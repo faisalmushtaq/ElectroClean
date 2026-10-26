@@ -5,7 +5,7 @@
 ```bash
 python -m pip install -r requirements-dev.txt
 python -m pip install --no-deps -e .
-python -m pytest                 # everything (134 tests, about 30 s)
+python -m pytest                 # everything (178 tests, about 35 s)
 python -m pytest -m "not gui"    # without Qt
 python -m pytest -m gui          # only the GUI tests
 ```
@@ -55,9 +55,9 @@ from it. Create a dataset with
 | 12 | Round-trip export and import | `test_export.py::test_round_trip_tsv_and_json`, `test_written_canonical_file_reads_back`; `test_timing.py::test_mne_round_trip_respects_first_samp` |
 | 13 | Repeated annotations of one category | `test_store.py::test_repeated_same_label_not_merged_unless_requested` |
 | 14 | Missing or corrupted files | `test_loading.py::test_missing_companion_files_fail`, `test_truncated_data_file_fails`, `test_truncated_on_sample_boundary_detected_by_markers`, `test_corrupted_header_fails`, `test_malformed_events_tsv_fails`; `test_gui.py::test_failed_load_message_and_continue` |
-| 15 | Output write failure | `test_session.py::test_write_failure_never_marks_complete` (6 stages), `test_register_failure_is_recovered_on_next_start`, `test_crash_recovery` |
+| 15 | Output write failure | `test_session.py::test_write_failure_never_marks_complete` (6 stages), `test_register_failure_is_recovered_on_next_start`, `test_crash_recovery`; `test_integrity.py` (failed roll-backs retried, failures after the register update, relocated results folder, unreadable journals) |
 | 16 | Per-annotator completion | `test_session.py::test_completion_is_per_annotator`; `test_gui.py::test_full_application_loop` |
-| 17 | Duplicate processing and overwriting | `test_session.py::test_completed_recording_not_reopened_or_overwritten`, `test_simultaneous_sessions_blocked_by_lock`, `test_stale_lock_from_dead_process_is_broken` |
+| 17 | Duplicate processing and overwriting | `test_session.py::test_completed_recording_not_reopened_or_overwritten`, `test_simultaneous_sessions_blocked_by_lock`, `test_stale_lock_from_dead_process_is_broken`; `test_integrity.py` (recovery during another session's save, stale-lock race, clock skew, heartbeat, leftover outputs) |
 | 18 | Inter-rater agreement on known examples | `test_reliability.py` (hand-computed 2×2 tables, kappa, Fleiss' kappa and alpha; comparison with reference implementations on random data; matching examples) |
 | 19 | Absent annotations and clean intervals | `test_reliability.py::test_clean_recording_and_absent_annotations`, `test_time_resolved_two_raters`; `test_export.py::test_empty_annotation_set_exports_cleanly`; `test_gui.py::test_save_with_no_annotations_needs_confirmation` |
 | 20 | Whole-montage and channel-specific | `test_reliability.py::test_whole_montage_versus_channel_specific`; `test_export.py::test_whole_montage_and_channel_encodings` |
@@ -68,6 +68,15 @@ agreement analysis), `test_gui.py::test_full_application_loop` (the desktop
 application from start request to "all recordings completed"),
 `test_training_gui.py` (practice with feedback and review, blinded assessment
 ending in the competency report, quiz, administrator tools, assignment).
+
+Three independent reviews (data integrity, statistics and the GUI) were run
+against the code with reproduction scripts; every confirmed problem has a
+regression test, in `test_integrity.py`, in the "edge cases (review)" section
+of `test_reliability.py`, in `test_training.py`, and at the end of
+`test_gui.py` and `test_training_gui.py` (for example: the application keeps
+running while a recording opens, Ctrl shortcuts never reach MNE's single-key
+shortcuts, Draw/edit off blocks every edit, a skipped assessment recording is
+not reported as complete).
 
 ## Checks that need a person
 

@@ -322,3 +322,145 @@ def test_unexpected_save_error_keeps_the_annotations_open(qapp, layout, settings
     assert any("Unexpected error" in t for _k, _title, t in prompts.log)
     monkeypatch.undo()
     assert ws.save_and_finish() is True
+
+
+# ------------------------------------------------------------- review fixes
+def test_main_keeps_running_between_windows(qapp, monkeypatch):
+    """The start window is hidden while a recording opens; the application must not quit then."""
+    from electroclean.app import main as main_mod
+
+    monkeypatch.setattr(type(qapp), "exec", lambda self: 0)
+    try:
+        assert main_mod.main([]) == 0
+        assert not qapp.quitOnLastWindowClosed()
+    finally:
+        qapp.setQuitOnLastWindowClosed(True)
+        for w in qapp.topLevelWidgets():
+            if type(w).__name__ == "StartWindow":
+                w.hide()
+
+
+def test_loading_dialog_cannot_be_dismissed(qapp):
+    from electroclean.app.gui.app_controller import LoadingDialog
+
+    dlg = LoadingDialog("Opening…", None)
+    dlg.show()
+    wait()
+    QTest.keyClick(dlg, Qt.Key_Escape)
+    dlg.close()
+    wait()
+    assert dlg.isVisible()
+    dlg.finish()
+    wait()
+    assert not dlg.isVisible()
+
+
+def test_ctrl_keys_never_reach_mne_shortcuts(qapp, layout, settings, catalogue, loaded):
+    session, ws = open_workspace(layout, settings, catalogue, loaded)
+    p = ws.browser.mne
+    before = (p.scalebars_visible, ws.browser.statusBar().isVisible())
+    for key in (Qt.Key_Z, Qt.Key_S, Qt.Key_X, Qt.Key_B):
+        QTest.keyClick(ws.browser, key, Qt.ControlModifier)
+        wait()
+    assert (p.scalebars_visible, ws.browser.statusBar().isVisible()) == before
+    assert ws.undo_action.isEnabled()  # consumes Ctrl+Z even with nothing to undo
+    ws._closing_ok = True
+    session.abandon()
+    ws.browser.close()
+
+
+def test_view_only_blocks_every_edit(qapp, layout, settings, catalogue, loaded):
+    session, ws = open_workspace(layout, settings, catalogue, loaded)
+    aid = ws.controller.create_annotation(5.0, 6.0)
+    original = session.store.get(aid)
+    ws.draw_action.setChecked(False)
+    c = ws.controller
+    c.select(aid)
+    c.toggle_annotation_channel(aid, loaded.info.ch_names[0])
+    c.relabel(aid, "Sweat-artifact")
+    c.delete_selected()
+    c.show_context_menu(aid, ws.browser.mapToGlobal(ws.browser.rect().center()))
+    assert c.create_annotation(8.0, 9.0) is None
+    assert len(session.store) == 1 and session.store.get(aid) == original
+    ws._update_actions()
+    assert not ws.btn_delete.isEnabled() and not ws.btn_label.isEnabled() and not ws.delete_action.isEnabled()
+    ws.draw_action.setChecked(True)
+    c.relabel(aid, "Sweat-artifact")
+    assert session.store.get(aid).label == "Sweat-artifact"
+    ws._closing_ok = True
+    session.abandon()
+    ws.browser.close()
+
+
+def test_delete_key_removes_every_selected_row(qapp, layout, settings, catalogue, loaded):
+    session, ws = open_workspace(layout, settings, catalogue, loaded)
+    for t in (2.0, 4.0, 6.0):
+        ws.controller.create_annotation(t, t + 0.5)
+    ws.table.selectAll()
+    wait()
+    ws.delete_action.trigger()
+    assert len(session.store) == 0
+    assert session.store.undo() and len(session.store) == 3  # one undo step
+    ids = [a.annotation_id for a in session.store.annotations()]
+    ws.controller.relabel_many(ids, "Sweat-artifact")
+    assert {a.label for a in session.store.annotations()} == {"Sweat-artifact"}
+    session.store.undo()
+    assert {a.label for a in session.store.annotations()} != {"Sweat-artifact"}  # relabelling was one step
+    ws._closing_ok = True
+    session.abandon()
+    ws.browser.close()
+
+
+def test_label_choice_does_not_take_keyboard_focus(qapp, layout, settings, catalogue, loaded):
+    session, ws = open_workspace(layout, settings, catalogue, loaded)
+    assert ws.label_combo.focusPolicy() == Qt.NoFocus
+    QTest.mouseClick(ws.label_combo, Qt.LeftButton)
+    wait()
+    assert not ws.label_combo.hasFocus()
+    ws._closing_ok = True
+    session.abandon()
+    ws.browser.close()
+
+
+def test_closing_survives_a_session_log_failure(qapp, layout, settings, catalogue, loaded, monkeypatch):
+    prompts = ScriptedPrompts({"Close without saving": True})
+    session, ws = open_workspace(layout, settings, catalogue, loaded, prompts)
+    closed = []
+    ws.closedWithoutSaving.connect(lambda: closed.append(True))
+
+    def broken(*a, **k):
+        raise OSError("network drive disconnected")
+
+    monkeypatch.setattr(session, "abandon", broken)
+    ws.browser.close()
+    wait(60)
+    assert closed and not session.lock.path.exists()
+    assert any("could not be written" in t for _k, _title, t in prompts.log)
+
+
+def test_many_failed_loads_in_a_row(qapp, dataset, monkeypatch):
+    """Each failure continues with the next recording in a loop, not by recursion."""
+    import dataclasses
+    import sys
+
+    from electroclean.app.eeg.loading import RecordingLoadError
+    from electroclean.app.gui import app_controller, workers
+
+    root, _ = dataset
+    real = app_controller.discover_recordings(root)
+    fakes = [dataclasses.replace(real[0], recording_id=f"fake-{i:03d}/x_eeg.vhdr") for i in range(150)]
+    monkeypatch.setattr(app_controller, "discover_recordings", lambda *a, **k: fakes)
+
+    def always_fail(self):
+        self.error = RecordingLoadError("broken", kind="corrupted_data")
+
+    monkeypatch.setattr(workers.LoadWorker, "run", always_fail)
+    ctrl = AppController(prompts=ScriptedPrompts(), synchronous_loading=True)
+    limit = sys.getrecursionlimit()
+    sys.setrecursionlimit(400)  # 150 nested failures would need far more than this
+    try:
+        ctrl.begin(StartRequest(annotator_id="A01", display_name="", dataset_root=root, output_root=None,
+                                mode="standard"))
+    finally:
+        sys.setrecursionlimit(limit)
+    assert sum(1 for h in ctrl.history if h["event"] == "load_failed") == 150

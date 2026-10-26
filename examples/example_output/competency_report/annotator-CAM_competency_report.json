@@ -42,20 +42,20 @@
   "inputs": {
     "reference_set": {
       "file": "demo-set/reference_set.json",
-      "sha256": "2f750de37494a3ac37907fa85de3a8e74793622b1684d45599507162a33f63cb"
+      "sha256": "90cfcb87911db4c60d4262a20a6a557b5aed7550154d26c7757e55027f7d3e85"
     },
     "references": {
-      "sub-002/eeg/sub-002_task-rest_eeg.vhdr": "ed8721e4df4fe1688042ce4481f7ddf8d086c2100cd8c21af890d50c8dff5214",
-      "sub-003/eeg/sub-003_task-rest_eeg.vhdr": "e00982d7de2e5efac5a9670d1d0c764d81a5ba8bd2408674631526e45e020791"
+      "sub-002/eeg/sub-002_task-rest_eeg.vhdr": "1fb255a6883106c212b594794b16da8bfe655f7780295ce18e68f68f8bf8b3b2",
+      "sub-003/eeg/sub-003_task-rest_eeg.vhdr": "c2bebc8f7bf905c7a0ce2d9a62b256da169579f1d2067c36549643195bac8d40"
     },
     "annotations": {
       "sub-002/eeg/sub-002_task-rest_eeg.vhdr": {
         "file": "training/demo-set/assessment/annotator-CAM/sub-002/eeg/sub-002_task-rest_eeg_annotator-CAM_annotations.json",
-        "sha256": "84e666ac1b644c33a92c70371cad8e87de8e49c5e25e324fa3da4bbf52d3b65a"
+        "sha256": "80846c1598def8942c486ab922133849e98a00712d72fe7566323a9d3256efe6"
       },
       "sub-003/eeg/sub-003_task-rest_eeg.vhdr": {
         "file": "training/demo-set/assessment/annotator-CAM/sub-003/eeg/sub-003_task-rest_eeg_annotator-CAM_annotations.json",
-        "sha256": "92310cf527a0f82325f13a276ffeceb87170004d3b32b8a726513671acc21082"
+        "sha256": "6f1af82d6c23e3c1ec80704839b5860407f3176e06b15d9eab6c2e3b87d8d86e"
       }
     }
   },
@@ -73,7 +73,7 @@
       "mean_iou": 0.8993582405274407,
       "mean_channel_jaccard": 0.9313725490196078,
       "label_accuracy": 0.9444444444444444,
-      "false_positives_per_min": 1.5
+      "false_positives_per_min": 1.0
     },
     "per_category": [
       {
@@ -253,13 +253,6 @@
         "channels": "F7,F8,T7,T8"
       },
       {
-        "recording": "sub-002/eeg/sub-002_task-rest_eeg.vhdr",
-        "label": "Slow-eye-movement-artifact",
-        "onset_s": 40.0,
-        "offset_s": 44.0,
-        "channels": "F7,F8,HEOG"
-      },
-      {
         "recording": "sub-003/eeg/sub-003_task-rest_eeg.vhdr",
         "label": "EMG-artifact",
         "onset_s": 9.2,
@@ -275,13 +268,6 @@
       }
     ],
     "extra": [
-      {
-        "recording": "sub-002/eeg/sub-002_task-rest_eeg.vhdr",
-        "label": "Horizontal-eye-movement-artifact",
-        "onset_s": 39.992,
-        "offset_s": 43.936,
-        "channels": "F7,F8,HEOG"
-      },
       {
         "recording": "sub-002/eeg/sub-002_task-rest_eeg.vhdr",
         "label": "Respiration-artifact",
@@ -307,6 +293,8 @@
       }
     ],
     "minutes_assessed": 2.0,
+    "recordings_not_compared": [],
+    "warnings": [],
     "analysis_config": {
       "resolutions_s": [
         0.1
@@ -381,6 +369,6 @@
     "Respiration-artifact",
     "Tongue-movement-artifact"
   ],
-  "results_sha256": "f867fa7c8331217a6702f8ca77bef72b264c49b0cf410f0660d486ecccbb5273",
-  "generated_at": "2026-10-26T15:47:55.253+00:00"
+  "results_sha256": "457b22c37f7fc06f35c93529727e8071694927eaaa943b49ff94b9128b44b615",
+  "generated_at": "2026-10-26T16:46:27.381+00:00"
 }

@@ -51,6 +51,7 @@ class StartWindow(QMainWindow):
     beginRequested = Signal(object)  # StartRequest
     adminRequested = Signal(object)  # dataset root (Path) or None
     agreementRequested = Signal(object)  # output root (Path) or None
+    closedByUser = Signal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -172,6 +173,13 @@ class StartWindow(QMainWindow):
         self.resize(640, 640)
 
     # ------------------------------------------------------------- settings
+
+    def closeEvent(self, event) -> None:  # noqa: ANN001, N802 - Qt API
+        # The application stays open while annotation windows replace this one (it is only
+        # hidden then); closing it here is the user's way of leaving ElectroClean.
+        super().closeEvent(event)
+        if event.isAccepted():
+            self.closedByUser.emit()
     def _restore(self) -> None:
         s = app_settings()
         self.dataset.setText(str(s.value("dataset", "")))

@@ -8,6 +8,8 @@ _MAC = platform.system() == "Darwin"
 _HOME_END = "fn+← / fn+→" if _MAC else "Home / End"
 _PAGE = "fn+↑ / fn+↓" if _MAC else "Page Up / Page Down"
 _CTRL = "⌘" if _MAC else "Ctrl"
+#: How to undo, as shown in status messages.
+UNDO_HINT = f"{_CTRL}+Z to undo"
 
 HELP_HTML = f"""
 <h3>Moving around the recording</h3>

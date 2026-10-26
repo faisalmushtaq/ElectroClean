@@ -248,6 +248,21 @@ class AnnotationStore:
     def set_label(self, annotation_id: str, label: str) -> ArtifactAnnotation:
         return self.update(annotation_id, label=label, description=f"relabel as {label}")
 
+    def set_label_many(self, annotation_ids: Iterable[str], label: str) -> None:
+        """Relabel several annotations as one undoable step."""
+        ids = tuple(dict.fromkeys(annotation_ids))
+        items = dict(self._items)
+        changed = []
+        stamp = now_local_iso()
+        for aid in ids:
+            current = self.get(aid)
+            if current.label != label:
+                items[aid] = self._check(current.with_changes(label=label, modified_at=stamp))
+                changed.append(aid)
+        if changed:
+            what = f"relabel as {label}" if len(changed) == 1 else f"relabel {len(changed)} annotations as {label}"
+            self._commit("update", what, items, tuple(changed))
+
     def set_channels(self, annotation_id: str, channels: Iterable[str]) -> ArtifactAnnotation:
         return self.update(annotation_id, channels=list(channels), description="change channels")
 

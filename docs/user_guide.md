@@ -71,9 +71,12 @@ Moving around:
 | x | Crosshair showing time and amplitude |
 | Scroll bars and overview bar | Move through time and channels |
 
-The toolbar under MNE's toolbar holds ElectroClean's controls. The coloured
-box shows the **active artifact type** with its short code (for example
-`[CHEW]`), so you never rely on colour alone. The panel on the right lists
+The toolbar under MNE's toolbar holds ElectroClean's controls. The
+*Artifact* menu shows the **active artifact type** by name, and the coloured
+box next to it shows its colour with its short code (for example `CHEW`), so
+you never rely on colour alone. The menu does not take the keyboard, so the
+arrow and page keys always move through the EEG. On a small screen, items that
+do not fit at the end of the toolbar (such as *Help*) move into its » menu. The panel on the right lists
 every annotation you have made; below it, the *Recording* tab shows details of
 the recording, the filters and any warnings, and the *Help* tab repeats these
 instructions. The status bar at the bottom always shows the recording, your
@@ -114,14 +117,15 @@ Click an annotation (or its row in the *Annotations* list) to select it. Then:
 | Move | Hold Shift and drag the middle |
 | Add or remove one channel | Hold Shift and click that channel inside the annotation |
 | Change type, edit channels, make whole-montage, delete | Right-click it |
-| Delete | Press Delete (or Backspace) |
+| Delete | Press Delete (or Backspace); with several rows selected in the list, all of them are deleted |
 | Set exact start and end times | Select it in the list and press **Edit times…** |
 | Merge annotations of the same type | Select them in the list (Ctrl/Cmd-click) and press **Merge** |
 | Undo or redo | Ctrl+Z, and Ctrl+Y or Ctrl+Shift+Z (Cmd on a Mac) |
 
 Selecting a row in the list jumps to that annotation. Turn **Draw/edit** off
 if you want to inspect the recording without any risk of changing your
-annotations.
+annotations: while it is off, nothing can be drawn, moved, relabelled, edited
+or deleted, by mouse, keyboard or the panel.
 
 ## 6. Saving
 
@@ -175,7 +179,9 @@ saved.
 
 **Short segments quiz.** Some reference sets include a quiz: you see short
 EEG segments, one at a time, and choose the main artifact type in the shaded
-part. In the assessment version you see your score at the end.
+part. In the assessment version you see your score at the end. If you close
+the quiz window before the end, ElectroClean asks for confirmation and saves
+the answers given so far, marked as incomplete.
 
 ![Quiz](images/quiz_window.png)
 

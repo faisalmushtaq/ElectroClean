@@ -157,3 +157,74 @@ def test_reference_set_assignment_is_enforced(qapp, ref_set):
     assert not ctrl.begin(StartRequest("CAM", "", root, None, "practice", reference_set_id="pilot"))
     assert any(title == "Not assigned" for _k, title, _t in prompts.log)
     assert ctrl.workspace is None
+
+
+def test_skipped_assessment_is_not_reported_as_complete(qapp, ref_set):
+    root, _, _ = ref_set
+    prompts = ScriptedPrompts({"Close without saving": True})
+    ctrl = AppController(prompts=prompts, synchronous_loading=True)
+    assert ctrl.begin(StartRequest("CAM", "", root, None, "assessment", reference_set_id="pilot"))
+    ctrl.workspace.browser.close()  # discard, then continue
+    wait()
+    titles = [title for _k, title, _t in prompts.log]
+    assert "Assessment complete" not in titles and "Assessment not finished" in titles
+    assert not (ctrl.layout.root / "training" / "pilot" / "reports").exists()
+
+
+def test_last_assessment_recording_reports_even_when_quitting(qapp, ref_set):
+    root, truths, _ = ref_set
+    prompts = ScriptedPrompts({"Continue?": False})
+    ctrl = AppController(prompts=prompts, synchronous_loading=True)
+    assert ctrl.begin(StartRequest("CAM", "", root, None, "assessment", reference_set_id="pilot"))
+    ws = ctrl.workspace
+    for a in truths[SUB2].annotations:
+        ws.session.store.add(a.label, a.onset_sample, a.duration_samples, a.channels)
+    assert ws.save_and_finish()
+    wait()
+    assert (ctrl.layout.root / "training" / "pilot" / "reports" / "annotator-CAM_competency_report.json").exists()
+
+
+def test_review_window_is_released_after_closing(qapp, ref_set):
+    root, truths, _ = ref_set
+    prompts = ScriptedPrompts({"Practice feedback": "Review in the viewer", "Continue?": False})
+    ctrl = AppController(prompts=prompts, synchronous_loading=True)
+    assert ctrl.begin(StartRequest("CAM", "", root, None, "practice", reference_set_id="pilot"))
+    ws = ctrl.workspace
+    ws.session.store.add(truths[SUB1].annotations[0].label, 250, 100, ())
+    assert ws.save_and_finish()
+    wait()
+    review = ctrl.review_workspace
+    assert review is not None
+    rid = review.session.store.annotations()[0].annotation_id
+    review.controller.delete(rid)  # read-only: nothing changes
+    assert rid in review.session.store
+    review.browser.close()
+    wait()
+    assert ctrl.review_workspace is None
+
+
+def test_closing_the_quiz_early_saves_incomplete_answers(qapp, ref_set):
+    import json
+
+    root, _, _ = ref_set
+    prompts = ScriptedPrompts({"Stop the quiz?": True})
+    ctrl = AppController(prompts=prompts, synchronous_loading=True)
+    assert ctrl.begin(StartRequest("CAM", "", root, None, "assessment", reference_set_id="pilot", assessment_kind="quiz"))
+    win = ctrl.quiz_window
+    win.answer(win.quiz.current_item().correct_label)
+    win.close()
+    wait()
+    (saved,) = (ctrl.layout.root / "training" / "pilot" / "quiz").glob("annotator-CAM_quiz_*.json")
+    data = json.loads(saved.read_text())
+    assert data["completed"] is False and len(data["answers"]) == 1
+    assert ctrl.quiz_window is None and ctrl.start_window.isVisible()
+
+
+def test_admin_tools_report_a_malformed_study_file(qapp, ref_set):
+    root, _, _ = ref_set
+    admin.study_config_path(root).write_text('{"study_id": "x", oops}')
+    prompts = ScriptedPrompts()
+    ctrl = AppController(prompts=prompts, synchronous_loading=True)
+    ctrl.open_admin(root)
+    assert ctrl.admin_dialog is None
+    assert any("cannot be read" in t for k, _title, t in prompts.log if k == "error")

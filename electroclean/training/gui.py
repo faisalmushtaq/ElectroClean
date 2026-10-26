@@ -115,14 +115,24 @@ def show_practice_feedback(ctrl: AppController, session: AnnotationSession, load
         return
     from electroclean.app.gui.annotation_window import AnnotationWorkspace
 
-    store, prefix = review_store(loaded, list(mine.annotations), list(ref.annotations), session.catalogue)
-    rsession = ReviewSession(loaded, store, session.annotator_id, session.filters, rs.set_id)
-    ws = AnnotationWorkspace(
-        rsession, ctrl.settings, prompts=ctrl.prompts, read_only=True, display_prefix=prefix,  # type: ignore[arg-type]
-        window_title=f"ElectroClean – review {loaded.files.stem}: YOU versus REF (reference)",
-    )
+    try:
+        store, prefix = review_store(loaded, list(mine.annotations), list(ref.annotations), session.catalogue)
+        rsession = ReviewSession(loaded, store, session.annotator_id, session.filters, rs.set_id)
+        ws = AnnotationWorkspace(
+            rsession, ctrl.settings, prompts=ctrl.prompts, read_only=True, display_prefix=prefix,  # type: ignore[arg-type]
+            window_title=f"ElectroClean – review {loaded.files.stem}: YOU versus REF (reference)",
+        )
+    except Exception as exc:
+        ctrl.prompts.error(ctrl.parent_widget, "Review unavailable", f"The review could not be opened: {exc}")
+        ctrl.after_practice_feedback(loaded)
+        return
     ctrl.review_workspace = ws
-    ws.closedWithoutSaving.connect(lambda: ctrl.after_practice_feedback(loaded))
+
+    def review_closed() -> None:
+        ctrl.review_workspace = None  # release the window and the recording's display data
+        ctrl.after_practice_feedback(loaded)
+
+    ws.closedWithoutSaving.connect(review_closed)
     ws.show()
 
 
@@ -198,7 +208,42 @@ class QuizWindow(QMainWindow):
         layout.addWidget(sw)
         self.resize(1400, 820)
         self._awaiting_next = False
+        self._done = False
         self.show_item()
+
+    def closeEvent(self, event) -> None:  # noqa: ANN001, N802 - Qt API
+        if self._done:
+            super().closeEvent(event)
+            return
+        stop = self.ctrl.prompts.ask(
+            self, "Stop the quiz?",
+            f"You have answered {self.quiz.current_index()} of {len(self.quiz.items)} segments.\n\n"
+            "If you stop now, your answers so far are saved and marked as incomplete.",
+            yes="Stop the quiz", no="Continue the quiz", default_yes=False,
+        )
+        if not stop:
+            event.ignore()
+            return
+        self._done = True
+        try:
+            path = self.quiz.save(self.ctrl.layout)
+            self.ctrl.history.append({"event": "quiz_stopped", "path": str(path)})
+        except OSError as exc:
+            self.ctrl.prompts.error(self, "Quiz", f"The answers could not be saved: {exc}")
+        self._release()
+        super().closeEvent(event)
+        self.ctrl._back_to_start()
+
+    def _release(self) -> None:
+        if self.browser is not None:
+            self.browser.close()
+            self.browser.deleteLater()
+            self.browser = None
+        for lr in self._loaded.values():
+            lr.close()
+        self._loaded.clear()
+        if self.ctrl.quiz_window is self:
+            self.ctrl.quiz_window = None
 
     def _segment_browser(self, item: QuizItem) -> Any:
         from electroclean.app.eeg.loading import load_recording
@@ -214,7 +259,12 @@ class QuizWindow(QMainWindow):
         dur = lr.timing.duration_s
         tmin = max(0.0, item.start_s - item.context_s)
         tmax = min(dur, item.end_s + item.context_s)
-        seg = lr.view_raw.copy().crop(tmin, tmax, include_tmax=False)
+        # Copy only the segment (Raw.copy() would duplicate the whole recording first).
+        sf = lr.view_raw.info["sfreq"]
+        start, stop = int(round(tmin * sf)), int(round(tmax * sf))
+        import mne
+
+        seg = mne.io.RawArray(lr.view_raw.get_data(start=start, stop=stop), lr.view_raw.info.copy(), verbose="error")
         b = create_browser(
             seg, events=None, event_id=None, label_colours={}, title="quiz segment", duration_s=tmax - tmin,
             n_channels=len(seg.ch_names), scalings=self.ctrl.settings.display.scalings,
@@ -278,11 +328,10 @@ class QuizWindow(QMainWindow):
             self.show_item()
 
     def _finish(self) -> None:
+        self._done = True
         path = self.quiz.save(self.ctrl.layout)
         s = self.quiz.score()
-        for lr in self._loaded.values():
-            lr.close()
-        self._loaded.clear()
+        self._release()
         self.ctrl.history.append({"event": "quiz_finished", "score": s, "path": str(path)})
         self.ctrl.prompts.inform(
             self, "Quiz complete",
@@ -312,14 +361,26 @@ def open_admin_tools(ctrl: AppController, dataset_root: Path | None) -> None:
     if dataset_root is None or not Path(dataset_root).is_dir():
         prompts.error(ctrl.parent_widget, "Administrator tools", "Choose the dataset folder in the start window first.")
         return
-    data = admin.read_study_dict(dataset_root)
+    try:
+        data = admin.read_study_dict(dataset_root)
+    except (OSError, ValueError) as exc:
+        prompts.error(
+            ctrl.parent_widget, "Administrator tools",
+            f"The study file in {dataset_root} cannot be read, so the administrator tools cannot open:\n\n{exc}\n\n"
+            "Correct it in a text editor (it must be valid JSON), or move it aside to start again.",
+        )
+        return
     record = data.get("admin_passphrase")
     if record:
         pw = prompts.ask_text(ctrl.parent_widget, "Administrator", "Administrator passphrase:", password=True)
         if pw is None or not admin.verify_passphrase(pw, record):
             prompts.error(ctrl.parent_widget, "Administrator", "Incorrect passphrase.")
             return
-    dlg = AdminDialog(ctrl, Path(dataset_root), prompts)
+    try:
+        dlg = AdminDialog(ctrl, Path(dataset_root), prompts)
+    except Exception as exc:
+        prompts.error(ctrl.parent_widget, "Administrator tools", f"The study settings cannot be used: {exc}")
+        return
     ctrl.admin_dialog = dlg
     dlg.show()
 

@@ -33,11 +33,40 @@ from electroclean.app.io.naming import OutputLayout
 from electroclean.app.session.failures import FailureLog, SessionLog
 from electroclean.app.session.register import CompletionRegister, RegisterError
 from electroclean.app.session.selection import select_next
-from electroclean.app.session.session import AnnotationSession, SessionError
+from electroclean.app.session.session import AnnotationSession, SessionError, recording_lock_owner
 from electroclean.app.session.transaction import recover_interrupted_exports
 from electroclean.config.settings import FilterSettings, Settings, SettingsError, StudyConfig, load_settings
 
 FAILED_TO_LOAD = "Failed to load file. Would you like to continue with another recording or quit?"
+
+
+class LoadingDialog(QProgressDialog):
+    """Progress shown while a recording opens. It cannot be cancelled or closed by the user,
+    because the background loader cannot be interrupted safely."""
+
+    def __init__(self, text: str, parent: QWidget | None) -> None:
+        super().__init__(text, "", 0, 0, parent)
+        self._may_close = False
+        self.setWindowTitle("ElectroClean")
+        self.setCancelButton(None)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowCloseButtonHint)
+        self.setWindowModality(Qt.ApplicationModal)
+        self.setMinimumDuration(0)
+        self.setAutoClose(False)
+        self.setAutoReset(False)
+
+    def reject(self) -> None:  # Esc
+        pass
+
+    def closeEvent(self, event) -> None:  # noqa: ANN001, N802 - Qt API
+        if self._may_close:
+            super().closeEvent(event)
+        else:
+            event.ignore()
+
+    def finish(self) -> None:
+        self._may_close = True
+        self.close()
 
 
 class AppController(QObject):
@@ -50,6 +79,7 @@ class AppController(QObject):
         self.start_window.beginRequested.connect(self.begin)
         self.start_window.adminRequested.connect(self.open_admin)
         self.start_window.agreementRequested.connect(self.open_agreement)
+        self.start_window.closedByUser.connect(self._on_start_window_closed)
         self.request: StartRequest | None = None
         self.settings: Settings | None = None
         self.study: StudyConfig | None = None
@@ -180,6 +210,36 @@ class AppController(QObject):
         return list(self.reference_set.assessment_recordings)
 
     def next_recording(self) -> None:
+        """Offer the next recording.
+
+        Re-entrant calls (a failed load that continues with another recording)
+        are turned into a loop, so many failures in a row cannot exhaust the stack.
+        """
+        if getattr(self, "_in_next", False):
+            self._next_again = True
+            return
+        self._in_next = True
+        try:
+            while True:
+                self._next_again = False
+                self._next_recording_once()
+                if not self._next_again:
+                    break
+        finally:
+            self._in_next = False
+
+    def _assessment_all_done(self) -> bool:
+        assert self.request is not None and self.layout is not None and self.settings is not None
+        required = set(self._restrict_to() or ())
+        try:
+            done = CompletionRegister(self.layout, self.settings.register_lock_timeout_s).completed(
+                self.request.annotator_id, "assessment", self._context_id()
+            )
+        except RegisterError:
+            return False
+        return bool(required) and required <= done
+
+    def _next_recording_once(self) -> None:
         assert self.request is not None and self.settings is not None and self.layout is not None
         req, s = self.request, self.settings
         register = CompletionRegister(self.layout, s.register_lock_timeout_s)
@@ -213,7 +273,17 @@ class AppController(QObject):
             if result.recording is None:
                 self.history.append({"event": "no_recording", "message": result.message})
                 if req.mode == "assessment" and self.reference_set is not None:
-                    self._assessment_complete_report()
+                    if self._assessment_all_done():
+                        self._assessment_complete_report()
+                    else:
+                        left = sorted(set(self._restrict_to() or ()) - completed)
+                        self.prompts.inform(
+                            self.parent_widget, "Assessment not finished",
+                            f"{len(left)} assessment recording(s) are still to be completed:\n\n"
+                            + "\n".join(left)
+                            + "\n\nThey were skipped or could not be opened in this session. Start the assessment "
+                            "again to complete them; the competency report is produced once all are done.",
+                        )
                 else:
                     self.prompts.inform(self.parent_widget, "No more recordings", result.message)
                 self._back_to_start()
@@ -275,6 +345,28 @@ class AppController(QObject):
     # ------------------------------------------------------------- loading
     def _load(self, files: RecordingFiles) -> None:
         assert self.settings is not None and self.filters is not None
+        assert self.layout is not None and self.request is not None
+        # A recording open in another session is skipped before spending time on loading it.
+        owner = recording_lock_owner(
+            self.layout, files.recording_id, self.request.annotator_id, self.request.mode, self._context_id(),
+            self.settings.recording_lock_stale_hours * 3600,
+        )
+        if owner is not None:
+            self.session_excluded.add(files.recording_id)
+            self.history.append({"event": "session_blocked", "recording_id": files.recording_id})
+            go_on = self.prompts.ask(
+                self.parent_widget,
+                "Recording unavailable",
+                f"{files.recording_id} is open in another session (computer {owner.get('host', '?')}, "
+                f"since {owner.get('created_utc', '?')}).\n\nContinue with another recording?",
+                yes="Continue",
+                no="Stop",
+            )
+            if go_on:
+                self.next_recording()
+            else:
+                self._back_to_start()
+            return
         self.history.append({"event": "loading", "recording_id": files.recording_id})
         cache = os.environ.get("ELECTROCLEAN_CACHE")  # optional folder for large memory-mapped copies
         worker = LoadWorker(files, self.settings, self.filters, self.catalogue, Path(cache) if cache else None)
@@ -286,11 +378,7 @@ class AppController(QObject):
             else:
                 self._on_loaded(worker.result)
             return
-        self.progress = QProgressDialog(f"Opening {files.recording_id}…", "", 0, 0)
-        self.progress.setWindowTitle("ElectroClean")
-        self.progress.setCancelButton(None)
-        self.progress.setWindowModality(Qt.ApplicationModal)
-        self.progress.setMinimumDuration(0)
+        self.progress = LoadingDialog(f"Opening {files.recording_id}…", self.start_window)
         self.progress.show()
         worker.progress.connect(lambda msg: self.progress and self.progress.setLabelText(f"{files.recording_id}\n{msg}…"))
         worker.succeeded.connect(self._on_loaded, Qt.QueuedConnection)
@@ -299,7 +387,8 @@ class AppController(QObject):
 
     def _close_progress(self) -> None:
         if self.progress is not None:
-            self.progress.close()
+            self.progress.finish()
+            self.progress.deleteLater()
             self.progress = None
 
     def _on_load_failed(self, files: RecordingFiles, exc: BaseException, tb: str) -> None:
@@ -351,7 +440,7 @@ class AppController(QObject):
                 context=context,
             )
             session.start()
-        except (LockError, SessionError) as exc:
+        except (LockError, SessionError, RegisterError, OSError) as exc:
             loaded.close()
             self.session_excluded.add(loaded.info.recording_id)
             self.history.append({"event": "session_blocked", "recording_id": loaded.info.recording_id})
@@ -407,6 +496,11 @@ class AppController(QObject):
             return
         if loaded is not None:
             loaded.close()
+        if self.request.mode == "assessment" and self.reference_set is not None and self._assessment_all_done():
+            # The last assessment recording: produce the report now, whatever the annotator does next.
+            self._assessment_complete_report()
+            self._back_to_start()
+            return
         if self.request.mode == "assessment":
             text = "Your annotations for this assessment recording were saved."
         elif result is not None:
@@ -442,10 +536,36 @@ class AppController(QObject):
 
     def quit(self) -> None:
         self.history.append({"event": "quit"})
-        self.start_window.close()
+        self.start_window.hide()
         app = QApplication.instance()
         if app is not None and not self.synchronous_loading:
             QTimer.singleShot(0, app.quit)
+
+    def _on_start_window_closed(self) -> None:
+        self.quit()
+
+    def start_watchdog(self, interval_ms: int = 2000) -> None:
+        """Bring back the start window if, after an unexpected error, no window is left.
+
+        The application does not quit when its last window closes (windows are
+        replaced one by another, with gaps); this makes sure it never keeps
+        running invisibly either.
+        """
+        self._idle_ticks = 0
+
+        def check() -> None:
+            app = QApplication.instance()
+            visible = [w for w in app.topLevelWidgets() if w.isVisible()] if app is not None else [True]
+            busy = self.worker is not None and self.worker.isRunning()
+            self._idle_ticks = 0 if (visible or busy) else self._idle_ticks + 1
+            if self._idle_ticks >= 2:
+                self._idle_ticks = 0
+                self.history.append({"event": "watchdog_restored_start_window"})
+                self._back_to_start()
+
+        self._watchdog = QTimer(self)
+        self._watchdog.timeout.connect(check)
+        self._watchdog.start(interval_ms)
 
     # -------------------------------------------------------------- training
     def _practice_feedback(self, session: AnnotationSession, loaded: LoadedRecording) -> None:

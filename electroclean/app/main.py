@@ -73,11 +73,16 @@ def main(argv: list[str] | None = None) -> int:
     app = pg.mkQApp("ElectroClean")
     app.setApplicationName("ElectroClean")
     app.setOrganizationName("ElectroClean")
+    # Windows replace one another (start window, loading dialog, annotation window), so the
+    # application must not quit when the last visible one closes; it quits when the user
+    # closes the start window or chooses Quit.
+    app.setQuitOnLastWindowClosed(False)
     install_exception_hook()
 
     from electroclean.app.gui.app_controller import AppController
 
     controller = AppController()
+    controller.start_watchdog()
     sw = controller.start_window
     if args.dataset:
         sw.dataset.setText(str(args.dataset))

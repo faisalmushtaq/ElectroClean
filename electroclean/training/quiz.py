@@ -122,6 +122,7 @@ class QuizSession:
                 "reference_set_id": self.reference_set.set_id,
                 "mode": self.mode,
                 "session_id": self.session_id,
+                "completed": self.finished,
                 "started_at": self.started_at,
                 "finished_at": now_local_iso(),
                 "electroclean_version": __version__,

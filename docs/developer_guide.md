@@ -141,9 +141,12 @@ locates annotations by their onset (ambiguous when two start together), marks
 channels bad when they are clicked, and has no undo or Save control.
 ElectroClean therefore keeps MNE's annotation mode switched off and supplies:
 
-* `ElectroCleanBrowser(MNEQtBrowser)`: a close guard and Escape to deselect.
-  It is substituted for `MNEQtBrowser` while `raw.plot()` constructs the
-  browser (MNE's `figure_class` option only works for the matplotlib backend).
+* `ElectroCleanBrowser(MNEQtBrowser)`: a close guard, Escape to deselect,
+  ElectroClean's help in place of MNE's, and a key filter: MNE's single-key
+  shortcuts ignore modifiers (Ctrl+Z would toggle zen mode, Ctrl+S the scale
+  bars), so key presses with Ctrl, Cmd or Alt are not passed to them. It is
+  substituted for `MNEQtBrowser` while `raw.plot()` constructs the browser
+  (MNE's `figure_class` option only works for the matplotlib backend).
 * `ElectroCleanViewBox(RawViewBox)` and `ElectroCleanDataTrace(DataTrace)`:
   dragging creates an ElectroClean annotation; clicking a channel selects it.
   The browser looks these classes up by name in its own module, so the
@@ -156,7 +159,21 @@ ElectroClean therefore keeps MNE's annotation mode switched off and supplies:
 * `AnnotationController`: synchronises regions with the store on the next
   event-loop turn after every change (never inside a mouse handler), keeps
   `raw.annotations` of the display copy in step for the overview bar, manages
-  label rows, channel highlighting and filter edge zones.
+  label rows, channel highlighting and filter edge zones. Every editing method
+  checks `editable` (Draw/edit on and not a read-only review), so mouse,
+  keyboard, context menu and panel all obey the same switch. When a region is
+  removed, its channel shading items are also removed from the plot item
+  list, which MNE's own `remove()` leaves behind.
+
+**Application windows.** The start window is hidden while a recording is
+open, and windows replace one another with short gaps, so `main()` turns off
+Qt's quit-on-last-window-closed; the application quits when the user closes
+the start window or chooses Quit. The loading dialog cannot be dismissed
+(the background loader cannot be interrupted safely), the quiz window asks
+before closing and saves partial answers, and a watchdog brings back the start
+window if an unexpected error ever leaves no window visible. In synchronous
+mode (tests) a failed load that continues with the next recording is handled
+by a loop rather than by recursion.
 
 Original events are passed to `raw.plot(events=…)`, which draws them as
 event lines that cannot be edited.

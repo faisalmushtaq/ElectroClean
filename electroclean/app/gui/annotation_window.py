@@ -43,7 +43,7 @@ from qtpy.QtWidgets import (
 from electroclean.app.annotations.model import AnnotationError
 from electroclean.app.gui.browser import AnnotationController, check_browser_version, create_browser
 from electroclean.app.gui.dialogs import UserPrompts, colour_icon, readable_text_colour
-from electroclean.app.gui.help_text import HELP_HTML
+from electroclean.app.gui.help_text import HELP_HTML, UNDO_HINT
 from electroclean.app.session.session import AnnotationSession, SessionError
 from electroclean.app.session.transaction import ExportCommitError
 from electroclean.app.validation.exports import ValidationError
@@ -127,7 +127,7 @@ class AnnotationWorkspace(QObject):
         self._tick.timeout.connect(self._update_clock)
         self._tick.start(1000)
         if read_only:
-            self.controller.set_drawing_enabled(False)
+            self.controller.set_read_only()
         self.controller.sync_now()
         self._refresh_state()
         self._refresh_table()
@@ -146,7 +146,7 @@ class AnnotationWorkspace(QObject):
         self.toolbar = tb
         cat = self.session.catalogue
 
-        tb.addWidget(QLabel(" Artifact type: "))
+        tb.addWidget(QLabel(" Artifact: "))
         self.label_combo = QComboBox()
         self.label_combo.setMaxVisibleItems(16)
         for lab in cat.labels:
@@ -154,12 +154,14 @@ class AnnotationWorkspace(QObject):
             idx = self.label_combo.count() - 1
             self.label_combo.setItemData(idx, self._hed.get(lab.label, lab.label), Qt.ToolTipRole)
         self.label_combo.setToolTip("Only the 16 HED-SCORE artifact categories can be used")
+        # Without keyboard focus the arrow, page and letter keys keep moving through the EEG
+        # instead of silently changing the artifact type.
+        self.label_combo.setFocusPolicy(Qt.NoFocus)
         self.label_combo.currentIndexChanged.connect(
             lambda i: self.controller.set_current_label(self.label_combo.itemData(i))
         )
         tb.addWidget(self.label_combo)
-        self.active_label = QLabel()
-        self.active_label.setToolTip("The artifact type that the next drag will create")
+        self.active_label = QLabel()  # colour and short code of the active type (the menu shows its name)
         tb.addWidget(self.active_label)
         tb.addSeparator()
 
@@ -172,12 +174,15 @@ class AnnotationWorkspace(QObject):
         self.scope_whole.setChecked(True)
         self.scope_whole.toggled.connect(lambda on: on and self.controller.set_scope("whole"))
         self.scope_channels.toggled.connect(lambda on: on and self.controller.set_scope("channels"))
+        for w in (self.scope_whole, self.scope_channels):
+            w.setFocusPolicy(Qt.NoFocus)
         tb.addWidget(self.scope_whole)
         tb.addWidget(self.scope_channels)
         self.choose_channels_btn = QPushButton("Choose channels…")
         self.choose_channels_btn.clicked.connect(self.choose_channels)
         tb.addWidget(self.choose_channels_btn)
         self.channels_summary = QLabel()
+        self.channels_summary.setMaximumWidth(170)
         tb.addWidget(self.channels_summary)
         tb.addSeparator()
 
@@ -189,7 +194,7 @@ class AnnotationWorkspace(QObject):
         tb.addAction(self.draw_action)
         self.delete_action = QAction("Delete", b)
         self.delete_action.setShortcuts([QKeySequence(Qt.Key_Delete), QKeySequence(Qt.Key_Backspace)])
-        self.delete_action.triggered.connect(self.controller.delete_selected)
+        self.delete_action.triggered.connect(self.delete_selection)
         tb.addAction(self.delete_action)
         self.undo_action = QAction("Undo", b)
         self.undo_action.setShortcut(QKeySequence.Undo)
@@ -202,9 +207,6 @@ class AnnotationWorkspace(QObject):
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         tb.addWidget(spacer)
-        self.help_action = QAction("Help", b)
-        self.help_action.triggered.connect(self.show_help)
-        tb.addAction(self.help_action)
         self.save_btn = QPushButton("  Save and Finish  ")
         self.save_btn.setStyleSheet(
             "QPushButton { background: #2E7D32; color: white; font-weight: bold; padding: 4px 10px; border-radius: 4px; }"
@@ -213,6 +215,10 @@ class AnnotationWorkspace(QObject):
         self.save_btn.setToolTip("Validate and save your annotations, then mark this recording complete")
         self.save_btn.clicked.connect(self.save_and_finish)
         self.save_action = tb.addWidget(self.save_btn)
+        # Help comes last: on a narrow screen the toolbar's overflow menu takes it before Save.
+        self.help_action = QAction("Help", b)
+        self.help_action.triggered.connect(self.show_help)
+        tb.addAction(self.help_action)
         if self.read_only:
             for w in (self.label_combo, self.scope_whole, self.scope_channels, self.choose_channels_btn, self.save_btn):
                 w.setEnabled(False)
@@ -298,6 +304,13 @@ class AnnotationWorkspace(QObject):
         help_view.setHtml(HELP_HTML)
         tabs.addTab(help_view, "Help")
         self.info_tabs = tabs
+
+        def show_help() -> None:
+            dock.show()
+            dock.raise_()
+            tabs.setCurrentWidget(help_view)
+
+        self.browser._ec_help = show_help
         dock.setWidget(tabs)
         self.browser.addDockWidget(Qt.RightDockWidgetArea, dock)
         self.info_dock = dock
@@ -354,7 +367,8 @@ class AnnotationWorkspace(QObject):
         c = self.controller
         lab = self.session.catalogue.get(c.current_label)
         fg = readable_text_colour(lab.colour)
-        self.active_label.setText(f"  {lab.label} [{lab.short_code}]  ")
+        self.active_label.setText(f" {lab.short_code} ")
+        self.active_label.setToolTip(f"The next drag creates: {lab.label} (code {lab.value})")
         self.active_label.setStyleSheet(
             f"QLabel {{ background: {lab.colour}; color: {fg}; font-weight: bold; border-radius: 3px; padding: 2px; }}"
         )
@@ -366,13 +380,16 @@ class AnnotationWorkspace(QObject):
         chans = c.selected_channels
         if c.scope == "whole":
             self.channels_summary.setText(" all channels ")
+            self.channels_summary.setToolTip("Annotations apply to the whole montage")
             self.channels_summary.setStyleSheet("")
         elif not chans:
-            self.channels_summary.setText(" none selected – click channel names ")
+            self.channels_summary.setText(" none selected ")
+            self.channels_summary.setToolTip("Click channel names, or use Choose channels…")
             self.channels_summary.setStyleSheet("QLabel { color: #B71C1C; font-weight: bold; }")
         else:
-            shown = ", ".join(chans[:4]) + (f" (+{len(chans) - 4})" if len(chans) > 4 else "")
+            shown = ", ".join(chans[:3]) + (f" (+{len(chans) - 3})" if len(chans) > 3 else "")
             self.channels_summary.setText(f" {shown} ")
+            self.channels_summary.setToolTip(", ".join(chans))
             self.channels_summary.setStyleSheet("QLabel { color: #D81B60; font-weight: bold; }")
         self.scope_whole.blockSignals(True)
         self.scope_channels.blockSignals(True)
@@ -387,19 +404,23 @@ class AnnotationWorkspace(QObject):
 
     def _update_actions(self) -> None:
         store = self.session.store
-        self.undo_action.setEnabled(store.can_undo and not self.read_only)
-        self.redo_action.setEnabled(store.can_redo and not self.read_only)
+        editable = self.controller.editable
+        # Undo and Redo stay enabled (they report "Nothing to undo"), so that their shortcuts
+        # are always consumed here and never reach the EEG browser's own single-key shortcuts.
+        self.undo_action.setEnabled(not self.read_only)
+        self.redo_action.setEnabled(not self.read_only)
+        self.delete_action.setEnabled(editable)
         self.undo_action.setToolTip(f"Undo {store.undo_description}" if store.can_undo else "Nothing to undo")
         self.redo_action.setToolTip(f"Redo {store.redo_description}" if store.can_redo else "Nothing to redo")
         ids = self._selected_ids()
         anns = [store.get(i) for i in ids if i in store]
         has = bool(anns)
         self.btn_goto.setEnabled(has)
-        self.btn_times.setEnabled(len(anns) == 1)
-        self.btn_label.setEnabled(has)
-        self.btn_chans.setEnabled(len(anns) == 1)
-        self.btn_delete.setEnabled(has)
-        self.btn_merge.setEnabled(len(anns) >= 2 and len({a.label for a in anns}) == 1)
+        self.btn_times.setEnabled(editable and len(anns) == 1)
+        self.btn_label.setEnabled(editable and has)
+        self.btn_chans.setEnabled(editable and len(anns) == 1)
+        self.btn_delete.setEnabled(editable and has)
+        self.btn_merge.setEnabled(editable and len(anns) >= 2 and len({a.label for a in anns}) == 1)
 
     def _refresh_table(self) -> None:
         store = self.session.store
@@ -532,7 +553,7 @@ class AnnotationWorkspace(QObject):
 
     def edit_times_of_selected(self) -> None:
         ids = self._selected_ids()
-        if len(ids) != 1:
+        if len(ids) != 1 or not self.controller._check_editable():
             return
         ann = self.session.store.get(ids[0])
         t = self.loaded.timing
@@ -546,35 +567,49 @@ class AnnotationWorkspace(QObject):
 
     def relabel_selected(self) -> None:
         ids = self._selected_ids()
-        if not ids:
+        if not ids or not self.controller._check_editable():
             return
         labels = list(self.session.catalogue.label_names)
         current = labels.index(self.session.store.get(ids[0]).label)
         label = self.prompts.choose_item(self.browser, "Change label", "New artifact type:", labels, current)
         if label is None:
             return
-        for aid in ids:
-            self.controller.relabel(aid, label)
+        self.controller.relabel_many(ids, label)
 
     def merge_selected(self) -> None:
         ids = self._selected_ids()
+        if not self.controller._check_editable():
+            return
         try:
             merged = self.session.store.merge(ids)
         except AnnotationError as exc:
             self.prompts.error(self.browser, "Cannot merge", str(exc))
             return
         self.controller.select(merged.annotation_id)
-        self._show_message(f"Merged {len(ids)} annotations into one {merged.label} (Ctrl+Z to undo)")
+        self._show_message(f"Merged {len(ids)} annotations into one {merged.label} ({UNDO_HINT})")
 
     def delete_selected_rows(self) -> None:
         ids = self._selected_ids()
-        if ids:
+        if ids and self.controller._check_editable():
             self.session.store.delete_many(ids)
-            self._show_message(f"Deleted {len(ids)} annotation(s) (Ctrl+Z to undo)")
+            self._show_message(f"Deleted {len(ids)} annotation(s) ({UNDO_HINT})")
+
+    def delete_selection(self) -> None:
+        """Delete key: every selected row of the list, or the annotation selected in the EEG."""
+        if len(self._selected_ids()) > 1:
+            self.delete_selected_rows()
+        else:
+            self.controller.delete_selected()
 
     # --------------------------------------------------------- finishing
     def show(self) -> None:
-        self.browser.resize(1600, 950)
+        # Fit the window to the screen (laptops are often 1366 × 768).
+        width, height = 1600, 950
+        screen = self.browser.screen() if hasattr(self.browser, "screen") else None
+        if screen is not None:
+            avail = screen.availableGeometry()
+            width, height = min(width, int(avail.width() * 0.97)), min(height, int(avail.height() * 0.95))
+        self.browser.resize(width, height)
         self.browser.resizeDocks([self.annotation_dock], [470], Qt.Horizontal)
         self.browser.resizeDocks([self.annotation_dock, self.info_dock], [540, 340], Qt.Vertical)
         self.browser.show()
@@ -673,7 +708,17 @@ class AnnotationWorkspace(QObject):
             return False
         self._closing_ok = True
         self._tick.stop()
-        self.session.abandon()
+        try:
+            self.session.abandon()
+        except Exception as exc:  # e.g. the session log is on a disconnected network drive
+            try:
+                self.session.lock.release()
+            except Exception:
+                pass
+            self.prompts.error(
+                self.browser, "Problem while closing",
+                f"The recording was closed and stays incomplete, but the session log could not be written: {exc}",
+            )
         QTimer.singleShot(0, self.closedWithoutSaving.emit)
         return True
 

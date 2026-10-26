@@ -48,6 +48,7 @@ from qtpy.QtWidgets import QMenu  # noqa: E402
 
 from electroclean.app.annotations.mne_bridge import to_mne_annotations  # noqa: E402
 from electroclean.app.annotations.model import AnnotationError  # noqa: E402
+from electroclean.app.gui.help_text import UNDO_HINT
 
 if TYPE_CHECKING:  # pragma: no cover
     from electroclean.app.annotations.store import AnnotationStore, StoreChange
@@ -79,7 +80,25 @@ class ElectroCleanBrowser(_pgf.MNEQtBrowser):
     def __init__(self, **kwargs: Any) -> None:
         self._ec_controller: AnnotationController | None = None
         self._ec_close_guard: Callable[[], bool] | None = None
+        self._ec_help: Callable[[], None] | None = None
         super().__init__(**kwargs)
+
+    def _toggle_help_fig(self) -> None:
+        # MNE's help describes its own shortcuts (marking bad channels, Esc closes the
+        # window), which do not apply here: show ElectroClean's help instead.
+        if self._ec_help is not None:
+            self._ec_help()
+        else:  # pragma: no cover
+            super()._toggle_help_fig()
+
+    def _create_ch_context_fig(self, idx: Any) -> None:
+        # Right-clicking a channel name shows its sensor position, which fails for
+        # recordings without positions; say so instead of failing silently.
+        try:
+            super()._create_ch_context_fig(idx)
+        except Exception as exc:  # noqa: BLE001
+            with contextlib.suppress(Exception):
+                self.statusBar().showMessage(f"No sensor position to show for this channel ({exc})", 8000)
 
     def closeEvent(self, event: Any) -> None:  # noqa: N802 (Qt naming)
         guard = self._ec_close_guard
@@ -92,6 +111,16 @@ class ElectroCleanBrowser(_pgf.MNEQtBrowser):
             # MNE disconnects every toolbar action on close; PySide warns about those never connected.
             warnings.filterwarnings("ignore", message=".*Failed to disconnect.*")
             super().closeEvent(event)
+
+    def keyPressEvent(self, event: Any) -> None:  # noqa: N802
+        # MNE's single-key shortcuts ignore Ctrl, so Ctrl+Z with nothing to undo would toggle
+        # "zen mode", Ctrl+S the scale bars, and so on. None of MNE's shortcuts uses Ctrl,
+        # Cmd or Alt, so such key presses are not passed on (ElectroClean's own shortcuts
+        # are handled by their actions before they get here).
+        if event.modifiers() & (Qt.ControlModifier | Qt.MetaModifier | Qt.AltModifier):
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     def _check_close(self) -> None:
         # MNE maps Escape to closing the window; ElectroClean uses it to clear the selection.
@@ -342,6 +371,7 @@ class AnnotationController(QObject):
         self.selected_channels: list[str] = []
         self.selected_id: str | None = None
         self.drawing_enabled = True
+        self.read_only = False  # review windows: nothing can be changed
         self.display_prefix: dict[str, str] = {}  # e.g. "REF: " in review mode
         self.regions: dict[str, ArtifactRegion] = {}
         self._drag_preview: pg.LinearRegionItem | None = None
@@ -417,7 +447,27 @@ class AnnotationController(QObject):
         self._update_channel_highlight()
         self.stateChanged.emit()
 
+    @property
+    def editable(self) -> bool:
+        return self.drawing_enabled and not self.read_only
+
+    def set_read_only(self) -> None:
+        """Make the view permanently read-only (review of a finished recording)."""
+        self.read_only = True
+        self.set_drawing_enabled(False)
+
+    def _check_editable(self) -> bool:
+        if self.editable:
+            return True
+        self._say(
+            "This view is read-only" if self.read_only
+            else "Drawing and editing is off: tick Draw/edit to change annotations"
+        )
+        return False
+
     def set_drawing_enabled(self, enabled: bool) -> None:
+        if self.read_only:
+            enabled = False
         self.drawing_enabled = bool(enabled)
         for region in self.regions.values():
             region.setMovable(self.drawing_enabled)
@@ -470,6 +520,8 @@ class AnnotationController(QObject):
 
     def create_annotation(self, t0: float, t1: float) -> str | None:
         """Create an annotation with the active label and channel scope."""
+        if not self._check_editable():
+            return None
         if self.scope == "channels" and not self.selected_channels:
             self._say("No channels selected: click channel names, use 'Choose channels…', or choose 'Whole montage'.")
             return None
@@ -490,6 +542,9 @@ class AnnotationController(QObject):
 
     # --------------------------------------------------------------- editing
     def on_region_edited(self, region: ArtifactRegion) -> None:
+        if not self.editable:
+            self.schedule_sync(force=True)  # put the region back where the store has it
+            return
         t0, t1 = region.getRegion()
         try:
             self.store.set_interval(region.annotation_id, t0, t1)
@@ -498,6 +553,8 @@ class AnnotationController(QObject):
             self.schedule_sync(force=True)
 
     def toggle_annotation_channel(self, annotation_id: str, ch_name: str) -> None:
+        if not self._check_editable():
+            return
         try:
             ann = self.store.toggle_channel(annotation_id, ch_name)
         except AnnotationError as exc:
@@ -521,35 +578,52 @@ class AnnotationController(QObject):
         self.selectionChanged.emit(annotation_id)
 
     def delete_selected(self) -> None:
+        if not self._check_editable():
+            return
         if self.selected_id is None:
             self._say("Select an annotation first (click it or choose it in the list)")
             return
         self.delete(self.selected_id)
 
     def delete(self, annotation_id: str) -> None:
+        if not self._check_editable():
+            return
         ann = self.store.get(annotation_id)
         self.store.delete(annotation_id)
         self.selected_id = None
         self.selectionChanged.emit(None)
-        self._say(f"Deleted {ann.label} (Ctrl+Z to undo)")
+        self._say(f"Deleted {ann.label} ({UNDO_HINT})")
 
     def relabel(self, annotation_id: str, label: str) -> None:
-        self.store.set_label(annotation_id, label)
+        if self._check_editable():
+            self.store.set_label(annotation_id, label)
+
+    def relabel_many(self, annotation_ids: list[str], label: str) -> None:
+        if self._check_editable():
+            self.store.set_label_many(annotation_ids, label)
 
     def set_annotation_channels(self, annotation_id: str, channels: list[str]) -> None:
-        self.store.set_channels(annotation_id, channels)
+        if self._check_editable():
+            self.store.set_channels(annotation_id, channels)
 
     def undo(self) -> None:
+        if not self._check_editable():
+            return
         what = self.store.undo()
         self._say(f"Undid: {what}" if what else "Nothing to undo")
 
     def redo(self) -> None:
+        if not self._check_editable():
+            return
         what = self.store.redo()
         self._say(f"Redid: {what}" if what else "Nothing to redo")
 
     def show_context_menu(self, annotation_id: str, screen_pos: Any) -> None:
+        if not self._check_editable():
+            return
         ann = self.store.get(annotation_id)
         menu = QMenu(self.browser)
+        menu.setAttribute(Qt.WA_DeleteOnClose)
         menu.addSection(f"{ann.label}")
         relabel = menu.addMenu("Change label to")
         for lab in self.catalogue.label_names:
@@ -708,7 +782,12 @@ class AnnotationController(QObject):
         p = self.browser.mne
         with contextlib.suppress(TypeError, RuntimeError):
             p.viewbox.sigYRangeChanged.disconnect(region.update_label_pos)
-        region.removeSingleChannelAnnots.emit(region)
+        # MNE's SingleChannelAnnot.remove() only takes the item off the view box and leaves it in
+        # PlotItem.items; remove it properly so that rebuilt regions do not accumulate dead items.
+        for item in list(region.single_channel_annots.values()):
+            if item in p.plt.items:
+                p.plt.removeItem(item)
+        region.single_channel_annots.clear()
         if region.label_item in p.plt.items:
             p.plt.removeItem(region.label_item)
         if region in p.plt.items:

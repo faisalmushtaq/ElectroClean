@@ -1,7 +1,7 @@
 {
   "schema": "electroclean.session",
   "schema_version": "1.0.0",
-  "session_id": "20261026T154749Z-e6797cfe",
+  "session_id": "20261026T164623Z-16b8409d",
   "mode": "standard",
   "context": {},
   "annotator": {
@@ -56,51 +56,51 @@
       "vhdr": {
         "path": "sub-001/eeg/sub-001_task-rest_eeg.vhdr",
         "size": 1023,
-        "mtime_ns": 1793029668574698147,
+        "mtime_ns": 1793033182566386333,
         "sha256": "4b98efe8ba8c9e518be4d13e0f093f6577dc5e5d734c976957376a848e118dbd"
       },
       "eeg": {
         "path": "sub-001/eeg/sub-001_task-rest_eeg.eeg",
         "size": 1260000,
-        "mtime_ns": 1793029668574067503,
+        "mtime_ns": 1793033182565183523,
         "sha256": "398a2c44f1676dbb2e7dcea0a14ce07240acfbc810da844efc89b82a0eed945f"
       },
       "vmrk": {
         "path": "sub-001/eeg/sub-001_task-rest_eeg.vmrk",
         "size": 1392,
-        "mtime_ns": 1793029668574564211,
+        "mtime_ns": 1793033182566278521,
         "sha256": "22fa2ca5f58043a805e73b001f51443864117904f8d9a0fd882ab8078214e1f5"
       },
       "channels_tsv": {
         "path": "sub-001/eeg/sub-001_task-rest_channels.tsv",
         "size": 367,
-        "mtime_ns": 1793029668574922949,
+        "mtime_ns": 1793033182566545597,
         "sha256": "fb7c4a95f705b23f6df1d41b1a1647eb112b58cf83d2b3a0dfa66e8c9b321e97"
       },
       "events_tsv": {
         "path": "sub-001/eeg/sub-001_task-rest_events.tsv",
         "size": 928,
-        "mtime_ns": 1793029668574799898,
+        "mtime_ns": 1793033182566452219,
         "sha256": "23fbd318246db707134f26fd35f535df2bd25580d7cf8c17e33066b3b744c0a8"
       },
       "events_json": {
         "path": "sub-001/eeg/sub-001_task-rest_events.json",
         "size": 289,
-        "mtime_ns": 1793029668574883556,
+        "mtime_ns": 1793033182566510171,
         "sha256": "203b47891160359d51301343101c20872de346b32b5a97b29a70139958c62f00"
       },
       "eeg_json": {
         "path": "sub-001/eeg/sub-001_task-rest_eeg.json",
         "size": 182,
-        "mtime_ns": 1793029668574967884,
+        "mtime_ns": 1793033182566584936,
         "sha256": "8e99bb89b33acc525aca92ddbee5735b514d836771f22abe2ed0f1a660fb42f4"
       }
     }
   },
   "timing": {
-    "session_opened": "2026-10-26T15:47:49.374+00:00",
-    "start_timestamp": "2026-10-26T15:47:49.375+00:00",
-    "finish_timestamp": "2026-10-26T15:47:49.375+00:00",
+    "session_opened": "2026-10-26T16:46:23.141+00:00",
+    "start_timestamp": "2026-10-26T16:46:23.141+00:00",
+    "finish_timestamp": "2026-10-26T16:46:23.141+00:00",
     "elapsed_seconds": 0.0,
     "clock": "time.monotonic (started when the viewer became usable, stopped at Save and Finish)"
   },

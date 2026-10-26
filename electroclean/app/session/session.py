@@ -66,6 +66,18 @@ def recording_lock_path(layout: OutputLayout, recording_id: str, annotator_id: s
     return layout.locks / f"recording-{digest}-{annotator_id}.lock"
 
 
+def recording_lock_owner(
+    layout: OutputLayout, recording_id: str, annotator_id: str, mode: str, context: str, stale_after_s: float
+) -> dict[str, Any] | None:
+    """Who holds the recording lock, if it is held and not stale (checked before loading)."""
+    path = recording_lock_path(layout, recording_id, annotator_id, mode, context)
+    if not path.exists():
+        return None
+    lock = FileLock(path, stale_after_s=stale_after_s)
+    owner = FileLock.read_owner(path)
+    return None if lock.is_stale(owner) else (owner or {"annotator_id": annotator_id})
+
+
 @dataclass
 class FinishResult:
     commit: CommitResult
@@ -149,20 +161,20 @@ class AnnotationSession:
         try:
             if not self.allow_repeat:
                 self._handle_leftover_outputs()
+            self.session_log.write(
+                "session_started",
+                session_id=self.session_id,
+                recording_id=self.recording_id,
+                annotator_id=self.annotator_id,
+                mode=self.mode,
+                context=self.context_id,
+            )
         except BaseException:
             self.lock.release()
             raise
         self.started_at = now_local_iso()
         self._last_heartbeat = time.monotonic()
         self.state = "open"
-        self.session_log.write(
-            "session_started",
-            session_id=self.session_id,
-            recording_id=self.recording_id,
-            annotator_id=self.annotator_id,
-            mode=self.mode,
-            context=self.context_id,
-        )
 
     def _handle_leftover_outputs(self) -> None:
         """Deal with output files of this recording and annotator that are not registered as complete.
