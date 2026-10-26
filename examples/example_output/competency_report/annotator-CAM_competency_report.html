@@ -1,0 +1,340 @@
+<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'><title>Competency report</title>
+<style>body{font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;max-width:1000px;margin:2em auto;padding:0 1em;color:#0b0b0b;background:#fcfcfb} table{border-collapse:collapse;font-size:13px} td,th{border-top:1px solid #e4e3df;padding:4px 8px;text-align:left} th{background:#f1f0ec}.muted{color:#52514e}</style></head><body>
+<h1>Competency report: annotator CAM</h1>
+<p class='muted'>Reference set demo-set – Demonstration reference set · generated 2026-10-26T15:47:55.253+00:00 · ElectroClean 1.0.0</p>
+<h2 style='color:#1B5E20'>Meets the competency criteria.</h2>
+<h3>Criteria</h3><table><tr><th>Criterion</th><th>Where</th><th>Value</th><th>Result</th></tr>
+<tr><td>Event F1 (time only) ≥ 0.8 (overall)</td><td>overall</td><td>0.810</td><td>pass</td></tr>
+<tr><td>Sensitivity: proportion of reference events found ≥ 0.7 (in every assessed category)</td><td>Eye-blink-artifact</td><td>0.833</td><td>pass</td></tr>
+<tr><td>Sensitivity: proportion of reference events found ≥ 0.7 (in every assessed category)</td><td>Electrode-pops-artifact</td><td>0.750</td><td>pass</td></tr>
+<tr><td>Same label as the reference for detected artifacts ≥ 0.85 (overall)</td><td>overall</td><td>0.944</td><td>pass</td></tr>
+</table>
+<p class='muted'>Categories with fewer than 3 reference events are reported but not judged: Chewing-artifact, ECG-artifact, EMG-artifact, Horizontal-eye-movement-artifact, Slow-eye-movement-artifact, Movement-artifact, Respiration-artifact, Tongue-movement-artifact.</p>
+<h3>Overall</h3><table><tr><th>Measure</th><th>Value</th></tr>
+<tr><td>Event F1 (time only)</td><td>0.810</td></tr>
+<tr><td>Sensitivity: proportion of reference events found</td><td>0.773</td></tr>
+<tr><td>Precision: proportion of your events that match the reference</td><td>0.850</td></tr>
+<tr><td>Cohen&#x27;s kappa over time (exact)</td><td>0.904</td></tr>
+<tr><td>Positive agreement over time (exact)</td><td>0.932</td></tr>
+<tr><td>Positive agreement over time and channels</td><td>0.907</td></tr>
+<tr><td>Mean temporal overlap (IoU) of matched events</td><td>0.899</td></tr>
+<tr><td>Mean channel overlap (Jaccard) of matched events</td><td>0.931</td></tr>
+<tr><td>Same label as the reference for detected artifacts</td><td>0.944</td></tr>
+<tr><td>Extra (false-positive) events per minute</td><td>1.500</td></tr>
+</table><h3>By artifact category</h3>
+<table class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>category</th>
+      <th>reference_events</th>
+      <th>your_events</th>
+      <th>found</th>
+      <th>event_f1</th>
+      <th>event_recall</th>
+      <th>event_precision</th>
+      <th>time_kappa</th>
+      <th>time_positive_agreement</th>
+      <th>channel_positive_agreement</th>
+      <th>mean_iou</th>
+      <th>mean_channel_jaccard</th>
+      <th>onset_diff_mean_s</th>
+      <th>offset_diff_mean_s</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Chewing-artifact</td>
+      <td>2</td>
+      <td>2</td>
+      <td>2</td>
+      <td>1.000</td>
+      <td>1.000</td>
+      <td>1.000</td>
+      <td>0.991</td>
+      <td>0.992</td>
+      <td>0.851</td>
+      <td>0.983</td>
+      <td>0.750</td>
+      <td>-0.002</td>
+      <td>-0.024</td>
+    </tr>
+    <tr>
+      <td>ECG-artifact</td>
+      <td>2</td>
+      <td>2</td>
+      <td>2</td>
+      <td>1.000</td>
+      <td>1.000</td>
+      <td>1.000</td>
+      <td>0.988</td>
+      <td>0.989</td>
+      <td>0.897</td>
+      <td>0.978</td>
+      <td>0.833</td>
+      <td>-0.024</td>
+      <td>-0.086</td>
+    </tr>
+    <tr>
+      <td>EMG-artifact</td>
+      <td>2</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0.000</td>
+      <td>0.000</td>
+      <td>n/a</td>
+      <td>-0.000</td>
+      <td>0.000</td>
+      <td>0.000</td>
+      <td>n/a</td>
+      <td>n/a</td>
+      <td>n/a</td>
+      <td>n/a</td>
+    </tr>
+    <tr>
+      <td>Eye-blink-artifact</td>
+      <td>6</td>
+      <td>5</td>
+      <td>5</td>
+      <td>0.909</td>
+      <td>0.833</td>
+      <td>1.000</td>
+      <td>0.829</td>
+      <td>0.832</td>
+      <td>0.799</td>
+      <td>0.858</td>
+      <td>0.933</td>
+      <td>-0.010</td>
+      <td>0.017</td>
+    </tr>
+    <tr>
+      <td>Horizontal-eye-movement-artifact</td>
+      <td>2</td>
+      <td>3</td>
+      <td>2</td>
+      <td>0.800</td>
+      <td>1.000</td>
+      <td>0.667</td>
+      <td>0.520</td>
+      <td>0.534</td>
+      <td>0.534</td>
+      <td>0.935</td>
+      <td>1.000</td>
+      <td>-0.056</td>
+      <td>-0.016</td>
+    </tr>
+    <tr>
+      <td>Slow-eye-movement-artifact</td>
+      <td>2</td>
+      <td>1</td>
+      <td>1</td>
+      <td>0.667</td>
+      <td>0.500</td>
+      <td>1.000</td>
+      <td>0.645</td>
+      <td>0.661</td>
+      <td>0.661</td>
+      <td>0.974</td>
+      <td>1.000</td>
+      <td>-0.072</td>
+      <td>0.036</td>
+    </tr>
+    <tr>
+      <td>Movement-artifact</td>
+      <td>2</td>
+      <td>2</td>
+      <td>2</td>
+      <td>1.000</td>
+      <td>1.000</td>
+      <td>1.000</td>
+      <td>0.976</td>
+      <td>0.977</td>
+      <td>0.977</td>
+      <td>0.954</td>
+      <td>1.000</td>
+      <td>0.028</td>
+      <td>0.030</td>
+    </tr>
+    <tr>
+      <td>Respiration-artifact</td>
+      <td>0</td>
+      <td>1</td>
+      <td>0</td>
+      <td>0.000</td>
+      <td>n/a</td>
+      <td>0.000</td>
+      <td>0.000</td>
+      <td>0.000</td>
+      <td>0.000</td>
+      <td>n/a</td>
+      <td>n/a</td>
+      <td>n/a</td>
+      <td>n/a</td>
+    </tr>
+    <tr>
+      <td>Tongue-movement-artifact</td>
+      <td>0</td>
+      <td>1</td>
+      <td>0</td>
+      <td>0.000</td>
+      <td>n/a</td>
+      <td>0.000</td>
+      <td>0.000</td>
+      <td>0.000</td>
+      <td>0.000</td>
+      <td>n/a</td>
+      <td>n/a</td>
+      <td>n/a</td>
+      <td>n/a</td>
+    </tr>
+    <tr>
+      <td>Electrode-pops-artifact</td>
+      <td>4</td>
+      <td>3</td>
+      <td>3</td>
+      <td>0.857</td>
+      <td>0.750</td>
+      <td>1.000</td>
+      <td>0.749</td>
+      <td>0.752</td>
+      <td>0.752</td>
+      <td>0.775</td>
+      <td>1.000</td>
+      <td>0.059</td>
+      <td>-0.025</td>
+    </tr>
+  </tbody>
+</table>
+<h3>Missed reference artifacts (5)</h3>
+<table class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>recording</th>
+      <th>label</th>
+      <th>onset_s</th>
+      <th>offset_s</th>
+      <th>channels</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>sub-002/eeg/sub-002_task-rest_eeg.vhdr</td>
+      <td>Eye-blink-artifact</td>
+      <td>3.00</td>
+      <td>3.40</td>
+      <td>Fp1,Fp2,VEOG</td>
+    </tr>
+    <tr>
+      <td>sub-002/eeg/sub-002_task-rest_eeg.vhdr</td>
+      <td>EMG-artifact</td>
+      <td>9.20</td>
+      <td>10.80</td>
+      <td>F7,F8,T7,T8</td>
+    </tr>
+    <tr>
+      <td>sub-002/eeg/sub-002_task-rest_eeg.vhdr</td>
+      <td>Slow-eye-movement-artifact</td>
+      <td>40.00</td>
+      <td>44.00</td>
+      <td>F7,F8,HEOG</td>
+    </tr>
+    <tr>
+      <td>sub-003/eeg/sub-003_task-rest_eeg.vhdr</td>
+      <td>EMG-artifact</td>
+      <td>9.20</td>
+      <td>10.80</td>
+      <td>F7,F8,T7,T8</td>
+    </tr>
+    <tr>
+      <td>sub-003/eeg/sub-003_task-rest_eeg.vhdr</td>
+      <td>Electrode-pops-artifact</td>
+      <td>53.50</td>
+      <td>53.90</td>
+      <td>O2</td>
+    </tr>
+  </tbody>
+</table>
+<h3>Extra annotations (3)</h3>
+<table class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>recording</th>
+      <th>label</th>
+      <th>onset_s</th>
+      <th>offset_s</th>
+      <th>channels</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>sub-002/eeg/sub-002_task-rest_eeg.vhdr</td>
+      <td>Horizontal-eye-movement-artifact</td>
+      <td>39.99</td>
+      <td>43.94</td>
+      <td>F7,F8,HEOG</td>
+    </tr>
+    <tr>
+      <td>sub-002/eeg/sub-002_task-rest_eeg.vhdr</td>
+      <td>Respiration-artifact</td>
+      <td>48.38</td>
+      <td>49.37</td>
+      <td>O1,P7</td>
+    </tr>
+    <tr>
+      <td>sub-003/eeg/sub-003_task-rest_eeg.vhdr</td>
+      <td>Tongue-movement-artifact</td>
+      <td>42.06</td>
+      <td>42.87</td>
+      <td>F3,T7</td>
+    </tr>
+  </tbody>
+</table>
+<h3>Different labels (1)</h3>
+<table class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>recording</th>
+      <th>reference_label</th>
+      <th>your_label</th>
+      <th>onset_s</th>
+      <th>offset_s</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>sub-002/eeg/sub-002_task-rest_eeg.vhdr</td>
+      <td>Slow-eye-movement-artifact</td>
+      <td>Horizontal-eye-movement-artifact</td>
+      <td>40.00</td>
+      <td>44.00</td>
+    </tr>
+  </tbody>
+</table>
+<p class='muted'>Matching: {&quot;match_criterion&quot;: &quot;iou&quot;, &quot;primary_iou_threshold&quot;: 0.2, &quot;allow_many_to_one&quot;: false}. Total assessed time 2.0 min.</p>
+<h3>Reference provenance</h3><pre>{
+  &quot;method&quot;: &quot;single_expert&quot;,
+  &quot;experts&quot;: [
+    &quot;TRUTH&quot;
+  ],
+  &quot;notes&quot;: &quot;Synthetic ground truth used as the reference&quot;
+}</pre>
+<h3>Reproducibility</h3><pre>{
+  &quot;reference_set&quot;: {
+    &quot;file&quot;: &quot;demo-set/reference_set.json&quot;,
+    &quot;sha256&quot;: &quot;2f750de37494a3ac37907fa85de3a8e74793622b1684d45599507162a33f63cb&quot;
+  },
+  &quot;references&quot;: {
+    &quot;sub-002/eeg/sub-002_task-rest_eeg.vhdr&quot;: &quot;ed8721e4df4fe1688042ce4481f7ddf8d086c2100cd8c21af890d50c8dff5214&quot;,
+    &quot;sub-003/eeg/sub-003_task-rest_eeg.vhdr&quot;: &quot;e00982d7de2e5efac5a9670d1d0c764d81a5ba8bd2408674631526e45e020791&quot;
+  },
+  &quot;annotations&quot;: {
+    &quot;sub-002/eeg/sub-002_task-rest_eeg.vhdr&quot;: {
+      &quot;file&quot;: &quot;training/demo-set/assessment/annotator-CAM/sub-002/eeg/sub-002_task-rest_eeg_annotator-CAM_annotations.json&quot;,
+      &quot;sha256&quot;: &quot;84e666ac1b644c33a92c70371cad8e87de8e49c5e25e324fa3da4bbf52d3b65a&quot;
+    },
+    &quot;sub-003/eeg/sub-003_task-rest_eeg.vhdr&quot;: {
+      &quot;file&quot;: &quot;training/demo-set/assessment/annotator-CAM/sub-003/eeg/sub-003_task-rest_eeg_annotator-CAM_annotations.json&quot;,
+      &quot;sha256&quot;: &quot;92310cf527a0f82325f13a276ffeceb87170004d3b32b8a726513671acc21082&quot;
+    }
+  }
+}</pre>
+<p class='muted'>Results digest: f867fa7c8331217a6702f8ca77bef72b264c49b0cf410f0660d486ecccbb5273</p></body></html>

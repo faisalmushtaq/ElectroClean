@@ -1,0 +1,203 @@
+{
+  "generated_by": "ElectroClean 1.0.0",
+  "python": "3.13.17",
+  "pandas": "3.1.0",
+  "config": {
+    "resolutions_s": [
+      0.01,
+      0.05,
+      0.1
+    ],
+    "min_bin_coverage": 0.5,
+    "channel_modes": [
+      "time_only",
+      "time_and_channel"
+    ],
+    "include_any_artifact": true,
+    "match_criterion": "iou",
+    "iou_thresholds": [
+      0.0,
+      0.2,
+      0.5
+    ],
+    "primary_iou_threshold": 0.2,
+    "onset_tolerance_s": 0.5,
+    "offset_tolerance_s": 0.5,
+    "allow_many_to_one": false,
+    "min_channel_jaccard": 0.0,
+    "categories": null,
+    "annotators": null,
+    "modes": [
+      "standard"
+    ],
+    "reference_annotator": null,
+    "duplicate_policy": "latest",
+    "channel_exclude": [],
+    "timeline_max_recordings": 12,
+    "extra_measures": []
+  },
+  "label_catalogue": {
+    "catalogue_id": "electroclean-hed-score-artifacts",
+    "catalogue_version": "1.0.0",
+    "sha256": "758489482e27c1eb85b60bb3e1df1470913b673d9bfef6b51832825f5596faae",
+    "hed_library": "score",
+    "hed_library_version": "2.2.0",
+    "hed_standard_version": "8.5.0",
+    "labels": [
+      {
+        "value": 100,
+        "label": "Chewing-artifact"
+      },
+      {
+        "value": 101,
+        "label": "ECG-artifact"
+      },
+      {
+        "value": 102,
+        "label": "EMG-artifact"
+      },
+      {
+        "value": 103,
+        "label": "Eye-blink-artifact"
+      },
+      {
+        "value": 104,
+        "label": "Horizontal-eye-movement-artifact"
+      },
+      {
+        "value": 105,
+        "label": "Slow-eye-movement-artifact"
+      },
+      {
+        "value": 106,
+        "label": "Vertical-eye-movement-artifact"
+      },
+      {
+        "value": 107,
+        "label": "Movement-artifact"
+      },
+      {
+        "value": 108,
+        "label": "Pulse-artifact"
+      },
+      {
+        "value": 109,
+        "label": "Respiration-artifact"
+      },
+      {
+        "value": 110,
+        "label": "Sweat-artifact"
+      },
+      {
+        "value": 111,
+        "label": "Tongue-movement-artifact"
+      },
+      {
+        "value": 112,
+        "label": "Induction-artifact"
+      },
+      {
+        "value": 113,
+        "label": "Electrode-movement-artifact"
+      },
+      {
+        "value": 114,
+        "label": "Electrode-pops-artifact"
+      },
+      {
+        "value": 115,
+        "label": "Salt-bridge-artifact"
+      }
+    ]
+  },
+  "n_recordings": 3,
+  "annotators": [
+    "A01",
+    "A02",
+    "A03"
+  ],
+  "input_files": [
+    {
+      "path": "Annotated_Events/annotator-A01/sub-001/eeg/sub-001_task-rest_eeg_annotator-A01_annotations.json",
+      "sha256": "72b96fc8ac28fe13a280e938c8eead76a61d2c00b91263b4d3005dab02723186",
+      "recording_id": "sub-001/eeg/sub-001_task-rest_eeg.vhdr",
+      "annotator_id": "A01",
+      "mode": "standard",
+      "n_annotations": "11",
+      "status": "read"
+    },
+    {
+      "path": "Annotated_Events/annotator-A01/sub-002/eeg/sub-002_task-rest_eeg_annotator-A01_annotations.json",
+      "sha256": "00f27d5aa457d8d269f4c800fa52341691267807ed3b7dc875fb5fdc25caed75",
+      "recording_id": "sub-002/eeg/sub-002_task-rest_eeg.vhdr",
+      "annotator_id": "A01",
+      "mode": "standard",
+      "n_annotations": "10",
+      "status": "read"
+    },
+    {
+      "path": "Annotated_Events/annotator-A01/sub-003/eeg/sub-003_task-rest_eeg_annotator-A01_annotations.json",
+      "sha256": "50632e22f4a62b189841c4854dd285121af4223495dfcff9f45e2d89663237c0",
+      "recording_id": "sub-003/eeg/sub-003_task-rest_eeg.vhdr",
+      "annotator_id": "A01",
+      "mode": "standard",
+      "n_annotations": "11",
+      "status": "read"
+    },
+    {
+      "path": "Annotated_Events/annotator-A02/sub-001/eeg/sub-001_task-rest_eeg_annotator-A02_annotations.json",
+      "sha256": "2e5822a187ee35f09571e9e9e70d4d033535068fb157b2f5058ce91e92a8fd95",
+      "recording_id": "sub-001/eeg/sub-001_task-rest_eeg.vhdr",
+      "annotator_id": "A02",
+      "mode": "standard",
+      "n_annotations": "12",
+      "status": "read"
+    },
+    {
+      "path": "Annotated_Events/annotator-A02/sub-002/eeg/sub-002_task-rest_eeg_annotator-A02_annotations.json",
+      "sha256": "014be855ff3b740bd0459a04cee407c864d8ded19bfe6559a0b7bd891f59723e",
+      "recording_id": "sub-002/eeg/sub-002_task-rest_eeg.vhdr",
+      "annotator_id": "A02",
+      "mode": "standard",
+      "n_annotations": "11",
+      "status": "read"
+    },
+    {
+      "path": "Annotated_Events/annotator-A02/sub-003/eeg/sub-003_task-rest_eeg_annotator-A02_annotations.json",
+      "sha256": "eafd5fa45cfbb734e52a7570c9aeb6a55c02f126c818dc1264bee5a3a84bc0d5",
+      "recording_id": "sub-003/eeg/sub-003_task-rest_eeg.vhdr",
+      "annotator_id": "A02",
+      "mode": "standard",
+      "n_annotations": "9",
+      "status": "read"
+    },
+    {
+      "path": "Annotated_Events/annotator-A03/sub-001/eeg/sub-001_task-rest_eeg_annotator-A03_annotations.json",
+      "sha256": "c079f5fd4cc8ee65c214aa0098bb02526b80a6b2e0094c53d97f6099dd00e70e",
+      "recording_id": "sub-001/eeg/sub-001_task-rest_eeg.vhdr",
+      "annotator_id": "A03",
+      "mode": "standard",
+      "n_annotations": "10",
+      "status": "read"
+    },
+    {
+      "path": "Annotated_Events/annotator-A03/sub-002/eeg/sub-002_task-rest_eeg_annotator-A03_annotations.json",
+      "sha256": "d6dbc16ca74fefa954cb29a4c87268755833bc59f861a7f20c8aaa263d3c182c",
+      "recording_id": "sub-002/eeg/sub-002_task-rest_eeg.vhdr",
+      "annotator_id": "A03",
+      "mode": "standard",
+      "n_annotations": "9",
+      "status": "read"
+    },
+    {
+      "path": "Annotated_Events/annotator-A03/sub-003/eeg/sub-003_task-rest_eeg_annotator-A03_annotations.json",
+      "sha256": "e30209f064b5d80a508c33be24a52c88f302e1a48991a2684428e5029fe53d4f",
+      "recording_id": "sub-003/eeg/sub-003_task-rest_eeg.vhdr",
+      "annotator_id": "A03",
+      "mode": "standard",
+      "n_annotations": "10",
+      "status": "read"
+    }
+  ],
+  "warnings": []
+}

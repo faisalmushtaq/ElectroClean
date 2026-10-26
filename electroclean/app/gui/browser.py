@@ -88,7 +88,10 @@ class ElectroCleanBrowser(_pgf.MNEQtBrowser):
             return
         if self._ec_controller is not None:
             self._ec_controller.detach()
-        super().closeEvent(event)
+        with warnings.catch_warnings():
+            # MNE disconnects every toolbar action on close; PySide warns about those never connected.
+            warnings.filterwarnings("ignore", message=".*Failed to disconnect.*")
+            super().closeEvent(event)
 
     def _check_close(self) -> None:
         # MNE maps Escape to closing the window; ElectroClean uses it to clear the selection.
@@ -272,6 +275,9 @@ def create_browser(
     )
     if events is not None and len(events):
         kwargs.update(events=events, event_id=event_id, event_color=EVENT_COLOUR)
+    # The display copy may carry annotations from an earlier window on the same
+    # recording; MNE would draw its own (editable) regions for them, so clear them.
+    view_raw.set_annotations(None)
     with _use_browser_class(ElectroCleanBrowser):
         browser = view_raw.plot(**kwargs)
     if app is not None:
@@ -358,6 +364,10 @@ class AnnotationController(QObject):
         p.current_description = None  # MNE's own annotation tool is never used
         if getattr(p, "fig_annotation", None) is not None:
             p.fig_annotation.setVisible(False)
+        # Remove any regions MNE created itself; all regions are ElectroClean's from here on.
+        for region in list(getattr(p, "regions", [])):
+            if not isinstance(region, ArtifactRegion):
+                b._remove_region(region, from_annot=False)
         # Remove the standard annotation-mode button and keyboard shortcuts that do not apply.
         for action in list(p.toolbar.actions()):
             if action.text() in ("Toggle annotations mode",):
@@ -556,6 +566,13 @@ class AnnotationController(QObject):
     # Hook replaced by the workspace (opens the channel dialog).
     def requestChannelEdit(self, annotation_id: str) -> None:  # noqa: N802
         self._say("Channel editing is not available")
+
+    def set_display_prefix(self, prefix: dict[str, str]) -> None:
+        """Label prefixes such as 'REF: ' (review mode); redraws existing regions."""
+        self.display_prefix = dict(prefix)
+        for aid in list(self.regions):
+            self._remove_region(self.regions.pop(aid))
+        self.sync_now()
 
     # ------------------------------------------------------------ navigation
     def jump_to(self, annotation_id: str) -> None:

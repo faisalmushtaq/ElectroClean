@@ -1,0 +1,545 @@
+recording	category	channel_mode	representation	unit	raters	raters_per_unit	n_units	fleiss_kappa	fleiss_note	krippendorff_alpha	alpha_note	mean_pairwise_kappa
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Chewing-artifact	time_only	exact	samples	A01, A02, A03	3	15000	0.960235		0.960235		0.960512
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Chewing-artifact	time_only	exact	samples	A01, A02, A03	3	15000	0.439281		0.439293		0.304531
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Chewing-artifact	time_only	exact	samples	A01, A02, A03	3	15000	0.404622		0.404635		0.281259
+ALL (pooled)	Chewing-artifact	time_only	exact	samples	A01, A02, A03	3	45000	0.645155		0.645158		0.63116
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	ECG-artifact	time_only	exact	samples	A01, A02, A03	3	15000	0.975195		0.975195		0.975237
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	ECG-artifact	time_only	exact	samples	A01, A02, A03	3	15000	-0.0281249		-0.0281021		1.35283e-15
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	ECG-artifact	time_only	exact	samples	A01, A02, A03	3	15000	-0.0285714		-0.0285486		0
+ALL (pooled)	ECG-artifact	time_only	exact	samples	A01, A02, A03	3	45000	0.567402		0.567405		0.636826
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	EMG-artifact	time_only	exact	samples	A01, A02, A03	3	15000	0.469851		0.469862		0.319085
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	EMG-artifact	time_only	exact	samples	A01, A02, A03	3	15000	0.923551		0.923553		0.921324
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	EMG-artifact	time_only	exact	samples	A01, A02, A03	3	15000	0.906401		0.906403		0.904853
+ALL (pooled)	EMG-artifact	time_only	exact	samples	A01, A02, A03	3	45000	0.79904		0.799041		0.783145
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Eye-blink-artifact	time_only	exact	samples	A01, A02, A03	3	15000	0.395539		0.395553		0.267535
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Eye-blink-artifact	time_only	exact	samples	A01, A02, A03	3	15000	0.324883		0.324898		0.252447
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Eye-blink-artifact	time_only	exact	samples	A01, A02, A03	3	15000	0.548382		0.548392		0.504882
+ALL (pooled)	Eye-blink-artifact	time_only	exact	samples	A01, A02, A03	3	45000	0.429777		0.429781		0.356947
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Horizontal-eye-movement-artifact	time_only	exact	samples	A01, A02, A03	3	15000	0.489051		0.489062		0.330466
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Horizontal-eye-movement-artifact	time_only	exact	samples	A01, A02, A03	3	15000	0.423114		0.423127		0.536118
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Horizontal-eye-movement-artifact	time_only	exact	samples	A01, A02, A03	3	15000	0.910712		0.910714		0.910367
+ALL (pooled)	Horizontal-eye-movement-artifact	time_only	exact	samples	A01, A02, A03	3	45000	0.560869		0.560873		0.599697
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Slow-eye-movement-artifact	time_only	exact	samples	A01, A02, A03	3	15000	0.980316		0.980317		0.980336
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Slow-eye-movement-artifact	time_only	exact	samples	A01, A02, A03	3	15000	0.450322		0.450334		0.315796
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Slow-eye-movement-artifact	time_only	exact	samples	A01, A02, A03	3	15000	0.437339		0.437351		0.306902
+ALL (pooled)	Slow-eye-movement-artifact	time_only	exact	samples	A01, A02, A03	3	45000	0.669813		0.669815		0.630133
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Vertical-eye-movement-artifact	time_only	exact	samples	A01, A02, A03	3	15000	-0.00565401		-0.00563166		0
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Vertical-eye-movement-artifact	time_only	exact	samples	A01, A02, A03	3	15000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Vertical-eye-movement-artifact	time_only	exact	samples	A01, A02, A03	3	15000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Vertical-eye-movement-artifact	time_only	exact	samples	A01, A02, A03	3	45000	-0.00187759		-0.00187017		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Movement-artifact	time_only	exact	samples	A01, A02, A03	3	15000	0.966763		0.966764		0.9668
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Movement-artifact	time_only	exact	samples	A01, A02, A03	3	15000	0.924613		0.924615		0.923239
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Movement-artifact	time_only	exact	samples	A01, A02, A03	3	15000	0.879862		0.879865		0.876263
+ALL (pooled)	Movement-artifact	time_only	exact	samples	A01, A02, A03	3	45000	0.924687		0.924687		0.923693
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Pulse-artifact	time_only	exact	samples	A01, A02, A03	3	15000	-0.00207095		-0.00204868		0
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Pulse-artifact	time_only	exact	samples	A01, A02, A03	3	15000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Pulse-artifact	time_only	exact	samples	A01, A02, A03	3	15000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Pulse-artifact	time_only	exact	samples	A01, A02, A03	3	45000	-0.000689364		-0.000681951		-5.37205e-14
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Respiration-artifact	time_only	exact	samples	A01, A02, A03	3	15000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Respiration-artifact	time_only	exact	samples	A01, A02, A03	3	15000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Respiration-artifact	time_only	exact	samples	A01, A02, A03	3	15000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Respiration-artifact	time_only	exact	samples	A01, A02, A03	3	45000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Sweat-artifact	time_only	exact	samples	A01, A02, A03	3	15000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Sweat-artifact	time_only	exact	samples	A01, A02, A03	3	15000	-0.0026738		-0.00265152		1.38778e-14
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Sweat-artifact	time_only	exact	samples	A01, A02, A03	3	15000	-0.00191477		-0.00189251		0
+ALL (pooled)	Sweat-artifact	time_only	exact	samples	A01, A02, A03	3	45000	-0.00152826		-0.00152084		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Tongue-movement-artifact	time_only	exact	samples	A01, A02, A03	3	15000	-0.00484559		-0.00482326		-7.67435e-15
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Tongue-movement-artifact	time_only	exact	samples	A01, A02, A03	3	15000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Tongue-movement-artifact	time_only	exact	samples	A01, A02, A03	3	15000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Tongue-movement-artifact	time_only	exact	samples	A01, A02, A03	3	45000	-0.00161		-0.00160258		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Induction-artifact	time_only	exact	samples	A01, A02, A03	3	15000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Induction-artifact	time_only	exact	samples	A01, A02, A03	3	15000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Induction-artifact	time_only	exact	samples	A01, A02, A03	3	15000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Induction-artifact	time_only	exact	samples	A01, A02, A03	3	45000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Electrode-movement-artifact	time_only	exact	samples	A01, A02, A03	3	15000	-0.00314318		-0.00312089		0
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Electrode-movement-artifact	time_only	exact	samples	A01, A02, A03	3	15000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Electrode-movement-artifact	time_only	exact	samples	A01, A02, A03	3	15000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Electrode-movement-artifact	time_only	exact	samples	A01, A02, A03	3	45000	-0.00104554		-0.00103812		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Electrode-pops-artifact	time_only	exact	samples	A01, A02, A03	3	15000	0.819645		0.819649		0.818724
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Electrode-pops-artifact	time_only	exact	samples	A01, A02, A03	3	15000	0.66125		0.661257		0.64405
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Electrode-pops-artifact	time_only	exact	samples	A01, A02, A03	3	15000	0.620268		0.620276		0.621289
+ALL (pooled)	Electrode-pops-artifact	time_only	exact	samples	A01, A02, A03	3	45000	0.712364		0.712366		0.710546
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Salt-bridge-artifact	time_only	exact	samples	A01, A02, A03	3	15000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Salt-bridge-artifact	time_only	exact	samples	A01, A02, A03	3	15000	-0.00216021		-0.00213794		0
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Salt-bridge-artifact	time_only	exact	samples	A01, A02, A03	3	15000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Salt-bridge-artifact	time_only	exact	samples	A01, A02, A03	3	45000	-0.000719035		-0.000711622		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	ANY-artifact	time_only	exact	samples	A01, A02, A03	3	15000	0.845593		0.845596		0.845073
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	ANY-artifact	time_only	exact	samples	A01, A02, A03	3	15000	0.612419		0.612427		0.614603
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	ANY-artifact	time_only	exact	samples	A01, A02, A03	3	15000	0.44813		0.448143		0.449201
+ALL (pooled)	ANY-artifact	time_only	exact	samples	A01, A02, A03	3	45000	0.654738		0.654741		0.65612
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Chewing-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	0.95999		0.959992		0.960288
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Chewing-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	0.44009		0.440121		0.305076
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Chewing-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	0.405371		0.405404		0.281756
+ALL (pooled)	Chewing-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	18000	0.645538		0.645544		0.631524
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	ECG-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	0.975213		0.975214		0.975261
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	ECG-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	-0.0281602		-0.028103		0
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	ECG-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	-0.0285714		-0.0285143		0
+ALL (pooled)	ECG-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	18000	0.567447		0.567455		0.636826
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	EMG-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	0.470164		0.470194		0.319293
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	EMG-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	0.924949		0.924953		0.922956
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	EMG-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	0.907947		0.907952		0.906349
+ALL (pooled)	EMG-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	18000	0.800369		0.800373		0.784695
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Eye-blink-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	0.39506		0.395093		0.267192
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Eye-blink-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	0.321385		0.321423		0.247439
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Eye-blink-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	0.552772		0.552797		0.509688
+ALL (pooled)	Eye-blink-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	18000	0.430592		0.430603		0.357675
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Horizontal-eye-movement-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	0.486915		0.486944		0.329029
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Horizontal-eye-movement-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	0.422029		0.422061		0.534658
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Horizontal-eye-movement-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	0.911791		0.911796		0.911443
+ALL (pooled)	Horizontal-eye-movement-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	18000	0.560616		0.560624		0.599238
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Slow-eye-movement-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	0.980671		0.980672		0.980692
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Slow-eye-movement-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	0.44994		0.449971		0.315548
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Slow-eye-movement-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	0.437208		0.43724		0.306809
+ALL (pooled)	Slow-eye-movement-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	18000	0.669804		0.66981		0.630133
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Vertical-eye-movement-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	-0.00564277		-0.0055869		0
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Vertical-eye-movement-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Vertical-eye-movement-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Vertical-eye-movement-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	18000	-0.00187388		-0.00185532		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Movement-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	0.966117		0.966119		0.966154
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Movement-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	0.925424		0.925428		0.924001
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Movement-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	0.880424		0.880431		0.876688
+ALL (pooled)	Movement-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	18000	0.924946		0.924948		0.923904
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Pulse-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	-0.00205979		-0.00200412		0
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Pulse-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Pulse-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Pulse-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	18000	-0.000685655		-0.000667124		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Respiration-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Respiration-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Respiration-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Respiration-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	18000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Sweat-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Sweat-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	-0.0026738		-0.00261809		0
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Sweat-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	-0.00189246		-0.0018368		0
+ALL (pooled)	Sweat-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	18000	-0.00152083		-0.00150228		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Tongue-movement-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	-0.00485681		-0.00480098		0
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Tongue-movement-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Tongue-movement-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Tongue-movement-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	18000	-0.00161371		-0.00159516		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Induction-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Induction-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Induction-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Induction-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	18000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Electrode-movement-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	-0.00312082		-0.00306509		0
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Electrode-movement-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Electrode-movement-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Electrode-movement-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	18000	-0.00103811		-0.00101958		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Electrode-pops-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	0.825944		0.825953		0.825042
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Electrode-pops-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	0.660959		0.660978		0.644595
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Electrode-pops-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	0.624667		0.624687		0.625878
+ALL (pooled)	Electrode-pops-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	18000	0.716335		0.71634		0.714565
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Salt-bridge-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Salt-bridge-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	-0.00211558		-0.0020599		0
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Salt-bridge-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Salt-bridge-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	18000	-0.000704199		-0.000685668		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	ANY-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	0.845982		0.845991		0.845458
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	ANY-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	0.61274		0.612761		0.614948
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	ANY-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	6000	0.449698		0.449729		0.450666
+ALL (pooled)	ANY-artifact	time_only	bins_0.01s	bins	A01, A02, A03	3	18000	0.655434		0.655441		0.656818
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Chewing-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	0.959907		0.959918		0.960088
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Chewing-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	0.436825		0.436982		0.302862
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Chewing-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	0.405861		0.406026		0.282204
+ALL (pooled)	Chewing-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	3600	0.643793		0.643826		0.62952
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	ECG-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	0.978115		0.978122		0.978131
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	ECG-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	-0.0282776		-0.027992		0
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	ECG-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	-0.0285714		-0.0282857		0
+ALL (pooled)	ECG-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	3600	0.568454		0.568494		0.637952
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	EMG-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	0.466861		0.467009		0.317033
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	EMG-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	0.931624		0.931643		0.929345
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	EMG-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	0.90066		0.900687		0.898552
+ALL (pooled)	EMG-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	3600	0.80033		0.800348		0.784204
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Eye-blink-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	0.383426		0.383597		0.259456
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Eye-blink-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	0.345201		0.345383		0.276364
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Eye-blink-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	0.567835		0.567955		0.529305
+ALL (pooled)	Eye-blink-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	3600	0.441449		0.4415		0.373489
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Horizontal-eye-movement-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	0.482607		0.482751		0.3261
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Horizontal-eye-movement-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	0.430169		0.430328		0.545818
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Horizontal-eye-movement-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	0.923958		0.923979		0.923838
+ALL (pooled)	Horizontal-eye-movement-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	3600	0.567629		0.567669		0.605637
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Slow-eye-movement-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	0.982481		0.982486		0.982497
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Slow-eye-movement-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	0.4474		0.447553		0.313814
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Slow-eye-movement-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	0.441048		0.441203		0.309472
+ALL (pooled)	Slow-eye-movement-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	3600	0.67119		0.67122		0.63157
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Vertical-eye-movement-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	-0.00586756		-0.00558815		0
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Vertical-eye-movement-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Vertical-eye-movement-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Vertical-eye-movement-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	3600	-0.00194823		-0.00185546		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Movement-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	0.95724		0.957252		0.957308
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Movement-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	0.928738		0.928758		0.927479
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Movement-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	0.883226		0.883259		0.880017
+ALL (pooled)	Movement-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	3600	0.923648		0.923655		0.922698
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Pulse-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	-0.00194823		-0.00166991		0
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Pulse-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Pulse-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Pulse-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	3600	-0.000648569		-0.000555916		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Respiration-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Respiration-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Respiration-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Respiration-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	3600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Sweat-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Sweat-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	-0.00278552		-0.00250696		0
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Sweat-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	-0.00194823		-0.00166991		0
+ALL (pooled)	Sweat-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	3600	-0.00157656		-0.00148382		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Tongue-movement-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	-0.00474463		-0.00446553		0
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Tongue-movement-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Tongue-movement-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Tongue-movement-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	3600	-0.00157656		-0.00148382		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Induction-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Induction-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Induction-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Induction-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	3600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Electrode-movement-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	-0.00334448		-0.00306577		0
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Electrode-movement-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Electrode-movement-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Electrode-movement-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	3600	-0.00111235		-0.00101965		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Electrode-pops-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	0.789716		0.789774		0.789045
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Electrode-pops-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	0.654873		0.654969		0.637949
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Electrode-pops-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	0.631864		0.631966		0.631081
+ALL (pooled)	Electrode-pops-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	3600	0.701443		0.701471		0.699825
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Salt-bridge-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Salt-bridge-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	-0.00194823		-0.00166991		0
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Salt-bridge-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Salt-bridge-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	3600	-0.000648569		-0.000555916		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	ANY-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	0.843739		0.843782		0.843251
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	ANY-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	0.614031		0.614138		0.616268
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	ANY-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	1200	0.451611		0.451764		0.452411
+ALL (pooled)	ANY-artifact	time_only	bins_0.05s	bins	A01, A02, A03	3	3600	0.655001		0.655033		0.656427
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Chewing-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	0.954646		0.954671		0.954803
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Chewing-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	0.440743		0.441054		0.305422
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Chewing-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	0.409444		0.409772		0.284542
+ALL (pooled)	Chewing-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	1800	0.646152		0.646217		0.631737
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	ECG-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	0.970732		0.970748		0.970773
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	ECG-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	-0.027984		-0.0274129		0
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	ECG-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	-0.0285714		-0.028		0
+ALL (pooled)	ECG-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	1800	0.564685		0.564766		0.63404
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	EMG-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	0.474826		0.475118		0.322296
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	EMG-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	0.908832		0.908883		0.907941
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	EMG-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	0.910763		0.910813		0.908723
+ALL (pooled)	EMG-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	1800	0.798732		0.798769		0.783834
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Eye-blink-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	0.373645		0.373993		0.252558
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Eye-blink-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	0.346985		0.347348		0.272177
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Eye-blink-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	0.522766		0.523031		0.477763
+ALL (pooled)	Eye-blink-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	1800	0.423451		0.423557		0.352454
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Horizontal-eye-movement-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	0.493243		0.493525		0.333333
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Horizontal-eye-movement-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	0.423747		0.424067		0.532856
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Horizontal-eye-movement-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	0.910066		0.910116		0.910029
+ALL (pooled)	Horizontal-eye-movement-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	1800	0.562511		0.562592		0.601139
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Slow-eye-movement-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	0.973622		0.973637		0.973619
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Slow-eye-movement-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	0.450581		0.450886		0.315884
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Slow-eye-movement-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	0.437803		0.438116		0.307155
+ALL (pooled)	Slow-eye-movement-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	1800	0.667716		0.667777		0.628784
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Vertical-eye-movement-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	-0.00558659		-0.00502793		0
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Vertical-eye-movement-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Vertical-eye-movement-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Vertical-eye-movement-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	1800	-0.00185529		-0.00166976		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Movement-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	0.983032		0.983041		0.983165
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Movement-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	0.928738		0.928778		0.927479
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Movement-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	0.873177		0.873247		0.869102
+ALL (pooled)	Movement-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	1800	0.929521		0.929534		0.928534
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Pulse-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	-0.00222717		-0.00167038		0
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Pulse-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Pulse-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Pulse-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	1800	-0.00074129		-0.000555967		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Respiration-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Respiration-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Respiration-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Respiration-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	1800	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Sweat-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Sweat-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	-0.00222717		-0.00167038		0
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Sweat-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	-0.00166945		-0.00111297		0
+ALL (pooled)	Sweat-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	1800	-0.00129798		-0.00111255		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Tongue-movement-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	-0.00502513		-0.00446678		0
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Tongue-movement-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Tongue-movement-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Tongue-movement-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	1800	-0.00166945		-0.00148395		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Induction-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Induction-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Induction-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Induction-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	1800	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Electrode-movement-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	-0.00334448		-0.00278707		0
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Electrode-movement-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Electrode-movement-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Electrode-movement-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	1800	-0.00111235		-0.000926956		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Electrode-pops-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	0.818607		0.818708		0.817846
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Electrode-pops-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	0.691713		0.691884		0.675569
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Electrode-pops-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	0.585847		0.586077		0.582803
+ALL (pooled)	Electrode-pops-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	1800	0.708387		0.708441		0.706678
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Salt-bridge-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Salt-bridge-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	-0.00222717		-0.00167038		0
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Salt-bridge-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Salt-bridge-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	1800	-0.00074129		-0.000555967		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	ANY-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	0.842099		0.842187		0.841702
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	ANY-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	0.613715		0.613929		0.615835
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	ANY-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	600	0.442921		0.44323		0.443442
+ALL (pooled)	ANY-artifact	time_only	bins_0.1s	bins	A01, A02, A03	3	1800	0.652002		0.652066		0.653387
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Chewing-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	0.764964		0.764964		0.743936
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Chewing-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	0.457244		0.457244		0.305908
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Chewing-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	0.424129		0.42413		0.283817
+ALL (pooled)	Chewing-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	945000	0.562285		0.562285		0.530527
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	ECG-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	0.853287		0.853288		0.845574
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	ECG-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	-0.00392327		-0.00392221		0
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	ECG-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	-0.00398406		-0.003983		0
+ALL (pooled)	ECG-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	945000	0.486101		0.486101		0.560138
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	EMG-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	0.317069		0.31707		0.212122
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	EMG-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	0.839614		0.839615		0.836695
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	EMG-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	0.725408		0.725408		0.724554
+ALL (pooled)	EMG-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	945000	0.676048		0.676048		0.675383
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Eye-blink-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	0.379835		0.379836		0.253725
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Eye-blink-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	0.316415		0.316415		0.24862
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Eye-blink-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	0.508846		0.508847		0.483157
+ALL (pooled)	Eye-blink-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	945000	0.406031		0.406031		0.341908
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Horizontal-eye-movement-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	0.494833		0.494834		0.330515
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Horizontal-eye-movement-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	0.364128		0.364129		0.480453
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Horizontal-eye-movement-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	0.912133		0.912133		0.911785
+ALL (pooled)	Horizontal-eye-movement-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	945000	0.529546		0.529547		0.567262
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Slow-eye-movement-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	0.856375		0.856375		0.847697
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Slow-eye-movement-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	0.379299		0.379299		0.254503
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Slow-eye-movement-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	0.467192		0.467193		0.313554
+ALL (pooled)	Slow-eye-movement-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	945000	0.607819		0.607819		0.57124
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Vertical-eye-movement-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	-0.00080382		-0.000802761		0
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Vertical-eye-movement-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Vertical-eye-movement-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Vertical-eye-movement-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	945000	-0.000267797		-0.000267444		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Movement-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	0.966763		0.966763		0.9668
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Movement-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	0.924613		0.924613		0.923239
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Movement-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	0.879862		0.879862		0.876263
+ALL (pooled)	Movement-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	945000	0.924687		0.924687		0.923693
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Pulse-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	-0.000196864		-0.000195806		0
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Pulse-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Pulse-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Pulse-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	945000	-6.56128e-05		-6.526e-05		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Respiration-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Respiration-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Respiration-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Respiration-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	945000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Sweat-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Sweat-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	-0.000254033		-0.000252974		0
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Sweat-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	-0.000182044		-0.000180985		-2.03326e-13
+ALL (pooled)	Sweat-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	945000	-0.000145347		-0.000144995		-2.54651e-13
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Tongue-movement-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	-0.00045947		-0.000458412		0
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Tongue-movement-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Tongue-movement-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Tongue-movement-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	945000	-0.00015311		-0.000152757		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Induction-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Induction-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Induction-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Induction-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	945000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Electrode-movement-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	-0.000298502		-0.000297443		0
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Electrode-movement-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Electrode-movement-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Electrode-movement-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	945000	-9.94808e-05		-9.9128e-05		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Electrode-pops-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	0.822422		0.822422		0.821492
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Electrode-pops-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	0.665281		0.665282		0.647643
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Electrode-pops-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	0.624554		0.624554		0.625254
+ALL (pooled)	Electrode-pops-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	945000	0.716063		0.716064		0.714216
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Salt-bridge-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Salt-bridge-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	-0.000205333		-0.000204275		0
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Salt-bridge-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Salt-bridge-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	945000	-6.8435e-05		-6.80823e-05		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	ANY-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	0.845714		0.845714		0.845753
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	ANY-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	0.769625		0.769625		0.769917
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	ANY-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	315000	0.695784		0.695784		0.691682
+ALL (pooled)	ANY-artifact	time_and_channel	exact	channel-samples	A01, A02, A03	3	945000	0.774622		0.774622		0.774119
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Chewing-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	0.764582		0.764583		0.743702
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Chewing-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	0.458022		0.458023		0.306427
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Chewing-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	0.424835		0.424837		0.284288
+ALL (pooled)	Chewing-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	378000	0.562616		0.562617		0.530842
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	ECG-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	0.853266		0.853267		0.845532
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	ECG-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	-0.00392807		-0.00392541		0
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	ECG-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	-0.00398406		-0.00398141		0
+ALL (pooled)	ECG-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	378000	0.48615		0.48615		0.560137
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	EMG-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	0.317609		0.317611		0.21248
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	EMG-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	0.841158		0.841159		0.838279
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	EMG-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	0.726429		0.726429		0.725568
+ALL (pooled)	EMG-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	378000	0.67738		0.67738		0.676831
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Eye-blink-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	0.379603		0.379605		0.253567
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Eye-blink-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	0.313086		0.313088		0.24362
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Eye-blink-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	0.513861		0.513862		0.488619
+ALL (pooled)	Eye-blink-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	378000	0.407116		0.407117		0.34287
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Horizontal-eye-movement-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	0.492717		0.492718		0.329102
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Horizontal-eye-movement-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	0.363181		0.363183		0.479119
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Horizontal-eye-movement-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	0.913202		0.913202		0.912851
+ALL (pooled)	Horizontal-eye-movement-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	378000	0.529458		0.529458		0.566977
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Slow-eye-movement-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	0.856648		0.856649		0.847968
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Slow-eye-movement-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	0.379072		0.379073		0.254352
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Slow-eye-movement-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	0.46714		0.467141		0.313518
+ALL (pooled)	Slow-eye-movement-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	378000	0.607859		0.60786		0.571281
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Vertical-eye-movement-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	-0.00080223		-0.000799583		0
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Vertical-eye-movement-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Vertical-eye-movement-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Vertical-eye-movement-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	378000	-0.000267267		-0.000266385		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Movement-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	0.966117		0.966117		0.966154
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Movement-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	0.925424		0.925424		0.924001
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Movement-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	0.880424		0.880424		0.876688
+ALL (pooled)	Movement-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	378000	0.924946		0.924946		0.923904
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Pulse-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	-0.000195806		-0.00019316		0
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Pulse-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Pulse-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Pulse-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	378000	-6.526e-05		-6.43781e-05		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Respiration-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Respiration-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Respiration-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Respiration-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	378000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Sweat-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Sweat-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	-0.000254033		-0.000251387		0
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Sweat-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	-0.000179927		-0.000177281		0
+ALL (pooled)	Sweat-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	378000	-0.000144642		-0.00014376		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Tongue-movement-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	-0.000460529		-0.000457883		0
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Tongue-movement-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Tongue-movement-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Tongue-movement-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	378000	-0.000153463		-0.000152581		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Induction-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Induction-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Induction-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Induction-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	378000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Electrode-movement-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	-0.000296384		-0.000293738		0
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Electrode-movement-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Electrode-movement-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Electrode-movement-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	378000	-9.87752e-05		-9.78933e-05		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Electrode-pops-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	0.828635		0.828635		0.827723
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Electrode-pops-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	0.66498		0.664981		0.648185
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Electrode-pops-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	0.628899		0.6289		0.629804
+ALL (pooled)	Electrode-pops-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	378000	0.719985		0.719985		0.718185
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Salt-bridge-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Salt-bridge-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	-0.000201099		-0.000198453		0
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Salt-bridge-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Salt-bridge-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	378000	-6.70239e-05		-6.6142e-05		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	ANY-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	0.845581		0.845582		0.845611
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	ANY-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	0.770242		0.770243		0.770561
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	ANY-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	126000	0.696473		0.696474		0.692242
+ALL (pooled)	ANY-artifact	time_and_channel	bins_0.01s	channel-bins	A01, A02, A03	3	378000	0.775003		0.775003		0.77448
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Chewing-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	0.765277		0.765281		0.74411
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Chewing-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	0.454861		0.454869		0.304317
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Chewing-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	0.42549		0.425497		0.284735
+ALL (pooled)	Chewing-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	75600	0.561514		0.561516		0.529263
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	ECG-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	0.85544		0.855442		0.847769
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	ECG-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	-0.00394407		-0.00393079		0
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	ECG-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	-0.00398406		-0.00397078		0
+ALL (pooled)	ECG-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	75600	0.486803		0.486805		0.560998
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	EMG-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	0.317452		0.317461		0.212361
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	EMG-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	0.846897		0.846899		0.843907
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	EMG-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	0.720183		0.720186		0.719728
+ALL (pooled)	EMG-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	75600	0.678495		0.678497		0.677508
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Eye-blink-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	0.368144		0.368153		0.245928
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Eye-blink-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	0.344023		0.344032		0.278038
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Eye-blink-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	0.526976		0.526982		0.503784
+ALL (pooled)	Eye-blink-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	75600	0.419508		0.419511		0.359531
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Horizontal-eye-movement-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	0.488408		0.488414		0.326221
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Horizontal-eye-movement-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	0.370221		0.370229		0.489271
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Horizontal-eye-movement-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	0.925174		0.925175		0.925054
+ALL (pooled)	Horizontal-eye-movement-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	75600	0.535682		0.535684		0.572578
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Slow-eye-movement-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	0.858314		0.858316		0.849624
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Slow-eye-movement-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	0.37711		0.377118		0.253043
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Slow-eye-movement-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	0.470924		0.470931		0.316055
+ALL (pooled)	Slow-eye-movement-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	75600	0.609441		0.609443		0.572803
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Vertical-eye-movement-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	-0.000834028		-0.00082079		0
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Vertical-eye-movement-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Vertical-eye-movement-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Vertical-eye-movement-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	75600	-0.000277855		-0.000273445		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Movement-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	0.95724		0.957241		0.957308
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Movement-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	0.928738		0.928739		0.927479
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Movement-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	0.883226		0.883228		0.880017
+ALL (pooled)	Movement-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	75600	0.923648		0.923648		0.922698
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Pulse-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	-0.000185219		-0.00017199		0
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Pulse-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Pulse-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Pulse-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	75600	-6.17322e-05		-5.73228e-05		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Respiration-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Respiration-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Respiration-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Respiration-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	75600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Sweat-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Sweat-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	-0.00026462		-0.000251389		0
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Sweat-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	-0.000185219		-0.00017199		0
+ALL (pooled)	Sweat-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	75600	-0.000149934		-0.000145524		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Tongue-movement-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	-0.000449938		-0.000436704		0
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Tongue-movement-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Tongue-movement-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Tongue-movement-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	75600	-0.000149934		-0.000145524		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Induction-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Induction-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Induction-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Induction-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	75600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Electrode-movement-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	-0.000317561		-0.000304329		0
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Electrode-movement-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Electrode-movement-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Electrode-movement-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	75600	-0.000105831		-0.000101422		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Electrode-pops-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	0.792945		0.792947		0.792265
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Electrode-pops-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	0.658892		0.658897		0.641424
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Electrode-pops-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	0.636152		0.636157		0.635042
+ALL (pooled)	Electrode-pops-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	75600	0.70529		0.705291		0.703642
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Salt-bridge-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Salt-bridge-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	-0.000185219		-0.00017199		0
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Salt-bridge-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Salt-bridge-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	75600	-6.17322e-05		-5.73228e-05		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	ANY-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	0.840337		0.840339		0.840376
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	ANY-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	0.773114		0.773117		0.773485
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	ANY-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	25200	0.699647		0.699651		0.69588
+ALL (pooled)	ANY-artifact	time_and_channel	bins_0.05s	channel-bins	A01, A02, A03	3	75600	0.7747		0.774701		0.774236
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Chewing-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	0.761838		0.761844		0.739741
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Chewing-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	0.458513		0.458527		0.306746
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Chewing-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	0.428805		0.42882		0.286941
+ALL (pooled)	Chewing-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	37800	0.56395		0.563954		0.531582
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	ECG-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	0.849808		0.849812		0.842242
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	ECG-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	-0.00390407		-0.00387751		0
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	ECG-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	-0.00398406		-0.0039575		0
+ALL (pooled)	ECG-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	37800	0.483873		0.483878		0.55781
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	EMG-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	0.317452		0.31747		0.212374
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	EMG-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	0.828524		0.828529		0.825972
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	EMG-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	0.727388		0.727395		0.726827
+ALL (pooled)	EMG-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	37800	0.67364		0.673642		0.674104
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Eye-blink-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	0.348967		0.348984		0.233097
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Eye-blink-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	0.331955		0.331973		0.265657
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Eye-blink-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	0.475551		0.475565		0.447577
+ALL (pooled)	Eye-blink-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	37800	0.391655		0.391661		0.330313
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Horizontal-eye-movement-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	0.499046		0.499059		0.333333
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Horizontal-eye-movement-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	0.364483		0.3645		0.476929
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Horizontal-eye-movement-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	0.911526		0.911528		0.911488
+ALL (pooled)	Horizontal-eye-movement-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	37800	0.531367		0.531371		0.568691
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Slow-eye-movement-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	0.85148		0.851484		0.842877
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Slow-eye-movement-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	0.379002		0.379018		0.254298
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Slow-eye-movement-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	0.467666		0.46768		0.313863
+ALL (pooled)	Slow-eye-movement-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	37800	0.606127		0.60613		0.570349
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Vertical-eye-movement-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	-0.000794281		-0.000767805		0
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Vertical-eye-movement-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Vertical-eye-movement-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Vertical-eye-movement-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	37800	-0.00026462		-0.0002558		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Movement-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	0.983032		0.983032		0.983165
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Movement-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	0.928738		0.92874		0.927479
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Movement-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	0.873177		0.87318		0.869102
+ALL (pooled)	Movement-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	37800	0.929521		0.929522		0.928534
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Pulse-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	-0.000211685		-0.000185224		0
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Pulse-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Pulse-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Pulse-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	37800	-7.05517e-05		-6.17328e-05		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Respiration-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Respiration-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Respiration-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Respiration-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	37800	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Sweat-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Sweat-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	-0.000211685		-0.000185224		0
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Sweat-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	-0.000158755		-0.000132296		0
+ALL (pooled)	Sweat-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	37800	-0.000123472		-0.000114653		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Tongue-movement-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	-0.000476417		-0.00044995		0
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Tongue-movement-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Tongue-movement-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Tongue-movement-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	37800	-0.000158755		-0.000149936		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Induction-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Induction-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Induction-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Induction-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	37800	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Electrode-movement-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	-0.000317561		-0.000291098		0
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Electrode-movement-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Electrode-movement-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Electrode-movement-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	37800	-0.000105831		-9.7012e-05		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Electrode-pops-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	0.821296		0.821301		0.820531
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Electrode-pops-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	0.695467		0.695475		0.679031
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Electrode-pops-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	0.590671		0.590682		0.58709
+ALL (pooled)	Electrode-pops-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	37800	0.712143		0.712146		0.710404
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	Salt-bridge-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	Salt-bridge-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	-0.000211685		-0.000185224		0
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	Salt-bridge-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	n/a	all ratings in one category: kappa undefined	n/a	all ratings in one category: alpha undefined	n/a
+ALL (pooled)	Salt-bridge-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	37800	-7.05517e-05		-6.17328e-05		0
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	ANY-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	0.851662		0.851666		0.851668
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	ANY-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	0.771807		0.771813		0.77221
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	ANY-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	12600	0.691002		0.69101		0.686524
+ALL (pooled)	ANY-artifact	time_and_channel	bins_0.1s	channel-bins	A01, A02, A03	3	37800	0.775963		0.775965		0.775502

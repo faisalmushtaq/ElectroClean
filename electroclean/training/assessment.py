@@ -312,10 +312,16 @@ def competency_report(layout: OutputLayout, rs: ReferenceSet, annotator_id: str,
     required = rs.assessment_recordings
     missing = [r for r in required if r not in docs]
     criteria = CompetencyCriteria.from_dict(rs.criteria)
+    def rel(p: Path) -> str:
+        try:
+            return p.resolve().relative_to(layout.root.resolve()).as_posix()
+        except ValueError:
+            return p.name
+
     inputs = {
-        "reference_set": {"file": str(rs.path), "sha256": sha256_file(rs.path)},
+        "reference_set": {"file": f"{rs.set_id}/{rs.path.name}", "sha256": sha256_file(rs.path)},
         "references": {r: rs.recordings[r].get("sha256") for r in sorted(required)},
-        "annotations": {r: {"file": str(p), "sha256": sha256_file(p)} for r, (p, _d) in sorted(docs.items())},
+        "annotations": {r: {"file": rel(p), "sha256": sha256_file(p)} for r, (p, _d) in sorted(docs.items())},
     }
     report: dict[str, Any] = {
         "schema": "electroclean.competency_report",

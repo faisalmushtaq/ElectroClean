@@ -1,0 +1,395 @@
+{
+  "schema": "electroclean.session",
+  "schema_version": "1.0.0",
+  "session_id": "20261026T154750Z-d6707abf",
+  "mode": "standard",
+  "context": {},
+  "annotator": {
+    "annotator_id": "A01",
+    "display_name": "Demo A01"
+  },
+  "recording": {
+    "recording_id": "sub-002/eeg/sub-002_task-rest_eeg.vhdr",
+    "vhdr": "sub-002_task-rest_eeg.vhdr",
+    "eeg": "sub-002_task-rest_eeg.eeg",
+    "vmrk": "sub-002_task-rest_eeg.vmrk",
+    "bids_sidecars": {
+      "channels_tsv": "sub-002/eeg/sub-002_task-rest_channels.tsv",
+      "events_tsv": "sub-002/eeg/sub-002_task-rest_events.tsv",
+      "events_json": [
+        "sub-002/eeg/sub-002_task-rest_events.json"
+      ],
+      "eeg_json": [
+        "sub-002/eeg/sub-002_task-rest_eeg.json"
+      ]
+    },
+    "sfreq": 250.0,
+    "n_samples": 15000,
+    "first_samp": 0,
+    "meas_date": "2024-01-01T12:00:00+00:00",
+    "duration_s": 60.0,
+    "n_channels": 21,
+    "ch_names": [
+      "Fp1",
+      "Fp2",
+      "F7",
+      "F3",
+      "Fz",
+      "F4",
+      "F8",
+      "T7",
+      "C3",
+      "Cz",
+      "C4",
+      "T8",
+      "P7",
+      "P3",
+      "Pz",
+      "P4",
+      "P8",
+      "O1",
+      "O2",
+      "HEOG",
+      "VEOG"
+    ],
+    "source_fingerprint": {
+      "vhdr": {
+        "path": "sub-002/eeg/sub-002_task-rest_eeg.vhdr",
+        "size": 1023,
+        "mtime_ns": 1793029668609339171,
+        "sha256": "bf2b13e4eb1abb3bd3a4c368f13ba84948d9369125621084b895767e8a644898"
+      },
+      "eeg": {
+        "path": "sub-002/eeg/sub-002_task-rest_eeg.eeg",
+        "size": 1260000,
+        "mtime_ns": 1793029668608534369,
+        "sha256": "53473902ba25b46f77ba4b86b9757ab178b2137cec1f9f301a1202254021a685"
+      },
+      "vmrk": {
+        "path": "sub-002/eeg/sub-002_task-rest_eeg.vmrk",
+        "size": 1392,
+        "mtime_ns": 1793029668609098890,
+        "sha256": "50bdfcc2c130fb5dd2297db938f08df0d0b8a725754126bc167ae811dccaca99"
+      },
+      "channels_tsv": {
+        "path": "sub-002/eeg/sub-002_task-rest_channels.tsv",
+        "size": 367,
+        "mtime_ns": 1793029668609657856,
+        "sha256": "fb7c4a95f705b23f6df1d41b1a1647eb112b58cf83d2b3a0dfa66e8c9b321e97"
+      },
+      "events_tsv": {
+        "path": "sub-002/eeg/sub-002_task-rest_events.tsv",
+        "size": 928,
+        "mtime_ns": 1793029668609482240,
+        "sha256": "23fbd318246db707134f26fd35f535df2bd25580d7cf8c17e33066b3b744c0a8"
+      },
+      "events_json": {
+        "path": "sub-002/eeg/sub-002_task-rest_events.json",
+        "size": 289,
+        "mtime_ns": 1793029668609588260,
+        "sha256": "203b47891160359d51301343101c20872de346b32b5a97b29a70139958c62f00"
+      },
+      "eeg_json": {
+        "path": "sub-002/eeg/sub-002_task-rest_eeg.json",
+        "size": 182,
+        "mtime_ns": 1793029668609733487,
+        "sha256": "8e99bb89b33acc525aca92ddbee5735b514d836771f22abe2ed0f1a660fb42f4"
+      }
+    }
+  },
+  "timing": {
+    "session_opened": "2026-10-26T15:47:50.274+00:00",
+    "start_timestamp": "2026-10-26T15:47:50.275+00:00",
+    "finish_timestamp": "2026-10-26T15:47:50.275+00:00",
+    "elapsed_seconds": 0.0,
+    "clock": "time.monotonic (started when the viewer became usable, stopped at Save and Finish)"
+  },
+  "application": {
+    "name": "ElectroClean",
+    "version": "1.0.0",
+    "platform": "Linux-6.18.44-fc-v153-x86_64-with-glibc2.39",
+    "libraries": {
+      "python": "3.13.17",
+      "electroclean": "1.0.0",
+      "mne": "1.13.2",
+      "mne_qt_browser": "0.7.5",
+      "numpy": "2.5.4",
+      "scipy": "1.18.1",
+      "pandas": "3.1.0",
+      "PySide6": "6.12.0",
+      "pyqtgraph": "0.14.0",
+      "matplotlib": "3.11.2"
+    }
+  },
+  "filters": {
+    "selected": {
+      "highpass_enabled": true,
+      "highpass_hz": 1.0,
+      "notch_enabled": true,
+      "notch_hz": 60.0,
+      "notch_harmonics": false,
+      "method": "fir",
+      "iir_order": 4,
+      "locked": false
+    },
+    "summary": "High-pass 1 Hz, Notch 60 Hz, FIR",
+    "fixed_by_administrator": false,
+    "design": {
+      "settings": {
+        "highpass_enabled": true,
+        "highpass_hz": 1.0,
+        "notch_enabled": true,
+        "notch_hz": 60.0,
+        "notch_harmonics": false,
+        "method": "fir",
+        "iir_order": 4,
+        "locked": false
+      },
+      "applied_to": "displayed copy only; source files are not modified",
+      "sfreq": 250.0,
+      "steps": [
+        {
+          "name": "high-pass",
+          "mne_call": "mne.io.Raw.filter",
+          "parameters": {
+            "l_freq": 1.0,
+            "h_freq": null,
+            "method": "fir",
+            "phase": "zero",
+            "fir_window": "hamming",
+            "fir_design": "firwin",
+            "filter_length": "auto",
+            "pad": "reflect_limited",
+            "l_trans_bandwidth": "auto"
+          },
+          "filter_length_samples": 825,
+          "filter_length_s": 3.3,
+          "transient_half_width_s": 1.648,
+          "mne_log": "Filtering raw data in 1 contiguous segment\nSetting up high-pass filter at 1 Hz\n\nFIR filter parameters\n---------------------\nDesigning a one-pass, zero-phase, non-causal highpass filter:\n- Windowed time-domain design (firwin) method\n- Hamming window with 0.0194 passband ripple and 53 dB stopband attenuation\n- Lower passband edge: 1.00\n- Lower transition bandwidth: 1.00 Hz (-6 dB cutoff frequency: 0.50 Hz)\n- Filter length: 825 samples (3.300 s)\n\n"
+        },
+        {
+          "name": "notch",
+          "mne_call": "mne.io.Raw.notch_filter",
+          "parameters": {
+            "freqs": [
+              60.0
+            ],
+            "method": "fir",
+            "phase": "zero",
+            "fir_window": "hamming",
+            "fir_design": "firwin",
+            "filter_length": "auto",
+            "pad": "reflect_limited",
+            "notch_widths": null,
+            "trans_bandwidth": 1.0
+          },
+          "filter_length_samples": 1651,
+          "filter_length_s": 6.604,
+          "transient_half_width_s": 3.3,
+          "mne_log": "Filtering raw data in 1 contiguous segment\nSetting up band-stop filter from 59 - 61 Hz\n\nFIR filter parameters\n---------------------\nDesigning a one-pass, zero-phase, non-causal bandstop filter:\n- Windowed time-domain design (firwin) method\n- Hamming window with 0.0194 passband ripple and 53 dB stopband attenuation\n- Lower passband edge: 59.35\n- Lower transition bandwidth: 0.50 Hz (-6 dB cutoff frequency: 59.10 Hz)\n- Upper passband edge: 60.65 Hz\n- Upper transition bandwidth: 0.50 Hz (-6 dB cutoff frequency: 60.90 Hz)\n- Filter length: 1651 samples (6.604 s)\n\n"
+        }
+      ],
+      "skipped": [],
+      "segments_filtered_separately_at_samples": [],
+      "edge_transient_half_width_s": 4.948,
+      "filtered_channels": [
+        "Fp1",
+        "Fp2",
+        "F7",
+        "F3",
+        "Fz",
+        "F4",
+        "F8",
+        "T7",
+        "C3",
+        "Cz",
+        "C4",
+        "T8",
+        "P7",
+        "P3",
+        "Pz",
+        "P4",
+        "P8",
+        "O1",
+        "O2",
+        "HEOG",
+        "VEOG"
+      ],
+      "data_storage": "in memory",
+      "library_versions": {
+        "mne": "1.13.2",
+        "numpy": "2.5.4",
+        "scipy": "1.18.1"
+      }
+    }
+  },
+  "annotations": {
+    "n_annotations": 10,
+    "n_whole_montage": 1,
+    "n_channel_specific": 9,
+    "by_label": {
+      "ECG-artifact": 1,
+      "EMG-artifact": 1,
+      "Eye-blink-artifact": 3,
+      "Horizontal-eye-movement-artifact": 1,
+      "Slow-eye-movement-artifact": 1,
+      "Movement-artifact": 1,
+      "Electrode-pops-artifact": 2
+    },
+    "time_conventions": {
+      "onset_origin": "first_sample",
+      "onset": "Seconds from the first sample stored in the data file (BIDS events.tsv convention; equal to MNE raw.times).",
+      "sample": "0-based sample index relative to the first stored sample: sample = onset * sfreq.",
+      "interval": "Half-open: an annotation covers samples [onset_sample, onset_sample + duration_samples).",
+      "boundary_snapping": "Boundaries are snapped to the nearest sample when created or edited.",
+      "mne_annotations": "In mne.Annotations attached to Raw, onset_mne = onset + first_samp / sfreq (relative to orig_time)."
+    }
+  },
+  "label_catalogue": {
+    "catalogue_id": "electroclean-hed-score-artifacts",
+    "catalogue_version": "1.0.0",
+    "sha256": "758489482e27c1eb85b60bb3e1df1470913b673d9bfef6b51832825f5596faae",
+    "hed_library": "score",
+    "hed_library_version": "2.2.0",
+    "hed_standard_version": "8.5.0",
+    "labels": [
+      {
+        "value": 100,
+        "label": "Chewing-artifact"
+      },
+      {
+        "value": 101,
+        "label": "ECG-artifact"
+      },
+      {
+        "value": 102,
+        "label": "EMG-artifact"
+      },
+      {
+        "value": 103,
+        "label": "Eye-blink-artifact"
+      },
+      {
+        "value": 104,
+        "label": "Horizontal-eye-movement-artifact"
+      },
+      {
+        "value": 105,
+        "label": "Slow-eye-movement-artifact"
+      },
+      {
+        "value": 106,
+        "label": "Vertical-eye-movement-artifact"
+      },
+      {
+        "value": 107,
+        "label": "Movement-artifact"
+      },
+      {
+        "value": 108,
+        "label": "Pulse-artifact"
+      },
+      {
+        "value": 109,
+        "label": "Respiration-artifact"
+      },
+      {
+        "value": 110,
+        "label": "Sweat-artifact"
+      },
+      {
+        "value": 111,
+        "label": "Tongue-movement-artifact"
+      },
+      {
+        "value": 112,
+        "label": "Induction-artifact"
+      },
+      {
+        "value": 113,
+        "label": "Electrode-movement-artifact"
+      },
+      {
+        "value": 114,
+        "label": "Electrode-pops-artifact"
+      },
+      {
+        "value": 115,
+        "label": "Salt-bridge-artifact"
+      }
+    ]
+  },
+  "original_events": {
+    "source": "events_tsv",
+    "n_events": 30,
+    "sample_column_computed": false,
+    "comparison_with_markers": {
+      "n_events_tsv": 30,
+      "n_vmrk_markers": 30,
+      "events_tsv_rows_without_marker": 0,
+      "markers_without_events_tsv_row": 0,
+      "consistent": true
+    },
+    "code_check": {
+      "policy": "require_explicit_policy",
+      "blocked": false,
+      "collisions": [],
+      "value_meaning_conflicts": {},
+      "label_value_conflicts": {},
+      "repeated_values": {
+        "1": 8,
+        "1001": 15,
+        "2": 7
+      },
+      "summary": []
+    }
+  },
+  "channel_check": {
+    "channels_tsv": "sub-002_task-rest_channels.tsv",
+    "n_recording_channels": 21,
+    "n_tsv_channels": 21,
+    "missing_from_channels_tsv": [],
+    "missing_from_recording": [],
+    "order_differs": false,
+    "bids_types": {
+      "Fp1": "eeg",
+      "Fp2": "eeg",
+      "F7": "eeg",
+      "F3": "eeg",
+      "Fz": "eeg",
+      "F4": "eeg",
+      "F8": "eeg",
+      "T7": "eeg",
+      "C3": "eeg",
+      "Cz": "eeg",
+      "C4": "eeg",
+      "T8": "eeg",
+      "P7": "eeg",
+      "P3": "eeg",
+      "Pz": "eeg",
+      "P4": "eeg",
+      "P8": "eeg",
+      "O1": "eeg",
+      "O2": "eeg",
+      "HEOG": "eog",
+      "VEOG": "eog"
+    },
+    "bids_bad_channels": [],
+    "problems": [],
+    "consistent": true
+  },
+  "warnings": [],
+  "notes": [
+    "Display channel types set from channels.tsv for 2 channel(s)"
+  ],
+  "outputs": {
+    "basename": "sub-002_task-rest_eeg_annotator-A01",
+    "files": {
+      "events_tsv": "sub-002_task-rest_eeg_annotator-A01_events.tsv",
+      "events_json": "sub-002_task-rest_eeg_annotator-A01_events.json",
+      "annotations_json": "sub-002_task-rest_eeg_annotator-A01_annotations.json",
+      "time_viewed": "sub-002_task-rest_eeg_annotator-A01_time_viewed.txt",
+      "session_json": "sub-002_task-rest_eeg_annotator-A01_session.json"
+    }
+  }
+}

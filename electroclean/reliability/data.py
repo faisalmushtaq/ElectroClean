@@ -126,20 +126,31 @@ def build_dataset(
     return AgreementDataset(groups=groups, catalogue=catalogue, files=files or [], warnings=warnings)
 
 
+def _display_path(f: Path, bases: list[Path]) -> str:
+    """Path relative to the input folder it was found in (portable in reports)."""
+    for b in bases:
+        try:
+            return (b.name + "/" + f.resolve().relative_to(b.resolve()).as_posix()) if b.is_dir() else f.name
+        except ValueError:
+            continue
+    return f.name
+
+
 def load_dataset(paths: Iterable[Path | str], config: AnalysisConfig) -> AgreementDataset:
-    files = collect_annotation_files(paths)
+    bases = [Path(p) for p in paths]
+    files = collect_annotation_files(bases)
     docs = []
     records = []
     for f in files:
         try:
             doc = read_annotations_json(f)
         except AnnotationError as exc:
-            records.append({"path": str(f), "status": f"skipped: {exc}"})
+            records.append({"path": _display_path(f, bases), "status": f"skipped: {exc}"})
             continue
-        docs.append((str(f), doc))
+        docs.append((_display_path(f, bases), doc))
         records.append(
             {
-                "path": str(f),
+                "path": _display_path(f, bases),
                 "sha256": sha256_file(f),
                 "recording_id": doc.recording.recording_id,
                 "annotator_id": doc.annotator_id,

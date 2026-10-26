@@ -1,0 +1,354 @@
+{
+  "schema": "electroclean.annotations",
+  "schema_version": "1.0.0",
+  "recording": {
+    "recording_id": "sub-002/eeg/sub-002_task-rest_eeg.vhdr",
+    "relative_path": "sub-002/eeg/sub-002_task-rest_eeg.vhdr",
+    "sfreq": 250.0,
+    "n_samples": 15000,
+    "first_samp": 0,
+    "meas_date": "2024-01-01T12:00:00+00:00",
+    "duration_s": 60.0,
+    "ch_names": [
+      "Fp1",
+      "Fp2",
+      "F7",
+      "F3",
+      "Fz",
+      "F4",
+      "F8",
+      "T7",
+      "C3",
+      "Cz",
+      "C4",
+      "T8",
+      "P7",
+      "P3",
+      "Pz",
+      "P4",
+      "P8",
+      "O1",
+      "O2",
+      "HEOG",
+      "VEOG"
+    ],
+    "fingerprint": {
+      "vhdr": {
+        "path": "sub-002/eeg/sub-002_task-rest_eeg.vhdr",
+        "size": 1023,
+        "mtime_ns": 1793029668609339171,
+        "sha256": "bf2b13e4eb1abb3bd3a4c368f13ba84948d9369125621084b895767e8a644898"
+      },
+      "eeg": {
+        "path": "sub-002/eeg/sub-002_task-rest_eeg.eeg",
+        "size": 1260000,
+        "mtime_ns": 1793029668608534369,
+        "sha256": "53473902ba25b46f77ba4b86b9757ab178b2137cec1f9f301a1202254021a685"
+      },
+      "vmrk": {
+        "path": "sub-002/eeg/sub-002_task-rest_eeg.vmrk",
+        "size": 1392,
+        "mtime_ns": 1793029668609098890,
+        "sha256": "50bdfcc2c130fb5dd2297db938f08df0d0b8a725754126bc167ae811dccaca99"
+      },
+      "channels_tsv": {
+        "path": "sub-002/eeg/sub-002_task-rest_channels.tsv",
+        "size": 367,
+        "mtime_ns": 1793029668609657856,
+        "sha256": "fb7c4a95f705b23f6df1d41b1a1647eb112b58cf83d2b3a0dfa66e8c9b321e97"
+      },
+      "events_tsv": {
+        "path": "sub-002/eeg/sub-002_task-rest_events.tsv",
+        "size": 928,
+        "mtime_ns": 1793029668609482240,
+        "sha256": "23fbd318246db707134f26fd35f535df2bd25580d7cf8c17e33066b3b744c0a8"
+      },
+      "events_json": {
+        "path": "sub-002/eeg/sub-002_task-rest_events.json",
+        "size": 289,
+        "mtime_ns": 1793029668609588260,
+        "sha256": "203b47891160359d51301343101c20872de346b32b5a97b29a70139958c62f00"
+      },
+      "eeg_json": {
+        "path": "sub-002/eeg/sub-002_task-rest_eeg.json",
+        "size": 182,
+        "mtime_ns": 1793029668609733487,
+        "sha256": "8e99bb89b33acc525aca92ddbee5735b514d836771f22abe2ed0f1a660fb42f4"
+      }
+    }
+  },
+  "annotator": {
+    "annotator_id": "A01",
+    "display_name": "Demo A01"
+  },
+  "session": {
+    "session_id": "20261026T154750Z-d6707abf",
+    "mode": "standard",
+    "created_at": "2026-10-26T15:47:50.275+00:00",
+    "app_version": "1.0.0",
+    "context": {}
+  },
+  "time_conventions": {
+    "onset_origin": "first_sample",
+    "onset": "Seconds from the first sample stored in the data file (BIDS events.tsv convention; equal to MNE raw.times).",
+    "sample": "0-based sample index relative to the first stored sample: sample = onset * sfreq.",
+    "interval": "Half-open: an annotation covers samples [onset_sample, onset_sample + duration_samples).",
+    "boundary_snapping": "Boundaries are snapped to the nearest sample when created or edited.",
+    "mne_annotations": "In mne.Annotations attached to Raw, onset_mne = onset + first_samp / sfreq (relative to orig_time)."
+  },
+  "channel_convention": {
+    "encoding": "List of channel names exactly as they appear in the recording.",
+    "empty_list_means": "The annotation applies to the whole recording montage, i.e. every channel in recording.ch_names, over the annotated time interval.",
+    "non_empty_list_means": "The annotation applies only to the listed channels.",
+    "order": "Channels are stored in the recording's channel order without duplicates."
+  },
+  "label_catalogue": {
+    "catalogue_id": "electroclean-hed-score-artifacts",
+    "catalogue_version": "1.0.0",
+    "sha256": "758489482e27c1eb85b60bb3e1df1470913b673d9bfef6b51832825f5596faae",
+    "hed_library": "score",
+    "hed_library_version": "2.2.0",
+    "hed_standard_version": "8.5.0",
+    "labels": [
+      {
+        "value": 100,
+        "label": "Chewing-artifact"
+      },
+      {
+        "value": 101,
+        "label": "ECG-artifact"
+      },
+      {
+        "value": 102,
+        "label": "EMG-artifact"
+      },
+      {
+        "value": 103,
+        "label": "Eye-blink-artifact"
+      },
+      {
+        "value": 104,
+        "label": "Horizontal-eye-movement-artifact"
+      },
+      {
+        "value": 105,
+        "label": "Slow-eye-movement-artifact"
+      },
+      {
+        "value": 106,
+        "label": "Vertical-eye-movement-artifact"
+      },
+      {
+        "value": 107,
+        "label": "Movement-artifact"
+      },
+      {
+        "value": 108,
+        "label": "Pulse-artifact"
+      },
+      {
+        "value": 109,
+        "label": "Respiration-artifact"
+      },
+      {
+        "value": 110,
+        "label": "Sweat-artifact"
+      },
+      {
+        "value": 111,
+        "label": "Tongue-movement-artifact"
+      },
+      {
+        "value": 112,
+        "label": "Induction-artifact"
+      },
+      {
+        "value": 113,
+        "label": "Electrode-movement-artifact"
+      },
+      {
+        "value": 114,
+        "label": "Electrode-pops-artifact"
+      },
+      {
+        "value": 115,
+        "label": "Salt-bridge-artifact"
+      }
+    ]
+  },
+  "n_annotations": 10,
+  "annotations": [
+    {
+      "annotation_id": "9a434a4d5d1d4fc5b00060b5c90e0960",
+      "label": "Eye-blink-artifact",
+      "value": 103,
+      "onset": 3.012,
+      "duration": 0.42,
+      "onset_sample": 753,
+      "duration_samples": 105,
+      "end_sample": 858,
+      "channels": [
+        "Fp1",
+        "Fp2",
+        "VEOG"
+      ],
+      "scope": "channels",
+      "created_at": "2026-10-26T15:47:50.275+00:00",
+      "modified_at": "2026-10-26T15:47:50.275+00:00"
+    },
+    {
+      "annotation_id": "636b8b30f81649c28042f8863e863068",
+      "label": "EMG-artifact",
+      "value": 102,
+      "onset": 9.228,
+      "duration": 1.616,
+      "onset_sample": 2307,
+      "duration_samples": 404,
+      "end_sample": 2711,
+      "channels": [
+        "F7",
+        "F8",
+        "T7",
+        "T8"
+      ],
+      "scope": "channels",
+      "created_at": "2026-10-26T15:47:50.275+00:00",
+      "modified_at": "2026-10-26T15:47:50.275+00:00"
+    },
+    {
+      "annotation_id": "938a597d1c2b4ddbb271688d56d26a47",
+      "label": "Eye-blink-artifact",
+      "value": 103,
+      "onset": 9.512,
+      "duration": 0.32,
+      "onset_sample": 2378,
+      "duration_samples": 80,
+      "end_sample": 2458,
+      "channels": [
+        "Fp1",
+        "Fp2",
+        "VEOG"
+      ],
+      "scope": "channels",
+      "created_at": "2026-10-26T15:47:50.275+00:00",
+      "modified_at": "2026-10-26T15:47:50.275+00:00"
+    },
+    {
+      "annotation_id": "abb2eeebccf44d55b2db6d993e1dc0d3",
+      "label": "Electrode-pops-artifact",
+      "value": 114,
+      "onset": 13.992,
+      "duration": 0.48,
+      "onset_sample": 3498,
+      "duration_samples": 120,
+      "end_sample": 3618,
+      "channels": [
+        "C3"
+      ],
+      "scope": "channels",
+      "created_at": "2026-10-26T15:47:50.275+00:00",
+      "modified_at": "2026-10-26T15:47:50.275+00:00"
+    },
+    {
+      "annotation_id": "cacff69c550b401d94603a5b6d38d9d1",
+      "label": "Horizontal-eye-movement-artifact",
+      "value": 104,
+      "onset": 18.068,
+      "duration": 1.116,
+      "onset_sample": 4517,
+      "duration_samples": 279,
+      "end_sample": 4796,
+      "channels": [
+        "F7",
+        "F8",
+        "HEOG"
+      ],
+      "scope": "channels",
+      "created_at": "2026-10-26T15:47:50.275+00:00",
+      "modified_at": "2026-10-26T15:47:50.275+00:00"
+    },
+    {
+      "annotation_id": "24f3c64137d44f5eb690ab2056e49636",
+      "label": "Movement-artifact",
+      "value": 107,
+      "onset": 24.012,
+      "duration": 2.004,
+      "onset_sample": 6003,
+      "duration_samples": 501,
+      "end_sample": 6504,
+      "channels": [],
+      "scope": "whole_montage",
+      "created_at": "2026-10-26T15:47:50.275+00:00",
+      "modified_at": "2026-10-26T15:47:50.275+00:00"
+    },
+    {
+      "annotation_id": "adb3f59c549c4ca4abf23b54a7b3273a",
+      "label": "Eye-blink-artifact",
+      "value": 103,
+      "onset": 35.168,
+      "duration": 0.4,
+      "onset_sample": 8792,
+      "duration_samples": 100,
+      "end_sample": 8892,
+      "channels": [
+        "Fp1",
+        "Fp2",
+        "VEOG"
+      ],
+      "scope": "channels",
+      "created_at": "2026-10-26T15:47:50.275+00:00",
+      "modified_at": "2026-10-26T15:47:50.275+00:00"
+    },
+    {
+      "annotation_id": "ba58b702ca4544b58edbf944cf345b4e",
+      "label": "Slow-eye-movement-artifact",
+      "value": 105,
+      "onset": 40.088,
+      "duration": 3.92,
+      "onset_sample": 10022,
+      "duration_samples": 980,
+      "end_sample": 11002,
+      "channels": [
+        "F8",
+        "HEOG"
+      ],
+      "scope": "channels",
+      "created_at": "2026-10-26T15:47:50.275+00:00",
+      "modified_at": "2026-10-26T15:47:50.275+00:00"
+    },
+    {
+      "annotation_id": "1be19da8fe0648f8ab2e5b5cf7163b53",
+      "label": "ECG-artifact",
+      "value": 101,
+      "onset": 47.072,
+      "duration": 4.924,
+      "onset_sample": 11768,
+      "duration_samples": 1231,
+      "end_sample": 12999,
+      "channels": [
+        "T7",
+        "P7",
+        "O1"
+      ],
+      "scope": "channels",
+      "created_at": "2026-10-26T15:47:50.275+00:00",
+      "modified_at": "2026-10-26T15:47:50.275+00:00"
+    },
+    {
+      "annotation_id": "9816b8b11fb8427ea8b619379bdfe3cb",
+      "label": "Electrode-pops-artifact",
+      "value": 114,
+      "onset": 53.552,
+      "duration": 0.312,
+      "onset_sample": 13388,
+      "duration_samples": 78,
+      "end_sample": 13466,
+      "channels": [
+        "O2"
+      ],
+      "scope": "channels",
+      "created_at": "2026-10-26T15:47:50.275+00:00",
+      "modified_at": "2026-10-26T15:47:50.275+00:00"
+    }
+  ]
+}

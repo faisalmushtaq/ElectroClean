@@ -1,0 +1,4 @@
+recording	duration_s	sfreq	n_channels	n_annotators	annotators	warnings
+sub-001/eeg/sub-001_task-rest_eeg.vhdr	60	250	21	3	A01, A02, A03	
+sub-002/eeg/sub-002_task-rest_eeg.vhdr	60	250	21	3	A01, A02, A03	
+sub-003/eeg/sub-003_task-rest_eeg.vhdr	60	250	21	3	A01, A02, A03	

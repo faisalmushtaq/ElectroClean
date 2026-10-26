@@ -108,7 +108,8 @@ class AnnotationWorkspace(QObject):
         )
         zones = self.loaded.filter_report.transient_zones(self.loaded.timing.n_samples)
         self.controller = AnnotationController(self.browser, session.store, transient_zones=zones)
-        self.controller.display_prefix = dict(display_prefix or {})
+        if display_prefix:
+            self.controller.set_display_prefix(display_prefix)
         self.controller.requestChannelEdit = self.edit_channels_of  # type: ignore[method-assign]
         self.browser._ec_close_guard = self._confirm_close
         self._hed = _hed_descriptions()
@@ -120,7 +121,8 @@ class AnnotationWorkspace(QObject):
         self.controller.stateChanged.connect(self._refresh_state)
         self.controller.annotationsChanged.connect(self._refresh_table)
         self.controller.selectionChanged.connect(self._on_controller_selection)
-        self._tick = QTimer(self)
+        # The clock belongs to the browser window so it stops when the window is destroyed.
+        self._tick = QTimer(self.browser)
         self._tick.timeout.connect(self._update_clock)
         self._tick.start(1000)
         if read_only:
@@ -436,7 +438,10 @@ class AnnotationWorkspace(QObject):
         self._update_actions()
 
     def _update_clock(self) -> None:
-        self.clock_label.setText(f"Time on this recording: {format_hms(self.session.elapsed_s)}")
+        try:
+            self.clock_label.setText(f"Time on this recording: {format_hms(self.session.elapsed_s)}")
+        except RuntimeError:  # window already destroyed
+            pass
 
     def _show_message(self, msg: str) -> None:
         self.browser.statusBar().showMessage(msg, 10000)

@@ -1,0 +1,386 @@
+{
+  "schema": "electroclean.competency_report",
+  "schema_version": "1.0.0",
+  "annotator_id": "CAM",
+  "reference_set": {
+    "set_id": "demo-set",
+    "name": "Demonstration reference set",
+    "provenance": {
+      "method": "single_expert",
+      "experts": [
+        "TRUTH"
+      ],
+      "notes": "Synthetic ground truth used as the reference"
+    }
+  },
+  "required_recordings": [
+    "sub-002/eeg/sub-002_task-rest_eeg.vhdr",
+    "sub-003/eeg/sub-003_task-rest_eeg.vhdr"
+  ],
+  "missing_recordings": [],
+  "criteria": {
+    "criteria": [
+      {
+        "metric": "event_f1",
+        "threshold": 0.8,
+        "scope": "overall"
+      },
+      {
+        "metric": "event_recall",
+        "threshold": 0.7,
+        "scope": "each_category"
+      },
+      {
+        "metric": "label_accuracy",
+        "threshold": 0.85,
+        "scope": "overall"
+      }
+    ],
+    "min_reference_events": 3,
+    "categories": null
+  },
+  "inputs": {
+    "reference_set": {
+      "file": "demo-set/reference_set.json",
+      "sha256": "2f750de37494a3ac37907fa85de3a8e74793622b1684d45599507162a33f63cb"
+    },
+    "references": {
+      "sub-002/eeg/sub-002_task-rest_eeg.vhdr": "ed8721e4df4fe1688042ce4481f7ddf8d086c2100cd8c21af890d50c8dff5214",
+      "sub-003/eeg/sub-003_task-rest_eeg.vhdr": "e00982d7de2e5efac5a9670d1d0c764d81a5ba8bd2408674631526e45e020791"
+    },
+    "annotations": {
+      "sub-002/eeg/sub-002_task-rest_eeg.vhdr": {
+        "file": "training/demo-set/assessment/annotator-CAM/sub-002/eeg/sub-002_task-rest_eeg_annotator-CAM_annotations.json",
+        "sha256": "84e666ac1b644c33a92c70371cad8e87de8e49c5e25e324fa3da4bbf52d3b65a"
+      },
+      "sub-003/eeg/sub-003_task-rest_eeg.vhdr": {
+        "file": "training/demo-set/assessment/annotator-CAM/sub-003/eeg/sub-003_task-rest_eeg_annotator-CAM_annotations.json",
+        "sha256": "92310cf527a0f82325f13a276ffeceb87170004d3b32b8a726513671acc21082"
+      }
+    }
+  },
+  "software": {
+    "electroclean": "1.0.0"
+  },
+  "metrics": {
+    "overall": {
+      "event_f1": 0.8095238095238095,
+      "event_recall": 0.7727272727272727,
+      "event_precision": 0.85,
+      "time_kappa": 0.9040859543953192,
+      "time_positive_agreement": 0.9321908869091527,
+      "channel_positive_agreement": 0.9066993328021122,
+      "mean_iou": 0.8993582405274407,
+      "mean_channel_jaccard": 0.9313725490196078,
+      "label_accuracy": 0.9444444444444444,
+      "false_positives_per_min": 1.5
+    },
+    "per_category": [
+      {
+        "category": "Chewing-artifact",
+        "reference_events": 2,
+        "your_events": 2,
+        "found": 2,
+        "event_f1": 1.0,
+        "event_recall": 1.0,
+        "event_precision": 1.0,
+        "time_kappa": 0.9911974930460193,
+        "time_positive_agreement": 0.9916359986617598,
+        "channel_positive_agreement": 0.8509340449866565,
+        "mean_iou": 0.9833764861294584,
+        "mean_channel_jaccard": 0.75,
+        "onset_diff_mean_s": -0.002,
+        "offset_diff_mean_s": -0.024
+      },
+      {
+        "category": "ECG-artifact",
+        "reference_events": 2,
+        "your_events": 2,
+        "found": 2,
+        "event_f1": 1.0,
+        "event_recall": 1.0,
+        "event_precision": 1.0,
+        "time_kappa": 0.9879319802523312,
+        "time_positive_agreement": 0.9889313745220367,
+        "channel_positive_agreement": 0.8974152449293403,
+        "mean_iou": 0.9780965240073913,
+        "mean_channel_jaccard": 0.8333333333333333,
+        "onset_diff_mean_s": -0.024,
+        "offset_diff_mean_s": -0.086
+      },
+      {
+        "category": "EMG-artifact",
+        "reference_events": 2,
+        "your_events": 0,
+        "found": 0,
+        "event_f1": 0.0,
+        "event_recall": 0.0,
+        "event_precision": null,
+        "time_kappa": -4.163336342344345e-15,
+        "time_positive_agreement": 0.0,
+        "channel_positive_agreement": 0.0,
+        "mean_iou": null,
+        "mean_channel_jaccard": null,
+        "onset_diff_mean_s": null,
+        "offset_diff_mean_s": null
+      },
+      {
+        "category": "Eye-blink-artifact",
+        "reference_events": 6,
+        "your_events": 5,
+        "found": 5,
+        "event_f1": 0.9090909090909091,
+        "event_recall": 0.8333333333333334,
+        "event_precision": 1.0,
+        "time_kappa": 0.8293593010556976,
+        "time_positive_agreement": 0.8324022346368717,
+        "channel_positive_agreement": 0.7989740301378647,
+        "mean_iou": 0.8575811104333301,
+        "mean_channel_jaccard": 0.9333333333333333,
+        "onset_diff_mean_s": -0.010400000000000001,
+        "offset_diff_mean_s": 0.0168
+      },
+      {
+        "category": "Horizontal-eye-movement-artifact",
+        "reference_events": 2,
+        "your_events": 3,
+        "found": 2,
+        "event_f1": 0.8,
+        "event_recall": 1.0,
+        "event_precision": 0.6666666666666666,
+        "time_kappa": 0.5200209173763619,
+        "time_positive_agreement": 0.5339981867633727,
+        "channel_positive_agreement": 0.5339981867633726,
+        "mean_iou": 0.9353170770964108,
+        "mean_channel_jaccard": 1.0,
+        "onset_diff_mean_s": -0.056,
+        "offset_diff_mean_s": -0.016
+      },
+      {
+        "category": "Slow-eye-movement-artifact",
+        "reference_events": 2,
+        "your_events": 1,
+        "found": 1,
+        "event_f1": 0.6666666666666666,
+        "event_recall": 0.5,
+        "event_precision": 1.0,
+        "time_kappa": 0.6446448755507372,
+        "time_positive_agreement": 0.6607201850016517,
+        "channel_positive_agreement": 0.6607201850016519,
+        "mean_iou": 0.9737098344693281,
+        "mean_channel_jaccard": 1.0,
+        "onset_diff_mean_s": -0.072,
+        "offset_diff_mean_s": 0.036
+      },
+      {
+        "category": "Movement-artifact",
+        "reference_events": 2,
+        "your_events": 2,
+        "found": 2,
+        "event_f1": 1.0,
+        "event_recall": 1.0,
+        "event_precision": 1.0,
+        "time_kappa": 0.9757013855380153,
+        "time_positive_agreement": 0.9765117441279361,
+        "channel_positive_agreement": 0.9765117441279362,
+        "mean_iou": 0.9542366412213741,
+        "mean_channel_jaccard": 1.0,
+        "onset_diff_mean_s": 0.027999999999999997,
+        "offset_diff_mean_s": 0.030000000000000002
+      },
+      {
+        "category": "Respiration-artifact",
+        "reference_events": 0,
+        "your_events": 1,
+        "found": 0,
+        "event_f1": 0.0,
+        "event_recall": null,
+        "event_precision": 0.0,
+        "time_kappa": 0.0,
+        "time_positive_agreement": 0.0,
+        "channel_positive_agreement": 0.0,
+        "mean_iou": null,
+        "mean_channel_jaccard": null,
+        "onset_diff_mean_s": null,
+        "offset_diff_mean_s": null
+      },
+      {
+        "category": "Tongue-movement-artifact",
+        "reference_events": 0,
+        "your_events": 1,
+        "found": 0,
+        "event_f1": 0.0,
+        "event_recall": null,
+        "event_precision": 0.0,
+        "time_kappa": 0.0,
+        "time_positive_agreement": 0.0,
+        "channel_positive_agreement": 0.0,
+        "mean_iou": null,
+        "mean_channel_jaccard": null,
+        "onset_diff_mean_s": null,
+        "offset_diff_mean_s": null
+      },
+      {
+        "category": "Electrode-pops-artifact",
+        "reference_events": 4,
+        "your_events": 3,
+        "found": 3,
+        "event_f1": 0.8571428571428571,
+        "event_recall": 0.75,
+        "event_precision": 1.0,
+        "time_kappa": 0.7487609659660364,
+        "time_positive_agreement": 0.7516960651289009,
+        "channel_positive_agreement": 0.7516960651289009,
+        "mean_iou": 0.7751404151404152,
+        "mean_channel_jaccard": 1.0,
+        "onset_diff_mean_s": 0.058666666666666666,
+        "offset_diff_mean_s": -0.025333333333333333
+      }
+    ],
+    "missed": [
+      {
+        "recording": "sub-002/eeg/sub-002_task-rest_eeg.vhdr",
+        "label": "Eye-blink-artifact",
+        "onset_s": 3.0,
+        "offset_s": 3.4,
+        "channels": "Fp1,Fp2,VEOG"
+      },
+      {
+        "recording": "sub-002/eeg/sub-002_task-rest_eeg.vhdr",
+        "label": "EMG-artifact",
+        "onset_s": 9.2,
+        "offset_s": 10.8,
+        "channels": "F7,F8,T7,T8"
+      },
+      {
+        "recording": "sub-002/eeg/sub-002_task-rest_eeg.vhdr",
+        "label": "Slow-eye-movement-artifact",
+        "onset_s": 40.0,
+        "offset_s": 44.0,
+        "channels": "F7,F8,HEOG"
+      },
+      {
+        "recording": "sub-003/eeg/sub-003_task-rest_eeg.vhdr",
+        "label": "EMG-artifact",
+        "onset_s": 9.2,
+        "offset_s": 10.8,
+        "channels": "F7,F8,T7,T8"
+      },
+      {
+        "recording": "sub-003/eeg/sub-003_task-rest_eeg.vhdr",
+        "label": "Electrode-pops-artifact",
+        "onset_s": 53.5,
+        "offset_s": 53.9,
+        "channels": "O2"
+      }
+    ],
+    "extra": [
+      {
+        "recording": "sub-002/eeg/sub-002_task-rest_eeg.vhdr",
+        "label": "Horizontal-eye-movement-artifact",
+        "onset_s": 39.992,
+        "offset_s": 43.936,
+        "channels": "F7,F8,HEOG"
+      },
+      {
+        "recording": "sub-002/eeg/sub-002_task-rest_eeg.vhdr",
+        "label": "Respiration-artifact",
+        "onset_s": 48.38,
+        "offset_s": 49.368,
+        "channels": "O1,P7"
+      },
+      {
+        "recording": "sub-003/eeg/sub-003_task-rest_eeg.vhdr",
+        "label": "Tongue-movement-artifact",
+        "onset_s": 42.06,
+        "offset_s": 42.868,
+        "channels": "F3,T7"
+      }
+    ],
+    "label_differences": [
+      {
+        "recording": "sub-002/eeg/sub-002_task-rest_eeg.vhdr",
+        "reference_label": "Slow-eye-movement-artifact",
+        "your_label": "Horizontal-eye-movement-artifact",
+        "onset_s": 40.0,
+        "offset_s": 44.0
+      }
+    ],
+    "minutes_assessed": 2.0,
+    "analysis_config": {
+      "resolutions_s": [
+        0.1
+      ],
+      "min_bin_coverage": 0.5,
+      "channel_modes": [
+        "time_only",
+        "time_and_channel"
+      ],
+      "include_any_artifact": true,
+      "match_criterion": "iou",
+      "iou_thresholds": [
+        0.0,
+        0.2,
+        0.5
+      ],
+      "primary_iou_threshold": 0.2,
+      "onset_tolerance_s": 0.5,
+      "offset_tolerance_s": 0.5,
+      "allow_many_to_one": false,
+      "min_channel_jaccard": 0.0,
+      "categories": null,
+      "annotators": null,
+      "modes": [
+        "reference",
+        "practice",
+        "assessment",
+        "standard"
+      ],
+      "reference_annotator": "REFERENCE",
+      "duplicate_policy": "latest",
+      "channel_exclude": [],
+      "timeline_max_recordings": 12,
+      "extra_measures": []
+    }
+  },
+  "status": "met",
+  "status_text": "Meets the competency criteria.",
+  "checks": [
+    {
+      "criterion": "Event F1 (time only) ≥ 0.8 (overall)",
+      "where": "overall",
+      "value": 0.8095238095238095,
+      "passed": true
+    },
+    {
+      "criterion": "Sensitivity: proportion of reference events found ≥ 0.7 (in every assessed category)",
+      "where": "Eye-blink-artifact",
+      "value": 0.8333333333333334,
+      "passed": true
+    },
+    {
+      "criterion": "Sensitivity: proportion of reference events found ≥ 0.7 (in every assessed category)",
+      "where": "Electrode-pops-artifact",
+      "value": 0.75,
+      "passed": true
+    },
+    {
+      "criterion": "Same label as the reference for detected artifacts ≥ 0.85 (overall)",
+      "where": "overall",
+      "value": 0.9444444444444444,
+      "passed": true
+    }
+  ],
+  "categories_not_judged": [
+    "Chewing-artifact",
+    "ECG-artifact",
+    "EMG-artifact",
+    "Horizontal-eye-movement-artifact",
+    "Slow-eye-movement-artifact",
+    "Movement-artifact",
+    "Respiration-artifact",
+    "Tongue-movement-artifact"
+  ],
+  "results_sha256": "f867fa7c8331217a6702f8ca77bef72b264c49b0cf410f0660d486ecccbb5273",
+  "generated_at": "2026-10-26T15:47:55.253+00:00"
+}
