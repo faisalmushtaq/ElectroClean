@@ -103,6 +103,10 @@ class CompletionRegister:
         try:
             entries = self.entries()
             if any(e.get("session_id") == row["session_id"] for e in entries):
+                # Already registered (e.g. by recovery). Regenerate the list in case an
+                # earlier attempt stopped between the register and the list.
+                if row["mode"] == "standard":
+                    self._write_completed_list(row["annotator_id"], entries)
                 return False
             entries.append(row)
             columns = list(REGISTER_COLUMNS)

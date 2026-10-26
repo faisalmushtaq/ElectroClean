@@ -64,7 +64,7 @@ def read_study_dict(dataset_root: Path) -> dict[str, Any]:
     p = study_config_path(dataset_root)
     if not p.exists():
         return {"study_id": "", "annotators": [], "allow_unlisted_annotators": True, "settings": {}}
-    return json.loads(p.read_text(encoding="utf-8"))
+    return json.loads(p.read_text(encoding="utf-8-sig"))
 
 
 def write_study_dict(dataset_root: Path, data: dict[str, Any]) -> Path:

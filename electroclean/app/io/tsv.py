@@ -20,7 +20,8 @@ def parse_tsv_text(text: str, source: str = "<text>") -> tuple[list[str], list[l
     # Split on line feeds only (str.splitlines would also split on form feeds,
     # Unicode separators etc. that may legitimately appear inside a value).
     lines = [ln[:-1] if ln.endswith("\r") else ln for ln in text.split("\n")]
-    while lines and lines[-1].strip() == "":
+    # Drop blank lines at the end, but keep rows whose cells are all empty (they contain tabs).
+    while lines and "\t" not in lines[-1] and lines[-1].strip() == "":
         lines.pop()
     if not lines:
         raise TSVError(f"{source} is empty (no header row)")

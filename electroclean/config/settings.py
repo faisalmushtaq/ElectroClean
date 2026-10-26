@@ -231,7 +231,7 @@ class StudyConfig:
     @classmethod
     def load(cls, path: Path) -> StudyConfig:
         try:
-            data = json.loads(path.read_text(encoding="utf-8"))
+            data = json.loads(path.read_text(encoding="utf-8-sig"))
         except json.JSONDecodeError as exc:
             raise SettingsError(f"Study configuration {path} is not valid JSON: {exc}") from exc
         if not isinstance(data, dict):

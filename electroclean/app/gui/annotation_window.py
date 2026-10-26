@@ -122,6 +122,7 @@ class AnnotationWorkspace(QObject):
         self.controller.annotationsChanged.connect(self._refresh_table)
         self.controller.selectionChanged.connect(self._on_controller_selection)
         # The clock belongs to the browser window so it stops when the window is destroyed.
+        self._lock_warned = False
         self._tick = QTimer(self.browser)
         self._tick.timeout.connect(self._update_clock)
         self._tick.start(1000)
@@ -441,7 +442,13 @@ class AnnotationWorkspace(QObject):
         try:
             self.clock_label.setText(f"Time on this recording: {format_hms(self.session.elapsed_s)}")
         except RuntimeError:  # window already destroyed
-            pass
+            return
+        if not self.read_only and not self._finished and not self.session.heartbeat() and not self._lock_warned:
+            self._lock_warned = True
+            self._show_message(
+                "Warning: this recording's lock was lost (was the computer asleep?). "
+                "ElectroClean will try to take it again when you press Save and Finish."
+            )
 
     def _show_message(self, msg: str) -> None:
         self.browser.statusBar().showMessage(msg, 10000)
@@ -620,6 +627,9 @@ class AnnotationWorkspace(QObject):
             return False
         except (SessionError, ValidationError, OSError, ValueError, AnnotationError) as exc:
             self._save_failed(str(exc))
+            return False
+        except Exception as exc:  # never leave the annotator with a disabled Save button
+            self._save_failed(f"Unexpected error ({type(exc).__name__}): {exc}")
             return False
         self._complete(result)
         return True

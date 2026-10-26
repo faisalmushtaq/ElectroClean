@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import random
 import time
 
@@ -107,6 +108,8 @@ def test_stale_lock_from_dead_process_is_broken(tmp_path):
     FileLock(path).acquire()
     path2 = tmp_path / "y.lock"
     path2.write_text(json.dumps({"pid": 1, "host": "elsewhere", "created_epoch": time.time() - 7200}))
+    old = time.time() - 7200  # age is judged from the lock file's modification time
+    os.utime(path2, (old, old))
     with pytest.raises(LockError):
         FileLock(path2, stale_after_s=3 * 3600).acquire()
     FileLock(path2, stale_after_s=3600).acquire()

@@ -99,12 +99,34 @@ The tests simulate a crash at every stage with a `BaseException` hook.
 ## Locks
 
 `io.locking.FileLock` creates a lock file with `O_CREAT | O_EXCL` (which
-fails if it exists) recording the process, host and time. A lock is stale when
-its process no longer exists on the same host, or when it is older than
-`recording_lock_stale_hours` (12 h). Stale locks are moved aside atomically
-before being replaced, so two sessions cannot both break the same lock. This
-works on local disks and on network drives that honour exclusive creation
+fails if it exists) recording the process, host, time and a random token. A
+lock is stale when its process no longer exists on the same host, or when it
+has not been refreshed for longer than its limit (`recording_lock_stale_hours`,
+2 h by default, for recording locks; 5 min for the register; 10 min for a save
+in progress). Ages are measured with the clock of the folder holding the lock
+(the modification time of a probe file written next to it), so computers
+whose clocks disagree do not misjudge each other's locks. An open annotation
+window refreshes its recording lock every minute; if the lock is lost anyway
+(for instance after a long sleep), Save and Finish takes it again or, if
+another session holds it, refuses to save.
+
+Breaking a stale lock is serialised by a short-lived `<lock>.breaking` file.
+Under it the breaker re-reads the lock and removes it only if it is still the
+one it judged stale (same token), so two sessions never both hold a lock.
+Releasing a lock removes the file only if it still carries the holder's token.
+This works on local disks and on network drives that honour exclusive creation
 (SMB and NFSv4 do).
+
+Every save holds `staging/<session_id>.lock`, and start-up recovery skips
+saves whose lock is held, so starting a second window (or a second computer)
+never interferes with a save in progress. Files are moved into the results
+folder with a move that refuses to replace an existing file
+(`atomic.move_no_clobber`). The journal stores the final folder relative to
+the results folder, so recovery works when the folder is reached by another
+path. When a session starts, output files for the same recording and
+annotator that are not registered as complete are handled first: a complete,
+consistent set is registered (its register row was lost), anything else is
+moved to `.electroclean/interrupted/` with a warning.
 
 ## Integration with MNE's Qt browser
 

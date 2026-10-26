@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import platform
 import sys
 import time
@@ -30,10 +31,11 @@ from electroclean.app.annotations.timing import TIME_CONVENTIONS
 from electroclean.app.common import new_session_id, normalise_annotator_id, now_local_iso, validate_mode
 from electroclean.app.eeg.loading import LoadedRecording, changed_since
 from electroclean.app.io.atomic import json_bytes
-from electroclean.app.io.canonical import annotations_json_bytes
-from electroclean.app.io.export import build_events_sidecar, events_tsv_bytes
-from electroclean.app.io.locking import FileLock
+from electroclean.app.io.canonical import annotations_json_bytes, read_annotations_json
+from electroclean.app.io.export import ExportError, build_events_sidecar, events_tsv_bytes
+from electroclean.app.io.locking import FileLock, LockError
 from electroclean.app.io.naming import OutputLayout, next_free_attempt, output_basename, output_filenames
+from electroclean.app.session.register import RegisterError
 from electroclean.app.session.failures import SessionLog
 from electroclean.app.session.register import CompletionRegister
 from electroclean.app.session.transaction import CommitResult, ExportCommitError, FaultHook, commit_outputs
@@ -127,6 +129,7 @@ class AnnotationSession:
         self.finished_at: str | None = None
         self._t0: float | None = None
         self._accumulated = 0.0
+        self._last_heartbeat = 0.0
         self.state = "created"
         self.events: list[dict[str, Any]] = []
 
@@ -143,7 +146,14 @@ class AnnotationSession:
                 "It will not be annotated again unless an administrator allows a repeat."
             )
         self.lock.acquire(timeout_s=0)
+        try:
+            if not self.allow_repeat:
+                self._handle_leftover_outputs()
+        except BaseException:
+            self.lock.release()
+            raise
         self.started_at = now_local_iso()
+        self._last_heartbeat = time.monotonic()
         self.state = "open"
         self.session_log.write(
             "session_started",
@@ -153,6 +163,114 @@ class AnnotationSession:
             mode=self.mode,
             context=self.context_id,
         )
+
+    def _handle_leftover_outputs(self) -> None:
+        """Deal with output files of this recording and annotator that are not registered as complete.
+
+        Normally there are none. A complete, consistent set means an earlier save
+        finished but its register update was lost: the save is registered and the
+        session refused (the work is already done). Anything else is an incomplete
+        set that would block saving; it is moved to ``.electroclean/interrupted/``
+        (never deleted) and a warning is shown.
+        """
+        final_dir = self.layout.recording_dir(self.annotator_id, self.recording_id, self.mode, self.context_id)
+        last = next_free_attempt(final_dir, self.loaded.files.stem, self.annotator_id) - 1
+        if last < 1:
+            return
+        for attempt in range(last, 0, -1):
+            basename = output_basename(self.loaded.files.stem, self.annotator_id, attempt)
+            entry = self._verified_entry(final_dir, basename)
+            if entry is not None:
+                try:
+                    self.register.add(entry)
+                except (RegisterError, OSError) as exc:
+                    raise SessionError(
+                        f"{self.recording_id} was already saved by {self.annotator_id} ({basename}), but the "
+                        f"completion register could not be updated: {exc}"
+                    ) from exc
+                self.session_log.write(
+                    "completion_recovered", recording_id=self.recording_id, annotator_id=self.annotator_id,
+                    session_id=entry["session_id"], output_basename=basename,
+                )
+                raise SessionError(
+                    f"{self.recording_id} was already saved by {self.annotator_id} on {entry['completed_at']} "
+                    f"({basename}). That save had not been recorded as complete; it is now."
+                )
+        dest = self.layout.quarantine / f"leftover-{self.session_id}"
+        moved = []
+        for attempt in range(1, last + 1):
+            for name in output_filenames(output_basename(self.loaded.files.stem, self.annotator_id, attempt)).values():
+                src = final_dir / name
+                if src.exists():
+                    dest.mkdir(parents=True, exist_ok=True)
+                    try:
+                        os.replace(src, dest / name)
+                    except OSError as exc:
+                        raise SessionError(
+                            f"Incomplete earlier output files for {self.recording_id} ({src}) are in the way and "
+                            f"could not be moved aside: {exc}. Please tell the study administrator."
+                        ) from exc
+                    moved.append(name)
+        message = (
+            f"Incomplete output files from an earlier save were found and moved to {dest}: " + ", ".join(moved)
+        )
+        self.loaded.warnings.append(message)
+        self.session_log.write(
+            "leftover_outputs_moved", recording_id=self.recording_id, annotator_id=self.annotator_id,
+            destination=str(dest), files=moved,
+        )
+
+    def _verified_entry(self, final_dir: Path, basename: str) -> dict[str, Any] | None:
+        """Register entry for a complete, self-consistent set of outputs, else None."""
+        names = output_filenames(basename)
+        paths = {k: final_dir / n for k, n in names.items()}
+        if not all(p.is_file() for p in paths.values()):
+            return None
+        try:
+            doc = read_annotations_json(paths["annotations_json"])
+            meta = json.loads(paths["session_json"].read_text(encoding="utf-8"))
+            elapsed = float(paths["time_viewed"].read_text(encoding="utf-8").strip())
+            if paths["events_tsv"].stat().st_size == 0:
+                return None
+            json.loads(paths["events_json"].read_text(encoding="utf-8"))
+        except Exception:
+            return None
+        if (
+            doc.annotator_id != self.annotator_id
+            or doc.recording.recording_id != self.recording_id
+            or doc.mode != self.mode
+            or meta.get("session_id") != doc.session_id
+            or (meta.get("outputs") or {}).get("basename") != basename
+        ):
+            return None
+        return {
+            "recording_id": self.recording_id,
+            "annotator_id": self.annotator_id,
+            "mode": self.mode,
+            "context": self.context_id,
+            "status": "completed",
+            "session_id": doc.session_id,
+            "completed_at": (meta.get("timing") or {}).get("finish_timestamp") or doc.created_at,
+            "elapsed_s": f"{elapsed:.3f}",
+            "n_annotations": str(len(doc.annotations)),
+            "output_dir": final_dir.relative_to(self.layout.root).as_posix(),
+            "output_basename": basename,
+            "app_version": (meta.get("application") or {}).get("version", ""),
+        }
+
+    def heartbeat(self, interval_s: float = 60.0) -> bool:
+        """Refresh the recording lock (call regularly while the session is open).
+
+        Returns False if the lock has been lost, for example because another
+        computer judged it stale while this one was asleep.
+        """
+        if self.state != "open":
+            return True
+        now = time.monotonic()
+        if now - self._last_heartbeat < interval_s:
+            return True
+        self._last_heartbeat = now
+        return self.lock.refresh()
 
     def start_timer(self) -> None:
         """Call when the EEG viewer becomes available for use."""
@@ -286,6 +404,15 @@ class AnnotationSession:
         elapsed = round(self.stop_timer(), 3)
         self.finished_at = now_local_iso()
         try:
+            if not self.lock.owns():
+                # The lock was judged stale (e.g. after a long sleep): take it again if nobody else has.
+                try:
+                    self.lock.acquire(timeout_s=0)
+                except LockError as exc:
+                    raise SessionError(
+                        f"{self.recording_id} has been opened by another session in the meantime ({exc}). "
+                        "Your annotations were not saved; please tell the study administrator."
+                    ) from exc
             changed = changed_since(self.loaded.files, self.loaded.fingerprint)
             if changed:
                 raise SessionError(
@@ -342,7 +469,7 @@ class AnnotationSession:
                     "export_failed", session_id=self.session_id, recording_id=self.recording_id, error=str(exc)
                 )
             raise
-        except (SessionError, ValidationError, OSError, ValueError) as exc:
+        except (SessionError, ValidationError, ExportError, OSError, ValueError, RuntimeError) as exc:
             self.resume_timer()
             self.session_log.write(
                 "export_failed", session_id=self.session_id, recording_id=self.recording_id, error=str(exc)

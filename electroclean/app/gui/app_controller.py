@@ -125,10 +125,11 @@ class AppController(QObject):
             self.recordings = discover_recordings(
                 request.dataset_root,
                 suffix=s.discovery_suffix,
-                exclude_dir_names=tuple(s.discovery_exclude_dir_names) + (out.name,),
+                exclude_dir_names=tuple(s.discovery_exclude_dir_names),
+                exclude_paths=(out,),
                 follow_symlinks=s.discovery_follow_symlinks,
             )
-        except OSError as exc:
+        except (OSError, ValueError) as exc:
             self.prompts.error(self.parent_widget, "Cannot read the dataset folder", str(exc))
             return False
         self.session_excluded = set()
@@ -394,6 +395,9 @@ class AppController(QObject):
         assert self.request is not None
         session, loaded = self.session, self.loaded
         self.workspace = None
+        if session is not None:
+            # Saved (even if its register update is still pending): never offer it again in this session.
+            self.session_excluded.add(session.recording_id)
         self.history.append(
             {"event": "finished", "recording_id": session.recording_id if session else None,
              "n_annotations": getattr(result, "n_annotations", None)}

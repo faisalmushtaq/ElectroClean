@@ -86,6 +86,10 @@ class RecordingFiles:
         ):
             if path is not None:
                 out[key] = path
+        # Inherited (less specific) JSON sidecars also contribute metadata.
+        for key, chain in (("events_json", self.sidecars.events_json_chain), ("eeg_json", self.sidecars.eeg_json_chain)):
+            for level, path in enumerate(chain[:-1], start=1):
+                out[f"{key}_inherited_{level}"] = path
         return out
 
 
@@ -131,7 +135,12 @@ def read_vhdr_header(vhdr: Path) -> VhdrHeader:
 
 def describe_recording(vhdr: Path, root: Path) -> RecordingFiles:
     """Build a :class:`RecordingFiles` entry and list any problems found."""
-    rel = vhdr.resolve().relative_to(root.resolve()).as_posix()
+    # The ID is the path as found below the dataset folder, not the target of a symbolic
+    # link (which may lie elsewhere, e.g. in a git-annex object store).
+    try:
+        rel = vhdr.relative_to(root).as_posix()
+    except ValueError:
+        rel = Path(os.path.relpath(os.path.abspath(vhdr), os.path.abspath(root))).as_posix()
     problems: list[str] = []
     header = None
     eeg = vmrk = None
@@ -177,21 +186,28 @@ def discover_recordings(
     *,
     suffix: str = "_eeg.vhdr",
     exclude_dir_names: tuple[str, ...] | list[str] = ("derivatives", "Annotated_Events", ".git"),
+    exclude_paths: tuple[Path | str, ...] | list[Path | str] = (),
     follow_symlinks: bool = False,
 ) -> list[RecordingFiles]:
     """Recursively find ``*<suffix>`` files below ``root``, sorted by recording ID.
 
-    Hidden folders and folders named in ``exclude_dir_names`` are skipped so
-    that ElectroClean's own outputs and derived data are never treated as
-    source recordings.
+    Hidden folders, folders named in ``exclude_dir_names`` and the folders in
+    ``exclude_paths`` (for example the results folder) are skipped so that
+    ElectroClean's own outputs and derived data are never treated as source
+    recordings.
     """
     root_path = Path(root)
     if not root_path.is_dir():
         raise NotADirectoryError(f"Dataset folder not found: {root_path}")
     excluded = set(exclude_dir_names)
+    excluded_paths = {os.path.normcase(os.path.abspath(p)) for p in exclude_paths}
     found: list[RecordingFiles] = []
     for dirpath, dirnames, filenames in os.walk(root_path, followlinks=follow_symlinks):
-        dirnames[:] = sorted(d for d in dirnames if d not in excluded and not d.startswith("."))
+        dirnames[:] = sorted(
+            d for d in dirnames
+            if d not in excluded and not d.startswith(".")
+            and os.path.normcase(os.path.abspath(os.path.join(dirpath, d))) not in excluded_paths
+        )
         for name in sorted(filenames):
             if name.endswith(suffix) and not name.startswith("."):
                 found.append(describe_recording(Path(dirpath) / name, root_path))

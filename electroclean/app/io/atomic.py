@@ -56,6 +56,30 @@ def fsync_directory(path: Path | str) -> None:
         os.close(fd)
 
 
+def move_no_clobber(src: Path | str, dst: Path | str) -> None:
+    """Move ``src`` to ``dst`` atomically, raising :class:`FileExistsError` if ``dst`` exists.
+
+    :func:`os.replace` would silently overwrite a file that appeared in the
+    meantime. On Windows :func:`os.rename` refuses to overwrite; elsewhere a
+    hard link is created (which fails if the target exists) and the source
+    removed. File systems without hard links fall back to checking first.
+    """
+    src, dst = Path(src), Path(dst)
+    if os.name == "nt":
+        os.rename(src, dst)
+        return
+    try:
+        os.link(src, dst)
+    except FileExistsError:
+        raise
+    except OSError:
+        if dst.exists():
+            raise FileExistsError(f"{dst} already exists") from None
+        os.replace(src, dst)
+        return
+    os.unlink(src)
+
+
 def check_free_space(directory: Path | str, required_bytes: int, margin_bytes: int = 10 * 1024 * 1024) -> None:
     """Raise :class:`DiskSpaceError` if ``directory`` lacks space for ``required_bytes``."""
     probe = Path(directory)
@@ -84,9 +108,13 @@ def atomic_write_bytes(path: Path | str, data: bytes, *, overwrite: bool = True)
             fh.write(data)
             fh.flush()
             os.fsync(fh.fileno())
-        if not overwrite and target.exists():
-            raise OutputWriteError(f"Refusing to overwrite existing file {target}")
-        os.replace(tmp, target)
+        if overwrite:
+            os.replace(tmp, target)
+        else:
+            try:
+                move_no_clobber(tmp, target)
+            except FileExistsError:
+                raise OutputWriteError(f"Refusing to overwrite existing file {target}") from None
         fsync_directory(target.parent)
     except OutputWriteError:
         _silent_unlink(tmp)

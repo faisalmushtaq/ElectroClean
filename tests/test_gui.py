@@ -284,3 +284,41 @@ def test_screenshot_for_documentation(qapp, layout, settings, catalogue, loaded,
     finally:
         ws._closing_ok = True
         ws.browser.close()
+
+
+def test_saved_recording_is_not_offered_again_while_register_is_pending(qapp, dataset, monkeypatch):
+    from electroclean.app.session.register import RegisterError
+
+    root, _ = dataset
+    ctrl = AppController(prompts=ScriptedPrompts(), synchronous_loading=True)
+    assert ctrl.begin(StartRequest(annotator_id="A01", display_name="", dataset_root=root, output_root=None,
+                                   mode="standard"))
+    first = ctrl.workspace.session.recording_id
+
+    def busy(self, entry):
+        raise RegisterError("completion_register.tsv is open in another program")
+
+    monkeypatch.setattr(CompletionRegister, "add", busy)
+    ctrl.workspace.controller.create_annotation(1, 2)
+    assert ctrl.workspace.save_and_finish()  # saved; registration finishes at the next start
+    wait(50)
+    assert ctrl.workspace is not None and ctrl.workspace.session.recording_id != first
+    ctrl.workspace._closing_ok = True
+    ctrl.workspace.session.abandon()
+    ctrl.workspace.browser.close()
+
+
+def test_unexpected_save_error_keeps_the_annotations_open(qapp, layout, settings, catalogue, loaded, monkeypatch):
+    prompts = ScriptedPrompts()
+    session, ws = open_workspace(layout, settings, catalogue, loaded, prompts)
+    ws.controller.create_annotation(1, 2)
+
+    def boom(*a, **k):
+        raise KeyError("unexpected")
+
+    monkeypatch.setattr(session, "finish", boom)
+    assert ws.save_and_finish() is False
+    assert ws.save_btn.isEnabled()
+    assert any("Unexpected error" in t for _k, _title, t in prompts.log)
+    monkeypatch.undo()
+    assert ws.save_and_finish() is True

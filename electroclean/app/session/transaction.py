@@ -6,20 +6,31 @@ Saving a session is a small transaction recorded in a journal file
 1. ``staging``    all output files are written (atomically) into the staging folder;
 2. ``validated``  the staged files are read back and validated;
 3. ``committing`` each file is moved into its final folder (same file system,
-   so each move is atomic) and its checksum is re-verified;
+   so each move is atomic, and a move never replaces an existing file) and
+   its checksum is re-verified;
 4. ``files_committed`` all final files are in place and verified;
 5. the completion register is updated;
 6. ``complete``   the staging folder is removed.
 
+While a save is in progress its session holds ``staging/<session_id>.lock``.
+
 If ElectroClean stops at any point, :func:`recover_interrupted_exports` (run
-at start-up) inspects the journals. A transaction that reached
-``files_committed``, or that was ``committing`` and whose final files are all
-present and verified, is rolled forward (the register is updated, because the
-annotator did press Save and Finish and every file was validated). Anything
-else is rolled back: files already moved are taken out of the output folders
-and, together with the staged files, kept in ``.electroclean/interrupted/`` for
-manual inspection. A recording is therefore never marked complete unless all
-of its outputs exist and match their verified checksums.
+at start-up) inspects the journals, skipping any save whose lock is still held
+by a running session (another window, or another computer on the same
+network drive). A transaction that reached ``files_committed``, or that was
+``committing`` and whose final files are all present and verified, is rolled
+forward (the register is updated, because the annotator did press Save and
+Finish and every file was validated). Anything else is rolled back: files
+already moved are taken out of the output folders and, together with the
+staged files, kept in ``.electroclean/interrupted/`` for manual inspection. If
+a file cannot be moved back (for example because it is open in another
+program), the journal is kept and the roll-back is retried at the next start.
+A recording is therefore never marked complete unless all of its outputs
+exist and match their verified checksums.
+
+The journal records the final folder relative to the output folder, so a
+results folder reached through another drive letter or mount point (or
+moved) is still recovered correctly.
 """
 
 from __future__ import annotations
@@ -39,14 +50,18 @@ from electroclean.app.io.atomic import (
     atomic_write_json,
     check_free_space,
     fsync_directory,
+    move_no_clobber,
     sha256_bytes,
     sha256_file,
 )
+from electroclean.app.io.locking import FileLock, LockError
 from electroclean.app.io.naming import OutputLayout
 from electroclean.app.session.failures import SessionLog
 from electroclean.app.session.register import CompletionRegister
 
 JOURNAL = "transaction.json"
+#: A save lock older than this (without its process being visibly alive) is stale.
+SAVE_LOCK_STALE_S = 600.0
 
 
 class ExportCommitError(RuntimeError):
@@ -68,7 +83,7 @@ class CommitResult:
 @dataclass
 class RecoveryAction:
     session_id: str
-    action: str  # "rolled_forward", "rolled_back", "cleaned_up", "unreadable"
+    action: str  # "rolled_forward", "rolled_back", "rollback_incomplete", "cleaned_up", "in_progress", "unreadable"
     message: str
     details: dict[str, Any] = field(default_factory=dict)
 
@@ -76,6 +91,20 @@ class RecoveryAction:
 def _write_journal(staging: Path, journal: dict[str, Any]) -> None:
     journal["updated_at"] = now_local_iso()
     atomic_write_json(staging / JOURNAL, journal)
+
+
+def save_lock(layout: OutputLayout, session_id: str) -> FileLock:
+    return FileLock(
+        layout.staging / f"{session_id}.lock", {"purpose": "saving", "session_id": session_id},
+        stale_after_s=SAVE_LOCK_STALE_S,
+    )
+
+
+def _final_dir(layout: OutputLayout, journal: dict[str, Any]) -> Path:
+    rel = journal.get("final_dir_rel")
+    if rel is not None:
+        return layout.root / rel
+    return Path(journal.get("final_dir", ""))
 
 
 # Test hook: a callable(stage_name) that may raise to simulate a crash.
@@ -94,7 +123,27 @@ def commit_outputs(
     fault: FaultHook | None = None,
 ) -> CommitResult:
     """Write, validate and commit ``files`` (key -> (file name, bytes))."""
+    lock = save_lock(layout, session_id)
+    try:
+        lock.acquire(timeout_s=0)
+    except (LockError, OSError) as exc:
+        raise ExportCommitError(f"Another save of session {session_id} is in progress ({exc})") from exc
+    try:
+        return _commit(layout, session_id, final_dir, files, validate, register, register_entry, fault)
+    finally:
+        lock.release()
 
+
+def _commit(
+    layout: OutputLayout,
+    session_id: str,
+    final_dir: Path,
+    files: dict[str, tuple[str, bytes]],
+    validate: Callable[[dict[str, bytes]], None],
+    register: CompletionRegister,
+    register_entry: dict[str, Any],
+    fault: FaultHook | None,
+) -> CommitResult:
     def hook(stage: str) -> None:
         if fault is not None:
             fault(stage)
@@ -111,14 +160,21 @@ def commit_outputs(
     if staging.exists():
         raise ExportCommitError(f"A staging folder for session {session_id} already exists")
     staging.mkdir(parents=True)
+    try:
+        final_rel: str | None = final_dir.relative_to(layout.root).as_posix()
+    except ValueError:
+        final_rel = None
     journal: dict[str, Any] = {
         "session_id": session_id,
         "state": "staging",
         "created_at": now_local_iso(),
         "final_dir": str(final_dir),
+        "final_dir_rel": final_rel,
         "files": {k: {"name": name, "sha256": sha256_bytes(b)} for k, (name, b) in files.items()},
         "register_entry": register_entry,
     }
+    if final_rel is None:
+        del journal["final_dir_rel"]
     try:
         _write_journal(staging, journal)
         for key, (name, data) in files.items():
@@ -146,9 +202,10 @@ def commit_outputs(
         for key, (name, _) in files.items():
             hook(f"commit:{key}")
             target = final_paths[key]
-            if target.exists():
-                raise ExportCommitError(f"Output file appeared while saving: {target}")
-            os.replace(staging / name, target)
+            try:
+                move_no_clobber(staging / name, target)
+            except FileExistsError:
+                raise ExportCommitError(f"Output file appeared while saving: {target}") from None
         fsync_directory(final_dir)
         hook("verify")
         for key, target in final_paths.items():
@@ -158,10 +215,17 @@ def commit_outputs(
         _write_journal(staging, journal)
     except Exception as exc:
         # Undo the partial commit so that no incomplete output set is left behind.
-        _roll_back(layout, staging, journal, reason=f"commit failed: {exc}")
+        info = _roll_back(layout, staging, journal, reason=f"commit failed: {exc}")
+        extra = ""
+        if info.get("not_moved"):
+            extra = (
+                " Some files could not be moved out of the results folder ("
+                + ", ".join(info["not_moved"])
+                + "); ElectroClean will retry the next time it starts."
+            )
         if isinstance(exc, ExportCommitError):
-            raise
-        raise ExportCommitError(f"Outputs could not be moved into place: {exc}") from exc
+            raise ExportCommitError(str(exc) + extra) from exc
+        raise ExportCommitError(f"Outputs could not be moved into place: {exc}.{extra}") from exc
 
     try:
         hook("register")
@@ -172,8 +236,14 @@ def commit_outputs(
             f"({exc}). ElectroClean will finish this automatically the next time it starts.",
             committed=True,
         ) from exc
-    journal["state"] = "complete"
-    _write_journal(staging, journal)
+    # The outputs are final and registered. Failing to tidy up the journal does not change
+    # that: recovery finds "files_committed", re-adds the (identical) register row and cleans up.
+    try:
+        hook("cleanup")
+        journal["state"] = "complete"
+        _write_journal(staging, journal)
+    except Exception:
+        pass
     shutil.rmtree(staging, ignore_errors=True)
     return CommitResult(
         final_dir=final_dir,
@@ -184,98 +254,158 @@ def commit_outputs(
 
 
 def _roll_back(layout: OutputLayout, staging: Path, journal: dict[str, Any], reason: str) -> dict[str, Any]:
-    """Move any committed final files back out of the output folders."""
+    """Move committed final files back out of the output folders, and keep everything staged.
+
+    Every file is moved into ``.electroclean/interrupted/<session>/``; nothing
+    is deleted. If a committed file cannot be moved, the journal is kept (state
+    ``rollback_incomplete``) so that the next start-up retries.
+    """
     session_id = journal.get("session_id", staging.name)
     dest = layout.quarantine / session_id
     dest.mkdir(parents=True, exist_ok=True)
-    moved = []
-    final_dir = Path(journal.get("final_dir", ""))
-    for key, info in journal.get("files", {}).items():
+    moved: list[str] = []
+    not_moved: list[str] = []
+    final_dir = _final_dir(layout, journal)
+    for _key, info in journal.get("files", {}).items():
         name = info["name"]
         final = final_dir / name
-        staged = staging / name
-        if final.exists():
+        try:
+            ours = final.exists() and sha256_file(final) == info["sha256"]
+        except OSError:  # exists but cannot be read now: try again later
+            not_moved.append(name)
+            continue
+        if ours:
             try:
-                if sha256_file(final) == info["sha256"]:
-                    os.replace(final, dest / name)
-                    moved.append(name)
+                os.replace(final, dest / name)
+                moved.append(name)
+            except OSError:
+                not_moved.append(name)
+    # Keep every staged file (named in the journal or not, e.g. when the journal is unreadable).
+    if staging.exists():
+        for f in sorted(staging.iterdir()):
+            if f.is_file() and f.name != JOURNAL:
+                target = dest / f.name
+                if target.exists():
+                    target = dest / f"staged-{f.name}"
+                try:
+                    os.replace(f, target)
+                except OSError:
+                    pass
+        unreadable_journal = staging / JOURNAL
+        if not journal.get("files") and unreadable_journal.exists():
+            try:
+                shutil.copy2(unreadable_journal, dest / "transaction-unreadable.json")
             except OSError:
                 pass
-        if staged.exists():
-            try:
-                os.replace(staged, dest / name)
-            except OSError:
-                pass
-    journal["state"] = "rolled_back"
     journal["rollback_reason"] = reason
-    journal["moved_out_of_outputs"] = moved
+    journal["moved_out_of_outputs"] = sorted(set(journal.get("moved_out_of_outputs", [])) | set(moved))
+    if not_moved:
+        journal["state"] = "rollback_incomplete"
+        journal["not_moved"] = not_moved
+        try:
+            _write_journal(staging, journal)
+        except OutputWriteError:
+            pass
+        return {"quarantine": str(dest), "moved_out_of_outputs": moved, "not_moved": not_moved}
+    journal["state"] = "rolled_back"
     try:
         atomic_write_json(dest / JOURNAL, journal)
     except OutputWriteError:
         pass
     shutil.rmtree(staging, ignore_errors=True)
-    return {"quarantine": str(dest), "moved_out_of_outputs": moved}
+    return {"quarantine": str(dest), "moved_out_of_outputs": moved, "not_moved": []}
 
 
 def recover_interrupted_exports(
     layout: OutputLayout, register: CompletionRegister, session_log: SessionLog | None = None
 ) -> list[RecoveryAction]:
-    """Inspect leftover staging folders and roll each forward or back."""
+    """Inspect leftover staging folders and roll each forward or back.
+
+    Saves still in progress in another running session are left alone.
+    """
     actions: list[RecoveryAction] = []
     if not layout.staging.exists():
         return actions
     for staging in sorted(p for p in layout.staging.iterdir() if p.is_dir()):
         sid = staging.name
-        jpath = staging / JOURNAL
+        lock = save_lock(layout, sid)
         try:
-            journal = json.loads(jpath.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            journal = {"session_id": sid, "files": {}, "state": "unknown"}
-            info = _roll_back(layout, staging, journal, reason="journal missing or unreadable")
-            actions.append(RecoveryAction(sid, "rolled_back", "Interrupted save without a readable journal", info))
+            lock.acquire(timeout_s=0)
+        except (LockError, OSError):
+            actions.append(RecoveryAction(sid, "in_progress", "A save is in progress in another session; left alone"))
             continue
-        state = journal.get("state")
-        if state == "complete":
-            shutil.rmtree(staging, ignore_errors=True)
-            actions.append(RecoveryAction(sid, "cleaned_up", "Removed leftover staging folder of a completed save"))
-            continue
-        final_dir = Path(journal.get("final_dir", ""))
-        all_final_ok = bool(journal.get("files")) and all(
-            (final_dir / f["name"]).exists() and sha256_file(final_dir / f["name"]) == f["sha256"]
-            for f in journal["files"].values()
-        )
-        if state in ("files_committed", "committing") and all_final_ok:
-            try:
-                register.add(journal["register_entry"])
-            except Exception as exc:  # leave for the next start-up
-                actions.append(RecoveryAction(sid, "unreadable", f"Register update still failing: {exc}"))
-                continue
-            journal["state"] = "complete"
-            _write_journal(staging, journal)
-            shutil.rmtree(staging, ignore_errors=True)
-            entry = journal.get("register_entry", {})
-            actions.append(
-                RecoveryAction(
-                    sid,
-                    "rolled_forward",
-                    f"Completed an interrupted save of {entry.get('recording_id')} by {entry.get('annotator_id')}",
-                    {"final_dir": str(final_dir)},
-                )
-            )
-        else:
-            info = _roll_back(layout, staging, journal, reason=f"interrupted in state {state!r}")
-            entry = journal.get("register_entry", {})
-            actions.append(
-                RecoveryAction(
-                    sid,
-                    "rolled_back",
-                    f"An interrupted save of {entry.get('recording_id', '?')} by {entry.get('annotator_id', '?')} "
-                    "was not completed; the recording was NOT marked as complete. The partial files were kept in "
-                    f"{info['quarantine']}.",
-                    info,
-                )
-            )
+        try:
+            if staging.exists():
+                actions.append(_recover_one(layout, register, staging))
+        finally:
+            lock.release()
     if session_log is not None:
         for a in actions:
-            session_log.write("export_recovery", session_id=a.session_id, action=a.action, message=a.message)
+            if a.action != "in_progress":
+                session_log.write("export_recovery", session_id=a.session_id, action=a.action, message=a.message)
     return actions
+
+
+def _recover_one(layout: OutputLayout, register: CompletionRegister, staging: Path) -> RecoveryAction:
+    sid = staging.name
+    jpath = staging / JOURNAL
+    try:
+        journal = json.loads(jpath.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        journal = {"session_id": sid, "files": {}, "state": "unknown"}
+        info = _roll_back(layout, staging, journal, reason="journal missing or unreadable")
+        return RecoveryAction(
+            sid, "rolled_back",
+            f"An interrupted save without a readable journal was found; its files were kept in {info['quarantine']}.",
+            info,
+        )
+    state = journal.get("state")
+    if state == "complete":
+        shutil.rmtree(staging, ignore_errors=True)
+        return RecoveryAction(sid, "cleaned_up", "Removed leftover staging folder of a completed save")
+    final_dir = _final_dir(layout, journal)
+
+    def final_ok(f: dict[str, Any]) -> bool:
+        path = final_dir / f["name"]
+        try:
+            return path.exists() and sha256_file(path) == f["sha256"]
+        except OSError:
+            return False
+
+    all_final_ok = bool(journal.get("files")) and all(final_ok(f) for f in journal["files"].values())
+    entry = journal.get("register_entry", {})
+    if state in ("files_committed", "committing") and all_final_ok:
+        try:
+            register.add(entry)
+        except Exception as exc:  # leave for the next start-up
+            return RecoveryAction(sid, "unreadable", f"Register update still failing: {exc}")
+        journal["state"] = "complete"
+        try:
+            _write_journal(staging, journal)
+        except OutputWriteError:
+            pass
+        shutil.rmtree(staging, ignore_errors=True)
+        return RecoveryAction(
+            sid,
+            "rolled_forward",
+            f"Completed an interrupted save of {entry.get('recording_id')} by {entry.get('annotator_id')}",
+            {"final_dir": str(final_dir)},
+        )
+    info = _roll_back(layout, staging, journal, reason=f"interrupted in state {state!r}")
+    who = f"{entry.get('recording_id', '?')} by {entry.get('annotator_id', '?')}"
+    if info["not_moved"]:
+        return RecoveryAction(
+            sid,
+            "rollback_incomplete",
+            f"An interrupted save of {who} was not completed and the recording was NOT marked as complete. "
+            f"These files could not be moved out of the results folder and will be retried next time: "
+            f"{', '.join(info['not_moved'])} (close any program that has them open).",
+            info,
+        )
+    return RecoveryAction(
+        sid,
+        "rolled_back",
+        f"An interrupted save of {who} was not completed; the recording was NOT marked as complete. "
+        f"The partial files were kept in {info['quarantine']}.",
+        info,
+    )

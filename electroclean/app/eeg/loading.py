@@ -246,6 +246,15 @@ def load_recording(
             )
     else:
         original = events_from_raw_annotations(raw, timing, files.vmrk)
+    from electroclean.app.io.export import ELECTROCLEAN_COLUMNS
+
+    clash = [c for c in ELECTROCLEAN_COLUMNS if c in original.columns]
+    if clash:
+        raise RecordingLoadError(
+            f"The recording's events.tsv already has column(s) {', '.join(clash)}, which ElectroClean uses for its "
+            "own information (is it an ElectroClean output file?). Rename them in a copy of the dataset.",
+            kind="malformed_bids_metadata",
+        )
     out_of_range = [
         i + 1 for i, s in enumerate(original.sample) if s is not None and not (0 <= s < timing.n_samples)
     ]

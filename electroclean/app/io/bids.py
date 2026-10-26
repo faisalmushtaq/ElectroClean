@@ -143,11 +143,23 @@ def load_json_chain(paths: list[Path]) -> tuple[dict[str, Any], list[str]]:
     merged: dict[str, Any] = {}
     problems: list[str] = []
     for p in paths:
+        non_finite: list[str] = []
+
+        def constant(name: str, found: list[str] = non_finite) -> None:
+            found.append(name)
+            return None
+
         try:
-            data = json.loads(p.read_text(encoding="utf-8"))
+            # utf-8-sig: files saved by Windows Notepad may start with a byte-order mark.
+            data = json.loads(p.read_text(encoding="utf-8-sig"), parse_constant=constant)
         except (OSError, ValueError) as exc:
             problems.append(f"Could not read JSON sidecar {p.name}: {exc}")
             continue
+        if non_finite:
+            problems.append(
+                f"JSON sidecar {p.name} contains {', '.join(sorted(set(non_finite)))}, which is not valid JSON; "
+                "these values are written as null in ElectroClean's outputs"
+            )
         if not isinstance(data, dict):
             problems.append(f"JSON sidecar {p.name} does not contain an object")
             continue
