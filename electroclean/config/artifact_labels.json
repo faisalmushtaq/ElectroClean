@@ -1,0 +1,27 @@
+{
+  "catalogue_id": "electroclean-hed-score-artifacts",
+  "catalogue_version": "1.0.0",
+  "description": "The only artifact categories annotators may assign in ElectroClean. Values are fixed and must never be renumbered. Label strings are copied exactly from the project specification and have been checked against the HED SCORE library schema 2.2.0 (see hed_score_2.2.0_validation.json).",
+  "hed_library": "score",
+  "hed_library_version": "2.2.0",
+  "hed_standard_version": "8.5.0",
+  "hed_namespace_prefix": "sc:",
+  "labels": [
+    {"value": 100, "label": "Chewing-artifact", "short_code": "CHEW", "colour": "#882D17"},
+    {"value": 101, "label": "ECG-artifact", "short_code": "ECG", "colour": "#BE0032"},
+    {"value": 102, "label": "EMG-artifact", "short_code": "EMG", "colour": "#F38400"},
+    {"value": 103, "label": "Eye-blink-artifact", "short_code": "BLINK", "colour": "#0067A5"},
+    {"value": 104, "label": "Horizontal-eye-movement-artifact", "short_code": "HEM", "colour": "#5FA8E8"},
+    {"value": 105, "label": "Slow-eye-movement-artifact", "short_code": "SEM", "colour": "#604E97"},
+    {"value": 106, "label": "Vertical-eye-movement-artifact", "short_code": "VEM", "colour": "#875692"},
+    {"value": 107, "label": "Movement-artifact", "short_code": "MOVE", "colour": "#8DB600"},
+    {"value": 108, "label": "Pulse-artifact", "short_code": "PULSE", "colour": "#E68FAC"},
+    {"value": 109, "label": "Respiration-artifact", "short_code": "RESP", "colour": "#008856"},
+    {"value": 110, "label": "Sweat-artifact", "short_code": "SWEAT", "colour": "#A89A5B"},
+    {"value": 111, "label": "Tongue-movement-artifact", "short_code": "TONGUE", "colour": "#B3446C"},
+    {"value": 112, "label": "Induction-artifact", "short_code": "INDUCT", "colour": "#D4A900"},
+    {"value": 113, "label": "Electrode-movement-artifact", "short_code": "ELMOVE", "colour": "#654522"},
+    {"value": 114, "label": "Electrode-pops-artifact", "short_code": "POP", "colour": "#E25822"},
+    {"value": 115, "label": "Salt-bridge-artifact", "short_code": "SALT", "colour": "#2B3D26"}
+  ]
+}

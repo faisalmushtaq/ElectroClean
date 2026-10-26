@@ -1,0 +1,49 @@
+{
+  "settings_version": 1,
+  "output": {
+    "directory_name": "Annotated_Events",
+    "directory": null
+  },
+  "discovery": {
+    "suffix": "_eeg.vhdr",
+    "exclude_dir_names": ["derivatives", "Annotated_Events", ".git", ".electroclean"],
+    "follow_symlinks": false
+  },
+  "filters": {
+    "highpass_enabled": true,
+    "highpass_hz": 1.0,
+    "notch_enabled": true,
+    "notch_hz": 60.0,
+    "notch_harmonics": false,
+    "method": "fir",
+    "iir_order": 4,
+    "locked": false
+  },
+  "display": {
+    "duration_s": 10.0,
+    "n_channels": 20,
+    "scalings": {"eeg": 5e-05, "eog": 0.00015, "ecg": 0.0005, "emg": 0.0001, "misc": 0.001},
+    "theme": "light",
+    "overview_mode": "channels"
+  },
+  "loading": {
+    "preload_memory_limit_mb": 2048,
+    "hash_source_files": true,
+    "apply_channel_types_from_bids": true,
+    "show_bids_bad_channels": true
+  },
+  "events": {
+    "collision_policy": "require_explicit_policy"
+  },
+  "selection": {
+    "strategy": "random",
+    "seed": null
+  },
+  "locks": {
+    "recording_lock_stale_hours": 12.0,
+    "register_lock_timeout_s": 30.0
+  },
+  "annotation": {
+    "min_duration_samples": 1
+  }
+}

@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "electroclean"
+dynamic = ["version"]
+description = "Desktop application for manual EEG artifact annotation, inter-rater reliability analysis and annotator competency assessment"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "BSD-3-Clause" }
+authors = [{ name = "ElectroClean contributors" }]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering :: Medical Science Apps.",
+]
+# Ranges known to work; exact versions used for testing are in requirements.txt.
+dependencies = [
+  "mne>=1.8,<1.14",
+  "mne-qt-browser>=0.7.5,<0.8",
+  "numpy>=1.26",
+  "scipy>=1.11",
+  "pandas>=2.1",
+  "matplotlib>=3.8",
+  "PySide6-Essentials>=6.7,<6.13",
+  "qtpy>=2.4",
+  "pyqtgraph>=0.13.7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pybv>=0.7"]
+
+[project.scripts]
+electroclean = "electroclean.app.main:main"
+electroclean-agreement = "electroclean.reliability.cli:main"
+electroclean-admin = "electroclean.training.cli:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "electroclean.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["electroclean*"]
+
+[tool.setuptools.package-data]
+electroclean = ["config/*.json", "app/gui/*.md", "app/gui/icons/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = [
+  "gui: tests that create Qt widgets (run offscreen)",
+  "slow: longer end-to-end tests",
+]
+
+[tool.ruff]
+line-length = 120
