@@ -209,13 +209,14 @@ class AnnotationWorkspace(QObject):
         )
         self.save_btn.setToolTip("Validate and save your annotations, then mark this recording complete")
         self.save_btn.clicked.connect(self.save_and_finish)
-        tb.addWidget(self.save_btn)
+        self.save_action = tb.addWidget(self.save_btn)
         if self.read_only:
             for w in (self.label_combo, self.scope_whole, self.scope_channels, self.choose_channels_btn, self.save_btn):
                 w.setEnabled(False)
             for a in (self.draw_action, self.delete_action, self.undo_action, self.redo_action):
                 a.setEnabled(False)
-            self.save_btn.setVisible(False)
+            # Widgets in a toolbar are shown and hidden through their toolbar action.
+            self.save_action.setVisible(False)
 
     def _build_annotation_panel(self) -> None:
         dock = QDockWidget("Annotations", self.browser)

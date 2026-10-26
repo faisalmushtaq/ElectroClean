@@ -110,6 +110,35 @@ class UserPrompts:
         item, ok = QInputDialog.getItem(parent, title, text, list(items), current, False)
         return item if ok else None
 
+    def show_html(self, parent: QWidget | None, title: str, html: str, buttons: Sequence[str]) -> str:
+        """Show rich text with one or more buttons; return the clicked button's text."""
+        from qtpy.QtWidgets import QTextBrowser
+
+        dlg = QDialog(parent)
+        dlg.setWindowTitle(title)
+        dlg.resize(760, 620)
+        layout = QVBoxLayout(dlg)
+        view = QTextBrowser()
+        view.setHtml(html)
+        layout.addWidget(view)
+        row = QHBoxLayout()
+        row.addStretch(1)
+        clicked = {"text": buttons[-1] if buttons else ""}
+        for text in buttons:
+            btn = QPushButton(text)
+            btn.clicked.connect(lambda _=False, t=text: (clicked.__setitem__("text", t), dlg.accept()))
+            row.addWidget(btn)
+        layout.addLayout(row)
+        dlg.exec()
+        return clicked["text"]
+
+    def ask_text(self, parent: QWidget | None, title: str, label: str, *, password: bool = False) -> str | None:
+        from qtpy.QtWidgets import QInputDialog
+
+        mode = QLineEdit.Password if password else QLineEdit.Normal
+        text, ok = QInputDialog.getText(parent, title, label, mode)
+        return text if ok else None
+
 
 class ScriptedPrompts(UserPrompts):
     """Answers prompts from a script; records everything that was asked (tests)."""
@@ -143,6 +172,12 @@ class ScriptedPrompts(UserPrompts):
 
     def choose_item(self, parent, title, text, items, current=0):  # type: ignore[override]
         return self._answer("item", title, text, items[current] if items else None)
+
+    def show_html(self, parent, title, html, buttons):  # type: ignore[override]
+        return self._answer("html", title, html, buttons[-1] if buttons else "")
+
+    def ask_text(self, parent, title, label, *, password=False):  # type: ignore[override]
+        return self._answer("text", title, label, "")
 
 
 class ChannelDialog(QDialog):

@@ -66,6 +66,7 @@ class AppController(QObject):
         self.progress: QProgressDialog | None = None
         self.review_workspace: Any = None
         self.quiz_window: Any = None
+        self.admin_dialog: Any = None
         self.history: list[dict[str, Any]] = []  # what happened (used by tests and the demo)
 
     # ------------------------------------------------------------- helpers

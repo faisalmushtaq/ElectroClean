@@ -122,7 +122,10 @@ class ElectroCleanDataTrace(DataTrace):
     """EEG trace: clicking selects channels instead of marking them bad."""
 
     def toggle_bad(self, x: Any = None) -> None:
-        ctrl = _controller_of(self.weakmain())
+        main = self.weakmain()
+        if getattr(main, "_ec_readonly", False):
+            return None  # read-only views (quiz segments) ignore clicks
+        ctrl = _controller_of(main)
         if ctrl is None:
             return super().toggle_bad(x)
         ctrl.on_channel_clicked(self.ch_name)
@@ -278,6 +281,26 @@ def create_browser(
     if not isinstance(browser, ElectroCleanBrowser):  # pragma: no cover - safety net
         raise RuntimeError("The MNE browser could not be created with ElectroClean's extensions")
     return browser
+
+
+def make_readonly(browser: ElectroCleanBrowser) -> None:
+    """Remove every way of editing from a browser (used for quiz segments)."""
+    browser._ec_readonly = True
+    p = browser.mne
+    for action in list(p.toolbar.actions()):
+        if action.text() in ("Toggle annotations mode",):
+            p.toolbar.removeAction(action)
+    for key in ("a", "j", "w", "h", "escape"):
+        p.keyboard_shortcuts.pop(key, None)
+    if getattr(p, "fig_annotation", None) is not None:
+        p.fig_annotation.setVisible(False)
+
+
+def add_highlight(browser: ElectroCleanBrowser, t0: float, t1: float, colour: tuple[int, int, int, int] = (42, 120, 214, 45)) -> Any:
+    item = pg.LinearRegionItem(values=(t0, t1), movable=False, brush=QBrush(QColor(*colour)))
+    item.setZValue(-4)
+    browser.mne.plt.addItem(item, ignoreBounds=True)
+    return item
 
 
 def check_browser_version() -> str | None:
