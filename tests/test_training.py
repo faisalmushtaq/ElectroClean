@@ -16,7 +16,15 @@ from electroclean.app.io.naming import OutputLayout
 from electroclean.app.session.session import AnnotationSession
 from electroclean.config.settings import load_settings
 from electroclean.training import admin
-from electroclean.training.assessment import CompetencyCriteria, competency_report, practice_feedback
+from electroclean.training.assessment import (
+    CompetencyCriteria,
+    _analysis_config,
+    compare_with_reference,
+    competency_report,
+    evaluate_criteria,
+    practice_feedback,
+    verify_competency_report,
+)
 from electroclean.training.consensus import build_consensus
 from electroclean.training.quiz import NONE_OPTION, QuizSession, item_order
 from electroclean.training.reference import (
@@ -53,6 +61,49 @@ def test_consensus_majority_in_time_and_channels():
     assert (4.0, 5.0, "1 of 3 experts; not in consensus") in times
     unanimous = build_consensus([e1, e2, e3], min_agreement=3)
     assert [(a.onset_sample, a.end_sample) for a in unanimous.document.annotations] == [(250, 300)]
+
+
+def test_consensus_disagreements_are_exact():
+    blink = "Eye-blink-artifact"
+    # Adjacent stretches marked by different single experts are listed separately.
+    res = build_consensus([doc("A", [(blink, 1, 2, ())]), doc("B", [(blink, 2, 3, ())]), doc("C", [])])
+    rows = [(d["onset_s"], d["offset_s"], d["experts_marking"]) for d in res.disagreements if d["kind"] == "time"]
+    assert rows == [(1.0, 2.0, "A"), (2.0, 3.0, "B")]
+    # The note reflects the final consensus after the minimum-duration rule.
+    res = build_consensus([doc("A", [(blink, 1, 1.05, ())]), doc("B", [(blink, 1, 1.05, ())]), doc("C", [])],
+                          min_duration_s=0.1)
+    assert res.document.annotations == []
+    (d,) = res.disagreements
+    assert d["note"].startswith("2 of 3 experts; not in consensus")
+    # Partial channel disagreements are listed, with every expert's selection.
+    e1 = doc("A", [("Electrode-pops-artifact", 1, 2, ("C1", "C2"))])
+    e2 = doc("B", [("Electrode-pops-artifact", 1, 2, ("C1",))])
+    e3 = doc("C", [("Electrode-pops-artifact", 1, 2, ("C1", "C3"))])
+    res = build_consensus([e1, e2, e3])
+    assert res.document.annotations[0].channels == ("C1",)
+    (d,) = [d for d in res.disagreements if d["kind"] == "channels"]
+    assert "A: C1,C2" in d["note"] and "consensus: C1" in d["note"]
+    # Unanimous channel choices are not disagreements.
+    same = [doc(x, [("Electrode-pops-artifact", 1, 2, ("C1",))]) for x in "ABC"]
+    assert build_consensus(same).disagreements == []
+
+
+def test_competency_status_needs_evaluated_criteria():
+    blink, emg = "Eye-blink-artifact", "EMG-artifact"
+    ref = doc("REFERENCE", [(blink, 1, 1.3, ()), (blink, 4, 4.3, ()), (emg, 6, 7, ())])
+    nothing = doc("CAM", [])
+    metrics = compare_with_reference([nothing], [ref], _analysis_config(None))
+    crit = CompetencyCriteria.from_dict({"criteria": [{"metric": "event_recall", "threshold": 0.7,
+                                                       "scope": "each_category"}], "min_reference_events": 3})
+    ev = evaluate_criteria(metrics, crit)
+    assert ev["status"] == "not_determined" and ev["checks"][0]["passed"] is None
+    # A recording that cannot be compared with the reference makes the result undetermined.
+    odd = AnnotationDocument(RecordingInfo("rec.vhdr", RecordingTiming(100.0, 999), CH), "CAM", [], CAT)
+    metrics = compare_with_reference([odd], [ref], _analysis_config(None))
+    assert metrics["recordings_not_compared"] == ["rec.vhdr"] and metrics["warnings"]
+    assert metrics["minutes_assessed"] == 0
+    crit = CompetencyCriteria.from_dict({"criteria": [{"metric": "event_recall", "threshold": 0.1}]})
+    assert evaluate_criteria(metrics, crit)["status"] == "not_determined"
 
 
 def test_consensus_channel_vote():
@@ -100,11 +151,14 @@ def test_practice_feedback_lists_misses_extras_and_label_differences():
     mine = doc("CAM", [("Eye-blink-artifact", 1.05, 1.4, ()), ("Chewing-artifact", 3, 4, ()), ("Sweat-artifact", 8, 9, ())])
     fb = practice_feedback(mine, ref)
     assert fb["overall"]["event_recall"] == pytest.approx(1 / 3)
-    missed = {m["label"] for m in fb["missed"]}
-    assert missed == {"EMG-artifact", "Electrode-pops-artifact"}
-    assert {e["label"] for e in fb["extra"]} == {"Chewing-artifact", "Sweat-artifact"}
-    assert fb["label_differences"][0]["your_label"] == "Chewing-artifact"
+    # Each disagreement is listed once: the EMG artifact marked as chewing is a label difference,
+    # not also a missed and an extra event.
+    assert {m["label"] for m in fb["missed"]} == {"Electrode-pops-artifact"}
+    assert {e["label"] for e in fb["extra"]} == {"Sweat-artifact"}
+    (diff,) = fb["label_differences"]
+    assert (diff["reference_label"], diff["your_label"]) == ("EMG-artifact", "Chewing-artifact")
     assert fb["overall"]["label_accuracy"] == pytest.approx(0.5)
+    assert fb["overall"]["false_positives_per_min"] == pytest.approx(1 / (10 / 60))  # only the sweat event
 
 
 def test_criteria_validation():
@@ -185,9 +239,18 @@ def test_competency_report_workflow(training_dataset):
     rep1 = competency_report(layout, rs, "CAM")
     rep2 = competency_report(layout, rs, "CAM")
     assert rep1["results_sha256"] == rep2["results_sha256"]  # reproducible
-    saved = json.loads((layout.root / "training" / "pilot" / "reports" / "annotator-CAM_competency_report.json").read_text())
+    saved_path = layout.root / "training" / "pilot" / "reports" / "annotator-CAM_competency_report.json"
+    saved = json.loads(saved_path.read_text())
     assert saved["results_sha256"] == rep1["results_sha256"]
+    assert verify_competency_report(saved_path)
     assert "Eye-blink-artifact" in {c["where"] for c in rep1["checks"]}
+    # Rewriting reference_set.json without changing the assessment (assigning annotators) keeps the digest.
+    rs.assigned_annotators = ["CAM"]
+    rs.save()
+    assert competency_report(layout, rs, "CAM")["results_sha256"] == rep1["results_sha256"]
+    saved["metrics"]["overall"]["event_f1"] = 1.0
+    saved_path.write_text(json.dumps(saved))
+    assert not verify_competency_report(saved_path)
 
 
 # --------------------------------------------------------------------- quiz
@@ -264,3 +327,15 @@ def test_admin_cli_end_to_end(training_dataset, capsys):
     assert (root / "dis.tsv").read_text().startswith("kind\tlabel")
     assert main(["show", str(root)]) == 0
     assert "secret" not in capsys.readouterr().out
+
+
+def test_quiz_clean_segment_needs_none_option(tmp_path):
+    rs = ReferenceSet.create(tmp_path, "q")
+    item = QuizItem("clean", "rec.vhdr", 1.0, 2.0, NONE_OPTION)
+    with pytest.raises(ReferenceSetError):
+        rs.add_quiz_item(item, CAT.label_names)
+    rs.quiz["include_none_option"] = True
+    rs.add_quiz_item(item, CAT.label_names)
+    quiz = QuizSession(rs, "CAM", "practice")
+    assert NONE_OPTION in quiz.options(CAT.label_names)
+    assert quiz.answer(NONE_OPTION) is True

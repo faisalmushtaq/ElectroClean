@@ -309,8 +309,18 @@ def test_dataset_rules():
     with pytest.raises(AnnotationError):
         build_dataset([("a1", a1), ("a2", a2)], AnalysisConfig(duplicate_policy="error"))
     other = doc("D", [], n=2000)
+    # One file against one: no way to tell which timing is right, so the recording is excluded.
     ds = build_dataset([("b", b), ("d", other)], cfg)
-    assert ds.groups["rec.vhdr"].annotators == ["B"] and any("excluded" in w for w in ds.warnings)
+    assert "rec.vhdr" not in ds.groups and any("excluded" in w for w in ds.warnings)
+    # The majority timing wins, whatever the annotator IDs (here the odd one out sorts first).
+    odd = doc("A", [], n=999)
+    c = doc("C", [("EMG-artifact", 1, 3, ())])
+    ds = build_dataset([("a", odd), ("b", b), ("c", c)], cfg)
+    assert ds.groups["rec.vhdr"].annotators == ["B", "C"] and any("a: timing" in w for w in ds.warnings)
+    # A designated reference annotator sets the expected timing.
+    ref_cfg = AnalysisConfig(resolutions_s=(1.0,), reference_annotator="A")
+    ds = build_dataset([("a", odd), ("b", b), ("c", c)], ref_cfg)
+    assert ds.groups["rec.vhdr"].annotators == ["A"]
 
 
 def test_synthetic_raters_end_to_end(tmp_path):
@@ -344,3 +354,80 @@ def test_pairs_are_all_combinations():
     df = analyse(docs).table("timeresolved_pairwise")
     pooled = df[(df.recording == "ALL (pooled)") & (df.category == "EMG-artifact") & (df.representation == "exact") & (df.channel_mode == "time_only")]
     assert sorted(zip(pooled.rater_1, pooled.rater_2)) == sorted(combinations("ABC", 2))
+
+
+# ------------------------------------------------------- edge cases (review)
+def test_report_when_no_compared_recording_has_annotations(tmp_path):
+    # Kappa is undefined everywhere; the report must still be written.
+    blink = "Eye-blink-artifact"
+    res = analyse([doc("A", [], rid="r1"), doc("B", [], rid="r1"), doc("C", [(blink, 1, 2, ())], rid="r2")])
+    paths = write_outputs(res, tmp_path)
+    assert "report" in paths and paths["report"].exists()
+
+
+def test_events_on_excluded_channels_leave_channel_matching():
+    blink = "Eye-blink-artifact"
+    anns = [(blink, 1.0, 1.5, ("C4",)), (blink, 3.0, 3.5, ("C1",))]
+    res = analyse([doc("A", anns), doc("B", anns)], channel_exclude=("C4",))
+    ev = res.table("events_summary")
+    for mode in ("time_only", "time_and_channel"):
+        r = row(ev, category=blink, channel_mode=mode, threshold=0.2)
+        assert r.f1 == 1.0
+    assert row(ev, category=blink, channel_mode="time_and_channel", threshold=0.2).n_reference == 1
+    assert row(ev, category=blink, channel_mode="time_only", threshold=0.2).n_reference == 2
+
+
+def test_any_artifact_prefers_same_label_and_respects_categories():
+    blink, emg = "Eye-blink-artifact", "EMG-artifact"
+    # The compared annotator marked EMG and blink over the reference blink: the blink is the match.
+    ref = doc("A", [(blink, 1, 1.3, ())])
+    other = doc("B", [(emg, 1, 1.3, ()), (blink, 1, 1.3, ())])
+    m = analyse([ref, other], reference_annotator="A").table("events_matched")
+    (r,) = m[(m.category == ANY_ARTIFACT) & (m.channel_mode == "time_only") & (m.threshold == 0.2)].itertuples()
+    assert r.compared_label == blink
+    # With the analysis limited to EMG, ANY-artifact pools EMG only.
+    a = doc("A", [(blink, 1, 2, ()), (emg, 4, 5, ())])
+    b = doc("B", [(emg, 4, 5, ())])
+    res = analyse([a, b], categories=(emg,))
+    tr = res.table("timeresolved_pairwise")
+    pa = row(tr, recording="ALL (pooled)", category=ANY_ARTIFACT, channel_mode="time_only", representation="exact")
+    assert pa.positive_agreement == 1.0
+    ev = res.table("events_summary")
+    assert row(ev, category=ANY_ARTIFACT, channel_mode="time_only", threshold=0.2).f1 == 1.0
+
+
+def test_mean_pairwise_kappa_uses_reference_pairs_everywhere():
+    emg = "EMG-artifact"
+    docs = [doc("R", [(emg, 1, 3, ())]), doc("A", [(emg, 1, 3, ())]), doc("B", [(emg, 5, 7, ())])]
+    mr = analyse(docs, reference_annotator="R").table("timeresolved_multirater")
+    sel = mr[(mr.category == emg) & (mr.channel_mode == "time_only") & (mr.representation == "exact")]
+    per_rec, pooled = row(sel, recording="rec.vhdr"), row(sel, recording="ALL (pooled)")
+    assert per_rec.mean_pairwise_kappa == pytest.approx(pooled.mean_pairwise_kappa)
+
+
+def test_bin_names_are_exact_and_unique():
+    from electroclean.reliability.timeresolved import representation_name, resolution_of
+
+    for r in (0.01, 0.1, 1 / 3, 0.1000001, 2.5):
+        assert resolution_of(representation_name(r)) == r
+    assert representation_name(0.1) == "bins_0.1s"
+    assert representation_name(0.1) != representation_name(0.1000001)
+    emg = "EMG-artifact"
+    res = analyse([doc("A", [(emg, 1, 2, ())]), doc("B", [(emg, 1, 2, ())])], resolutions_s=(1 / 3,))
+    tr = res.table("timeresolved_pairwise")
+    r = row(tr, recording="ALL (pooled)", category=emg, channel_mode="time_only",
+            representation=representation_name(1 / 3))
+    assert r.both + r.only_1 + r.only_2 + r.neither == 30  # 10 s in bins of 1/3 s
+    with pytest.raises(ValueError):
+        AnalysisConfig(resolutions_s=(0.1, 0.1)).validate()
+    with pytest.raises(ValueError):
+        AnalysisConfig(primary_iou_threshold=1.5).validate()
+
+
+def test_overlapping_annotations_counted_once_in_descriptives_and_missing_reference_warned():
+    emg = "EMG-artifact"
+    res = analyse([doc("A", [(emg, 0, 6, ()), (emg, 4, 10, ())]), doc("B", [])])
+    d = res.table("descriptives_annotations_by_annotator")
+    assert row(d, annotator="A", category=emg).proportion_of_recording == 1.0
+    res = analyse([doc("A", []), doc("B", [])], reference_annotator="Z")
+    assert any("reference annotator Z" in w for w in res.settings_record["warnings"])

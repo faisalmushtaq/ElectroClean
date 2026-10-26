@@ -42,7 +42,10 @@ repeated exactly.
 **Checks before comparing.** All files must use the same label catalogue
 (compared by digest). Files whose sampling frequency or number of samples
 differ from the other annotators' for the same recording are excluded with a
-warning, because they cannot refer to the same data. A differing data
+warning, because they cannot refer to the same data. The expected timing is
+that of the `reference_annotator`, if one is set, and otherwise the timing
+shared by most of the files; when two timings are equally common the
+recording is excluded. A differing data
 checksum is reported. If an annotator has several files for one recording,
 the most recent is used (or the analysis stops, with
 `duplicate_policy="error"`).
@@ -100,7 +103,13 @@ is always computed on counts of units, never on durations.
 **The "ANY-artifact" row** treats any artifact label as present. It measures
 agreement on *whether* something is an artifact, regardless of its type.
 Comparing it with the per-category rows separates detection disagreements
-from classification disagreements.
+from classification disagreements. When the analysis is limited to some
+categories (`categories`), ANY-artifact pools only those categories.
+
+When a `reference_annotator` is set, pairwise statistics, including the mean
+pairwise kappa in `timeresolved_multirater.tsv`, use only the pairs that
+include the reference, while Fleiss' kappa and Krippendorff's alpha still use
+every annotator of the recording.
 
 ### Why there is no single overall agreement figure
 
@@ -146,8 +155,11 @@ Hungarian algorithm after sorting events by onset, offset and identifier, so
 the result is deterministic. A simple greedy rule (best IoU first) can match
 fewer events: if one reference event overlaps two events and another
 reference event overlaps only one of them, the greedy rule may leave one
-unmatched. If `allow_many_to_one` is set, every eligible pair counts as a
-match instead.
+unmatched. For the ANY-artifact row, where all categories are pooled, ties
+in the number of matches are broken first in favour of pairs with the same
+label, so that an annotator who marked two labels over the same interval is
+matched on the one the reference used. If `allow_many_to_one` is set, every
+eligible pair counts as a match instead.
 
 From the matches:
 
@@ -185,6 +197,10 @@ analysed with its own channels and the results are pooled. If annotators'
 files for the same recording list different channels (which should not
 happen), only the shared channels are used and a warning is given.
 `channel_exclude` removes channels (for example EOG) from channel analyses.
+In time-and-channel mode, a channel-specific annotation none of whose
+channels remain in the analysis is left out entirely (it covers no analysed
+channel-seconds and takes no part in event matching); it still counts in
+time-only mode.
 
 ## 4. Category disagreements
 

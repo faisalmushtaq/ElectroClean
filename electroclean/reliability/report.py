@@ -299,9 +299,11 @@ def build_html_report(result: Any) -> str:
     if not tr.empty:
         sel = tr[(tr.recording == POOLED) & (tr.channel_mode == "time_only")]
         if not sel.empty:
-            res = sel.pivot_table(index="category", columns="representation", values="cohen_kappa", aggfunc="mean")
-            res = res.reindex([c for c in show_cats if c in res.index]).rename_axis(columns=None)
-            res = res[["exact"] + [c for c in res.columns if c != "exact"]]
+            # groupby keeps categories whose kappa is undefined (NaN), which pivot_table would drop.
+            res = sel.groupby(["category", "representation"], sort=False)["cohen_kappa"].mean().unstack("representation")
+            reps = list(dict.fromkeys(sel.representation))
+            reps = (["exact"] if "exact" in reps else []) + [r for r in reps if r != "exact"]
+            res = res.reindex(index=[c for c in show_cats if c in res.index], columns=reps).rename_axis(columns=None)
             add(f"<p class='muted'>Mean Cohen's kappa (time only) for the exact representation and for bins; a bin is "
                 f"positive when at least {cfg.min_bin_coverage:g} of it is covered (0 = any overlap).</p>")
             add(_table(res.reset_index()))

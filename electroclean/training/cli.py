@@ -22,6 +22,7 @@ from electroclean.training import admin
 from electroclean.training.assessment import METRICS, competency_report
 from electroclean.training.consensus import build_consensus, disagreements_tsv
 from electroclean.training.reference import (
+    NONE_OPTION,
     QuizItem,
     ReferenceSet,
     import_adjudicated_reference,
@@ -192,7 +193,11 @@ def cmd_assign(a: argparse.Namespace) -> int:
 
 def cmd_quiz_item(a: argparse.Namespace) -> int:
     rs = _set(a.dataset, a.set_id)
-    item = QuizItem(a.item_id, a.recording, a.start, a.end, a.label, a.accept or [], a.explanation or "", a.context)
+    if a.offer_none_option and not rs.quiz.get("include_none_option"):
+        rs.quiz["include_none_option"] = True
+        rs.save()
+    label = NONE_OPTION if a.label.strip().lower() in ("none", NONE_OPTION.lower()) else a.label
+    item = QuizItem(a.item_id, a.recording, a.start, a.end, label, a.accept or [], a.explanation or "", a.context)
     rs.add_quiz_item(item, default_catalogue().label_names)
     print(f"Quiz item {a.item_id} saved ({len(rs.quiz_items)} items)")
     return 0
@@ -271,9 +276,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("set_id")
     sp.add_argument("files", type=Path, nargs="+")
     sp.add_argument("--use", choices=("practice", "assessment"), required=True)
-    sp.add_argument("--min-agreement", type=int)
-    sp.add_argument("--min-duration", type=float, default=0.0)
-    sp.add_argument("--merge-gap", type=float, default=0.0)
+    sp.add_argument("--min-agreement", type=int, help="Experts needed for consensus (default: a strict majority)")
+    sp.add_argument("--min-duration", type=float, default=0.0, help="Drop consensus intervals shorter than this (s)")
+    sp.add_argument("--merge-gap", type=float, default=0.0, help="Join consensus intervals separated by at most this (s)")
     sp.add_argument("--disagreements", type=Path, help="Also write the disagreement list (TSV)")
     sp = sub.add_parser("export-disagreements", help="List expert disagreements for adjudication")
     sp.add_argument("files", type=Path, nargs="+")
@@ -303,7 +308,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--recording", required=True)
     sp.add_argument("--start", type=float, required=True)
     sp.add_argument("--end", type=float, required=True)
-    sp.add_argument("--label", required=True)
+    sp.add_argument("--label", required=True, help="Correct label; 'none' for a segment without an artifact")
+    sp.add_argument("--offer-none-option", action="store_true",
+                    help="Offer the answer 'No artifact / none of these' for every item of this quiz")
     sp.add_argument("--accept", nargs="*")
     sp.add_argument("--explanation")
     sp.add_argument("--context", type=float, default=2.0)

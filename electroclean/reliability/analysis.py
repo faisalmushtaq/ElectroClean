@@ -23,6 +23,7 @@ from electroclean import __version__
 from electroclean.app.io.atomic import atomic_write_bytes, atomic_write_text
 from electroclean.reliability.config import AnalysisConfig
 from electroclean.reliability.data import AgreementDataset, load_dataset
+from electroclean.reliability.intervals import total_length, union
 from electroclean.reliability.matching import event_agreement
 from electroclean.reliability.timeresolved import category_confusion, time_resolved_agreement
 
@@ -62,7 +63,9 @@ def descriptives(dataset: AgreementDataset, config: AnalysisConfig) -> dict[str,
                     "total_duration_s": sum(a.duration(g.timing) for a in anns),
                     "n_whole_montage": sum(a.is_global for a in anns),
                     "n_channel_specific": sum(not a.is_global for a in anns),
-                    "proportion_of_recording": sum(a.duration_samples for a in anns) / g.timing.n_samples,
+                    # Overlapping annotations of one category are counted once here.
+                    "proportion_of_recording": total_length(union((a.onset_sample, a.end_sample) for a in anns))
+                    / g.timing.n_samples,
                 })
     return {"recordings": rec_rows, "annotations_by_annotator": rows}
 
@@ -102,6 +105,11 @@ def run_analysis(
     cfg = config or AnalysisConfig()
     cfg.validate()
     ds = source if isinstance(source, AgreementDataset) else load_dataset(source, cfg)
+    if cfg.reference_annotator and cfg.reference_annotator not in ds.annotators:
+        ds.warnings.append(
+            f"The reference annotator {cfg.reference_annotator} has no annotation files in this analysis, so there are "
+            "no pairwise comparisons"
+        )
     tables: dict[str, pd.DataFrame] = {}
     names = ["descriptives", "timeresolved", "events", "confusion", *cfg.extra_measures]
     for name in names:

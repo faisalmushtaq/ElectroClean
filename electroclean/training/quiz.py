@@ -20,9 +20,9 @@ from electroclean import __version__
 from electroclean.app.common import new_session_id, now_local_iso
 from electroclean.app.io.atomic import atomic_write_json
 from electroclean.app.io.naming import OutputLayout
-from electroclean.training.reference import QuizItem, ReferenceSet
+from electroclean.training.reference import NONE_OPTION, QuizItem, ReferenceSet
 
-NONE_OPTION = "No artifact / none of these"
+__all__ = ["NONE_OPTION", "QuizSession", "item_order"]
 
 
 def item_order(items: list[QuizItem], annotator_id: str, set_id: str) -> list[QuizItem]:

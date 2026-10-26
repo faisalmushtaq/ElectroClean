@@ -14,7 +14,11 @@ event of the other annotator:
 * **Matching.** By default each event can be matched at most once
   (one-to-one). Among all one-to-one assignments of eligible pairs, the one
   with the most matches is chosen and, among those, the one with the largest
-  total IoU. The problem is solved exactly with the Hungarian algorithm
+  total IoU. For ANY-artifact, where events of all categories are pooled,
+  ties in the number of matches are broken first by the number of matched
+  pairs that carry the same label, so that a correctly labelled event is
+  preferred to a differently labelled one over the same interval. The problem
+  is solved exactly with the Hungarian algorithm
   (``scipy.optimize.linear_sum_assignment``) after sorting events by onset,
   offset and identifier, so the result is deterministic. If many-to-one
   matching is explicitly allowed, every eligible pair counts as a match.
@@ -51,13 +55,28 @@ class Event:
     whole_montage: bool
 
 
-def events_for(doc: AnnotationDocument, category: str, ch_names: tuple[str, ...]) -> list[Event]:
+def events_for(
+    doc: AnnotationDocument, category: str, ch_names: tuple[str, ...], *, require_channels: bool = False,
+    categories: tuple[str, ...] | None = None,
+) -> list[Event]:
+    """Events of one annotator for a category.
+
+    With ``require_channels`` (time-and-channel mode), channel-specific events
+    whose channels are all excluded from the analysis are left out, as they are
+    in the time-resolved channel analysis. For ANY-artifact, ``categories``
+    restricts the pooled events to the analysed categories.
+    """
     allowed = set(ch_names)
     out = []
     for a in doc.annotations:
-        if category != ANY_ARTIFACT and a.label != category:
+        if category == ANY_ARTIFACT:
+            if categories and a.label not in categories:
+                continue
+        elif a.label != category:
             continue
         chans = frozenset(ch_names) if a.is_global else frozenset(c for c in a.channels if c in allowed)
+        if require_channels and not chans:
+            continue
         out.append(Event(doc.annotator_id, a.annotation_id, a.label, a.onset_sample, a.end_sample, chans, a.is_global))
     out.sort(key=lambda e: (e.start, e.stop, e.annotation_id))
     return out
@@ -89,6 +108,7 @@ def match_events(
     require_channels: bool,
     min_channel_jaccard: float,
     many_to_one: bool,
+    prefer_same_label: bool = False,
 ) -> MatchOutcome:
     n, m = len(ref), len(test)
     if n == 0 or m == 0:
@@ -121,8 +141,15 @@ def match_events(
         return MatchOutcome(
             pairs, [i for i in range(n) if i not in mr], [j for j in range(m) if j not in mt], len(mr), len(mt)
         )
-    big = min(n, m) + 1.0  # lexicographic: number of matches first, then total score
-    weights = np.where(eligible, big + score, 0.0)
+    # Lexicographic objective: number of matches first, then (when pooling categories)
+    # the number of matches with the same label, then the total score. Each score is at
+    # most 1, so with L = min(n, m) + 1 no lower-priority sum can outweigh one unit above it.
+    big = min(n, m) + 1.0
+    weights = big * big + score
+    if prefer_same_label:
+        same = np.array([[r.label == t.label for t in test] for r in ref], dtype=float)
+        weights = weights + big * same
+    weights = np.where(eligible, weights, 0.0)
     rows, cols = linear_sum_assignment(weights, maximize=True)
     pairs = [(int(i), int(j)) for i, j in zip(rows, cols) if eligible[i, j]]
     pairs.sort()
@@ -173,13 +200,17 @@ def event_agreement(dataset: AgreementDataset, config: AnalysisConfig) -> dict[s
                     if len(raters) < 2:
                         continue
                     sf = group.timing.sfreq
-                    evs = {r: events_for(group.docs[r], cat, group.ch_names) for r in raters}
+                    evs = {
+                        r: events_for(group.docs[r], cat, group.ch_names, require_channels=require_channels,
+                                      categories=config.categories)
+                        for r in raters
+                    }
                     for a, b in _pairs(raters, config.reference_annotator):
                         out = match_events(
                             evs[a], evs[b], sfreq=sf, criterion=config.match_criterion, iou_threshold=thr,
                             onset_tolerance_s=config.onset_tolerance_s, offset_tolerance_s=config.offset_tolerance_s,
                             require_channels=require_channels, min_channel_jaccard=config.min_channel_jaccard,
-                            many_to_one=config.allow_many_to_one,
+                            many_to_one=config.allow_many_to_one, prefer_same_label=cat == ANY_ARTIFACT,
                         )
                         acc = pooled.setdefault((a, b), {"n_ref": 0, "n_test": 0, "matched_ref": 0, "matched_test": 0,
                                                           "iou": [], "d_on": [], "d_off": [], "d_dur": [], "jac": []})

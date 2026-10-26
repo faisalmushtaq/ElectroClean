@@ -42,7 +42,7 @@ METRICS: dict[str, dict[str, str]] = {
     "mean_iou": {"label": "Mean temporal overlap (IoU) of matched events", "better": "higher"},
     "mean_channel_jaccard": {"label": "Mean channel overlap (Jaccard) of matched events", "better": "higher"},
     "label_accuracy": {"label": "Same label as the reference for detected artifacts", "better": "higher"},
-    "false_positives_per_min": {"label": "Extra (false-positive) events per minute", "better": "lower"},
+    "false_positives_per_min": {"label": "Extra events (matching no reference artifact) per minute", "better": "lower"},
 }
 
 
@@ -101,6 +101,9 @@ def _analysis_config(rs: ReferenceSet | None) -> AnalysisConfig:
         data.update(rs.analysis)
     data["reference_annotator"] = REFERENCE_ANNOTATOR
     data["modes"] = ["reference", "practice", "assessment", "standard"]
+    # The competency measures need the ANY-artifact rows and both channel modes.
+    data["include_any_artifact"] = True
+    data["channel_modes"] = ["time_only", "time_and_channel"]
     return AnalysisConfig.from_dict(data)
 
 
@@ -110,7 +113,16 @@ def compare_with_reference(
     """Overall and per-category metrics of one annotator against the reference."""
     docs = [(f"ref:{d.recording.recording_id}", d) for d in reference_docs]
     docs += [(f"ann:{d.recording.recording_id}", d) for d in annotator_docs]
-    result = run_analysis(build_dataset(docs, config), config)
+    dataset = build_dataset(docs, config)
+    result = run_analysis(dataset, config)
+    # A reference recording without a comparable annotation (missing, or excluded because
+    # its timing differs) would silently drop the reference events from every measure.
+    not_compared = sorted(
+        d.recording.recording_id for d in reference_docs
+        if len(getattr(dataset.groups.get(d.recording.recording_id), "docs", {})) < 2
+    )
+    compared_refs = [d for d in reference_docs if d.recording.recording_id not in not_compared]
+    data_warnings = list(dataset.warnings) + [w for g in dataset.groups.values() for w in g.warnings]
     ev = result.table("events_summary")
     tr = result.table("timeresolved_pairwise")
     matched = result.table("events_matched")
@@ -132,7 +144,7 @@ def compare_with_reference(
 
     e_t, e_c = ev_rows("time_only"), ev_rows("time_and_channel")
     t_t, t_c = tr_rows("time_only"), tr_rows("time_and_channel")
-    minutes = sum(d.recording.timing.duration_s for d in reference_docs) / 60.0
+    minutes = sum(d.recording.timing.duration_s for d in compared_refs) / 60.0
 
     def get(df: pd.DataFrame, cat: str, col: str) -> float:
         if df.empty:
@@ -154,7 +166,8 @@ def compare_with_reference(
         "mean_iou": get(e_t, MICRO, "mean_iou"),
         "mean_channel_jaccard": get(e_t, MICRO, "mean_channel_jaccard"),
         "label_accuracy": label_acc,
-        "false_positives_per_min": (get(e_t, MICRO, "extra") / minutes) if minutes > 0 else float("nan"),
+        # Events that match no reference artifact of any category (a relabelled artifact is not counted).
+        "false_positives_per_min": (get(e_t, ANY_ARTIFACT, "extra") / minutes) if minutes > 0 else float("nan"),
     }
     per_cat = []
     labels = reference_docs[0].catalogue.label_names if reference_docs else ()
@@ -179,10 +192,12 @@ def compare_with_reference(
             "onset_diff_mean_s": get(e_t, lab, "onset_diff_mean_s"),
             "offset_diff_mean_s": get(e_t, lab, "offset_diff_mean_s"),
         })
+    # Missed, extra and relabelled artifacts come from the ANY-artifact matching, so that each
+    # disagreement is listed once: an artifact found with another label is a label difference.
     missed = []
     extra = []
     if not unmatched.empty:
-        u = unmatched[(unmatched.channel_mode == "time_only") & (unmatched.category != ANY_ARTIFACT)]
+        u = unmatched[(unmatched.channel_mode == "time_only") & (unmatched.category == ANY_ARTIFACT)]
         if config.match_criterion != "tolerance":
             u = u[u.threshold == thr]
         for _, r in u.sort_values(["recording", "onset_s"]).iterrows():
@@ -201,6 +216,8 @@ def compare_with_reference(
         "extra": extra,
         "label_differences": confusions,
         "minutes_assessed": minutes,
+        "recordings_not_compared": not_compared,
+        "warnings": data_warnings,
         "analysis_config": config.to_dict(),
     }
 
@@ -216,19 +233,33 @@ def evaluate_criteria(metrics: dict[str, Any], criteria: CompetencyCriteria) -> 
         if crit.scope == "overall":
             v = metrics["overall"].get(crit.metric, float("nan"))
             checks.append({"criterion": crit.describe(), "where": "overall", "value": v, "passed": crit.passes(v)})
-        else:
+        elif judged:
             for c in judged:
                 v = c.get(crit.metric, float("nan"))
                 checks.append({"criterion": crit.describe(), "where": c["category"], "value": v, "passed": crit.passes(v)})
+        else:
+            # A per-category criterion with no category to judge must not count as passed.
+            checks.append({
+                "criterion": crit.describe(),
+                "where": f"no category has at least {criteria.min_reference_events} reference events",
+                "value": float("nan"), "passed": None,
+            })
+    not_compared = metrics.get("recordings_not_compared") or []
     if not criteria.criteria:
         status = "not_determined"
         text = "Not determined: the administrator has not set competency criteria for this reference set."
+    elif not_compared:
+        status = "not_determined"
+        text = (f"Not determined: {len(not_compared)} assessment recording(s) could not be compared with the reference "
+                "(see the warnings below).")
     elif any(ch["passed"] is False for ch in checks):
         status = "not_met"
         text = "Does not yet meet the competency criteria."
     elif any(ch["passed"] is None for ch in checks):
         status = "not_determined"
-        text = "Not determined: some criteria could not be evaluated (no data)."
+        text = ("Not determined: some criteria could not be evaluated because the measure is undefined for these "
+                "annotations (for example, mean overlap when no events were matched, or a per-category criterion "
+                "when no category has enough reference events).")
     else:
         status = "met"
         text = "Meets the competency criteria."
@@ -345,16 +376,43 @@ def competency_report(layout: OutputLayout, rs: ReferenceSet, annotator_id: str,
         metrics = compare_with_reference(mine, refs, cfg)
         evaluation = evaluate_criteria(metrics, criteria)
         report.update(metrics=metrics, **evaluation)
-    digest_src = json.dumps({k: v for k, v in report.items() if k not in ("generated_at",)}, sort_keys=True, default=str)
-    report["results_sha256"] = hashlib.sha256(digest_src.encode("utf-8")).hexdigest()
+    report = _clean(report)
+    report["results_sha256"] = results_digest(report)
     report["generated_at"] = now_local_iso()
     if write:
         out_dir = layout.root / "training" / rs.set_id / "reports"
         base = out_dir / f"annotator-{annotator_id}_competency_report"
-        atomic_write_json(base.with_suffix(".json"), _clean(report))
+        atomic_write_json(base.with_suffix(".json"), report)
         atomic_write_text(base.with_suffix(".html"), competency_html(report))
         report["paths"] = {"json": str(base.with_suffix(".json")), "html": str(base.with_suffix(".html"))}
     return report
+
+
+DIGEST_EXCLUDED = ("generated_at", "results_sha256", "paths")
+
+
+def results_digest(report: dict[str, Any]) -> str:
+    """SHA-256 of a competency report's results, as written in its JSON file.
+
+    It covers everything except the generation time, the digest itself, the
+    output paths and the checksum of ``reference_set.json`` (that file also
+    changes when annotators are assigned or quiz items added; the reference
+    annotations, criteria and analysis settings are covered separately).
+    Recompute it from a saved report with ``verify_competency_report``.
+    """
+    src = {k: v for k, v in report.items() if k not in DIGEST_EXCLUDED}
+    inputs = dict(src.get("inputs") or {})
+    if "reference_set" in inputs:
+        inputs["reference_set"] = {k: v for k, v in inputs["reference_set"].items() if k != "sha256"}
+    src["inputs"] = inputs
+    text = json.dumps(_clean(src), sort_keys=True, ensure_ascii=False, allow_nan=False, default=str)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def verify_competency_report(path: Path | str) -> bool:
+    """True when a saved competency report's ``results_sha256`` matches its contents."""
+    report = json.loads(Path(path).read_text(encoding="utf-8"))
+    return report.get("results_sha256") == results_digest(report)
 
 
 def _clean(obj: Any) -> Any:
@@ -384,6 +442,12 @@ def competency_html(report: dict[str, Any]) -> str:
     p.append(f"<p class='muted'>Reference set {html.escape(rs['set_id'])} – {html.escape(rs.get('name') or '')} · "
              f"generated {html.escape(report.get('generated_at', ''))} · ElectroClean {html.escape(report['software']['electroclean'])}</p>")
     p.append(f"<h2 style='color:{colour}'>{html.escape(report['status_text'])}</h2>")
+    m0 = report.get("metrics") or {}
+    if m0.get("recordings_not_compared"):
+        p.append("<p>Recordings that could not be compared with the reference:</p><ul>"
+                 + "".join(f"<li>{html.escape(r)}</li>" for r in m0["recordings_not_compared"]) + "</ul>")
+    if m0.get("warnings"):
+        p.append("<h3>Warnings</h3><ul>" + "".join(f"<li>{html.escape(w)}</li>" for w in m0["warnings"]) + "</ul>")
     if report.get("missing_recordings"):
         p.append("<p>Recordings still to complete:</p><ul>" + "".join(f"<li>{html.escape(r)}</li>" for r in report["missing_recordings"]) + "</ul>")
     if report.get("checks"):

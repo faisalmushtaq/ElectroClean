@@ -88,6 +88,10 @@ class QuizItem:
         return answer == self.correct_label or answer in self.accepted_labels
 
 
+#: Quiz answer for a segment without an artifact (offered when ``include_none_option`` is set).
+NONE_OPTION = "No artifact / none of these"
+
+
 @dataclass
 class ReferenceSet:
     directory: Path
@@ -290,7 +294,12 @@ class ReferenceSet:
         self.save()
 
     def add_quiz_item(self, item: QuizItem, catalogue_labels: tuple[str, ...]) -> None:
-        if item.correct_label not in catalogue_labels:
+        if item.correct_label == NONE_OPTION:
+            if not self.quiz.get("include_none_option", False):
+                raise ReferenceSetError(
+                    f"{NONE_OPTION!r} can be the answer only when the quiz offers that option (include_none_option)"
+                )
+        elif item.correct_label not in catalogue_labels:
             raise ReferenceSetError(f"{item.correct_label!r} is not a permitted label")
         if item.end_s <= item.start_s:
             raise ReferenceSetError("Quiz segment end must be after its start")

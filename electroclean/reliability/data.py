@@ -95,35 +95,70 @@ def build_dataset(
             )
         chosen[key] = items[-1]
 
-    groups: dict[str, RecordingGroup] = {}
+    per_recording: dict[str, list[tuple[str, str, AnnotationDocument]]] = {}
     for (rid, aid), (source, doc) in sorted(chosen.items()):
-        g = groups.get(rid)
-        if g is None:
-            groups[rid] = RecordingGroup(rid, doc.recording.timing, tuple(doc.recording.ch_names), {aid: doc})
-            continue
-        if doc.recording.timing.sfreq != g.timing.sfreq or doc.recording.timing.n_samples != g.timing.n_samples:
+        per_recording.setdefault(rid, []).append((aid, source, doc))
+
+    groups: dict[str, RecordingGroup] = {}
+    for rid, items in sorted(per_recording.items()):
+        baseline = _baseline_timing(items, config.reference_annotator)
+        if baseline is None:
             warnings.append(
-                f"{source}: timing of {rid} ({doc.recording.timing.sfreq} Hz, {doc.recording.timing.n_samples} samples) "
-                f"differs from other annotators' ({g.timing.sfreq} Hz, {g.timing.n_samples}); excluded"
+                f"Annotators' files for {rid} disagree about its timing (sampling rate or number of samples) and no "
+                "timing is shared by a majority; the recording is excluded: "
+                + ", ".join(f"{aid} {d.recording.timing.sfreq} Hz, {d.recording.timing.n_samples} samples" for aid, _s, d in items)
             )
             continue
-        ref_doc = next(iter(g.docs.values()))
-        fp_a = (ref_doc.recording.fingerprint.get("eeg") or {}).get("sha256")
-        fp_b = (doc.recording.fingerprint.get("eeg") or {}).get("sha256")
-        if fp_a and fp_b and fp_a != fp_b:
-            g.warnings.append(
-                f"{aid} annotated a different version of {rid} (data checksum differs); kept, but check the data"
-            )
-        if tuple(doc.recording.ch_names) != g.ch_names:
-            common = tuple(c for c in g.ch_names if c in set(doc.recording.ch_names))
-            g.warnings.append(f"Channel lists differ for {rid}; channel analyses use the {len(common)} shared channels")
-            g.ch_names = common
-        g.docs[aid] = doc
+        g: RecordingGroup | None = None
+        for aid, source, doc in items:
+            timing = doc.recording.timing
+            if (timing.sfreq, timing.n_samples) != baseline:
+                warnings.append(
+                    f"{source}: timing of {rid} ({timing.sfreq} Hz, {timing.n_samples} samples) differs from the "
+                    f"other annotators' ({baseline[0]} Hz, {baseline[1]} samples); excluded"
+                )
+                continue
+            if g is None:
+                g = groups[rid] = RecordingGroup(rid, timing, tuple(doc.recording.ch_names), {aid: doc})
+                continue
+            ref_doc = g.docs.get(config.reference_annotator or "") or next(iter(g.docs.values()))
+            fp_a = (ref_doc.recording.fingerprint.get("eeg") or {}).get("sha256")
+            fp_b = (doc.recording.fingerprint.get("eeg") or {}).get("sha256")
+            if fp_a and fp_b and fp_a != fp_b:
+                g.warnings.append(
+                    f"{aid} annotated a different version of {rid} (data checksum differs); kept, but check the data"
+                )
+            if tuple(doc.recording.ch_names) != g.ch_names:
+                common = tuple(c for c in g.ch_names if c in set(doc.recording.ch_names))
+                g.warnings.append(f"Channel lists differ for {rid}; channel analyses use the {len(common)} shared channels")
+                g.ch_names = common
+            g.docs[aid] = doc
     excluded = set(config.channel_exclude)
     for g in groups.values():
         if excluded:
             g.ch_names = tuple(c for c in g.ch_names if c not in excluded)
     return AgreementDataset(groups=groups, catalogue=catalogue, files=files or [], warnings=warnings)
+
+
+def _baseline_timing(
+    items: list[tuple[str, str, AnnotationDocument]], reference: str | None
+) -> tuple[float, int] | None:
+    """Timing that the annotators' files for one recording should share.
+
+    The designated reference annotator's timing if present, otherwise the
+    timing shared by more files than any other; ``None`` when two timings are
+    equally common (there is no way to tell which is right).
+    """
+    timings = {aid: (d.recording.timing.sfreq, d.recording.timing.n_samples) for aid, _s, d in items}
+    if reference is not None and reference in timings:
+        return timings[reference]
+    counts: dict[tuple[float, int], int] = {}
+    for t in timings.values():
+        counts[t] = counts.get(t, 0) + 1
+    ranked = sorted(counts.items(), key=lambda kv: -kv[1])
+    if len(ranked) > 1 and ranked[0][1] == ranked[1][1]:
+        return None
+    return ranked[0][0]
 
 
 def _display_path(f: Path, bases: list[Path]) -> str:

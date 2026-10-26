@@ -135,8 +135,13 @@ There are three ways to establish a reference:
    `--min-agreement` experts marked it (a strict majority by default). For each
    consensus interval the channels are those chosen by at least as many of the
    contributing experts, and the interval is whole-montage when enough experts
-   used whole montage. Every place where the experts disagree is written to the
-   disagreement list.
+   used whole montage. `--merge-gap` joins consensus intervals separated by
+   at most that many seconds and `--min-duration` then drops shorter
+   intervals (both 0 by default). The disagreement list has one row for each
+   stretch of time that the same subset of experts (some but not all) marked,
+   saying whether it ended up in the consensus, and one row for each consensus
+   interval where the experts chose different channels, giving every expert's
+   selection and the consensus result.
 3. **Adjudication.** Give the disagreement list to an adjudicator, who
    annotates the recording (in standard mode, in a separate results folder) to
    produce the final version, and import it:
@@ -169,12 +174,20 @@ pilot data, expert agreement and the intended use of the labels.
 | `mean_iou` | Mean temporal overlap of matched artifacts |
 | `mean_channel_jaccard` | Mean channel overlap of matched artifacts |
 | `label_accuracy` | Proportion of detected artifacts given the reference's label |
-| `false_positives_per_min` | Extra artifacts per minute (lower is better) |
+| `false_positives_per_min` | Annotations matching no reference artifact of any category, per minute (lower is better); an artifact found with a different label counts towards `label_accuracy` instead |
 
 Each criterion applies **overall** or **in every assessed category**. A
 category is judged only when the reference contains at least
 `min_reference_events` events of it (3 by default); others are reported but
-not judged.
+not judged. The result is "not determined" when a criterion cannot be
+evaluated: for example a per-category criterion when no category has enough
+reference events, or `mean_iou` when no artifact was matched at all. Pairing
+`mean_iou`, `event_precision` or `label_accuracy` with `event_recall` or
+`event_f1` therefore avoids undetermined results for annotators who find
+very little. It is also "not determined" when an assessment recording could
+not be compared with its reference (for instance because the annotator's file
+refers to a different version of the recording); the report lists the
+reasons.
 
 ```bash
 electroclean-admin set-criteria /data/MyStudy pilot \
@@ -184,7 +197,14 @@ electroclean-admin set-criteria /data/MyStudy pilot \
 
 Matching for competency uses the defaults of the reliability analysis (IoU of
 at least 0.2, one-to-one); a reference set can override them in the
-`analysis` entry of its `reference_set.json`.
+`analysis` entry of its `reference_set.json`. The ANY-artifact rows and both
+channel modes are always computed for assessments, because the competency
+measures are based on them.
+
+Each competency report carries a `results_sha256` digest of its contents.
+`electroclean.training.assessment.verify_competency_report(path)` recomputes
+it from the saved JSON file, and regenerating a report from the same files
+gives the same digest.
 
 ### What annotators experience
 
@@ -223,7 +243,10 @@ electroclean-admin add-quiz-item /data/MyStudy pilot --item-id q01 \
 ```
 
 The order is shuffled reproducibly for each annotator. Results are saved in
-`Annotated_Events/training/<set>/quiz/`.
+`Annotated_Events/training/<set>/quiz/`. When the quiz offers the answer
+"No artifact / none of these" (`"include_none_option": true` in the `quiz`
+entry of `reference_set.json`), clean segments can be included by giving that
+text as the item's label.
 
 ## Before a study starts
 

@@ -47,8 +47,18 @@ from electroclean.reliability.statistics import (
 )
 
 
-def category_intervals(doc: AnnotationDocument, category: str, channel: str | None = None) -> list[Interval]:
-    anns = doc.annotations if category == ANY_ARTIFACT else [a for a in doc.annotations if a.label == category]
+def category_intervals(
+    doc: AnnotationDocument, category: str, channel: str | None = None, categories: tuple[str, ...] | None = None
+) -> list[Interval]:
+    """Union of one annotator's intervals for a category (and channel).
+
+    For ANY-artifact, ``categories`` limits the pooled annotations to the
+    categories being analysed (``None`` = all).
+    """
+    if category == ANY_ARTIFACT:
+        anns = [a for a in doc.annotations if not categories or a.label in categories]
+    else:
+        anns = [a for a in doc.annotations if a.label == category]
     if channel is not None:
         anns = [a for a in anns if a.is_global or channel in a.channels]
     return union((a.onset_sample, a.end_sample) for a in anns)
@@ -104,7 +114,7 @@ def recording_tables(
     hist: dict[tuple[int, int], float] = {}
     pairs = list(combinations(raters, 2))
     for unit in _units(group, mode):
-        ints = {r: category_intervals(group.docs[r], category, unit) for r in raters}
+        ints = {r: category_intervals(group.docs[r], category, unit, config.categories) for r in raters}
         if representation == "exact":
             n = timing.n_samples
             scale = 1.0 / timing.sfreq
@@ -123,7 +133,7 @@ def recording_tables(
             for k, samples in coverage_count_histogram(list(ints.values()), n).items():
                 hist[(m, k)] = hist.get((m, k), 0.0) + float(samples)
         else:
-            res = float(representation.removeprefix("bins_").removesuffix("s"))
+            res = resolution_of(representation)
             vec = {
                 r: binarise(coverage_per_bin(v, timing.sfreq, res, timing.duration_s), config.min_bin_coverage)
                 for r, v in ints.items()
@@ -142,8 +152,20 @@ def recording_tables(
     return pair_tables, hist, 1.0
 
 
+def representation_name(resolution_s: float) -> str:
+    """Name of a binned representation; reading it back gives exactly ``resolution_s``."""
+    text = f"{resolution_s:g}"
+    if float(text) != resolution_s:
+        text = repr(float(resolution_s))
+    return f"bins_{text}s"
+
+
+def resolution_of(representation: str) -> float:
+    return float(representation.removeprefix("bins_").removesuffix("s"))
+
+
 def representations(config: AnalysisConfig) -> list[str]:
-    return ["exact"] + [f"bins_{r:g}s" for r in config.resolutions_s]
+    return ["exact"] + [representation_name(r) for r in config.resolutions_s]
 
 
 def categories_for(dataset: AgreementDataset, config: AnalysisConfig) -> list[str]:
@@ -174,10 +196,10 @@ def time_resolved_agreement(dataset: AgreementDataset, config: AnalysisConfig) -
                     if len(group.docs) < 2:
                         continue
                     tables, hist, _ = recording_tables(group, cat, mode, rep, config)
+                    if config.reference_annotator:
+                        tables = {k: t for k, t in tables.items() if config.reference_annotator in k}
                     pooled_raters.update(group.annotators)
                     for (a, b), t in tables.items():
-                        if config.reference_annotator and config.reference_annotator not in (a, b):
-                            continue
                         key = _orient(a, b, config.reference_annotator)
                         tt = t if key == (a, b) else PairTable(t.a, t.c, t.b, t.d)
                         pooled_pairs[key] = pooled_pairs.get(key, PairTable(0, 0, 0, 0)) + tt

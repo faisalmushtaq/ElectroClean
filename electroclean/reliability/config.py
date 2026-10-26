@@ -50,6 +50,8 @@ class AnalysisConfig:
     def validate(self) -> None:
         if not self.resolutions_s or any(r <= 0 for r in self.resolutions_s):
             raise ValueError("Resolutions must be positive numbers of seconds")
+        if len(set(self.resolutions_s)) != len(self.resolutions_s):
+            raise ValueError("Each resolution may be listed only once")
         if not 0 <= self.min_bin_coverage <= 1:
             raise ValueError("min_bin_coverage must be between 0 and 1")
         bad = [m for m in self.channel_modes if m not in CHANNEL_MODES]
@@ -59,6 +61,10 @@ class AnalysisConfig:
             raise ValueError(f"match_criterion must be one of {MATCH_CRITERIA}")
         if any(not 0 <= t < 1 for t in self.iou_thresholds):
             raise ValueError("IoU thresholds must be in [0, 1)")
+        if not 0 <= self.primary_iou_threshold < 1:
+            raise ValueError("primary_iou_threshold must be in [0, 1)")
+        if not 0 <= self.min_channel_jaccard <= 1:
+            raise ValueError("min_channel_jaccard must be between 0 and 1")
         if self.duplicate_policy not in ("latest", "error"):
             raise ValueError("duplicate_policy must be 'latest' or 'error'")
         if self.onset_tolerance_s < 0 or self.offset_tolerance_s < 0:
