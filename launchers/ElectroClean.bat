@@ -29,10 +29,9 @@ if exist wheels (
   ".venv\Scripts\python.exe" -m pip install -r requirements.txt
 )
 if errorlevel 1 goto failed
-".venv\Scripts\python.exe" -m pip install --no-deps -e .
-if errorlevel 1 goto failed
 
 :run
+rem Run from the ElectroClean folder, so the package does not need to be installed.
 start "" ".venv\Scripts\pythonw.exe" -m electroclean %*
 exit /b 0
 

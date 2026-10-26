@@ -29,6 +29,6 @@ if [ ! -x ".venv/bin/python" ]; then
     .venv/bin/python -m pip install --upgrade pip
     .venv/bin/python -m pip install -r requirements.txt
   fi
-  .venv/bin/python -m pip install --no-deps --no-build-isolation -e . || .venv/bin/python -m pip install --no-deps -e .
 fi
+# Run from the ElectroClean folder, so the package does not need to be installed.
 exec .venv/bin/python -m electroclean "$@"
