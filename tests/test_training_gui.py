@@ -146,3 +146,14 @@ def test_admin_tools_require_passphrase(qapp, ref_set):
     metrics = {c["metric"] for c in rs.criteria["criteria"]}
     assert metrics == {"event_f1", "event_recall"}
     dlg.close()
+
+
+def test_reference_set_assignment_is_enforced(qapp, ref_set):
+    root, _, rs = ref_set
+    rs.assigned_annotators = ["A01"]
+    rs.save()
+    prompts = ScriptedPrompts()
+    ctrl = AppController(prompts=prompts, synchronous_loading=True)
+    assert not ctrl.begin(StartRequest("CAM", "", root, None, "practice", reference_set_id="pilot"))
+    assert any(title == "Not assigned" for _k, title, _t in prompts.log)
+    assert ctrl.workspace is None

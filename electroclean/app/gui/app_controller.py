@@ -143,6 +143,16 @@ class AppController(QObject):
             except Exception as exc:
                 self.prompts.error(self.parent_widget, "Reference set unavailable", str(exc))
                 return False
+            assigned = [a.upper() for a in self.reference_set.assigned_annotators]
+            if assigned and request.annotator_id not in assigned:
+                self.prompts.error(
+                    self.parent_widget,
+                    "Not assigned",
+                    f"Annotator {request.annotator_id} is not assigned to reference set "
+                    f"{self.reference_set.set_id}. Please check with the study administrator.",
+                )
+                self.reference_set = None
+                return False
             if request.mode == "assessment" and request.assessment_kind == "quiz":
                 return self.start_quiz()
         self.start_window.hide()

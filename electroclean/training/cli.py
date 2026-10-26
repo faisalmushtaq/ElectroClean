@@ -182,6 +182,14 @@ def cmd_criteria(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_assign(a: argparse.Namespace) -> int:
+    rs = _set(a.dataset, a.set_id)
+    rs.assigned_annotators = sorted({x.upper() for x in a.annotators})
+    rs.save()
+    print(f"{rs.set_id} is assigned to: {', '.join(rs.assigned_annotators) or 'anyone'}")
+    return 0
+
+
 def cmd_quiz_item(a: argparse.Namespace) -> int:
     rs = _set(a.dataset, a.set_id)
     item = QuizItem(a.item_id, a.recording, a.start, a.end, a.label, a.accept or [], a.explanation or "", a.context)
@@ -286,6 +294,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--min-reference-events", type=int, default=3)
     sp.add_argument("--categories", nargs="*")
     sp.add_argument("--from-json")
+    sp = add("assign", cmd_assign, "Restrict a reference set to named annotators (none = anyone)")
+    sp.add_argument("set_id")
+    sp.add_argument("annotators", nargs="*")
     sp = add("add-quiz-item", cmd_quiz_item, "Add a short-segment quiz item")
     sp.add_argument("set_id")
     sp.add_argument("--item-id", required=True)
