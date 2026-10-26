@@ -52,7 +52,7 @@ python -m venv .venv
 source .venv/bin/activate            # Windows: .venv\Scripts\activate
 python -m pip install -r requirements-dev.txt
 python -m pip install --no-deps -e .
-python -m pytest                     # 178 tests, about 35 s
+python -m pytest                     # 179 tests, about 35 s
 electroclean                         # start the application
 ```
 

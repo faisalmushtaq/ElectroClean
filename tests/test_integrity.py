@@ -296,3 +296,15 @@ def test_events_tsv_with_electroclean_columns_refused_at_load(dataset, settings,
 def test_tsv_rows_of_empty_cells_are_kept():
     cols, rows = parse_tsv_text("a\tb\n1\t2\n\t\n\n")
     assert cols == ["a", "b"] and rows == [["1", "2"], ["", ""]]
+
+
+def test_local_failures_only_exclude_the_annotator_who_met_them(layout, recordings):
+    from electroclean.app.session.failures import FailureLog
+
+    log = FailureLog(layout)
+    recs = list(recordings.values())
+    log.record(recordings[SUB1], SUB1, "memory", "MemoryError", annotator_id="A01")
+    log.record(recordings[SUB2], SUB2, "corrupt_recording", "truncated", annotator_id="A01")
+    assert set(log.unresolved(recs, {}, annotator_id="A01")) == {SUB1, SUB2}
+    assert set(log.unresolved(recs, {}, annotator_id="B02")) == {SUB2}  # the file itself is broken
+    assert set(log.unresolved(recs, {})) == {SUB1, SUB2}  # administrator view

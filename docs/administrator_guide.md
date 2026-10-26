@@ -90,7 +90,11 @@ Recordings that cannot be opened (missing or renamed companion files, a
 truncated data file, a malformed `events.tsv`, an event-code clash, and so on)
 are listed in `Annotated_Events/failed_load.txt` and `failure_log.jsonl`. They
 are not offered again until the files change, the setting that caused the
-failure changes, or you mark the failure resolved:
+failure changes, or you mark the failure resolved. Problems that may belong to
+one computer or moment (running out of memory, a filter error, a permission
+problem, an unexpected error) only hold the recording back from the annotator
+who met them; problems with the files hold it back from everyone. To mark a
+failure resolved:
 
 ```bash
 electroclean-admin resolve-failure /data/MyStudy sub-007/eeg/sub-007_task-rest_eeg.vhdr --note "re-copied from source"

@@ -9,6 +9,11 @@ failure still applies (same files, same relevant settings, not marked as
 resolved) is left out of automatic selection, so annotators are not offered the
 same broken file again. Once the files are replaced, the setting is changed,
 or an administrator records a resolution, it becomes eligible again.
+
+Failures that may depend on the computer or the moment (a filter error, a
+permission problem, running out of memory, an unexpected error) only exclude
+the recording for the annotator who met them; problems with the files
+themselves exclude it for everyone.
 """
 
 from __future__ import annotations
@@ -22,6 +27,10 @@ from electroclean.app.common import now_local_iso
 from electroclean.app.io.atomic import append_line
 from electroclean.app.io.discovery import RecordingFiles
 from electroclean.app.io.naming import OutputLayout
+
+
+#: Failure kinds that may be specific to one computer or moment.
+LOCAL_FAILURE_KINDS = frozenset({"filter_error", "permission", "memory", "unexpected_error", "viewer_error"})
 
 
 def cheap_fingerprint(files: RecordingFiles) -> dict[str, list[int]]:
@@ -96,8 +105,14 @@ class FailureLog:
                 continue  # a partially written last line after a crash
         return out
 
-    def unresolved(self, recordings: list[RecordingFiles], current_conditions: dict[str, Any]) -> dict[str, dict[str, Any]]:
-        """Recording ID -> latest failure entry, for failures that still apply."""
+    def unresolved(
+        self, recordings: list[RecordingFiles], current_conditions: dict[str, Any], annotator_id: str | None = None
+    ) -> dict[str, dict[str, Any]]:
+        """Recording ID -> latest failure entry, for failures that still apply.
+
+        With ``annotator_id``, failures of a kind in :data:`LOCAL_FAILURE_KINDS`
+        met by other annotators are ignored.
+        """
         latest: dict[str, dict[str, Any]] = {}
         for e in self.entries():
             rid = e.get("recording_id", "")
@@ -116,6 +131,11 @@ class FailureLog:
             cond = e.get("conditions") or {}
             if any(current_conditions.get(k) != v for k, v in cond.items()):
                 continue  # the setting that caused the failure has changed
+            if (
+                annotator_id is not None and e.get("kind") in LOCAL_FAILURE_KINDS
+                and e.get("annotator_id") not in ("", annotator_id)
+            ):
+                continue  # another annotator's computer had a problem; the files may be fine
             out[rid] = e
         return out
 

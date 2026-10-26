@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 import shutil
+import sys
 import uuid
 from pathlib import Path
 from typing import Any
@@ -38,6 +39,20 @@ def sha256_file(path: Path | str, chunk_size: int = 4 * 1024 * 1024) -> str:
                 break
             digest.update(block)
     return digest.hexdigest()
+
+
+def full_fsync(fd: int) -> None:
+    """Flush a file to the disk itself. On macOS ``fsync`` only reaches the drive's cache,
+    so ``F_FULLFSYNC`` is used there (falling back to ``fsync`` where unsupported)."""
+    if sys.platform == "darwin":
+        try:
+            import fcntl
+
+            fcntl.fcntl(fd, fcntl.F_FULLFSYNC)
+            return
+        except (OSError, AttributeError):
+            pass
+    os.fsync(fd)
 
 
 def fsync_directory(path: Path | str) -> None:
@@ -107,7 +122,7 @@ def atomic_write_bytes(path: Path | str, data: bytes, *, overwrite: bool = True)
         with open(tmp, "xb") as fh:
             fh.write(data)
             fh.flush()
-            os.fsync(fh.fileno())
+            full_fsync(fh.fileno())
         if overwrite:
             os.replace(tmp, target)
         else:
@@ -147,7 +162,7 @@ def append_line(path: Path | str, line: str) -> None:
         with open(target, "a", encoding="utf-8", newline="\n") as fh:
             fh.write(text)
             fh.flush()
-            os.fsync(fh.fileno())
+            full_fsync(fh.fileno())
     except OSError as exc:
         raise OutputWriteError(f"Could not append to {target}: {exc}") from exc
 
