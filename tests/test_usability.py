@@ -45,16 +45,31 @@ def close(ws) -> None:
     wait()
 
 
+def _toolbar_report(ws) -> str:
+    """Sizes of the window and its toolbars, to diagnose a failure on another system."""
+    from qtpy.QtWidgets import QToolBar, QToolButton
+
+    b = ws.browser
+    parts = [f"window {b.width()}x{b.height()} font {b.font().family()} {b.font().pointSizeF()}pt "
+             f"dpi {b.logicalDpiX()} ratio {b.devicePixelRatioF()}"]
+    for tb in b.findChildren(QToolBar):
+        ext = tb.findChild(QToolButton, "qt_toolbar_ext_button")
+        parts.append(f"{tb.objectName() or tb.windowTitle()}: geom {tb.geometry().getRect()} hint {tb.sizeHint().width()} "
+                     f"actions {len(tb.actions())} ext {bool(ext and ext.isVisible())}")
+    return " | ".join(parts)
+
+
 @pytest.mark.parametrize("width, height", [(1325, 729), (1241, 684)])  # the app's fit to 1366x768 and 1280x720
 def test_save_and_finish_is_visible_on_laptop_screens(qapp, layout, settings, catalogue, loaded, width, height):
     session, ws = open_workspace(layout, settings, catalogue, loaded)
     try:
         ws.browser.resize(width, height)
         wait(150)
+        info = _toolbar_report(ws)
         for widget in (ws.save_btn, ws.label_combo, ws.choose_channels_btn):
-            assert widget.isVisible()
+            assert widget.isVisible(), info
             right = widget.mapTo(ws.browser, QPoint(0, 0)).x() + widget.width()
-            assert right <= ws.browser.width()
+            assert right <= ws.browser.width(), info
     finally:
         close(ws)
 
