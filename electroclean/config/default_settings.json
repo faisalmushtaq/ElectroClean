@@ -24,7 +24,7 @@
     "n_channels": 32,
     "scalings": {"eeg": 5e-05, "eog": 0.00015, "ecg": 0.0005, "emg": 0.0001, "misc": 0.001},
     "theme": "light",
-    "overview_mode": "channels"
+    "overview_mode": "empty"
   },
   "loading": {
     "preload_memory_limit_mb": 2048,

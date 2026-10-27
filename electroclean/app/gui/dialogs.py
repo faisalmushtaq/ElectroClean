@@ -29,6 +29,8 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
+from electroclean.app.gui import style
+
 
 def colour_icon(colour: str, size: int = 14) -> QIcon:
     pix = QPixmap(size, size)
@@ -119,6 +121,7 @@ class UserPrompts:
         yes_btn = box.addButton(yes, QMessageBox.AcceptRole)
         no_btn = box.addButton(no, QMessageBox.RejectRole)
         box.setDefaultButton(yes_btn if default_yes else no_btn)
+        style.set_kind(yes_btn if default_yes else no_btn, "primary")
         box.exec()
         return box.clickedButton() is yes_btn
 
@@ -131,6 +134,7 @@ class UserPrompts:
         box.setText(text)
         buttons = [box.addButton(o, QMessageBox.ActionRole) for o in options]
         box.setDefaultButton(buttons[default])
+        style.set_kind(buttons[default], "primary")
         box.setEscapeButton(buttons[-1])
         box.exec()
         clicked = box.clickedButton()
@@ -326,6 +330,8 @@ class ChannelDialog(QDialog):
         self.setWindowTitle(title)
         self.resize(360, 520)
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 16, 16, 14)
+        layout.setSpacing(10)
         self.whole = QCheckBox("Whole montage (all channels)")
         self.whole.setVisible(allow_whole_montage)
         self.whole.setChecked(whole_montage)
@@ -346,12 +352,16 @@ class ChannelDialog(QDialog):
         row = QHBoxLayout()
         all_btn = QPushButton("Select all")
         none_btn = QPushButton("Clear")
+        for btn in (all_btn, none_btn):
+            style.set_kind(btn, "quiet")
         row.addWidget(all_btn)
         row.addWidget(none_btn)
+        row.addStretch(1)
+        self.count = style.label("", "caption")
+        row.addWidget(self.count)
         layout.addLayout(row)
-        self.count = QLabel()
-        layout.addWidget(self.count)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        style.set_kind(buttons.button(QDialogButtonBox.Ok), "primary")
         layout.addWidget(buttons)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
@@ -411,11 +421,14 @@ class TimesDialog(QDialog):
             box.setSingleStep(1.0 / sfreq)
             box.setSuffix(" s")
             box.setValue(value)
-        self.info = QLabel()
+        form.setContentsMargins(16, 16, 16, 14)
+        form.setSpacing(10)
+        self.info = style.label("", "caption")
         form.addRow("Start", self.start)
         form.addRow("End", self.end)
         form.addRow("", self.info)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        style.set_kind(buttons.button(QDialogButtonBox.Ok), "primary")
         form.addRow(buttons)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)

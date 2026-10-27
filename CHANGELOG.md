@@ -3,6 +3,19 @@
 Each section below becomes the notes of the GitHub release with the same
 version. The release workflow refuses a version tag that has no section here.
 
+## Unreleased
+
+ElectroClean has a new look, built on principles that well-designed desktop
+software shares: the EEG is the content, so the controls around it are quiet,
+with light surfaces, white cards, grey secondary text and one accent colour.
+Each window has one blue button for the step that moves you forward (Begin,
+Open recording, Save and Finish), and options appear when they apply. The
+start window is grouped into three cards (who is annotating, the recordings,
+and what you would like to do), the whole montage or selected channels choice
+is a two-part switch, and the overview bar under the EEG is plain so that the
+annotations in it stand out. Every text colour meets the WCAG 2.1 AA contrast
+ratio, and the application looks the same on Windows, macOS and Linux.
+
 ## 1.1.0
 
 The first public release, with stand-alone applications for Windows (64-bit),

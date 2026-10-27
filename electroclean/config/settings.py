@@ -108,7 +108,7 @@ class DisplaySettings:
     n_channels: int = 32
     scalings: dict[str, float] = field(default_factory=dict)
     theme: str = "light"
-    overview_mode: str = "channels"
+    overview_mode: str = "empty"
 
 
 @dataclass(frozen=True)
@@ -159,7 +159,7 @@ class Settings:
                     n_channels=int(disp["n_channels"]),
                     scalings={k: float(v) for k, v in disp.get("scalings", {}).items()},
                     theme=str(disp.get("theme", "light")),
-                    overview_mode=str(disp.get("overview_mode", "channels")),
+                    overview_mode=str(disp.get("overview_mode", "empty")),
                 ),
                 preload_memory_limit_mb=float(load["preload_memory_limit_mb"]),
                 hash_source_files=bool(load["hash_source_files"]),

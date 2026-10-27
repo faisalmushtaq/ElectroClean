@@ -299,7 +299,7 @@ def create_browser(
     n_channels: int,
     scalings: dict[str, float],
     theme: str = "light",
-    overview_mode: str = "channels",
+    overview_mode: str = "empty",
 ) -> ElectroCleanBrowser:
     """Create (but do not show) an MNE Qt browser for the display copy."""
     mne.viz.set_browser_backend("qt", verbose="error")
@@ -318,7 +318,9 @@ def create_browser(
         show_scalebars=True,
         annotation_colors=dict(label_colours),
         color=dict(TRACE_COLOURS),
-        theme=theme,
+        # ElectroClean's own light palette (style.apply_theme) already makes the window light on
+        # every system, so for "light" MNE adds no style sheet of its own; "dark" keeps MNE's.
+        theme="auto" if theme == "light" else theme,
         overview_mode=overview_mode,
         splash=False,
         verbose="error",
@@ -328,6 +330,11 @@ def create_browser(
     # The display copy may carry annotations from an earlier window on the same
     # recording; MNE would draw its own (editable) regions for them, so clear them.
     view_raw.set_annotations(None)
+    # mne-qt-browser takes the overview mode from its own saved settings and ignores the argument,
+    # so the study's choice is written there first (it is also what the overview menu shows).
+    from qtpy.QtCore import QSettings
+
+    QSettings("mne-tools", "mne-qt-browser").setValue("overview_mode", overview_mode)
     with _use_browser_class(ElectroCleanBrowser):
         browser = view_raw.plot(**kwargs)
     if app is not None:

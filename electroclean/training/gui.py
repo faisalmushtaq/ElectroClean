@@ -38,6 +38,7 @@ from qtpy.QtWidgets import (
 
 from electroclean.app.annotations.model import ArtifactAnnotation
 from electroclean.app.annotations.store import AnnotationStore
+from electroclean.app.gui import style
 from electroclean.app.gui.dialogs import UserPrompts, colour_icon, fill_label_combo
 from electroclean.config.settings import SELECTION_STRATEGIES, FilterSettings, load_settings
 from electroclean.training import admin
@@ -141,11 +142,12 @@ def prepare_review_window(ws: Any) -> None:
     legend = QLabel(REVIEW_LEGEND)
     legend.setTextFormat(Qt.RichText)
     legend.setWordWrap(True)
-    legend.setStyleSheet("QLabel { background:#F1F0EC; padding:4px; }")
+    style.set_role(legend, "note")
     panel = ws.annotation_dock.widget().layout()  # above the list of annotations
     panel.insertWidget(0, legend)
     ws.review_legend = legend
     finish = QPushButton("Finish review")
+    style.set_kind(finish, "primary")
     finish.setToolTip("Close the review and continue")
     finish.clicked.connect(ws.browser.close)
     bar = getattr(ws, "actions_toolbar", None) or ws.toolbar
@@ -255,6 +257,7 @@ class QuizWindow(QMainWindow):
         self.ctrl = ctrl
         self.quiz = quiz
         self.catalogue = ctrl.catalogue
+        style.apply_theme()
         kind = "practice quiz" if quiz.mode == "practice" else "assessment quiz"
         self.setWindowTitle(
             f"ElectroClean {kind} – {quiz.reference_set.name or quiz.reference_set.set_id} – {quiz.annotator_id}"
@@ -314,6 +317,7 @@ class QuizWindow(QMainWindow):
         self.feedback.setWordWrap(True)
         side.addWidget(self.feedback)
         self.submit = QPushButton("Submit answer")
+        style.set_kind(self.submit, "primary")
         self.submit.clicked.connect(self._submit)
         side.addWidget(self.submit)
         sw = QWidget()
@@ -414,7 +418,7 @@ class QuizWindow(QMainWindow):
         try:
             self.browser = self._segment_browser(item)
         except Exception as exc:
-            self.feedback.setText(f"<span style='color:#B71C1C'>This segment could not be shown: {html.escape(str(exc))}</span>")
+            self.feedback.setText(f"<span style='color:{style.colour('destructive')}'>This segment could not be shown: {html.escape(str(exc))}</span>")
             return
         self.browser.setParent(self.view_host)
         self.browser.setWindowFlags(Qt.Widget)
@@ -517,12 +521,13 @@ class AdminDialog(QDialog):
         self.ctrl = ctrl
         self.root = dataset_root
         self.prompts = prompts
+        style.apply_theme()
         self.setWindowTitle(f"Administrator tools – {dataset_root}")
         self.resize(1000, 720)
         layout = QVBoxLayout(self)
         self.pass_warning = QLabel("No administrator passphrase is set. Set one on the Study tab so annotators do not "
                                    "open these tools by accident.")
-        self.pass_warning.setStyleSheet("QLabel { background:#FFF3CD; padding:6px; }")
+        style.set_role(self.pass_warning, "banner")
         self.pass_warning.setWordWrap(True)
         self.pass_warning.setVisible(not admin.read_study_dict(dataset_root).get("admin_passphrase"))
         layout.addWidget(self.pass_warning)
@@ -580,8 +585,7 @@ class AdminDialog(QDialog):
         new.clicked.connect(self.new_set)
         row.addWidget(self.set_combo, 1)
         row.addWidget(new)
-        hint = QLabel("used by the Reference sets, Competency criteria, Quiz and Progress tabs")
-        hint.setStyleSheet("QLabel { color:#52514e; }")
+        hint = style.label("used by the Reference sets, Competency criteria, Quiz and Progress tabs", "caption")
         row.addWidget(hint)
         layout.addWidget(box)
 
@@ -816,11 +820,12 @@ class AdminDialog(QDialog):
             self._update_buttons()
             return
         prov = rs.provenance
+        muted = style.colour("text_secondary")
         self.set_info.setText(
             f"<b>{html.escape(rs.name or rs.set_id)}</b>{': ' + html.escape(rs.description) if rs.description else ''}<br>"
             f"Declared when created: {html.escape(describe_provenance(prov))} · "
             f"{len(rs.practice_recordings)} practice and {len(rs.assessment_recordings)} assessment recording(s), "
-            f"{len(rs.quiz_items)} quiz item(s)<br><span style='color:#52514e'>Folder: {html.escape(str(rs.directory))}</span>"
+            f"{len(rs.quiz_items)} quiz item(s)<br><span style='color:{muted}'>Folder: {html.escape(str(rs.directory))}</span>"
         )
         self.opt_review.blockSignals(True)
         self.opt_review.setChecked(rs.practice_review)

@@ -183,6 +183,30 @@ EDF, EDF+ and BDF support, the `channels.hide` setting for the headset's
 housekeeping channels, the handling of `BAD_ACQ_SKIP` padding and of a
 `sample` column that holds timestamps, all described above.
 
+## Visual design (27 October 2026)
+
+The windows follow principles that well-designed desktop software shares;
+Apple's Human Interface Guidelines have long named clarity and deference among
+them. The EEG is the content, so the controls around it are quiet: light grey
+surfaces, white cards with thin outlines, grey secondary text and one accent
+colour, blue. Each window has one primary action in that blue (Begin, Open
+recording, Save and Finish, Submit answer, Run analysis); other buttons are
+plain, links and minor actions are blue text, and destructive actions are red.
+Text has four levels (title, heading, body and caption) in the system font.
+Options appear when they apply, such as the reference set and activity on the
+start window, which appear only for practice and assessment. The choice
+between the whole montage and selected channels is a two-part switch, so the
+current choice is visible at a glance. Every text colour meets the WCAG 2.1 AA
+contrast ratio of 4.5:1 against its background, and colour is never the only
+signal (selected channels are also named in the toolbar).
+
+The same Fusion style and light palette are used on Windows, macOS and Linux,
+so the application looks the same everywhere and screenshots in this guide
+match what annotators see. The overview bar under the EEG is plain by default
+(the `display.overview_mode` setting, `empty`), so the annotations in it stand
+out; mne-qt-browser kept its own saved mode and ignored the setting until this
+change.
+
 ## Decisions still open
 
 1. **Agreement settings to pre-register:** bin widths, the bin coverage rule,

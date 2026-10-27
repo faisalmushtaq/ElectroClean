@@ -19,19 +19,22 @@ display name is optional and is only stored inside the session files.
 **Dataset folder.** Choose the folder that holds the recordings. ElectroClean
 looks through it and all its sub-folders for recordings whose file name ends
 in `_eeg.vhdr` (BrainVision), `_eeg.edf` (EDF or EDF+) or `_eeg.bdf` (BDF). The window then shows how many recordings it
-found and how many you have already completed (*Begin new session* stays
+found and how many you have already completed (*Begin* stays
 unavailable until a folder with recordings is chosen). The *Results folder* is where
 your work is saved (normally `Annotated_Events` inside the dataset folder).
 If the line *Study settings* names a study, your administrator has configured
 this dataset, for example by fixing the viewing filters or assigning
 recordings to you.
 
-**What would you like to do?** Choose *Standard annotation* for research
-annotation, or one of the training modes (section 7). Leave *Let me choose the
-recording* unticked unless your administrator asks you to choose; normally a
-recording you have not yet completed is picked for you.
+**What would you like to do?** Choose *Annotate recordings* for research
+annotation, or *Practise with feedback* or *Competency assessment* (section 7);
+the choice of reference set and activity appears when one of these two is
+chosen. Leave *Let me choose the recording* unticked unless your administrator
+asks you to choose; normally a recording you have not yet completed is picked
+for you.
 
-Press **Begin new session**.
+Press **Begin**, the blue button. Each window has one blue button, for the
+step that moves you forward (Begin, Open recording, Save and Finish).
 
 ## 2. Viewing options
 
@@ -57,8 +60,9 @@ artifact near them, mark where the underlying event starts and ends.
 ![Annotation window](images/annotation_window.png)
 
 The large panel is MNE-Python's EEG browser. Channel names are on the left,
-time in seconds along the bottom, and the black overview bar at the bottom
-shows where you are in the whole recording (click it to jump). Teal vertical
+time in seconds along the bottom, and the overview bar at the bottom shows
+the whole recording, with your annotations in their colours and the part on
+screen outlined (click it to jump). Teal vertical
 lines are the **original experimental events** recorded during the session;
 they are shown for reference and cannot be changed. A stretch cross-hatched in
 darker grey has no recorded data (EDF+ files mark it as `BAD_ACQ_SKIP`, for
@@ -108,7 +112,7 @@ ID, the mode, the filters and the number of annotations.
    as Eye-movement-artifact (133) or Data-artifact (130): use them only when
    you can see that there is an artifact of that family but cannot tell which
    type it is.
-2. Choose what it affects:
+2. Choose what it affects with the two-part switch after *Applies to*:
    * **Whole montage** marks the interval on every channel.
    * **Selected channels** marks only the channels you choose. Click channel
      names or traces to select or deselect them (they turn magenta), or use
@@ -200,8 +204,8 @@ it has been fixed.
 Your administrator may ask you to practise on reference recordings and then
 complete an assessment.
 
-**Training (practise with feedback).** Choose *Training* and the reference set
-on the start window. Annotate as usual. After Save and Finish you see how your
+**Practise with feedback.** Choose *Practise with feedback* on the start window,
+then the reference set and *Continuous recordings* as the activity. Annotate as usual. After Save and Finish you see how your
 annotations compare with the reference: how many reference artifacts you
 found, which you missed, which of yours are not in the reference, and where
 you chose a different type.
@@ -216,13 +220,15 @@ The window title shows how far you are, for example "practice recording 2 of
 
 ![Review against the reference](images/practice_review.png)
 
-**Competency assessment.** Choose *Competency assessment*. You annotate the
+**Competency assessment.** Choose *Competency assessment*, the reference set
+and *Continuous recordings*. You annotate the
 assessment recordings without feedback. When all of them are complete,
 ElectroClean shows your result and the criteria you were assessed against,
 and tells you what to do next. The full report, with the details of every
 recording, is saved for your study administrator.
 
-**Short segments quiz.** Some reference sets include a quiz: you see short
+**Short-segment quiz.** Some reference sets include a quiz (choose
+*Short-segment quiz* as the activity): you see short
 EEG segments, one at a time, and choose the main artifact type in the shaded
 part. The answers are grouped under the same headings as in the annotation
 window; a group term (in italics) is the right choice when the exact type

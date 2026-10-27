@@ -15,6 +15,7 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
+from electroclean.app.gui import style
 from electroclean.config.settings import FilterSettings
 
 
@@ -29,17 +30,17 @@ class FilterDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Viewing options")
         self.locked = current.locked
+        style.apply_theme()
         layout = QVBoxLayout(self)
-        intro = QLabel(
-            ("<b>Next recording:</b> " + recording_label + "<br>" if recording_label else "")
-            + "These filters change only what you see. The recording files are never modified."
-        )
-        intro.setWordWrap(True)
-        layout.addWidget(intro)
+        layout.setContentsMargins(20, 18, 20, 16)
+        layout.setSpacing(12)
+        layout.addWidget(style.label("Viewing options", "heading"))
+        if recording_label:
+            layout.addWidget(style.label(f"Next recording: {recording_label}", "subtitle", wrap=True))
+        layout.addWidget(style.label(
+            "These filters change only what you see. The recording files are never modified.", "caption", wrap=True))
         if self.locked:
-            banner = QLabel("These settings are fixed by the study administrator.")
-            banner.setStyleSheet("QLabel { background: #FFF3CD; padding: 6px; border-radius: 3px; }")
-            layout.addWidget(banner)
+            layout.addWidget(style.label("These settings are fixed by the study administrator.", "banner", wrap=True))
 
         hp = QGroupBox("High-pass filter")
         hpl = QVBoxLayout(hp)
@@ -81,20 +82,19 @@ class FilterDialog(QDialog):
         self._method = current.method
         self._iir_order = current.iir_order
         design = "FIR, zero-phase (MNE defaults)" if current.method == "fir" else f"IIR Butterworth, order {current.iir_order}, zero-phase (set by the administrator)"
-        layout.addWidget(QLabel(f"Filter design: {design}"))
-
-        note = QLabel(
-            "<small>Zero-phase filters do not shift artifacts in time, but they spread very sharp "
-            "events slightly in both directions and can distort the first and last few seconds and "
-            "the signal around recording discontinuities. These zones are hatched in the viewer.</small>"
+        note = style.label(
+            f"Filter design: {design}. Zero-phase filters do not shift artifacts in time, but they spread very "
+            "sharp events slightly in both directions and can distort the first and last few seconds and the "
+            "signal around recording discontinuities. These zones are hatched in the viewer.",
+            "caption", wrap=True,
         )
-        note.setWordWrap(True)
         layout.addWidget(note)
         self.remember = QCheckBox("Use these settings for the rest of this session")
         self.remember.setChecked(True)
         layout.addWidget(self.remember)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.button(QDialogButtonBox.Ok).setText("Open recording")
+        style.set_kind(buttons.button(QDialogButtonBox.Ok), "primary")
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)

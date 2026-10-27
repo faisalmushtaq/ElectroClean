@@ -43,7 +43,8 @@ electroclean/
                            autosave.py
         gui/               browser.py (MNE integration), annotation_window.py,
                            start_window.py, filter_dialog.py, dialogs.py,
-                           app_controller.py, workers.py, help_text.py
+                           app_controller.py, workers.py, help_text.py,
+                           style.py (colours, type, spacing, style sheet), icons/
     reliability/           config.py, data.py, intervals.py, statistics.py,
                            timeresolved.py, matching.py, analysis.py, report.py, cli.py, gui.py
     training/              reference.py, consensus.py, assessment.py, quiz.py,
@@ -232,6 +233,14 @@ Type hints throughout; `from __future__ import annotations`; errors that can
 reach a user are raised with messages written for annotators. Times in files
 are local time with UTC offset (ISO 8601). User-facing text uses UK English,
 while label strings keep the HED spelling *artifact*.
+
+Every window takes its look from `electroclean/app/gui/style.py`. Call
+`style.apply_theme()` before building a window, give the one button that moves
+the user forward `style.set_kind(button, "primary")`, and give labels a role
+(`style.label(text, "caption")` and so on) rather than a colour or font of
+their own. A colour that is needed in rich text comes from `style.colour()`.
+The chevron icons are drawn by `scripts/make_theme_icons.py`;
+`tests/test_style.py` checks the contrast of every text colour.
 
 ## Packaging
 

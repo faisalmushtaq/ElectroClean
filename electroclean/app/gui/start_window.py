@@ -6,14 +6,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from qtpy.QtCore import QSettings, Qt, Signal
-from qtpy.QtGui import QAction, QFont
+from qtpy.QtGui import QAction
 from qtpy.QtWidgets import (
     QButtonGroup,
     QCheckBox,
     QComboBox,
     QFileDialog,
     QFormLayout,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -26,6 +25,7 @@ from qtpy.QtWidgets import (
 
 from electroclean import __version__
 from electroclean.app.common import IdentifierError, normalise_annotator_id
+from electroclean.app.gui import style
 from electroclean.config.settings import SettingsError, StudyConfig, load_settings
 
 
@@ -55,6 +55,7 @@ class StartWindow(QMainWindow):
 
     def __init__(self) -> None:
         super().__init__()
+        style.apply_theme()
         self.setWindowTitle(f"ElectroClean {__version__}")
         self.study: StudyConfig | None = None
         self._output_override: Path | None = None
@@ -62,76 +63,97 @@ class StartWindow(QMainWindow):
         central = QWidget()
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(14)
 
-        title = QLabel("ElectroClean")
-        f = QFont()
-        f.setPointSize(18)
-        f.setBold(True)
-        title.setFont(f)
-        layout.addWidget(title)
-        layout.addWidget(QLabel("Manual annotation of artifacts in continuous EEG recordings"))
+        layout.addWidget(style.label("ElectroClean", "title"))
+        layout.addWidget(style.label("Mark artifacts in continuous EEG recordings.", "subtitle"))
+        layout.addSpacing(4)
 
-        who = QGroupBox("Annotator")
-        wf = QFormLayout(who)
+        # Who is annotating
+        who, wl = style.card()
+        wl.addWidget(style.label("Who is annotating?", "heading"))
+        wf = QFormLayout()
+        wf.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        wf.setHorizontalSpacing(16)
+        wf.setVerticalSpacing(8)
         self.annotator = QComboBox()
         self.annotator.setEditable(True)
         self.annotator.setInsertPolicy(QComboBox.NoInsert)
         self.annotator.lineEdit().setPlaceholderText("type or choose your ID, e.g. A01")
         self.annotator.setToolTip("Letters and digits only. This identifier appears in every output file name.")
         self.display_name = QLineEdit()
-        self.display_name.setPlaceholderText("optional, e.g. your initials or name")
-        self.id_hint = QLabel()
-        self.id_hint.setStyleSheet("QLabel { color: #B71C1C; }")
+        self.display_name.setPlaceholderText("optional, e.g. your initials")
+        self.id_hint = style.label("", "error")
         wf.addRow("Annotator ID", self.annotator)
         wf.addRow("", self.id_hint)
-        wf.addRow("Display name", self.display_name)
+        wf.setRowVisible(self.id_hint, False)
+        self._identity_form = wf
+        wf.addRow("Name", self.display_name)
+        wl.addLayout(wf)
         layout.addWidget(who)
 
-        data = QGroupBox("Recordings")
-        df = QFormLayout(data)
+        # Which recordings
+        data, dl = style.card()
+        dl.addWidget(style.label("Recordings", "heading"))
         row = QHBoxLayout()
+        row.setSpacing(8)
         self.dataset = QLineEdit()
-        self.dataset.setPlaceholderText("Folder containing the recordings (*_eeg.vhdr, *_eeg.edf or *_eeg.bdf)")
+        self.dataset.setPlaceholderText("Folder with the recordings (*_eeg.vhdr, *_eeg.edf or *_eeg.bdf)")
         browse = QPushButton("Browse…")
         browse.clicked.connect(self._browse_dataset)
-        row.addWidget(self.dataset)
+        row.addWidget(self.dataset, 1)
         row.addWidget(browse)
-        df.addRow("Dataset folder", row)
+        dl.addLayout(row)
+        self.progress_label = QLabel("–")
+        self.progress_label.setWordWrap(True)
+        dl.addWidget(self.progress_label)
         orow = QHBoxLayout()
-        self.output_label = QLabel("–")
+        orow.setSpacing(6)
+        orow.addWidget(style.label("Results are saved in", "caption"))
+        self.output_label = style.label("–", "caption")
         self.output_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.output_label.setMinimumWidth(120)
-        out_btn = QPushButton("Change…")
-        out_btn.clicked.connect(self._browse_output)
         orow.addWidget(self.output_label, 1)
+        out_btn = style.set_kind(QPushButton("Change…"), "quiet")
+        out_btn.clicked.connect(self._browse_output)
         orow.addWidget(out_btn)
-        df.addRow("Results folder", orow)
-        self.study_label = QLabel("–")
-        self.study_label.setWordWrap(True)
-        df.addRow("Study settings", self.study_label)
-        self.progress_label = QLabel("–")
-        df.addRow("Progress", self.progress_label)
+        dl.addLayout(orow)
+        self.study_label = style.label("–", "caption", wrap=True)
+        dl.addWidget(self.study_label)
         layout.addWidget(data)
 
-        mode = QGroupBox("What would you like to do?")
-        ml = QVBoxLayout(mode)
-        self.mode_standard = QRadioButton("Standard annotation")
-        self.mode_practice = QRadioButton("Training: practise with feedback")
+        # What to do
+        mode, ml = style.card(spacing=6)
+        ml.addWidget(style.label("What would you like to do?", "heading"))
+        self.mode_standard = QRadioButton("Annotate recordings")
+        self.mode_practice = QRadioButton("Practise with feedback")
         self.mode_assessment = QRadioButton("Competency assessment")
+        explanations = {
+            self.mode_standard: "Mark the artifacts in recordings for the study.",
+            self.mode_practice: "Annotate recordings that experts have annotated, then see how your work compares.",
+            self.mode_assessment: "Annotate without feedback; you see your result when every recording is done.",
+        }
         g = QButtonGroup(self)
-        for rb in (self.mode_standard, self.mode_practice, self.mode_assessment):
+        for rb, text in explanations.items():
             g.addButton(rb)
             ml.addWidget(rb)
+            hint = style.label(text, "caption", wrap=True)
+            hint.setContentsMargins(26, 0, 0, 4)
+            ml.addWidget(hint)
         self.mode_standard.setChecked(True)
-        rs = QHBoxLayout()
-        rs.addWidget(QLabel("Reference set:"))
+        # Shown only for practice and assessment.
+        self.training_box = QWidget()
+        tf = QFormLayout(self.training_box)
+        tf.setContentsMargins(26, 4, 0, 0)
+        tf.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        tf.setHorizontalSpacing(16)
         self.reference_combo = QComboBox()
-        rs.addWidget(self.reference_combo, 1)
-        ml.addLayout(rs)
+        tf.addRow("Reference set", self.reference_combo)
         ak = QHBoxLayout()
-        ak.addWidget(QLabel("Activity:"))
-        self.assess_continuous = QRadioButton("Annotate continuous recordings")
-        self.assess_quiz = QRadioButton("Short segments quiz")
+        ak.setSpacing(16)
+        self.assess_continuous = QRadioButton("Continuous recordings")
+        self.assess_quiz = QRadioButton("Short-segment quiz")
         g2 = QButtonGroup(self)
         g2.addButton(self.assess_continuous)
         g2.addButton(self.assess_quiz)
@@ -139,15 +161,20 @@ class StartWindow(QMainWindow):
         ak.addWidget(self.assess_continuous)
         ak.addWidget(self.assess_quiz)
         ak.addStretch(1)
-        ml.addLayout(ak)
+        tf.addRow("Activity", ak)
+        ml.addWidget(self.training_box)
         self.choose_recording = QCheckBox("Let me choose the recording (otherwise one is picked for me)")
+        ml.addSpacing(4)
         ml.addWidget(self.choose_recording)
         layout.addWidget(mode)
+        layout.addStretch(1)
 
         buttons = QHBoxLayout()
-        self.begin_btn = QPushButton("Begin new session")
+        buttons.setSpacing(8)
+        self.begin_btn = QPushButton("Begin")
         self.begin_btn.setDefault(True)
-        self.begin_btn.setStyleSheet("QPushButton { font-weight: bold; padding: 6px 16px; }")
+        style.set_kind(self.begin_btn, "primary")
+        self.begin_btn.setMinimumWidth(120)
         quit_btn = QPushButton("Quit")
         quit_btn.clicked.connect(self.close)
         buttons.addStretch(1)
@@ -171,7 +198,7 @@ class StartWindow(QMainWindow):
         self.reference_combo.currentIndexChanged.connect(self._update_mode_widgets)
         self._restore()
         self._update_mode_widgets()
-        self.resize(640, 640)
+        self.resize(620, 720)
 
     # ------------------------------------------------------------- settings
 
@@ -257,7 +284,7 @@ class StartWindow(QMainWindow):
             self.study_label.setText("–")
             self.progress_label.setText(
                 "Choose a dataset folder" if root is None
-                else "<span style='color:#B71C1C'>Folder not found. Check the path or use Browse…</span>"
+                else f"<span style='color:{style.colour('destructive')}'>Folder not found. Check the path or use Browse…</span>"
             )
             self.output_label.setText("–")
             self._fill_reference_sets()
@@ -266,7 +293,7 @@ class StartWindow(QMainWindow):
         try:
             settings, study = load_settings(root)
         except (SettingsError, OSError) as exc:
-            self.study_label.setText(f"<span style='color:#B71C1C'>Study configuration problem: {exc}</span>")
+            self.study_label.setText(f"<span style='color:{style.colour('destructive')}'>Study configuration problem: {exc}</span>")
             self._update_begin()
             return
         self.study = study
@@ -324,7 +351,8 @@ class StartWindow(QMainWindow):
             return
         if not ids:
             self.progress_label.setText(
-                "<span style='color:#B71C1C'>No recordings found.</span> ElectroClean looks in this folder and its "
+                f"<span style='color:{style.colour('destructive')}'>No recordings found.</span> ElectroClean looks in "
+                "this folder and its "
                 "sub-folders for files whose names end in _eeg.vhdr, _eeg.edf or _eeg.bdf."
             )
             self.progress_label.setWordWrap(True)
@@ -378,20 +406,24 @@ class StartWindow(QMainWindow):
                     self.display_name.setText(a.display_name)
         try:
             normalise_annotator_id(self._annotator_text())
-            self.id_hint.setText("")
+            hint = ""
         except IdentifierError:
-            self.id_hint.setText("Use letters and digits only (e.g. A01)" if self._annotator_text() else "")
+            hint = "Use letters and digits only (e.g. A01)" if self._annotator_text() else ""
+        self.id_hint.setText(hint)
+        self._identity_form.setRowVisible(self.id_hint, bool(hint))  # no empty gap when all is well
 
     def _update_mode_widgets(self, *args: object) -> None:
         # Practice and assessment can each be done on continuous recordings or as the short-segment quiz.
         training = self.mode_practice.isChecked() or self.mode_assessment.isChecked()
         self.reference_combo.setEnabled(training and bool(self._reference_sets))
         has_quiz = any(q for sid, _n, q in self._reference_sets if sid == self.reference_combo.currentData())
+        self.training_box.setVisible(training)  # options appear when they apply
         self.assess_continuous.setEnabled(training)
         self.assess_quiz.setEnabled(training and has_quiz)
         if not has_quiz or not training:
             self.assess_continuous.setChecked(True)
         self.choose_recording.setEnabled(not self.mode_assessment.isChecked() and not self.assess_quiz.isChecked())
+        self.choose_recording.setVisible(self.choose_recording.isEnabled())
 
     # ---------------------------------------------------------------- begin
     def build_request(self) -> StartRequest:

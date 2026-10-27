@@ -34,6 +34,7 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
+from electroclean.app.gui import style
 from electroclean.reliability.config import AnalysisConfig
 
 GUIDE_URL = "https://github.com/faisalmushtaq/ElectroClean/blob/main/docs/reliability_guide.md"
@@ -42,8 +43,7 @@ CRITERIA = (
     ("Onset and offset tolerance", "tolerance"),
     ("Overlap and tolerance", "iou_and_tolerance"),
 )
-WARN_STYLE = "background:#FFF4E5; border-left:4px solid #E65100; padding:6px;"
-ERROR_COLOUR = "#B71C1C"
+ERROR_COLOUR = style.colour("destructive")
 
 
 def parse_numbers(text: str, what: str, example: str) -> tuple[float, ...]:
@@ -135,6 +135,7 @@ class AgreementDialog(QDialog):
         self.last_result: Any = None
         self._results_edited = False
         self._close_after_worker = False
+        style.apply_theme()
         self.setWindowTitle("Inter-rater agreement analysis")
         d = AnalysisConfig()
         tabs = QTabWidget()
@@ -282,7 +283,7 @@ class AgreementDialog(QDialog):
         # ---------------------------------------------------------- bottom
         layout = QVBoxLayout(self)
         layout.addWidget(tabs)
-        guide = QLabel(f"The measures and how to read them: <a href='{GUIDE_URL}'>reliability guide</a>.")
+        guide = style.label(f"The measures and how to read them: <a href='{GUIDE_URL}'>reliability guide</a>.", "caption")
         guide.setOpenExternalLinks(True)
         layout.addWidget(guide)
         self.status = QLabel()
@@ -293,12 +294,13 @@ class AgreementDialog(QDialog):
         self.warnings = QLabel()
         self.warnings.setWordWrap(True)
         self.warnings.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self.warnings.setStyleSheet(WARN_STYLE)
+        style.set_role(self.warnings, "banner")
         self.warnings.hide()
         layout.addWidget(self.warnings)
         buttons = QHBoxLayout()
         self.run_btn = QPushButton("Run analysis")
         self.run_btn.setDefault(True)
+        style.set_kind(self.run_btn, "primary")
         self.run_btn.clicked.connect(self.run)
         self.cancel_btn = QPushButton("Cancel analysis")
         self.cancel_btn.setEnabled(False)

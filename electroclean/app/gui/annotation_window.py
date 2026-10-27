@@ -17,7 +17,7 @@ import html
 from typing import Any
 
 from qtpy.QtCore import QObject, Qt, QTimer, Signal
-from qtpy.QtGui import QAction, QFont, QKeySequence
+from qtpy.QtGui import QAction, QKeySequence
 from qtpy.QtWidgets import (
     QAbstractItemView,
     QButtonGroup,
@@ -28,7 +28,6 @@ from qtpy.QtWidgets import (
     QHeaderView,
     QLabel,
     QPushButton,
-    QRadioButton,
     QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
@@ -40,6 +39,7 @@ from qtpy.QtWidgets import (
 )
 
 from electroclean.app.annotations.model import AnnotationError
+from electroclean.app.gui import style
 from electroclean.app.gui.browser import AnnotationController, check_browser_version, create_browser
 from electroclean.app.gui.dialogs import UserPrompts, colour_icon, fill_label_combo, readable_text_colour
 from electroclean.app.gui.help_text import HELP_HTML, UNDO_HINT
@@ -87,6 +87,7 @@ class AnnotationWorkspace(QObject):
         self.prompts = prompts or UserPrompts()
         self.read_only = read_only
         self.loaded = session.loaded
+        style.apply_theme()
         self._closing_ok = False
         self._finished = False
         cat = session.catalogue
@@ -161,7 +162,7 @@ class AnnotationWorkspace(QObject):
         self.toolbar = tb
         cat = self.session.catalogue
 
-        tb.addWidget(QLabel(" Artifact: "))
+        tb.addWidget(style.label(" Artifact ", "subtitle"))
         self.label_combo = QComboBox()
         fill_label_combo(self.label_combo, cat)  # family headings, colours, group terms in italics
         # The closed menu is as wide as about 32 characters rather than the longest entry, so the row
@@ -183,10 +184,15 @@ class AnnotationWorkspace(QObject):
         tb.addWidget(self.active_label)
         tb.addSeparator()
 
-        tb.addWidget(QLabel(" Applies to: "))
-        self.scope_whole = QRadioButton("Whole montage")
-        self.scope_channels = QRadioButton("Selected channels")
+        tb.addWidget(style.label(" Applies to ", "subtitle"))
+        # A segmented control: two linked buttons, exactly one of them on.
+        self.scope_whole = QPushButton("Whole montage")
+        self.scope_channels = QPushButton("Selected channels")
+        style.segmented(self.scope_whole, self.scope_channels)
+        self.scope_whole.setToolTip("The next drag marks every channel")
+        self.scope_channels.setToolTip("The next drag marks only the selected channels (click channel names to select them)")
         group = QButtonGroup(tb)
+        group.setExclusive(True)
         group.addButton(self.scope_whole)
         group.addButton(self.scope_channels)
         self.scope_whole.setChecked(True)
@@ -194,12 +200,19 @@ class AnnotationWorkspace(QObject):
         self.scope_channels.toggled.connect(lambda on: on and self.controller.set_scope("channels"))
         for w in (self.scope_whole, self.scope_channels):
             w.setFocusPolicy(Qt.NoFocus)
-        tb.addWidget(self.scope_whole)
-        tb.addWidget(self.scope_channels)
+        segment = QWidget()
+        seg_layout = QHBoxLayout(segment)
+        seg_layout.setContentsMargins(0, 0, 0, 0)
+        seg_layout.setSpacing(0)
+        seg_layout.addWidget(self.scope_whole)
+        seg_layout.addWidget(self.scope_channels)
+        tb.addWidget(segment)
         self.choose_channels_btn = QPushButton("Channels…")
+        style.set_kind(self.choose_channels_btn, "quiet")
+        self.choose_channels_btn.setToolTip("Choose the channels from a list")
         self.choose_channels_btn.clicked.connect(self.choose_channels)
         tb.addWidget(self.choose_channels_btn)
-        self.channels_summary = QLabel()
+        self.channels_summary = style.label("", "subtitle")
         self.channels_summary.setMaximumWidth(170)
         tb.addWidget(self.channels_summary)
 
@@ -226,11 +239,8 @@ class AnnotationWorkspace(QObject):
         self.redo_action.triggered.connect(self.controller.redo)
         tb.addAction(self.redo_action)
         tb.addSeparator()
-        self.save_btn = QPushButton("  Save and Finish  ")
-        self.save_btn.setStyleSheet(
-            "QPushButton { background: #2E7D32; color: white; font-weight: bold; padding: 4px 10px; border-radius: 4px; }"
-            "QPushButton:disabled { background: #9E9E9E; }"
-        )
+        self.save_btn = QPushButton("Save and Finish")
+        style.set_kind(self.save_btn, "primary")  # the one primary action of the window
         self.save_btn.setToolTip("Validate and save your annotations, then mark this recording complete")
         self.save_btn.clicked.connect(self.save_and_finish)
         self.save_action = tb.addWidget(self.save_btn)
@@ -252,7 +262,7 @@ class AnnotationWorkspace(QObject):
         w = QWidget()
         layout = QVBoxLayout(w)
         layout.setContentsMargins(4, 4, 4, 4)
-        self.count_label = QLabel()
+        self.count_label = style.label("", "subtitle")
         layout.addWidget(self.count_label)
         # Duration is in each row's tooltip: with it as a column the channel list had no room in the panel.
         self.table = QTableWidget(0, 5)
@@ -283,6 +293,7 @@ class AnnotationWorkspace(QObject):
         self.btn_chans = QPushButton("Edit channels…")
         self.btn_merge = QPushButton("Merge")
         self.btn_delete = QPushButton("Delete")
+        style.set_kind(self.btn_delete, "destructive")
         self.btn_merge.setToolTip("Merge the selected annotations (same label only) into one interval")
         for btn in (self.btn_goto, self.btn_times, self.btn_label):
             row1.addWidget(btn)
@@ -311,10 +322,7 @@ class AnnotationWorkspace(QObject):
         info = QWidget()
         il = QVBoxLayout(info)
         il.setContentsMargins(4, 4, 4, 4)
-        self.clock_label = QLabel()
-        f = QFont()
-        f.setBold(True)
-        self.clock_label.setFont(f)
+        self.clock_label = style.label("", "heading")
         il.addWidget(self.clock_label)
         self.zones_check = QCheckBox("Show filter edge zones")
         self.zones_check.setChecked(True)
@@ -383,7 +391,7 @@ class AnnotationWorkspace(QObject):
             out.extend(f"<li>{html.escape(n)}</li>" for n in lr.notes)
             out.append("</ul>")
         out.append(
-            "<p style='color:#555'>Filters change only what you see. The recording files are never "
+            f"<p style='color:{style.colour('text_secondary')}'>Filters change only what you see. The recording files are never "
             "modified. Zero-phase filters can make sharp transients appear to start slightly earlier; "
             "mark the artifact where the underlying event begins.</p>"
         )
@@ -396,8 +404,9 @@ class AnnotationWorkspace(QObject):
         fg = readable_text_colour(lab.colour)
         self.active_label.setText(f" {lab.short_code} ")
         self.active_label.setToolTip(f"The next drag creates: {lab.label} (code {lab.value})")
+        # The badge takes the colour of the type, so it is the one place the colour is set here.
         self.active_label.setStyleSheet(
-            f"QLabel {{ background: {lab.colour}; color: {fg}; font-weight: bold; border-radius: 3px; padding: 2px; }}"
+            f"QLabel {{ background: {lab.colour}; color: {fg}; font-weight: 600; border-radius: 5px; padding: 2px 6px; }}"
         )
         idx = self.label_combo.findData(c.current_label)
         if idx >= 0 and idx != self.label_combo.currentIndex():
@@ -408,16 +417,16 @@ class AnnotationWorkspace(QObject):
         if c.scope == "whole":
             self.channels_summary.setText(" all channels ")
             self.channels_summary.setToolTip("Annotations apply to the whole montage")
-            self.channels_summary.setStyleSheet("")
+            style.set_state(self.channels_summary, "")
         elif not chans:
             self.channels_summary.setText(" none selected ")
             self.channels_summary.setToolTip("Click channel names, or use Channels…")
-            self.channels_summary.setStyleSheet("QLabel { color: #B71C1C; font-weight: bold; }")
+            style.set_state(self.channels_summary, "warning")
         else:
             shown = ", ".join(chans[:3]) + (f" (+{len(chans) - 3})" if len(chans) > 3 else "")
             self.channels_summary.setText(f" {shown} ")
             self.channels_summary.setToolTip(", ".join(chans))
-            self.channels_summary.setStyleSheet("QLabel { color: #D81B60; font-weight: bold; }")
+            style.set_state(self.channels_summary, "selected")
         self.scope_whole.blockSignals(True)
         self.scope_channels.blockSignals(True)
         self.scope_whole.setChecked(c.scope == "whole")

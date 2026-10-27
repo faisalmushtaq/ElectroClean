@@ -174,7 +174,12 @@ def _run(work: Path, say) -> None:  # noqa: ANN001
     _check(icon.is_file(), f"mne-qt-browser's icons are missing ({icon})")
     _check(b"svg" in [bytes(f) for f in QImageReader.supportedImageFormats()], "Qt cannot read SVG images")
     _check(not QIcon(str(icon)).pixmap(16, 16).isNull(), "Qt could not draw an SVG icon")
-    say(f"   imported {len(names)} ElectroClean modules; SVG icons OK")
+    from electroclean.app.gui import style
+
+    theme_icons = sorted(style.ICONS.glob("chevron-*.png"))
+    _check(len(theme_icons) == 8, f"ElectroClean's theme icons are missing from {style.ICONS}")
+    style.apply_theme()
+    say(f"   imported {len(names)} ElectroClean modules; SVG icons and theme OK")
 
     # 2. Synthetic dataset (writes BrainVision files with pybv).
     from electroclean.app.io.discovery import discover_recordings
