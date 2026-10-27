@@ -30,9 +30,9 @@ The latest build of the main branch, and of any run started by hand, is on the A
 
 1. Set the new version in `electroclean/__init__.py` (`__version__ = "1.2.0"`) and add a section `## 1.2.0` at the top of `CHANGELOG.md`; that section becomes the text of the release.
 2. Commit, push to main and wait for the workflow to pass.
-3. Tag the commit and push the tag: `git tag v1.2.0` and `git push origin v1.2.0`.
+3. Either open the Actions tab, choose *Build applications*, press *Run workflow*, keep the branch `main`, tick *Publish a release* and run it; or tag the commit and push the tag (`git tag v1.2.0` and `git push origin v1.2.0`).
 
-The workflow then runs the tests and builds on all three systems and, only if every one passes, the `release` job checks that the tag matches `__version__`, takes the notes from `CHANGELOG.md`, checks the three zip files and creates the release with them attached. If anything fails, no release is made; fix the problem, move the tag to the corrected commit (`git tag -f v1.2.0` and `git push -f origin v1.2.0`) and the workflow runs again.
+The workflow then runs the tests and builds on all three systems and, only if every one passes, the `release` job checks the version (a pushed tag must match `__version__`; a run by hand refuses a version that has already been released), takes the notes from `CHANGELOG.md`, checks the three zip files and creates the release with them attached. A run by hand creates the `v1.2.0` tag itself, on the commit it tested. If anything fails, no release is made; fix the problem on main and run the workflow again (with a pushed tag, move the tag to the corrected commit with `git tag -f v1.2.0` and `git push -f origin v1.2.0`).
 
 To install, unzip the file anywhere the annotator can write to, such as their home folder or Documents. On Windows, start `ElectroClean.exe` in the `ElectroClean` folder; the folder must stay together, because the programs load everything from the `_internal` folder next to them. On macOS, move `ElectroClean.app` to Applications if you wish and open it. On Linux, run `ElectroClean/ElectroClean`. Use a tool that keeps symbolic links when unzipping on Linux (the `unzip` command and the usual desktop archive managers do).
 
