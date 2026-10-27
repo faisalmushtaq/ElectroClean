@@ -25,6 +25,7 @@ from electroclean.app.annotations.labels import default_catalogue
 from electroclean.app.common import friendly_time
 from electroclean.app.eeg.loading import LoadedRecording, RecordingLoadError
 from electroclean.app.gui import style
+from electroclean.app.session.interaction_log import NULL_LOG
 from electroclean.app.gui.dialogs import UserPrompts
 from electroclean.app.gui.filter_dialog import FilterDialog
 from electroclean.app.gui.start_window import StartRequest, StartWindow
@@ -84,6 +85,7 @@ class AppController(QObject):
     def __init__(self, *, prompts: UserPrompts | None = None, synchronous_loading: bool = False) -> None:
         super().__init__()
         style.apply_theme()
+        self.log = NULL_LOG  # the current visit's interaction log, opened by begin()
         self.prompts = prompts or UserPrompts()
         self.synchronous_loading = synchronous_loading  # used by tests
         self.catalogue = default_catalogue()

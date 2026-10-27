@@ -43,6 +43,7 @@ from electroclean.app.gui import style
 from electroclean.app.gui.browser import AnnotationController, check_browser_version, create_browser
 from electroclean.app.gui.dialogs import UserPrompts, colour_icon, fill_label_combo, readable_text_colour
 from electroclean.app.gui.help_text import HELP_HTML, KEY_HINT, UNDO_HINT
+from electroclean.app.session.interaction_log import NULL_LOG, InteractionLog
 from electroclean.app.session.session import AnnotationSession, SessionError
 from electroclean.app.session.transaction import ExportCommitError
 from electroclean.app.validation.exports import ValidationError
@@ -78,6 +79,7 @@ class AnnotationWorkspace(QObject):
         title_suffix: str = "",
         window_title: str | None = None,
         view_state: dict[str, float] | None = None,
+        log: InteractionLog | None = None,
     ) -> None:
         """``view_state`` (from :meth:`view_state` of the previous window) carries the amplitude
         scale, the seconds and the number of channels shown over to the next recording."""
@@ -87,6 +89,7 @@ class AnnotationWorkspace(QObject):
         self.prompts = prompts or UserPrompts()
         self.read_only = read_only
         self.loaded = session.loaded
+        self.log = log or NULL_LOG  # the visit's interaction log (research data); see interaction_log.py
         style.apply_theme()
         self._closing_ok = False
         self._finished = False
