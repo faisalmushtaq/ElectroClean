@@ -2,10 +2,15 @@
 
 This guide is for the researcher who sets up a study: which annotators take
 part, which recordings each annotates, how the viewer is configured, and how
-annotators are trained and assessed. Every task can be done in the
-application (*Tools → Administrator tools* on the start window) or with the
-`electroclean-admin` command; `electroclean-admin <command> --help` lists each
-command's options.
+annotators are trained and assessed. Most tasks can be done in the
+application (*Tools → Administrator tools* on the start window), and all of
+them with the `electroclean-admin` command; `electroclean-admin <command>
+--help` lists each command's options. A few need the command (or a text
+editor): the consensus options `--min-agreement`, `--merge-gap` and
+`--min-duration` (the application uses a strict majority and no merging),
+marking a load failure as resolved (`resolve-failure`), the matching settings
+of a reference set (its `analysis` entry) and replacing a forgotten
+administrator passphrase (`set-passphrase`).
 
 ## The study configuration
 
@@ -165,6 +170,16 @@ Cameron can be trained and assessed without having produced any of the
 reference material himself. The method used is stored as provenance with each
 reference.
 
+In the administrator tools, the reference set chosen at the top of the window
+is the one that the *Reference sets*, *Competency criteria*, *Quiz* and
+*Progress and reports* tabs work on. Each of the three *Add* buttons asks
+whether the new reference is for practice or for assessment. There is no
+default, because a reference imported for practice by mistake would give
+annotators feedback on an assessment recording. *Change use…* switches the
+selected recording between the two; when annotators have already completed
+the recording in practice, ElectroClean names them and warns that the
+assessment would not be blinded for them.
+
 ```bash
 electroclean-admin create-reference-set /data/MyStudy pilot --name "Pilot set" \
     --method consensus --experts E1 E2 E3
@@ -199,14 +214,29 @@ reference file that has been edited afterwards is refused. Keep reference sets
 somewhere annotators do not browse (set `training.reference_sets_dir` in the
 study file); by default they are in `derivatives/electroclean_reference_sets`.
 
-To restrict a reference set to particular annotators:
+To restrict a reference set to particular annotators, type their IDs under
+*Only these annotators may use this set* on the *Reference sets* tab, or run
 `electroclean-admin assign /data/MyStudy pilot CAM A03`.
+
+The *What annotators see* box on the same tab holds two settings of the
+reference set (stored in its `reference_set.json`). `practice_review` (on by
+default) offers a side-by-side review against the reference after each
+practice recording. `show_full_report_to_annotator` (off by default) lets
+annotators open the full competency report at the end of their assessment.
+That report lists the reference's artifacts that were missed, with their
+times and channels, so turn it on only when no one else will annotate the
+same assessment recordings. Reference sets made with version 1.0 could set
+this as `show_report_to_annotator` in the `quiz` entry; that key is still
+read.
 
 ### Competency criteria
 
 ElectroClean does not impose a universal threshold: no criteria are set until
 you set them, and reports then say "not determined". Choose criteria from
-pilot data, expert agreement and the intended use of the labels.
+pilot data, expert agreement and the intended use of the labels. In the
+administrator tools, hovering over a measure explains it, and thresholds can
+only take values the measure can have (0 to 1 for proportions, -1 to 1 for
+kappa).
 
 ![Competency criteria](images/admin_criteria.png)
 
@@ -256,12 +286,15 @@ gives the same digest.
 ### What annotators experience
 
 In **practice** mode annotators see feedback after each recording and can
-review their annotations next to the reference. In **assessment** mode they
-see nothing until all assessment recordings are complete; ElectroClean then
-writes the competency report to
-`Annotated_Events/training/<set>/reports/` and shows its result. Practice and
-assessment annotations are stored under `Annotated_Events/training/` and are
-never mixed with research annotations.
+review their annotations next to the reference (theirs shaded, the
+reference's hatched). In **assessment** mode they see nothing until all
+assessment recordings are complete; ElectroClean then writes the competency
+report to `Annotated_Events/training/<set>/reports/` and shows the annotator
+a summary: the overall result, the table of criteria and what to do next. The
+full report is for you (see `show_full_report_to_annotator` above). The
+annotation window's title shows how far they are, for example "assessment
+recording 1 of 2". Practice and assessment annotations are stored under
+`Annotated_Events/training/` and are never mixed with research annotations.
 
 ### Competency reports
 
@@ -270,9 +303,14 @@ electroclean-admin progress /data/MyStudy pilot --annotators CAM A03
 electroclean-admin report /data/MyStudy pilot CAM
 ```
 
-The report lists each criterion with its value and result, the overall and
-per-category measures, the missed, extra and relabelled artifacts, the
-reference provenance and the checksum of every input file. Its
+The report lists each criterion with its value and result, the overall
+measures and the measures by artifact type (with a glossary), the missed,
+extra and relabelled artifacts, the matching rule in words, how each
+assessment reference was made (method, experts and adjudicator; the method
+declared when the set was created is shown separately) and the checksum of
+every input file. In the administrator tools, *Show training progress* lists
+the annotators named on the *Study* tab and everyone who has practice or
+assessment work in the chosen set. Its
 `results_sha256` is identical whenever the report is regenerated from the
 same files, which makes the assessment reproducible.
 
@@ -289,11 +327,20 @@ electroclean-admin add-quiz-item /data/MyStudy pilot --item-id q01 \
     --label EMG-artifact --explanation "High-frequency activity over temporal channels"
 ```
 
-The order is shuffled reproducibly for each annotator. Results are saved in
-`Annotated_Events/training/<set>/quiz/`. When the quiz offers the answer
-"No artifact / none of these" (`"include_none_option": true` in the `quiz`
-entry of `reference_set.json`), clean segments can be included by giving that
-text as the item's label.
+On the *Quiz* tab of the administrator tools, choose the recording, the
+start and end of the segment, how much EEG is shown around it, and the correct
+answer. *Also accept the group term* accepts, for example, Eye-artifact for an
+eye blink (the item's `accepted_labels`), and other acceptable answers can be
+typed in. The explanation is shown after each answer in the practice quiz.
+Selected items can be removed.
+
+The order is shuffled reproducibly for each annotator, and the answers are
+listed under the same family headings as in the annotation window, with group
+terms marked. Results are saved in `Annotated_Events/training/<set>/quiz/`.
+When the quiz offers the answer "No artifact / none of these" (the checkbox on
+the *Quiz* tab, or `"include_none_option": true` in the `quiz` entry of
+`reference_set.json`), clean segments can be included by giving that text as
+the item's label.
 
 ## Before a study starts
 

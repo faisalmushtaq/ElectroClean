@@ -32,6 +32,12 @@ SCHEMA = "electroclean.reference_set"
 SCHEMA_VERSION = "1.0.0"
 REFERENCE_ANNOTATOR = "REFERENCE"
 METHODS = ("single_expert", "consensus", "adjudicated")
+#: How each method is described to people.
+METHOD_NAMES = {
+    "single_expert": "one expert's annotations",
+    "consensus": "consensus of several experts",
+    "adjudicated": "adjudicated consensus",
+}
 USES = ("practice", "assessment")
 DEFAULT_DIRNAME = Path("derivatives") / "electroclean_reference_sets"
 
@@ -107,6 +113,10 @@ class ReferenceSet:
     analysis: dict[str, Any] = field(default_factory=dict)
     quiz: dict[str, Any] = field(default_factory=dict)
     practice_review: bool = True
+    # Whether an annotator sees the full competency report (with the missed and extra artifacts, their
+    # times and channels) at the end of the assessment. Off by default: assessment recordings are
+    # shared between annotators, so the full report would show the next one where the artifacts are.
+    show_full_report_to_annotator: bool = False
 
     # ------------------------------------------------------------ properties
     @property
@@ -162,6 +172,7 @@ class ReferenceSet:
             "analysis": self.analysis,
             "quiz": self.quiz,
             "practice_review": self.practice_review,
+            "show_full_report_to_annotator": self.show_full_report_to_annotator,
         }
 
     def save(self) -> None:
@@ -192,6 +203,10 @@ class ReferenceSet:
             analysis=dict(d.get("analysis", {})),
             quiz=dict(d.get("quiz", {})),
             practice_review=bool(d.get("practice_review", True)),
+            # Sets written before version 1.1 could only set this as quiz.show_report_to_annotator.
+            show_full_report_to_annotator=bool(
+                d.get("show_full_report_to_annotator", dict(d.get("quiz", {})).get("show_report_to_annotator", False))
+            ),
         )
 
     @classmethod
@@ -288,6 +303,22 @@ class ReferenceSet:
 
     def remove_recording(self, recording_id: str) -> None:
         self.recordings.pop(recording_id, None)
+        self.save()
+
+    def set_use(self, recording_id: str, use: str) -> None:
+        """Change whether a reference recording is used for practice or for assessment."""
+        if use not in USES:
+            raise ReferenceSetError(f"use must be one of {USES}")
+        if recording_id not in self.recordings:
+            raise ReferenceSetError(f"{recording_id} is not part of reference set {self.set_id}")
+        self.recordings[recording_id]["use"] = use
+        self.save()
+
+    def remove_quiz_item(self, item_id: str) -> None:
+        items = [d for d in self.quiz.get("items", []) if d["item_id"] != item_id]
+        if len(items) == len(self.quiz.get("items", [])):
+            raise ReferenceSetError(f"Quiz item {item_id!r} is not in reference set {self.set_id}")
+        self.quiz["items"] = items
         self.save()
 
     def set_criteria(self, criteria: dict[str, Any]) -> None:
