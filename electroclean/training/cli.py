@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import getpass
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -17,7 +18,11 @@ from electroclean.app.annotations.labels import default_catalogue
 from electroclean.app.io.atomic import atomic_write_bytes
 from electroclean.app.io.canonical import read_annotations_json
 from electroclean.app.io.naming import OutputLayout
-from electroclean.config.settings import FilterSettings, load_settings
+from electroclean.app.io.discovery import DEFAULT_SUFFIXES
+from electroclean.app.session.failures import FailureLog
+from electroclean.app.session.register import CompletionRegister, RegisterError
+from electroclean.config.settings import STUDY_CONFIG_FILENAME, FilterSettings, SettingsError, load_settings
+from electroclean.hints import did_you_mean
 from electroclean.training import admin
 from electroclean.training.assessment import METRICS, competency_report
 from electroclean.training.consensus import build_consensus, disagreements_tsv
@@ -30,6 +35,46 @@ from electroclean.training.reference import (
     load_reference_set_by_id,
     reference_sets_dir,
 )
+
+
+class CommandError(ValueError):
+    """A mistake in the command line, reported without a traceback."""
+
+
+def _has_recording(root: Path) -> bool:
+    """True as soon as one recording file is found (the whole tree is not listed)."""
+    try:
+        settings, _ = load_settings(root)
+        suffixes = tuple(s.lower() for s in settings.discovery_suffixes)
+        excluded = set(settings.discovery_exclude_dir_names)
+    except (SettingsError, OSError, ValueError):
+        suffixes, excluded = DEFAULT_SUFFIXES, {"derivatives", "Annotated_Events", ".git", ".electroclean"}
+    for _dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in excluded and not d.startswith(".")]
+        if any(f.lower().endswith(suffixes) for f in filenames):
+            return True
+    return False
+
+
+def check_dataset(path: Path, command: str, *, create: bool = False) -> None:
+    """Refuse a dataset folder that does not exist or (except for init-study) holds no study."""
+    if not path.exists():
+        if command == "init-study" and create:
+            path.mkdir(parents=True)
+            return
+        hint = " Use --create to make a new folder for the study." if command == "init-study" else ""
+        raise CommandError(f"Dataset folder not found: {path}. Check the path.{hint}")
+    if not path.is_dir():
+        raise CommandError(f"{path} is a file; give the dataset folder that holds the recordings.")
+    if command == "init-study":
+        return
+    if (path / STUDY_CONFIG_FILENAME).is_file() or _has_recording(path):
+        return
+    raise CommandError(
+        f"{path} does not look like an ElectroClean dataset: it holds no recordings "
+        f"({', '.join('*' + s for s in DEFAULT_SUFFIXES)}, also in sub-folders) and no {STUDY_CONFIG_FILENAME}. "
+        "Check the path, or set up the study first with 'electroclean-admin init-study'."
+    )
 
 
 def output_layout(dataset: Path) -> OutputLayout:
@@ -58,6 +103,8 @@ def cmd_show(a: argparse.Namespace) -> int:
 
 
 def cmd_init_study(a: argparse.Namespace) -> int:
+    if not _has_recording(a.dataset):
+        print(f"Note: no recordings were found in {a.dataset} yet.", file=sys.stderr)
     data = admin.read_study_dict(a.dataset)
     data["study_id"] = a.study_id
     if a.annotators:
@@ -198,9 +245,34 @@ def cmd_quiz_item(a: argparse.Namespace) -> int:
     return 0
 
 
+def known_annotators(dataset: Path, layout: OutputLayout, rs: ReferenceSet) -> list[str]:
+    """Annotators this study knows of: listed in the study, assigned to the set, in the register or with outputs."""
+    known: set[str] = set(rs.assigned_annotators)
+    _, study = load_settings(dataset)
+    if study is not None:
+        known.update(e.annotator_id for e in study.annotators)
+    known.update(str(e.get("annotator_id", "")) for e in CompletionRegister(layout).entries())
+    for base in (layout.root, layout.annotator_dir("X", "assessment", rs.set_id).parent,
+                 layout.annotator_dir("X", "practice", rs.set_id).parent):
+        if base.is_dir():
+            known.update(p.name.removeprefix("annotator-") for p in base.iterdir()
+                         if p.is_dir() and p.name.startswith("annotator-"))
+    known.discard("")
+    return sorted(known)
+
+
 def cmd_report(a: argparse.Namespace) -> int:
     rs = _set(a.dataset, a.set_id)
-    rep = competency_report(output_layout(a.dataset), rs, a.annotator.upper())
+    layout = output_layout(a.dataset)
+    aid = a.annotator.upper()
+    known = known_annotators(a.dataset, layout, rs)
+    if aid not in known:
+        listing = ", ".join(known) if known else "none yet"
+        raise CommandError(
+            f"{aid} is not an annotator of this study: not listed in the study, not assigned to reference set "
+            f"'{rs.set_id}' and without any saved work.{did_you_mean(aid, known)} Known annotators: {listing}."
+        )
+    rep = competency_report(layout, rs, aid)
     print(rep["status_text"])
     if "paths" in rep:
         print("Report:", rep["paths"]["html"])
@@ -216,43 +288,63 @@ def cmd_progress(a: argparse.Namespace) -> int:
 
 
 def cmd_resolve(a: argparse.Namespace) -> int:
-    admin.resolve_failure(output_layout(a.dataset), a.recording, a.note)
+    layout = output_layout(a.dataset)
+    latest: dict[str, str] = {}
+    for e in FailureLog(layout).entries():
+        if e.get("event") in ("failure", "resolved"):
+            latest[str(e.get("recording_id", ""))] = e["event"]
+    open_failures = sorted(rid for rid, ev in latest.items() if ev == "failure")
+    if a.recording not in open_failures:
+        state = "is already marked resolved" if latest.get(a.recording) == "resolved" else "has no recorded load failure"
+        listing = (", ".join(open_failures[:10]) + (" ..." if len(open_failures) > 10 else "")) if open_failures else "none"
+        raise CommandError(
+            f"{a.recording} {state}.{did_you_mean(a.recording, open_failures)} Unresolved failures: {listing}. "
+            "Recordings are named by their path below the dataset folder, as in failed_load.txt."
+        )
+    admin.resolve_failure(layout, a.recording, a.note)
     print("Marked as resolved:", a.recording)
     return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="electroclean-admin", description="ElectroClean study administration")
-    sub = p.add_subparsers(dest="command", required=True)
+    p = argparse.ArgumentParser(
+        prog="electroclean-admin",
+        description="ElectroClean study administration: study set-up, viewing filters, allocation, reference sets, "
+        "competency criteria and reports.",
+        epilog="Run 'electroclean-admin COMMAND --help' for the options of one command. "
+        "Example: electroclean-admin show /data/MyStudy. See docs/administrator_guide.md.",
+    )
+    sub = p.add_subparsers(dest="command", required=True, metavar="COMMAND", title="commands")
 
     def add(name: str, func, help_text: str) -> argparse.ArgumentParser:  # noqa: ANN001
         sp = sub.add_parser(name, help=help_text, description=help_text)
-        sp.add_argument("dataset", type=Path, help="Dataset folder")
+        sp.add_argument("dataset", type=Path, help="Dataset folder (the folder that holds the recordings)")
         sp.set_defaults(func=func)
         return sp
 
     add("show", cmd_show, "Show the study configuration and reference sets")
     sp = add("init-study", cmd_init_study, "Create or update the study configuration")
-    sp.add_argument("--study-id", required=True)
+    sp.add_argument("--study-id", required=True, help="Short name of the study, e.g. pilot-2026")
     sp.add_argument("--annotators", nargs="*", help="IDs, optionally ID:Display name")
     sp.add_argument("--listed-only", action="store_true", help="Only listed annotators may start sessions")
+    sp.add_argument("--create", action="store_true", help="Create the dataset folder if it does not exist yet")
     sp = add("set-passphrase", cmd_set_passphrase, "Set the administrator passphrase")
     sp.add_argument("--passphrase", help="For scripts; omit to be prompted")
     sp = add("fix-filters", cmd_fix_filters, "Fix the viewing filters for all annotators")
-    sp.add_argument("--no-highpass", action="store_true")
-    sp.add_argument("--highpass-hz", type=float, default=1.0)
-    sp.add_argument("--notch", choices=("50", "60", "off"), default="50")
-    sp.add_argument("--harmonics", action="store_true")
+    sp.add_argument("--no-highpass", action="store_true", help="No high-pass filter")
+    sp.add_argument("--highpass-hz", type=float, default=1.0, help="High-pass cut-off in Hz (default 1)")
+    sp.add_argument("--notch", choices=("50", "60", "off"), default="50", help="Notch filter in Hz (default 50)")
+    sp.add_argument("--harmonics", action="store_true", help="Also filter the harmonics of the mains frequency")
     sp.add_argument("--method", choices=("fir", "iir"), default="fir",
                     help="Filter design; the study uses FIR (IIR only for special purposes)")
     add("unlock-filters", cmd_unlock_filters, "Let annotators choose filters again")
     sp = add("allocation", cmd_allocation, "Choose random or seeded allocation")
     sp.add_argument("strategy", choices=("random", "seeded"))
-    sp.add_argument("--seed", type=int)
+    sp.add_argument("--seed", type=int, help="Seed for the seeded strategy (any whole number)")
     sp = add("allocate", cmd_allocate, "Create a balanced manual allocation with controlled overlap")
-    sp.add_argument("--annotators", nargs="+", required=True)
-    sp.add_argument("--raters-per-recording", type=int, required=True)
-    sp.add_argument("--seed", type=int, required=True)
+    sp.add_argument("--annotators", nargs="+", required=True, help="Annotator IDs to share the recordings")
+    sp.add_argument("--raters-per-recording", type=int, required=True, help="How many annotators each recording gets")
+    sp.add_argument("--seed", type=int, required=True, help="Seed for a reproducible allocation")
     sp = add("create-reference-set", cmd_create_set, "Create a reference set for training/assessment")
     sp.add_argument("set_id")
     sp.add_argument("--name", default="")
@@ -309,22 +401,24 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--explanation")
     sp.add_argument("--context", type=float, default=2.0)
     sp = add("report", cmd_report, "Generate an annotator's competency report")
-    sp.add_argument("set_id")
-    sp.add_argument("annotator")
+    sp.add_argument("set_id", help="Reference set")
+    sp.add_argument("annotator", help="Annotator ID")
     sp = add("progress", cmd_progress, "Show practice and assessment progress")
     sp.add_argument("set_id")
     sp.add_argument("--annotators", nargs="+", required=True)
     sp = add("resolve-failure", cmd_resolve, "Mark a recording's load failure as resolved")
-    sp.add_argument("recording")
-    sp.add_argument("--note", required=True)
+    sp.add_argument("recording", help="Recording as listed in failed_load.txt, e.g. sub-007/eeg/sub-007_task-rest_eeg.vhdr")
+    sp.add_argument("--note", required=True, help="What was done about it, for the record")
     return p
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
+        if getattr(args, "dataset", None) is not None:
+            check_dataset(args.dataset, args.command, create=getattr(args, "create", False))
         return int(args.func(args))
-    except (ValueError, FileNotFoundError, OSError) as exc:
+    except (ValueError, FileNotFoundError, OSError, RegisterError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
