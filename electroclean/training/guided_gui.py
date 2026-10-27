@@ -685,7 +685,7 @@ def _colour_flags(ws: Any, flags: list[dict[str, Any]]) -> None:
         region = ws.controller.regions.get(f["region"])
         if region is None:
             continue
-        region.text_color = QColor(style.colour(FLAG_COLOURS[f["kind"]]))
+        region.label_colour_override = QColor(style.colour(FLAG_COLOURS[f["kind"]]))
         try:
             region._style_label()
             region.label_item.update()
@@ -704,6 +704,7 @@ def add_review_flags(ctrl: Any, ws: Any, flags: list[dict[str, Any]]) -> None:
     style_reference_regions(ws)
     _colour_flags(ws, flags)
     ws.controller.annotationsChanged.connect(lambda: _colour_flags(ws, flags))
+    ws.controller.selectionChanged.connect(lambda *_: _colour_flags(ws, flags))  # MNE recolours on selection
     panel = ws.annotation_dock.widget().layout()
     box = QWidget()
     v = QVBoxLayout(box)

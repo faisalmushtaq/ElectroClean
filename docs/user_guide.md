@@ -27,7 +27,7 @@ this dataset, for example by fixing the viewing filters or assigning
 recordings to you.
 
 **What would you like to do?** Choose *Annotate recordings* for research
-annotation, or *Practise with feedback* or *Competency assessment* (section 7);
+annotation, or *Training programme* or *Competency assessment* (section 7);
 the choice of reference set and activity appears when one of these two is
 chosen. Leave *Let me choose the recording* unticked unless your administrator
 asks you to choose; normally a recording you have not yet completed is picked
@@ -248,31 +248,75 @@ it has been fixed.
 
 ## 7. Training and assessment
 
-Your administrator may ask you to practise on reference recordings and then
-complete an assessment.
+Your administrator may ask you to go through the training programme before you
+annotate study recordings. It has three stages, and each one unlocks when you
+have completed the one before.
 
-**Practise with feedback.** Choose *Practise with feedback* on the start window,
-then the reference set and *Continuous recordings* as the activity. Annotate as usual. After Save and Finish you see how your
-annotations compare with the reference: how many reference artifacts you
-found, which you missed, which of yours are not in the reference, and where
-you chose a different type.
+**Starting.** Choose *Training programme* on the start window, the reference
+set your administrator named, and *Recordings* as the activity, then press
+**Begin**. Instead of going straight to a recording, ElectroClean shows your
+training path: the three stages side by side, what you have done in each,
+your stars and best score, and one blue button for the next step. You come
+back to this window after every recording, and you can leave it (*Back to the
+start window*) and continue another day from where you stopped.
+
+![Training path](images/training_path.png)
+
+**Stage 1: learn with the experts.** You work through recordings that experts
+have annotated, one artifact at a time, and mark each one as they did. A
+*Learn with the experts* panel above the list of annotations says what to do:
+
+1. In the first recording each artifact is outlined with a dashed line, with
+   its type, its channels and the experts' note about it. Choose the type
+   (the number key or the type buttons), choose the channels, and mark it by
+   dragging or with **M** at its start and end.
+2. In the second recording the panel names the type and shows a screen that
+   contains it, and you find it yourself.
+3. In later recordings it only says that another artifact follows; you scroll
+   on and find it.
+
+Every change you make is checked at once against the experts' annotation, and
+the panel says what is right and what still differs, for example "the start
+is 0.40 s too early", the type the experts chose, or a channel that is
+missing. A start or end within 0.2 s (or a fifth of the artifact's length, for
+long artifacts) counts as the same, unless your administrator chose otherwise.
+Change your annotation until the panel turns green, then press **Continue**
+(or Enter, or Space) for the next one. If something you marked is not in the
+experts' annotations, the panel says so and selects it; delete it (Delete) or
+undo. **Show me** places the experts' annotation for you to study.
+
+![Learn with the experts](images/guided_step.png)
+
+Each artifact earns up to three stars: three if you match it at your first
+try, two within three tries, and one with *Show me*. When every artifact
+matches, press **Save and Finish**; it stays unavailable until then.
+
+**Stage 2: on your own.** You annotate a practice recording by yourself, with
+the usual tools and no help. After Save and Finish you see how your
+annotations compare with the experts': how many of their artifacts you found,
+which you missed, which of yours they did not mark, and where you chose a
+different type. Below that is the verdict: passing needs, by default, 80 % of
+the experts' artifacts found and 80 % of those given the right type. If you
+have not passed yet, the training path offers the next practice recording, or
+the same one again.
 
 ![Practice feedback](images/practice_feedback.png)
 
 Press **Review in the viewer** to see your annotations (`YOU:`, shaded) and
-the reference (`REF:`, hatched with dotted edges) together. The review window
-is read-only; press **Finish review** (or close the window) when you are done.
-The window title shows how far you are, for example "practice recording 2 of
-5".
+the experts' (`REF:`, hatched with dotted edges) together. The differences are
+marked on the EEG (*MISSED*, *EXTRA*, and *TYPE* when you chose another type)
+and listed above the annotations under *What to look at*: click an item, or
+press **N** and **P**, to go from one to the next. The review window is
+read-only; press **Finish review** (or close the window) when you are done.
 
 ![Review against the reference](images/practice_review.png)
 
-**Competency assessment.** Choose *Competency assessment*, the reference set
-and *Continuous recordings*. You annotate the
-assessment recordings without feedback. When all of them are complete,
-ElectroClean shows your result and the criteria you were assessed against,
-and tells you what to do next. The full report, with the details of every
-recording, is saved for your study administrator.
+**Stage 3: competency assessment.** You annotate the assessment recordings
+without feedback. When all of them are complete, ElectroClean shows your
+result and the criteria you were assessed against, and tells you what to do
+next. The full report, with the details of every recording, is saved for your
+study administrator. (Your administrator can also ask you to take the
+assessment directly: choose *Competency assessment* on the start window.)
 
 **Short-segment quiz.** Some reference sets include a quiz (choose
 *Short-segment quiz* as the activity): you see short

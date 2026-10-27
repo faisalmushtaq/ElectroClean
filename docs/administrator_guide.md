@@ -253,7 +253,8 @@ annotator chose not to restore, is moved to
 ### Reference sets
 
 A reference set is a group of recordings with expert reference annotations,
-each marked for **practice** or **assessment**. The references must be
+each marked for **guided** learning (Stage 1 of the training programme, below),
+**practice** or **assessment**. The references must be
 prepared independently of the people being assessed, so that, for example,
 Cameron can be trained and assessed without having produced any of the
 reference material himself. The method used is stored as provenance with each
@@ -261,13 +262,13 @@ reference.
 
 In the administrator tools, the reference set chosen at the top of the window
 is the one that the *Reference sets*, *Competency criteria*, *Quiz* and
-*Progress and reports* tabs work on. Each of the three *Add* buttons asks
-whether the new reference is for practice or for assessment. There is no
+*Progress and reports* tabs work on. Each of the *Add* buttons asks whether
+the new reference is for guided learning, practice or assessment. There is no
 default, because a reference imported for practice by mistake would give
-annotators feedback on an assessment recording. *Change use…* switches the
-selected recording between the two; when annotators have already completed
-the recording in practice, ElectroClean names them and warns that the
-assessment would not be blinded for them.
+annotators feedback on an assessment recording. *Change use…* gives the
+selected recording another use; when annotators have already completed the
+recording in practice or guided learning, ElectroClean names them and warns
+that the assessment would not be blinded for them.
 
 ```bash
 electroclean-admin create-reference-set /data/MyStudy pilot --name "Pilot set" \
@@ -372,6 +373,91 @@ Each competency report carries a `results_sha256` digest of its contents.
 it from the saved JSON file, and regenerating a report from the same files
 gives the same digest.
 
+### The training programme
+
+When annotators choose *Training programme* on the start window, they work
+through three stages of a reference set, each unlocked by the one before:
+**learn with the experts** (the set's guided recordings), **on your own** (its
+practice recordings, with a pass mark) and the **competency assessment** (its
+assessment recordings). A stage the set has no recordings for is skipped. A
+training path window shows the stages, what each annotator has done, their
+stars, best practice score and time, and the next step. Section 7 of the user
+guide describes what annotators see.
+
+**Self-contained reference sets.** A reference set can keep its recordings in
+its own folder (`recordings/` inside the set, laid out like a small BIDS
+dataset), so training recordings are never offered for study annotation and
+the whole set can be copied to another study. Such sets have
+`"recordings_dir": "recordings"` in their `reference_set.json`. Sets that refer
+to recordings of the study dataset work as before.
+
+**The example training set.** Until your experts' files are ready, *Create
+example training set* on the *Training programme* tab (or
+`electroclean-admin create-example-set /data/MyStudy`) makes a self-contained
+set called *Example training set (placeholder)* with three simulated
+recordings: two for guided learning and one for practice. Its reference is the
+simulation's ground truth, known exactly because the artifacts were simulated,
+and each guided step has a placeholder note that describes only what was
+simulated. Use it to try the programme and to show annotators how it works;
+it is not expert material.
+
+**Real expert files.** Each expert annotates the recordings in ElectroClean in
+standard mode (in their own results folder). *Add recording with expert
+annotations…* (or `electroclean-admin import-recording /data/MyStudy SET
+recording_eeg.vhdr E1_annotations.json --use guided`) copies the recording, its
+companion files and its BIDS sidecars into the set's own folder and uses the
+expert's file as the reference. To build a set from two or three real files,
+create a new reference set, add each recording with its use, and remove the
+example set's folder when it is no longer needed. Consensus and adjudicated
+references (above) can also be used for guided and practice recordings.
+
+**How much help guided recordings give.** The first guided recording shows
+each artifact (a dashed outline of the experts' interval and channels), the
+second names the type and shows a screen that contains it, and later ones only
+say that another artifact follows. To choose for a recording:
+`electroclean-admin set-guidance /data/MyStudy SET RECORDING show|find|find_unnamed`
+(`auto` goes back to choosing by its place). The *Used for* column shows the
+level, for example "guided (find)".
+
+**Notes from the experts.** Each guided step can show the experts' explanation
+of that artifact:
+`electroclean-admin set-note /data/MyStudy SET ANNOTATION_ID "Look at the frontal channels first"`.
+Annotation IDs are in the reference files (`references/` inside the set); the
+notes are stored under `guided.notes` in `reference_set.json`.
+
+**What counts as a match.** In guided learning an annotation matches the
+experts' when it has the same type, its start and end are each within 0.2 s
+or 20 % of the experts' duration (whichever is larger), it has the same scope
+(whole montage or particular channels) and, for channel-specific annotations,
+at least 75 % of the channels are the same (Jaccard index: the channels both
+chose divided by the channels either chose). The *Training programme* tab
+sets these for the reference set chosen at the top, or
+`electroclean-admin set-programme /data/MyStudy SET --tolerance-s 0.25 --tolerance-fraction 0.2 --channel-overlap 0.75`.
+Alternatives that are also accepted for a type can be listed in
+`guided.tolerance.accepted_labels` in `reference_set.json`, for example
+`{"Eye-blink-artifact": ["Eye-artifact"]}`.
+
+**The pass mark for practice.** A practice recording passes when the
+annotator finds at least 80 % of the experts' artifacts (event F1) and gives
+at least 80 % of those found the experts' type, by default. The *Training
+programme* tab sets both, or
+`electroclean-admin set-programme /data/MyStudy SET --pass-f1 0.8 --pass-types 0.8`.
+One passed practice recording unlocks the assessment. When every practice
+recording has been done without passing, the training path offers one of them
+again (saved as a second attempt, `_attempt-02`).
+
+**Progress and records.** Completion comes from the completion register, as
+for all work. Stars, scores, times and the order of stages are kept for each
+annotator in `Annotated_Events/training_progress/<set>/annotator-<ID>.json`,
+and each guided recording's summary (steps, stars, attempts, steps shown) is
+also in its session file, so the progress file can be rebuilt if it is lost.
+Every step (each check with what differed, each *Show me*, each step's time
+and stars, each practice score, and each item opened in a review) is recorded
+in the visit's interaction log. The *Progress and reports* tab and
+`electroclean-admin progress` list, for each annotator, the guided recordings
+done with their stars, the practice recordings done and whether one passed,
+and the assessment recordings done.
+
 ### What annotators experience
 
 In **practice** mode annotators see feedback after each recording and can
@@ -382,8 +468,9 @@ report to `Annotated_Events/training/<set>/reports/` and shows the annotator
 a summary: the overall result, the table of criteria and what to do next. The
 full report is for you (see `show_full_report_to_annotator` above). The
 annotation window's title shows how far they are, for example "assessment
-recording 1 of 2". Practice and assessment annotations are stored under
-`Annotated_Events/training/` and are never mixed with research annotations.
+recording 1 of 2". Guided, practice and assessment annotations are stored
+under `Annotated_Events/training/` and are never mixed with research
+annotations.
 
 ### Competency reports
 

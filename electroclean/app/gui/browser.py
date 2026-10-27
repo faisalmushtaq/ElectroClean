@@ -258,7 +258,10 @@ class ArtifactRegion(AnnotRegion):
             return 1.05 / (lum + 0.05)
 
         item = self.label_item
-        base = QColor(getattr(self, "text_color", None) or QColor(COLOURS["text_secondary"]))
+        # label_colour_override: a colour that MNE's own updates (selection, type changes) keep,
+        # used by the practice review to flag missed, extra and relabelled artifacts.
+        base = QColor(getattr(self, "label_colour_override", None) or getattr(self, "text_color", None)
+                      or QColor(COLOURS["text_secondary"]))
         fill = QColor(COLOURS["surface"])
         fill.setAlpha(215)
         outline = QColor(base)

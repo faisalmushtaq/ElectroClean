@@ -560,6 +560,7 @@ class AdminDialog(QDialog):
         self._build_criteria_tab()
         self._build_quiz_tab()
         self._build_progress_tab()
+        self._build_programme_tab()
         self._refresh_sets()
 
     # ---------------------------------------------------------------- utils
@@ -805,7 +806,6 @@ class AdminDialog(QDialog):
         row2.addWidget(self.change_use_btn)
         row2.addWidget(self.remove_btn)
         v.addLayout(row2)
-        v.addWidget(self._build_programme_box())
         self.tabs.addTab(w, "Reference sets")
 
     def _sets(self) -> list[ReferenceSet]:
@@ -1068,8 +1068,32 @@ class AdminDialog(QDialog):
             "experts' recordings (Add recording with expert annotations…) when you have them.")
 
     # ---------------------------------------------------- programme settings
+    def _build_programme_tab(self) -> None:
+        w = QWidget()
+        v = QVBoxLayout(w)
+        v.addWidget(style.label(
+            "Annotators who choose Training programme work through the chosen set's guided recordings (learn with "
+            "the experts), then its practice recordings (on their own), then its assessment. These settings belong "
+            "to the reference set chosen above.", "caption", wrap=True))
+        v.addWidget(self._build_programme_box())
+        example = QGroupBox("Example training set")
+        el = QVBoxLayout(example)
+        el.addWidget(style.label(
+            "Three simulated recordings with known artifacts (two to learn with the experts, one to practise on), "
+            "as placeholders until your experts' recordings are ready. Replace them with Add recording with expert "
+            "annotations… on the Reference sets tab.", "caption", wrap=True))
+        erow = QHBoxLayout()
+        self.example_btn = QPushButton("Create example training set")
+        self.example_btn.clicked.connect(self.create_example_set)
+        erow.addWidget(self.example_btn)
+        erow.addStretch(1)
+        el.addLayout(erow)
+        v.addWidget(example)
+        v.addStretch(1)
+        self.tabs.addTab(w, "Training programme")
+
     def _build_programme_box(self) -> QGroupBox:
-        box = QGroupBox("Training programme")
+        box = QGroupBox("Matching and pass mark")
         form = QFormLayout(box)
         pass_row = QHBoxLayout()
         self.pass_f1 = self._needs_set(QSpinBox())
@@ -1107,12 +1131,8 @@ class AdminDialog(QDialog):
         buttons = QHBoxLayout()
         self.save_programme_btn = self._needs_set(QPushButton("Save programme settings"))
         self.save_programme_btn.clicked.connect(self.save_programme)
-        example = QPushButton("Create example training set")
-        example.setToolTip("Three simulated recordings with known artifacts, as placeholders for real expert files")
-        example.clicked.connect(self.create_example_set)
         buttons.addWidget(self.save_programme_btn)
         buttons.addStretch(1)
-        buttons.addWidget(example)
         form.addRow(buttons)
         return box
 

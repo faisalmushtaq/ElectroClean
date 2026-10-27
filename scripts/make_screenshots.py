@@ -150,7 +150,10 @@ def main() -> int:
         fd.resize(760, 600)
         lay = QVBoxLayout(fd)
         tb = QTextBrowser()
-        tb.setHtml(feedback_html(fb))
+        from electroclean.training.guided_gui import practice_verdict_html
+        from electroclean.training.programme import PassRule
+
+        tb.setHtml(feedback_html(fb) + practice_verdict_html(rs, PassRule().evaluate(fb), True))
         lay.addWidget(tb)
         fd.show()
         grab(fd, "practice_feedback.png")
@@ -161,11 +164,16 @@ def main() -> int:
                                      prompts=ScriptedPrompts(), read_only=True, display_prefix=prefix,
                                      window_title="ElectroClean – review: YOU versus REF")
         prepare_review_window(review)
+        from electroclean.training.guided_gui import add_review_flags, review_flags
+
+        add_review_flags(ctrl, review, review_flags(fb, list(mine.annotations),
+                                                    list(rs.reference_document(rid).annotations), lr.timing.sfreq))
         review.show()
         desktop_size(review)
         QTest.qWaitForWindowExposed(review.browser)
         settle(300)
-        review.controller.jump_to(sorted(store.annotations(), key=lambda a: a.onset_sample)[0].annotation_id)
+        review.review_step(1)  # the first item under "What to look at"
+        review.controller.select(None)  # show the flag colours rather than the selection
         settle(300)
         grab(review.browser, "practice_review.png")
         review.browser.close()
@@ -190,6 +198,34 @@ def main() -> int:
         adm.tabs.setCurrentIndex(2)
         grab(adm, "admin_criteria.png")
         adm.close()
+
+        # Training programme: the path and a guided step (with the example set)
+        from electroclean.app.gui.start_window import StartRequest
+        from electroclean.training.examples import create_example_training_set
+        from electroclean.training.guided_gui import continue_programme
+
+        create_example_training_set(root, study)
+        tctrl = AppController(prompts=ScriptedPrompts({"Save and Finish": True}), synchronous_loading=True)
+        tctrl.begin(StartRequest("A01", "", root, None, "practice", reference_set_id="example", programme=True))
+        continue_programme(tctrl)
+        gws = tctrl.workspace
+        desktop_size(gws)
+        coach = gws.coach
+        t = coach.current.target
+        gws.session.store.add("Eye-blink-artifact", t.onset_sample - 60, t.duration_samples, ("Fp1", "Fp2"))
+        settle(300)
+        grab(gws.browser, "guided_step.png")
+        gws.session.store.undo()
+        while not coach.complete:
+            coach.show_me()
+            settle(20)
+            coach.next_step()
+        gws.save_and_finish()
+        settle(300)
+        path = tctrl.training_path
+        path.resize(980, 500)
+        grab(path, "training_path.png")
+        path.hide()
 
         # Agreement report (rendered with Playwright if available)
         from electroclean.app.io.canonical import write_annotations_json
