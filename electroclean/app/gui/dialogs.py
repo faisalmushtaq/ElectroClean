@@ -304,7 +304,16 @@ class ScriptedPrompts(UserPrompts):
 
 
 class ChannelDialog(QDialog):
-    """Checklist of channels with a filter box."""
+    """Choosing channels, built for 20 to 260 of them.
+
+    Typing finds channels by name: names or the beginnings of names, separated by commas or
+    spaces; a name in quotes finds that channel only and ``*`` stands for any characters. Group
+    buttons tick or clear whole groups at once (10-20 regions, laterality and midline, name
+    prefixes such as BioSemi's A to D banks, and channel types). Many channels are laid out in
+    columns, and *Show selected only* lists just the ticked ones.
+    """
+
+    MANY = 16  # with more channels than this, the list is laid out in columns
 
     def __init__(
         self,
@@ -317,36 +326,95 @@ class ChannelDialog(QDialog):
         whole_montage: bool = False,
         ch_types: dict[str, str] | None = None,
     ) -> None:
+        from qtpy.QtCore import QSize
+        from qtpy.QtWidgets import QListView
+
         super().__init__(parent)
         self.setWindowTitle(title)
-        self.resize(360, 520)
+        names = list(ch_names)
+        many = len(names) > self.MANY
+        if many:
+            self.resize(640, 620)
+        else:
+            self.resize(380, 580)
+        self._allow_whole = bool(allow_whole_montage)
+        types = {ch: str((ch_types or {}).get(ch, "") or "") for ch in names}
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 16, 16, 14)
         layout.setSpacing(10)
         self.whole = QCheckBox("Whole montage (all channels)")
-        self.whole.setVisible(allow_whole_montage)
-        self.whole.setChecked(whole_montage)
+        self.whole.setVisible(self._allow_whole)
+        self.whole.setChecked(whole_montage and self._allow_whole)
         layout.addWidget(self.whole)
+
         self.filter = QLineEdit()
-        self.filter.setPlaceholderText("Type to filter channels…")
+        self.filter.setPlaceholderText("Find channels, e.g. Fp1, F, *z")
+        self.filter.setClearButtonEnabled(True)
+        self.filter.installEventFilter(self)  # Down arrow moves into the list
         layout.addWidget(self.filter)
+        self.filter_help = style.label(
+            'Type names or their beginnings, separated by commas (b1 finds B1 and B10 to B19). Put a name in '
+            'quotes for that channel only ("b1"), or use * for any characters (*z finds Fz, Cz and Pz).',
+            "caption", wrap=True,
+        )
+        layout.addWidget(self.filter_help)
+
+        # Group buttons: a click ticks every channel of the group, or clears them if all are ticked.
+        self._groups: list[tuple[QPushButton, list[str]]] = []
+        for row_label, groups in self._channel_groups(names, types):
+            row = QHBoxLayout()
+            row.setSpacing(4)
+            row.addWidget(style.label(row_label, "caption"))
+            for name, members in groups:
+                btn = QPushButton(f"{name} ({len(members)})")
+                btn.setToolTip(f"Tick these {len(members)} channels, or clear them if all are ticked: "
+                               + ", ".join(members))
+                btn.setAutoDefault(False)
+                btn.clicked.connect(lambda _=False, m=members: self._toggle_group(m))
+                row.addWidget(btn)
+                self._groups.append((btn, members))
+            row.addStretch(1)
+            layout.addLayout(row)
+
+        # The type is shown only for channels whose type differs from most of the montage and is not
+        # already in the name (EXG1 · EOG; HEOG and ECG need no suffix).
+        common = max(set(types.values()), key=list(types.values()).count) if types else ""
         self.list = QListWidget()
+        self.list.setUniformItemSizes(True)
+        fm = self.list.fontMetrics()
         chosen = set(selected)
-        for ch in ch_names:
-            text = ch if not ch_types else f"{ch}    ({ch_types.get(ch, '')})"
+        widest = 0
+        for ch in names:
+            kind = types.get(ch, "")
+            plain = not kind or kind == common or kind.upper() in ch.upper()
+            text = ch if plain else f"{ch}  · {kind.upper()}"
+            widest = max(widest, fm.horizontalAdvance(text))
             item = QListWidgetItem(text)
             item.setData(Qt.UserRole, ch)
+            item.setToolTip(f"{ch} ({kind})" if kind else ch)
             item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
             item.setCheckState(Qt.Checked if ch in chosen else Qt.Unchecked)
             self.list.addItem(item)
-        layout.addWidget(self.list)
+        if many:
+            # Columns, filled row by row and scrolled vertically; arrow keys move in all four directions.
+            self.list.setViewMode(QListView.ListMode)
+            self.list.setFlow(QListView.LeftToRight)
+            self.list.setWrapping(True)
+            self.list.setResizeMode(QListView.Adjust)
+            self.list.setMovement(QListView.Static)
+            self.list.setGridSize(QSize(widest + 56, fm.height() + 10))  # check box and margins
+        layout.addWidget(self.list, 1)
+
         row = QHBoxLayout()
-        all_btn = QPushButton("Select all")
-        none_btn = QPushButton("Clear")
-        for btn in (all_btn, none_btn):
+        self.select_btn = QPushButton("Select all")
+        self.clear_btn = QPushButton("Clear all")
+        for btn in (self.select_btn, self.clear_btn):
             style.set_kind(btn, "quiet")
-        row.addWidget(all_btn)
-        row.addWidget(none_btn)
+            btn.setAutoDefault(False)
+        row.addWidget(self.select_btn)
+        row.addWidget(self.clear_btn)
+        self.selected_only = QCheckBox("Show selected only")
+        row.addWidget(self.selected_only)
         row.addStretch(1)
         self.count = style.label("", "caption")
         row.addWidget(self.count)
@@ -356,31 +424,153 @@ class ChannelDialog(QDialog):
         layout.addWidget(buttons)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
-        all_btn.clicked.connect(lambda: self._set_all(True))
-        none_btn.clicked.connect(lambda: self._set_all(False))
+        self.select_btn.clicked.connect(lambda: self._set_all(True))
+        self.clear_btn.clicked.connect(lambda: self._set_all(False))
         self.filter.textChanged.connect(self._apply_filter)
+        self.selected_only.toggled.connect(lambda _on: self._apply_filter(self.filter.text()))
         self.list.itemChanged.connect(self._update)
         self.whole.toggled.connect(self._update)
+        self.filter.setFocus()
         self._update()
 
+    # ------------------------------------------------------------ matching
+    @staticmethod
+    def _terms(text: str) -> list[str]:
+        import re
+
+        return [t for t in re.split(r"[,;\s]+", text.strip()) if t]
+
+    @staticmethod
+    def name_matches(name: str, terms: Sequence[str]) -> bool:
+        """Whether a channel name matches any search term (see the class description)."""
+        import fnmatch
+
+        low = name.lower()
+        for term in terms:
+            t = term.lower()
+            if len(t) >= 2 and t[0] == t[-1] and t[0] in "\"'":
+                if low == t[1:-1]:
+                    return True
+            elif "*" in t or "?" in t:
+                if fnmatch.fnmatchcase(low, t):
+                    return True
+            elif low.startswith(t.strip("\"'")):
+                return True
+        return False
+
+    # -------------------------------------------------------------- groups
+    @staticmethod
+    def _channel_groups(names: list[str], types: dict[str, str]) -> list[tuple[str, list[tuple[str, list[str]]]]]:
+        """Rows of group buttons: (row caption, [(group name, channels)])."""
+        import re
+
+        rows: list[tuple[str, list[tuple[str, list[str]]]]] = []
+        eeg = [ch for ch in names if types.get(ch, "eeg") in ("eeg", "")]
+        regions: dict[str, list[str]] = {}
+        sides: dict[str, list[str]] = {}
+        region_of = {"FP": "Frontal", "AF": "Frontal", "F": "Frontal", "FC": "Central", "C": "Central",
+                     "CP": "Central", "FT": "Temporal", "T": "Temporal", "TP": "Temporal", "P": "Parietal",
+                     "PO": "Occipital", "O": "Occipital", "I": "Occipital"}
+        for ch in eeg:
+            # 10-20 names, also as EDF writes them ("EEG Fp1-REF").
+            core = re.sub(r"^(EEG)[\s_-]*", "", ch, flags=re.I)
+            core = re.sub(r"[\s_-](REF|LE|AR|AVG|CZ|M1|M2|A1|A2)$", "", core, flags=re.I)
+            m = re.fullmatch(r"(FP|AF|FC|FT|CP|TP|PO|F|C|T|P|O|I)(\d+|Z)", core.upper())
+            if not m:
+                continue
+            regions.setdefault(region_of[m.group(1)], []).append(ch)
+            pos = m.group(2)
+            side = "Midline" if pos == "Z" else ("Left" if int(pos) % 2 else "Right")
+            sides.setdefault(side, []).append(ch)
+        if eeg and sum(len(v) for v in regions.values()) >= 0.6 * len(eeg):
+            order = ["Frontal", "Central", "Temporal", "Parietal", "Occipital"]
+            rows.append(("Regions", [(r, regions[r]) for r in order if regions.get(r)]))
+            rows.append(("Sides", [(s, sides[s]) for s in ("Left", "Midline", "Right") if sides.get(s)]))
+        else:
+            # Name prefixes shared by several numbered channels, e.g. BioSemi's A1-A32 ... D1-D32.
+            prefixes: dict[str, list[str]] = {}
+            for ch in names:
+                m = re.fullmatch(r"([A-Za-z]+)(\d+)", ch)
+                if m:
+                    prefixes.setdefault(m.group(1), []).append(ch)
+            banks = [(p, chs) for p, chs in prefixes.items() if len(chs) >= 2]
+            if len(banks) >= 2:
+                rows.append(("Groups", banks))
+        kinds: dict[str, list[str]] = {}
+        for ch in names:
+            kinds.setdefault(types.get(ch, "") or "other", []).append(ch)
+        if len(kinds) >= 2:
+            rows.append(("Types", [(k.upper(), chs) for k, chs in kinds.items()]))
+        return rows
+
+    def _toggle_group(self, members: Sequence[str]) -> None:
+        wanted = set(members)
+        items = [self.list.item(i) for i in range(self.list.count())]
+        items = [it for it in items if it.data(Qt.UserRole) in wanted]
+        tick = not all(it.checkState() == Qt.Checked for it in items)
+        self.list.blockSignals(True)
+        for it in items:
+            it.setCheckState(Qt.Checked if tick else Qt.Unchecked)
+        self.list.blockSignals(False)
+        self._apply_filter(self.filter.text())
+
+    # ------------------------------------------------------------ the list
     def _set_all(self, on: bool) -> None:
+        """Tick or clear every channel shown (all of them when nothing is typed)."""
+        self.list.blockSignals(True)
         for i in range(self.list.count()):
             item = self.list.item(i)
             if not item.isHidden():
                 item.setCheckState(Qt.Checked if on else Qt.Unchecked)
+        self.list.blockSignals(False)
+        self._update()
 
     def _apply_filter(self, text: str) -> None:
-        t = text.strip().lower()
+        terms = self._terms(text)
+        only = self.selected_only.isChecked()
+        first = None
         for i in range(self.list.count()):
             item = self.list.item(i)
-            item.setHidden(bool(t) and t not in item.text().lower())
+            hide = bool(terms) and not self.name_matches(item.data(Qt.UserRole), terms)
+            hide = hide or (only and item.checkState() != Qt.Checked)
+            item.setHidden(hide)
+            if not hide and first is None:
+                first = item
+        if first is not None and terms:
+            self.list.setCurrentItem(first)  # Down arrow, then Space, ticks the best match
+        self._update()
 
     def _update(self, *args: Any) -> None:
-        whole = self.whole.isVisible() and self.whole.isChecked()
-        self.list.setEnabled(not whole)
-        self.filter.setEnabled(not whole)
+        whole = self._allow_whole and self.whole.isChecked()
+        for w in (self.list, self.filter, self.selected_only, self.select_btn, self.clear_btn):
+            w.setEnabled(not whole)
+        for btn, _members in self._groups:
+            btn.setEnabled(not whole)
         n = len(self._checked())
-        self.count.setText("Applies to all channels" if whole else f"{n} channel(s) selected")
+        total = self.list.count()
+        shown = sum(1 for i in range(total) if not self.list.item(i).isHidden())
+        narrowed = shown < total
+        self.select_btn.setText(f"Select {shown} shown" if narrowed else "Select all")
+        self.clear_btn.setText("Clear shown" if narrowed else "Clear all")
+        if whole:
+            self.count.setText("Applies to all channels")
+        elif narrowed:
+            self.count.setText(f"{n} of {total} selected · {shown} shown")
+        else:
+            self.count.setText(f"{n} of {total} selected")
+
+    def eventFilter(self, obj: Any, event: Any) -> bool:  # noqa: N802 (Qt naming)
+        from qtpy.QtCore import QEvent
+
+        if obj is self.filter and event.type() == QEvent.KeyPress and event.key() == Qt.Key_Down:
+            self.list.setFocus()
+            if self.list.currentItem() is None or self.list.currentItem().isHidden():
+                for i in range(self.list.count()):
+                    if not self.list.item(i).isHidden():
+                        self.list.setCurrentRow(i)
+                        break
+            return True
+        return super().eventFilter(obj, event)
 
     def _checked(self) -> list[str]:
         return [
@@ -390,7 +580,9 @@ class ChannelDialog(QDialog):
         ]
 
     def result_channels(self) -> list[str]:
-        if self.whole.isVisible() and self.whole.isChecked():
+        # Whole montage is an empty list. (Checked through the stored flag: once the dialog has
+        # closed, none of its widgets is visible any more.)
+        if self._allow_whole and self.whole.isChecked():
             return []
         return self._checked()
 

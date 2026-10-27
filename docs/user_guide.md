@@ -157,6 +157,21 @@ if you want to inspect the recording without any risk of changing your
 annotations: while it is off, nothing can be drawn, moved, relabelled, edited
 or deleted, by mouse, keyboard or the panel.
 
+**Choosing channels.** **Channels…** and **Edit channels…** open the channel
+chooser shown above. Type in its search box to find channels by name: a name
+or the beginning of one finds every channel that starts with it (b1 finds B1
+and B10 to B19), a name in quotes finds that channel only ("b1"), an asterisk
+stands for any characters (\*z finds Fz, Cz and Pz), and several names can be
+separated by commas. The Down arrow moves from the search box to the first
+match, and Space ticks it. The buttons above the list tick a whole group at
+once, or clear it when all its channels are already ticked: the regions and
+sides of the head for 10-20 names, banks such as A to D for BioSemi names, and
+channel types such as EOG and ECG. With many channels the list is laid out in
+columns, *Show selected only* lists just the ticked channels, and the count
+below the list says how many are selected. In the *Annotations* list the
+*Channels* column starts with the number of channels (for example
+"40 ch: A5, A12, …"); hold the pointer over it to see them all.
+
 ## 6. Saving
 
 When you have reviewed the whole recording, press **Save and Finish**. You
