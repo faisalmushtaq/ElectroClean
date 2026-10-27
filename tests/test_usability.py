@@ -272,3 +272,28 @@ def test_session_metadata_has_display_block(layout, settings, catalogue, loaded)
     res = s.finish()
     meta = json.loads(res.commit.paths["session_json"].read_text(encoding="utf-8"))
     assert meta["display"]["scale_factor"] == 2.0 and meta["display"]["scalings"]["eeg"] == pytest.approx(5e-05)
+
+
+def test_end_of_practice_names_the_set_and_the_next_step(qapp, dataset):
+    from electroclean.app.annotations.labels import default_catalogue
+    from electroclean.app.annotations.model import AnnotationDocument
+    from electroclean.config.settings import load_settings
+    from electroclean.training.reference import ReferenceSet, reference_sets_dir
+
+    root, truths = dataset
+    _, study = load_settings(root)
+    rs = ReferenceSet.create(reference_sets_dir(root, study), "pilot", name="Pilot set", method="single_expert",
+                             experts=["E1"])
+    rs.add_reference(AnnotationDocument(truths[SUB1].recording, "E1", list(truths[SUB1].annotations),
+                                        default_catalogue(), session_id="e"),
+                     use="practice", method="single_expert", experts=["E1"])
+    prompts = ScriptedPrompts({"Practice feedback": "Continue", "Continue?": "Continue with another recording"})
+    ctrl = AppController(prompts=prompts, synchronous_loading=True)
+    ctrl.begin(StartRequest(annotator_id="CAM", display_name="", dataset_root=root, output_root=None,
+                            mode="practice", reference_set_id="pilot"))
+    ctrl.workspace.controller.create_annotation(3.0, 3.4)
+    assert ctrl.workspace.save_and_finish()
+    wait()
+    text = next(t for k, title, t in prompts.log if title == "Practice complete")
+    assert "Pilot set" in text and "Competency assessment" in text
+    assert ctrl.start_window.isVisible()

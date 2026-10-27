@@ -295,13 +295,19 @@ not to restore, is moved to `.electroclean/interrupted/autosave/`.
 (method `single_expert`, `consensus` or `adjudicated`, experts, notes), the
 `recordings` (use `practice` or `assessment`, reference file, its SHA-256,
 per-recording provenance including the consensus rule), `criteria`
-(competency criteria), optional `analysis` overrides, `quiz` items and
-`practice_review`. A reference file whose checksum no longer matches is
-refused.
+(competency criteria), optional `analysis` overrides, `quiz` items,
+`practice_review` and `show_full_report_to_annotator` (false by default: at
+the end of an assessment annotators see their result and the criteria, and the
+full report with the missed and extra artifacts is for the administrator; the
+older key `quiz.show_report_to_annotator` is still read). A reference file
+whose checksum no longer matches is refused.
 
 ## Competency report (`…_competency_report.json`)
 
-Annotator, reference set and provenance, required and missing recordings,
+Annotator, reference set and its declared provenance (with a `provenance_note`
+saying that it was declared when the set was created), `reference_provenance`
+(how each assessment reference was actually made: method, experts,
+adjudicator, agreement rule, date added), required and missing recordings,
 criteria, `status` (`met`, `not_met`, `not_determined`, `incomplete`), the
 individual `checks`, all `metrics` (overall, per category, missed, extra and
 relabelled artifacts), the SHA-256 of every input file, the software version

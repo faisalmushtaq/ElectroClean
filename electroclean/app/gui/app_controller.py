@@ -349,6 +349,11 @@ class AppController(QObject):
                             + "\n\nThey were skipped or could not be opened in this session. Start the assessment "
                             "again to complete them; the competency report is produced once all are done.",
                         )
+                elif (req.mode == "practice" and self.reference_set is not None
+                      and set(self._restrict_to() or ()) <= completed):
+                    from electroclean.training.gui import practice_complete_text
+
+                    self.prompts.inform(self.parent_widget, "Practice complete", practice_complete_text(self.reference_set))
                 else:
                     self.prompts.inform(self.parent_widget, "No more recordings", result.message)
                 self._back_to_start()

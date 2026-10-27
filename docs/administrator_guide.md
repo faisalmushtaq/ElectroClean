@@ -84,6 +84,24 @@ session file. A 1 Hz FIR high-pass at MNE's defaults is 3.3 s long and the
 FIR notch is 6.6 s long, so up to about 5 s at each recording edge and around
 each discontinuity can be affected; these zones are hatched in the viewer.
 
+## The display
+
+The `display` settings choose how the EEG first appears: `scalings` (the
+amplitude per channel type, in volts; the scale bar shows twice the value),
+`duration_s` (seconds shown, 10 by default) and `n_channels` (channels shown
+at once, 32 by default, so that a 10-20 montage with its EOG and ECG channels
+fits without scrolling). Annotators can still change the amplitude with − and
++, and their choice is kept for the next recording they open and written to
+each session file (`display` in session.json), so you can see at what scale
+each recording was annotated. For a reliability study it helps to choose a
+starting scale that suits the data. The default (50 µV, `5e-05`) suits
+clinical EEG; low-density consumer headsets such as Emotiv's record larger
+signals, and `1e-4` (a 200 µV scale bar) keeps neighbouring channels apart:
+
+```json
+{"settings": {"display": {"scalings": {"eeg": 1e-4}}}}
+```
+
 ## Which recordings each annotator sees
 
 `electroclean-admin allocation /data/MyStudy random` (the default) offers a
@@ -135,6 +153,12 @@ failure resolved:
 ```bash
 electroclean-admin resolve-failure /data/MyStudy sub-007/eeg/sub-007_task-rest_eeg.vhdr --note "re-copied from source"
 ```
+
+`resolve-failure` refuses a recording that has no unresolved failure in the
+log, so a mistyped path cannot be marked resolved. More generally, every
+`electroclean-admin` command refuses a dataset folder that does not exist,
+and (except `init-study --create`) one that holds neither recordings nor a
+study file, so a typing mistake cannot create a stray study file.
 
 The *Progress and reports* tab of the administrator tools lists unresolved
 failures.
