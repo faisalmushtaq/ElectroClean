@@ -359,7 +359,8 @@ class AnnotationController(QObject):
     annotationsChanged = Signal()
 
     def __init__(self, browser: ElectroCleanBrowser, store: AnnotationStore, *,
-                 transient_zones: list[tuple[float, float]] | None = None) -> None:
+                 transient_zones: list[tuple[float, float]] | None = None,
+                 gap_zones: list[tuple[float, float]] | None = None) -> None:
         super().__init__()
         self.browser = browser
         self.store = store
@@ -379,8 +380,10 @@ class AnnotationController(QObject):
         self._sync_pending = False
         self._base_colours: dict[str, Any] = {}
         self._zone_items: list[pg.LinearRegionItem] = []
+        self._gap_items: list[pg.LinearRegionItem] = []
         self._attached = False
         self._attach(transient_zones or [])
+        self.set_gap_zones(gap_zones or [])
 
     # ------------------------------------------------------------ set-up
     def _attach(self, transient_zones: list[tuple[float, float]]) -> None:
@@ -824,3 +827,18 @@ class AnnotationController(QObject):
     def set_transient_zones_visible(self, visible: bool) -> None:
         for item in self._zone_items:
             item.setVisible(visible)
+
+    def set_gap_zones(self, zones: list[tuple[float, float]]) -> None:
+        """Mark stretches without recorded data (BAD_ACQ_SKIP in the file); always visible."""
+        p = self.browser.mne
+        for item in self._gap_items:
+            p.plt.removeItem(item)
+        self._gap_items = []
+        for a, b in zones:
+            item = pg.LinearRegionItem(values=(a, b), movable=False, brush=QBrush(QColor(90, 90, 90, 70), Qt.DiagCrossPattern))
+            for line in item.lines:
+                line.setPen(pg.mkPen(None))
+            item.setZValue(-4)
+            item.setToolTip("No recorded data here: the file marks this stretch as BAD_ACQ_SKIP")
+            p.plt.addItem(item, ignoreBounds=True)
+            self._gap_items.append(item)

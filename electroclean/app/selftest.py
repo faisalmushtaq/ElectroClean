@@ -3,8 +3,9 @@
 The self-test needs no display and no data: it creates a small synthetic BIDS
 dataset in a temporary folder, discovers and loads it with the default filters,
 opens the real annotation window offscreen, lets two annotators each draw and
-save an annotation through the window's own controls, and runs the inter-rater
-agreement analysis (tables and HTML report) on what they saved.
+save an annotation through the window's own controls, runs the inter-rater
+agreement analysis (tables and HTML report) on what they saved, and reads an
+EDF+ recording.
 
 Its main purpose is to check a frozen (PyInstaller) build, where a missing
 module, Qt plug-in or data file would otherwise only show up when an annotator
@@ -205,6 +206,26 @@ def _run(work: Path, say) -> None:  # noqa: ANN001
            "the agreement report has no figures")
     say(f"4. agreement analysis: {len(result.tables)} tables, {len(pairwise)} pairwise rows, "
         f"report {report.stat().st_size // 1024} KB")
+
+    # 5. An EDF+ recording like a headset export: read, checked, filtered, housekeeping channels hidden.
+    from electroclean.app.annotations.labels import default_catalogue
+    from electroclean.app.eeg.loading import load_recording
+    from electroclean.config.settings import load_settings
+    from electroclean.synthetic import ALL_CHANNELS, write_edf_recording
+
+    edf_root = work / "SelfTestEDF"
+    write_edf_recording(edf_root / "sub-01" / "eeg", "sub-01_task-rest", duration_s=20.5)
+    settings, _ = load_settings(edf_root)
+    (edf,) = discover_recordings(edf_root, suffixes=settings.discovery_suffixes)
+    lr = load_recording(edf, settings, settings.filters, default_catalogue())
+    try:
+        _check(lr.info.ch_names == tuple(ALL_CHANNELS), f"EDF channels shown: {lr.info.ch_names}")
+        _check(len(lr.info.hidden_channels) == 5, f"EDF channels hidden: {lr.info.hidden_channels}")
+        _check(len(lr.filter_report.steps) == 2, "the EDF recording was not filtered")
+        say(f"5. EDF recording: {len(lr.info.ch_names)} channels shown, {len(lr.info.hidden_channels)} hidden, "
+            f"{len(lr.original_events)} events, filtered")
+    finally:
+        lr.close()
     say(f"   finished in {time.monotonic() - t_start:.1f} s")
 
 

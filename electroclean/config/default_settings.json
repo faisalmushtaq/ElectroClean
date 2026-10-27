@@ -5,7 +5,7 @@
     "directory": null
   },
   "discovery": {
-    "suffix": "_eeg.vhdr",
+    "suffixes": ["_eeg.vhdr", "_eeg.edf", "_eeg.bdf"],
     "exclude_dir_names": ["derivatives", "Annotated_Events", ".git", ".electroclean"],
     "follow_symlinks": false
   },
@@ -31,6 +31,13 @@
     "hash_source_files": true,
     "apply_channel_types_from_bids": true,
     "show_bids_bad_channels": true
+  },
+  "channels": {
+    "hide": [
+      "TIME_STAMP_s", "TIME_STAMP_ms", "OR_TIME_STAMP_s", "OR_TIME_STAMP_ms", "COUNTER", "INTERPOLATED",
+      "RAW_CQ", "BATTERY", "BATTERY_PERCENT", "MarkerIndex", "MarkerType", "MarkerValueInt", "MARKER_HARDWARE",
+      "CQ_*", "EQ_*"
+    ]
   },
   "selection": {
     "strategy": "random",

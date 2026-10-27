@@ -111,16 +111,18 @@ def check_channels(recording_channels: list[str], channels_tsv: Path | None) -> 
 def apply_channel_metadata(raw: Any, report: ChannelReport, *, apply_types: bool, show_bads: bool) -> list[str]:
     """Apply BIDS channel types and bad-channel flags to the *viewing copy* only."""
     notes = []
+    present = set(raw.ch_names)  # hidden channels are not in the viewing copy
     if apply_types and report.types:
         current = dict(zip(raw.ch_names, raw.get_channel_types()))
-        mapping = {ch: t for ch, t in report.types.items() if current.get(ch) != t}
+        mapping = {ch: t for ch, t in report.types.items() if ch in present and current.get(ch) != t}
         if mapping:
             try:
                 raw.set_channel_types(mapping, on_unit_change="ignore", verbose="error")
                 notes.append(f"Display channel types set from channels.tsv for {len(mapping)} channel(s)")
             except (ValueError, KeyError) as exc:
                 notes.append(f"Could not apply channel types from channels.tsv: {exc}")
-    if show_bads and report.bads:
-        raw.info["bads"] = [c for c in report.bads if c in raw.ch_names]
-        notes.append("Channels marked bad in channels.tsv are shown in grey: " + ", ".join(report.bads))
+    shown_bads = [c for c in report.bads if c in present]
+    if show_bads and shown_bads:
+        raw.info["bads"] = shown_bads
+        notes.append("Channels marked bad in channels.tsv are shown in grey: " + ", ".join(shown_bads))
     return notes

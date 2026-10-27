@@ -24,6 +24,11 @@ CHANNEL_CONVENTION = {
     ),
     "non_empty_list_means": "The annotation applies only to the listed channels.",
     "order": "Channels are stored in the recording's channel order without duplicates.",
+    "hidden_channels": (
+        "recording.ch_names lists the channels that were shown and could be annotated. Channels in the file "
+        "that the study settings hide (for example a headset's timestamp or contact-quality channels) are "
+        "listed in recording.hidden_channels, when there are any, and are never part of the whole montage."
+    ),
 }
 
 
@@ -33,28 +38,38 @@ class AnnotationError(ValueError):
 
 @dataclass(frozen=True)
 class RecordingInfo:
-    """Identity and timing of the recording an annotation set refers to."""
+    """Identity and timing of the recording an annotation set refers to.
+
+    ``ch_names`` are the channels that could be annotated (the montage);
+    ``hidden_channels`` are channels in the file that the settings hid.
+    """
 
     recording_id: str
     timing: RecordingTiming
     ch_names: tuple[str, ...]
     relative_path: str = ""
     fingerprint: dict[str, Any] = field(default_factory=dict)
+    hidden_channels: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.recording_id:
             raise AnnotationError("recording_id must not be empty")
         if len(set(self.ch_names)) != len(self.ch_names):
             raise AnnotationError("Recording channel names must be unique")
+        if set(self.hidden_channels) & set(self.ch_names):
+            raise AnnotationError("A channel cannot be both shown and hidden")
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        out = {
             "recording_id": self.recording_id,
             "relative_path": self.relative_path or self.recording_id,
             **self.timing.to_dict(),
             "ch_names": list(self.ch_names),
             "fingerprint": dict(self.fingerprint),
         }
+        if self.hidden_channels:
+            out["hidden_channels"] = list(self.hidden_channels)
+        return out
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> RecordingInfo:
@@ -64,6 +79,7 @@ class RecordingInfo:
             ch_names=tuple(str(c) for c in data.get("ch_names", [])),
             relative_path=str(data.get("relative_path", "")),
             fingerprint=dict(data.get("fingerprint") or {}),
+            hidden_channels=tuple(str(c) for c in data.get("hidden_channels", []) or []),
         )
 
 

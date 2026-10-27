@@ -75,7 +75,7 @@ class AutosaveRecord:
         if self.document.recording.timing != loaded.info.timing:
             problems.append("the recording's sampling rate or length differs")
         if tuple(self.document.recording.ch_names) != tuple(loaded.info.ch_names):
-            problems.append("the recording's channels differ")
+            problems.append("the recording's channels (or the channels shown) differ")
         for role in ("eeg", "vhdr", "vmrk"):
             before = (self.source_fingerprint.get(role) or {})
             now = (loaded.fingerprint.get(role) or {})

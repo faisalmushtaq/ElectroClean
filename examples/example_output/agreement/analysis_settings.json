@@ -230,7 +230,7 @@
   "input_files": [
     {
       "path": "Annotated_Events/annotator-A01/sub-001/eeg/sub-001_task-rest_eeg_annotator-A01_annotations.json",
-      "sha256": "44dc325a8a647820f087805c3af4495b328d389ddbc48d6962fb9a6f1cf973da",
+      "sha256": "845cc6a85c33230c89c326919057d3f6e2c982a2d2a94800ba2e45733e767d61",
       "recording_id": "sub-001/eeg/sub-001_task-rest_eeg.vhdr",
       "annotator_id": "A01",
       "mode": "standard",
@@ -239,7 +239,7 @@
     },
     {
       "path": "Annotated_Events/annotator-A01/sub-002/eeg/sub-002_task-rest_eeg_annotator-A01_annotations.json",
-      "sha256": "483cb880bc1f6765f686f5272819653b23095ad6443bc03668b6be62dd77fcf9",
+      "sha256": "aede9f09e061f43e86cfab40c3ebda464a5103fc23c7061cac90da7307fbd3a1",
       "recording_id": "sub-002/eeg/sub-002_task-rest_eeg.vhdr",
       "annotator_id": "A01",
       "mode": "standard",
@@ -248,7 +248,7 @@
     },
     {
       "path": "Annotated_Events/annotator-A01/sub-003/eeg/sub-003_task-rest_eeg_annotator-A01_annotations.json",
-      "sha256": "5082d80c2cdb3a8f599389223cc9b1d4039bffb4cdfae0fdef2e6409d385727f",
+      "sha256": "4085ae98f82d656fd9c17c3dc714ad03c8ede19c334b4a62b284d6564ff6ec62",
       "recording_id": "sub-003/eeg/sub-003_task-rest_eeg.vhdr",
       "annotator_id": "A01",
       "mode": "standard",
@@ -257,7 +257,7 @@
     },
     {
       "path": "Annotated_Events/annotator-A02/sub-001/eeg/sub-001_task-rest_eeg_annotator-A02_annotations.json",
-      "sha256": "833a5e674c6d148e8cffce4e94b388282a2dc03abffcff2b0cd95dbba39e9983",
+      "sha256": "7f07ed367126fff338c3ff3c690864ba08a2642f9a65d60419041e5f109616fe",
       "recording_id": "sub-001/eeg/sub-001_task-rest_eeg.vhdr",
       "annotator_id": "A02",
       "mode": "standard",
@@ -266,7 +266,7 @@
     },
     {
       "path": "Annotated_Events/annotator-A02/sub-002/eeg/sub-002_task-rest_eeg_annotator-A02_annotations.json",
-      "sha256": "16f6b20024e066901cdcd952765e907e131fa1c9ef86b5003f3ddc34592b6c25",
+      "sha256": "b08d704dc46b135e31a876983723c76e3c2eba9d481c28f795f879ac3258e664",
       "recording_id": "sub-002/eeg/sub-002_task-rest_eeg.vhdr",
       "annotator_id": "A02",
       "mode": "standard",
@@ -275,7 +275,7 @@
     },
     {
       "path": "Annotated_Events/annotator-A02/sub-003/eeg/sub-003_task-rest_eeg_annotator-A02_annotations.json",
-      "sha256": "e460bc476f3d68113c3fc39548f0dba0d90e4512ee5f43fa54c64e5f98b1e997",
+      "sha256": "d797cf625b742d732b60ae546e8a9eb2559f358b58a79608bee1046d02ec695a",
       "recording_id": "sub-003/eeg/sub-003_task-rest_eeg.vhdr",
       "annotator_id": "A02",
       "mode": "standard",
@@ -284,7 +284,7 @@
     },
     {
       "path": "Annotated_Events/annotator-A03/sub-001/eeg/sub-001_task-rest_eeg_annotator-A03_annotations.json",
-      "sha256": "31633ec562fd5f02db1330e8d35f575f40584a5fb906123ff7a913fefe07abea",
+      "sha256": "49efce648f95a173b8b9e1bcd4487081d3ebca2a2e5fb10acd8b6c41900a3366",
       "recording_id": "sub-001/eeg/sub-001_task-rest_eeg.vhdr",
       "annotator_id": "A03",
       "mode": "standard",
@@ -293,7 +293,7 @@
     },
     {
       "path": "Annotated_Events/annotator-A03/sub-002/eeg/sub-002_task-rest_eeg_annotator-A03_annotations.json",
-      "sha256": "9501a5cd8c121e52ed95e5ae37c4c9293209803202ed5a0d0d6d29f7e0131795",
+      "sha256": "6cdd01b3705416132a178c19e8a101591ad196e19fe52706d12add1cd92316f8",
       "recording_id": "sub-002/eeg/sub-002_task-rest_eeg.vhdr",
       "annotator_id": "A03",
       "mode": "standard",
@@ -302,7 +302,7 @@
     },
     {
       "path": "Annotated_Events/annotator-A03/sub-003/eeg/sub-003_task-rest_eeg_annotator-A03_annotations.json",
-      "sha256": "33dd9100111a685450b725469db20f47301d879f7b2c01d7ffb7b81092b05255",
+      "sha256": "d3f6dc4e0f4e822b13c6eed22aff7ccecbfe58960eda7c7862dc93eae88b43c7",
       "recording_id": "sub-003/eeg/sub-003_task-rest_eeg.vhdr",
       "annotator_id": "A03",
       "mode": "standard",

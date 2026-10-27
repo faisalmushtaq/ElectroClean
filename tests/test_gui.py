@@ -534,3 +534,39 @@ def test_declined_autosave_is_set_aside_when_starting_afresh(qapp, dataset):
     ws._closing_ok = True
     ws.session.abandon()
     ws.browser.close()
+
+
+def test_edf_recording_in_the_application(qapp, dataset):
+    """A dataset mixing BrainVision and EDF: the EDF opens with its housekeeping channels hidden."""
+    from electroclean.synthetic import ALL_CHANNELS, write_edf_recording
+
+    root, _ = dataset
+    write_edf_recording(root / "sub-050" / "eeg", "sub-050_task-rest", seed=9)
+    edf_id = "sub-050/eeg/sub-050_task-rest_eeg.edf"
+    prompts = ScriptedPrompts()
+    ctrl = AppController(prompts=prompts, synchronous_loading=True)
+    assert ctrl.begin(StartRequest(annotator_id="A01", display_name="", dataset_root=root, output_root=None,
+                                   mode="standard"))
+    seen = []
+    for _ in range(3):
+        ws = ctrl.workspace
+        assert ws is not None
+        rid = ws.session.recording_id
+        seen.append(rid)
+        wait(50)
+        if rid == edf_id:
+            p = ws.browser.mne
+            assert list(p.ch_names) == list(ALL_CHANNELS)  # COUNTER, CQ_* and so on are not shown
+            assert len(ws.controller._gap_items) == 1  # the padded last record is hatched
+            assert "hidden by the channels.hide setting" in ws._info_html()
+            ws.scope_channels.setChecked(True)
+            next(t for t in p.traces if t.ch_name == "O1").toggle_bad()
+        ws.controller.create_annotation(10.0, 11.0)
+        assert ws.save_and_finish()
+        wait(50)
+    assert sorted(seen) == sorted([SUB1, SUB2, edf_id])
+    reg = CompletionRegister(ctrl.layout)
+    assert edf_id in reg.completed("A01")
+    out = ctrl.layout.root / "annotator-A01" / "sub-050" / "eeg" / "sub-050_task-rest_eeg_annotator-A01_annotations.json"
+    doc = json.loads(out.read_text())
+    assert doc["annotations"][0]["channels"] == ["O1"]

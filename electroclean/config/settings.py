@@ -21,6 +21,7 @@ DEFAULT_SETTINGS_PATH = CONFIG_DIR / "default_settings.json"
 STUDY_CONFIG_FILENAME = "electroclean_study.json"
 
 SELECTION_STRATEGIES = ("random", "seeded", "manual")
+RECORDING_EXTENSIONS = (".vhdr", ".edf", ".bdf")
 FILTER_METHODS = ("fir", "iir")
 NOTCH_FREQUENCIES = (50.0, 60.0)
 
@@ -116,7 +117,7 @@ class Settings:
 
     output_directory_name: str
     output_directory: str | None
-    discovery_suffix: str
+    discovery_suffixes: tuple[str, ...]
     discovery_exclude_dir_names: tuple[str, ...]
     discovery_follow_symlinks: bool
     filters: FilterSettings
@@ -125,6 +126,7 @@ class Settings:
     hash_source_files: bool
     apply_channel_types_from_bids: bool
     show_bids_bad_channels: bool
+    hidden_channel_patterns: tuple[str, ...]
     selection_strategy: str
     selection_seed: int | None
     recording_lock_stale_hours: float
@@ -142,10 +144,13 @@ class Settings:
             sel = data["selection"]
             locks = data["locks"]
             ann = data["annotation"]
+            chans = data.get("channels", {}) or {}
+            # Study files written before EDF support give a single "suffix".
+            suffixes = [disc["suffix"]] if disc.get("suffix") else list(disc.get("suffixes", []))
             settings = cls(
                 output_directory_name=str(out["directory_name"]),
                 output_directory=out.get("directory"),
-                discovery_suffix=str(disc["suffix"]),
+                discovery_suffixes=tuple(str(x) for x in suffixes),
                 discovery_exclude_dir_names=tuple(disc.get("exclude_dir_names", [])),
                 discovery_follow_symlinks=bool(disc.get("follow_symlinks", False)),
                 filters=FilterSettings.from_dict(data["filters"]),
@@ -160,6 +165,7 @@ class Settings:
                 hash_source_files=bool(load["hash_source_files"]),
                 apply_channel_types_from_bids=bool(load.get("apply_channel_types_from_bids", True)),
                 show_bids_bad_channels=bool(load.get("show_bids_bad_channels", True)),
+                hidden_channel_patterns=tuple(str(x) for x in chans.get("hide", [])),
                 selection_strategy=str(sel["strategy"]),
                 selection_seed=None if sel.get("seed") is None else int(sel["seed"]),
                 recording_lock_stale_hours=float(locks["recording_lock_stale_hours"]),
@@ -179,8 +185,15 @@ class Settings:
             )
         if self.selection_strategy == "seeded" and self.selection_seed is None:
             raise SettingsError("selection.seed is required when selection.strategy is 'seeded'")
-        if not self.discovery_suffix.endswith(".vhdr"):
-            raise SettingsError("discovery.suffix must end with '.vhdr'")
+        if not self.discovery_suffixes:
+            raise SettingsError("discovery.suffixes must name at least one kind of recording file")
+        for sfx in self.discovery_suffixes:
+            if not sfx.lower().endswith(RECORDING_EXTENSIONS):
+                raise SettingsError(
+                    f"discovery.suffixes: {sfx!r} must end with one of {', '.join(RECORDING_EXTENSIONS)}"
+                )
+        if any(not p.strip() for p in self.hidden_channel_patterns):
+            raise SettingsError("channels.hide must not contain empty patterns")
         if self.min_duration_samples < 1:
             raise SettingsError("annotation.min_duration_samples must be at least 1")
         if not self.output_directory_name or any(c in self.output_directory_name for c in "/\\:"):

@@ -1,14 +1,17 @@
-"""Loading a BrainVision recording for annotation.
+"""Loading a recording for annotation.
 
 :func:`load_recording` checks the companion files, reads the recording with
-``mne.io.read_raw_brainvision``, validates it against its BIDS metadata,
-collects the original events, and prepares a separate viewing copy to which
-the chosen display filters are applied. Source files are only ever opened for
-reading.
+``mne.io.read_raw_brainvision``, ``mne.io.read_raw_edf`` or
+``mne.io.read_raw_bdf``, validates it against its BIDS metadata, collects the
+original events, and prepares a separate viewing copy to which the chosen
+display filters are applied. Channels that the settings hide (for example a
+headset's timestamp and contact-quality channels) are left out of the viewing
+copy. Source files are only ever opened for reading.
 """
 
 from __future__ import annotations
 
+import fnmatch
 import gc
 import tempfile
 import warnings
@@ -33,6 +36,7 @@ from electroclean.app.eeg.filtering import FilterReport, apply_view_filters
 from electroclean.app.io.atomic import sha256_file
 from electroclean.app.io.bids import load_json_chain
 from electroclean.app.io.discovery import RecordingFiles
+from electroclean.app.io.edf import EdfHeader
 from electroclean.app.io.tsv import TSVError
 from electroclean.config.settings import FilterSettings, Settings
 
@@ -45,6 +49,11 @@ FATAL_WARNING_PATTERNS = (
     "outside data range",  # markers beyond the end of the data: truncated .eeg file
     "not found; no annotations",  # marker file missing: original events would be lost
 )
+# MNE's EDF warning when the header and file size disagree; ElectroClean checks this itself first.
+EDF_SIZE_WARNING = "Number of records from the header does not match the file size"
+# Annotations that mark stretches without recorded data (MNE writes BAD_ACQ_SKIP into EDF+
+# files it exports, for example for the padding of the last data record).
+ACQUISITION_GAP_PREFIX = "bad_acq_skip"
 
 
 class RecordingLoadError(RuntimeError):
@@ -72,6 +81,8 @@ class LoadedRecording:
     events_sidecar: dict[str, Any] = field(default_factory=dict)
     eeg_sidecar: dict[str, Any] = field(default_factory=dict)
     discontinuity_samples: list[int] = field(default_factory=list)
+    acquisition_gaps: list[tuple[int, int]] = field(default_factory=list)
+    hidden_channels: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     cache_path: Path | None = None
@@ -127,28 +138,37 @@ def changed_since(files: RecordingFiles, fingerprint: dict[str, Any]) -> list[st
     return changed
 
 
-def _read_raw(vhdr: Path, preload: bool | str) -> tuple[Any, list[str]]:
+def _read_raw(files: RecordingFiles, preload: bool | str) -> tuple[Any, list[str]]:
     import mne
 
     from mne.utils import catch_logging
 
+    path = files.path
     # MNE only emits its warnings (e.g. "markers outside data range") when its
     # log level is WARNING or lower; they are captured here, not printed.
     with warnings.catch_warnings(record=True) as caught, catch_logging():
         warnings.simplefilter("always")
         try:
-            raw = mne.io.read_raw_brainvision(vhdr, preload=preload, verbose="warning")
+            if files.format == "edf":
+                raw = mne.io.read_raw_edf(path, preload=preload, infer_types=False, verbose="warning")
+            elif files.format == "bdf":
+                raw = mne.io.read_raw_bdf(path, preload=preload, infer_types=False, verbose="warning")
+            else:
+                raw = mne.io.read_raw_brainvision(path, preload=preload, verbose="warning")
         except FileNotFoundError as exc:
             raise RecordingLoadError(
-                f"A file needed by {vhdr.name} is missing: {exc}", kind="missing_companion"
+                f"A file needed by {path.name} is missing: {exc}", kind="missing_companion"
             ) from exc
         except Exception as exc:  # MNE raises many types for corrupt headers
             raise RecordingLoadError(
-                f"{vhdr.name} could not be read as a BrainVision recording: {exc}",
+                f"{path.name} could not be read as a {files.format_name} recording: {exc}",
                 kind="corrupt_recording",
                 details=repr(exc),
             ) from exc
     messages = [str(w.message) for w in caught]
+    if files.format in ("edf", "bdf"):
+        # Already reported, in plain words, by _check_edf.
+        messages = [m for m in messages if EDF_SIZE_WARNING not in m]
     fatal = [m for m in messages if any(p in m for p in FATAL_WARNING_PATTERNS)]
     if fatal:
         hint = ""
@@ -164,10 +184,34 @@ def _read_raw(vhdr: Path, preload: bool | str) -> tuple[Any, list[str]]:
     return raw, messages
 
 
-def _check_data_size(files: RecordingFiles, n_ch: int | None) -> None:
-    """Check that the binary data file holds a whole number of samples."""
+def _check_edf(files: RecordingFiles) -> list[str]:
+    """Check an EDF/BDF file against its header; return warnings, raise on fatal problems."""
     header = files.header
-    if header is None or files.eeg is None or not n_ch:
+    if not isinstance(header, EdfHeader):
+        return []
+    if header.is_discontinuous:
+        raise RecordingLoadError(
+            f"{files.path.name} is an {header.file_type} file (discontinuous: its data records are not "
+            "contiguous in time). MNE-Python reads such files as if they were continuous, so annotation times "
+            "would not match the recording. Convert it to a continuous file first.",
+            kind="unsupported_format",
+        )
+    try:
+        size = files.path.stat().st_size
+    except OSError as exc:
+        raise RecordingLoadError(f"Cannot read {files.path.name}: {exc}", kind="permission") from exc
+    fatal, notes = header.size_problems(size)
+    if fatal:
+        raise RecordingLoadError(
+            f"{files.path.name}: " + "; ".join(fatal) + ".", kind="corrupt_recording"
+        )
+    return [f"{files.format_name}: {n}" for n in notes]
+
+
+def _check_data_size(files: RecordingFiles, n_ch: int | None) -> None:
+    """Check that a BrainVision data file holds a whole number of samples."""
+    header = files.header
+    if files.format != "brainvision" or header is None or files.eeg is None or not n_ch:
         return
     bps = BYTES_PER_SAMPLE.get((header.binary_format or "").upper())
     if bps is None:
@@ -199,6 +243,24 @@ def _discontinuities(raw: Any, timing: RecordingTiming) -> list[int]:
     return sorted(set(out))
 
 
+def _acquisition_gaps(raw: Any, timing: RecordingTiming) -> list[tuple[int, int]]:
+    """Sample ranges [start, stop) that the file marks as having no recorded data."""
+    out = []
+    for a in raw.annotations:
+        if str(a["description"]).lower().startswith(ACQUISITION_GAP_PREFIX):
+            start = timing.time_to_sample(timing.from_mne_onset(float(a["onset"])))
+            stop = start + max(1, timing.duration_to_samples(float(a["duration"])))
+            start, stop = max(0, start), min(timing.n_samples, stop)
+            if stop > start:
+                out.append((start, stop))
+    return sorted(set(out))
+
+
+def hidden_channels(ch_names: list[str], patterns: tuple[str, ...] | list[str]) -> list[str]:
+    """Channels whose names match one of the ``channels.hide`` patterns (case-sensitive globs)."""
+    return [c for c in ch_names if any(fnmatch.fnmatchcase(c, p) for p in patterns)]
+
+
 def load_recording(
     files: RecordingFiles,
     settings: Settings,
@@ -215,7 +277,9 @@ def load_recording(
             progress(msg)
 
     if files.problems:
-        raise RecordingLoadError("; ".join(files.problems), kind="missing_companion")
+        # BrainVision problems are missing or misnamed companion files; an EDF/BDF problem is the file itself.
+        kind = "missing_companion" if files.format == "brainvision" else "corrupt_recording"
+        raise RecordingLoadError("; ".join(files.problems), kind=kind)
 
     say("Checking source files")
     try:
@@ -224,11 +288,13 @@ def load_recording(
         raise RecordingLoadError(f"Cannot read the recording files: {exc}", kind="permission") from exc
 
     say("Reading recording header and markers")
-    _check_data_size(files, files.header.n_channels if files.header else None)
-    raw, mne_messages = _read_raw(files.vhdr, preload=False)
+    edf_notes = _check_edf(files)
+    if files.format == "brainvision":
+        _check_data_size(files, files.header.n_channels if files.header else None)
+    raw, mne_messages = _read_raw(files, preload=False)
     _check_data_size(files, len(raw.ch_names))
     timing = RecordingTiming.from_raw(raw)
-    warnings_out = [f"MNE: {m}" for m in mne_messages]
+    warnings_out = list(edf_notes) + [f"MNE: {m}" for m in mne_messages]
     warnings_out.extend(f"BIDS: {w}" for w in files.sidecars.warnings)
 
     say("Reading original events")
@@ -237,15 +303,20 @@ def load_recording(
             original = events_from_tsv(files.events_tsv, timing)
         except TSVError as exc:
             raise RecordingLoadError(str(exc), kind="malformed_bids_metadata") from exc
-        original.comparison = compare_with_markers(original, raw, timing)
+        original.comparison = compare_with_markers(original, raw, timing, files.format)
         if not original.comparison["consistent"]:
+            where = (
+                "the BrainVision marker file" if files.format == "brainvision"
+                else f"the {files.format_name}+ annotations"
+            )
             warnings_out.append(
-                "events.tsv and the BrainVision marker file disagree: "
+                f"events.tsv and {where} disagree: "
                 f"{original.comparison['events_tsv_rows_without_marker']} events.tsv row(s) have no marker "
                 f"and {original.comparison['markers_without_events_tsv_row']} marker(s) have no events.tsv row"
             )
     else:
-        original = events_from_raw_annotations(raw, timing, files.vmrk)
+        original = events_from_raw_annotations(raw, timing, files.vmrk if files.format == "brainvision" else files.path,
+                                               files.format)
     from electroclean.app.io.export import ELECTROCLEAN_COLUMNS
 
     clash = [c for c in ELECTROCLEAN_COLUMNS if c in original.columns]
@@ -289,25 +360,55 @@ def load_recording(
         warnings_out.append(
             f"The recording has {len(discontinuities)} discontinuity marker(s) (BrainVision 'New Segment')"
         )
+    gaps = _acquisition_gaps(raw, timing)
+    if gaps:
+        total = sum(b - a for a, b in gaps) / timing.sfreq
+        tail = " (at the end of the file, probably padding of the last data record)" if (
+            len(gaps) == 1 and gaps[0][1] == timing.n_samples) else ""
+        warnings_out.append(
+            f"The file marks {len(gaps)} stretch(es) without recorded data (BAD_ACQ_SKIP), {total:.3f} s in total"
+            f"{tail}; they are hatched in the viewer and filtered separately"
+        )
+
+    hidden = hidden_channels(list(raw.ch_names), settings.hidden_channel_patterns)
+    shown = [c for c in raw.ch_names if c not in set(hidden)]
+    if not shown:
+        raise RecordingLoadError(
+            "Every channel of the recording matches the channels.hide setting, so nothing could be shown. "
+            "Change channels.hide in the study configuration.",
+            kind="no_channels",
+        )
 
     say("Preparing the display copy")
     needs_data = filters.highpass_enabled or filters.notch_enabled
     cache_path: Path | None = None
     storage = "read from source file on demand (not filtered)"
     if needs_data:
-        n_bytes = len(raw.ch_names) * timing.n_samples * 8
+        n_bytes = len(shown) * timing.n_samples * 8
+        view_raw, _ = _read_raw(files, preload=False)
+        if hidden:
+            view_raw.pick(shown)  # hidden channels are never read
         if n_bytes <= settings.preload_memory_limit_mb * 1024 * 1024:
-            view_raw, _ = _read_raw(files.vhdr, preload=True)
+            view_raw.load_data(verbose="error")
             storage = "in memory"
         else:
             base = Path(tempfile.mkdtemp(prefix="electroclean-", dir=cache_dir))
             cache_path = base / "view_data.dat"
-            view_raw, _ = _read_raw(files.vhdr, preload=str(cache_path))
+            view_raw.load_data(memmap=str(cache_path), verbose="error")
             storage = f"temporary memory-mapped file ({n_bytes / 1e9:.2f} GB)"
     else:
         view_raw = raw
+        if hidden:
+            view_raw.pick(shown)
     view_raw.set_annotations(None)
-    notes_out = list(
+    if hidden:
+        notes_hidden = [
+            f"{len(hidden)} channel(s) matching channels.hide are not shown and cannot be annotated: "
+            + ", ".join(hidden)
+        ]
+    else:
+        notes_hidden = []
+    notes_out = notes_hidden + list(
         apply_channel_metadata(
             view_raw,
             channel_report,
@@ -318,7 +419,7 @@ def load_recording(
     if needs_data:
         say("Applying display filters")
     try:
-        filter_report = apply_view_filters(view_raw, filters, discontinuities)
+        filter_report = apply_view_filters(view_raw, filters, discontinuities, gaps)
     except Exception as exc:
         raise RecordingLoadError(f"Filtering failed: {exc}", kind="filter_error") from exc
     filter_report.data_storage = storage
@@ -328,9 +429,10 @@ def load_recording(
     info = RecordingInfo(
         recording_id=files.recording_id,
         timing=timing,
-        ch_names=tuple(raw.ch_names),
+        ch_names=tuple(shown),
         relative_path=files.recording_id,
         fingerprint=fingerprint,
+        hidden_channels=tuple(hidden),
     )
     return LoadedRecording(
         files=files,
@@ -344,6 +446,8 @@ def load_recording(
         events_sidecar=events_sidecar,
         eeg_sidecar=eeg_sidecar,
         discontinuity_samples=discontinuities,
+        acquisition_gaps=gaps,
+        hidden_channels=hidden,
         warnings=warnings_out,
         notes=notes_out,
         cache_path=cache_path,

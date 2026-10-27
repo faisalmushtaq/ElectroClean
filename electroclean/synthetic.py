@@ -9,7 +9,9 @@ ground truth by adding boundary jitter, misses, false alarms and label
 confusions, which is useful for demonstrating the reliability analysis.
 
 Writing BrainVision files requires the ``pybv`` package (a development
-dependency).
+dependency). :func:`write_edf` and :func:`write_edf_recording` write EDF,
+EDF+ and BDF files without any extra package; they exist so that the tests
+can cover these formats, including broken files.
 """
 
 from __future__ import annotations
@@ -280,6 +282,180 @@ def write_recording(
         )
     timing = RecordingTiming(sfreq=float(sfreq), n_samples=n, first_samp=0)
     return folder / f"{fname_base}.vhdr", plan, timing
+
+
+def _ascii(value: str, width: int) -> bytes:
+    raw = value.encode("ascii")
+    if len(raw) > width:
+        raise ValueError(f"EDF header field {value!r} is longer than {width} characters")
+    return raw.ljust(width, b" ")
+
+
+def _num(value: float, width: int) -> bytes:
+    text = f"{value:g}" if isinstance(value, float) else str(value)
+    if len(text) > width:
+        text = f"{value:.{max(width - 6, 1)}g}"
+    return _ascii(text, width)
+
+
+def write_edf(
+    path: Path,
+    data_v: np.ndarray,
+    sfreq: float,
+    ch_names: list[str],
+    *,
+    annotations: list[tuple[float, float, str]] | None = None,
+    bdf: bool = False,
+    record_duration_s: float = 1.0,
+    n_records_in_header: int | None = None,
+    meas_date: datetime = datetime(2024, 1, 1, 12, 0, 0),
+) -> Path:
+    """Write ``data_v`` (channels x samples, in volts) as an EDF or BDF file.
+
+    With ``annotations`` (onset s, duration s, text) the file is EDF+C (BDF+C)
+    and holds an annotation signal. The data are padded with zeros to whole
+    data records; like MNE's own EDF export, the padding is then marked with a
+    ``BAD_ACQ_SKIP`` annotation. ``n_records_in_header`` overrides the number
+    of records written in the header (``-1`` means unknown), to imitate
+    broken files.
+    """
+    spr = int(round(sfreq * record_duration_s))
+    if abs(spr - sfreq * record_duration_s) > 1e-9:
+        raise ValueError("sfreq * record_duration_s must be a whole number of samples")
+    n_ch, n = data_v.shape
+    n_records = -(-n // spr)
+    pad = n_records * spr - n
+    plus = annotations is not None
+    tals = list(annotations or [])
+    if plus and pad:
+        tals.append((n / sfreq, pad / sfreq, "BAD_ACQ_SKIP"))
+    bytes_per = 3 if bdf else 2
+    dmax = 8388607 if bdf else 32767
+    dmin = -dmax - 1
+    data_uv = np.zeros((n_ch, n_records * spr))
+    data_uv[:, :n] = data_v * 1e6
+    phys_max = np.maximum(np.abs(data_uv).max(axis=1), 1.0) * 1.01
+    phys_min = -phys_max
+    digital = np.round((data_uv - phys_min[:, None]) / (phys_max - phys_min)[:, None] * (dmax - dmin) + dmin)
+    digital = np.clip(digital, dmin, dmax).astype(np.int64)
+
+    # One TAL block per record: the time-keeping TAL, then the annotations starting in that record.
+    per_record: list[bytes] = []
+    if plus:
+        for r in range(n_records):
+            t0 = r * record_duration_s
+            block = f"+{t0:g}\x14\x14\x00".encode("utf-8")
+            for onset, duration, text in tals:
+                if t0 <= onset < t0 + record_duration_s or (r == n_records - 1 and onset >= t0 + record_duration_s):
+                    block += f"+{onset:.6f}\x15{duration:.6f}\x14{text}\x14\x00".encode("utf-8")
+            per_record.append(block)
+        ann_samples = -(-max(len(b) for b in per_record) // bytes_per) + 1
+    labels = list(ch_names) + (["BDF Annotations" if bdf else "EDF Annotations"] if plus else [])
+    ns = len(labels)
+    samples = [spr] * n_ch + ([ann_samples] if plus else [])
+    family = "BDF" if bdf else "EDF"
+    reserved = f"{family}+C" if plus else ("24BIT" if bdf else "")
+    header = b"\xffBIOSEMI" if bdf else _ascii("0", 8)
+    header += _ascii("X X X X", 80)
+    header += _ascii(f"Startdate {meas_date.strftime('%d-%b-%Y').upper()} X X X", 80)
+    header += _ascii(meas_date.strftime("%d.%m.%y"), 8) + _ascii(meas_date.strftime("%H.%M.%S"), 8)
+    header += _num(256 * (ns + 1), 8) + _ascii(reserved, 44)
+    header += _num(n_records if n_records_in_header is None else n_records_in_header, 8)
+    header += _num(float(record_duration_s), 8) + _num(ns, 4)
+    header += b"".join(_ascii(lab, 16) for lab in labels)
+    header += b"".join(_ascii("", 80) for _ in labels)
+    header += b"".join(_ascii("uV", 8) for _ in ch_names) + (_ascii("", 8) if plus else b"")
+    header += b"".join(_num(round(float(v), 3), 8) for v in phys_min) + (_num(-1, 8) if plus else b"")
+    header += b"".join(_num(round(float(v), 3), 8) for v in phys_max) + (_num(1, 8) if plus else b"")
+    header += b"".join(_num(dmin, 8) for _ in labels)
+    header += b"".join(_num(dmax, 8) for _ in labels)
+    header += b"".join(_ascii("", 80) for _ in labels)
+    header += b"".join(_num(k, 8) for k in samples)
+    header += b"".join(_ascii("", 32) for _ in labels)
+    assert len(header) == 256 * (ns + 1)
+
+    def encode(values: np.ndarray) -> bytes:
+        if bdf:
+            v = values.astype("<i4").view(np.uint8).reshape(-1, 4)[:, :3]
+            return v.tobytes()
+        return values.astype("<i2").tobytes()
+
+    body = bytearray()
+    for r in range(n_records):
+        for c in range(n_ch):
+            body += encode(digital[c, r * spr : (r + 1) * spr])
+        if plus:
+            body += per_record[r].ljust(ann_samples * bytes_per, b"\x00")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(header + bytes(body))
+    return path
+
+
+def write_edf_recording(
+    folder: Path,
+    stem: str,
+    *,
+    sfreq: float = 128.0,
+    duration_s: float = 40.5,
+    seed: int = 0,
+    line_freq: float = 50.0,
+    housekeeping_channels: tuple[str, ...] = ("COUNTER", "INTERPOLATED", "CQ_Fp1", "CQ_Fp2", "BATTERY"),
+    events_in_file: bool = True,
+    write_bids_sidecars: bool = True,
+    bdf: bool = False,
+    all_channels_typed_eeg: bool = True,
+    plan: list[SyntheticArtifact] | None = None,
+) -> tuple[Path, list[SyntheticArtifact], RecordingTiming]:
+    """Write one ``<stem>_eeg.edf`` (or ``.bdf``) recording like a consumer headset export.
+
+    Besides the EEG, EOG and ECG channels the file holds ``housekeeping_channels``
+    (a sample counter, contact-quality values and so on), and its channels.tsv
+    types every channel as EEG, as some converters do. With ``events_in_file``
+    the stimulus markers are EDF+ annotations; otherwise they are only in the
+    events.tsv, whose ``sample`` column holds stimulus-software timestamps.
+    """
+    rng = np.random.default_rng(seed)
+    plan = plan if plan is not None else default_artifact_plan(duration_s, rng)
+    signal = synthesise_signal(plan, sfreq, duration_s, line_freq, rng)
+    n = signal.shape[1]
+    extra = []
+    for name in housekeeping_channels:
+        if name == "COUNTER":
+            extra.append((np.arange(n) % 128) * 1e-6)
+        elif name.startswith("CQ_"):
+            extra.append(np.full(n, 4e-6))
+        else:
+            extra.append(np.full(n, 1e-6))
+    data = np.vstack([signal] + ([np.vstack(extra)] if extra else []))
+    names = list(ALL_CHANNELS) + list(housekeeping_channels)
+    onsets = [float(t) for t in np.arange(2.0, duration_s - 1.0, 4.0)]
+    anns = [(t, 0.0, f"stim/{1 + k % 2}") for k, t in enumerate(onsets)] if events_in_file else None
+    ext = ".bdf" if bdf else ".edf"
+    path = write_edf(folder / f"{stem}_eeg{ext}", data, sfreq, names, annotations=anns, bdf=bdf)
+    if write_bids_sidecars:
+        rows = [[repr(t), "0.0", f"stim/{1 + k % 2}", str(10 * (1 + k % 2)), f"2026-01-01_12:00:{t:09.6f}"]
+                for k, t in enumerate(onsets)]
+        _write_tsv(folder / f"{stem}_events.tsv", ["onset", "duration", "trial_type", "trigger_code", "sample"], rows)
+        (folder / f"{stem}_events.json").write_text(
+            json.dumps(
+                {"trigger_code": {"Description": "Trigger code"},
+                 "sample": {"Description": "Stimulus software timestamp."}},
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        types = {c: "EEG" for c in names} if all_channels_typed_eeg else {
+            **{c: "EEG" for c in EEG_CHANNELS}, "HEOG": "HEOG", "VEOG": "VEOG", "ECG": "ECG",
+            **{c: "MISC" for c in housekeeping_channels}}
+        _write_tsv(folder / f"{stem}_channels.tsv", ["name", "type", "units", "status"],
+                   [[c, types[c], "µV", "good"] for c in names])
+        (folder / f"{stem}_eeg.json").write_text(
+            json.dumps({"TaskName": "rest", "SamplingFrequency": sfreq, "PowerLineFrequency": line_freq,
+                        "RecordingDuration": duration_s}, indent=2),
+            encoding="utf-8",
+        )
+    spr = int(round(sfreq))  # one-second data records; the last one is padded
+    return path, plan, RecordingTiming(sfreq=float(sfreq), n_samples=-(-n // spr) * spr, first_samp=0)
 
 
 def truth_document(

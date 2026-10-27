@@ -1,4 +1,10 @@
-"""Recursive discovery of BrainVision recordings and their companion files."""
+"""Recursive discovery of EEG recordings and their companion files.
+
+ElectroClean opens BrainVision recordings (``.vhdr`` header with ``.eeg`` data
+and ``.vmrk`` marker files) and EDF, EDF+ and BDF recordings (a single
+file). By default every ``*_eeg.vhdr``, ``*_eeg.edf`` and ``*_eeg.bdf`` file
+below the dataset folder is a recording.
+"""
 
 from __future__ import annotations
 
@@ -8,6 +14,18 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
 from electroclean.app.io.bids import SidecarResolution, parse_bids_name, resolve_sidecars
+from electroclean.app.io.edf import EdfHeader, EdfHeaderError, read_edf_header
+
+#: Recording formats ElectroClean can open, by file extension (lower case).
+FORMATS = {".vhdr": "brainvision", ".edf": "edf", ".bdf": "bdf"}
+FORMAT_NAMES = {"brainvision": "BrainVision", "edf": "EDF", "bdf": "BDF"}
+DEFAULT_SUFFIXES = ("_eeg.vhdr", "_eeg.edf", "_eeg.bdf")
+
+
+def recording_format(path: Path | str) -> str | None:
+    """``brainvision``, ``edf`` or ``bdf`` from a file name, or None if not supported."""
+    return FORMATS.get(Path(path).suffix.lower())
+
 
 _KEY_RE = re.compile(r"^\s*([A-Za-z]+)\s*=\s*(.*?)\s*$")
 
@@ -27,24 +45,37 @@ class VhdrHeader:
 class RecordingFiles:
     """All files belonging to one recording.
 
-    ``recording_id`` is the POSIX-style path of the ``.vhdr`` file relative to
-    the dataset root. It is unique within a dataset and stable across
-    computers, so two recordings with the same file name in different folders
-    are never confused.
+    ``path`` is the file that identifies the recording: the ``.vhdr`` header
+    of a BrainVision recording or the ``.edf``/``.bdf`` file itself.
+    ``recording_id`` is its POSIX-style path relative to the dataset root. It
+    is unique within a dataset and stable across computers, so two recordings
+    with the same file name in different folders are never confused. For EDF
+    and BDF, ``eeg`` is the same file as ``path`` and ``vmrk`` is None.
     """
 
     recording_id: str
     root: Path
-    vhdr: Path
+    path: Path
     eeg: Path | None
     vmrk: Path | None
-    header: VhdrHeader | None
+    header: VhdrHeader | EdfHeader | None
     sidecars: SidecarResolution
     problems: list[str] = field(default_factory=list)
+    format: str = "brainvision"
+
+    @property
+    def vhdr(self) -> Path | None:
+        """The BrainVision header file (None for EDF and BDF recordings)."""
+        return self.path if self.format == "brainvision" else None
+
+    @property
+    def format_name(self) -> str:
+        return FORMAT_NAMES.get(self.format, self.format)
 
     @property
     def stem(self) -> str:
-        return self.vhdr.name[: -len(".vhdr")] if self.vhdr.name.endswith(".vhdr") else self.vhdr.stem
+        """The file name without its extension, e.g. ``sub-01_task-rest_eeg``."""
+        return self.path.name[: -len(self.path.suffix)] if self.path.suffix else self.path.name
 
     @property
     def relative_dir(self) -> str:
@@ -53,7 +84,7 @@ class RecordingFiles:
 
     @property
     def entities(self) -> dict[str, str]:
-        return dict(parse_bids_name(self.vhdr.name).entities)
+        return dict(parse_bids_name(self.path.name).entities)
 
     @property
     def channels_tsv(self) -> Path | None:
@@ -72,8 +103,12 @@ class RecordingFiles:
         return self.sidecars.eeg_json
 
     def source_files(self) -> dict[str, Path]:
-        """Every existing input file, keyed by role (used for fingerprints)."""
-        out: dict[str, Path] = {"vhdr": self.vhdr}
+        """Every existing input file, keyed by role (used for fingerprints).
+
+        Roles are ``vhdr``, ``eeg`` and ``vmrk`` for BrainVision and ``eeg``
+        alone for EDF and BDF, followed by the BIDS sidecars.
+        """
+        out: dict[str, Path] = {"vhdr": self.path} if self.format == "brainvision" else {}
         if self.eeg is not None and self.eeg.exists():
             out["eeg"] = self.eeg
         if self.vmrk is not None and self.vmrk.exists():
@@ -133,14 +168,18 @@ def read_vhdr_header(vhdr: Path) -> VhdrHeader:
     )
 
 
-def describe_recording(vhdr: Path, root: Path) -> RecordingFiles:
+def describe_recording(path: Path, root: Path) -> RecordingFiles:
     """Build a :class:`RecordingFiles` entry and list any problems found."""
     # The ID is the path as found below the dataset folder, not the target of a symbolic
     # link (which may lie elsewhere, e.g. in a git-annex object store).
     try:
-        rel = vhdr.relative_to(root).as_posix()
+        rel = path.relative_to(root).as_posix()
     except ValueError:
-        rel = Path(os.path.relpath(os.path.abspath(vhdr), os.path.abspath(root))).as_posix()
+        rel = Path(os.path.relpath(os.path.abspath(path), os.path.abspath(root))).as_posix()
+    fmt = recording_format(path)
+    if fmt in ("edf", "bdf"):
+        return _describe_edf(path, root, rel, fmt)
+    vhdr = path
     problems: list[str] = []
     header = None
     eeg = vmrk = None
@@ -172,30 +211,61 @@ def describe_recording(vhdr: Path, root: Path) -> RecordingFiles:
     return RecordingFiles(
         recording_id=rel,
         root=root,
-        vhdr=vhdr,
+        path=vhdr,
         eeg=eeg,
         vmrk=vmrk,
         header=header,
         sidecars=sidecars,
         problems=problems,
+        format="brainvision",
+    )
+
+
+def _describe_edf(path: Path, root: Path, rel: str, fmt: str) -> RecordingFiles:
+    problems: list[str] = []
+    header: EdfHeader | None = None
+    try:
+        header = read_edf_header(path)
+    except OSError as exc:
+        problems.append(f"Cannot read {path.name}: {exc}")
+    except EdfHeaderError as exc:
+        problems.append(f"{path.name} is not a readable {FORMAT_NAMES[fmt]} file: {exc}")
+    try:
+        sidecars = resolve_sidecars(path, root)
+    except OSError as exc:
+        sidecars = SidecarResolution(warnings=[f"Could not search for BIDS sidecars: {exc}"])
+    return RecordingFiles(
+        recording_id=rel,
+        root=root,
+        path=path,
+        eeg=path,
+        vmrk=None,
+        header=header,
+        sidecars=sidecars,
+        problems=problems,
+        format=fmt,
     )
 
 
 def discover_recordings(
     root: Path | str,
     *,
-    suffix: str = "_eeg.vhdr",
+    suffixes: tuple[str, ...] | list[str] | str = DEFAULT_SUFFIXES,
     exclude_dir_names: tuple[str, ...] | list[str] = ("derivatives", "Annotated_Events", ".git"),
     exclude_paths: tuple[Path | str, ...] | list[Path | str] = (),
     follow_symlinks: bool = False,
 ) -> list[RecordingFiles]:
-    """Recursively find ``*<suffix>`` files below ``root``, sorted by recording ID.
+    """Recursively find files ending in one of ``suffixes`` below ``root``, sorted by recording ID.
 
+    Suffixes are compared without regard to case (``_eeg.EDF`` is found too).
     Hidden folders, folders named in ``exclude_dir_names`` and the folders in
     ``exclude_paths`` (for example the results folder) are skipped so that
     ElectroClean's own outputs and derived data are never treated as source
     recordings.
     """
+    if isinstance(suffixes, str):
+        suffixes = (suffixes,)
+    endings = tuple(sfx.lower() for sfx in suffixes)
     root_path = Path(root)
     if not root_path.is_dir():
         raise NotADirectoryError(f"Dataset folder not found: {root_path}")
@@ -209,7 +279,7 @@ def discover_recordings(
             and os.path.normcase(os.path.abspath(os.path.join(dirpath, d))) not in excluded_paths
         )
         for name in sorted(filenames):
-            if name.endswith(suffix) and not name.startswith("."):
+            if name.lower().endswith(endings) and not name.startswith(".") and recording_format(name):
                 found.append(describe_recording(Path(dirpath) / name, root_path))
     found.sort(key=lambda r: r.recording_id)
     return found

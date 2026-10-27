@@ -2,7 +2,7 @@
 
 Original events come from the recording's BIDS ``events.tsv`` when one exists
 (its rows are kept exactly as strings) and otherwise from the BrainVision
-marker file as read by MNE. They are never edited. In the viewer they are drawn
+marker file or the EDF+/BDF+ annotations, as read by MNE. They are never edited. In the viewer they are drawn
 as vertical event lines, which cannot be moved or deleted, while artifact
 annotations are drawn as shaded intervals.
 """
@@ -23,7 +23,12 @@ from electroclean.app.io.tsv import TSVError, read_tsv
 
 SOURCE_EVENTS_TSV = "events_tsv"
 SOURCE_VMRK = "brainvision_vmrk"
+SOURCE_EDF = "edf_annotations"
+SOURCE_BDF = "bdf_annotations"
 SOURCE_NONE = "none"
+# Annotations describing the recording itself rather than an experimental event.
+NON_EVENT_PREFIXES = ("new segment", "bad_acq_skip")
+MAX_ROW_PROBLEMS = 10
 
 
 def format_seconds(value: float) -> str:
@@ -67,6 +72,7 @@ class OriginalEvents:
     onset_s: list[float | None] = field(default_factory=list)
     sample: list[int | None] = field(default_factory=list)
     sample_computed: bool = False
+    sample_column_ignored: bool = False
     problems: list[str] = field(default_factory=list)
     comparison: dict[str, Any] = field(default_factory=dict)
 
@@ -98,9 +104,12 @@ class OriginalEvents:
         samples = []
         tts = self.trial_types
         vals = self.values
+        from_file = self.source in (SOURCE_EDF, SOURCE_BDF)
         for i, s in enumerate(self.sample):
             if s is None or s < 0 or s >= timing.n_samples:
                 continue
+            if from_file and tts[i].lower().startswith("bad_acq_skip"):
+                continue  # shown as a hatched stretch without data, not as an event line
             label = tts[i] if tts[i] not in ("", "n/a") else f"value {vals[i]}"
             labels.append(label)
             samples.append(s)
@@ -120,6 +129,18 @@ def _parse_rows(ev: OriginalEvents, timing: RecordingTiming) -> None:
     onset_col = ev.column("onset")
     has_sample = "sample" in ev.columns
     sample_col = ev.column("sample")
+    if has_sample:
+        given = [v for v in sample_col if v not in ("n/a", "")]
+        if given and all(parse_int_code(v) is None for v in given):
+            # BIDS defines "sample" as the onset in samples; some datasets use the name for
+            # something else (for example a stimulus-software timestamp). Onsets are used instead.
+            ev.sample_column_ignored = True
+            ev.problems.append(
+                f"The sample column does not hold sample numbers (for example {given[0]!r}); "
+                "the onset column is used for timing and the sample column is kept unchanged"
+            )
+            has_sample = False
+    row_problems: list[str] = []
     for i in range(len(ev.rows)):
         onset = parse_float(onset_col[i])
         ev.onset_s.append(onset)
@@ -127,19 +148,22 @@ def _parse_rows(ev: OriginalEvents, timing: RecordingTiming) -> None:
         if has_sample:
             sample = parse_int_code(sample_col[i])
             if sample is None and sample_col[i] not in ("n/a", ""):
-                ev.problems.append(f"Row {i + 1}: sample value {sample_col[i]!r} is not an integer")
+                row_problems.append(f"Row {i + 1}: sample value {sample_col[i]!r} is not an integer")
         if sample is None and onset is not None:
             sample = timing.time_to_sample(onset)
         if onset is None:
-            ev.problems.append(f"Row {i + 1}: onset {onset_col[i]!r} is not a number")
+            row_problems.append(f"Row {i + 1}: onset {onset_col[i]!r} is not a number")
         elif has_sample and sample is not None:
             implied = timing.time_to_sample(onset)
             if abs(implied - sample) > 1:
-                ev.problems.append(
+                row_problems.append(
                     f"Row {i + 1}: onset {onset_col[i]} s implies sample {implied} but the sample "
                     f"column says {sample}"
                 )
         ev.sample.append(sample)
+    ev.problems.extend(row_problems[:MAX_ROW_PROBLEMS])
+    if len(row_problems) > MAX_ROW_PROBLEMS:
+        ev.problems.append(f"... and {len(row_problems) - MAX_ROW_PROBLEMS} more row(s) with the same kinds of problem")
     ev.sample_computed = not has_sample
 
 
@@ -155,12 +179,18 @@ def events_from_tsv(path: Path, timing: RecordingTiming) -> OriginalEvents:
     return ev
 
 
-def events_from_raw_annotations(raw: Any, timing: RecordingTiming, vmrk: Path | None) -> OriginalEvents:
-    """Build event rows from the BrainVision markers that MNE read into ``raw``.
+def events_from_raw_annotations(
+    raw: Any, timing: RecordingTiming, path: Path | None, file_format: str = "brainvision"
+) -> OriginalEvents:
+    """Build event rows from the markers or annotations that MNE read into ``raw``.
 
-    ``trial_type`` is MNE's marker description (e.g. ``Stimulus/S  1``) and
-    ``value`` is the integer MNE's BrainVision parser assigns to it (for
-    example 1 for ``Stimulus/S  1`` and 1001 for ``Response/R  1``).
+    For BrainVision, ``trial_type`` is MNE's marker description (e.g.
+    ``Stimulus/S  1``) and ``value`` is the integer MNE's BrainVision parser
+    assigns to it (for example 1 for ``Stimulus/S  1`` and 1001 for
+    ``Response/R  1``). For EDF+ and BDF+, ``trial_type`` is the annotation
+    text and ``value`` the integer MNE assigns to each distinct text
+    (``mne.events_from_annotations``), or the text itself when it is an
+    integer. ``path`` is the file the markers were read from.
     """
     import mne
 
@@ -186,18 +216,35 @@ def events_from_raw_annotations(raw: Any, timing: RecordingTiming, vmrk: Path | 
                 json.dumps(list(ch), ensure_ascii=False) if ch else "n/a",
             ]
         )
-    ev = OriginalEvents(source=SOURCE_VMRK if len(rows) else SOURCE_NONE, path=vmrk, columns=columns, rows=rows)
+    source = {"edf": SOURCE_EDF, "bdf": SOURCE_BDF}.get(file_format, SOURCE_VMRK)
+    ev = OriginalEvents(source=source if len(rows) else SOURCE_NONE, path=path, columns=columns, rows=rows)
     _parse_rows(ev, timing)
     return ev
 
 
-def compare_with_markers(tsv_events: OriginalEvents, raw: Any, timing: RecordingTiming) -> dict[str, Any]:
-    """Compare events.tsv samples with BrainVision marker samples (warnings only)."""
+def compare_with_markers(
+    tsv_events: OriginalEvents, raw: Any, timing: RecordingTiming, file_format: str = "brainvision"
+) -> dict[str, Any]:
+    """Compare events.tsv samples with the recording's own markers (warnings only).
+
+    A BrainVision recording always has a marker file, so an events.tsv row
+    without a marker is reported. EDF and BDF files often carry no event
+    annotations at all; then the events.tsv is the only record of the events
+    and there is nothing to compare.
+    """
     marker_samples = sorted(
         timing.time_to_sample(timing.from_mne_onset(float(a["onset"])))
         for a in raw.annotations
-        if not str(a["description"]).lower().startswith("new segment")
+        if not str(a["description"]).lower().startswith(NON_EVENT_PREFIXES)
     )
+    if file_format != "brainvision" and not marker_samples:
+        return {
+            "n_events_tsv": len(tsv_events),
+            "n_file_markers": 0,
+            "compared": False,
+            "note": "The file has no event annotations; events.tsv is the only record of the events.",
+            "consistent": True,
+        }
     tsv_samples = sorted(s for s in tsv_events.sample if s is not None)
     remaining = list(marker_samples)
     unmatched = 0
@@ -209,7 +256,8 @@ def compare_with_markers(tsv_events: OriginalEvents, raw: Any, timing: Recording
             remaining.remove(hit)
     return {
         "n_events_tsv": len(tsv_events),
-        "n_vmrk_markers": len(marker_samples),
+        "n_vmrk_markers" if file_format == "brainvision" else "n_file_markers": len(marker_samples),
+        "compared": True,
         "events_tsv_rows_without_marker": unmatched,
         "markers_without_events_tsv_row": len(remaining),
         "consistent": unmatched == 0 and not remaining,

@@ -425,7 +425,7 @@ class AdminDialog(QDialog):
         from electroclean.app.io.discovery import discover_recordings
 
         s, _ = self._settings()
-        return [r.recording_id for r in discover_recordings(self.root, suffix=s.discovery_suffix,
+        return [r.recording_id for r in discover_recordings(self.root, suffixes=s.discovery_suffixes,
                                                             exclude_dir_names=s.discovery_exclude_dir_names)]
 
     # ---------------------------------------------------------------- study
@@ -918,7 +918,7 @@ class AdminDialog(QDialog):
         from electroclean.app.session.failures import FailureLog
 
         s, _ = self._settings()
-        recs = discover_recordings(self.root, suffix=s.discovery_suffix, exclude_dir_names=s.discovery_exclude_dir_names)
+        recs = discover_recordings(self.root, suffixes=s.discovery_suffixes, exclude_dir_names=s.discovery_exclude_dir_names)
         un = FailureLog(self._layout()).unresolved(recs, {})
         if not un:
             self.p_text.setHtml("<p>No unresolved load failures.</p>")

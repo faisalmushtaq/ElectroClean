@@ -414,7 +414,9 @@ class AnnotationSession:
             "annotator": {"annotator_id": self.annotator_id, "display_name": self.display_name},
             "recording": {
                 "recording_id": lr.info.recording_id,
-                "vhdr": lr.files.vhdr.name,
+                "format": lr.files.format_name,
+                "file": lr.files.path.name,
+                "vhdr": lr.files.vhdr.name if lr.files.vhdr else None,
                 "eeg": lr.files.eeg.name if lr.files.eeg else None,
                 "vmrk": lr.files.vmrk.name if lr.files.vmrk else None,
                 "bids_sidecars": {
@@ -426,6 +428,8 @@ class AnnotationSession:
                 **lr.info.timing.to_dict(),
                 "n_channels": len(lr.info.ch_names),
                 "ch_names": list(lr.info.ch_names),
+                "hidden_channels": list(lr.info.hidden_channels),
+                "acquisition_gaps_samples": [list(g) for g in lr.acquisition_gaps],
                 "source_fingerprint": lr.fingerprint,
             },
             "timing": {

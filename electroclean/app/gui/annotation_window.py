@@ -105,7 +105,9 @@ class AnnotationWorkspace(QObject):
             overview_mode=settings.display.overview_mode,
         )
         zones = self.loaded.filter_report.transient_zones(self.loaded.timing.n_samples)
-        self.controller = AnnotationController(self.browser, session.store, transient_zones=zones)
+        sf = self.loaded.timing.sfreq
+        gaps = [(a / sf, b / sf) for a, b in self.loaded.acquisition_gaps]
+        self.controller = AnnotationController(self.browser, session.store, transient_zones=zones, gap_zones=gaps)
         if display_prefix:
             self.controller.set_display_prefix(display_prefix)
         self.controller.requestChannelEdit = self.edit_channels_of  # type: ignore[method-assign]
@@ -354,7 +356,9 @@ class AnnotationWorkspace(QObject):
             ("Mode", s.mode + (f" ({s.context_id})" if s.context_id else "")),
             ("Sampling rate", f"{t.sfreq:g} Hz"),
             ("Duration", f"{t.duration_s:.1f} s ({format_hms(t.duration_s)})"),
-            ("Channels", str(len(lr.info.ch_names))),
+            ("Format", lr.files.format_name),
+            ("Channels", str(len(lr.info.ch_names))
+             + (f" shown ({len(lr.info.hidden_channels)} hidden by the channels.hide setting)" if lr.info.hidden_channels else "")),
             ("Viewing filters", s.filters.describe() + (" (fixed by administrator)" if s.filters.locked else "")),
             ("Filter edge zones", f"±{fr.transient_half_width_s:.2f} s at edges and discontinuities"),
             ("Original events", f"{len(lr.original_events)} from {lr.original_events.source.replace('_', ' ')}"),

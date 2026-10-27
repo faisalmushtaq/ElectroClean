@@ -91,7 +91,7 @@ class StartWindow(QMainWindow):
         df = QFormLayout(data)
         row = QHBoxLayout()
         self.dataset = QLineEdit()
-        self.dataset.setPlaceholderText("Folder containing the BrainVision (*_eeg.vhdr) recordings")
+        self.dataset.setPlaceholderText("Folder containing the recordings (*_eeg.vhdr, *_eeg.edf or *_eeg.bdf)")
         browse = QPushButton("Browse…")
         browse.clicked.connect(self._browse_dataset)
         row.addWidget(self.dataset)
@@ -271,7 +271,7 @@ class StartWindow(QMainWindow):
         try:
             recs = discover_recordings(
                 root,
-                suffix=settings.discovery_suffix,
+                suffixes=settings.discovery_suffixes,
                 exclude_dir_names=settings.discovery_exclude_dir_names,
                 follow_symlinks=settings.discovery_follow_symlinks,
             )

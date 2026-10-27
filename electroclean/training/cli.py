@@ -106,7 +106,7 @@ def cmd_allocate(a: argparse.Namespace) -> int:
     from electroclean.app.io.discovery import discover_recordings
 
     settings, _ = load_settings(a.dataset)
-    recs = [r.recording_id for r in discover_recordings(a.dataset, suffix=settings.discovery_suffix,
+    recs = [r.recording_id for r in discover_recordings(a.dataset, suffixes=settings.discovery_suffixes,
                                                         exclude_dir_names=settings.discovery_exclude_dir_names)]
     assignments = admin.make_balanced_allocation(a.dataset, recs, a.annotators, a.raters_per_recording, a.seed)
     for aid, rids in assignments.items():

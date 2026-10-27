@@ -269,7 +269,11 @@ class ReferenceSet:
             app_version=__version__,
             context={"reference_set_id": self.set_id, "provenance": provenance},
         )
-        name = safe_component(rid.replace("/", "__").removesuffix(".vhdr")) + "_reference_annotations.json"
+        base = rid.replace("/", "__")
+        # BrainVision names keep their earlier form; others keep their extension (x_eeg.edf -> x_eeg_edf)
+        # so that two formats of one recording can never share a reference file.
+        base = base.removesuffix(".vhdr") if base.endswith(".vhdr") else base.replace(".", "_")
+        name = safe_component(base) + "_reference_annotations.json"
         path = self.directory / "references" / name
         write_annotations_json(path, ref, overwrite=True)
         self.recordings[rid] = {

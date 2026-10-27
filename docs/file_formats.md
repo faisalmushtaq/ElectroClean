@@ -9,8 +9,8 @@ into place in one step, so a file is either complete or absent.
 
 * **`onset`** is in seconds from the first sample stored in the recording's
   data file. This is the BIDS `events.tsv` convention and equals MNE's
-  `raw.times`. For BrainVision files MNE always reads the first sample as
-  sample 0.
+  `raw.times`. For BrainVision, EDF and BDF files MNE reads the first sample
+  as sample 0.
 * **`sample`** is a 0-based index into the data file:
   `sample = onset × sampling frequency`.
 * An annotation covers the half-open sample range
@@ -22,8 +22,9 @@ into place in one step, so a file is either complete or absent.
   `onset + first_samp / sfreq` relative to the measurement date;
   `electroclean.app.annotations.mne_bridge` converts both ways.
 * **Channels.** A list of channel names exactly as stored in the recording.
-  An **empty list means the whole recording montage** (every channel in the
-  recording) over the annotated interval. Selecting every channel explicitly
+  An **empty list means the whole recording montage** (every channel that was
+  shown, which is every channel in the recording unless the `channels.hide`
+  setting hid some) over the annotated interval. Selecting every channel explicitly
   is stored as the full list, so the annotator's choice is kept.
 
 ## Output folder
@@ -54,7 +55,8 @@ Annotated_Events/
                         autosaves that were not restored
 ```
 
-The base name is the recording's file name without `.vhdr` followed by
+The base name is the recording's file name without its extension (`.vhdr`,
+`.edf` or `.bdf`) followed by
 `_annotator-<ID>`. Files are never overwritten: if an administrator allows an
 annotator to annotate a recording again, the new files get `_attempt-02`
 (and so on) before the suffix.
@@ -65,9 +67,9 @@ One row per original event, unchanged, and one row per artifact annotation,
 in order of onset. Columns, in this order:
 
 1. every column of the original `events.tsv`, in its original order (if the
-   recording has no `events.tsv`, the BrainVision markers read by MNE are
-   used, with columns `onset`, `duration`, `trial_type`, `value`, `sample`,
-   `channels`);
+   recording has no `events.tsv`, the BrainVision markers or the EDF+/BDF+
+   annotations read by MNE are used, with columns `onset`, `duration`,
+   `trial_type`, `value`, `sample`, `channels`);
 2. any of `onset`, `duration`, `trial_type`, `value`, `sample`, `channels`
    that the original lacked;
 3. `artifact_code`, `event_source`, `annotation_id`, `annotator_id`,
@@ -80,9 +82,9 @@ in order of onset. Columns, in this order:
 | `trial_type` | original text | HED-SCORE label, e.g. `Eye-blink-artifact` |
 | `value` | original text | `n/a` |
 | `artifact_code` | `n/a` | fixed artifact code (100-121 for specific types, 130-136 for group terms) |
-| `sample` | original text; computed from `onset` if the original had no `sample` column | `onset_sample` |
+| `sample` | original text; computed from `onset` if the original had no `sample` column | `onset_sample` (also when the dataset uses `sample` for something else, such as a stimulus-software timestamp; `events.json` then says so) |
 | `channels` | original text, or `n/a` | JSON array, e.g. `["Fp1","Fp2"]`; `[]` = whole montage |
-| `event_source` | `original:events_tsv` or `original:brainvision_vmrk` | `electroclean_artifact` |
+| `event_source` | `original:events_tsv`, `original:brainvision_vmrk`, `original:edf_annotations` or `original:bdf_annotations` | `electroclean_artifact` |
 | `annotation_id` | `n/a` | stable 32-character identifier |
 | `annotator_id` | `n/a` | annotator ID |
 | `original_row` | 1-based row number in the original file | `n/a` |
@@ -109,7 +111,10 @@ The original `events.json` (with BIDS inheritance applied), plus:
 
 * descriptions of `channels`, `artifact_code` (with a `Levels` entry for every
   code), `event_source`, `annotation_id`, `annotator_id` and `original_row`;
-  the original description of `value` is kept unchanged;
+  the original description of `value` is kept unchanged; a column that
+  ElectroClean adds because the original events lack it (often `value` or
+  `sample`) is described by ElectroClean, even when the dataset's
+  `events.json` describes a column of that name;
 * `trial_type.Levels` and `trial_type.HED` entries for the 29 artifact terms,
   using HED tags such as `sc:Eye-blink-artifact` (declare
   `"HEDVersion": ["8.5.0", "sc:score_2.2.0"]` in `dataset_description.json` to
@@ -150,6 +155,12 @@ The original `events.json` (with BIDS inheritance applied), plus:
 }
 ```
 
+`ch_names` are the channels that were shown and could be annotated. When the
+`channels.hide` setting hid channels of the recording, they are listed in
+`recording.hidden_channels` (the key is absent otherwise). `fingerprint` has
+the roles `vhdr`, `eeg` and `vmrk` for BrainVision and `eeg` alone for EDF and
+BDF, followed by the BIDS sidecars.
+
 When the file is read, the sample fields are authoritative; the seconds must
 agree with them to within half a sample, the `value` must match the label,
 `n_annotations` must match and the catalogue digest must match its label
@@ -169,7 +180,7 @@ A single number: seconds spent annotating, to the nearest millisecond, e.g.
 |---|---|
 | `session_id`, `mode`, `context` | Session identity, mode and (for training) reference set |
 | `annotator` | ID and display name |
-| `recording` | Recording ID, file names, BIDS sidecars used, timing, channel names, source fingerprints |
+| `recording` | Recording ID, `format` (`BrainVision`, `EDF` or `BDF`), `file` and the BrainVision file names (`vhdr`, `eeg`, `vmrk`, null for EDF and BDF), BIDS sidecars used, timing, channel names, `hidden_channels`, `acquisition_gaps_samples` (stretches marked `BAD_ACQ_SKIP`, as [start, stop) samples), source fingerprints |
 | `timing` | `session_opened`, `start_timestamp` (viewer ready), `finish_timestamp` (Save and Finish), `elapsed_seconds` (all the time spent on the recording, including earlier unfinished sessions), clock used, `elapsed_in_earlier_sessions_seconds` and `resumed_from_autosave` (the earlier sessions continued from an autosave) |
 | `application` | ElectroClean version, platform, versions of Python, MNE, mne-qt-browser, NumPy, SciPy, pandas, PySide6, pyqtgraph, matplotlib |
 | `filters` | Selected settings, whether fixed by the administrator, and `design`: the exact MNE calls and parameters, filter lengths, MNE's own description of each filter, edge-transient duration, discontinuities filtered separately, channels filtered and how the display data were stored |
@@ -184,7 +195,7 @@ A single number: seconds spent annotating, to the nearest millisecond, e.g.
 
 | Column | Meaning |
 |---|---|
-| `recording_id` | Path of the `.vhdr` file relative to the dataset folder |
+| `recording_id` | Path of the recording file (`.vhdr`, `.edf` or `.bdf`) relative to the dataset folder |
 | `annotator_id` | Annotator |
 | `mode` | `standard`, `practice` or `assessment` |
 | `context` | Reference set ID for training modes, empty otherwise |
@@ -204,8 +215,9 @@ recording IDs completed in standard mode by that annotator, one per line
   separated by tabs.
 * `failure_log.jsonl`: one JSON object per line with the same information,
   the failure kind (`missing_companion`, `corrupt_recording`,
-  `inconsistent_recording`, `malformed_bids_metadata`, `filter_error`,
-  `permission`, `memory`, `unexpected_error`), the size and modification time
+  `inconsistent_recording`, `unsupported_format`, `no_channels`,
+  `malformed_bids_metadata`, `filter_error`, `permission`, `memory`,
+  `unexpected_error`), the size and modification time
   of every file of the recording, and the settings that caused the failure.
   Lines with `"event": "resolved"` lift a failure. Failures of the last four
   kinds may belong to one computer, so they only hold the recording back from
@@ -229,7 +241,9 @@ recording IDs completed in standard mode by that annotator, one per line
   "settings": {
     "filters": {"highpass_enabled": true, "highpass_hz": 1.0, "notch_enabled": true, "notch_hz": 50.0,
                 "method": "fir", "locked": true},
-    "output": {"directory": "/shared/drive/Annotated_Events"}
+    "output": {"directory": "/shared/drive/Annotated_Events"},
+    "discovery": {"suffixes": ["_eeg.vhdr", "_eeg.edf", "_eeg.bdf"]},
+    "channels": {"hide": ["TIME_STAMP_*", "COUNTER", "CQ_*", "EQ_*"]}
   },
   "training": {"reference_sets_dir": "derivatives/electroclean_reference_sets"},
   "admin_passphrase": {"algorithm": "pbkdf2_sha256", "iterations": 200000, "salt": "…", "hash": "…"}

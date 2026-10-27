@@ -10,7 +10,7 @@ It has three parts that share one annotation file format:
 
 | Component | What it does | How to start it |
 |---|---|---|
-| **A. Annotation** | View continuous BrainVision EEG with MNE-Python's browser, mark artifact intervals with any of the 29 HED-SCORE artifact terms on the whole montage or on chosen channels, and save validated, BIDS-compatible outputs. Work is saved automatically until it is finished. | The ElectroClean application, `electroclean`, or a launcher in `launchers/` |
+| **A. Annotation** | View continuous EEG (BrainVision, EDF/EDF+ or BDF) with MNE-Python's browser, mark artifact intervals with any of the 29 HED-SCORE artifact terms on the whole montage or on chosen channels, and save validated, BIDS-compatible outputs. Work is saved automatically until it is finished. | The ElectroClean application, `electroclean`, or a launcher in `launchers/` |
 | **B. Inter-rater agreement** | Compare annotators by category, time and channel: time-resolved and event-based agreement, with an HTML report and tables. | `electroclean-agreement`, or *Tools → Inter-rater agreement analysis* |
 | **C. Training and assessment** | Practice with feedback against expert references, blinded competency assessment with administrator-defined criteria, and an optional short-segment quiz. | Training modes in the start window; `electroclean-admin` and *Tools → Administrator tools* |
 
@@ -68,7 +68,7 @@ python -m venv .venv
 source .venv/bin/activate            # Windows: .venv\Scripts\activate
 python -m pip install -r requirements-dev.txt
 python -m pip install --no-deps -e .
-python -m pytest                     # about 195 tests, under a minute
+python -m pytest                     # about 215 tests, under a minute
 electroclean                         # start the application
 ```
 
@@ -92,13 +92,15 @@ competency assessment. Its outputs are kept in `examples/example_output/`.
 
 On the start window enter your annotator ID (letters and digits, for example
 `A01`), choose the folder with the recordings and press **Begin new session**.
-ElectroClean finds every `*_eeg.vhdr` file in that folder and its sub-folders,
-picks a recording you have not completed yet, asks which viewing filters to
+ElectroClean finds every recording (`*_eeg.vhdr`, `*_eeg.edf` or `*_eeg.bdf`)
+in that folder and its sub-folders, picks a recording you have not completed yet, asks which viewing filters to
 use (1 Hz high-pass and 50 Hz notch by default, with 60 Hz available; they
 change only the display), and opens it. Choose the artifact type in the
 toolbar, choose *Whole montage* or *Selected channels*, and drag across the EEG
 to mark an interval. Overlapping annotations of the same type on the same
-channels are merged into one. Your work is saved automatically as you go;
+channels are merged into one. Channels that only carry information about the
+headset, such as the timestamp, contact-quality and battery channels in Emotiv
+EDF exports, are not shown (the list is a setting). Your work is saved automatically as you go;
 you can close the recording and finish it later. When you have reviewed the
 whole recording, press **Save and Finish**. The
 [user guide](docs/user_guide.md) explains every step with screenshots.
@@ -182,7 +184,7 @@ electroclean/
     reliability/    Component B
     training/       Component C
     config/         label catalogue, default settings, HED-SCORE validation snapshot
-    synthetic.py    synthetic BrainVision/BIDS data with known artifacts
+    synthetic.py    synthetic BrainVision, EDF and BDF data with known artifacts
 tests/              pytest suite (unit, integration and offscreen GUI tests)
 examples/           demo scripts and example outputs
 docs/               documentation and screenshots

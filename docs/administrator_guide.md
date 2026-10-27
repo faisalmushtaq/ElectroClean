@@ -26,6 +26,37 @@ boundary: anyone who can read the dataset folder can read its files.
 
 ![Administrator tools: reference sets](images/admin_reference_sets.png)
 
+## Recording formats and headset channels
+
+ElectroClean opens BrainVision (`*_eeg.vhdr` with its `.eeg` and `.vmrk`
+files), EDF and EDF+ (`*_eeg.edf`) and BDF (`*_eeg.bdf`) recordings, all read
+with MNE-Python, and finds all three by default. To restrict a study to one
+kind, set `"discovery": {"suffixes": ["_eeg.edf"]}` in the `settings` of the
+study file. Before an EDF or BDF file is opened, its header is compared with
+the file size: a file that holds fewer or more data records than its header
+announces (for example an interrupted copy) is refused, as is an EDF+D file,
+whose data records are not contiguous in time (MNE reads such files as if they
+were continuous, so annotation times would be wrong). When the original
+events have no `events.tsv`, the annotations stored in an EDF+ or BDF+ file
+are used as the original events. Stretches the file marks as `BAD_ACQ_SKIP`
+(MNE writes this, for example, for the padding of the last data record when it
+exports EDF) are hatched in the viewer and filtered separately.
+
+Some headsets, Emotiv's among them, export housekeeping signals as extra
+"EEG" channels: timestamps, sample counters, contact and signal quality, battery
+level and marker channels. Shown next to the EEG they would crowd the display,
+and in the channel analyses a whole-montage annotation would count them as
+annotated channels. The setting `channels.hide` lists names (with `*` and `?`
+as wildcards, case-sensitive) of channels that are not shown and cannot be
+annotated. By default it lists the housekeeping channels of Emotiv EDF exports
+(`TIME_STAMP_s`, `COUNTER`, `INTERPOLATED`, `RAW_CQ`, `BATTERY`,
+`MarkerValueInt`, `CQ_*`, `EQ_*` and so on); a study file can replace the list,
+for example with `"channels": {"hide": []}` to show every channel. Hidden
+channels are listed in every annotation and session file, and the
+annotations' "whole montage" means the channels that were shown. Keep the
+setting the same for all annotators of a study: files made with different
+lists are compared on the channels they share, with a warning.
+
 ## Fixing the viewing filters
 
 The defaults are a 1 Hz high-pass and a 50 Hz notch filter, both zero-phase FIR
@@ -86,7 +117,8 @@ HED-SCORE artifact names. Older study files that still set
 ## Load failures
 
 Recordings that cannot be opened (missing or renamed companion files, a
-truncated data file, a malformed `events.tsv`, an event-code clash, and so on)
+truncated data file, an EDF file whose header and size disagree, a malformed
+`events.tsv`, and so on)
 are listed in `Annotated_Events/failed_load.txt` and `failure_log.jsonl`. They
 are not offered again until the files change, the setting that caused the
 failure changes, or you mark the failure resolved. Problems that may belong to

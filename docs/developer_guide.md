@@ -24,7 +24,7 @@
 electroclean/
     __init__.py            version
     __main__.py            python -m electroclean
-    synthetic.py           synthetic BrainVision/BIDS recordings with ground truth
+    synthetic.py           synthetic BrainVision, EDF and BDF recordings with ground truth
     config/
         artifact_labels.json            the 29 HED-SCORE artifact terms, codes and hierarchy
         hed_score_2.2.0_validation.json snapshot of the label check against HED SCORE
@@ -53,17 +53,22 @@ electroclean/
 ## Data flow of one session
 
 1. `io.discovery.discover_recordings` walks the dataset, parses each
-   `.vhdr` header for `DataFile` and `MarkerFile`, and resolves BIDS sidecars
-   with the inheritance principle (`io.bids`).
+   BrainVision `.vhdr` header for `DataFile` and `MarkerFile` or each EDF/BDF
+   header (`io.edf`), and resolves BIDS sidecars with the inheritance
+   principle (`io.bids`). `RecordingFiles.path` is the recording's own file
+   and `RecordingFiles.format` is `brainvision`, `edf` or `bdf`.
 2. `session.selection.select_next` chooses a recording, excluding those the
    annotator completed (`session.register`) and unresolved failures
    (`session.failures`).
 3. `eeg.loading.load_recording` (run in a `QThread` by the GUI) fingerprints the
-   files, checks the data-file size, reads the recording with
-   `mne.io.read_raw_brainvision` while capturing its warnings, loads original
-   events (`eeg.events`), checks event codes, checks channels (`eeg.channels`)
-   and prepares the display copy: in memory, or as a temporary memory-mapped
-   file above `preload_memory_limit_mb`, filtered with MNE by
+   files, checks the data-file size (BrainVision) or the header against the
+   file size (EDF/BDF), reads the recording with `mne.io.read_raw_brainvision`,
+   `read_raw_edf` or `read_raw_bdf` while capturing their warnings, loads
+   original events (`eeg.events`), checks event codes, checks channels
+   (`eeg.channels`), leaves out the channels matching `channels.hide` and
+   prepares the display copy of the remaining channels: in memory, or as a
+   temporary memory-mapped file above `preload_memory_limit_mb`
+   (`Raw.load_data(memmap=...)`), filtered with MNE by
    `eeg.filtering.apply_view_filters`, which records MNE's own filter
    description.
 4. `session.session.AnnotationSession` holds a lock file, the
@@ -211,9 +216,10 @@ read the browser's changelog for changes to `AnnotRegion`, `RawViewBox`,
 * **Competency metrics.** Add an entry to `training.assessment.METRICS` and
   compute it in `compare_with_reference`.
 * **Selection strategies.** `session.selection.select_next`.
-* **Data formats.** Loading is isolated in `eeg.loading`; supporting another
-  MNE reader means providing a different discovery suffix, header check and
-  reader there. The rest of the application works on `RecordingInfo` and the
+* **Data formats.** Formats are listed in `io.discovery.FORMATS` and read in
+  `eeg.loading._read_raw`; supporting another MNE reader means adding its
+  extension there and in `config.settings.RECORDING_EXTENSIONS`, a header or
+  size check, and a source for its markers in `eeg.events`. The rest of the application works on `RecordingInfo` and the
   display `Raw`.
 * **Autosave.** `session.autosave` writes the canonical document, the
   elapsed time and the source fingerprint atomically; `AnnotationSession`

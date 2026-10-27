@@ -156,7 +156,7 @@ class AppController(QObject):
         try:
             self.recordings = discover_recordings(
                 request.dataset_root,
-                suffix=s.discovery_suffix,
+                suffixes=s.discovery_suffixes,
                 exclude_dir_names=tuple(s.discovery_exclude_dir_names),
                 exclude_paths=(out,),
                 follow_symlinks=s.discovery_follow_symlinks,

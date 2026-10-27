@@ -12,7 +12,8 @@ original columns in their original order, then any of ``onset``,
 original lacked, then four ElectroClean columns:
 
 ``event_source``
-    ``original:events_tsv``, ``original:brainvision_vmrk`` or
+    ``original:events_tsv``, ``original:brainvision_vmrk``,
+    ``original:edf_annotations``, ``original:bdf_annotations`` or
     ``electroclean_artifact``. This always distinguishes original events from
     artifact annotations, even if an original event uses a code from 100-115.
 ``annotation_id``
@@ -197,6 +198,17 @@ def build_events_sidecar(
     cat = doc.catalogue
     out = copy.deepcopy(original_sidecar) if isinstance(original_sidecar, dict) else {}
     notes: list[str] = []
+    # Columns that ElectroClean adds because the original events lack them get ElectroClean's own
+    # description, even when the dataset's events.json (often shared by many recordings) describes
+    # a column of that name.
+    base_cols = list(original.columns) if original.source != SOURCE_NONE else []
+    for col in REQUIRED_COLUMNS:
+        if col not in base_cols and col in out:
+            del out[col]
+            notes.append(
+                f"The original events.json describes a {col!r} column that the original events do not have; "
+                "ElectroClean's description is used for the column it adds"
+            )
 
     tt = out.setdefault("trial_type", {})
     if not isinstance(tt, dict):
@@ -220,9 +232,15 @@ def build_events_sidecar(
         else:
             notes.append("Original trial_type HED annotation is not a mapping; HED tags for artifacts not added")
 
-    val = out.setdefault("value", {})
-    if isinstance(val, dict):
-        val.setdefault("Description", "Marker value of the original events (n/a on artifact rows).")
+    if "value" in base_cols:
+        val = out.setdefault("value", {})
+        if isinstance(val, dict):
+            val.setdefault("Description", "Marker value of the original events (n/a on artifact rows).")
+    else:
+        out["value"] = {
+            "Description": "Added by ElectroClean for BIDS compatibility; n/a on every row (the original events "
+            "have no value column, and artifact codes are in artifact_code)."
+        }
     out["artifact_code"] = {
         "LongName": "Artifact code",
         "Description": (
@@ -232,7 +250,18 @@ def build_events_sidecar(
         ),
         "Levels": {str(item.value): item.label for item in sorted(cat.labels, key=lambda x: x.value)},
     }
-    out.setdefault("sample", {"Description": "Onset as a 0-based sample index relative to the first sample in the data file."})
+    sample_desc = "Onset as a 0-based sample index relative to the first sample in the data file."
+    if "sample" not in base_cols:
+        sample_desc += (
+            " For original rows ElectroClean computed it from onset (the original events have no sample column)."
+        )
+    sample = out.setdefault("sample", {"Description": sample_desc})
+    if original.sample_column_ignored and isinstance(sample, dict):
+        # The dataset uses "sample" for something else; say what the artifact rows hold.
+        sample["Description"] = (
+            f"{sample.get('Description', '')} On rows with event_source '{ARTIFACT_SOURCE}': {sample_desc[0].lower()}"
+            f"{sample_desc[1:]}"
+        ).strip()
     out["channels"] = {
         "LongName": "Affected channels",
         "Description": (
@@ -250,6 +279,8 @@ def build_events_sidecar(
         "Levels": {
             "original:events_tsv": "Unchanged row from the recording's original BIDS events.tsv.",
             "original:brainvision_vmrk": "Marker from the BrainVision .vmrk file (read with MNE-Python).",
+            "original:edf_annotations": "Annotation from the EDF+ file itself (read with MNE-Python).",
+            "original:bdf_annotations": "Annotation from the BDF+ file itself (read with MNE-Python).",
             ARTIFACT_SOURCE: "Artifact annotation created with ElectroClean.",
         },
     }

@@ -86,6 +86,8 @@ def validate_annotations_json(data: bytes, doc: AnnotationDocument) -> None:
         raise ValidationError("annotations.json timing metadata differs")
     if parsed.recording.ch_names != doc.recording.ch_names:
         raise ValidationError("annotations.json channel list differs")
+    if parsed.recording.hidden_channels != doc.recording.hidden_channels:
+        raise ValidationError("annotations.json list of hidden channels differs")
 
 
 def validate_time_file(data: bytes, elapsed_s: float) -> None:

@@ -10,6 +10,7 @@ research team.
 | Need | Provided by MNE | Added by ElectroClean |
 |---|---|---|
 | Reading BrainVision | `mne.io.read_raw_brainvision` (resolves `.eeg` and `.vmrk` from the header) | Pre-checks of companion files and data-file size; treating MNE's "markers outside data range" and "marker file not found" warnings as failures |
+| Reading EDF, EDF+ and BDF | `mne.io.read_raw_edf`, `read_raw_bdf` (EDF+ annotations become `raw.annotations`) | A check of the header against the file size, because MNE silently infers the number of data records from the size when they disagree; refusing EDF+D; hidden headset channels; `BAD_ACQ_SKIP` stretches treated as gaps |
 | BIDS sidecars | (MNE-BIDS is not used, to keep dependencies minimal) | Entity parsing and the inheritance principle for `channels.tsv`, `events.tsv`, `events.json`, `eeg.json` |
 | Display filters | `Raw.filter`, `Raw.notch_filter`, `skip_by_annotation` | Applying them to a display copy only (in memory or memory-mapped), recording MNE's filter design, marking edge zones |
 | Continuous EEG viewer | mne-qt-browser: scrolling, zoom, scaling, channel paging, overview bar, time cursor, events | Annotation interaction (below), toolbar, panels, Save and Finish |
@@ -69,15 +70,15 @@ data-file size is also checked against the channel count and sample format.
 **Original events.** When a BIDS `events.tsv` exists its rows are
 authoritative and are copied as text, never re-formatted. Otherwise the
 BrainVision markers are used, with MNE's codes (for example 1 for
-`Stimulus/S  1`, 1001 for `Response/R  1`). Differences between `events.tsv`
-and the marker file are reported, not corrected.
-
-**Event codes 100 to 115.** Original codes in this range would share a code
-with an artifact label. The specification asks for an explicit policy before
-export; ElectroClean applies it before annotation, so no annotation time is
-wasted on a recording that cannot be exported. The only available policy
-keeps both and distinguishes them by `event_source`; codes are never
-renumbered.
+`Stimulus/S  1`, 1001 for `Response/R  1`), or the annotations of an EDF+ or
+BDF+ file. Differences between `events.tsv` and the marker file are reported,
+not corrected. Many EDF files have no event annotations at all; their
+`events.tsv` is then the only record and nothing is compared. BIDS defines
+`sample` as the onset in samples; when a dataset uses the column for
+something else (one dataset tested stores stimulus-software timestamps
+there), ElectroClean times the events from `onset`, keeps the column
+unchanged and says so in the session file and `events.json`. Events that lie
+beyond the end of the recording are kept and reported.
 
 **Repeated and inconsistent codes.** Repeated codes are normal and are only
 counted. A code used for different event types, and an event type used with
@@ -117,12 +118,29 @@ the annotator is away from the computer is included.
 **Identifiers.** Annotator IDs are letters and digits only (so they are safe
 in file names and as a BIDS-style entity) and are upper-cased, so `a01` and
 `A01` cannot create two sets of files on Windows or macOS. A recording's ID
-is the path of its `.vhdr` file relative to the dataset folder, which keeps
+is the path of its `.vhdr`, `.edf` or `.bdf` file relative to the dataset folder, which keeps
 recordings with the same file name in different folders apart.
 
 **Channel metadata.** The channel names in the recording are authoritative.
 `channels.tsv` is used to check them, to give EOG and ECG channels a suitable
 scale, and to grey out channels marked bad; none of this changes any file.
+
+**Headset housekeeping channels.** Consumer headsets such as Emotiv's export
+timestamps, counters, contact-quality and battery values as extra channels,
+and the BIDS conversion of the dataset tested typed all 60 channels as EEG
+although 14 are electrodes. Typing them from `channels.tsv` is therefore not
+enough. A setting, `channels.hide`, names channels by pattern; they are left
+out of the display copy (so they are never read or filtered), cannot be
+annotated, and are recorded as `hidden_channels`. The whole montage is the
+set of channels shown, so channel-level agreement is computed over the
+electrodes. The default list holds the Emotiv names, which do not occur as
+electrode names in the 10-20 or 10-10 systems.
+
+**Stretches without data.** MNE's EDF export pads the last data record and
+marks the padding `BAD_ACQ_SKIP`. ElectroClean hatches such stretches, leaves
+them unfiltered and filters the data on either side separately, so that the
+padding does not create a filter transient. The annotation is kept with the
+original events but not drawn as an event line.
 
 **Overlapping annotations of one type by one annotator.** At the research
 team's request these are merged automatically while annotating, when they
@@ -157,6 +175,14 @@ automatically; every HED-SCORE artifact term available, group terms included;
 stand-alone applications for Windows, macOS and Linux; free for research and
 other non-commercial use (PolyForm Noncommercial License 1.0.0); autosave.
 
+## Changes after a test on the group's own data (27 October 2026)
+
+ElectroClean was run over the group's low-density dataset (772 Emotiv
+recordings in EDF+ with BIDS sidecars). Every recording now loads; this needed
+EDF, EDF+ and BDF support, the `channels.hide` setting for the headset's
+housekeeping channels, the handling of `BAD_ACQ_SKIP` padding and of a
+`sample` column that holds timestamps, all described above.
+
 ## Decisions still open
 
 1. **Agreement settings to pre-register:** bin widths, the bin coverage rule,
@@ -174,3 +200,7 @@ other non-commercial use (PolyForm Noncommercial License 1.0.0); autosave.
 6. **Code signing** of the stand-alone applications (Apple and Windows
    certificates), so that annotators are not asked to confirm the first start,
    and whether an Intel macOS build is needed.
+7. **Contact-quality channels.** Emotiv's `CQ_*` channels are hidden with the
+   other housekeeping channels. They could instead be shown (not annotated) as
+   a guide to poor electrode contact; this needs a decision on whether they
+   would help or bias annotators.

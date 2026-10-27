@@ -94,7 +94,7 @@ def _candidates(directory: Path, suffix: str, extension: str, target: BidsName) 
 
 
 def resolve_sidecars(recording_path: Path, dataset_root: Path) -> SidecarResolution:
-    """Find metadata files for ``recording_path`` (a ``*_eeg.vhdr`` file)."""
+    """Find metadata files for ``recording_path`` (a ``*_eeg.vhdr``, ``*_eeg.edf`` or ``*_eeg.bdf`` file)."""
     target = parse_bids_name(recording_path.name)
     res = SidecarResolution()
     # Directories from the dataset root down to the recording's folder.

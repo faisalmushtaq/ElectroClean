@@ -117,6 +117,23 @@ def test_sidecar_describes_new_columns_and_codes(layout, settings, catalogue, lo
     assert sidecar["ElectroCleanMetadata"]["label_catalogue"]["sha256"] == catalogue.sha256
 
 
+def test_sidecar_never_describes_added_columns_with_the_datasets_text(layout, settings, catalogue, loaded):
+    """A dataset-wide events.json may describe columns that this recording's events.tsv lacks."""
+    s = make_session(layout, settings, catalogue, loaded)
+    doc = _doc(loaded, s.store)
+    ev = loaded.original_events
+    keep = [ev.columns.index(c) for c in ("onset", "duration", "trial_type")]
+    narrow = OriginalEvents(source="events_tsv", path=None, columns=["onset", "duration", "trial_type"],
+                            rows=[[r[i] for i in keep] for r in ev.rows], onset_s=ev.onset_s, sample=ev.sample,
+                            sample_computed=True)
+    original = {"sample": {"Description": "Original PsychoPy timestamp."}, "value": {"Description": "Trigger"}}
+    sidecar, notes = build_events_sidecar(original, narrow, doc)
+    assert sidecar["sample"]["Description"].startswith("Onset as a 0-based sample index")
+    assert "computed it from onset" in sidecar["sample"]["Description"]
+    assert sidecar["value"]["Description"].startswith("Added by ElectroClean")
+    assert sum("does not have" in n or "do not have" in n for n in notes) == 2
+
+
 def test_vmrk_events_used_without_events_tsv(rich_dataset, catalogue):
     from electroclean.app.eeg.loading import load_recording
     from electroclean.app.io.discovery import discover_recordings

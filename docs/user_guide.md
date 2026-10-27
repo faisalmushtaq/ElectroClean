@@ -15,8 +15,8 @@ a list of annotators, pick yourself from the drop-down list. The display name
 is optional and is only stored inside the session files.
 
 **Dataset folder.** Choose the folder that holds the recordings. ElectroClean
-looks through it and all its sub-folders for BrainVision recordings whose
-header file ends in `_eeg.vhdr`. The window then shows how many recordings it
+looks through it and all its sub-folders for recordings whose file name ends
+in `_eeg.vhdr` (BrainVision), `_eeg.edf` (EDF or EDF+) or `_eeg.bdf` (BDF). The window then shows how many recordings it
 found and how many you have already completed. The *Results folder* is where
 your work is saved (normally `Annotated_Events` inside the dataset folder).
 If the line *Study settings* names a study, your administrator has configured
@@ -57,7 +57,13 @@ The large panel is MNE-Python's EEG browser. Channel names are on the left,
 time in seconds along the bottom, and the black overview bar at the bottom
 shows where you are in the whole recording (click it to jump). Teal vertical
 lines are the **original experimental events** recorded during the session;
-they are shown for reference and cannot be changed.
+they are shown for reference and cannot be changed. A stretch cross-hatched in
+darker grey has no recorded data (EDF+ files mark it as `BAD_ACQ_SKIP`, for
+example the padding at the very end of many EDF files); there is nothing there
+to annotate. Some headsets store information about the recording itself
+(timestamps, sample counters, contact quality, battery) as extra channels;
+these are not shown and cannot be annotated, and the *Recording* panel says
+how many were hidden.
 
 Moving around:
 

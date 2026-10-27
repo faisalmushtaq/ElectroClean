@@ -56,6 +56,7 @@ class FilterReport:
     steps: list[FilterStep] = field(default_factory=list)
     skipped: list[str] = field(default_factory=list)
     discontinuity_samples: list[int] = field(default_factory=list)
+    acquisition_gaps: list[tuple[int, int]] = field(default_factory=list)
     filtered_channels: list[str] = field(default_factory=list)
     data_storage: str = "none"
     library_versions: dict[str, str] = field(default_factory=dict)
@@ -105,6 +106,7 @@ class FilterReport:
             ],
             "skipped": self.skipped,
             "segments_filtered_separately_at_samples": self.discontinuity_samples,
+            "acquisition_gaps_not_filtered_samples": [list(g) for g in self.acquisition_gaps],
             "edge_transient_half_width_s": self.transient_half_width_s,
             "filtered_channels": self.filtered_channels,
             "data_storage": self.data_storage,
@@ -151,17 +153,36 @@ def _iir_ringing(sfreq: float, l_freq: float | None, h_freq: float | None, order
         return 0
 
 
-def apply_view_filters(raw: Any, settings: FilterSettings, discontinuity_samples: list[int]) -> FilterReport:
-    """Filter a *preloaded viewing copy* in place and describe what was done."""
+def apply_view_filters(
+    raw: Any,
+    settings: FilterSettings,
+    discontinuity_samples: list[int],
+    acquisition_gaps: list[tuple[int, int]] | tuple[tuple[int, int], ...] = (),
+) -> FilterReport:
+    """Filter a *preloaded viewing copy* in place and describe what was done.
+
+    Each continuous segment is filtered on its own: segments are separated by
+    ``discontinuity_samples`` and by ``acquisition_gaps`` (sample ranges
+    without recorded data, which are left unfiltered).
+    """
     import mne
     import scipy
     from mne.utils import catch_logging
 
     sfreq = float(raw.info["sfreq"])
+    n_times = int(raw.n_times)
+    gaps = sorted({(int(a), int(b)) for a, b in acquisition_gaps if b > a})
+    breaks = sorted(set(int(s) for s in discontinuity_samples if s > 0))
+    # Gap edges are segment edges too (for the hatched zones), but the BAD_ACQ_SKIP
+    # annotation alone makes MNE split there; an extra boundary would create empty segments.
+    edges = set(breaks)
+    for a, b in gaps:
+        edges.update(x for x in (a, b) if 0 < x < n_times)
     report = FilterReport(
         settings=settings.to_dict(),
         sfreq=sfreq,
-        discontinuity_samples=sorted(set(int(s) for s in discontinuity_samples if s > 0)),
+        discontinuity_samples=sorted(edges),
+        acquisition_gaps=gaps,
         library_versions={"mne": mne.__version__, "numpy": np.__version__, "scipy": scipy.__version__},
     )
     if not (settings.highpass_enabled or settings.notch_enabled):
@@ -175,13 +196,15 @@ def apply_view_filters(raw: Any, settings: FilterSettings, discontinuity_samples
         report.skipped.append("No filterable channels")
         return report
 
-    # Mark discontinuities so that MNE filters each continuous segment separately.
+    # Mark discontinuities and gaps so that MNE filters each continuous segment separately.
     saved = raw.annotations.copy()
-    if report.discontinuity_samples:
-        onsets = [s / sfreq + raw.first_time for s in report.discontinuity_samples]
-        boundaries = mne.Annotations(
-            onsets, [0.0] * len(onsets), [BOUNDARY_DESCRIPTION] * len(onsets), orig_time=raw.annotations.orig_time
-        )
+    breaks = [s for s in breaks if not any(a <= s <= b for a, b in gaps)]
+    if breaks or gaps:
+        onsets = [s / sfreq + raw.first_time for s in breaks]
+        onsets += [a / sfreq + raw.first_time for a, _ in gaps]
+        durations = [0.0] * len(breaks) + [(b - a) / sfreq for a, b in gaps]
+        descriptions = [BOUNDARY_DESCRIPTION] * len(breaks) + ["BAD_ACQ_SKIP"] * len(gaps)
+        boundaries = mne.Annotations(onsets, durations, descriptions, orig_time=raw.annotations.orig_time)
         raw.set_annotations(saved + boundaries if len(saved) else boundaries)
     try:
         if settings.highpass_enabled:

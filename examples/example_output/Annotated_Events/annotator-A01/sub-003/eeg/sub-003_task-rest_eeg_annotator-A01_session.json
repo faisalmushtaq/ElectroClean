@@ -1,7 +1,7 @@
 {
   "schema": "electroclean.session",
   "schema_version": "1.0.0",
-  "session_id": "20261027T115234Z-0aca7d9c",
+  "session_id": "20261027T122223Z-0088ed79",
   "mode": "standard",
   "context": {},
   "annotator": {
@@ -10,6 +10,8 @@
   },
   "recording": {
     "recording_id": "sub-003/eeg/sub-003_task-rest_eeg.vhdr",
+    "format": "BrainVision",
+    "file": "sub-003_task-rest_eeg.vhdr",
     "vhdr": "sub-003_task-rest_eeg.vhdr",
     "eeg": "sub-003_task-rest_eeg.eeg",
     "vmrk": "sub-003_task-rest_eeg.vmrk",
@@ -53,55 +55,57 @@
       "VEOG",
       "ECG"
     ],
+    "hidden_channels": [],
+    "acquisition_gaps_samples": [],
     "source_fingerprint": {
       "vhdr": {
         "path": "sub-003/eeg/sub-003_task-rest_eeg.vhdr",
         "size": 1041,
-        "mtime_ns": 1793101952380100516,
+        "mtime_ns": 1793103741013659898,
         "sha256": "e94f94e8e65f96d325d9c1eb420bbd288fb47ae4cfc816a28820a5327eaa4cc8"
       },
       "eeg": {
         "path": "sub-003/eeg/sub-003_task-rest_eeg.eeg",
         "size": 1320000,
-        "mtime_ns": 1793101952379102553,
+        "mtime_ns": 1793103741012952046,
         "sha256": "d10ac380f9a64d4b0afeea76418d77833eb20a6c8811728658a00890b88ef8ed"
       },
       "vmrk": {
         "path": "sub-003/eeg/sub-003_task-rest_eeg.vmrk",
         "size": 1392,
-        "mtime_ns": 1793101952379748335,
+        "mtime_ns": 1793103741013476455,
         "sha256": "6b96ee0685a1ca8e58d1a3cd816968de3c423c8f050ce756954ca24b7e0c5f77"
       },
       "channels_tsv": {
         "path": "sub-003/eeg/sub-003_task-rest_channels.tsv",
         "size": 384,
-        "mtime_ns": 1793101952380521909,
+        "mtime_ns": 1793103741014044399,
         "sha256": "2606e8830e14c65eed97ea25c80f9f56708eb24e26134f516b754234c6927d82"
       },
       "events_tsv": {
         "path": "sub-003/eeg/sub-003_task-rest_events.tsv",
         "size": 928,
-        "mtime_ns": 1793101952380317202,
+        "mtime_ns": 1793103741013832462,
         "sha256": "23fbd318246db707134f26fd35f535df2bd25580d7cf8c17e33066b3b744c0a8"
       },
       "events_json": {
         "path": "sub-003/eeg/sub-003_task-rest_events.json",
         "size": 289,
-        "mtime_ns": 1793101952380447204,
+        "mtime_ns": 1793103741013952805,
         "sha256": "203b47891160359d51301343101c20872de346b32b5a97b29a70139958c62f00"
       },
       "eeg_json": {
         "path": "sub-003/eeg/sub-003_task-rest_eeg.json",
         "size": 255,
-        "mtime_ns": 1793101952380618725,
+        "mtime_ns": 1793103741014140569,
         "sha256": "b4261e68d3afe2c97349082cc1460d8fb6e73c9427090698dd1e1ec35b914cac"
       }
     }
   },
   "timing": {
-    "session_opened": "2026-10-27T11:52:34.475+00:00",
-    "start_timestamp": "2026-10-27T11:52:34.475+00:00",
-    "finish_timestamp": "2026-10-27T11:52:34.476+00:00",
+    "session_opened": "2026-10-27T12:22:23.176+00:00",
+    "start_timestamp": "2026-10-27T12:22:23.176+00:00",
+    "finish_timestamp": "2026-10-27T12:22:23.177+00:00",
     "elapsed_seconds": 0.0,
     "clock": "time.monotonic (started when the viewer became usable, stopped at Save and Finish)",
     "elapsed_in_earlier_sessions_seconds": 0.0,
@@ -194,6 +198,7 @@
       ],
       "skipped": [],
       "segments_filtered_separately_at_samples": [],
+      "acquisition_gaps_not_filtered_samples": [],
       "edge_transient_half_width_s": 4.948,
       "filtered_channels": [
         "Fp1",
@@ -441,6 +446,7 @@
     "comparison_with_markers": {
       "n_events_tsv": 30,
       "n_vmrk_markers": 30,
+      "compared": true,
       "events_tsv_rows_without_marker": 0,
       "markers_without_events_tsv_row": 0,
       "consistent": true

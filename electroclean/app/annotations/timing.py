@@ -4,7 +4,7 @@ Conventions used throughout ElectroClean (also written into every output file):
 
 * **Time origin.** ``onset`` values are seconds from the first sample stored in
   the recording's data file. This is the BIDS ``events.tsv`` convention and is
-  the same as ``raw.times`` in MNE. For BrainVision recordings MNE always sets
+  the same as ``raw.times`` in MNE. For BrainVision, EDF and BDF recordings MNE sets
   ``raw.first_samp`` to 0, so this is also seconds from the start of the file.
 * **Samples.** ``sample`` values are 0-based indices into the data file,
   relative to the first stored sample (``onset * sfreq``).

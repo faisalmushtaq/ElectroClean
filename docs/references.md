@@ -22,6 +22,16 @@ Valdes-Sosa, P., Worrell, G., Makeig, S., & Robbins, K. (2025). Hierarchical
 Event Descriptor library schema for EEG data annotation. *Scientific Data*, 12,
 1448. https://doi.org/10.1038/s41597-025-05791-2
 
+Kemp, B., & Olivan, J. (2003). European data format 'plus' (EDF+), an EDF
+alike standard format for the exchange of physiological data. *Clinical
+Neurophysiology*, 114(9), 1755–1761.
+https://doi.org/10.1016/S1388-2457(03)00123-8
+
+Kemp, B., Värri, A., Rosa, A. C., Nielsen, K. D., & Gade, J. (1992). A simple
+format for exchange of digitized polygraphic recordings.
+*Electroencephalography and Clinical Neurophysiology*, 82(5), 391–393.
+https://doi.org/10.1016/0013-4694(92)90009-7
+
 Pernet, C. R., Appelhoff, S., Gorgolewski, K. J., Flandin, G., Phillips, C.,
 Delorme, A., & Oostenveld, R. (2019). EEG-BIDS, an extension to the brain
 imaging data structure for electroencephalography. *Scientific Data*, 6, 103.
