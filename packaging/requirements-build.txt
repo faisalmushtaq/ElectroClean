@@ -1,9 +1,8 @@
 # Build environment for the stand-alone applications (packaging/build.py and
-# .github/workflows/build-apps.yml): the pinned run-time requirements, pybv (it
-# writes the synthetic recordings used by the frozen --self-test, so it is
-# bundled) and PyInstaller with its own dependencies.
+# .github/workflows/build-apps.yml): the pinned run-time requirements (which
+# include pybv, used by the frozen --self-test) and PyInstaller with its own
+# dependencies.
 -r ../requirements.txt
-pybv==0.8.1
 pyinstaller==6.22.3
 pyinstaller-hooks-contrib==2026.9
 altgraph==0.17.5

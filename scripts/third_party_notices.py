@@ -1,7 +1,6 @@
 """Write THIRD_PARTY_NOTICES.md from the installed packages' own metadata.
 
-Run in an environment made from ``requirements.txt`` (plus pybv, which the
-stand-alone applications bundle)::
+Run in an environment made from ``requirements.txt``::
 
     python scripts/third_party_notices.py
 
@@ -19,7 +18,6 @@ from importlib import metadata
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-EXTRA = ["pybv"]  # bundled in the stand-alone applications for --self-test
 
 
 def requirement_names() -> list[str]:
@@ -28,7 +26,7 @@ def requirement_names() -> list[str]:
         line = line.split("#", 1)[0].strip()
         if line and not line.startswith("-"):
             names.append(re.split(r"[=<>!~;\[ ]", line, maxsplit=1)[0])
-    return names + EXTRA
+    return names
 
 
 def licence_of(dist: metadata.Distribution) -> str:
