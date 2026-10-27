@@ -481,6 +481,8 @@ class AnnotationWorkspace(QObject):
             self.clock_label.setText(f"Time on this recording: {format_hms(self.session.elapsed_s)}")
         except RuntimeError:  # window already destroyed
             return
+        if not self.read_only and not self._finished:
+            self.session.autosave()
         if not self.read_only and not self._finished and not self.session.heartbeat() and not self._lock_warned:
             self._lock_warned = True
             self._show_message(
@@ -711,22 +713,31 @@ class AnnotationWorkspace(QObject):
             QTimer.singleShot(0, self.closedWithoutSaving.emit)
             return True
         n = len(self.session.store)
-        ok = self.prompts.ask(
+        later, discard, stay = "Close and finish later", "Discard and close", "Keep annotating"
+        choice = self.prompts.choose(
             self.browser,
             "Close without saving?",
-            "Close this recording without saving?\n\n"
-            + (f"The {n} annotation(s) you made will be discarded. " if n else "")
-            + "The recording will stay incomplete and may be offered again later.",
-            yes="Discard and close",
-            no="Keep annotating",
-            default_yes=False,
+            "This recording has not been saved with Save and Finish, so it is not complete.\n\n"
+            f"{later}: your {n} annotation(s) and the time spent are kept, and ElectroClean offers to "
+            "continue the next time you open this recording.\n"
+            f"{discard}: your annotations for this recording are deleted.",
+            [later, discard, stay],
+            default=0,
         )
-        if not ok:
+        if choice == stay:
+            return False
+        if choice == discard and n and not self.prompts.ask(
+            self.browser, "Discard annotations?", f"Delete your {n} annotation(s) for this recording?",
+            yes="Delete them", no="Keep annotating", default_yes=False,
+        ):
             return False
         self._closing_ok = True
         self._tick.stop()
         try:
-            self.session.abandon()
+            self.session.abandon(
+                "closed to finish later" if choice == later else "viewer closed without Save and Finish",
+                keep_autosave=choice == later,
+            )
         except Exception as exc:  # e.g. the session log is on a disconnected network drive
             try:
                 self.session.lock.release()

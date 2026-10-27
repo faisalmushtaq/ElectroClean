@@ -193,7 +193,7 @@ def test_close_without_saving(qapp, layout, settings, catalogue, loaded):
     ws.browser.close()
     wait()
     assert ws.browser.isVisible()  # refused: still open
-    prompts.answers["Close without saving"] = True
+    prompts.answers["Close without saving"] = "Discard and close"
     closed = []
     ws.closedWithoutSaving.connect(lambda: closed.append(True))
     ws.browser.close()
@@ -442,7 +442,7 @@ def test_label_choice_does_not_take_keyboard_focus(qapp, layout, settings, catal
 
 
 def test_closing_survives_a_session_log_failure(qapp, layout, settings, catalogue, loaded, monkeypatch):
-    prompts = ScriptedPrompts({"Close without saving": True})
+    prompts = ScriptedPrompts({"Close without saving": "Discard and close"})
     session, ws = open_workspace(layout, settings, catalogue, loaded, prompts)
     closed = []
     ws.closedWithoutSaving.connect(lambda: closed.append(True))
@@ -483,3 +483,54 @@ def test_many_failed_loads_in_a_row(qapp, dataset, monkeypatch):
     finally:
         sys.setrecursionlimit(limit)
     assert sum(1 for h in ctrl.history if h["event"] == "load_failed") == 150
+
+
+def test_finish_later_and_continue_in_a_new_session(qapp, dataset):
+    root, _ = dataset
+    prompts = ScriptedPrompts({"Close without saving": "Close and finish later", "Continue?": False})
+    ctrl = AppController(prompts=prompts, synchronous_loading=True)
+    assert ctrl.begin(StartRequest(annotator_id="A01", display_name="", dataset_root=root, output_root=None,
+                                   mode="standard"))
+    first = ctrl.workspace.session.recording_id
+    ctrl.workspace.controller.create_annotation(2.0, 3.0)
+    ctrl.workspace.browser.close()
+    wait(60)
+    # Next time ElectroClean offers to continue that recording, with the annotation restored.
+    prompts2 = ScriptedPrompts({"Continue unfinished work": True})
+    ctrl2 = AppController(prompts=prompts2, synchronous_loading=True)
+    assert ctrl2.begin(StartRequest(annotator_id="A01", display_name="", dataset_root=root, output_root=None,
+                                    mode="standard"))
+    ws = ctrl2.workspace
+    assert ws.session.recording_id == first and len(ws.session.store) == 1
+    assert any(t == "Continue unfinished work?" for _k, t, _x in prompts2.log)
+    assert ws.save_and_finish()
+    wait(50)
+    assert not ws.session.autosave_path.exists()
+    assert CompletionRegister(ctrl2.layout).is_completed(first, "A01")
+    if ctrl2.workspace is not None:
+        ctrl2.workspace._closing_ok = True
+        ctrl2.workspace.session.abandon()
+        ctrl2.workspace.browser.close()
+
+
+def test_declined_autosave_is_set_aside_when_starting_afresh(qapp, dataset):
+    root, _ = dataset
+    prompts = ScriptedPrompts({"Close without saving": "Close and finish later", "Continue?": False})
+    ctrl = AppController(prompts=prompts, synchronous_loading=True)
+    ctrl.begin(StartRequest(annotator_id="A01", display_name="", dataset_root=root, output_root=None,
+                            mode="standard", choose_recording=True))
+    rid = ctrl.workspace.session.recording_id
+    ctrl.workspace.controller.create_annotation(2.0, 3.0)
+    ctrl.workspace.browser.close()
+    wait(60)
+    prompts2 = ScriptedPrompts({"Continue unfinished work": False, "Restore unfinished work": False})
+    ctrl2 = AppController(prompts=prompts2, synchronous_loading=True)
+    ctrl2.begin(StartRequest(annotator_id="A01", display_name="", dataset_root=root, output_root=None,
+                             mode="standard", choose_recording=True))
+    ws = ctrl2.workspace
+    assert ws.session.recording_id == rid  # the same recording is chosen from the list again
+    assert len(ws.session.store) == 0  # started afresh
+    assert list((ctrl2.layout.quarantine / "autosave").glob("*not-restored*.json"))
+    ws._closing_ok = True
+    ws.session.abandon()
+    ws.browser.close()

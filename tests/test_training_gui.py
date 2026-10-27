@@ -161,7 +161,7 @@ def test_reference_set_assignment_is_enforced(qapp, ref_set):
 
 def test_skipped_assessment_is_not_reported_as_complete(qapp, ref_set):
     root, _, _ = ref_set
-    prompts = ScriptedPrompts({"Close without saving": True})
+    prompts = ScriptedPrompts({"Close without saving": "Discard and close"})
     ctrl = AppController(prompts=prompts, synchronous_loading=True)
     assert ctrl.begin(StartRequest("CAM", "", root, None, "assessment", reference_set_id="pilot"))
     ctrl.workspace.browser.close()  # discard, then continue

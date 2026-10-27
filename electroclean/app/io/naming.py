@@ -59,6 +59,10 @@ class OutputLayout:
         return self.internal / "staging"
 
     @property
+    def autosave(self) -> Path:
+        return self.internal / "autosave"
+
+    @property
     def quarantine(self) -> Path:
         return self.internal / "interrupted"
 

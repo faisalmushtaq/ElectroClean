@@ -35,6 +35,7 @@ from electroclean.app.io.canonical import annotations_json_bytes, read_annotatio
 from electroclean.app.io.export import ExportError, build_events_sidecar, events_tsv_bytes
 from electroclean.app.io.locking import FileLock, LockError
 from electroclean.app.io.naming import OutputLayout, next_free_attempt, output_basename, output_filenames
+from electroclean.app.session.autosave import AutosaveRecord, autosave_path, delete_autosave, write_autosave
 from electroclean.app.session.register import RegisterError
 from electroclean.app.session.failures import SessionLog
 from electroclean.app.session.register import CompletionRegister
@@ -104,6 +105,8 @@ class AnnotationSession:
         context: dict[str, Any] | None = None,
         initial_annotations: list[ArtifactAnnotation] | None = None,
         allow_repeat: bool = False,
+        resume: AutosaveRecord | None = None,
+        autosave_enabled: bool = True,
     ) -> None:
         self.layout = layout
         self.settings = settings
@@ -121,12 +124,26 @@ class AnnotationSession:
         self.session_id = new_session_id()
         self.register = CompletionRegister(layout, settings.register_lock_timeout_s)
         self.session_log = SessionLog(layout)
+        self.resumed_from = resume
+        self.previous_sessions: list[dict[str, Any]] = []
+        if resume is not None:
+            initial_annotations = list(resume.document.annotations)
+            self.previous_sessions = list(resume.previous_sessions) + [
+                {"session_id": resume.session_id, "autosaved_at": resume.saved_at, "elapsed_s": resume.elapsed_s}
+            ]
         self.store = AnnotationStore(
             loaded.info,
             catalogue,
             min_duration_samples=settings.min_duration_samples,
             initial=initial_annotations or (),
         )
+        self.autosave_enabled = autosave_enabled
+        self.autosave_path = autosave_path(
+            layout, loaded.info.recording_id, self.annotator_id, self.mode, self.context_id
+        )
+        self._autosaved_revision: int | None = None
+        self._autosaved_elapsed = 0.0
+        self._last_autosave = 0.0
         self.lock = FileLock(
             recording_lock_path(layout, loaded.info.recording_id, self.annotator_id, self.mode, self.context_id),
             {
@@ -140,7 +157,9 @@ class AnnotationSession:
         self.timer_started_at: str | None = None
         self.finished_at: str | None = None
         self._t0: float | None = None
-        self._accumulated = 0.0
+        # Time already spent in earlier, unfinished sessions of this recording (from the autosave).
+        self.elapsed_before_s = float(resume.elapsed_s) if resume is not None else 0.0
+        self._accumulated = self.elapsed_before_s
         self._last_heartbeat = 0.0
         self.state = "created"
         self.events: list[dict[str, Any]] = []
@@ -270,6 +289,40 @@ class AnnotationSession:
             "app_version": (meta.get("application") or {}).get("version", ""),
         }
 
+    def autosave(self, *, force: bool = False, min_interval_s: float = 5.0, max_interval_s: float = 60.0) -> bool:
+        """Write the unfinished work to the autosave file when it has changed.
+
+        Changes are saved at most every ``min_interval_s`` seconds; while the
+        timer runs, the elapsed time is refreshed at least every
+        ``max_interval_s`` seconds. Returns True if a file was written.
+        """
+        if self.state != "open" or not self.autosave_enabled:
+            return False
+        now = time.monotonic()
+        changed = self.store.revision != self._autosaved_revision
+        if not force:
+            if changed and now - self._last_autosave < min_interval_s:
+                return False
+            if not changed and (now - self._last_autosave < max_interval_s
+                                or abs(self.elapsed_s - self._autosaved_elapsed) < 1.0):
+                return False
+            if self._autosaved_revision is None and not len(self.store) and self.elapsed_s < 30:
+                return False  # nothing worth keeping yet
+        revision, elapsed = self.store.revision, self.elapsed_s
+        try:
+            write_autosave(
+                self.autosave_path, self.build_document(), elapsed_s=elapsed, session_id=self.session_id,
+                filters=self.filters.to_dict(), source_fingerprint=self.loaded.fingerprint,
+                previous_sessions=self.previous_sessions,
+            )
+        except OSError:
+            return False  # the next attempt may succeed; autosave never interrupts the annotator
+        self._autosaved_revision, self._autosaved_elapsed, self._last_autosave = revision, elapsed, now
+        return True
+
+    def discard_autosave(self) -> None:
+        delete_autosave(self.autosave_path)
+
     def heartbeat(self, interval_s: float = 60.0) -> bool:
         """Refresh the recording lock (call regularly while the session is open).
 
@@ -305,12 +358,22 @@ class AnnotationSession:
         running = (time.monotonic() - self._t0) if self._t0 is not None else 0.0
         return self._accumulated + running
 
-    def abandon(self, reason: str = "viewer closed without Save and Finish") -> None:
-        """End the session without saving (the recording stays incomplete)."""
+    def abandon(self, reason: str = "viewer closed without Save and Finish", *, keep_autosave: bool = False) -> None:
+        """End the session without saving (the recording stays incomplete).
+
+        With ``keep_autosave`` the unfinished work is saved for later (and
+        offered again next time); otherwise it is discarded.
+        """
         if self.state in ("finished", "abandoned"):
             return
+        worth_keeping = len(self.store) > 0 or self.resumed_from is not None or self.elapsed_s >= 30
+        keep_autosave = keep_autosave and worth_keeping
+        if keep_autosave:
+            self.autosave(force=True)
         elapsed = self.stop_timer()
         self.state = "abandoned"
+        if not keep_autosave:
+            self.discard_autosave()
         self.session_log.write(
             "session_incomplete",
             session_id=self.session_id,
@@ -319,7 +382,8 @@ class AnnotationSession:
             mode=self.mode,
             reason=reason,
             elapsed_s=round(elapsed, 3),
-            n_annotations_discarded=len(self.store),
+            n_annotations_discarded=0 if keep_autosave else len(self.store),
+            kept_for_later=keep_autosave,
         )
         self.lock.release()
 
@@ -370,6 +434,8 @@ class AnnotationSession:
                 "finish_timestamp": self.finished_at,
                 "elapsed_seconds": elapsed,
                 "clock": "time.monotonic (started when the viewer became usable, stopped at Save and Finish)",
+                "elapsed_in_earlier_sessions_seconds": self.elapsed_before_s,
+                "resumed_from_autosave": self.previous_sessions,
             },
             "application": {
                 "name": APP_NAME,
@@ -475,6 +541,7 @@ class AnnotationSession:
         except ExportCommitError as exc:
             if exc.committed:
                 self._close("finished_register_pending", elapsed)
+                self.discard_autosave()
             else:
                 self.resume_timer()
                 self.session_log.write(
@@ -488,6 +555,7 @@ class AnnotationSession:
             )
             raise
         self._close("finished", elapsed)
+        self.discard_autosave()
         return FinishResult(
             commit=result,
             elapsed_s=elapsed,

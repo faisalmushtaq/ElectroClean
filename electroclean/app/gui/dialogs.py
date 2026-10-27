@@ -69,6 +69,20 @@ class UserPrompts:
         box.exec()
         return box.clickedButton() is yes_btn
 
+    def choose(self, parent: QWidget | None, title: str, text: str, options: Sequence[str], *,
+               default: int = 0, icon: QMessageBox.Icon = QMessageBox.Question) -> str:
+        """Ask with several buttons; returns the chosen option (the last one if the box is closed)."""
+        box = QMessageBox(parent)
+        box.setIcon(icon)
+        box.setWindowTitle(title)
+        box.setText(text)
+        buttons = [box.addButton(o, QMessageBox.ActionRole) for o in options]
+        box.setDefaultButton(buttons[default])
+        box.setEscapeButton(buttons[-1])
+        box.exec()
+        clicked = box.clickedButton()
+        return options[buttons.index(clicked)] if clicked in buttons else options[-1]
+
     def inform(self, parent: QWidget | None, title: str, text: str, *, details: str = "") -> None:
         box = QMessageBox(QMessageBox.Information, title, text, QMessageBox.Ok, parent)
         if details:
@@ -109,6 +123,27 @@ class UserPrompts:
 
         item, ok = QInputDialog.getItem(parent, title, text, list(items), current, False)
         return item if ok else None
+
+    def choose_from_list(self, parent: QWidget | None, title: str, items: Sequence[str]) -> str | None:
+        """A list to pick one item from (double-click or OK); None if cancelled."""
+        from qtpy.QtWidgets import QDialogButtonBox, QListWidget
+
+        dlg = QDialog(parent)
+        dlg.setWindowTitle(title)
+        layout = QVBoxLayout(dlg)
+        lst = QListWidget()
+        lst.addItems(list(items))
+        lst.setCurrentRow(0)
+        layout.addWidget(lst)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(dlg.accept)
+        bb.rejected.connect(dlg.reject)
+        lst.itemDoubleClicked.connect(lambda _i: dlg.accept())
+        layout.addWidget(bb)
+        dlg.resize(520, 420)
+        if dlg.exec() != QDialog.Accepted or lst.currentItem() is None:
+            return None
+        return lst.currentItem().text()
 
     def show_html(self, parent: QWidget | None, title: str, html: str, buttons: Sequence[str]) -> str:
         """Show rich text with one or more buttons; return the clicked button's text."""
@@ -158,6 +193,17 @@ class ScriptedPrompts(UserPrompts):
     def ask(self, parent, title, text, **kw) -> bool:  # type: ignore[override]
         return bool(self._answer("ask", title, text, self.default))
 
+    def choose(self, parent, title, text, options, **kw):  # type: ignore[override]
+        """An answer may be an option's text; True means the first option and False the last."""
+        answer = self._answer("choose", title, text, kw.get("default", 0))
+        if answer is True:
+            return options[0]
+        if answer is False:
+            return options[-1]
+        if isinstance(answer, int):
+            return options[answer]
+        return answer if answer in options else options[0]
+
     def inform(self, parent, title, text, **kw) -> None:  # type: ignore[override]
         self._answer("inform", title, text, None)
 
@@ -172,6 +218,9 @@ class ScriptedPrompts(UserPrompts):
 
     def choose_item(self, parent, title, text, items, current=0):  # type: ignore[override]
         return self._answer("item", title, text, items[current] if items else None)
+
+    def choose_from_list(self, parent, title, items):  # type: ignore[override]
+        return self._answer("list", title, "", items[0] if items else None)
 
     def show_html(self, parent, title, html, buttons):  # type: ignore[override]
         return self._answer("html", title, html, buttons[-1] if buttons else "")

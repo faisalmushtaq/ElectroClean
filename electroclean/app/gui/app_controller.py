@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from qtpy.QtCore import QObject, Qt, QTimer
-from qtpy.QtWidgets import QApplication, QListWidget, QListWidgetItem, QMessageBox, QProgressDialog, QWidget
+from qtpy.QtWidgets import QApplication, QMessageBox, QProgressDialog, QWidget
 
 from electroclean.app.annotations.labels import default_catalogue
 from electroclean.app.eeg.loading import LoadedRecording, RecordingLoadError
@@ -97,6 +97,8 @@ class AppController(QObject):
         self.review_workspace: Any = None
         self.quiz_window: Any = None
         self.admin_dialog: Any = None
+        self._resume_choice: Any = None  # autosave the annotator chose to continue
+        self._declined_resume: set[str] = set()
         self.history: list[dict[str, Any]] = []  # what happened (used by tests and the demo)
 
     # ------------------------------------------------------------- helpers
@@ -163,6 +165,8 @@ class AppController(QObject):
             self.prompts.error(self.parent_widget, "Cannot read the dataset folder", str(exc))
             return False
         self.session_excluded = set()
+        self._declined_resume = set()
+        self._resume_choice = None
         self.filters = None
         self.remember_filters = False
         self.reference_set = None
@@ -228,6 +232,24 @@ class AppController(QObject):
         finally:
             self._in_next = False
 
+    def _resumable(
+        self, completed: set[str], failed: set[str], restrict: list[str] | None
+    ) -> tuple[Any, RecordingFiles] | None:
+        """The most recent unfinished (autosaved) recording this annotator could continue now."""
+        assert self.request is not None and self.layout is not None
+        from electroclean.app.session.autosave import autosaves_for, delete_autosave
+
+        by_id = {r.recording_id: r for r in self.recordings}
+        for record in autosaves_for(self.layout, self.request.annotator_id, self.request.mode, self._context_id()):
+            rid = record.recording_id
+            if rid in completed:
+                delete_autosave(record.path)  # saved after all (e.g. finished on another computer)
+                continue
+            if (rid in by_id and rid not in failed and rid not in self.session_excluded
+                    and rid not in self._declined_resume and (restrict is None or rid in restrict)):
+                return record, by_id[rid]
+        return None
+
     def _assessment_all_done(self) -> bool:
         assert self.request is not None and self.layout is not None and self.settings is not None
         required = set(self._restrict_to() or ())
@@ -253,6 +275,22 @@ class AppController(QObject):
             self.recordings, {}, annotator_id=req.annotator_id
         )
         restrict = self._restrict_to()
+        resumable = self._resumable(completed, set(failures), restrict)
+        if resumable is not None:
+            record, files = resumable
+            if self.prompts.ask(
+                self.parent_widget,
+                "Continue unfinished work?",
+                f"You have unfinished work: {record.describe()}.\n\nContinue with it now?",
+                yes="Continue it", no="Not now",
+            ):
+                self._resume_choice = record
+                if not self._choose_filters(files):
+                    self._back_to_start()
+                    return
+                self._load(files)
+                return
+            self._declined_resume.add(record.recording_id)
         if req.choose_recording:
             files = self._choose_manually(completed, set(failures), restrict)
             if files is None:
@@ -297,8 +335,6 @@ class AppController(QObject):
         self._load(files)
 
     def _choose_manually(self, completed: set[str], failed: set[str], restrict: list[str] | None) -> RecordingFiles | None:
-        from qtpy.QtWidgets import QDialog, QDialogButtonBox, QVBoxLayout
-
         candidates = [
             r for r in self.recordings
             if r.recording_id not in completed and r.recording_id not in failed and r.recording_id not in self.session_excluded
@@ -307,25 +343,11 @@ class AppController(QObject):
         if not candidates:
             self.prompts.inform(self.parent_widget, "No more recordings", "All eligible recordings have been completed.")
             return None
-        dlg = QDialog(self.parent_widget)
-        dlg.setWindowTitle("Choose a recording")
-        layout = QVBoxLayout(dlg)
-        lst = QListWidget()
-        for r in candidates:
-            item = QListWidgetItem(r.recording_id)
-            item.setData(Qt.UserRole, r.recording_id)
-            lst.addItem(item)
-        lst.setCurrentRow(0)
-        layout.addWidget(lst)
-        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        bb.accepted.connect(dlg.accept)
-        bb.rejected.connect(dlg.reject)
-        lst.itemDoubleClicked.connect(lambda _i: dlg.accept())
-        layout.addWidget(bb)
-        dlg.resize(520, 420)
-        if dlg.exec() != QDialog.Accepted or lst.currentItem() is None:
+        rid = self.prompts.choose_from_list(
+            self.parent_widget, "Choose a recording", [r.recording_id for r in candidates]
+        )
+        if rid is None:
             return None
-        rid = lst.currentItem().data(Qt.UserRole)
         return next(r for r in candidates if r.recording_id == rid)
 
     def _choose_filters(self, files: RecordingFiles) -> bool:
@@ -422,6 +444,37 @@ class AppController(QObject):
         else:
             self.quit()
 
+    def _resume_for(self, loaded: LoadedRecording) -> Any:
+        """The autosave to restore onto ``loaded``, after checking it still fits (or None)."""
+        assert self.request is not None and self.layout is not None
+        from electroclean.app.session.autosave import find_autosave, set_aside
+
+        chosen, self._resume_choice = self._resume_choice, None
+        rid = loaded.info.recording_id
+        record = chosen if chosen is not None and chosen.recording_id == rid else find_autosave(
+            self.layout, rid, self.request.annotator_id, self.request.mode, self._context_id()
+        )
+        if record is None:
+            return None
+        problems = record.problems_with(loaded)
+        if problems:
+            where = set_aside(self.layout, record.path, "recording-changed")
+            self.prompts.inform(
+                self.parent_widget, "Unfinished work not restored",
+                f"Your unfinished work on {rid} could not be restored because {', and '.join(problems)}. "
+                f"It was kept in {where} for the study administrator.",
+            )
+            return None
+        if record is not chosen and not self.prompts.ask(
+            self.parent_widget, "Restore unfinished work?",
+            f"{record.describe()}.\n\nRestore it and continue?",
+            yes="Restore and continue", no="Start afresh",
+        ):
+            set_aside(self.layout, record.path, "not-restored")
+            return None
+        self.history.append({"event": "resumed", "recording_id": rid, "n_annotations": record.n_annotations})
+        return record
+
     def _on_loaded(self, loaded: LoadedRecording) -> None:
         self._close_progress()
         assert self.request is not None and self.settings is not None and self.layout is not None
@@ -429,6 +482,7 @@ class AppController(QObject):
         context: dict[str, Any] = {}
         if self.reference_set is not None:
             context = {"reference_set_id": self.reference_set.set_id, "reference_set_name": self.reference_set.name}
+        resume = self._resume_for(loaded)
         try:
             session = AnnotationSession(
                 layout=self.layout,
@@ -440,6 +494,7 @@ class AppController(QObject):
                 display_name=req.display_name,
                 mode=req.mode,
                 context=context,
+                resume=resume,
             )
             session.start()
         except (LockError, SessionError, RegisterError, OSError) as exc:
@@ -471,7 +526,7 @@ class AppController(QObject):
                 title_suffix={"practice": "practice", "assessment": "assessment"}.get(req.mode, ""),
             )
         except Exception as exc:
-            session.abandon(reason=f"viewer could not be opened: {exc}")
+            session.abandon(reason=f"viewer could not be opened: {exc}", keep_autosave=True)
             loaded.close()
             self._on_load_failed(loaded.files, exc, traceback.format_exc())
             return
