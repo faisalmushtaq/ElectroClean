@@ -32,7 +32,7 @@ distort the signal (recording edges and discontinuities).</p>
 <li>Choose the <b>artifact type</b> in the toolbar.</li>
 <li>Choose whether it affects the <b>whole montage</b> or only <b>selected channels</b>.
 In <i>Selected channels</i> mode, click channel names or traces to select them
-(they turn magenta), or use <b>Choose channels…</b>.</li>
+(they turn magenta), or use <b>Channels…</b>.</li>
 <li><b>Drag</b> across the EEG to mark the interval. You can drag over an existing
 annotation to add an overlapping one.</li>
 </ol>

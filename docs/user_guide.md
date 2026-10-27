@@ -112,7 +112,7 @@ ID, the mode, the filters and the number of annotations.
    * **Whole montage** marks the interval on every channel.
    * **Selected channels** marks only the channels you choose. Click channel
      names or traces to select or deselect them (they turn magenta), or use
-     **Choose channels…**. Clicking a channel in ElectroClean never marks it as
+     **Channels…**. Clicking a channel in ElectroClean never marks it as
      bad.
 3. **Drag** across the EEG from the start to the end of the artifact. The new
    annotation appears as a shaded band labelled with its type; channel-specific

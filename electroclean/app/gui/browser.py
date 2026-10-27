@@ -462,7 +462,7 @@ class AnnotationController(QObject):
         self._update_channel_highlight()
         self.stateChanged.emit()
         if scope == "channels" and not self.selected_channels:
-            self._say("Click channel names or traces (or use 'Choose channels…') to select channels.")
+            self._say("Click channel names or traces (or use 'Channels…') to select channels.")
 
     def set_selected_channels(self, channels: list[str]) -> None:
         order = self.recording.ch_names
@@ -547,7 +547,7 @@ class AnnotationController(QObject):
         if not self._check_editable():
             return None
         if self.scope == "channels" and not self.selected_channels:
-            self._say("No channels selected: click channel names, use 'Choose channels…', or choose 'Whole montage'.")
+            self._say("No channels selected: click channel names, use 'Channels…', or choose 'Whole montage'.")
             return None
         channels = list(self.selected_channels) if self.scope == "channels" else []
         try:

@@ -164,6 +164,10 @@ class AnnotationWorkspace(QObject):
         tb.addWidget(QLabel(" Artifact: "))
         self.label_combo = QComboBox()
         fill_label_combo(self.label_combo, cat)  # family headings, colours, group terms in italics
+        # The closed menu is as wide as about 32 characters rather than the longest entry, so the row
+        # fits on laptop screens; the open list is as wide as it needs to be.
+        self.label_combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.label_combo.setMinimumContentsLength(32)
         self.label_combo.setToolTip(
             f"Only the {len(cat.labels)} HED-SCORE artifact terms can be used. Group terms (in italics) are for "
             "artifacts whose exact type is unclear."
@@ -192,7 +196,7 @@ class AnnotationWorkspace(QObject):
             w.setFocusPolicy(Qt.NoFocus)
         tb.addWidget(self.scope_whole)
         tb.addWidget(self.scope_channels)
-        self.choose_channels_btn = QPushButton("Choose channels…")
+        self.choose_channels_btn = QPushButton("Channels…")
         self.choose_channels_btn.clicked.connect(self.choose_channels)
         tb.addWidget(self.choose_channels_btn)
         self.channels_summary = QLabel()
@@ -407,7 +411,7 @@ class AnnotationWorkspace(QObject):
             self.channels_summary.setStyleSheet("")
         elif not chans:
             self.channels_summary.setText(" none selected ")
-            self.channels_summary.setToolTip("Click channel names, or use Choose channels…")
+            self.channels_summary.setToolTip("Click channel names, or use Channels…")
             self.channels_summary.setStyleSheet("QLabel { color: #B71C1C; font-weight: bold; }")
         else:
             shown = ", ".join(chans[:3]) + (f" (+{len(chans) - 3})" if len(chans) > 3 else "")
