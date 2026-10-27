@@ -33,7 +33,8 @@ EEG_CHANNELS = [
     "C4", "T8", "P7", "P3", "Pz", "P4", "P8", "O1", "O2",
 ]  # fmt: skip
 EOG_CHANNELS = ["HEOG", "VEOG"]
-ALL_CHANNELS = EEG_CHANNELS + EOG_CHANNELS
+ECG_CHANNELS = ["ECG"]
+ALL_CHANNELS = EEG_CHANNELS + EOG_CHANNELS + ECG_CHANNELS
 
 
 @dataclass(frozen=True)
@@ -106,6 +107,15 @@ def synthesise_signal(
     data += 4 * uv * np.sin(2 * np.pi * line_freq * t + rng.uniform(0, np.pi, (len(ALL_CHANNELS), 1)))
     data[idx["VEOG"]] += 15 * uv * _pink_noise(rng, 1, n)[0]
     data[idx["HEOG"]] += 15 * uv * _pink_noise(rng, 1, n)[0]
+    # The ECG channel shows the heartbeat throughout (about 69 beats per minute).
+    period = sfreq / 1.15
+    width = max(2, int(0.04 * sfreq))
+    qrs = np.hanning(width)
+    k = float(rng.uniform(0, period))
+    while k < n - width:
+        b = int(k)
+        data[idx["ECG"], b : b + width] += 800 * uv * qrs
+        k += period
 
     for art in plan:
         s0 = int(round(art.start_s * sfreq))
@@ -249,7 +259,7 @@ def write_recording(
             folder / f"{stem}_channels.tsv",
             ["name", "type", "units", "status"],
             [[c, "EEG", "µV", "good"] for c in EEG_CHANNELS]
-            + [["HEOG", "HEOG", "µV", "good"], ["VEOG", "VEOG", "µV", "good"]],
+            + [["HEOG", "HEOG", "µV", "good"], ["VEOG", "VEOG", "µV", "good"], ["ECG", "ECG", "µV", "good"]],
         )
         (folder / f"{stem}_eeg.json").write_text(
             json.dumps(
@@ -257,6 +267,9 @@ def write_recording(
                     "TaskName": stem.split("task-")[-1].split("_")[0] if "task-" in stem else "rest",
                     "SamplingFrequency": sfreq,
                     "PowerLineFrequency": line_freq,
+                    "EEGChannelCount": len(EEG_CHANNELS),
+                    "EOGChannelCount": len(EOG_CHANNELS),
+                    "ECGChannelCount": len(ECG_CHANNELS),
                     "EEGReference": "average (synthetic)",
                     "SoftwareFilters": "n/a",
                     "RecordingDuration": duration_s,

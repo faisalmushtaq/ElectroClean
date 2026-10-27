@@ -82,7 +82,7 @@ def test_repeated_same_label_annotations(store):
     b = store.add_interval("EMG-artifact", 1.5, 3.0)  # overlaps a and touching: merged into a
     assert b.annotation_id == a.annotation_id and store.last_auto_merged == 2
     assert (b.onset_sample, b.end_sample) == (250, 750)
-    assert len(store) == 2 and far.annotation_id in store
+    assert len(store) == 2 and far.annotation_id in store and touching.annotation_id not in store
     assert "merged" in store.undo_description
     store.undo()  # one step restores all three
     assert len(store) == 3 and store.get(a.annotation_id).end_sample == 500

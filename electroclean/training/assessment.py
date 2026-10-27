@@ -142,7 +142,7 @@ def compare_with_reference(
             return tr
         return tr[(tr.recording == "ALL (pooled)") & (tr.representation == "exact") & (tr.channel_mode == mode)]
 
-    e_t, e_c = ev_rows("time_only"), ev_rows("time_and_channel")
+    e_t = ev_rows("time_only")
     t_t, t_c = tr_rows("time_only"), tr_rows("time_and_channel")
     minutes = sum(d.recording.timing.duration_s for d in compared_refs) / 60.0
 

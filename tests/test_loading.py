@@ -27,11 +27,11 @@ def test_load_recording_basic(loaded):
     assert loaded.info.recording_id == SUB1
     assert loaded.timing.sfreq == 250.0
     assert loaded.timing.n_samples == 15000
-    assert len(loaded.info.ch_names) == 21
+    assert len(loaded.info.ch_names) == 22
     assert loaded.original_events.source == "events_tsv"
     assert len(loaded.original_events) == 30
     assert loaded.channel_report.consistent
-    assert loaded.view_raw.get_channel_types(["HEOG"]) == ["eog"]
+    assert loaded.view_raw.get_channel_types(["HEOG", "ECG"]) == ["eog", "ecg"]
     assert set(loaded.fingerprint) >= {"vhdr", "eeg", "vmrk", "events_tsv", "channels_tsv"}
     assert all("sha256" in v for v in loaded.fingerprint.values())
 
@@ -130,7 +130,7 @@ def test_truncated_data_file_fails(dataset, catalogue, settings):
 def test_truncated_on_sample_boundary_detected_by_markers(dataset, catalogue, settings):
     root, _ = dataset
     eeg = root / "sub-001" / "eeg" / "sub-001_task-rest_eeg.eeg"
-    frame = 21 * 4
+    frame = 22 * 4
     eeg.write_bytes(eeg.read_bytes()[: frame * 2000])  # 8 s of 60 s, whole samples
     rec = {r.recording_id: r for r in discover_recordings(root)}[SUB1]
     with pytest.raises(RecordingLoadError) as err:
@@ -186,3 +186,8 @@ def test_original_codes_like_artifact_codes_load_without_a_policy(rich_dataset, 
     )
     settings, _ = load_settings(root)
     load_recording(rec, settings, settings.filters, catalogue).close()
+
+
+def test_eog_and_ecg_channels_are_filtered_like_eeg(loaded):
+    """EOG and ECG are part of the montage: the viewing filters apply to them as well."""
+    assert {"HEOG", "VEOG", "ECG"} <= set(loaded.filter_report.filtered_channels)

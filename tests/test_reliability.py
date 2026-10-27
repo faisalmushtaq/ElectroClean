@@ -472,3 +472,16 @@ def test_files_from_compatible_catalogue_versions_are_analysed_together():
     bad = AnnotationDocument(old.recording, "C", [], clash, session_id="C")
     with pytest.raises(AnnotationError):
         build_dataset([("b", new), ("c", bad)], AnalysisConfig(resolutions_s=(1.0,)))
+
+
+def test_eog_and_ecg_channels_are_included_in_channel_analyses():
+    chans = ("Fp1", "Fp2", "VEOG", "ECG")
+    blink = "Eye-blink-artifact"
+    a = doc("A", [(blink, 1, 1.5, ("Fp1", "VEOG")), ("ECG-artifact", 3, 6, ("ECG",))], ch=chans)
+    b = doc("B", [(blink, 1, 1.5, ("VEOG",)), ("ECG-artifact", 3, 6, ("ECG",))], ch=chans)
+    res = analyse([a, b])  # default settings: no channel is excluded
+    tr = res.table("timeresolved_pairwise")
+    r = row(tr, recording="ALL (pooled)", category=blink, channel_mode="time_and_channel", representation="exact")
+    assert (r.both, r.only_1, r.only_2) == pytest.approx((0.5, 0.5, 0.0))  # VEOG agrees, Fp1 only in A
+    ev = res.table("events_summary")
+    assert row(ev, category="ECG-artifact", channel_mode="time_and_channel", threshold=0.2).f1 == 1.0

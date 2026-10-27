@@ -47,7 +47,6 @@ from electroclean.app.eeg.events import (
     parse_int_code,
 )
 from electroclean.app.io.tsv import parse_tsv_text, tsv_bytes
-from electroclean.config.settings import CONFIG_DIR
 
 REQUIRED_COLUMNS = ["onset", "duration", "trial_type", "value", "sample", "channels"]
 # Artifact codes have their own column, so they can never be confused with the dataset's

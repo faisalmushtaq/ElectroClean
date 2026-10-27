@@ -232,7 +232,7 @@ def test_failure_log_and_exclusion(dataset, layout, settings, catalogue):
     assert sel.recording.recording_id == SUB1
     # Fixing the file makes it eligible again.
     time.sleep(0.01)
-    eeg.write_bytes(b"\0" * 21 * 4 * 15000)
+    eeg.write_bytes(b"\0" * 22 * 4 * 15000)
     assert log.unresolved(list(recs.values()), {}) == {}
     # Failures caused by a setting are lifted when the setting changes.
     log.record(recs[SUB1], SUB1, "filter_error", "bad filter", conditions={"highpass_hz": 1.0})

@@ -14,7 +14,6 @@ The MNE browser is a ``QMainWindow``; ElectroClean adds to it
 from __future__ import annotations
 
 import html
-import json
 from typing import Any
 
 from qtpy.QtCore import QObject, Qt, QTimer, Signal
@@ -47,7 +46,7 @@ from electroclean.app.gui.help_text import HELP_HTML, UNDO_HINT
 from electroclean.app.session.session import AnnotationSession, SessionError
 from electroclean.app.session.transaction import ExportCommitError
 from electroclean.app.validation.exports import ValidationError
-from electroclean.config.settings import CONFIG_DIR, Settings
+from electroclean.config.settings import Settings
 
 
 def _hed_descriptions() -> dict[str, str]:
