@@ -732,7 +732,9 @@ class AnnotationWorkspace(QObject):
             self.browser,
             "Close without saving?",
             "This recording has not been saved with Save and Finish, so it is not complete.\n\n"
-            f"{later}: your {n} annotation(s) and the time spent are kept, and ElectroClean offers to "
+            f"{later}: "
+            + (f"your {n} annotation(s) and the time spent are kept" if n else "the time spent so far is kept")
+            + ", and ElectroClean offers to "
             "continue the next time you open this recording.\n\n"
             f"{discard}: your annotations for this recording are deleted.",
             [later, discard, stay],

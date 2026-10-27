@@ -11,13 +11,16 @@ administrator gave you (or the `electroclean` command).
 **Annotator ID.** Type the identifier your study uses for you, for example
 `A01`. It may contain only letters and digits, and it is written in capitals
 in every file name (so `a01` and `A01` are the same person). If the study has
-a list of annotators, pick yourself from the drop-down list. The display name
-is optional and is only stored inside the session files.
+a list of annotators, pick yourself from the drop-down list. The ID used last
+on the computer is in that list too, but it is never filled in for you, so on
+a shared computer nobody saves work under someone else's ID by mistake. The
+display name is optional and is only stored inside the session files.
 
 **Dataset folder.** Choose the folder that holds the recordings. ElectroClean
 looks through it and all its sub-folders for recordings whose file name ends
 in `_eeg.vhdr` (BrainVision), `_eeg.edf` (EDF or EDF+) or `_eeg.bdf` (BDF). The window then shows how many recordings it
-found and how many you have already completed. The *Results folder* is where
+found and how many you have already completed (*Begin new session* stays
+unavailable until a folder with recordings is chosen). The *Results folder* is where
 your work is saved (normally `Annotated_Events` inside the dataset folder).
 If the line *Study settings* names a study, your administrator has configured
 this dataset, for example by fixing the viewing filters or assigning
@@ -78,12 +81,18 @@ Moving around:
 | x | Crosshair showing time and amplitude |
 | Scroll bars and overview bar | Move through time and channels |
 
-The toolbar under MNE's toolbar holds ElectroClean's controls. The
-*Artifact* menu shows the **active artifact type** by name, and the coloured
-box next to it shows its colour with its short code (for example `CHEW`), so
-you never rely on colour alone. The menu does not take the keyboard, so the
-arrow and page keys always move through the EEG. On a small screen, items that
-do not fit at the end of the toolbar (such as *Help*) move into its » menu. The panel on the right lists
+ElectroClean's controls are in two rows at the top. To the right of MNE's
+icons are **Draw/edit**, **Delete**, **Undo**, **Redo**, **Save and Finish**
+and **Help**; the row below holds what you draw: the *Artifact* menu and the
+choice between the whole montage and selected channels. The *Artifact* menu
+shows the **active artifact type** by name, and the coloured box next to it
+shows its colour with its short code (for example `CHEW`), so you never rely
+on colour alone. The menu does not take the keyboard, so the arrow and page
+keys always move through the EEG. Selected channels are drawn in magenta. The
+amplitude scale (− and +), the number of seconds and the number of channels
+you choose stay the same for the next recording you open. When experimental
+events are close together, only the labels that fit are written at the
+bottom of the plot; hold the mouse over an event line to see its label. The panel on the right lists
 every annotation you have made; below it, the *Recording* tab shows details of
 the recording, the filters and any warnings, and the *Help* tab repeats these
 instructions. The status bar at the bottom always shows the recording, your
@@ -155,8 +164,9 @@ ElectroClean then writes your results, reads them back to check them, and
 only then records the recording as completed by you. If anything goes wrong
 (for example the network drive disconnects), you will see a message saying
 the recording has **not** been marked complete; your annotations stay open and
-you can try again. Afterwards you are asked whether to continue with another
-recording or quit.
+you can try again. Afterwards you can continue with another recording, go
+back to the start window (to change the mode, the dataset or the annotator),
+or quit.
 
 **Your work is saved automatically.** While a recording is open,
 ElectroClean keeps a copy of your annotations and of the time you have spent,
@@ -180,9 +190,10 @@ a recording over several sessions, the times are added up. The clock is shown
 in the *Recording* tab.
 
 **If a recording cannot be opened**, you will see *Failed to load file. Would
-you like to continue with another recording or quit?* with the reason under
-*Show Details*. The problem is logged for the administrator and that
-recording is not offered again until it has been fixed.
+you like to continue with another recording or quit?* with the recording and
+the reason (the full technical message is under *Show Details*). The problem
+is logged for the administrator and that recording is not offered again until
+it has been fixed.
 
 ## 7. Training and assessment
 

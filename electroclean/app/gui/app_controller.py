@@ -77,6 +77,7 @@ class AppController(QObject):
         self.synchronous_loading = synchronous_loading  # used by tests
         self.catalogue = default_catalogue()
         self.start_window = StartWindow()
+        self.start_window.prompts = self.prompts  # its error messages use the same (possibly scripted) prompts
         self.start_window.beginRequested.connect(self.begin)
         self.start_window.adminRequested.connect(self.open_admin)
         self.start_window.agreementRequested.connect(self.open_agreement)
@@ -190,7 +191,7 @@ class AppController(QObject):
                 )
                 self.reference_set = None
                 return False
-            if request.mode == "assessment" and request.assessment_kind == "quiz":
+            if request.mode in ("assessment", "practice") and request.assessment_kind == "quiz":
                 return self.start_quiz()
         self.start_window.hide()
         self.next_recording()
@@ -277,6 +278,15 @@ class AppController(QObject):
             self.recordings, {}, annotator_id=req.annotator_id
         )
         restrict = self._restrict_to()
+        if req.mode != "standard" and self.reference_set is not None and not restrict:
+            kind = "practice" if req.mode == "practice" else "assessment"
+            self.prompts.inform(
+                self.parent_widget, "No recordings in this reference set",
+                f"The reference set \"{self.reference_set.name or self.reference_set.set_id}\" has no {kind} recordings "
+                f"yet. Ask the study administrator to add some (Tools, then Administrator tools, then Reference sets).",
+            )
+            self._back_to_start()
+            return
         resumable = self._resumable(completed, set(failures), restrict)
         if resumable is not None:
             record, files = resumable
@@ -319,6 +329,10 @@ class AppController(QObject):
                         self._assessment_complete_report()
                     else:
                         left = sorted(set(self._restrict_to() or ()) - completed)
+                        if not left:
+                            self.prompts.inform(self.parent_widget, "No more recordings", result.message)
+                            self._back_to_start()
+                            return
                         self.prompts.inform(
                             self.parent_widget, "Assessment not finished",
                             f"{len(left)} assessment recording(s) are still to be completed:\n\n"

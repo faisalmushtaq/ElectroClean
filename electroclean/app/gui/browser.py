@@ -207,7 +207,9 @@ class ArtifactRegion(AnnotRegion):
     def label_text_size(self) -> tuple[float, float]:
         """Width and height of the label in pixels, measured with its own font."""
         metrics = QFontMetrics(self.label_item.textItem.font())
-        return float(metrics.horizontalAdvance(self.label_item.textItem.toPlainText()) + 12), float(metrics.height() + 2)
+        box = self.label_item.boundingRect()  # includes the text item's own padding
+        width = max(metrics.horizontalAdvance(self.label_item.textItem.toPlainText()) + 12, box.width() + 4)
+        return float(width), float(max(metrics.height() + 2, box.height() + 1))
 
     def update_label_pos(self) -> None:
         # Labels sit at the top of the plot (event labels are at the bottom),
@@ -803,6 +805,35 @@ class AnnotationController(QObject):
     def relayout_labels(self, *args: Any) -> None:
         if self._attached:
             self._assign_label_rows()
+            self._thin_event_labels()
+
+    def _thin_event_labels(self) -> None:
+        """Hide event labels that would overlap the previous one (the lines stay; hover shows the text).
+
+        Dense experimental events (for example stimulus and key press 0.4 s apart) would otherwise print
+        their labels on top of each other at the bottom of the plot.
+        """
+        p = self.browser.mne
+        lines = list(getattr(p, "event_lines", []) or [])
+        if not lines:
+            return
+        try:
+            x0, x1 = p.viewbox.viewRange()[0]
+            px_per_s = max(1e-9, float(p.viewbox.width())) / max(1e-9, x1 - x0)
+        except Exception:  # pragma: no cover - before the view exists
+            return
+        last_end = -1e18
+        for line in sorted(lines, key=lambda ln: float(ln.value())):
+            label = getattr(line, "label", None)
+            if label is None:
+                continue
+            start = float(line.value() - x0) * px_per_s
+            width = float(label.boundingRect().width())
+            fits = bool(start >= last_end + 4)
+            label.setVisible(fits)
+            if fits:
+                last_end = start + width
+            line.setToolTip(label.toPlainText())
 
     def _remove_region(self, region: ArtifactRegion) -> None:
         p = self.browser.mne

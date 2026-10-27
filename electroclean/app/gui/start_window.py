@@ -129,7 +129,7 @@ class StartWindow(QMainWindow):
         rs.addWidget(self.reference_combo, 1)
         ml.addLayout(rs)
         ak = QHBoxLayout()
-        ak.addWidget(QLabel("Assessment type:"))
+        ak.addWidget(QLabel("Activity:"))
         self.assess_continuous = QRadioButton("Annotate continuous recordings")
         self.assess_quiz = QRadioButton("Short segments quiz")
         g2 = QButtonGroup(self)
@@ -383,14 +383,15 @@ class StartWindow(QMainWindow):
             self.id_hint.setText("Use letters and digits only (e.g. A01)" if self._annotator_text() else "")
 
     def _update_mode_widgets(self, *args: object) -> None:
+        # Practice and assessment can each be done on continuous recordings or as the short-segment quiz.
         training = self.mode_practice.isChecked() or self.mode_assessment.isChecked()
         self.reference_combo.setEnabled(training and bool(self._reference_sets))
         has_quiz = any(q for sid, _n, q in self._reference_sets if sid == self.reference_combo.currentData())
-        self.assess_continuous.setEnabled(self.mode_assessment.isChecked())
-        self.assess_quiz.setEnabled(self.mode_assessment.isChecked() and has_quiz)
-        if not has_quiz:
+        self.assess_continuous.setEnabled(training)
+        self.assess_quiz.setEnabled(training and has_quiz)
+        if not has_quiz or not training:
             self.assess_continuous.setChecked(True)
-        self.choose_recording.setEnabled(not self.mode_assessment.isChecked())
+        self.choose_recording.setEnabled(not self.mode_assessment.isChecked() and not self.assess_quiz.isChecked())
 
     # ---------------------------------------------------------------- begin
     def build_request(self) -> StartRequest:
@@ -417,7 +418,7 @@ class StartWindow(QMainWindow):
             output_root=self._output_override,
             mode=mode,
             reference_set_id=ref,
-            assessment_kind="quiz" if (mode == "assessment" and self.assess_quiz.isChecked()) else "continuous",
+            assessment_kind="quiz" if (mode != "standard" and self.assess_quiz.isChecked()) else "continuous",
             choose_recording=self.choose_recording.isChecked() and mode != "assessment",
         )
 
@@ -427,7 +428,7 @@ class StartWindow(QMainWindow):
         try:
             req = self.build_request()
         except (IdentifierError, ValueError) as exc:
-            UserPrompts().error(self, "Cannot start", str(exc))
+            (getattr(self, "prompts", None) or UserPrompts()).error(self, "Cannot start", str(exc))
             return
         self._save(req)
         self.beginRequested.emit(req)
