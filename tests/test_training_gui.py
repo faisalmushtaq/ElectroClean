@@ -78,7 +78,8 @@ def test_practice_mode_feedback_and_review(qapp, ref_set):
     review = ctrl.review_workspace
     assert review is not None and review.read_only
     prefixes = set(review.controller.display_prefix.values())
-    assert prefixes == {"YOU: ", "REF: "}
+    assert {"YOU: ", "REF: "} <= prefixes
+    assert "MISSED · REF: " in prefixes  # four of the reference's artifacts were marked, the rest are flagged
     assert not review.save_action.isVisible()
     review.browser.close()
     wait()

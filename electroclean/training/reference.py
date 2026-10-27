@@ -6,6 +6,17 @@ A reference set lives in its own folder (by default
     reference_set.json            metadata, provenance, recordings, criteria, quiz
     references/<...>_annotations.json   one canonical reference file per recording
     sources/                      copies of the expert files the references came from
+    recordings/                   (self-contained sets only) the recordings themselves
+
+A *self-contained* set (``recordings_dir`` set, normally ``"recordings"``) keeps
+its recordings inside its own folder, laid out like a small BIDS dataset, so
+training recordings are never offered for study annotation and the set can be
+copied from one study to another. Other sets refer to recordings of the study
+dataset.
+
+Each recording is used for one of three purposes: ``guided`` (Stage 1 of the
+training programme, matched step by step with feedback), ``practice`` (Stage 2,
+annotated independently and then scored) or ``assessment`` (blinded).
 
 Reference annotations use the same canonical format as every other
 ElectroClean annotation file, with annotator ID ``REFERENCE`` and the
@@ -38,7 +49,15 @@ METHOD_NAMES = {
     "consensus": "consensus of several experts",
     "adjudicated": "adjudicated consensus",
 }
-USES = ("practice", "assessment")
+USES = ("guided", "practice", "assessment")
+#: How each use is described to people.
+USE_NAMES = {
+    "guided": "guided (learn with the experts)",
+    "practice": "practice (on your own, with feedback)",
+    "assessment": "assessment (blinded)",
+}
+#: How much help each guided recording gives (see electroclean/training/guided.py).
+GUIDANCE_LEVELS = ("show", "find", "find_unnamed")
 DEFAULT_DIRNAME = Path("derivatives") / "electroclean_reference_sets"
 
 
@@ -117,6 +136,12 @@ class ReferenceSet:
     # times and channels) at the end of the assessment. Off by default: assessment recordings are
     # shared between annotators, so the full report would show the next one where the artifacts are.
     show_full_report_to_annotator: bool = False
+    # Self-contained sets keep their recordings in this folder (relative to the set's folder).
+    recordings_dir: str = ""
+    # Stage 1 settings: {"tolerance": {...}, "notes": {annotation_id: text}} (see training/guided.py).
+    guided: dict[str, Any] = field(default_factory=dict)
+    # Stage 2 pass rule, e.g. {"event_f1": 0.8, "label_accuracy": 0.8} (see training/programme.py).
+    practice_pass: dict[str, Any] = field(default_factory=dict)
 
     # ------------------------------------------------------------ properties
     @property
@@ -126,6 +151,32 @@ class ReferenceSet:
     @property
     def practice_recordings(self) -> list[str]:
         return [r for r, e in self.recordings.items() if e.get("use") == "practice"]
+
+    @property
+    def guided_recordings(self) -> list[str]:
+        """Stage 1 recordings, in the order they were added (the order trainees meet them)."""
+        return [r for r, e in self.recordings.items() if e.get("use") == "guided"]
+
+    @property
+    def self_contained(self) -> bool:
+        return bool(self.recordings_dir)
+
+    def recordings_root(self) -> Path | None:
+        """The folder that holds a self-contained set's recordings (None for dataset-based sets)."""
+        return self.directory / self.recordings_dir if self.recordings_dir else None
+
+    def guidance_for(self, recording_id: str) -> str:
+        """How much help a guided recording gives: its own setting, or by its place in the order
+        (the first shows each artifact, the second names it, later ones only say an artifact follows)."""
+        chosen = str(self.recordings.get(recording_id, {}).get("guidance", ""))
+        if chosen in GUIDANCE_LEVELS:
+            return chosen
+        order = self.guided_recordings
+        index = order.index(recording_id) if recording_id in order else 0
+        return GUIDANCE_LEVELS[min(index, len(GUIDANCE_LEVELS) - 1)]
+
+    def guided_note(self, annotation_id: str) -> str:
+        return str(dict(self.guided.get("notes", {})).get(annotation_id, ""))
 
     @property
     def assessment_recordings(self) -> list[str]:
@@ -173,6 +224,9 @@ class ReferenceSet:
             "quiz": self.quiz,
             "practice_review": self.practice_review,
             "show_full_report_to_annotator": self.show_full_report_to_annotator,
+            "recordings_dir": self.recordings_dir,
+            "guided": self.guided,
+            "practice_pass": self.practice_pass,
         }
 
     def save(self) -> None:
@@ -207,6 +261,9 @@ class ReferenceSet:
             show_full_report_to_annotator=bool(
                 d.get("show_full_report_to_annotator", dict(d.get("quiz", {})).get("show_report_to_annotator", False))
             ),
+            recordings_dir=str(d.get("recordings_dir", "") or ""),
+            guided=dict(d.get("guided", {}) or {}),
+            practice_pass=dict(d.get("practice_pass", {}) or {}),
         )
 
     @classmethod
@@ -306,13 +363,96 @@ class ReferenceSet:
         self.save()
 
     def set_use(self, recording_id: str, use: str) -> None:
-        """Change whether a reference recording is used for practice or for assessment."""
+        """Change whether a reference recording is used for guided learning, practice or assessment."""
         if use not in USES:
             raise ReferenceSetError(f"use must be one of {USES}")
         if recording_id not in self.recordings:
             raise ReferenceSetError(f"{recording_id} is not part of reference set {self.set_id}")
         self.recordings[recording_id]["use"] = use
         self.save()
+
+    def set_guidance(self, recording_id: str, guidance: str) -> None:
+        """How much help a guided recording gives: show, find or find_unnamed ("" = by its place)."""
+        if guidance and guidance not in GUIDANCE_LEVELS:
+            raise ReferenceSetError(f"guidance must be one of {GUIDANCE_LEVELS}")
+        if recording_id not in self.recordings:
+            raise ReferenceSetError(f"{recording_id} is not part of reference set {self.set_id}")
+        if guidance:
+            self.recordings[recording_id]["guidance"] = guidance
+        else:
+            self.recordings[recording_id].pop("guidance", None)
+        self.save()
+
+    def set_guided_note(self, annotation_id: str, text: str) -> None:
+        """The experts' explanation of one reference annotation, shown in Stage 1 ("" removes it)."""
+        ids = set()
+        for rid in self.recordings:
+            try:
+                ids.update(a.annotation_id for a in self.reference_document(rid).annotations)
+            except (ReferenceSetError, OSError, ValueError):
+                continue
+        if annotation_id not in ids:
+            raise ReferenceSetError(f"No reference annotation {annotation_id!r} in reference set {self.set_id}")
+        notes = dict(self.guided.get("notes", {}))
+        if text.strip():
+            notes[annotation_id] = text.strip()
+        else:
+            notes.pop(annotation_id, None)
+        self.guided["notes"] = notes
+        self.save()
+
+    def set_guided_tolerance(self, tolerance: dict[str, Any]) -> None:
+        from electroclean.training.guided import Tolerance
+
+        self.guided["tolerance"] = Tolerance.from_dict(tolerance).to_dict()  # validates
+        self.save()
+
+    def set_practice_pass(self, rule: dict[str, Any]) -> None:
+        from electroclean.training.programme import PassRule
+
+        self.practice_pass = PassRule.from_dict(rule).to_dict()  # validates
+        self.save()
+
+    # ------------------------------------------------ self-contained recordings
+    def add_recording_files(self, recording_file: Path, *, recording_id: str | None = None) -> str:
+        """Copy a recording, with its companion files and BIDS sidecars, into this set's own folder.
+
+        Returns the recording's ID inside the set (its path below the set's recordings folder). The
+        set becomes self-contained if it was not already. ``recording_id`` defaults to
+        ``<sub>/eeg/<file name>`` (the subject taken from a BIDS file name, or ``sub-<stem>``).
+        """
+        from electroclean.app.io.discovery import DEFAULT_SUFFIXES, discover_recordings
+
+        src = Path(recording_file)
+        if not src.is_file():
+            raise ReferenceSetError(f"Recording not found: {src}")
+        if not src.name.lower().endswith(tuple(DEFAULT_SUFFIXES)):
+            raise ReferenceSetError(
+                f"{src.name}: a recording's file name must end in {', '.join(DEFAULT_SUFFIXES)} (BIDS naming)"
+            )
+        if recording_id is None:
+            sub = src.name.split("_")[0] if src.name.startswith("sub-") else "sub-" + safe_component(src.stem)
+            recording_id = f"{sub}/eeg/{src.name}"
+        parts = Path(recording_id).parts
+        if Path(recording_id).is_absolute() or ".." in parts:
+            raise ReferenceSetError(f"Unsafe recording ID {recording_id!r}")
+        if not self.recordings_dir:
+            self.recordings_dir = "recordings"
+        root = self.directory / self.recordings_dir
+        dest_dir = root / Path(recording_id).parent
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        # Companion files (.vmrk, .eeg) and BIDS sidecars share the part of the name before "_eeg".
+        stem = src.name[: src.name.lower().rfind("_eeg")]
+        for f in sorted(src.parent.iterdir()):
+            if f.is_file() and (f == src or f.name.startswith(stem + "_")):
+                target = dest_dir / f.name
+                if f.resolve() != target.resolve():
+                    shutil.copy2(f, target)
+        found = {r.recording_id for r in discover_recordings(root, suffixes=DEFAULT_SUFFIXES)}
+        if recording_id not in found:
+            raise ReferenceSetError(f"{src.name} was copied but could not be found again as {recording_id}")
+        self.save()
+        return recording_id
 
     def remove_quiz_item(self, item_id: str) -> None:
         items = [d for d in self.quiz.get("items", []) if d["item_id"] != item_id]
@@ -372,6 +512,27 @@ def import_expert_reference(
     expert = expert_id or doc.annotator_id
     # A file without annotations is a valid reference: the expert judged the recording clean.
     return rs.add_reference(doc, use=use, method="single_expert", experts=[expert], source_files=[expert_file])
+
+
+def import_expert_recording(
+    rs: ReferenceSet, recording_file: Path, expert_file: Path, *, use: str, guidance: str = "",
+    expert_id: str | None = None,
+) -> str:
+    """Copy a recording into a self-contained set and use an expert's annotations of it as its reference.
+
+    The expert's file must describe the same recording (the same timing and channels); its
+    recording ID is replaced by the recording's ID inside the set. Returns that ID.
+    """
+    from dataclasses import replace
+
+    doc = read_annotations_json(expert_file)
+    rid = rs.add_recording_files(recording_file)
+    doc = replace(doc, recording=replace(doc.recording, recording_id=rid, relative_path=rid))
+    expert = expert_id or doc.annotator_id
+    rs.add_reference(doc, use=use, method="single_expert", experts=[expert], source_files=[expert_file])
+    if guidance:
+        rs.set_guidance(rid, guidance)
+    return rid
 
 
 def import_adjudicated_reference(

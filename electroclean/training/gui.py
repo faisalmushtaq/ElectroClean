@@ -161,16 +161,28 @@ def prepare_review_window(ws: Any) -> None:
 def show_practice_feedback(ctrl: AppController, session: AnnotationSession, loaded: LoadedRecording) -> None:
     rs: ReferenceSet = ctrl.reference_set
     rid = loaded.info.recording_id
+    from electroclean.training.guided_gui import practice_verdict_html, programme_active
+    from electroclean.training.programme import PassRule, load_progress
+
     try:
         ref = rs.reference_document(rid)
         mine = session.build_document()
         fb = practice_feedback(mine, ref, rs)
-        text = feedback_html(fb)
+        verdict = PassRule.from_dict(rs.practice_pass).evaluate(fb)
+        text = feedback_html(fb) + practice_verdict_html(rs, verdict, programme_active(ctrl))
     except Exception as exc:  # feedback is helpful but never blocks saving
         ctrl.prompts.error(ctrl.parent_widget, "Feedback unavailable", f"Feedback could not be prepared: {exc}")
         ctrl.after_practice_feedback(loaded)
         return
-    ctrl.history.append({"event": "practice_feedback", "recording_id": rid, "overall": fb["overall"]})
+    try:  # Stage 2 of the training programme: the score counts towards unlocking the assessment
+        load_progress(ctrl.layout, rs, session.annotator_id).record_practice(rid, verdict, seconds=session.elapsed_s)
+    except OSError:
+        pass
+    ctrl.log.event("practice_scored", recording=rid, passed=verdict["passed"], event_f1=verdict["event_f1"],
+                   label_accuracy=verdict["label_accuracy"], rule=verdict["rule"], overall=fb["overall"],
+                   missed=len(fb["missed"]), extra=len(fb["extra"]), label_differences=len(fb["label_differences"]))
+    ctrl.history.append({"event": "practice_feedback", "recording_id": rid, "overall": fb["overall"],
+                         "passed": verdict["passed"]})
     buttons = ["Review in the viewer", "Continue"] if rs.practice_review else ["Continue"]
     choice = ctrl.prompts.show_html(ctrl.parent_widget, "Practice feedback", text, buttons)
     if choice != "Review in the viewer":
@@ -183,9 +195,14 @@ def show_practice_feedback(ctrl: AppController, session: AnnotationSession, load
         rsession = ReviewSession(loaded, store, session.annotator_id, session.filters, rs.set_id)
         ws = AnnotationWorkspace(
             rsession, ctrl.settings, prompts=ctrl.prompts, read_only=True, display_prefix=prefix,  # type: ignore[arg-type]
-            window_title=f"ElectroClean – review {loaded.files.stem}: YOU versus REF (reference)",
+            window_title=f"ElectroClean – review {loaded.files.stem}: YOU versus REF (reference)", log=ctrl.log,
         )
         prepare_review_window(ws)
+        from electroclean.training.guided_gui import add_review_flags, review_flags
+
+        flags = review_flags(fb, list(mine.annotations), list(ref.annotations), loaded.timing.sfreq)
+        add_review_flags(ctrl, ws, flags)
+        ctrl.log.event("practice_review_opened", recording=rid, flags=len(flags))
     except Exception as exc:
         ctrl.prompts.error(ctrl.parent_widget, "Review unavailable", f"The review could not be opened: {exc}")
         ctrl.after_practice_feedback(loaded)
@@ -227,15 +244,18 @@ def training_title_suffix(ctrl: AppController, mode: str) -> str:
     from electroclean.app.session.register import CompletionRegister
 
     rs = getattr(ctrl, "reference_set", None)
-    if mode not in ("practice", "assessment") or rs is None or ctrl.request is None or ctrl.layout is None:
-        return {"practice": "practice", "assessment": "assessment"}.get(mode, "")
-    total = rs.practice_recordings if mode == "practice" else rs.assessment_recordings
+    names = {"practice": "practice", "assessment": "assessment", "guided": "learn with the experts"}
+    if mode not in names or rs is None or ctrl.request is None or ctrl.layout is None:
+        return names.get(mode, "")
+    total = {"practice": rs.practice_recordings, "assessment": rs.assessment_recordings,
+             "guided": rs.guided_recordings}[mode]
     try:
         done = CompletionRegister(ctrl.layout).completed(ctrl.request.annotator_id, mode, rs.set_id) & set(total)
     except Exception:  # the title is a convenience only
         return mode
     current = min(len(done) + 1, max(len(total), 1))
-    return f"{mode} recording {current} of {len(total)}"
+    return f"{names[mode]}, recording {current} of {len(total)}" if mode == "guided" else (
+        f"{mode} recording {current} of {len(total)}")
 
 
 def practice_complete_text(rs: ReferenceSet) -> str:
@@ -771,14 +791,21 @@ class AdminDialog(QDialog):
             b.setToolTip(tip + ". You will be asked whether it is for practice or for assessment.")
             b.clicked.connect(lambda _=False, slot=slot: slot())
             row2.addWidget(b)
+        self.add_recording_btn = self._needs_set(QPushButton("Add recording with expert annotations…"))
+        self.add_recording_btn.setToolTip(
+            "Copy a recording into this set's own folder and use an expert's ElectroClean annotations of it as the "
+            "reference (for the training programme; the recording is never offered for study annotation)")
+        self.add_recording_btn.clicked.connect(lambda: self.add_recording())
+        row2.addWidget(self.add_recording_btn)
         self.change_use_btn = QPushButton("Change use…")
-        self.change_use_btn.setToolTip("Switch the selected recording between practice and assessment")
+        self.change_use_btn.setToolTip("Use the selected recording for guided learning, practice or assessment")
         self.change_use_btn.clicked.connect(lambda: self.change_use())
         self.remove_btn = QPushButton("Remove selected")
         self.remove_btn.clicked.connect(self.remove_rec)
         row2.addWidget(self.change_use_btn)
         row2.addWidget(self.remove_btn)
         v.addLayout(row2)
+        v.addWidget(self._build_programme_box())
         self.tabs.addTab(w, "Reference sets")
 
     def _sets(self) -> list[ReferenceSet]:
@@ -824,9 +851,12 @@ class AdminDialog(QDialog):
         self.set_info.setText(
             f"<b>{html.escape(rs.name or rs.set_id)}</b>{': ' + html.escape(rs.description) if rs.description else ''}<br>"
             f"Declared when created: {html.escape(describe_provenance(prov))} · "
-            f"{len(rs.practice_recordings)} practice and {len(rs.assessment_recordings)} assessment recording(s), "
-            f"{len(rs.quiz_items)} quiz item(s)<br><span style='color:{muted}'>Folder: {html.escape(str(rs.directory))}</span>"
+            f"{len(rs.guided_recordings)} guided, {len(rs.practice_recordings)} practice and "
+            f"{len(rs.assessment_recordings)} assessment recording(s), {len(rs.quiz_items)} quiz item(s)"
+            + (" · recordings kept in the set's own folder" if rs.self_contained else "")
+            + f"<br><span style='color:{muted}'>Folder: {html.escape(str(rs.directory))}</span>"
         )
+        self._load_programme(rs)
         self.opt_review.blockSignals(True)
         self.opt_review.setChecked(rs.practice_review)
         self.opt_review.blockSignals(False)
@@ -838,7 +868,10 @@ class AdminDialog(QDialog):
             r = self.rec_table.rowCount()
             self.rec_table.insertRow(r)
             p = e.get("provenance", {})
-            for c, val in enumerate([rid, e.get("use", ""), METHOD_NAMES.get(p.get("method", ""), p.get("method", "")),
+            use = e.get("use", "")
+            if use == "guided":
+                use = f"guided ({rs.guidance_for(rid).replace('_', ' ')})"
+            for c, val in enumerate([rid, use, METHOD_NAMES.get(p.get("method", ""), p.get("method", "")),
                                      ", ".join(p.get("experts", [])), str(e.get("n_annotations", ""))]):
                 self.rec_table.setItem(r, c, QTableWidgetItem(val))
         self._load_criteria(rs)
@@ -902,15 +935,17 @@ class AdminDialog(QDialog):
         return [Path(f)] if f else []
 
     def ask_use(self, what: str = "this reference") -> str | None:
-        """Practice or assessment, asked every time with no default (a mis-import would break the blinding)."""
+        """Guided, practice or assessment, asked every time with no default (a mis-import would break the blinding)."""
         choice = self.prompts.choose(
             self, "Practice or assessment?",
             f"How will {what} be used?\n\n"
+            "Guided: Stage 1 of the training programme; trainees match the experts' annotations one by one, "
+            "with feedback.\n\n"
             "Practice: annotators see feedback and can review their annotations against the reference.\n\n"
             "Assessment: blinded; annotators see only their overall result at the end.",
-            ["Practice", "Assessment", "Cancel"], default=2,
+            ["Guided", "Practice", "Assessment", "Cancel"], default=3,
         )
-        return {"Practice": "practice", "Assessment": "assessment"}.get(choice)
+        return {"Guided": "guided", "Practice": "practice", "Assessment": "assessment"}.get(choice)
 
     def add_expert(self, files: list[Path] | None = None, use: str | None = None) -> None:
         rs = self.current_set()
@@ -983,6 +1018,131 @@ class AdminDialog(QDialog):
             return
         self._show_set()
 
+    def add_recording(self, recording: Path | None = None, expert_file: Path | None = None,
+                      use: str | None = None) -> None:
+        """Copy a recording into the set's own folder with an expert's annotations as its reference."""
+        from electroclean.training.reference import import_expert_recording
+
+        rs = self.current_set()
+        if rs is None:
+            return
+        if recording is None:
+            f, _ = QFileDialog.getOpenFileName(self, "Recording", str(self.root),
+                                               "EEG recordings (*_eeg.vhdr *_eeg.edf *_eeg.bdf)")
+            recording = Path(f) if f else None
+        if recording is None:
+            return
+        if expert_file is None:
+            files = self._pick_files("The expert's annotation file for this recording", False)
+            expert_file = files[0] if files else None
+        if expert_file is None:
+            return
+        use = use or self.ask_use("this recording")
+        if use is None:
+            return
+        try:
+            rid = import_expert_recording(rs, recording, expert_file, use=use)
+        except Exception as exc:
+            self._error(exc)
+            return
+        self._show_set()
+        self.ctrl.start_window.refresh()
+        self.prompts.inform(self, "Recording added", f"{rid} was copied into {rs.set_id} and will be used for {use}.")
+
+    def create_example_set(self) -> None:
+        """The example training set: three simulated recordings, a placeholder for real expert files."""
+        from electroclean.training.examples import EXAMPLE_SET_ID, create_example_training_set
+
+        try:
+            _, study = self._settings()
+            rs = create_example_training_set(self.root, study)
+        except Exception as exc:
+            self._error(exc)
+            return
+        self._refresh_sets(select=EXAMPLE_SET_ID)
+        self.ctrl.start_window.refresh()
+        self.prompts.inform(
+            self, "Example training set created",
+            f"{rs.name} was created with {len(rs.guided_recordings)} recordings to learn with the experts and "
+            f"{len(rs.practice_recordings)} to practise on. They are simulated recordings: replace them with your "
+            "experts' recordings (Add recording with expert annotations…) when you have them.")
+
+    # ---------------------------------------------------- programme settings
+    def _build_programme_box(self) -> QGroupBox:
+        box = QGroupBox("Training programme")
+        form = QFormLayout(box)
+        pass_row = QHBoxLayout()
+        self.pass_f1 = self._needs_set(QSpinBox())
+        self.pass_acc = self._needs_set(QSpinBox())
+        for sb in (self.pass_f1, self.pass_acc):
+            sb.setRange(0, 100)
+            sb.setSuffix(" %")
+        pass_row.addWidget(self.pass_f1)
+        pass_row.addWidget(QLabel("of the experts' artifacts found, and"))
+        pass_row.addWidget(self.pass_acc)
+        pass_row.addWidget(QLabel("of them given the right type"))
+        pass_row.addStretch(1)
+        form.addRow("Pass mark for practice", pass_row)
+        tol_row = QHBoxLayout()
+        self.tol_seconds = self._needs_set(QDoubleSpinBox())
+        self.tol_seconds.setRange(0.0, 5.0)
+        self.tol_seconds.setSingleStep(0.05)
+        self.tol_seconds.setDecimals(2)
+        self.tol_seconds.setSuffix(" s")
+        self.tol_fraction = self._needs_set(QSpinBox())
+        self.tol_fraction.setRange(0, 100)
+        self.tol_fraction.setSuffix(" %")
+        self.tol_channels = self._needs_set(QSpinBox())
+        self.tol_channels.setRange(1, 100)
+        self.tol_channels.setSuffix(" %")
+        tol_row.addWidget(QLabel("start and end within"))
+        tol_row.addWidget(self.tol_seconds)
+        tol_row.addWidget(QLabel("or"))
+        tol_row.addWidget(self.tol_fraction)
+        tol_row.addWidget(QLabel("of its length; channels"))
+        tol_row.addWidget(self.tol_channels)
+        tol_row.addWidget(QLabel("the same"))
+        tol_row.addStretch(1)
+        form.addRow("Guided steps match when", tol_row)
+        buttons = QHBoxLayout()
+        self.save_programme_btn = self._needs_set(QPushButton("Save programme settings"))
+        self.save_programme_btn.clicked.connect(self.save_programme)
+        example = QPushButton("Create example training set")
+        example.setToolTip("Three simulated recordings with known artifacts, as placeholders for real expert files")
+        example.clicked.connect(self.create_example_set)
+        buttons.addWidget(self.save_programme_btn)
+        buttons.addStretch(1)
+        buttons.addWidget(example)
+        form.addRow(buttons)
+        return box
+
+    def _load_programme(self, rs: ReferenceSet) -> None:
+        from electroclean.training.guided import Tolerance
+        from electroclean.training.programme import PassRule
+
+        rule = PassRule.from_dict(rs.practice_pass)
+        tol = Tolerance.from_dict(rs.guided.get("tolerance"))
+        self.pass_f1.setValue(round(rule.event_f1 * 100))
+        self.pass_acc.setValue(round(rule.label_accuracy * 100))
+        self.tol_seconds.setValue(tol.seconds)
+        self.tol_fraction.setValue(round(tol.fraction * 100))
+        self.tol_channels.setValue(round(tol.channel_jaccard * 100))
+
+    def save_programme(self) -> None:
+        rs = self.current_set()
+        if rs is None:
+            return
+        try:
+            rs.set_practice_pass({"event_f1": self.pass_f1.value() / 100, "label_accuracy": self.pass_acc.value() / 100})
+            tol = dict(rs.guided.get("tolerance", {}))
+            tol.update(seconds=self.tol_seconds.value(), fraction=self.tol_fraction.value() / 100,
+                       channel_jaccard=self.tol_channels.value() / 100)
+            rs.set_guided_tolerance(tol)
+        except Exception as exc:
+            self._error(exc)
+            return
+        self.prompts.inform(self, "Saved", f"Training programme settings saved for {rs.name or rs.set_id}.")
+
     def _selected_recording(self) -> str | None:
         rows = self.rec_table.selectionModel().selectedRows()
         return self.rec_table.item(rows[0].row(), 0).text() if rows else None
@@ -996,7 +1156,7 @@ class AdminDialog(QDialog):
         except Exception:
             return []
         return sorted({e["annotator_id"] for e in entries if e.get("recording_id") == recording_id
-                       and e.get("mode") == "practice" and e.get("context") == rs.set_id})
+                       and e.get("mode") in ("practice", "guided") and e.get("context") == rs.set_id})
 
     def change_use(self, recording_id: str | None = None) -> None:
         rs = self.current_set()
@@ -1005,7 +1165,13 @@ class AdminDialog(QDialog):
             self.prompts.inform(self, "Change use", "Select a recording in the list first.")
             return
         current = rs.recordings[rid].get("use", "practice")
-        new = "assessment" if current == "practice" else "practice"
+        others = [u for u in ("assessment", "practice", "guided") if u != current]
+        names = {"guided": "Guided", "practice": "Practice", "assessment": "Assessment"}
+        picked = self.prompts.choose(self, "New use", f"How should {rid} be used from now on? (Now: {current}.)",
+                                     [names[u] for u in others] + ["Cancel"], default=0)
+        new = {v: k for k, v in names.items()}.get(picked)
+        if new is None:
+            return
         warning = ""
         if new == "assessment":
             seen = self.practised_by(rs, rid)
@@ -1322,10 +1488,15 @@ class AdminDialog(QDialog):
             return
         rows = admin.assessment_progress(self._layout(), rs, ids)
         self.p_text.setHtml(f"<p><b>{html.escape(rs.name or rs.set_id)}</b></p>"
-                            "<table border='1' cellpadding='4' cellspacing='0'><tr><th>Annotator</th><th>Practice</th>"
+                            "<table border='1' cellpadding='4' cellspacing='0'><tr><th>Annotator</th>"
+                            "<th>Learn with the experts</th><th>Practice</th>"
                             "<th>Assessment</th></tr>" + "".join(
                                 f"<tr><td>{html.escape(r['annotator_id'])}</td>"
-                                f"<td>{r['practice_completed']} of {r['practice_total']}</td>"
+                                f"<td>{r['guided_completed']} of {r['guided_total']}"
+                                + (f" ({r['guided_stars']} of {r['guided_max_stars']} stars)" if r['guided_max_stars'] else "")
+                                + "</td>"
+                                f"<td>{r['practice_completed']} of {r['practice_total']}"
+                                + (" (passed)" if r["practice_passed"] else "") + "</td>"
                                 f"<td>{r['assessment_completed']} of {r['assessment_total']}</td></tr>" for r in rows)
                             + "</table>")
 

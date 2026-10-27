@@ -143,14 +143,25 @@ def make_balanced_allocation(
 
 
 def assessment_progress(layout: OutputLayout, rs: ReferenceSet, annotators: list[str]) -> list[dict[str, Any]]:
+    from electroclean.training.programme import load_progress
+
     reg = CompletionRegister(layout)
     rows = []
     for a in annotators:
         aid = normalise_annotator_id(a)
         done = reg.completed(aid, "assessment", rs.set_id) & set(rs.assessment_recordings)
         practice = reg.completed(aid, "practice", rs.set_id) & set(rs.practice_recordings)
+        guided = reg.completed(aid, "guided", rs.set_id) & set(rs.guided_recordings)
+        prog = load_progress(layout, rs, aid)
+        best = prog.best_practice()
         rows.append({
             "annotator_id": aid,
+            "guided_completed": len(guided),
+            "guided_total": len(rs.guided_recordings),
+            "guided_stars": sum(int(prog.guided.get(r, {}).get("stars", 0)) for r in guided),
+            "guided_max_stars": sum(int(prog.guided.get(r, {}).get("max_stars", 0)) for r in guided),
+            "practice_passed": prog.practice_passed,
+            "practice_best_f1": None if best is None else best.get("event_f1"),
             "practice_completed": len(practice),
             "practice_total": len(rs.practice_recordings),
             "assessment_completed": len(done),

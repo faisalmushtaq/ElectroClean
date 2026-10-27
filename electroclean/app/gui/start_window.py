@@ -39,6 +39,8 @@ class StartRequest:
     reference_set_id: str = ""
     assessment_kind: str = "continuous"  # or "quiz"
     choose_recording: bool = False
+    # The training programme (guided learning, then practice, then the assessment) rather than one mode.
+    programme: bool = False
 
 
 def app_settings() -> QSettings:
@@ -127,11 +129,12 @@ class StartWindow(QMainWindow):
         mode, ml = style.card(spacing=6)
         ml.addWidget(style.label("What would you like to do?", "heading"))
         self.mode_standard = QRadioButton("Annotate recordings")
-        self.mode_practice = QRadioButton("Practise with feedback")
+        self.mode_practice = QRadioButton("Training programme")
         self.mode_assessment = QRadioButton("Competency assessment")
         explanations = {
             self.mode_standard: "Mark the artifacts in recordings for the study.",
-            self.mode_practice: "Annotate recordings that experts have annotated, then see how your work compares.",
+            self.mode_practice: "Learn with the experts step by step, then practise on your own and see your score. "
+            "Ends with the competency assessment.",
             self.mode_assessment: "Annotate without feedback; you see your result when every recording is done.",
         }
         g = QButtonGroup(self)
@@ -152,7 +155,7 @@ class StartWindow(QMainWindow):
         tf.addRow("Reference set", self.reference_combo)
         ak = QHBoxLayout()
         ak.setSpacing(16)
-        self.assess_continuous = QRadioButton("Continuous recordings")
+        self.assess_continuous = QRadioButton("Recordings")
         self.assess_quiz = QRadioButton("Short-segment quiz")
         g2 = QButtonGroup(self)
         g2.addButton(self.assess_continuous)
@@ -372,8 +375,13 @@ class StartWindow(QMainWindow):
     def _update_begin(self) -> None:
         ids = getattr(self, "_recording_ids", None)
         if hasattr(self, "begin_btn"):
-            self.begin_btn.setEnabled(bool(ids))
-            self.begin_btn.setToolTip("" if ids else "Choose a folder that contains recordings first")
+            # Training can run from a reference set that brings its own recordings.
+            training = (getattr(self, "mode_practice", None) is not None
+                        and (self.mode_practice.isChecked() or self.mode_assessment.isChecked())
+                        and bool(getattr(self, "_reference_sets", [])))
+            ok = bool(ids) or training
+            self.begin_btn.setEnabled(ok)
+            self.begin_btn.setToolTip("" if ok else "Choose a folder that contains recordings first")
 
     def _fill_reference_sets(self) -> None:
         self.reference_combo.blockSignals(True)
@@ -422,8 +430,9 @@ class StartWindow(QMainWindow):
         self.assess_quiz.setEnabled(training and has_quiz)
         if not has_quiz or not training:
             self.assess_continuous.setChecked(True)
-        self.choose_recording.setEnabled(not self.mode_assessment.isChecked() and not self.assess_quiz.isChecked())
+        self.choose_recording.setEnabled(self.mode_standard.isChecked())
         self.choose_recording.setVisible(self.choose_recording.isEnabled())
+        self._update_begin()
 
     # ---------------------------------------------------------------- begin
     def build_request(self) -> StartRequest:
@@ -451,7 +460,8 @@ class StartWindow(QMainWindow):
             mode=mode,
             reference_set_id=ref,
             assessment_kind="quiz" if (mode != "standard" and self.assess_quiz.isChecked()) else "continuous",
-            choose_recording=self.choose_recording.isChecked() and mode != "assessment",
+            choose_recording=self.choose_recording.isChecked() and mode == "standard",
+            programme=mode == "practice" and not self.assess_quiz.isChecked(),
         )
 
     def _begin(self) -> None:

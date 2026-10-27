@@ -66,7 +66,7 @@ def check_dataset(path: Path, command: str, *, create: bool = False) -> None:
         raise CommandError(f"Dataset folder not found: {path}. Check the path.{hint}")
     if not path.is_dir():
         raise CommandError(f"{path} is a file; give the dataset folder that holds the recordings.")
-    if command == "init-study":
+    if command in ("init-study", "create-example-set"):
         return
     if (path / STUDY_CONFIG_FILENAME).is_file() or _has_recording(path):
         return
@@ -172,6 +172,67 @@ def cmd_create_set(a: argparse.Namespace) -> int:
 def cmd_add_reference(a: argparse.Namespace) -> int:
     rs = _set(a.dataset, a.set_id)
     print("Added", import_expert_reference(rs, a.file, use=a.use, expert_id=a.expert))
+    return 0
+
+
+def cmd_example_set(a: argparse.Namespace) -> int:
+    from electroclean.training.examples import create_example_training_set
+
+    _, study = load_settings(a.dataset)
+    rs = create_example_training_set(a.dataset, study, set_id=a.set_id)
+    print(f"Created {rs.name} in {rs.directory}: {len(rs.guided_recordings)} guided and "
+          f"{len(rs.practice_recordings)} practice recording(s) (simulated placeholders)")
+    return 0
+
+
+def cmd_import_recording(a: argparse.Namespace) -> int:
+    from electroclean.training.reference import import_expert_recording
+
+    rs = _set(a.dataset, a.set_id)
+    rid = import_expert_recording(rs, a.recording, a.annotations, use=a.use, guidance=a.guidance or "",
+                                  expert_id=a.expert)
+    print(f"Added {rid} to {rs.set_id} for {a.use}")
+    return 0
+
+
+def cmd_guidance(a: argparse.Namespace) -> int:
+    rs = _set(a.dataset, a.set_id)
+    if a.recording not in rs.recordings:
+        raise CommandError(f"{a.recording} is not in reference set {rs.set_id}.{did_you_mean(a.recording, list(rs.recordings))}")
+    rs.set_guidance(a.recording, "" if a.guidance == "auto" else a.guidance)
+    print(f"{a.recording}: guidance {rs.guidance_for(a.recording)}")
+    return 0
+
+
+def cmd_note(a: argparse.Namespace) -> int:
+    rs = _set(a.dataset, a.set_id)
+    rs.set_guided_note(a.annotation_id, a.text)
+    print("Note saved" if a.text.strip() else "Note removed")
+    return 0
+
+
+def cmd_programme(a: argparse.Namespace) -> int:
+    rs = _set(a.dataset, a.set_id)
+    if a.pass_f1 is not None or a.pass_types is not None:
+        rule = dict(rs.practice_pass)
+        if a.pass_f1 is not None:
+            rule["event_f1"] = a.pass_f1
+        if a.pass_types is not None:
+            rule["label_accuracy"] = a.pass_types
+        rs.set_practice_pass(rule)
+    tol = dict(rs.guided.get("tolerance", {}))
+    for key, value in (("seconds", a.tolerance_s), ("fraction", a.tolerance_fraction),
+                       ("channel_jaccard", a.channel_overlap)):
+        if value is not None:
+            tol[key] = value
+    rs.set_guided_tolerance(tol)
+    from electroclean.training.guided import Tolerance
+    from electroclean.training.programme import PassRule
+
+    print(f"Pass mark for practice: {PassRule.from_dict(rs.practice_pass).describe()}")
+    t = Tolerance.from_dict(rs.guided.get("tolerance"))
+    print(f"Guided steps match within {t.seconds:g} s or {t.fraction:.0%} of the duration; "
+          f"channels {t.channel_jaccard:.0%} the same")
     return 0
 
 
@@ -282,7 +343,10 @@ def cmd_report(a: argparse.Namespace) -> int:
 def cmd_progress(a: argparse.Namespace) -> int:
     rs = _set(a.dataset, a.set_id)
     for row in admin.assessment_progress(output_layout(a.dataset), rs, a.annotators):
-        print(f"{row['annotator_id']}: practice {row['practice_completed']}/{row['practice_total']}, "
+        passed = " (passed)" if row["practice_passed"] else ""
+        print(f"{row['annotator_id']}: guided {row['guided_completed']}/{row['guided_total']} "
+              f"({row['guided_stars']}/{row['guided_max_stars']} stars), "
+              f"practice {row['practice_completed']}/{row['practice_total']}{passed}, "
               f"assessment {row['assessment_completed']}/{row['assessment_total']}")
     return 0
 
@@ -358,12 +422,12 @@ def build_parser() -> argparse.ArgumentParser:
     sp = add("add-reference", cmd_add_reference, "Use one expert's annotation file as a reference")
     sp.add_argument("set_id")
     sp.add_argument("file", type=Path)
-    sp.add_argument("--use", choices=("practice", "assessment"), required=True)
+    sp.add_argument("--use", choices=("guided", "practice", "assessment"), required=True)
     sp.add_argument("--expert")
     sp = add("build-consensus", cmd_consensus, "Build a consensus reference from several experts' files")
     sp.add_argument("set_id")
     sp.add_argument("files", type=Path, nargs="+")
-    sp.add_argument("--use", choices=("practice", "assessment"), required=True)
+    sp.add_argument("--use", choices=("guided", "practice", "assessment"), required=True)
     sp.add_argument("--min-agreement", type=int, help="Experts needed for consensus (default: a strict majority)")
     sp.add_argument("--min-duration", type=float, default=0.0, help="Drop consensus intervals shorter than this (s)")
     sp.add_argument("--merge-gap", type=float, default=0.0, help="Join consensus intervals separated by at most this (s)")
@@ -376,11 +440,38 @@ def build_parser() -> argparse.ArgumentParser:
     sp = add("add-adjudicated", cmd_adjudicated, "Use an adjudicator's final file as a reference")
     sp.add_argument("set_id")
     sp.add_argument("file", type=Path)
-    sp.add_argument("--use", choices=("practice", "assessment"), required=True)
+    sp.add_argument("--use", choices=("guided", "practice", "assessment"), required=True)
     sp.add_argument("--experts", nargs="+", required=True)
     sp.add_argument("--adjudicator")
     sp.add_argument("--expert-files", type=Path, nargs="*")
     sp.add_argument("--disagreements", type=Path)
+    sp = add("create-example-set", cmd_example_set,
+             "Create the example training set: three simulated recordings as placeholders for expert files")
+    sp.add_argument("--set-id", default="example")
+    sp = add("import-recording", cmd_import_recording,
+             "Copy a recording into a reference set's own folder, with an expert's annotations as its reference")
+    sp.add_argument("set_id")
+    sp.add_argument("recording", type=Path, help="The recording (*_eeg.vhdr, *_eeg.edf or *_eeg.bdf)")
+    sp.add_argument("annotations", type=Path, help="The expert's ElectroClean annotations file for it")
+    sp.add_argument("--use", choices=("guided", "practice", "assessment"), required=True)
+    sp.add_argument("--guidance", choices=("show", "find", "find_unnamed"),
+                    help="For guided recordings: how much help (default: by its place in the set)")
+    sp.add_argument("--expert", help="The expert's ID (default: the annotator ID in the file)")
+    sp = add("set-guidance", cmd_guidance, "How much help a guided recording gives")
+    sp.add_argument("set_id")
+    sp.add_argument("recording")
+    sp.add_argument("guidance", choices=("show", "find", "find_unnamed", "auto"))
+    sp = add("set-note", cmd_note, "The experts' explanation of one reference annotation, shown in guided steps")
+    sp.add_argument("set_id")
+    sp.add_argument("annotation_id")
+    sp.add_argument("text", help="The note ('' removes it)")
+    sp = add("set-programme", cmd_programme, "The practice pass mark and how closely guided steps must match")
+    sp.add_argument("set_id")
+    sp.add_argument("--pass-f1", type=float, help="Share of the experts' artifacts to find, 0 to 1 (default 0.8)")
+    sp.add_argument("--pass-types", type=float, help="Share of found artifacts with the right type, 0 to 1 (default 0.8)")
+    sp.add_argument("--tolerance-s", type=float, help="Start and end within this many seconds (default 0.2)")
+    sp.add_argument("--tolerance-fraction", type=float, help="... or this share of the duration (default 0.2)")
+    sp.add_argument("--channel-overlap", type=float, help="Channels the same, Jaccard 0 to 1 (default 0.75)")
     sp = add("set-criteria", cmd_criteria, "Set competency criteria: " + ", ".join(sorted(METRICS)))
     sp.add_argument("set_id")
     sp.add_argument("--criterion", action="append", help="metric:threshold[:each_category]; repeatable")

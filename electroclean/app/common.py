@@ -9,7 +9,8 @@ from datetime import datetime, timezone
 ANNOTATOR_ID_PATTERN = re.compile(r"^[A-Za-z0-9]{1,32}$")
 SAFE_COMPONENT_PATTERN = re.compile(r"[^A-Za-z0-9._-]+")
 
-MODES = ("standard", "practice", "assessment")
+# "guided": Stage 1 of the training programme, where the trainee matches the experts' annotations step by step.
+MODES = ("standard", "practice", "assessment", "guided")
 
 
 class IdentifierError(ValueError):

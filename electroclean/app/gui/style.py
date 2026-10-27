@@ -56,6 +56,9 @@ COLOURS = {
     "warning_border": "#F0D48A",
     "warning_text": "#6B4A00",
     "success": "#1B7A3A",
+    "success_bg": "#EAF6EE",  # matched steps, passed results
+    "success_border": "#A8D5B5",
+    "flag_type": "#6A1B9A",  # review: an artifact found with another type
     "selection_channel": "#C2185B",  # selected channels in the EEG (magenta)
 }
 
@@ -91,12 +94,36 @@ QLabel[role="note"] {{
     background: {c['surface_alt']}; border: 1px solid {c['separator']}; border-radius: 8px;
     padding: 8px 12px; color: {c['text']};
 }}
+QLabel[role="success"] {{
+    background: {c['success_bg']}; border: 1px solid {c['success_border']}; border-radius: 8px;
+    padding: 8px 12px; color: {c['success']};
+}}
 
 /* ---------- cards and groups ---------- */
 QFrame[role="card"] {{
     background: {c['surface']}; border: 1px solid {c['separator']}; border-radius: {RADIUS['card']}px;
 }}
 QFrame[role="card"] QLabel {{ background: transparent; }}
+QFrame[role="card"][state="current"] {{ border: 2px solid {c['accent']}; }}
+QFrame[role="card"][state="locked"] {{ background: {c['surface_alt']}; }}
+/* chips: a short status in a pill (the card prefix makes them win over the transparent card labels) */
+QLabel[role="chip"], QFrame[role="card"] QLabel[role="chip"] {{
+    background: {c['hover']}; color: {c['text_secondary']}; border-radius: 9px; padding: 2px 9px; font-weight: 600;
+}}
+QLabel[role="chip"][state="active"], QFrame[role="card"] QLabel[role="chip"][state="active"] {{
+    background: {c['accent_soft']}; color: {c['accent']};
+}}
+QLabel[role="chip"][state="done"], QFrame[role="card"] QLabel[role="chip"][state="done"] {{
+    background: {c['success_bg']}; color: {c['success']};
+}}
+QLabel[role="badge"], QFrame[role="card"] QLabel[role="badge"] {{
+    background: {c['accent']}; color: #FFFFFF; border-radius: 13px; font-weight: 700;
+    min-width: 26px; max-width: 26px; min-height: 26px; max-height: 26px; qproperty-alignment: AlignCenter;
+}}
+QLabel[role="badge"][state="done"], QFrame[role="card"] QLabel[role="badge"][state="done"] {{ background: {c['success']}; }}
+QLabel[role="badge"][state="locked"], QFrame[role="card"] QLabel[role="badge"][state="locked"] {{
+    background: {c['text_disabled']};
+}}
 QGroupBox {{
     background: {c['surface']}; border: 1px solid {c['separator']}; border-radius: {RADIUS['card']}px;
     margin-top: 1.4em; padding: 10px 12px 12px 12px; font-weight: 600;

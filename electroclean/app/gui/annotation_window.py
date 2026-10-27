@@ -604,6 +604,7 @@ class AnnotationWorkspace(QObject):
         # A reminder of the annotating keys, on the left; status messages replace it for a while.
         self.hint_label = style.label("N / P  next, previous annotation" if self.read_only else KEY_HINT, "caption")
         sb.addWidget(self.hint_label)
+        sb.messageChanged.connect(lambda m: self.hint_label.setVisible(not m))  # never drawn under a message
         sb.addPermanentWidget(self.status_fixed)
         self.status_progress = QLabel()
         sb.addPermanentWidget(self.status_progress)
@@ -929,6 +930,9 @@ class AnnotationWorkspace(QObject):
 
     def save_and_finish(self) -> bool:
         if self.read_only or self._finished:
+            return False
+        gate = getattr(self, "save_gate", None)  # set by Stage 1 of the training programme
+        if gate is not None and not gate():
             return False
         store = self.session.store
         counts = {k: v for k, v in self.session.build_document().counts_by_label().items() if v}

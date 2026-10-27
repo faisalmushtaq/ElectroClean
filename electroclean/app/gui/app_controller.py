@@ -45,7 +45,7 @@ FAILED_TO_LOAD = "Failed to load file. Would you like to continue with another r
 
 def _training_title_suffix(ctrl: Any, mode: str) -> str:
     """'assessment recording 1 of 2' (or practice) for the window title during training; '' otherwise."""
-    if mode not in ("practice", "assessment"):
+    if mode not in ("practice", "assessment", "guided"):
         return ""
     from electroclean.training.gui import training_title_suffix
 
@@ -114,6 +114,12 @@ class AppController(QObject):
         self.admin_dialog: Any = None
         self._resume_choice: Any = None  # autosave the annotator chose to continue
         self._declined_resume: set[str] = set()
+        # Training programme (electroclean/training/guided_gui.py): the path window replaces the
+        # start window while it runs; one recording may be annotated again (a practice retry).
+        self.programme_active = False
+        self.training_path: Any = None
+        self.guided_summary: dict[str, Any] = {}
+        self._repeat_recording: str | None = None
         self.history: list[dict[str, Any]] = []  # what happened (used by tests and the demo)
 
     # ------------------------------------------------------------- helpers
@@ -125,9 +131,26 @@ class AppController(QObject):
         return self.request.reference_set_id if self.request and self.request.mode != "standard" else ""
 
     def _back_to_start(self) -> None:
+        if self._in_programme():  # the training path is the programme's "start window"
+            from electroclean.training.guided_gui import open_training_path
+
+            open_training_path(self)
+            return
         self.start_window.refresh()
         self.start_window.show()
         self.start_window.raise_()
+
+    def _in_programme(self) -> bool:
+        return bool(self.programme_active and self.reference_set is not None and self.request is not None)
+
+    def _reference_sets_folder(self, dataset_root: Path) -> list[Path]:
+        """Where reference sets live, so that recordings inside self-contained sets are never study recordings."""
+        try:
+            from electroclean.training.reference import reference_sets_dir
+
+            return [reference_sets_dir(dataset_root, self.study)]
+        except Exception:  # noqa: BLE001 - training is optional
+            return []
 
     # --------------------------------------------------------------- begin
     def begin(self, request: StartRequest) -> bool:
@@ -174,7 +197,7 @@ class AppController(QObject):
                 request.dataset_root,
                 suffixes=s.discovery_suffixes,
                 exclude_dir_names=tuple(s.discovery_exclude_dir_names),
-                exclude_paths=(out,),
+                exclude_paths=(out, *self._reference_sets_folder(request.dataset_root)),
                 follow_symlinks=s.discovery_follow_symlinks,
             )
         except (OSError, ValueError) as exc:
@@ -186,6 +209,8 @@ class AppController(QObject):
         self.filters = None
         self.remember_filters = False
         self.reference_set = None
+        self.programme_active = False
+        self._repeat_recording = None
         if request.mode != "standard":
             try:
                 from electroclean.training.reference import load_reference_set_by_id
@@ -206,9 +231,38 @@ class AppController(QObject):
                 return False
             if request.mode in ("assessment", "practice") and request.assessment_kind == "quiz":
                 return self.start_quiz()
+            root = self.reference_set.recordings_root()
+            if root is not None:  # a self-contained set brings its own recordings
+                try:
+                    self.recordings = discover_recordings(root, suffixes=s.discovery_suffixes,
+                                                          follow_symlinks=s.discovery_follow_symlinks)
+                except (OSError, ValueError) as exc:
+                    self.prompts.error(self.parent_widget, "Cannot read the training recordings", str(exc))
+                    return False
+            if getattr(request, "programme", False):
+                from electroclean.training.guided_gui import open_training_path
+
+                self.programme_active = True
+                open_training_path(self)
+                return True
         self.start_window.hide()
         self.next_recording()
         return True
+
+    def open_recording(self, recording_id: str, *, repeat: bool = False) -> None:
+        """Open one recording of the current mode (the training programme chooses it); ``repeat`` lets
+        an already completed practice recording be annotated again (saved as a new attempt)."""
+        files = next((r for r in self.recordings if r.recording_id == recording_id), None)
+        if files is None:
+            self.prompts.error(self.parent_widget, "Recording not found",
+                               f"{recording_id} is not among the recordings of this reference set.")
+            self._back_to_start()
+            return
+        self._repeat_recording = recording_id if repeat else None
+        if not self._choose_filters(files):
+            self._back_to_start()
+            return
+        self._load(files)
 
     @staticmethod
     def _check_writable(out: Path) -> str:
@@ -227,6 +281,8 @@ class AppController(QObject):
             return None
         if self.request.mode == "practice":
             return list(self.reference_set.practice_recordings)
+        if self.request.mode == "guided":
+            return list(self.reference_set.guided_recordings)
         return list(self.reference_set.assessment_recordings)
 
     def next_recording(self) -> None:
@@ -235,6 +291,9 @@ class AppController(QObject):
         Re-entrant calls (a failed load that continues with another recording)
         are turned into a loop, so many failures in a row cannot exhaust the stack.
         """
+        if self._in_programme() and self.request.mode != "assessment":
+            self._back_to_start()  # the training path chooses the next recording
+            return
         if getattr(self, "_in_next", False):
             self._next_again = True
             return
@@ -538,6 +597,7 @@ class AppController(QObject):
                 mode=req.mode,
                 context=context,
                 resume=resume,
+                allow_repeat=loaded.info.recording_id == self._repeat_recording,
             )
             session.start()
         except (LockError, SessionError, RegisterError, OSError) as exc:
@@ -568,7 +628,12 @@ class AppController(QObject):
                 prompts=self.prompts,
                 title_suffix=_training_title_suffix(self, req.mode),  # e.g. "assessment recording 1 of 2"
                 view_state=getattr(self, "_view_state", None),
+                log=self.log,
             )
+            if req.mode == "guided":  # Stage 1 of the training programme: the coach panel
+                from electroclean.training.guided_gui import attach_guided_coach
+
+                attach_guided_coach(self, ws)
         except Exception as exc:
             session.abandon(reason=f"viewer could not be opened: {exc}", keep_autosave=True)
             loaded.close()
@@ -603,6 +668,14 @@ class AppController(QObject):
         if self.request.mode == "practice" and session is not None and loaded is not None:
             self._practice_feedback(session, loaded)
             return
+        if self.request.mode == "guided":
+            from electroclean.training.guided_gui import after_guided_recording
+
+            message = after_guided_recording(self, result)
+            if loaded is not None:
+                loaded.close()
+            self._continue_or_quit(message)
+            return
         if loaded is not None:
             loaded.close()
         if self.request.mode == "assessment" and self.reference_set is not None and self._assessment_all_done():
@@ -632,6 +705,11 @@ class AppController(QObject):
         self._continue_or_quit("The recording was closed without saving and remains incomplete.")
 
     def _continue_or_quit(self, text: str) -> None:
+        if self._in_programme():  # back to the training path, which says what comes next
+            from electroclean.training.guided_gui import open_training_path
+
+            open_training_path(self, text)
+            return
         go_on, back, leave = "Continue with another recording", "Back to the start window", "Quit"
         choice = self.prompts.choose(
             self.parent_widget,
