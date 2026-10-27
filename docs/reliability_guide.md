@@ -23,8 +23,23 @@ electroclean-agreement Annotated_Events --out agreement_results \
     --criterion iou --iou-thresholds 0 0.2 0.5 --primary-iou 0.2
 ```
 
-or *Tools → Inter-rater agreement analysis* in the application, or from
-Python:
+`electroclean-agreement --help` describes every option with its unit and
+default. Without `--out` the results go to a new folder
+`agreement_<date>-<time>` in the current folder, and a folder that already
+holds the results of an earlier analysis is only reused with `--overwrite`, so
+earlier results are never replaced by accident. Category and annotator names
+are checked against the data: a mistyped name (`--categories EMG` instead of
+`EMG-artifact`) stops the analysis with a suggestion rather than producing an
+empty category. The exit status is 0 when the analysis ran, 2 for a mistake in
+the command and 3 when it ran but no recording was annotated by two of the
+annotators being compared.
+
+In the application, *Tools → Inter-rater agreement analysis* opens the same
+analysis with its settings on two tabs. It checks the folders before starting,
+proposes a new dated results folder (in the dataset's `derivatives` folder for
+a BIDS dataset), asks before replacing earlier results, runs in the background
+with a *Cancel analysis* button, and shows any warnings and a link to the
+report when it has finished. From Python:
 
 ```python
 from electroclean.reliability import AnalysisConfig, run_analysis, write_outputs
@@ -32,15 +47,23 @@ result = run_analysis(["Annotated_Events"], AnalysisConfig(resolutions_s=(0.01, 
 write_outputs(result, "agreement_results")
 ```
 
+`run_analysis(..., strict=True)` applies the same name checks as the command
+line; `progress` and `cancel` callbacks report each step and stop the
+analysis.
+
 Input folders are searched for `*_annotations.json` files. By default only
 standard-mode annotations are used (training files are excluded). Files are
 grouped by recording; only recordings annotated by at least two annotators
-contribute to comparisons. Every setting, the input files and their SHA-256
-checksums are written to `analysis_settings.json`, so an analysis can be
-repeated exactly.
+contribute to comparisons. When no recording has two annotators to compare,
+or only some have, the report and the command line say so first, and the
+agreement tables are written with their header row and no data rows. Every
+setting, the input files and their SHA-256 checksums are written to
+`analysis_settings.json`, so an analysis can be repeated exactly.
 
-**Checks before comparing.** All files must use the same label catalogue
-(compared by digest). Files whose sampling frequency or number of samples
+**Checks before comparing.** All files must use the same label catalogue or
+compatible versions of it (see *Label catalogue versions* below); files whose
+catalogue gives a label or code a different meaning are refused. Files whose
+sampling frequency or number of samples
 differ from the other annotators' for the same recording are excluded with a
 warning, because they cannot refer to the same data. The expected timing is
 that of the `reference_annotator`, if one is set, and otherwise the timing
@@ -142,7 +165,16 @@ behaves paradoxically when prevalence is low or very unequal between
 annotators: it can be low although agreement on the few positive intervals is
 good (Feinstein and Cicchetti, 1990). The report therefore leads with positive
 agreement, shows kappa with the prevalence and bias indices, and adds the
-event-based measures below.
+event-based measures below. Its *Key results* box gives, for each pair of
+annotators, positive agreement and kappa for any artifact over time and the
+event F1 over all categories, as a starting point for the detailed sections.
+
+**Rare categories.** A category annotated only once or twice gives agreement
+values that mean very little (one missed blink can turn positive agreement
+from 1 to 0). The report's tables give the number of annotations of each
+category, and its figures leave out categories with fewer than
+`min_events_per_category` annotations in total (5 by default; `--min-events`
+on the command line), listing them below the figure instead.
 
 **Units are not independent.** Neighbouring samples or bins are strongly
 correlated, so the usual standard errors of kappa would be far too small. No

@@ -237,7 +237,8 @@ while label strings keep the HED spelling *artifact*.
 
 `pyproject.toml` defines the package and three commands (`electroclean`,
 `electroclean-agreement`, `electroclean-admin`). `requirements.txt` pins every
-dependency; `requirements-dev.txt` adds pytest and pybv. The launchers in
+dependency (pybv among them, for the synthetic recordings of the self-test and
+the examples); `requirements-dev.txt` adds pytest. The launchers in
 `launchers/` create `.venv` on first use.
 
 The stand-alone applications are built with PyInstaller from

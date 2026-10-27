@@ -10,6 +10,8 @@ PySide6-Essentials==6.12.0
 shiboken6==6.12.0
 qtpy==2.4.3
 pyqtgraph==0.14.0
+# Writes the synthetic recordings used by --self-test and the examples
+pybv==0.8.1
 # Indirect dependencies, pinned for reproducibility
 contourpy==1.4.0
 cycler==0.12.1
