@@ -54,7 +54,7 @@ def main() -> int:
     from electroclean.config.settings import load_settings
     from electroclean.synthetic import make_synthetic_dataset, simulate_rater
     from electroclean.training.assessment import feedback_html, practice_feedback
-    from electroclean.training.gui import AdminDialog, QuizWindow, ReviewSession, review_store
+    from electroclean.training.gui import AdminDialog, QuizWindow, ReviewSession, prepare_review_window, review_store
     from electroclean.training.quiz import QuizSession
     from electroclean.training.reference import QuizItem, ReferenceSet, reference_sets_dir
 
@@ -160,6 +160,7 @@ def main() -> int:
         review = AnnotationWorkspace(ReviewSession(lr, store, "A01", settings.filters, "pilot"), settings,  # type: ignore[arg-type]
                                      prompts=ScriptedPrompts(), read_only=True, display_prefix=prefix,
                                      window_title="ElectroClean – review: YOU versus REF")
+        prepare_review_window(review)
         review.show()
         desktop_size(review)
         QTest.qWaitForWindowExposed(review.browser)

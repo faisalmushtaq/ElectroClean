@@ -41,6 +41,15 @@ from electroclean.config.settings import FilterSettings, Settings, SettingsError
 FAILED_TO_LOAD = "Failed to load file. Would you like to continue with another recording or quit?"
 
 
+def _training_title_suffix(ctrl: Any, mode: str) -> str:
+    """'assessment recording 1 of 2' (or practice) for the window title during training; '' otherwise."""
+    if mode not in ("practice", "assessment"):
+        return ""
+    from electroclean.training.gui import training_title_suffix
+
+    return training_title_suffix(ctrl, mode)
+
+
 class LoadingDialog(QProgressDialog):
     """Progress shown while a recording opens. It cannot be cancelled or closed by the user,
     because the background loader cannot be interrupted safely."""
@@ -534,7 +543,7 @@ class AppController(QObject):
                 session,
                 self.settings,
                 prompts=self.prompts,
-                title_suffix={"practice": "practice", "assessment": "assessment"}.get(req.mode, ""),
+                title_suffix=_training_title_suffix(self, req.mode),  # e.g. "assessment recording 1 of 2"
                 view_state=getattr(self, "_view_state", None),
             )
         except Exception as exc:

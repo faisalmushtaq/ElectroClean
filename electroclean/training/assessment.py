@@ -28,21 +28,78 @@ from electroclean.app.io.naming import OutputLayout
 from electroclean.reliability.analysis import run_analysis
 from electroclean.reliability.config import ANY_ARTIFACT, AnalysisConfig
 from electroclean.reliability.data import build_dataset
-from electroclean.training.reference import REFERENCE_ANNOTATOR, ReferenceSet
+from electroclean.training.reference import METHOD_NAMES, REFERENCE_ANNOTATOR, ReferenceSet
 
 MICRO = "ALL categories (micro-average)"
 
-METRICS: dict[str, dict[str, str]] = {
-    "event_f1": {"label": "Event F1 (time only)", "better": "higher"},
-    "event_recall": {"label": "Sensitivity: proportion of reference events found", "better": "higher"},
-    "event_precision": {"label": "Precision: proportion of your events that match the reference", "better": "higher"},
-    "time_kappa": {"label": "Cohen's kappa over time (exact)", "better": "higher"},
-    "time_positive_agreement": {"label": "Positive agreement over time (exact)", "better": "higher"},
-    "channel_positive_agreement": {"label": "Positive agreement over time and channels", "better": "higher"},
-    "mean_iou": {"label": "Mean temporal overlap (IoU) of matched events", "better": "higher"},
-    "mean_channel_jaccard": {"label": "Mean channel overlap (Jaccard) of matched events", "better": "higher"},
-    "label_accuracy": {"label": "Same label as the reference for detected artifacts", "better": "higher"},
-    "false_positives_per_min": {"label": "Extra events (matching no reference artifact) per minute", "better": "lower"},
+#: The competency measures. ``label`` is shown in criteria and reports, ``short`` in table headers,
+#: ``description`` explains the measure in plain words (tooltips and the report's glossary) and
+#: ``range`` is the range of possible values (used to limit thresholds).
+METRICS: dict[str, dict[str, Any]] = {
+    "event_f1": {
+        "label": "Event F1 (time only)", "short": "F1", "better": "higher", "range": (0.0, 1.0),
+        "description": "Combines sensitivity and precision (their harmonic mean): 1 means every reference artifact "
+        "was found and nothing extra was marked; 0 means no artifact was found.",
+    },
+    "event_recall": {
+        "label": "Sensitivity: proportion of reference events found", "short": "Sensitivity", "better": "higher",
+        "range": (0.0, 1.0), "description": "The proportion of the reference's artifacts that the annotator found.",
+    },
+    "event_precision": {
+        "label": "Precision: proportion of your events that match the reference", "short": "Precision",
+        "better": "higher", "range": (0.0, 1.0),
+        "description": "The proportion of the annotator's annotations that match an artifact in the reference.",
+    },
+    "time_kappa": {
+        "label": "Cohen's kappa over time (exact)", "short": "Kappa over time", "better": "higher",
+        "range": (-1.0, 1.0),
+        "description": "Agreement, moment by moment, on whether an artifact is present, corrected for the agreement "
+        "expected by chance: 1 is perfect agreement, 0 is no better than chance.",
+    },
+    "time_positive_agreement": {
+        "label": "Positive agreement over time (exact)", "short": "Positive agreement", "better": "higher",
+        "range": (0.0, 1.0),
+        "description": "Agreement on the time marked as artifact: twice the time both marked, divided by the time "
+        "each marked. Clean time that both left unmarked does not count.",
+    },
+    "channel_positive_agreement": {
+        "label": "Positive agreement over time and channels", "short": "Positive agreement (channels)",
+        "better": "higher", "range": (0.0, 1.0),
+        "description": "Positive agreement counted separately for every channel, so choosing the wrong channels "
+        "lowers it.",
+    },
+    "mean_iou": {
+        "label": "Mean temporal overlap (IoU) of matched events", "short": "Overlap (IoU)", "better": "higher",
+        "range": (0.0, 1.0),
+        "description": "For artifacts that were found: the time both marked divided by the time either marked "
+        "(intersection over union), averaged. 1 means identical start and end.",
+    },
+    "mean_channel_jaccard": {
+        "label": "Mean channel overlap (Jaccard) of matched events", "short": "Channel overlap", "better": "higher",
+        "range": (0.0, 1.0),
+        "description": "For artifacts that were found: the channels both chose divided by the channels either chose, "
+        "averaged (a whole-montage annotation counts as every channel).",
+    },
+    "label_accuracy": {
+        "label": "Same label as the reference for detected artifacts", "short": "Same label", "better": "higher",
+        "range": (0.0, 1.0),
+        "description": "The proportion of found artifacts that were given the same artifact type as in the reference.",
+    },
+    "false_positives_per_min": {
+        "label": "Extra events (matching no reference artifact) per minute", "short": "Extra per minute",
+        "better": "lower", "range": (0.0, 1000.0),
+        "description": "Annotations that match no reference artifact of any type, per minute of recording "
+        "(lower is better). An artifact found with a different type counts under 'Same label' instead.",
+    },
+}
+
+#: What the annotator should do next, by competency status (shown to annotators and in reports).
+NEXT_STEPS = {
+    "met": "Your study administrator will confirm what happens next.",
+    "not_met": "Please talk to your study administrator, who can go through the results with you and suggest "
+    "further practice before you take the assessment again.",
+    "not_determined": "Your study administrator will look at the results; a decision needs their judgement.",
+    "incomplete": "Start the assessment again to complete the remaining recordings.",
 }
 
 
@@ -289,10 +346,12 @@ def feedback_html(fb: dict[str, Any]) -> str:
 
     parts = [f"<h2>Feedback: {html.escape(fb.get('recording_id', ''))}</h2>"]
     parts.append(
-        f"<p>You found <b>{n_found} of {n_ref}</b> reference artifacts "
-        f"(F1 {f1_text(o['event_f1'])}; precision {pct(o['event_precision'])}; sensitivity {pct(o['event_recall'])}). "
-        f"Matched artifacts overlapped the reference by {pct(o['mean_iou'])} on average and had the same label "
-        f"{pct(o['label_accuracy'])} of the time. Channel selection overlap: {pct(o['mean_channel_jaccard'])}.</p>"
+        f"<p>You found <b>{n_found} of {n_ref}</b> reference artifacts ({pct(o['event_recall'])}, the sensitivity), "
+        f"and {pct(o['event_precision'])} of your annotations matched an artifact in the reference (the precision). "
+        f"Together these give a score of {f1_text(o['event_f1'])} out of 1 (F1).</p>"
+        f"<p>Where you found an artifact, your start and end overlapped the reference's by {pct(o['mean_iou'])} on "
+        f"average, you chose the same artifact type {pct(o['label_accuracy'])} of the time, and your channels "
+        f"overlapped the reference's by {pct(o['mean_channel_jaccard'])}.</p>"
         if n_ref else "<p>The reference contains no artifacts for this recording.</p>"
     )
     rows = "".join(
@@ -300,8 +359,8 @@ def feedback_html(fb: dict[str, Any]) -> str:
         f"<td>{c['found']}</td><td>{f1_text(c['event_f1'])}</td></tr>"
         for c in fb["per_category"]
     )
-    parts.append("<table border='1' cellspacing='0' cellpadding='4'><tr><th>Category</th><th>Reference</th><th>You</th>"
-                 f"<th>Found</th><th>F1</th></tr>{rows}</table>")
+    parts.append("<table border='1' cellspacing='0' cellpadding='4'><tr><th>Artifact type</th><th>In the reference</th>"
+                 f"<th>Yours</th><th>Found</th><th>Score (F1)</th></tr>{rows}</table>")
     for title, key, fmt in (
         ("Artifacts you missed", "missed", lambda x: f"{x['label']} at {x['onset_s']:.2f}–{x['offset_s']:.2f} s ({x['channels']})"),
         ("Extra annotations (not in the reference)", "extra", lambda x: f"{x['label']} at {x['onset_s']:.2f}–{x['offset_s']:.2f} s"),
@@ -358,7 +417,12 @@ def competency_report(layout: OutputLayout, rs: ReferenceSet, annotator_id: str,
         "schema": "electroclean.competency_report",
         "schema_version": "1.0.0",
         "annotator_id": annotator_id,
-        "reference_set": {"set_id": rs.set_id, "name": rs.name, "provenance": rs.provenance},
+        "reference_set": {
+            "set_id": rs.set_id, "name": rs.name, "provenance": rs.provenance,
+            "provenance_note": "as declared when the reference set was created; how each assessment reference was "
+            "actually made is in reference_provenance",
+        },
+        "reference_provenance": {r: reference_provenance(rs, r) for r in sorted(required)},
         "required_recordings": required,
         "missing_recordings": missing,
         "criteria": criteria.to_dict(),
@@ -386,6 +450,48 @@ def competency_report(layout: OutputLayout, rs: ReferenceSet, annotator_id: str,
         atomic_write_text(base.with_suffix(".html"), competency_html(report))
         report["paths"] = {"json": str(base.with_suffix(".json")), "html": str(base.with_suffix(".html"))}
     return report
+
+
+def reference_provenance(rs: ReferenceSet, recording_id: str) -> dict[str, Any]:
+    """How the reference for one recording was made (method, experts, adjudicator, when it was added)."""
+    prov = dict(rs.recordings.get(recording_id, {}).get("provenance", {}))
+    out = {
+        "method": prov.get("method", ""),
+        "experts": list(prov.get("experts", [])),
+        "adjudicator": prov.get("adjudicator", ""),
+        "added_at": prov.get("added_at", ""),
+    }
+    rule = prov.get("consensus_rule")
+    if isinstance(rule, dict) and rule.get("min_agreement"):
+        out["min_agreement"] = rule["min_agreement"]
+    return out
+
+
+def describe_provenance(prov: dict[str, Any]) -> str:
+    """One phrase for people, e.g. 'consensus of several experts: E1, E2, E3 (2 needed to agree)'."""
+    text = METHOD_NAMES.get(prov.get("method", ""), prov.get("method", "") or "method not recorded")
+    experts = ", ".join(prov.get("experts") or [])
+    if experts:
+        text += f": {experts}"
+    if prov.get("min_agreement"):
+        text += f" ({prov['min_agreement']} needed to agree)"
+    if prov.get("adjudicator"):
+        text += f"; adjudicated by {prov['adjudicator']}"
+    return text
+
+
+def matching_in_words(cfg: dict[str, Any]) -> str:
+    """The matching rule of the analysis, as a sentence."""
+    crit = cfg.get("match_criterion", "iou")
+    iou = float(cfg.get("primary_iou_threshold", 0.2))
+    overlap = ("any overlap in time" if iou <= 0
+               else f"an overlap in time of at least {100 * iou:.0f}% (intersection over union)")
+    tol = (f"starts within {float(cfg.get('onset_tolerance_s', 0.5)):g} s and ends within "
+           f"{float(cfg.get('offset_tolerance_s', 0.5)):g} s of each other")
+    rule = {"iou": overlap, "tolerance": tol, "iou_and_tolerance": f"{overlap}, and {tol}"}.get(crit, overlap)
+    many = ("an artifact could match several annotations" if cfg.get("allow_many_to_one")
+            else "each artifact could match at most one annotation")
+    return f"An annotation matched a reference artifact when they had {rule}; {many}."
 
 
 DIGEST_EXCLUDED = ("generated_at", "results_sha256", "paths")
@@ -425,57 +531,151 @@ def _clean(obj: Any) -> Any:
     return obj
 
 
-def competency_html(report: dict[str, Any]) -> str:
-    def f(v: Any) -> str:
-        if v is None or (isinstance(v, float) and math.isnan(v)):
-            return "n/a"
-        return f"{v:.3f}" if isinstance(v, float) else html.escape(str(v))
+_CSS = (
+    "body{font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;max-width:1100px;margin:2em auto;"
+    "padding:0 1em;color:#0b0b0b;background:#fcfcfb;line-height:1.45} "
+    "table{border-collapse:collapse;font-size:13px;margin:0.4em 0 1em} "
+    "td,th{border-top:1px solid #e4e3df;padding:4px 8px;text-align:left;vertical-align:top} "
+    "th{background:#f1f0ec;font-weight:600} td.num{text-align:right;font-variant-numeric:tabular-nums} "
+    "td.cat{white-space:nowrap} .wide{overflow-x:auto} .muted{color:#52514e} "
+    "dt{font-weight:600;margin-top:0.4em} dd{margin-left:1.2em} "
+    ".status{padding:0.5em 0.8em;border-radius:6px;display:inline-block}"
+)
+_STATUS_COLOUR = {"met": "#1B5E20", "not_met": "#B71C1C", "incomplete": "#E65100"}
 
-    colour = {"met": "#1B5E20", "not_met": "#B71C1C", "incomplete": "#E65100"}.get(report["status"], "#37474F")
+
+def _fmt(v: Any, digits: int = 3) -> str:
+    if v is None or (isinstance(v, float) and math.isnan(v)):
+        return "n/a"
+    if isinstance(v, float):
+        s = f"{v:.{digits}f}"
+        return s[1:] if s.startswith("-") and float(s) == 0 else s  # no "-0.000"
+    return html.escape(str(v))
+
+
+def _checks_table(report: dict[str, Any]) -> list[str]:
+    p = ["<table><tr><th>Criterion</th><th>Where</th><th>Value</th><th>Result</th></tr>"]
+    for ch in report["checks"]:
+        res = {True: "met", False: "<b>not met</b>", None: "not determined"}[ch["passed"]]
+        p.append(f"<tr><td>{html.escape(ch['criterion'])}</td><td class='cat'>{html.escape(ch['where'])}</td>"
+                 f"<td class='num'>{_fmt(ch['value'])}</td><td>{res}</td></tr>")
+    p.append("</table>")
+    return p
+
+
+def competency_summary_html(report: dict[str, Any]) -> str:
+    """What an annotator sees at the end of an assessment: the result and the criteria.
+
+    It says nothing about where the reference's artifacts are, because assessment
+    recordings are shared between annotators.
+    """
+    rs = report["reference_set"]
+    colour = _STATUS_COLOUR.get(report["status"], "#37474F")
+    p = [f"<h2>Assessment: {html.escape(rs.get('name') or rs['set_id'])}</h2>",
+         f"<p style='color:{colour};font-size:15px'><b>{html.escape(report['status_text'])}</b></p>",
+         f"<p>{html.escape(NEXT_STEPS.get(report['status'], ''))}</p>"]
+    if report.get("checks"):
+        p.append("<h3>Criteria</h3>")
+        p.extend(_checks_table(report))
+    p.append("<p class='muted'>The full report, with the details of every recording, has been saved for the study "
+             "administrator.</p>")
+    return "\n".join(p)
+
+
+def competency_html(report: dict[str, Any]) -> str:
+    """The full competency report (for the administrator)."""
+    colour = _STATUS_COLOUR.get(report["status"], "#37474F")
     p = ["<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'><title>Competency report</title>",
-         "<style>body{font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;max-width:1000px;margin:2em auto;"
-         "padding:0 1em;color:#0b0b0b;background:#fcfcfb} table{border-collapse:collapse;font-size:13px} "
-         "td,th{border-top:1px solid #e4e3df;padding:4px 8px;text-align:left} th{background:#f1f0ec}"
-         ".muted{color:#52514e}</style></head><body>"]
+         f"<style>{_CSS}</style></head><body>"]
     rs = report["reference_set"]
     p.append(f"<h1>Competency report: annotator {html.escape(report['annotator_id'])}</h1>")
-    p.append(f"<p class='muted'>Reference set {html.escape(rs['set_id'])} – {html.escape(rs.get('name') or '')} · "
-             f"generated {html.escape(report.get('generated_at', ''))} · ElectroClean {html.escape(report['software']['electroclean'])}</p>")
-    p.append(f"<h2 style='color:{colour}'>{html.escape(report['status_text'])}</h2>")
-    m0 = report.get("metrics") or {}
-    if m0.get("recordings_not_compared"):
+    p.append(f"<p class='muted'>Reference set {html.escape(rs['set_id'])}"
+             + (f" ({html.escape(rs['name'])})" if rs.get("name") else "")
+             + f" · generated {html.escape(report.get('generated_at', ''))} · ElectroClean "
+             f"{html.escape(report['software']['electroclean'])}</p>")
+    p.append(f"<h2 class='status' style='color:{colour};border:2px solid {colour}'>"
+             f"{html.escape(report['status_text'])}</h2>")
+    if report["status"] in NEXT_STEPS:
+        p.append(f"<p>Next step for the annotator: {html.escape(NEXT_STEPS[report['status']])}</p>")
+    m = report.get("metrics") or {}
+    if m.get("recordings_not_compared"):
         p.append("<p>Recordings that could not be compared with the reference:</p><ul>"
-                 + "".join(f"<li>{html.escape(r)}</li>" for r in m0["recordings_not_compared"]) + "</ul>")
-    if m0.get("warnings"):
-        p.append("<h3>Warnings</h3><ul>" + "".join(f"<li>{html.escape(w)}</li>" for w in m0["warnings"]) + "</ul>")
+                 + "".join(f"<li>{html.escape(r)}</li>" for r in m["recordings_not_compared"]) + "</ul>")
+    if m.get("warnings"):
+        p.append("<h3>Warnings</h3><ul>" + "".join(f"<li>{html.escape(w)}</li>" for w in m["warnings"]) + "</ul>")
     if report.get("missing_recordings"):
-        p.append("<p>Recordings still to complete:</p><ul>" + "".join(f"<li>{html.escape(r)}</li>" for r in report["missing_recordings"]) + "</ul>")
+        p.append("<p>Recordings still to complete:</p><ul>"
+                 + "".join(f"<li>{html.escape(r)}</li>" for r in report["missing_recordings"]) + "</ul>")
     if report.get("checks"):
-        p.append("<h3>Criteria</h3><table><tr><th>Criterion</th><th>Where</th><th>Value</th><th>Result</th></tr>")
-        for ch in report["checks"]:
-            res = {True: "pass", False: "FAIL", None: "no data"}[ch["passed"]]
-            p.append(f"<tr><td>{html.escape(ch['criterion'])}</td><td>{html.escape(ch['where'])}</td><td>{f(ch['value'])}</td><td>{res}</td></tr>")
-        p.append("</table>")
+        p.append("<h3>Criteria</h3>")
+        p.extend(_checks_table(report))
         if report.get("categories_not_judged"):
-            p.append(f"<p class='muted'>Categories with fewer than {report['criteria']['min_reference_events']} reference "
-                     f"events are reported but not judged: {html.escape(', '.join(report['categories_not_judged']))}.</p>")
-    m = report.get("metrics")
+            p.append(f"<p class='muted'>Artifact types with fewer than {report['criteria']['min_reference_events']} "
+                     "reference events are reported but not judged: "
+                     f"{html.escape(', '.join(report['categories_not_judged']))}.</p>")
     if m:
         p.append("<h3>Overall</h3><table><tr><th>Measure</th><th>Value</th></tr>")
         for k, v in m["overall"].items():
-            p.append(f"<tr><td>{html.escape(METRICS[k]['label'])}</td><td>{f(v)}</td></tr>")
-        p.append("</table><h3>By artifact category</h3>")
-        df = pd.DataFrame(m["per_category"])
-        p.append(df.to_html(index=False, float_format=lambda x: f"{x:.3f}", na_rep="n/a", border=0))
-        for title, key in (("Missed reference artifacts", "missed"), ("Extra annotations", "extra"),
-                           ("Different labels", "label_differences")):
+            p.append(f"<tr><td>{html.escape(METRICS[k]['label'])}</td><td class='num'>{_fmt(v)}</td></tr>")
+        p.append("</table>")
+        cols = [("reference_events", "Reference"), ("your_events", "Annotator"), ("found", "Found"),
+                ("event_f1", METRICS["event_f1"]["short"]), ("event_recall", METRICS["event_recall"]["short"]),
+                ("event_precision", METRICS["event_precision"]["short"]),
+                ("time_kappa", METRICS["time_kappa"]["short"]), ("mean_iou", METRICS["mean_iou"]["short"]),
+                ("onset_diff_mean_s", "Mean start difference (s)")]
+        p.append("<h3>By artifact type</h3><p class='muted'>Reference, Annotator and Found are numbers of artifacts; "
+                 "the other measures are explained in the glossary below.</p><div class='wide'><table><tr>"
+                 "<th>Artifact type</th>" + "".join(f"<th>{html.escape(h)}</th>" for _k, h in cols) + "</tr>")
+        for c in m["per_category"]:
+            p.append(f"<tr><td class='cat'>{html.escape(c['category'])}</td>"
+                     + "".join(f"<td class='num'>{_fmt(c.get(k))}</td>" for k, _h in cols) + "</tr>")
+        p.append("</table></div>")
+        for title, key in (
+            ("Reference artifacts not found", "missed"),
+            ("Annotations not in the reference", "extra"),
+            ("Artifacts given a different type", "label_differences"),
+        ):
             items = m.get(key, [])
             p.append(f"<h3>{title} ({len(items)})</h3>")
-            if items:
-                p.append(pd.DataFrame(items).to_html(index=False, float_format=lambda x: f"{x:.2f}", border=0))
-        p.append(f"<p class='muted'>Matching: {html.escape(json.dumps({k: m['analysis_config'][k] for k in ('match_criterion', 'primary_iou_threshold', 'allow_many_to_one')}))}. "
-                 f"Total assessed time {m['minutes_assessed']:.1f} min.</p>")
-    p.append("<h3>Reference provenance</h3><pre>" + html.escape(json.dumps(rs.get("provenance", {}), indent=2)) + "</pre>")
+            if not items:
+                continue
+            if key == "label_differences":
+                p.append("<div class='wide'><table><tr><th>Recording</th><th>Start (s)</th><th>End (s)</th>"
+                         "<th>Reference type</th><th>Annotator's type</th></tr>")
+                for it in items:
+                    p.append(f"<tr><td class='cat'>{html.escape(it['recording'])}</td>"
+                             f"<td class='num'>{_fmt(it['onset_s'], 2)}</td><td class='num'>{_fmt(it['offset_s'], 2)}</td>"
+                             f"<td class='cat'>{html.escape(it['reference_label'])}</td>"
+                             f"<td class='cat'>{html.escape(it['your_label'])}</td></tr>")
+            else:
+                p.append("<div class='wide'><table><tr><th>Recording</th><th>Type</th><th>Start (s)</th>"
+                         "<th>End (s)</th><th>Channels</th></tr>")
+                for it in items:
+                    chans = it.get("channels")
+                    chans = "whole montage" if chans in ("", "[]", None) else str(chans)
+                    p.append(f"<tr><td class='cat'>{html.escape(it['recording'])}</td>"
+                             f"<td class='cat'>{html.escape(it['label'])}</td>"
+                             f"<td class='num'>{_fmt(it['onset_s'], 2)}</td><td class='num'>{_fmt(it['offset_s'], 2)}</td>"
+                             f"<td>{html.escape(chans)}</td></tr>")
+            p.append("</table></div>")
+        p.append(f"<p>{html.escape(matching_in_words(m.get('analysis_config', {})))} "
+                 f"Total time assessed: {m['minutes_assessed']:.1f} minutes.</p>")
+        p.append("<h3>Glossary</h3><dl>" + "".join(
+            f"<dt>{html.escape(meta['label'])}</dt><dd>{html.escape(meta['description'])}</dd>"
+            for meta in METRICS.values()
+        ) + "</dl>")
+    prov_by_rec = report.get("reference_provenance") or {}
+    if prov_by_rec:
+        p.append("<h3>How each assessment reference was made</h3><table><tr><th>Recording</th><th>Reference</th>"
+                 "<th>Added</th></tr>")
+        for rid, prov in prov_by_rec.items():
+            p.append(f"<tr><td class='cat'>{html.escape(rid)}</td><td>{html.escape(describe_provenance(prov))}</td>"
+                     f"<td class='cat'>{html.escape(str(prov.get('added_at', ''))[:16].replace('T', ' '))}</td></tr>")
+        p.append("</table>")
+    declared = rs.get("provenance") or {}
+    p.append("<p class='muted'>Declared when the reference set was created: "
+             f"{html.escape(describe_provenance(declared))}"
+             + (f". Notes: {html.escape(declared['notes'])}" if declared.get("notes") else "") + ".</p>")
     p.append("<h3>Reproducibility</h3><pre>" + html.escape(json.dumps(report["inputs"], indent=2)) + "</pre>")
     p.append(f"<p class='muted'>Results digest: {html.escape(report.get('results_sha256', ''))}</p></body></html>")
     return "\n".join(p)

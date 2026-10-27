@@ -216,10 +216,15 @@ class ArtifactRegion(AnnotRegion):
         rgn = self.getRegion()
         vb = self.mne.viewbox
         if vb:
-            y0, y1 = vb.viewRange()[1]
+            (x0, x1), (y0, y1) = vb.viewRange()
             units_per_px = abs(y1 - y0) / max(1.0, float(vb.height()))
-            line_px = self.label_text_size()[1]
-            self.label_item.setPos(sum(rgn) / 2, min(y0, y1) + (4 + line_px * (0.5 + self.label_row)) * units_per_px)
+            text_px, line_px = self.label_text_size()
+            # Keep the whole label on screen when the interval starts or ends outside the view.
+            half = text_px / 2 * (x1 - x0) / max(1.0, float(vb.width()))
+            x = sum(rgn) / 2
+            if x1 - x0 > 2 * half:
+                x = min(max(x, x0 + half), x1 - half)
+            self.label_item.setPos(x, min(y0, y1) + (4 + line_px * (0.5 + self.label_row)) * units_per_px)
 
     def mouseClickEvent(self, event: Any) -> None:  # noqa: N802
         ctrl = self._ctrl()
