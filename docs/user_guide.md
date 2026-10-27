@@ -104,15 +104,23 @@ ID, the mode, the filters and the number of annotations.
 
 ## 4. Marking artifacts
 
-1. Choose the **artifact type** in the toolbar. Every artifact term of
-   HED SCORE 2.2.0 is available (29 terms), listed under four headings: eye,
-   other biological, non-biological and type unknown. Hover over an entry to
-   see its definition. Most terms are specific types, such as
-   Eye-blink-artifact (103). The terms in italics are **group terms**, such
-   as Eye-movement-artifact (133) or Data-artifact (130): use them only when
-   you can see that there is an artifact of that family but cannot tell which
-   type it is.
-2. Choose what it affects with the two-part switch after *Applies to*:
+1. Choose the **artifact type**. The nine most common types are on the
+   number keys **1** to **9** and on the numbered buttons after *Draw as* in
+   the toolbar (1 blink, 2 horizontal eye movement, 3 EMG, 4 movement,
+   5 electrode pop, 6 chewing, 7 ECG, 8 line noise and 9 for an artifact
+   whose type is unclear, unless your administrator has chosen others). The
+   menu next to the buttons holds every artifact term of HED SCORE 2.2.0
+   (29 terms) under four headings: eye, other biological, non-biological and
+   type unknown. Press **/** to find any of them by typing part of its name
+   or its code (for example *blink*, *pops* or *103*) and Enter. Hover over a
+   button or an entry to see its definition. Most terms are specific types,
+   such as Eye-blink-artifact (103). The terms in italics are **group
+   terms**, such as Eye-movement-artifact (133) or Data-artifact (130): use
+   them only when you can see that there is an artifact of that family but
+   cannot tell which type it is. On a small screen the buttons show only
+   their numbers and colours.
+2. Choose what it affects with the two-part switch next to the menu (or press
+   **C** to switch):
    * **Whole montage** marks the interval on every channel.
    * **Selected channels** marks only the channels you choose. Click channel
      names or traces to select or deselect them (they turn magenta), or use
@@ -122,6 +130,22 @@ ID, the mode, the filters and the number of annotations.
    annotation appears as a shaded band labelled with its type; channel-specific
    annotations are shaded more strongly on their channels and carry `[ch]` in
    their label.
+
+**With the keyboard.** Point at the start of the artifact and press **M**, then
+point at its end and press **M** again. A dashed line shows the start while you
+move on, and you can scroll (with the arrow keys or the scroll bar) between the
+two presses, which is the easiest way to mark an artifact longer than the
+screen. **[** and **]** mark the start and the end separately, and **Esc**
+cancels a start you have marked. The keys are listed at the bottom of the
+window and in the *Help* tab.
+
+**Draw first, choose the type afterwards.** A new annotation is drawn with the
+current type and is not selected, so the next number key chooses the type of
+the next annotation. To change one you have drawn, click it (the toolbar then
+reads *Change to* instead of *Draw as*) and press a number, click a type button
+or choose from the menu; or double-click it and pick the type from the
+searchable list. **Esc**, a click on empty EEG or a new drag ends the
+selection.
 
 You can drag over an existing annotation to add an overlapping one of a
 different type, for example muscle activity during an eye blink; the two stay
@@ -139,14 +163,17 @@ what the data allow.
 
 ![Choosing channels](images/channel_dialog.png)
 
-Click an annotation (or its row in the *Annotations* list) to select it. Then:
+Click an annotation (or its row in the *Annotations* list, or press **N** or
+**P**) to select it. Then:
 
 | To | Do this |
 |---|---|
 | Resize | Drag its left or right edge |
 | Move | Hold Shift and drag the middle |
 | Add or remove one channel | Hold Shift and click that channel inside the annotation |
-| Change type, edit channels, make whole-montage, delete | Right-click it |
+| Change type | Press 1 to 9, click a type button, use the menu, or double-click it to search all types |
+| Change type, edit channels, make whole-montage, delete | Right-click it (the common types are listed first) |
+| Go to the next or previous annotation | Press N or P |
 | Delete | Press Delete (or Backspace); with several rows selected in the list, all of them are deleted |
 | Set exact start and end times | Select it in the list and press **Edit times…** |
 | Merge annotations of the same type | Select them in the list (Ctrl/Cmd-click) and press **Merge** |

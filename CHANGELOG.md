@@ -16,6 +16,24 @@ is a two-part switch, and the overview bar under the EEG is plain so that the
 annotations in it stand out. Every text colour meets the WCAG 2.1 AA contrast
 ratio, and the application looks the same on Windows, macOS and Linux.
 
+Marking artifacts is quicker by keyboard and by mouse. The nine most common
+types are on the keys 1 to 9 and on numbered, colour-coded buttons in the
+toolbar, and the / key finds any of the 29 types by part of its name or its
+code. With the pointer on the EEG, M marks the start of an artifact and M
+again its end, with scrolling in between, so long artifacts are as easy as
+short ones. You can choose the type first or draw first: the toolbar reads
+*Draw as* for the next annotation and *Change to* while annotations are
+selected, and a click, the N and P keys or a double-click selects them. A
+right-click lists the common types first. The keys are shown at the bottom
+of the window and in Help.
+
+A test with two openly available 128-channel recordings led to further
+changes. Annotation labels sit on small tags above the traces, the channel
+chooser finds channels by name, ticks whole regions or banks with one click
+and lays many channels out in columns, the list of annotations shows how many
+channels each covers, and the time-resolved agreement analysis is about six
+times faster on recordings with many channels, with identical results.
+
 ## 1.1.0
 
 The first public release, with stand-alone applications for Windows (64-bit),

@@ -402,7 +402,12 @@ class ChannelDialog(QDialog):
             self.list.setWrapping(True)
             self.list.setResizeMode(QListView.Adjust)
             self.list.setMovement(QListView.Static)
-            self.list.setGridSize(QSize(widest + 56, fm.height() + 10))  # check box and margins
+            cell = QSize(widest + 56, fm.height() + 10)  # check box and margins
+            self.list.setGridSize(cell)
+            # With uniform sizes every item takes the first one's size, which cut longer names
+            # short ("H…" for HEOG); each item gets the whole cell instead.
+            for i in range(self.list.count()):
+                self.list.item(i).setSizeHint(cell)
         layout.addWidget(self.list, 1)
 
         row = QHBoxLayout()

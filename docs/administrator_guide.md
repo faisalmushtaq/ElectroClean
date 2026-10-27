@@ -102,6 +102,22 @@ signals, and `1e-4` (a 200 µV scale bar) keeps neighbouring channels apart:
 {"settings": {"display": {"scalings": {"eeg": 1e-4}}}}
 ```
 
+### The types on the number keys
+
+Annotators choose the nine most common artifact types with the keys 1 to 9 and
+the numbered buttons in the toolbar. The defaults are Eye-blink, Horizontal
+eye movement, EMG, Movement, Electrode pops, Chewing, ECG, Line noise and
+Data-artifact (the group term for an artifact whose type is unclear). A study
+can choose others, in key order, with up to nine of the names used in the
+annotation window:
+
+```json
+{"settings": {"annotation": {"quick_labels": ["Eye-blink-artifact", "Slow-eye-movement-artifact", "EMG-artifact"]}}}
+```
+
+Names that are not in the label catalogue are left out, and the other types
+stay available from the menu and the searchable list (the / key).
+
 ## Which recordings each annotator sees
 
 `electroclean-admin allocation /data/MyStudy random` (the default) offers a

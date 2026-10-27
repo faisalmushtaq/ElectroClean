@@ -230,3 +230,14 @@ def test_close_after_save_and_finish_does_nothing(qapp, layout, settings, catalo
     assert ws.browser._closed and not shiboken6.isValid(ws.browser)
     ws.close()  # used to crash the application
     ws.close()
+
+
+def test_channel_names_are_not_cut_short_in_columns(qapp):
+    from electroclean.app.gui.dialogs import ChannelDialog
+
+    names = [f"E{i}" for i in range(1, 30)] + ["HEOG_LEFT", "VEOG"]
+    dlg = ChannelDialog(None, names, [], title="t", allow_whole_montage=False)
+    fm = dlg.list.fontMetrics()
+    for i in range(dlg.list.count()):
+        item = dlg.list.item(i)
+        assert item.sizeHint().width() >= fm.horizontalAdvance(item.text()) + 20, item.text()
