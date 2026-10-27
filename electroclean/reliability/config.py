@@ -10,6 +10,16 @@ from typing import Any
 CHANNEL_MODES = ("time_only", "time_and_channel")
 MATCH_CRITERIA = ("iou", "tolerance", "iou_and_tolerance")
 ANY_ARTIFACT = "ANY-artifact"
+#: Suffix of the roll-up category of a group term: the group term and every type below it.
+ROLLUP_SUFFIX = " + subtypes"
+
+
+def rollup_name(group: str) -> str:
+    return f"{group}{ROLLUP_SUFFIX}"
+
+
+def is_rollup(category: str) -> bool:
+    return category.endswith(ROLLUP_SUFFIX)
 
 
 @dataclass
@@ -25,6 +35,7 @@ class AnalysisConfig:
     min_bin_coverage: float = 0.5  # 0 = any overlap marks the bin positive
     channel_modes: tuple[str, ...] = CHANNEL_MODES
     include_any_artifact: bool = True  # pseudo-category: any artifact versus none
+    include_group_rollups: bool = True  # e.g. "Eye-artifact + subtypes": agreement on the artifact family
 
     # Event (interval) matching
     match_criterion: str = "iou"
@@ -36,7 +47,7 @@ class AnalysisConfig:
     min_channel_jaccard: float = 0.0  # time_and_channel matching: 0 = at least one shared channel
 
     # Which annotations to analyse
-    categories: tuple[str, ...] | None = None  # None = all 16
+    categories: tuple[str, ...] | None = None  # None = every label of the catalogue
     annotators: tuple[str, ...] | None = None  # None = all found
     modes: tuple[str, ...] = ("standard",)
     reference_annotator: str | None = None  # if set, compare everyone with this annotator only

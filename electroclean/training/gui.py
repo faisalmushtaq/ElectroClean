@@ -39,7 +39,7 @@ from qtpy.QtWidgets import (
 from electroclean.app.annotations.model import ArtifactAnnotation
 from electroclean.app.annotations.store import AnnotationStore
 from electroclean.app.gui.dialogs import UserPrompts
-from electroclean.config.settings import COLLISION_POLICIES, SELECTION_STRATEGIES, FilterSettings, load_settings
+from electroclean.config.settings import SELECTION_STRATEGIES, FilterSettings, load_settings
 from electroclean.training import admin
 from electroclean.training.assessment import METRICS, CompetencyCriteria, competency_report, feedback_html, practice_feedback
 from electroclean.training.quiz import QuizSession
@@ -460,10 +460,6 @@ class AdminDialog(QDialog):
         row.addWidget(QLabel("seed"))
         row.addWidget(self.seed)
         form.addRow("Recording selection", row)
-        self.policy = QComboBox()
-        self.policy.addItems(COLLISION_POLICIES)
-        self.policy.setCurrentText(settings.collision_policy)
-        form.addRow("Original event codes 100-115", self.policy)
         f = settings.filters
         box = QGroupBox("Viewing filters")
         fl = QFormLayout(box)
@@ -472,15 +468,13 @@ class AdminDialog(QDialog):
         self.f_hp = QCheckBox(f"High-pass {f.highpass_hz:g} Hz")
         self.f_hp.setChecked(f.highpass_enabled)
         self.f_notch = QComboBox()
-        self.f_notch.addItems(["60", "50", "off"])
+        self.f_notch.addItems(["50", "60", "off"])
         self.f_notch.setCurrentText("off" if not f.notch_enabled else f"{f.notch_hz:g}")
-        self.f_method = QComboBox()
-        self.f_method.addItems(["fir", "iir"])
-        self.f_method.setCurrentText(f.method)
+        self._f_method = f.method  # FIR by study decision; kept as set in the study file
         fl.addRow(self.fix_filters)
         fl.addRow("", self.f_hp)
         fl.addRow("Notch (Hz)", self.f_notch)
-        fl.addRow("Design", self.f_method)
+        fl.addRow("Design", QLabel("FIR, zero-phase (MNE defaults)" if f.method == "fir" else f.method.upper()))
         form.addRow(box)
         buttons = QHBoxLayout()
         save = QPushButton("Save study settings")
@@ -510,11 +504,14 @@ class AdminDialog(QDialog):
             alloc["seed"] = self.seed.value()
             data["allocation"] = alloc
             settings = data.setdefault("settings", {})
-            settings.setdefault("events", {})["collision_policy"] = self.policy.currentText()
+            if isinstance(settings.get("events"), dict):
+                settings["events"].pop("collision_policy", None)  # no longer used: artifacts have their own column
+                if not settings["events"]:
+                    del settings["events"]
             notch = self.f_notch.currentText()
             settings["filters"] = FilterSettings(
                 highpass_enabled=self.f_hp.isChecked(), notch_enabled=notch != "off",
-                notch_hz=60.0 if notch == "off" else float(notch), method=self.f_method.currentText(),
+                notch_hz=50.0 if notch == "off" else float(notch), method=self._f_method,
                 locked=self.fix_filters.isChecked(),
             ).to_dict()
             path = admin.write_study_dict(self.root, data)
@@ -922,7 +919,7 @@ class AdminDialog(QDialog):
 
         s, _ = self._settings()
         recs = discover_recordings(self.root, suffix=s.discovery_suffix, exclude_dir_names=s.discovery_exclude_dir_names)
-        un = FailureLog(self._layout()).unresolved(recs, {"collision_policy": s.collision_policy})
+        un = FailureLog(self._layout()).unresolved(recs, {})
         if not un:
             self.p_text.setHtml("<p>No unresolved load failures.</p>")
             return

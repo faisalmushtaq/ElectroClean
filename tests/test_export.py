@@ -28,7 +28,7 @@ def _doc(loaded, store, annotator="A01"):
     )
 
 
-def test_all_sixteen_labels_export_with_fixed_codes(layout, settings, catalogue, loaded):
+def test_all_labels_export_with_fixed_codes(layout, settings, catalogue, loaded):
     s = make_session(layout, settings, catalogue, loaded)
     for i, label in enumerate(catalogue.label_names):
         s.store.add_interval(label, 1.0 + 2 * i, 1.5 + 2 * i)
@@ -36,9 +36,10 @@ def test_all_sixteen_labels_export_with_fixed_codes(layout, settings, catalogue,
     cols, rows = parse_tsv_text(data.decode())
     idx = {c: i for i, c in enumerate(cols)}
     art = [r for r in rows if r[idx["event_source"]] == "electroclean_artifact"]
-    assert {(r[idx["trial_type"]], int(r[idx["value"]])) for r in art} == {
+    assert {(r[idx["trial_type"]], int(r[idx["artifact_code"]])) for r in art} == {
         (lab.label, lab.value) for lab in catalogue.labels
     }
+    assert {r[idx["value"]] for r in art} == {"n/a"}  # value is left to the dataset's own markers
 
 
 def test_events_tsv_columns_and_original_rows_preserved(layout, settings, catalogue, loaded):
@@ -105,11 +106,14 @@ def test_sidecar_describes_new_columns_and_codes(layout, settings, catalogue, lo
     s = make_session(layout, settings, catalogue, loaded)
     doc = _doc(loaded, s.store)
     sidecar, notes = build_events_sidecar(loaded.events_sidecar, loaded.original_events, doc)
-    for key in ("channels", "event_source", "annotation_id", "annotator_id", "original_row"):
+    for key in ("channels", "artifact_code", "event_source", "annotation_id", "annotator_id", "original_row"):
         assert key in sidecar
     assert sidecar["trial_type"]["Levels"]["stimulus/1"] == "Standard stimulus"  # original kept
     assert sidecar["trial_type"]["HED"]["Eye-blink-artifact"] == "sc:Eye-blink-artifact"
-    assert sidecar["value"]["Levels"]["103"] == "Eye-blink-artifact"
+    assert sidecar["trial_type"]["HED"]["Eye-artifact"] == "sc:Eye-artifact"
+    assert sidecar["artifact_code"]["Levels"]["103"] == "Eye-blink-artifact"
+    assert sidecar["artifact_code"]["Levels"]["132"] == "Eye-artifact"
+    assert sidecar["value"] == loaded.events_sidecar.get("value", sidecar["value"])  # original description untouched
     assert sidecar["ElectroCleanMetadata"]["label_catalogue"]["sha256"] == catalogue.sha256
 
 
@@ -137,7 +141,7 @@ def _events(rows):
     )
 
 
-def test_code_collision_and_mapping_checks(catalogue):
+def test_original_code_report_never_blocks(catalogue):
     ev = _events(
         [
             ["1.0", "0", "go", "1"],
@@ -145,31 +149,29 @@ def test_code_collision_and_mapping_checks(catalogue):
             ["3.0", "0", "stop", "2"],
             ["4.0", "0", "nogo", "2"],  # same code, different meaning: flagged
             ["5.0", "0", "stop", "3"],  # same meaning, different code: flagged
-            ["6.0", "0", "probe", "102"],  # clashes with EMG-artifact code
-            ["7.0", "0", "Eye-blink-artifact", "7"],  # uses an artifact label name
+            ["6.0", "0", "probe", "102"],  # also an artifact code: harmless, noted
+            ["7.0", "0", "Eye-blink-artifact", "7"],  # uses an artifact label name: noted
         ]
     )
-    rep = check_event_codes(ev, catalogue, "require_explicit_policy")
-    assert rep.blocked
-    kinds = {(c["kind"], c["value"]) for c in rep.collisions}
-    assert ("value", 102) in kinds and ("label", 7) in kinds
+    rep = check_event_codes(ev, catalogue)
+    assert rep.codes_also_used_for_artifacts == [102]
+    assert [r["row"] for r in rep.artifact_label_rows] == [7]
     assert rep.value_meaning_conflicts == {"2": ["nogo", "stop"]}
     assert rep.label_value_conflicts == {"stop": ["2", "3"]}
     assert rep.repeated_values["1"] == 2
-    assert not check_event_codes(ev, catalogue, "preserve_and_flag").blocked
-    ok = _events([["1.0", "0", "go", "1"], ["2.0", "0", "go", "1"]])
-    rep = check_event_codes(ok, catalogue, "require_explicit_policy")
-    assert not rep.has_collisions and not rep.value_meaning_conflicts
+    ok = check_event_codes(_events([["1.0", "0", "go", "1"], ["2.0", "0", "go", "1"]]), catalogue)
+    assert not ok.codes_also_used_for_artifacts and not ok.value_meaning_conflicts and not ok.summary_lines()
 
 
-def test_collision_rows_distinguished_in_export(rich_dataset, catalogue, tmp_path):
+def test_original_codes_that_equal_artifact_codes_cannot_be_confused(rich_dataset, catalogue, tmp_path):
+    """The dataset's events use 101; an ECG artifact is coded 101 in its own column."""
     from electroclean.app.eeg.loading import load_recording
     from electroclean.app.io.discovery import discover_recordings
     from electroclean.app.io.naming import OutputLayout
     from electroclean.config.settings import load_settings
 
     root, _ = rich_dataset
-    settings, _ = load_settings(root, {"events": {"collision_policy": "preserve_and_flag"}})
+    settings, _ = load_settings(root)  # no policy needed
     rec = {r.recording_id: r for r in discover_recordings(root)}["sub-099/eeg/sub-099_task-oddball_eeg.vhdr"]
     lr = load_recording(rec, settings, settings.filters, catalogue)
     s = make_session(OutputLayout(root / "Annotated_Events"), settings, catalogue, lr)
@@ -180,16 +182,23 @@ def test_collision_rows_distinguished_in_export(rich_dataset, catalogue, tmp_pat
     text = res.commit.paths["events_tsv"].read_text()
     cols, rows = parse_tsv_text(text)
     idx = {c: i for i, c in enumerate(cols)}
-    with101 = [r for r in rows if r[idx["value"]] == "101"]
-    assert {r[idx["event_source"]] for r in with101} == {"original:events_tsv", "electroclean_artifact"}
+    assert {r[idx["event_source"]] for r in rows if r[idx["value"]] == "101"} == {"original:events_tsv"}
+    (art,) = [r for r in rows if r[idx["event_source"]] == "electroclean_artifact"]
+    assert (art[idx["value"]], art[idx["artifact_code"]], art[idx["trial_type"]]) == ("n/a", "101", "ECG-artifact")
     sidecar = json.loads(res.commit.paths["events_json"].read_text())
-    assert any("101" in n and "event_source" in n for n in sidecar["ElectroCleanMetadata"]["notes"])
-    assert sidecar["value"]["Levels"]["101"].startswith("AMBIGUOUS CODE")
-    assert sidecar["value"]["Levels"]["103"] == "Eye-blink-artifact"
-    assert sidecar["ElectroCleanMetadata"]["event_code_check"]["collisions"][0]["value"] == 101
+    assert sidecar["artifact_code"]["Levels"]["101"] == "ECG-artifact"
+    assert "101" not in (sidecar["value"].get("Levels") or {}) or "ECG" not in sidecar["value"]["Levels"]["101"]
     meta = json.loads(res.commit.paths["session_json"].read_text())
-    assert meta["original_events"]["code_check"]["collisions"][0]["value"] == 101
+    assert meta["original_events"]["code_check"]["codes_also_used_for_artifacts"] == [101]
     lr.close()
+
+
+def test_exports_from_version_1_can_still_be_read(loaded, catalogue):
+    """Before version 2, artifact codes were in the value column."""
+    header = "onset\tduration\ttrial_type\tvalue\tsample\tchannels\tevent_source\tannotation_id\tannotator_id\toriginal_row"
+    row = "1.0\t0.5\tEMG-artifact\t102\t250\t[]\telectroclean_artifact\tabc\tA01\tn/a"
+    (ann,) = annotations_from_events_tsv(header + "\n" + row + "\n", loaded.info, catalogue)
+    assert (ann.label, ann.onset_sample, ann.duration_samples) == ("EMG-artifact", 250, 125)
 
 
 def test_vmrk_events_helper_matches_mne(loaded):

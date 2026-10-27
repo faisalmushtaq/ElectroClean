@@ -29,7 +29,8 @@ from typing import Any
 import numpy as np
 
 from electroclean.app.annotations.model import AnnotationDocument
-from electroclean.reliability.config import ANY_ARTIFACT, AnalysisConfig
+from electroclean.app.annotations.labels import LabelCatalogue
+from electroclean.reliability.config import ANY_ARTIFACT, ROLLUP_SUFFIX, AnalysisConfig, is_rollup, rollup_name
 from electroclean.reliability.data import AgreementDataset, RecordingGroup
 from electroclean.reliability.intervals import (
     Interval,
@@ -47,15 +48,35 @@ from electroclean.reliability.statistics import (
 )
 
 
+def category_label_set(category: str, catalogue: LabelCatalogue, config: AnalysisConfig) -> frozenset[str]:
+    """The labels an analysis category covers.
+
+    A label covers itself; ANY-artifact covers every analysed label; a group
+    roll-up ("Eye-artifact + subtypes") covers the group term and every
+    analysed label below it.
+    """
+    analysed = set(config.categories) if config.categories else set(catalogue.label_names)
+    if category == ANY_ARTIFACT:
+        return frozenset(analysed)
+    if is_rollup(category):
+        group = category[: -len(ROLLUP_SUFFIX)]
+        return frozenset(({group} | set(catalogue.descendants(group))) & analysed)
+    return frozenset({category})
+
+
 def category_intervals(
-    doc: AnnotationDocument, category: str, channel: str | None = None, categories: tuple[str, ...] | None = None
+    doc: AnnotationDocument, category: str, channel: str | None = None, categories: tuple[str, ...] | None = None,
+    labels: frozenset[str] | set[str] | None = None,
 ) -> list[Interval]:
     """Union of one annotator's intervals for a category (and channel).
 
-    For ANY-artifact, ``categories`` limits the pooled annotations to the
-    categories being analysed (``None`` = all).
+    ``labels`` (from :func:`category_label_set`) gives the labels the category
+    covers; without it, ANY-artifact pools the ``categories`` being analysed
+    (``None`` = all) and any other category is a single label.
     """
-    if category == ANY_ARTIFACT:
+    if labels is not None:
+        anns = [a for a in doc.annotations if a.label in labels]
+    elif category == ANY_ARTIFACT:
         anns = [a for a in doc.annotations if not categories or a.label in categories]
     else:
         anns = [a for a in doc.annotations if a.label == category]
@@ -99,6 +120,7 @@ def recording_tables(
     mode: str,
     representation: str,
     config: AnalysisConfig,
+    labels: frozenset[str] | None = None,
 ) -> tuple[dict[tuple[str, str], PairTable], dict[tuple[int, int], float], float]:
     """Pair tables and the multi-rater histogram for one recording.
 
@@ -114,7 +136,7 @@ def recording_tables(
     hist: dict[tuple[int, int], float] = {}
     pairs = list(combinations(raters, 2))
     for unit in _units(group, mode):
-        ints = {r: category_intervals(group.docs[r], category, unit, config.categories) for r in raters}
+        ints = {r: category_intervals(group.docs[r], category, unit, config.categories, labels) for r in raters}
         if representation == "exact":
             n = timing.n_samples
             scale = 1.0 / timing.sfreq
@@ -169,7 +191,22 @@ def representations(config: AnalysisConfig) -> list[str]:
 
 
 def categories_for(dataset: AgreementDataset, config: AnalysisConfig) -> list[str]:
-    cats = list(config.categories) if config.categories else list(dataset.catalogue.label_names)
+    """Analysis categories: each label, the roll-up of each group term just after it, then ANY-artifact.
+
+    Data-artifact is the top of the hierarchy, so its roll-up would repeat
+    ANY-artifact and is not added.
+    """
+    cat = dataset.catalogue
+    labels = list(config.categories) if config.categories else list(cat.label_names)
+    analysed = set(labels)
+    cats: list[str] = []
+    for lab in labels:
+        cats.append(lab)
+        if (
+            config.include_group_rollups and cat.is_permitted(lab) and cat.get(lab).is_group
+            and cat.get(lab).parent is not None and set(cat.descendants(lab)) & analysed
+        ):
+            cats.append(rollup_name(lab))
     if config.include_any_artifact:
         cats.append(ANY_ARTIFACT)
     return cats
@@ -188,6 +225,7 @@ def time_resolved_agreement(dataset: AgreementDataset, config: AnalysisConfig) -
     for mode in config.channel_modes:
         for rep in representations(config):
             for cat in cats:
+                labels = category_label_set(cat, dataset.catalogue, config)
                 pooled_pairs: dict[tuple[str, str], PairTable] = {}
                 pooled_hist: dict[tuple[int, int], float] = {}
                 pooled_raters: set[str] = set()
@@ -195,7 +233,7 @@ def time_resolved_agreement(dataset: AgreementDataset, config: AnalysisConfig) -
                 for rid, group in sorted(dataset.groups.items()):
                     if len(group.docs) < 2:
                         continue
-                    tables, hist, _ = recording_tables(group, cat, mode, rep, config)
+                    tables, hist, _ = recording_tables(group, cat, mode, rep, config, labels)
                     if config.reference_annotator:
                         tables = {k: t for k, t in tables.items() if config.reference_annotator in k}
                     pooled_raters.update(group.annotators)

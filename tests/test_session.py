@@ -49,7 +49,7 @@ def test_full_session_outputs(layout, settings, catalogue, loaded):
         assert meta["timing"][key] is not None
     assert meta["annotator"] == {"annotator_id": "A01", "display_name": "Dr Test"}
     assert meta["application"]["version"]
-    assert meta["filters"]["selected"]["notch_hz"] == 60.0
+    assert meta["filters"]["selected"]["notch_hz"] == 50.0
     assert meta["annotations"]["n_annotations"] == 1
     assert not list(layout.staging.iterdir())
     assert not s.lock.path.exists()
@@ -235,11 +235,11 @@ def test_failure_log_and_exclusion(dataset, layout, settings, catalogue):
     eeg.write_bytes(b"\0" * 21 * 4 * 15000)
     assert log.unresolved(list(recs.values()), {}) == {}
     # Failures caused by a setting are lifted when the setting changes.
-    log.record(recs[SUB1], SUB1, "event_code_collision", "clash", conditions={"collision_policy": "require_explicit_policy"})
-    assert SUB1 in log.unresolved(list(recs.values()), {"collision_policy": "require_explicit_policy"})
-    assert SUB1 not in log.unresolved(list(recs.values()), {"collision_policy": "preserve_and_flag"})
+    log.record(recs[SUB1], SUB1, "filter_error", "bad filter", conditions={"highpass_hz": 1.0})
+    assert SUB1 in log.unresolved(list(recs.values()), {"highpass_hz": 1.0})
+    assert SUB1 not in log.unresolved(list(recs.values()), {"highpass_hz": 0.5})
     log.mark_resolved(SUB1, "admin checked")
-    assert SUB1 not in log.unresolved(list(recs.values()), {"collision_policy": "require_explicit_policy"})
+    assert SUB1 not in log.unresolved(list(recs.values()), {"highpass_hz": 1.0})
 
 
 def test_selection_messages(recordings):

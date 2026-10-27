@@ -290,8 +290,6 @@ def test_admin_study_configuration(dataset):
     admin.set_annotators(root, [("a01", "Annotator one"), ("CAM", "Cameron")], allow_unlisted=False)
     with pytest.raises(Exception):
         admin.set_annotators(root, [("A 01", "")], allow_unlisted=False)
-    with pytest.raises(ValueError):
-        admin.set_collision_policy(root, "renumber")
     from electroclean.config.settings import FilterSettings
 
     admin.fix_filters(root, FilterSettings(notch_hz=50.0))

@@ -170,7 +170,7 @@ def compare_with_reference(
         "false_positives_per_min": (get(e_t, ANY_ARTIFACT, "extra") / minutes) if minutes > 0 else float("nan"),
     }
     per_cat = []
-    labels = reference_docs[0].catalogue.label_names if reference_docs else ()
+    labels = dataset.catalogue.label_names if reference_docs else ()
     for lab in labels:
         n_ref = int(get(e_t, lab, "n_reference")) if not math.isnan(get(e_t, lab, "n_reference")) else 0
         n_you = int(get(e_t, lab, "n_compared")) if not math.isnan(get(e_t, lab, "n_compared")) else 0

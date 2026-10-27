@@ -250,7 +250,7 @@ class AppController(QObject):
             self._back_to_start()
             return
         failures = FailureLog(self.layout).unresolved(
-            self.recordings, {"collision_policy": s.collision_policy}, annotator_id=req.annotator_id
+            self.recordings, {}, annotator_id=req.annotator_id
         )
         restrict = self._restrict_to()
         if req.choose_recording:
@@ -398,7 +398,7 @@ class AppController(QObject):
         assert self.layout is not None and self.request is not None and self.settings is not None
         kind = "memory" if isinstance(exc, MemoryError) else getattr(exc, "kind", "unexpected_error")
         message = str(exc)
-        conditions = {"collision_policy": self.settings.collision_policy} if kind == "event_code_collision" else {}
+        conditions: dict[str, Any] = {}
         try:
             FailureLog(self.layout).record(
                 files, files.recording_id, kind, message, annotator_id=self.request.annotator_id,

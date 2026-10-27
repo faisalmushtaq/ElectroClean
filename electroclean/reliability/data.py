@@ -72,11 +72,24 @@ def build_dataset(
         if catalogue is None:
             catalogue = doc.catalogue
         elif doc.catalogue.sha256 != catalogue.sha256:
-            raise AnnotationError(
-                f"{source} uses label catalogue {doc.catalogue.catalogue_id} {doc.catalogue.catalogue_version} "
-                f"({doc.catalogue.sha256[:12]}), which differs from the others ({catalogue.sha256[:12]}). "
-                "Annotations made with different label sets cannot be compared."
+            if not doc.catalogue.compatible_with(catalogue):
+                raise AnnotationError(
+                    f"{source} uses label catalogue {doc.catalogue.catalogue_id} {doc.catalogue.catalogue_version} "
+                    f"({doc.catalogue.sha256[:12]}), which gives labels or codes a different meaning from the "
+                    f"others ({catalogue.catalogue_version}, {catalogue.sha256[:12]}). They cannot be compared."
+                )
+            # Compatible versions (codes are never reused): analyse with the larger catalogue.
+            larger = doc.catalogue if len(doc.catalogue.labels) > len(catalogue.labels) else catalogue
+            note = (
+                f"Files use label catalogue versions {catalogue.catalogue_version} and "
+                f"{doc.catalogue.catalogue_version}; they are compatible and analysed with {larger.catalogue_version}"
             )
+            if note not in warnings:
+                warnings.append(note)
+            if not larger.covers(doc.catalogue if larger is catalogue else catalogue):
+                # Neither contains the other: combine them.
+                larger = _union_catalogue(catalogue, doc.catalogue)
+            catalogue = larger
         by_key.setdefault((doc.recording.recording_id, doc.annotator_id), []).append((source, doc))
     if catalogue is None:
         raise AnnotationError("No annotation files matched the analysis settings")
@@ -138,6 +151,21 @@ def build_dataset(
         if excluded:
             g.ch_names = tuple(c for c in g.ch_names if c not in excluded)
     return AgreementDataset(groups=groups, catalogue=catalogue, files=files or [], warnings=warnings)
+
+
+def _union_catalogue(a: LabelCatalogue, b: LabelCatalogue) -> LabelCatalogue:
+    """Labels of two compatible catalogues, in the order of the newer one."""
+    newer, older = (a, b) if a.catalogue_version >= b.catalogue_version else (b, a)
+    items = list(newer.labels) + [x for x in older.labels if not newer.is_permitted(x.label)]
+    return LabelCatalogue(
+        catalogue_id=newer.catalogue_id,
+        catalogue_version=f"{newer.catalogue_version}+{older.catalogue_version}",
+        hed_library=newer.hed_library,
+        hed_library_version=newer.hed_library_version,
+        hed_standard_version=newer.hed_standard_version,
+        hed_namespace_prefix=newer.hed_namespace_prefix,
+        labels=tuple(items),
+    )
 
 
 def _baseline_timing(

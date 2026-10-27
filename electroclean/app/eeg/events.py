@@ -218,35 +218,26 @@ def compare_with_markers(tsv_events: OriginalEvents, raw: Any, timing: Recording
 
 @dataclass
 class EventCodeReport:
-    """Result of checking original event codes against the artifact codes."""
+    """What the original events look like, for the record and for the research team.
 
-    policy: str
-    collisions: list[dict[str, Any]] = field(default_factory=list)
+    Artifact codes are written to their own ``artifact_code`` column, so original
+    event codes can never clash with them and nothing here blocks annotation.
+    """
+
+    codes_also_used_for_artifacts: list[int] = field(default_factory=list)
+    artifact_label_rows: list[dict[str, Any]] = field(default_factory=list)
     value_meaning_conflicts: dict[str, list[str]] = field(default_factory=dict)
     label_value_conflicts: dict[str, list[str]] = field(default_factory=dict)
     repeated_values: dict[str, int] = field(default_factory=dict)
 
-    @property
-    def has_collisions(self) -> bool:
-        return bool(self.collisions)
-
-    @property
-    def blocked(self) -> bool:
-        """True when collisions exist and no explicit policy allows export."""
-        return self.has_collisions and self.policy == "require_explicit_policy"
-
     def summary_lines(self) -> list[str]:
         lines = []
-        if self.collisions:
-            values = sorted({c["value"] for c in self.collisions if c["value"] is not None})
-            labels = sorted({c["trial_type"] for c in self.collisions if c["kind"] == "label"})
-            if values:
-                lines.append(
-                    f"{len(self.collisions)} original event(s) use code(s) {values} that are reserved "
-                    "for artifact categories (100-115)."
-                )
-            if labels:
-                lines.append(f"Original events use artifact label names: {labels}.")
+        if self.artifact_label_rows:
+            labels = sorted({r["trial_type"] for r in self.artifact_label_rows})
+            lines.append(
+                f"{len(self.artifact_label_rows)} original event(s) already use HED-SCORE artifact names as "
+                f"trial_type ({', '.join(labels)}); they are kept as original events."
+            )
         for value, meanings in self.value_meaning_conflicts.items():
             lines.append(f"Original code {value} is used for different events: {meanings}.")
         for label, values in self.label_value_conflicts.items():
@@ -255,9 +246,13 @@ class EventCodeReport:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "policy": self.policy,
-            "blocked": self.blocked,
-            "collisions": self.collisions,
+            "artifact_codes_column": "artifact_code",
+            "codes_also_used_for_artifacts": self.codes_also_used_for_artifacts,
+            "note": (
+                "Original values are kept unchanged in the value column; artifact codes are in the separate "
+                "artifact_code column, so the two can never be confused."
+            ),
+            "artifact_label_rows": self.artifact_label_rows,
             "value_meaning_conflicts": self.value_meaning_conflicts,
             "label_value_conflicts": self.label_value_conflicts,
             "repeated_values": self.repeated_values,
@@ -265,22 +260,23 @@ class EventCodeReport:
         }
 
 
-def check_event_codes(events: OriginalEvents, catalogue: LabelCatalogue, policy: str) -> EventCodeReport:
-    """Detect clashes with artifact codes and inconsistent code meanings.
+def check_event_codes(events: OriginalEvents, catalogue: LabelCatalogue) -> EventCodeReport:
+    """Describe the original event codes; flag inconsistent code meanings.
 
     Repeated codes are normal (many trials share a code) and are only counted.
     A code used for more than one ``trial_type``, or a ``trial_type`` that
     appears with more than one code, is reported as an inconsistency for the
-    research team to review. Nothing is renumbered.
+    research team to review. Original codes that coincide with artifact codes
+    are only noted: artifact codes live in their own column. Nothing is
+    renumbered.
     """
-    report = EventCodeReport(policy=policy)
+    report = EventCodeReport()
     artifact_codes = set(catalogue.values)
+    shared: set[int] = set()
     by_value: dict[str, set[str]] = {}
     by_label: dict[str, set[str]] = {}
     counts: dict[str, int] = {}
-    tts = events.trial_types
-    vals = events.values
-    for i, (tt, val) in enumerate(zip(tts, vals)):
+    for i, (tt, val) in enumerate(zip(events.trial_types, events.values)):
         code = parse_int_code(val)
         key = str(code) if code is not None else val
         if val not in ("", "n/a"):
@@ -289,28 +285,10 @@ def check_event_codes(events: OriginalEvents, catalogue: LabelCatalogue, policy:
         if tt not in ("", "n/a"):
             by_label.setdefault(tt, set()).add(key)
         if code is not None and code in artifact_codes:
-            artifact_label = catalogue.label_for(code)
-            report.collisions.append(
-                {
-                    "kind": "value",
-                    "row": i + 1,
-                    "value": code,
-                    "trial_type": tt,
-                    "artifact_label_for_value": artifact_label,
-                    "same_meaning": tt == artifact_label,
-                }
-            )
-        elif catalogue.is_permitted(tt):
-            report.collisions.append(
-                {
-                    "kind": "label",
-                    "row": i + 1,
-                    "value": code,
-                    "trial_type": tt,
-                    "artifact_label_for_value": None,
-                    "same_meaning": False,
-                }
-            )
+            shared.add(code)
+        if catalogue.is_permitted(tt):
+            report.artifact_label_rows.append({"row": i + 1, "value": val, "trial_type": tt})
+    report.codes_also_used_for_artifacts = sorted(shared)
     report.value_meaning_conflicts = {
         k: sorted(v) for k, v in sorted(by_value.items()) if len({x for x in v if x not in ("", "n/a")}) > 1
     }

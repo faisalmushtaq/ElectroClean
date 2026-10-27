@@ -63,7 +63,11 @@ def test_only_permitted_labels_and_mne_tools_disabled(qapp, layout, settings, ca
     session, ws = open_workspace(layout, settings, catalogue, loaded)
     try:
         combo_labels = [ws.label_combo.itemData(i) for i in range(ws.label_combo.count())]
-        assert combo_labels == list(catalogue.label_names)
+        # Every catalogue term, in catalogue order, under non-selectable family headings.
+        assert [x for x in combo_labels if x is not None] == list(catalogue.label_names)
+        headings = [i for i, x in enumerate(combo_labels) if x is None]
+        assert len(headings) == 4
+        assert all(not ws.label_combo.model().item(i).isEnabled() for i in headings)
         assert ws.label_combo.isEditable() is False
         p = ws.browser.mne
         assert "a" not in p.keyboard_shortcuts  # MNE's free-text annotation tool is unreachable
@@ -197,14 +201,14 @@ def test_filter_dialog_defaults_and_lock(qapp):
     dlg = FilterDialog(None, FilterSettings())
     fs = dlg.settings()
     assert fs.highpass_enabled and fs.highpass_hz == 1.0
-    assert fs.notch_enabled and fs.notch_hz == 60.0 and fs.method == "fir"
+    assert fs.notch_enabled and fs.notch_hz == 50.0 and fs.method == "fir"
     dlg.hp_off.setChecked(True)
-    dlg.n50.setChecked(True)
+    dlg.n60.setChecked(True)
     fs = dlg.settings()
-    assert not fs.highpass_enabled and fs.notch_hz == 50.0
-    locked = FilterDialog(None, FilterSettings(locked=True, notch_hz=50.0))
-    assert not locked.hp_on.isEnabled() and not locked.n60.isEnabled()
-    assert locked.settings().locked and locked.settings().notch_hz == 50.0
+    assert not fs.highpass_enabled and fs.notch_hz == 60.0 and fs.method == "fir"
+    locked = FilterDialog(None, FilterSettings(locked=True, notch_hz=60.0))
+    assert not locked.hp_on.isEnabled() and not locked.n50.isEnabled()
+    assert locked.settings().locked and locked.settings().notch_hz == 60.0
 
 
 def test_start_window_validates_identifier(qapp, dataset):

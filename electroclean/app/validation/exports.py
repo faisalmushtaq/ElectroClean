@@ -60,8 +60,13 @@ def validate_events_tsv(data: bytes, original: OriginalEvents, doc: AnnotationDo
         raise ValidationError("Artifact rows in events.tsv do not reproduce the annotations")
     idx = {c: i for i, c in enumerate(columns)}
     for n, row in enumerate(rows, start=2):
-        if parse_float(row[idx["onset"]]) is None and row[idx["event_source"]] == "electroclean_artifact":
+        artifact = row[idx["event_source"]] == "electroclean_artifact"
+        if parse_float(row[idx["onset"]]) is None and artifact:
             raise ValidationError(f"events.tsv line {n} has a non-numeric onset")
+        if artifact and row[idx["value"]] != "n/a":
+            raise ValidationError(f"events.tsv line {n}: artifact rows must leave value as n/a")
+        if not artifact and row[idx["artifact_code"]] != "n/a":
+            raise ValidationError(f"events.tsv line {n}: original rows must not have an artifact_code")
     if len(rows) != len(original.rows) + len(doc.annotations):
         raise ValidationError("events.tsv has an unexpected number of rows")
 

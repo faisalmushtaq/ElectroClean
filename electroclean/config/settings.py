@@ -20,7 +20,6 @@ CONFIG_DIR = Path(__file__).resolve().parent
 DEFAULT_SETTINGS_PATH = CONFIG_DIR / "default_settings.json"
 STUDY_CONFIG_FILENAME = "electroclean_study.json"
 
-COLLISION_POLICIES = ("require_explicit_policy", "preserve_and_flag")
 SELECTION_STRATEGIES = ("random", "seeded", "manual")
 FILTER_METHODS = ("fir", "iir")
 NOTCH_FREQUENCIES = (50.0, 60.0)
@@ -51,7 +50,7 @@ class FilterSettings:
     highpass_enabled: bool = True
     highpass_hz: float = 1.0
     notch_enabled: bool = True
-    notch_hz: float = 60.0
+    notch_hz: float = 50.0  # UK/European mains; 60 Hz can be chosen
     notch_harmonics: bool = False
     method: str = "fir"
     iir_order: int = 4
@@ -126,7 +125,6 @@ class Settings:
     hash_source_files: bool
     apply_channel_types_from_bids: bool
     show_bids_bad_channels: bool
-    collision_policy: str
     selection_strategy: str
     selection_seed: int | None
     recording_lock_stale_hours: float
@@ -141,7 +139,6 @@ class Settings:
             disc = data["discovery"]
             disp = data["display"]
             load = data["loading"]
-            ev = data["events"]
             sel = data["selection"]
             locks = data["locks"]
             ann = data["annotation"]
@@ -163,7 +160,6 @@ class Settings:
                 hash_source_files=bool(load["hash_source_files"]),
                 apply_channel_types_from_bids=bool(load.get("apply_channel_types_from_bids", True)),
                 show_bids_bad_channels=bool(load.get("show_bids_bad_channels", True)),
-                collision_policy=str(ev["collision_policy"]),
                 selection_strategy=str(sel["strategy"]),
                 selection_seed=None if sel.get("seed") is None else int(sel["seed"]),
                 recording_lock_stale_hours=float(locks["recording_lock_stale_hours"]),
@@ -177,10 +173,6 @@ class Settings:
         return settings
 
     def validate(self) -> None:
-        if self.collision_policy not in COLLISION_POLICIES:
-            raise SettingsError(
-                f"events.collision_policy must be one of {COLLISION_POLICIES}, got {self.collision_policy!r}"
-            )
         if self.selection_strategy not in SELECTION_STRATEGIES:
             raise SettingsError(
                 f"selection.strategy must be one of {SELECTION_STRATEGIES}, got {self.selection_strategy!r}"

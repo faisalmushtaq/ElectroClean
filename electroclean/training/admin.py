@@ -24,7 +24,6 @@ from electroclean.app.session.failures import FailureLog
 from electroclean.app.session.register import CompletionRegister
 from electroclean.app.session.selection import balanced_allocation
 from electroclean.config.settings import (
-    COLLISION_POLICIES,
     STUDY_CONFIG_FILENAME,
     FilterSettings,
     Settings,
@@ -115,14 +114,6 @@ def unlock_filters(dataset_root: Path) -> Path:
     data = read_study_dict(dataset_root)
     f = data.setdefault("settings", {}).setdefault("filters", {})
     f["locked"] = False
-    return write_study_dict(dataset_root, data)
-
-
-def set_collision_policy(dataset_root: Path, policy: str) -> Path:
-    if policy not in COLLISION_POLICIES:
-        raise ValueError(f"Policy must be one of {COLLISION_POLICIES}")
-    data = read_study_dict(dataset_root)
-    data.setdefault("settings", {}).setdefault("events", {})["collision_policy"] = policy
     return write_study_dict(dataset_root, data)
 
 

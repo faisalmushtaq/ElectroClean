@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import math
 from itertools import combinations
 
 import numpy as np
 import pytest
 
-from electroclean.app.annotations.labels import default_catalogue
+from electroclean.app.annotations.labels import LabelCatalogue, default_catalogue
 from electroclean.app.annotations.model import AnnotationDocument, AnnotationError, ArtifactAnnotation, RecordingInfo
 from electroclean.app.annotations.timing import RecordingTiming
 from electroclean.reliability.analysis import run_analysis, write_outputs
@@ -16,6 +17,7 @@ from electroclean.reliability.config import ANY_ARTIFACT, AnalysisConfig
 from electroclean.reliability.data import build_dataset
 from electroclean.reliability.intervals import binarise, coverage_per_bin, intersection_length, union
 from electroclean.reliability.matching import events_for, match_events
+from electroclean.config.settings import CONFIG_DIR
 from electroclean.reliability.statistics import (
     PairTable,
     fleiss_kappa,
@@ -431,3 +433,42 @@ def test_overlapping_annotations_counted_once_in_descriptives_and_missing_refere
     assert row(d, annotator="A", category=emg).proportion_of_recording == 1.0
     res = analyse([doc("A", []), doc("B", [])], reference_annotator="Z")
     assert any("reference annotator Z" in w for w in res.settings_record["warnings"])
+
+
+# ----------------------------------------------------------- hierarchy (v2)
+def test_group_rollups_show_agreement_on_the_artifact_family():
+    blink, eye = "Eye-blink-artifact", "Eye-artifact"
+    res = analyse([doc("A", [(blink, 1, 2, ())]), doc("B", [(eye, 1, 2, ())])])
+    tr = res.table("timeresolved_pairwise")
+
+    def pa(cat):
+        return row(tr, recording="ALL (pooled)", category=cat, channel_mode="time_only",
+                   representation="exact").positive_agreement
+
+    assert pa(blink) == 0.0 and pa("Eye-artifact + subtypes") == 1.0 and pa(ANY_ARTIFACT) == 1.0
+    ev = res.table("events_summary")
+    f1 = {c: row(ev, category=c, channel_mode="time_only", threshold=0.2).f1
+          for c in ("Eye-artifact + subtypes", ANY_ARTIFACT, "ALL categories (micro-average)")}
+    assert f1 == {"Eye-artifact + subtypes": 1.0, ANY_ARTIFACT: 1.0, "ALL categories (micro-average)": 0.0}
+    # Data-artifact's roll-up would repeat ANY-artifact and is not reported.
+    assert "Data-artifact + subtypes" not in set(tr.category)
+
+
+def test_files_from_compatible_catalogue_versions_are_analysed_together():
+    data = json.loads((CONFIG_DIR / "artifact_labels.json").read_text(encoding="utf-8"))
+    v1 = LabelCatalogue.from_dict(dict(data, catalogue_version="1.0.0",
+                                       labels=[e for e in data["labels"] if e["value"] <= 115]))
+    old = doc("A", [("EMG-artifact", 1, 2, ())])
+    old = AnnotationDocument(old.recording, "A", old.annotations, v1, session_id="A")
+    new = doc("B", [("EMG-artifact", 1, 2, ()), ("Nystagmus-artifact", 4, 5, ())])
+    res = analyse([old, new])
+    assert res.dataset.catalogue.catalogue_version == "2.0.0"
+    assert any("compatible" in w for w in res.dataset.warnings)
+    tr = res.table("timeresolved_pairwise")
+    assert row(tr, recording="ALL (pooled)", category="EMG-artifact", channel_mode="time_only",
+               representation="exact").positive_agreement == 1.0
+    clash = LabelCatalogue.from_dict(dict(data, catalogue_version="9.0.0",
+                                          labels=[dict(e, value=999) if e["value"] == 102 else e for e in data["labels"]]))
+    bad = AnnotationDocument(old.recording, "C", [], clash, session_id="C")
+    with pytest.raises(AnnotationError):
+        build_dataset([("b", new), ("c", bad)], AnalysisConfig(resolutions_s=(1.0,)))

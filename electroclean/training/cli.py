@@ -97,11 +97,6 @@ def cmd_unlock_filters(a: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_collision(a: argparse.Namespace) -> int:
-    print("Saved", admin.set_collision_policy(a.dataset, a.policy))
-    return 0
-
-
 def cmd_allocation(a: argparse.Namespace) -> int:
     print("Saved", admin.set_allocation(a.dataset, a.strategy, seed=a.seed))
     return 0
@@ -250,8 +245,6 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--harmonics", action="store_true")
     sp.add_argument("--method", choices=("fir", "iir"), default="fir")
     add("unlock-filters", cmd_unlock_filters, "Let annotators choose filters again")
-    sp = add("collision-policy", cmd_collision, "Set the policy for original event codes 100-115")
-    sp.add_argument("policy", choices=("require_explicit_policy", "preserve_and_flag"))
     sp = add("allocation", cmd_allocation, "Choose random or seeded allocation")
     sp.add_argument("strategy", choices=("random", "seeded"))
     sp.add_argument("--seed", type=int)

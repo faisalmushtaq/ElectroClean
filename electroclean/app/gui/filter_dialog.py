@@ -5,10 +5,8 @@ from __future__ import annotations
 from qtpy.QtWidgets import (
     QButtonGroup,
     QCheckBox,
-    QComboBox,
     QDialog,
     QDialogButtonBox,
-    QFormLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -63,30 +61,27 @@ class FilterDialog(QDialog):
         nl.addWidget(self.notch_on)
         row = QHBoxLayout()
         row.addWidget(QLabel("Frequency:"))
-        self.n60 = QRadioButton("60 Hz")
-        self.n50 = QRadioButton("50 Hz (UK/Europe)")
+        self.n50 = QRadioButton("50 Hz (UK, Europe)")
+        self.n60 = QRadioButton("60 Hz (North America)")
         g2 = QButtonGroup(self)
-        g2.addButton(self.n60)
         g2.addButton(self.n50)
-        (self.n50 if float(current.notch_hz) == 50.0 else self.n60).setChecked(True)
-        row.addWidget(self.n60)
+        g2.addButton(self.n60)
+        (self.n60 if float(current.notch_hz) == 60.0 else self.n50).setChecked(True)
         row.addWidget(self.n50)
+        row.addWidget(self.n60)
         row.addStretch(1)
         nl.addLayout(row)
-        self.harmonics = QCheckBox("Also remove harmonics (e.g. 120, 180 Hz)")
+        self.harmonics = QCheckBox("Also remove harmonics (100, 150 Hz … or 120, 180 Hz …)")
         self.harmonics.setChecked(current.notch_harmonics)
         nl.addWidget(self.harmonics)
         layout.addWidget(notch)
 
-        adv = QGroupBox("Filter design")
-        form = QFormLayout(adv)
-        self.method = QComboBox()
-        self.method.addItem("FIR, zero-phase (MNE default)", "fir")
-        self.method.addItem("IIR Butterworth, zero-phase", "iir")
-        self.method.setCurrentIndex(0 if current.method == "fir" else 1)
-        form.addRow("Type", self.method)
-        layout.addWidget(adv)
+        # The study uses FIR filters (MNE's zero-phase defaults). The design is shown but not chosen
+        # here; an administrator could still set IIR in the study file for a special purpose.
+        self._method = current.method
         self._iir_order = current.iir_order
+        design = "FIR, zero-phase (MNE defaults)" if current.method == "fir" else f"IIR Butterworth, order {current.iir_order}, zero-phase (set by the administrator)"
+        layout.addWidget(QLabel(f"Filter design: {design}"))
 
         note = QLabel(
             "<small>Zero-phase filters do not shift artifacts in time, but they spread very sharp "
@@ -105,7 +100,7 @@ class FilterDialog(QDialog):
         layout.addWidget(buttons)
         self.notch_on.toggled.connect(self._update)
         if self.locked:
-            for w in (self.hp_on, self.hp_off, self.notch_on, self.n50, self.n60, self.harmonics, self.method):
+            for w in (self.hp_on, self.hp_off, self.notch_on, self.n50, self.n60, self.harmonics):
                 w.setEnabled(False)
         self._update()
 
@@ -121,7 +116,7 @@ class FilterDialog(QDialog):
             notch_enabled=self.notch_on.isChecked(),
             notch_hz=50.0 if self.n50.isChecked() else 60.0,
             notch_harmonics=self.harmonics.isChecked(),
-            method=self.method.currentData(),
+            method=self._method,
             iir_order=self._iir_order,
             locked=self.locked,
         )

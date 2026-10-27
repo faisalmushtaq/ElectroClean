@@ -51,11 +51,10 @@ from electroclean.config.settings import CONFIG_DIR, Settings
 
 
 def _hed_descriptions() -> dict[str, str]:
-    try:
-        data = json.loads((CONFIG_DIR / "hed_score_2.2.0_validation.json").read_text(encoding="utf-8"))
-        return {e["label"]: e.get("hed_description", "") for e in data.get("labels", [])}
-    except (OSError, ValueError):
-        return {}
+    """HED SCORE descriptions of the labels (shown as tooltips)."""
+    from electroclean.app.annotations.labels import default_catalogue
+
+    return {item.label: item.description for item in default_catalogue().labels}
 
 
 def format_hms(seconds: float) -> str:
@@ -148,17 +147,35 @@ class AnnotationWorkspace(QObject):
 
         tb.addWidget(QLabel(" Artifact: "))
         self.label_combo = QComboBox()
-        self.label_combo.setMaxVisibleItems(16)
+        self.label_combo.setMaxVisibleItems(36)
+        section = None
         for lab in cat.labels:
-            self.label_combo.addItem(colour_icon(lab.colour), f"{lab.label}  ({lab.value})", lab.label)
+            if lab.section and lab.section != section:
+                # A heading for each family (not selectable).
+                section = lab.section
+                self.label_combo.addItem(f"— {section} —")
+                head = self.label_combo.model().item(self.label_combo.count() - 1)
+                head.setEnabled(False)
+                head.setSelectable(False)
+            text = f"{lab.label}  ({lab.value})"
+            if lab.is_group:
+                text += "  – exact type unclear"
+            self.label_combo.addItem(colour_icon(lab.colour), text, lab.label)
             idx = self.label_combo.count() - 1
             self.label_combo.setItemData(idx, self._hed.get(lab.label, lab.label), Qt.ToolTipRole)
-        self.label_combo.setToolTip("Only the 16 HED-SCORE artifact categories can be used")
+            if lab.is_group:
+                font = self.label_combo.font()
+                font.setItalic(True)
+                self.label_combo.setItemData(idx, font, Qt.FontRole)
+        self.label_combo.setToolTip(
+            f"Only the {len(cat.labels)} HED-SCORE artifact terms can be used. Group terms (in italics) are for "
+            "artifacts whose exact type is unclear."
+        )
         # Without keyboard focus the arrow, page and letter keys keep moving through the EEG
         # instead of silently changing the artifact type.
         self.label_combo.setFocusPolicy(Qt.NoFocus)
         self.label_combo.currentIndexChanged.connect(
-            lambda i: self.controller.set_current_label(self.label_combo.itemData(i))
+            lambda i: self.label_combo.itemData(i) and self.controller.set_current_label(self.label_combo.itemData(i))
         )
         tb.addWidget(self.label_combo)
         self.active_label = QLabel()  # colour and short code of the active type (the menu shows its name)

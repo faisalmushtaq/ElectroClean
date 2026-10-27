@@ -103,8 +103,8 @@ def build_consensus(
     for d in experts[1:]:
         if d.recording.recording_id != rec.recording_id or d.recording.timing != rec.timing:
             raise AnnotationError("All expert files must refer to the same recording with the same timing")
-        if d.catalogue.sha256 != experts[0].catalogue.sha256:
-            raise AnnotationError("Expert files use different label catalogues")
+        if d.catalogue.sha256 != experts[0].catalogue.sha256 and not d.catalogue.compatible_with(experts[0].catalogue):
+            raise AnnotationError("Expert files use label catalogues that give labels or codes different meanings")
     n = len(experts)
     k = min_agreement if min_agreement is not None else math.floor(n / 2) + 1
     if not 1 <= k <= n:
@@ -116,7 +116,8 @@ def build_consensus(
     stamp = now_local_iso()
     anns: list[ArtifactAnnotation] = []
     disagreements: list[dict[str, Any]] = []
-    for label in experts[0].catalogue.label_names:
+    catalogue = max((d.catalogue for d in experts), key=lambda c: len(c.labels))
+    for label in catalogue.label_names:
         per_expert = [category_intervals(d, label) for d in experts]
         if not any(per_expert):
             continue
@@ -190,7 +191,7 @@ def build_consensus(
         annotator_id="REFERENCE",
         annotator_display_name="Consensus",
         annotations=anns,
-        catalogue=experts[0].catalogue,
+        catalogue=catalogue,
         session_id="consensus",
         mode="reference",
         created_at=stamp,

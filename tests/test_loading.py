@@ -49,11 +49,11 @@ def test_filtering_does_not_alter_source(dataset, recordings, settings, catalogu
         # ... and matches applying the same MNE filters to a fresh copy.
         ref = mne.io.read_raw_brainvision(rec.vhdr, preload=True, verbose="error")
         ref.filter(1.0, None, verbose="error", picks="all")
-        ref.notch_filter([60.0], verbose="error", picks="all")
+        ref.notch_filter([50.0], verbose="error", picks="all")
         np.testing.assert_allclose(filtered, ref.get_data(), atol=1e-12)
         # Line noise is reduced in the display copy.
         f = np.fft.rfftfreq(source.shape[1], 1 / 250.0)
-        k = np.argmin(abs(f - 60))
+        k = np.argmin(abs(f - 50))
         assert abs(np.fft.rfft(filtered[0]))[k] < 0.1 * abs(np.fft.rfft(source[0]))[k]
     finally:
         lr.close()
@@ -85,13 +85,13 @@ def test_memory_mapped_display_copy_for_large_recordings(dataset, recordings, ca
 
 
 def test_iir_filters_recorded(recordings, settings, catalogue):
-    filters = FilterSettings(method="iir", notch_hz=50.0)
+    filters = FilterSettings(method="iir", notch_hz=60.0)
     lr = load_recording(recordings[SUB1], settings, filters, catalogue)
     steps = lr.filter_report.to_dict()["steps"]
     assert steps[0]["parameters"]["iir_params"]["order"] == 4
-    assert steps[1]["parameters"]["freqs"] == [50.0]
+    assert steps[1]["parameters"]["freqs"] == [60.0]
     assert lr.filter_report.transient_half_width_s > 0
-    # eeg.json says 60 Hz mains, so a 50 Hz notch is flagged.
+    # eeg.json says 50 Hz mains (UK), so a 60 Hz notch is flagged.
     assert any("power-line frequency" in w for w in lr.warnings)
     lr.close()
 
@@ -172,20 +172,17 @@ def test_inconsistent_channels_and_bad_json_are_warnings(dataset, catalogue, set
     lr.close()
 
 
-def test_event_code_collision_requires_policy(rich_dataset, catalogue):
+def test_original_codes_like_artifact_codes_load_without_a_policy(rich_dataset, catalogue):
+    """sub-099's own events use code 101; artifact codes have their own column, so it simply loads."""
     root, _ = rich_dataset
     rec = {r.recording_id: r for r in discover_recordings(root)}["sub-099/eeg/sub-099_task-oddball_eeg.vhdr"]
     settings, _ = load_settings(root)
-    with pytest.raises(RecordingLoadError) as err:
-        load_recording(rec, settings, settings.filters, catalogue)
-    assert err.value.kind == "event_code_collision"
-    assert "101" in str(err.value)
-    # An explicit policy, set by the administrator in the study config, allows it.
+    lr = load_recording(rec, settings, settings.filters, catalogue)
+    assert lr.event_report.codes_also_used_for_artifacts == [101]
+    lr.close()
+    # An old study file that still sets the retired policy is accepted.
     (root / "electroclean_study.json").write_text(
         json.dumps({"settings": {"events": {"collision_policy": "preserve_and_flag"}}})
     )
     settings, _ = load_settings(root)
-    lr = load_recording(rec, settings, settings.filters, catalogue)
-    assert lr.event_report.has_collisions and not lr.event_report.blocked
-    assert lr.event_report.collisions[0]["value"] == 101
-    lr.close()
+    load_recording(rec, settings, settings.filters, catalogue).close()

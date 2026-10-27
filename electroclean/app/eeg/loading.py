@@ -262,25 +262,8 @@ def load_recording(
         warnings_out.append(f"{len(out_of_range)} original event(s) lie outside the recording: rows {out_of_range[:10]}")
     warnings_out.extend(f"Events: {p}" for p in original.problems)
 
-    event_report = check_event_codes(original, catalogue, settings.collision_policy)
-    if event_report.blocked:
-        raise RecordingLoadError(
-            "Original event codes clash with the artifact codes. "
-            + " ".join(event_report.summary_lines())
-            + " No mapping policy has been set, so this recording cannot be annotated until the "
-            "study administrator sets events.collision_policy (see the user guide).",
-            kind="event_code_collision",
-        )
-    if event_report.has_collisions:
-        warnings_out.append(
-            "Original event codes overlap artifact codes; both are kept unchanged and distinguished by the "
-            "event_source column (policy: preserve_and_flag)."
-        )
-    warnings_out.extend(
-        f"Events: {line}"
-        for line in event_report.summary_lines()
-        if "different" in line
-    )
+    event_report = check_event_codes(original, catalogue)
+    warnings_out.extend(f"Events: {line}" for line in event_report.summary_lines())
 
     say("Checking channels")
     channel_report = check_channels(list(raw.ch_names), files.channels_tsv)

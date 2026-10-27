@@ -50,7 +50,9 @@ from electroclean.app.io.tsv import parse_tsv_text, tsv_bytes
 from electroclean.config.settings import CONFIG_DIR
 
 REQUIRED_COLUMNS = ["onset", "duration", "trial_type", "value", "sample", "channels"]
-ELECTROCLEAN_COLUMNS = ["event_source", "annotation_id", "annotator_id", "original_row"]
+# Artifact codes have their own column, so they can never be confused with the dataset's
+# own marker values (which stay in ``value``, untouched).
+ELECTROCLEAN_COLUMNS = ["artifact_code", "event_source", "annotation_id", "annotator_id", "original_row"]
 ARTIFACT_SOURCE = "electroclean_artifact"
 NA = "n/a"
 
@@ -112,7 +114,7 @@ def build_events_table(
         out[index["onset"]] = format_seconds(ann.onset(timing))
         out[index["duration"]] = format_seconds(ann.duration(timing))
         out[index["trial_type"]] = ann.label
-        out[index["value"]] = str(doc.catalogue.value_for(ann.label))
+        out[index["artifact_code"]] = str(doc.catalogue.value_for(ann.label))
         out[index["sample"]] = str(ann.onset_sample)
         out[index["channels"]] = encode_channels(ann.channels)
         out[index["event_source"]] = ARTIFACT_SOURCE
@@ -135,7 +137,9 @@ def annotations_from_events_tsv(
     """Rebuild artifact annotations from an exported events TSV alone."""
     text = data.decode("utf-8") if isinstance(data, bytes) else data
     columns, rows = parse_tsv_text(text, "exported events.tsv")
-    missing = [c for c in REQUIRED_COLUMNS + ELECTROCLEAN_COLUMNS if c not in columns]
+    # Files written before version 2 kept artifact codes in ``value``.
+    code_column = "artifact_code" if "artifact_code" in columns else "value"
+    missing = [c for c in REQUIRED_COLUMNS + ELECTROCLEAN_COLUMNS if c not in columns and c != "artifact_code"]
     if missing:
         raise AnnotationError(f"Exported events file lacks columns {missing}")
     idx = {c: i for i, c in enumerate(columns)}
@@ -145,9 +149,11 @@ def annotations_from_events_tsv(
         if row[idx["event_source"]] != ARTIFACT_SOURCE:
             continue
         label = row[idx["trial_type"]]
-        code = parse_int_code(row[idx["value"]])
+        code = parse_int_code(row[idx[code_column]])
         if not catalogue.is_permitted(label) or code != catalogue.value_for(label):
-            raise AnnotationError(f"Line {n}: label {label!r} and value {row[idx['value']]!r} do not match the catalogue")
+            raise AnnotationError(
+                f"Line {n}: label {label!r} and {code_column} {row[idx[code_column]]!r} do not match the catalogue"
+            )
         onset = parse_float(row[idx["onset"]])
         duration = parse_float(row[idx["duration"]])
         sample = parse_int_code(row[idx["sample"]])
@@ -177,36 +183,31 @@ def original_rows_from_events_tsv(data: bytes | str) -> tuple[list[str], list[li
     return columns, originals
 
 
-def _hed_snapshot() -> dict[str, dict[str, Any]]:
-    path = CONFIG_DIR / "hed_score_2.2.0_validation.json"
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
-    return {entry["label"]: entry for entry in data.get("labels", []) if entry.get("found")}
-
-
 def build_events_sidecar(
     original_sidecar: dict[str, Any],
     original: OriginalEvents,
     doc: AnnotationDocument,
-    collision_report: dict[str, Any] | None = None,
+    event_report: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], list[str]]:
-    """BIDS events.json describing the merged table; returns (sidecar, notes)."""
+    """BIDS events.json describing the merged table; returns (sidecar, notes).
+
+    The original description of every original column, including ``value``, is
+    kept as it was. Artifact rows are described by ``trial_type`` (with HED
+    tags) and by ``artifact_code``.
+    """
     cat = doc.catalogue
     out = copy.deepcopy(original_sidecar) if isinstance(original_sidecar, dict) else {}
     notes: list[str] = []
-    hed = _hed_snapshot()
 
     tt = out.setdefault("trial_type", {})
     if not isinstance(tt, dict):
         notes.append("Original trial_type description is not an object; artifact levels not added")
     else:
-        tt.setdefault("Description", "Event type. Artifact rows use HED-SCORE artifact labels.")
+        tt.setdefault("Description", "Event type. Artifact rows use HED-SCORE artifact terms.")
         levels = tt.setdefault("Levels", {})
         if isinstance(levels, dict):
             for item in cat.labels:
-                desc = hed.get(item.label, {}).get("hed_description") or item.label
+                desc = item.description or item.label
                 if item.label in levels and levels[item.label] != desc:
                     notes.append(f"Original Levels already define {item.label!r}; kept the original text")
                 else:
@@ -222,35 +223,16 @@ def build_events_sidecar(
 
     val = out.setdefault("value", {})
     if isinstance(val, dict):
-        val.setdefault("Description", "Numerical event code. Codes 100-115 on artifact rows are the fixed ElectroClean artifact codes.")
-        vlevels = val.setdefault("Levels", {})
-        if isinstance(vlevels, dict):
-            original_meanings: dict[int, set[str]] = {}
-            for tt, v in zip(original.trial_types, original.values):
-                code = parse_int_code(v)
-                if code is not None:
-                    original_meanings.setdefault(code, set()).add(tt)
-            for item in cat.labels:
-                key = str(item.value)
-                if item.value in original_meanings:
-                    meaning = ", ".join(sorted(original_meanings[item.value]))
-                    notes.append(
-                        f"Value {key} is used by original events ({meaning}) and by artifact rows "
-                        f"({item.label}); use event_source to tell them apart"
-                    )
-                    if key not in vlevels:
-                        vlevels[key] = (
-                            f"AMBIGUOUS CODE: on rows with event_source '{ARTIFACT_SOURCE}' it means {item.label}; "
-                            f"on original rows it keeps its original meaning ({meaning})."
-                        )
-                elif key in vlevels and vlevels[key] != item.label:
-                    notes.append(
-                        f"Original Levels define value {key} as {vlevels[key]!r}; artifact rows with value {key} "
-                        f"mean {item.label!r} and are identified by event_source"
-                    )
-                else:
-                    vlevels[key] = item.label
-
+        val.setdefault("Description", "Marker value of the original events (n/a on artifact rows).")
+    out["artifact_code"] = {
+        "LongName": "Artifact code",
+        "Description": (
+            f"Fixed ElectroClean code of the artifact type on rows with event_source '{ARTIFACT_SOURCE}' "
+            "(n/a on original rows). Codes never change between datasets or versions: "
+            f"{min(cat.values)}-{max(cat.values)}, with group terms from 130."
+        ),
+        "Levels": {str(item.value): item.label for item in sorted(cat.labels, key=lambda x: x.value)},
+    }
     out.setdefault("sample", {"Description": "Onset as a 0-based sample index relative to the first sample in the data file."})
     out["channels"] = {
         "LongName": "Affected channels",
@@ -284,7 +266,7 @@ def build_events_sidecar(
         "original_sample_column_computed": original.sample_computed if original.source == SOURCE_EVENTS_TSV else None,
         "time_conventions": TIME_CONVENTIONS,
         "label_catalogue": cat.to_metadata(),
-        "event_code_check": collision_report or {},
+        "event_code_check": event_report or {},
         "notes": notes,
     }
     return out, notes

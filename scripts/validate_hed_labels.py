@@ -3,8 +3,10 @@
 This is a development-time script. It reads a HED SCORE XML schema (downloaded
 from the hed-standard/hed-schemas repository, or supplied as a local file),
 confirms that every label in ``electroclean/config/artifact_labels.json`` is a
-node of that schema with exactly the same spelling and capitalisation, and
-writes a snapshot that the offline test-suite checks against.
+node of that schema with exactly the same spelling and capitalisation, that
+its kind (specific type or group term) and parent group agree with the schema,
+and that no artifact term of the schema is missing; it writes a snapshot that
+the offline test-suite checks against.
 
 Usage::
 
@@ -41,10 +43,13 @@ def _walk(node: ET.Element, path: list[str], out: dict[str, list[dict]]) -> None
         name = name_el.text.strip()
         desc_el = child.find("description")
         full = path + [name]
+        children = [c.findtext("name") for c in child.findall("node")]
         out.setdefault(name, []).append(
             {
                 "path": "/".join(full),
                 "description": (desc_el.text or "").strip() if desc_el is not None else "",
+                "parent": path[-1] if path else None,
+                "has_child_terms": any(c and c != "#" for c in children),
             }
         )
         _walk(child, full, out)
@@ -96,13 +101,24 @@ def main(argv: list[str] | None = None) -> int:
             )
             results.append({"value": entry["value"], "label": label, "found": False})
         else:
+            node = found[0]
+            kind = "group" if node["has_child_terms"] else "specific"
+            if entry.get("kind", "specific") != kind:
+                discrepancies.append({"value": entry["value"], "label": label,
+                                      "problem": f"kind is {entry.get('kind')!r} but the schema makes it a {kind} term"})
+            catalogue_labels = {e["label"] for e in catalogue["labels"]}
+            expected_parent = node["parent"] if node["parent"] in catalogue_labels else None
+            if entry.get("parent") != expected_parent:
+                discrepancies.append({"value": entry["value"], "label": label,
+                                      "problem": f"parent is {entry.get('parent')!r}, schema says {expected_parent!r}"})
             results.append(
                 {
                     "value": entry["value"],
                     "label": label,
                     "found": True,
-                    "hed_path": found[0]["path"],
-                    "hed_description": found[0]["description"],
+                    "kind": kind,
+                    "hed_path": node["path"],
+                    "hed_description": node["description"],
                 }
             )
 
@@ -112,6 +128,8 @@ def main(argv: list[str] | None = None) -> int:
         for n, occ in nodes.items()
         if n.endswith("-artifact") and n not in requested and "Data-artifact" in occ[0]["path"]
     )
+    for n in other_artifact_nodes:
+        discrepancies.append({"value": None, "label": n, "problem": "schema artifact term missing from the catalogue"})
 
     snapshot = {
         "schema_library": library,

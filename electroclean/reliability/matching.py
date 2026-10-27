@@ -14,9 +14,9 @@ event of the other annotator:
 * **Matching.** By default each event can be matched at most once
   (one-to-one). Among all one-to-one assignments of eligible pairs, the one
   with the most matches is chosen and, among those, the one with the largest
-  total IoU. For ANY-artifact, where events of all categories are pooled,
-  ties in the number of matches are broken first by the number of matched
-  pairs that carry the same label, so that a correctly labelled event is
+  total IoU. For ANY-artifact and the group roll-ups, where events of several
+  labels are pooled, ties in the number of matches are broken first by the
+  number of matched pairs that carry the same label, so that a correctly labelled event is
   preferred to a differently labelled one over the same interval. The problem
   is solved exactly with the Hungarian algorithm
   (``scipy.optimize.linear_sum_assignment``) after sorting events by onset,
@@ -42,6 +42,7 @@ from electroclean.app.annotations.model import AnnotationDocument
 from electroclean.reliability.config import ANY_ARTIFACT, AnalysisConfig
 from electroclean.reliability.data import AgreementDataset
 from electroclean.reliability.intervals import iou
+from electroclean.reliability.timeresolved import categories_for, category_label_set
 
 
 @dataclass(frozen=True)
@@ -57,7 +58,7 @@ class Event:
 
 def events_for(
     doc: AnnotationDocument, category: str, ch_names: tuple[str, ...], *, require_channels: bool = False,
-    categories: tuple[str, ...] | None = None,
+    categories: tuple[str, ...] | None = None, labels: frozenset[str] | None = None,
 ) -> list[Event]:
     """Events of one annotator for a category.
 
@@ -69,7 +70,10 @@ def events_for(
     allowed = set(ch_names)
     out = []
     for a in doc.annotations:
-        if category == ANY_ARTIFACT:
+        if labels is not None:
+            if a.label not in labels:
+                continue
+        elif category == ANY_ARTIFACT:
             if categories and a.label not in categories:
                 continue
         elif a.label != category:
@@ -183,9 +187,9 @@ def _summary(values: list[float]) -> dict[str, float]:
 
 def event_agreement(dataset: AgreementDataset, config: AnalysisConfig) -> dict[str, list[dict[str, Any]]]:
     """Matching results: summary rows, matched pairs and unmatched events."""
-    cats = list(config.categories) if config.categories else list(dataset.catalogue.label_names)
-    if config.include_any_artifact:
-        cats.append(ANY_ARTIFACT)
+    cats = categories_for(dataset, config)
+    members = {cat: category_label_set(cat, dataset.catalogue, config) for cat in cats}
+    exact = set(dataset.catalogue.label_names)  # single-label categories, which make up the micro-average
     summary: list[dict[str, Any]] = []
     matched_rows: list[dict[str, Any]] = []
     unmatched_rows: list[dict[str, Any]] = []
@@ -202,7 +206,7 @@ def event_agreement(dataset: AgreementDataset, config: AnalysisConfig) -> dict[s
                     sf = group.timing.sfreq
                     evs = {
                         r: events_for(group.docs[r], cat, group.ch_names, require_channels=require_channels,
-                                      categories=config.categories)
+                                      categories=config.categories, labels=members[cat])
                         for r in raters
                     }
                     for a, b in _pairs(raters, config.reference_annotator):
@@ -210,7 +214,7 @@ def event_agreement(dataset: AgreementDataset, config: AnalysisConfig) -> dict[s
                             evs[a], evs[b], sfreq=sf, criterion=config.match_criterion, iou_threshold=thr,
                             onset_tolerance_s=config.onset_tolerance_s, offset_tolerance_s=config.offset_tolerance_s,
                             require_channels=require_channels, min_channel_jaccard=config.min_channel_jaccard,
-                            many_to_one=config.allow_many_to_one, prefer_same_label=cat == ANY_ARTIFACT,
+                            many_to_one=config.allow_many_to_one, prefer_same_label=cat not in exact,
                         )
                         acc = pooled.setdefault((a, b), {"n_ref": 0, "n_test": 0, "matched_ref": 0, "matched_test": 0,
                                                           "iou": [], "d_on": [], "d_off": [], "d_dur": [], "jac": []})
@@ -255,7 +259,7 @@ def event_agreement(dataset: AgreementDataset, config: AnalysisConfig) -> dict[s
                                 })
                 for (a, b), acc in sorted(pooled.items()):
                     summary.append(_summary_row(cat, mode, thr, config, a, b, acc))
-                    if cat != ANY_ARTIFACT:
+                    if cat in exact:
                         mi = micro.setdefault((a, b), {"n_ref": 0, "n_test": 0, "matched_ref": 0, "matched_test": 0,
                                                        "iou": [], "d_on": [], "d_off": [], "d_dur": [], "jac": []})
                         for k in ("n_ref", "n_test", "matched_ref", "matched_test"):

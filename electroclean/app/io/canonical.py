@@ -41,9 +41,12 @@ ANNOTATION_FILE_FIELDS = {
 
 def catalogue_from_metadata(meta: dict[str, Any]) -> LabelCatalogue:
     """Rebuild a catalogue from the copy embedded in an annotation file."""
-    current = default_catalogue()
-    colours = {item.label: item.colour for item in current.labels}
-    codes = {item.label: item.short_code for item in current.labels}
+    current = {item.label: item for item in default_catalogue().labels}
+
+    def attr(label: str, name: str, default: Any) -> Any:
+        item = current.get(label)
+        return getattr(item, name) if item is not None else default
+
     return LabelCatalogue.from_dict(
         {
             "catalogue_id": meta["catalogue_id"],
@@ -55,8 +58,13 @@ def catalogue_from_metadata(meta: dict[str, Any]) -> LabelCatalogue:
                 {
                     "value": e["value"],
                     "label": e["label"],
-                    "colour": colours.get(e["label"], "#808080"),
-                    "short_code": codes.get(e["label"], ""),
+                    "colour": attr(e["label"], "colour", "#808080"),
+                    "short_code": attr(e["label"], "short_code", ""),
+                    # Files from catalogue 1.0.0 have no hierarchy; the current catalogue supplies it.
+                    "kind": e.get("kind", attr(e["label"], "kind", "specific")),
+                    "parent": e.get("parent", attr(e["label"], "parent", None)),
+                    "section": attr(e["label"], "section", ""),
+                    "description": attr(e["label"], "description", ""),
                 }
                 for e in meta["labels"]
             ],

@@ -230,7 +230,17 @@ def build_html_report(result: Any) -> str:
     ev = tables.get("events_summary", pd.DataFrame())
     matched = tables.get("events_matched", pd.DataFrame())
     present = _present_categories(result)
-    show_cats = present + ([ANY_ARTIFACT] if cfg.include_any_artifact else [])
+    # Group roll-ups are shown when they combine at least two labels that were used.
+    from electroclean.reliability.config import is_rollup
+    from electroclean.reliability.timeresolved import categories_for, category_label_set
+
+    used = set(present)
+    show_cats = [
+        c for c in categories_for(result.dataset, cfg)
+        if c in used
+        or (is_rollup(c) and len(category_label_set(c, result.dataset.catalogue, cfg) & used) >= 2)
+        or c == ANY_ARTIFACT
+    ]
     parts: list[str] = []
     add = parts.append
     add("<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'>")
@@ -291,7 +301,7 @@ def build_html_report(result: Any) -> str:
         add(f"<h3>{mode.replace('_', ' ').capitalize()} (exact, {unit})</h3>")
         add("<p class='muted'>Means over annotator pairs of pooled 2&times;2 tables; Fleiss' kappa and "
             "Krippendorff's alpha use all annotators (samples as units).</p>")
-        img = fig_category_agreement(summ[summ.category.isin(present + [ANY_ARTIFACT])])
+        img = fig_category_agreement(summ[summ.category.isin(show_cats)])
         if img:
             add(_img(img, f"Agreement by category, {mode.replace('_', ' ')}"))
         add(_table(summ))

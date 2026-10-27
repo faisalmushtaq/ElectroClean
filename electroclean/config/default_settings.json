@@ -13,7 +13,7 @@
     "highpass_enabled": true,
     "highpass_hz": 1.0,
     "notch_enabled": true,
-    "notch_hz": 60.0,
+    "notch_hz": 50.0,
     "notch_harmonics": false,
     "method": "fir",
     "iir_order": 4,
@@ -31,9 +31,6 @@
     "hash_source_files": true,
     "apply_channel_types_from_bids": true,
     "show_bids_bad_channels": true
-  },
-  "events": {
-    "collision_policy": "require_explicit_policy"
   },
   "selection": {
     "strategy": "random",
