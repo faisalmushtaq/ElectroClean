@@ -18,6 +18,12 @@ Overlapping annotations of the same category by one annotator are combined
 (union) for these analyses: the question is *whether* an annotator considered
 that time affected by that artifact type. Whole-montage annotations cover
 every channel of the recording in time-and-channel mode.
+
+In time-and-channel mode most channels of a recording carry the same
+intervals for every annotator (the whole-montage annotations only, or none at
+all), so the contribution of each distinct combination of intervals is
+computed once and added for every channel that has it, in channel order; the
+results are identical to computing every channel separately.
 """
 
 from __future__ import annotations
@@ -74,15 +80,49 @@ def category_intervals(
     covers; without it, ANY-artifact pools the ``categories`` being analysed
     (``None`` = all) and any other category is a single label.
     """
-    if labels is not None:
-        anns = [a for a in doc.annotations if a.label in labels]
-    elif category == ANY_ARTIFACT:
-        anns = [a for a in doc.annotations if not categories or a.label in categories]
-    else:
-        anns = [a for a in doc.annotations if a.label == category]
+    anns = _category_annotations(doc, category, categories, labels)
     if channel is not None:
         anns = [a for a in anns if a.is_global or channel in a.channels]
     return union((a.onset_sample, a.end_sample) for a in anns)
+
+
+def _category_annotations(
+    doc: AnnotationDocument, category: str, categories: tuple[str, ...] | None, labels: frozenset[str] | set[str] | None,
+) -> list[Any]:
+    if labels is not None:
+        return [a for a in doc.annotations if a.label in labels]
+    if category == ANY_ARTIFACT:
+        return [a for a in doc.annotations if not categories or a.label in categories]
+    return [a for a in doc.annotations if a.label == category]
+
+
+def _intervals_by_unit(
+    doc: AnnotationDocument, category: str, units: list[str | None], categories: tuple[str, ...] | None,
+    labels: frozenset[str] | None,
+) -> list[tuple[Interval, ...]]:
+    """:func:`category_intervals` for every unit (``None`` = time only, or a channel), in one pass.
+
+    Channels with no channel-specific annotation share one tuple (the union of
+    the whole-montage annotations), which lets callers recognise them.
+    """
+    anns = _category_annotations(doc, category, categories, labels)
+    whole = [(a.onset_sample, a.end_sample) for a in anns if a.is_global]
+    per_channel: dict[str, list[Interval]] = {}
+    for a in anns:
+        if not a.is_global:
+            for ch in set(a.channels):
+                per_channel.setdefault(ch, []).append((a.onset_sample, a.end_sample))
+    everything = tuple(union((a.onset_sample, a.end_sample) for a in anns))
+    shared = tuple(union(whole))
+    out: list[tuple[Interval, ...]] = []
+    for unit in units:
+        if unit is None:
+            out.append(everything)
+        elif unit in per_channel:
+            out.append(tuple(union(whole + per_channel[unit])))
+        else:
+            out.append(shared)
+    return out
 
 
 def coverage_count_histogram(interval_lists: list[list[Interval]], n_samples: int) -> dict[int, int]:
@@ -135,43 +175,75 @@ def recording_tables(
     pair_tables: dict[tuple[str, str], PairTable] = {}
     hist: dict[tuple[int, int], float] = {}
     pairs = list(combinations(raters, 2))
-    for unit in _units(group, mode):
-        ints = {r: category_intervals(group.docs[r], category, unit, config.categories, labels) for r in raters}
-        if representation == "exact":
-            n = timing.n_samples
-            scale = 1.0 / timing.sfreq
-            lengths = {r: total_length(v) for r, v in ints.items()}
-            for a, b in pairs:
-                both = intersection_length(ints[a], ints[b])
-                t = PairTable(
-                    both * scale,
-                    (lengths[a] - both) * scale,
-                    (lengths[b] - both) * scale,
-                    (n - lengths[a] - lengths[b] + both) * scale,
-                )
-                pair_tables[(a, b)] = pair_tables.get((a, b), PairTable(0, 0, 0, 0)) + t
-            # Multi-rater statistics use samples as units: Krippendorff's alpha has a
-            # small-sample term (n - 1) and must not depend on the unit of time.
-            for k, samples in coverage_count_histogram(list(ints.values()), n).items():
-                hist[(m, k)] = hist.get((m, k), 0.0) + float(samples)
-        else:
-            res = resolution_of(representation)
-            vec = {
-                r: binarise(coverage_per_bin(v, timing.sfreq, res, timing.duration_s), config.min_bin_coverage)
-                for r, v in ints.items()
-            }
-            for a, b in pairs:
-                va, vb = vec[a], vec[b]
-                t = PairTable(
-                    float(np.sum(va & vb)), float(np.sum(va & ~vb)), float(np.sum(~va & vb)), float(np.sum(~va & ~vb))
-                )
-                pair_tables[(a, b)] = pair_tables.get((a, b), PairTable(0, 0, 0, 0)) + t
-            if raters:
-                counts = np.sum(np.vstack([vec[r] for r in raters]), axis=0)
-                for k, w in enumerate(np.bincount(counts, minlength=m + 1)):
-                    if w:
-                        hist[(m, k)] = hist.get((m, k), 0.0) + float(w)
+    units = _units(group, mode)
+    per_rater = {r: _intervals_by_unit(group.docs[r], category, units, config.categories, labels) for r in raters}
+    # One contribution per distinct combination of the raters' intervals (most channels share one:
+    # unmarked, or marked only by whole-montage annotations), added for each unit in unit order so
+    # that the sums are exactly those of a channel-by-channel computation.
+    contributions: dict[tuple[tuple[Interval, ...], ...], _Contribution] = {}
+    vectors: dict[tuple[Interval, ...], np.ndarray] = {}
+    for i in range(len(units)):
+        key = tuple(per_rater[r][i] for r in raters)
+        part = contributions.get(key)
+        if part is None:
+            ints = dict(zip(raters, key))
+            if representation == "exact":
+                part = _exact_contribution(ints, pairs, m, timing.n_samples, timing.sfreq)
+            else:
+                part = _binned_contribution(ints, raters, pairs, m, timing, resolution_of(representation),
+                                            config.min_bin_coverage, vectors)
+            contributions[key] = part
+        for pair, t in part[0]:
+            pair_tables[pair] = pair_tables.get(pair, PairTable(0, 0, 0, 0)) + t
+        for k, w in part[1]:
+            hist[k] = hist.get(k, 0.0) + w
     return pair_tables, hist, 1.0
+
+
+# Pair tables and multi-rater histogram entries that one unit adds, in the order they are added.
+_Contribution = tuple[list[tuple[tuple[str, str], PairTable]], list[tuple[tuple[int, int], float]]]
+
+
+def _exact_contribution(
+    ints: dict[str, tuple[Interval, ...]], pairs: list[tuple[str, str]], m: int, n: int, sfreq: float,
+) -> _Contribution:
+    scale = 1.0 / sfreq
+    lengths = {r: total_length(v) for r, v in ints.items()}
+    tables = []
+    for a, b in pairs:
+        both = intersection_length(list(ints[a]), list(ints[b]))
+        tables.append(((a, b), PairTable(
+            both * scale,
+            (lengths[a] - both) * scale,
+            (lengths[b] - both) * scale,
+            (n - lengths[a] - lengths[b] + both) * scale,
+        )))
+    # Multi-rater statistics use samples as units: Krippendorff's alpha has a
+    # small-sample term (n - 1) and must not depend on the unit of time.
+    histogram = coverage_count_histogram([list(v) for v in ints.values()], n)
+    return tables, [((m, k), float(samples)) for k, samples in histogram.items()]
+
+
+def _binned_contribution(
+    ints: dict[str, tuple[Interval, ...]], raters: list[str], pairs: list[tuple[str, str]], m: int, timing: Any,
+    res: float, min_coverage: float, vectors: dict[tuple[Interval, ...], np.ndarray],
+) -> _Contribution:
+    vec: dict[str, np.ndarray] = {}
+    for r, v in ints.items():
+        if v not in vectors:  # the same intervals give the same bins, whoever drew them
+            vectors[v] = binarise(coverage_per_bin(list(v), timing.sfreq, res, timing.duration_s), min_coverage)
+        vec[r] = vectors[v]
+    tables = []
+    for a, b in pairs:
+        va, vb = vec[a], vec[b]
+        tables.append(((a, b), PairTable(
+            float(np.sum(va & vb)), float(np.sum(va & ~vb)), float(np.sum(~va & vb)), float(np.sum(~va & ~vb))
+        )))
+    counts: list[tuple[tuple[int, int], float]] = []
+    if raters:
+        per_bin = np.sum(np.vstack([vec[r] for r in raters]), axis=0)
+        counts = [((m, k), float(w)) for k, w in enumerate(np.bincount(per_bin, minlength=m + 1)) if w]
+    return tables, counts
 
 
 def representation_name(resolution_s: float) -> str:
