@@ -176,6 +176,22 @@ _pgf.RawViewBox = ElectroCleanViewBox
 _pgf.DataTrace = ElectroCleanDataTrace
 
 
+class ElectroCleanScaleBarText(_pgf.ScaleBarText):
+    """The scale bar's value ("100.0 µV") on a light background, so it stays legible where it
+    lies on the first traces of a page."""
+
+    def __init__(self, mne_params: Any, ch_type: str) -> None:
+        super().__init__(mne_params, ch_type)
+        from electroclean.app.gui.style import COLOURS
+
+        fill = QColor(COLOURS["surface"])
+        fill.setAlpha(215)
+        self.fill = pg.mkBrush(fill)
+
+
+_pgf.ScaleBarText = ElectroCleanScaleBarText
+
+
 class ArtifactRegion(AnnotRegion):
     """Shaded interval for one ElectroClean annotation (identified by id)."""
 
@@ -209,12 +225,56 @@ class ArtifactRegion(AnnotRegion):
         metrics = QFontMetrics(self.label_item.textItem.font())
         box = self.label_item.boundingRect()  # includes the text item's own padding
         width = max(metrics.horizontalAdvance(self.label_item.textItem.toPlainText()) + 12, box.width() + 4)
-        return float(width), float(max(metrics.height() + 2, box.height() + 1))
+        # Two pixels between stacked rows, so the outlines of neighbouring labels do not touch.
+        return float(width), float(max(metrics.height() + 2, box.height() + 1) + 2)
+
+    def _style_label(self) -> None:
+        """Draw the label as a tag: a light, slightly transparent background with an outline in the
+        artifact's colour, above the traces. Without it the label text and the EEG cross each other
+        (worst with many channels, where the first rows of labels lie on top of the first traces)."""
+        from electroclean.app.gui.style import COLOURS
+
+        def contrast_with_white(c: QColor) -> float:
+            def lin(v: float) -> float:
+                return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+
+            lum = 0.2126 * lin(c.redF()) + 0.7152 * lin(c.greenF()) + 0.0722 * lin(c.blueF())
+            return 1.05 / (lum + 0.05)
+
+        item = self.label_item
+        base = QColor(getattr(self, "text_color", None) or QColor(COLOURS["text_secondary"]))
+        fill = QColor(COLOURS["surface"])
+        fill.setAlpha(215)
+        outline = QColor(base)
+        outline.setAlpha(160)
+        if item.fill.color() != fill or item.border.color() != outline:
+            item.fill = pg.mkBrush(fill)
+            item.border = pg.mkPen(outline, width=1)
+            item.update()
+        # Light colours (yellow, pale blue) are darkened until the text is readable on the tag
+        # (WCAG AA, 4.5:1); the outline keeps the artifact's own colour.
+        text = QColor(base)
+        text.setAlpha(255)
+        for _ in range(20):
+            if contrast_with_white(text) >= 4.5:
+                break
+            text = text.darker(112)
+        if QColor(item.color) != text:
+            item.setColor(text)
+        if item.zValue() < 6:
+            item.setZValue(6)  # above traces (1), scale bars (2) and regions (up to 3)
+
+    def update_color(self, all_channels: bool = True) -> None:
+        # MNE resets the label's colour here (for example when the type changes); restyle it.
+        super().update_color(all_channels=all_channels)
+        if getattr(self, "label_item", None) is not None:
+            self._style_label()
 
     def update_label_pos(self) -> None:
         # Labels sit at the top of the plot (event labels are at the bottom),
         # staggered in rows so that neighbouring labels do not overlap. Rows are spaced by the
         # height of the text in pixels, converted to the plot's channel units.
+        self._style_label()
         rgn = self.getRegion()
         vb = self.mne.viewbox
         if vb:

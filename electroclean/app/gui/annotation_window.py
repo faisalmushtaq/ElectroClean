@@ -472,7 +472,13 @@ class AnnotationWorkspace(QObject):
             label_item = QTableWidgetItem(colour_icon(lab.colour), prefix.get(a.annotation_id, "") + a.label)
             label_item.setData(Qt.UserRole, a.annotation_id)
             label_item.setToolTip(f"{a.label}\n{self._hed.get(a.label, '')}".strip())
-            chans = "Whole montage" if a.is_global else ", ".join(a.channels)
+            # The count comes first, so annotations on 40 and on 64 channels can be told apart even
+            # when the list is cut short; the tooltip has the full list.
+            all_chans = "Whole montage" if a.is_global else ", ".join(a.channels)
+            if a.is_global or len(a.channels) == 1:
+                chans = all_chans
+            else:
+                chans = f"{len(a.channels)} ch: {all_chans}"
             values = [
                 label_item,
                 QTableWidgetItem(str(lab.value)),
@@ -482,7 +488,7 @@ class AnnotationWorkspace(QObject):
             ]
             for item in values[1:4]:
                 item.setToolTip(f"{a.onset(timing):.3f} to {a.offset(timing):.3f} s, duration {a.duration(timing):.3f} s")
-            values[4].setToolTip(chans)
+            values[4].setToolTip(all_chans)
             for c, item in enumerate(values):
                 self.table.setItem(r, c, item)
         self.table.clearSelection()
@@ -785,5 +791,16 @@ class AnnotationWorkspace(QObject):
         return True
 
     def close(self) -> None:
-        """Programmatic close (asks for confirmation unless already saved)."""
+        """Programmatic close (asks for confirmation unless already saved).
+
+        Does nothing once the window has closed, for example after Save and Finish: MNE's browser
+        deletes itself when it closes, and closing a deleted window would crash the application."""
+        try:
+            import shiboken6
+
+            alive = shiboken6.isValid(self.browser)
+        except ImportError:  # pragma: no cover - PySide6 is the supported binding
+            alive = True
+        if self._finished or getattr(self.browser, "_closed", False) or not alive:
+            return
         self.browser.close()
