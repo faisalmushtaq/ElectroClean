@@ -27,6 +27,30 @@ selected, and a click, the N and P keys or a double-click selects them. A
 right-click lists the common types first. The keys are shown at the bottom
 of the window and in Help.
 
+A training programme takes new annotators from first steps to the competency
+assessment, one stage at a time, on a training path that shows their stars,
+scores and time. In *Learn with the experts* they mark each of the experts'
+annotations in turn and cannot move on until theirs matches: the same type,
+start and end within 0.2 s (or a fifth of the artifact's length), and the same
+channels. The help fades from one recording to the next (the experts'
+annotation outlined, then the type named, then only "find the next
+artifact"), feedback says exactly what differs, and *Show me* demonstrates the
+answer. In *On your own* they annotate a recording by themselves and see their
+score, with what they missed, marked extra or typed differently flagged on the
+EEG; 80 % unlocks the assessment. An example training set of three simulated
+recordings stands in until real expert-annotated recordings are imported,
+and training recordings live with their reference set, so they are never
+offered for study annotation.
+
+ElectroClean can record how annotators work, as research data: every click
+and key, what was on screen, every change to the annotations, the dialogs, idle
+periods and the training steps, time-stamped in one log per visit (text typed
+into fields and passwords are never recorded, and the start window says when
+recording is on). *Activity and learning curves* in the administrator tools,
+or `electroclean-activity`, turns the logs into tables for R or Python and a
+report showing, for example, whether annotators got faster from one recording
+to the next.
+
 A test with two openly available 128-channel recordings led to further
 changes. Annotation labels sit on small tags above the traces, the channel
 chooser finds channels by name, ticks whole regions or banks with one click

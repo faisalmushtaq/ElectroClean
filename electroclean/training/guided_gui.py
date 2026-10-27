@@ -718,6 +718,10 @@ def add_review_flags(ctrl: Any, ws: Any, flags: list[dict[str, Any]]) -> None:
         v.addWidget(style.label("Click an item, or press N and P, to go to it.", "caption"))
         lst = QListWidget()
         lst.setMaximumHeight(150)
+        # Long items wrap rather than run off the side of the panel.
+        lst.setWordWrap(True)
+        lst.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        lst.setTextElideMode(Qt.ElideNone)
         for f in flags:
             item = QListWidgetItem(_flag_text(f))
             item.setData(Qt.UserRole, f["region"])
