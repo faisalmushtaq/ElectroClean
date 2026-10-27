@@ -297,10 +297,23 @@ class AnnotationWorkspace(QObject):
             self.save_action.setVisible(False)
 
     def _fit_toolbar(self) -> None:
-        """Show the type buttons' abbreviations when the row has room, otherwise only their keys.
+        """Keep every control on screen whatever the window width and fonts.
 
-        On a laptop screen the full row would push the channel controls into the toolbar's overflow
-        menu; the buttons keep their colour, number and tooltip, and the menu shows the type's name."""
+        The editing actions and Save and Finish share the first row with MNE's icons; when the two
+        do not fit side by side, the actions move to a row of their own, so Save and Finish never
+        ends up in an overflow menu. The type buttons show their abbreviations when the row has room,
+        otherwise only their keys (they keep their colour, number and tooltip, and the menu shows
+        the type's name)."""
+        b = self.browser
+        acts = getattr(self, "actions_toolbar", None)
+        mne_bar = getattr(b.mne, "toolbar", None)
+        if acts is not None and mne_bar is not None:
+            needed = mne_bar.sizeHint().width() + acts.sizeHint().width() + 16
+            own_row = b.toolBarBreak(acts)
+            if needed > b.width() and not own_row:
+                b.insertToolBarBreak(acts)
+            elif needed <= b.width() and own_row:
+                b.removeToolBarBreak(acts)
         if not getattr(self, "quick_buttons", None):
             return
         for btn in self.quick_buttons:

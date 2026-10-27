@@ -320,3 +320,22 @@ def test_end_of_practice_names_the_set_and_the_next_step(qapp, dataset):
     text = next(t for k, title, t in prompts.log if title == "Practice complete")
     assert "Pilot set" in text and "Competency assessment" in text
     assert ctrl.start_window.isVisible()
+
+
+def test_save_and_finish_stays_visible_however_narrow_the_window(qapp, layout, settings, catalogue, loaded):
+    # The actions move to a row of their own when they do not fit next to MNE's icons (on the
+    # Windows test machines text is drawn about twice as wide, so this happens at laptop sizes).
+    session, ws = open_workspace(layout, settings, catalogue, loaded)
+    try:
+        for width in (1600, 1000, 820, 1600):  # the first row needs about 1080 px on Linux
+            ws.browser.resize(width, 700)
+            wait(150)
+            info = _toolbar_report(ws)
+            assert ws.save_btn.isVisible(), info
+            right = ws.save_btn.mapTo(ws.browser, QPoint(0, 0)).x() + ws.save_btn.width()
+            assert right <= ws.browser.width(), info
+            own_row = ws.browser.toolBarBreak(ws.actions_toolbar)
+            needed = ws.browser.mne.toolbar.sizeHint().width() + ws.actions_toolbar.sizeHint().width() + 16
+            assert own_row == (needed > width), info  # side by side again when there is room
+    finally:
+        close(ws)
