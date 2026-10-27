@@ -52,7 +52,7 @@ On Linux nothing needs to be allowed, although the files must keep their permiss
 
 ## Checking an installation
 
-The application has a self-test that needs no data and no display. It creates a small synthetic recording in a temporary folder, loads and filters it, opens the annotation window invisibly, has two pretend annotators each mark and save an artifact through the window's own controls, runs the agreement analysis on what they saved, and then removes the temporary files. It reports each step and ends with "ElectroClean self-test passed" (exit code 0) or with the error that stopped it (exit code 1). It is useful after installing on a new computer, or when someone reports that something does not work.
+The application has a self-test that needs no data and no display. It creates a small synthetic recording in a temporary folder, loads and filters it, opens the annotation window invisibly, has two pretend annotators each mark and save an artifact through the window's own controls, runs the agreement analysis on what they saved, reads an EDF+ recording, and then removes the temporary files. It reports each step and ends with "ElectroClean self-test passed" (exit code 0) or with the error that stopped it (exit code 1). It is useful after installing on a new computer, or when someone reports that something does not work.
 
 On macOS and Linux, run it from a terminal, for example `ElectroClean.app/Contents/MacOS/ElectroClean --self-test`. On Windows the desktop application has no console window, so give it a file for the report and wait for it to finish:
 
@@ -65,7 +65,7 @@ The same check works from a normal Python installation with `python -m electrocl
 
 ## Size
 
-The Linux build is about 385 MB when unpacked and 185 MB as a zip file. The Windows and macOS builds are of a similar size; the exact figures are printed at the end of each build. Most of the space is taken by Qt (about 100 MB), SciPy, NumPy and their numerical libraries (about 115 MB), pandas, matplotlib and MNE. Each of the three programs also carries its own copy of the compiled Python code, about 24 MB each.
+The Linux build is about 385 MB when unpacked and about 210 MB as a zip file (Windows 176 MB, macOS 138 MB); the exact figures are printed at the end of each build. Most of the space is taken by Qt (about 100 MB), SciPy, NumPy and their numerical libraries (about 115 MB), pandas, matplotlib and MNE. Each of the three programs also carries its own copy of the compiled Python code, about 24 MB each.
 
 ## Supported systems
 

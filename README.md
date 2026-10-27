@@ -43,7 +43,7 @@ main (see `.github/workflows/build-apps.yml`).
 
 **With the launchers (no Python knowledge needed)**
 
-1. Install Python 3.12 or newer from [python.org](https://www.python.org/downloads/).
+1. Install Python 3.12 or 3.13 from [python.org](https://www.python.org/downloads/).
    On Windows, tick *Add python.exe to PATH*.
 2. Download or copy this folder to the computer.
 3. Double-click the launcher for your system in the `launchers` folder:
@@ -51,8 +51,10 @@ main (see `.github/workflows/build-apps.yml`).
    right-click it and choose *Open*) or run `launchers/electroclean.sh` (Linux).
 
 The first start creates a private environment in the `.venv` folder and
-installs the exact library versions listed in `requirements.txt`. This needs
-an internet connection once; afterwards ElectroClean works offline.
+installs the exact library versions listed in `requirements.txt`. When
+`requirements.txt` changes, or an installation was interrupted, the launcher
+installs them again at the next start. This needs an internet connection;
+afterwards ElectroClean works offline.
 
 **Offline installation.** On a computer with internet access and the same
 operating system and Python version, run
@@ -67,7 +69,7 @@ python -m venv .venv
 source .venv/bin/activate            # Windows: .venv\Scripts\activate
 python -m pip install -r requirements-dev.txt
 python -m pip install --no-deps -e .
-python -m pytest                     # about 215 tests, under a minute
+python -m pytest                     # about 250 tests, under two minutes
 electroclean                         # start the application
 ```
 
@@ -140,10 +142,12 @@ onset  duration  trial_type          value  sample  channels              artifa
 ## Agreement analysis
 
 ```bash
-electroclean-agreement path/to/Annotated_Events --out agreement_results
+electroclean-agreement path/to/Annotated_Events
 ```
 
-This produces `agreement_report.html` and tab-separated tables. Agreement is
+This produces `agreement_report.html` and tab-separated tables, in a new
+folder `agreement_<date-time>` (choose another with `--out`). The report opens
+with the key results for each pair of annotators. Agreement is
 reported by artifact category, by annotator pair and over time at several
 resolutions, for time alone and for time and channel together, and with
 event matching (precision, recall, F1, boundary differences). The

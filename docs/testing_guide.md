@@ -5,7 +5,7 @@
 ```bash
 python -m pip install -r requirements-dev.txt
 python -m pip install --no-deps -e .
-python -m pytest                 # everything (about 215 tests, under a minute)
+python -m pytest                 # everything (about 250 tests, under two minutes)
 python -m pytest -m "not gui"    # without Qt
 python -m pytest -m gui          # only the GUI tests
 ```
@@ -90,6 +90,13 @@ EDF recordings are opened in the real application in
 BrainVision and EDF, housekeeping channels hidden, a channel-specific
 annotation saved), and the saved files are checked in
 `test_edf.py::test_session_saves_and_validates_edf_outputs`.
+
+The problems found in a usability walk-through each have a regression test:
+the annotator's journey in `test_usability.py` (for example Save and Finish
+visible at laptop sizes, labels that do not overlap, messages that name the
+recording and the reason), the agreement and command-line tools in
+`test_reliability_usability.py` and `test_cli_usability.py`, and the shell
+launcher's set-up, update and repair, tested offline, in `test_launchers.py`.
 
 Autosave is tested in `test_autosave.py` (when it writes, restoring with the
 time carried over, discarding, recordings that changed) and through the whole
