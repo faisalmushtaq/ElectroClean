@@ -92,7 +92,7 @@ def review_store(loaded: LoadedRecording, mine: list[ArtifactAnnotation], refere
             aid = f"{tag.lower()}-{a.annotation_id}"
             items.append(a.with_changes(annotation_id=aid))
             prefix[aid] = f"{tag}: "
-    return AnnotationStore(loaded.info, catalogue, initial=items), prefix
+    return AnnotationStore(loaded.info, catalogue, initial=items, auto_merge=False), prefix  # YOU and REF may overlap
 
 
 def show_practice_feedback(ctrl: AppController, session: AnnotationSession, loaded: LoadedRecording) -> None:

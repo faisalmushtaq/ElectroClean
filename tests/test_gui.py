@@ -99,10 +99,25 @@ def test_draw_edit_and_save(qapp, layout, settings, catalogue, loaded):
     drag(ws, 3.2, 4.0)
     emg = next(a for a in store.annotations() if a.label == "EMG-artifact")
     assert emg.channels == ("F7", "T7")
-    # 3. Same label again, overlapping: kept separate.
+    # 3. Same label again, overlapping on the same channels: merged automatically (one undo step).
     drag(ws, 3.6, 4.4)
+    wait()
+    emgs = [a for a in store.annotations() if a.label == "EMG-artifact"]
+    assert len(emgs) == 1 and emgs[0].annotation_id == emg.annotation_id
+    assert emgs[0].offset(loaded.timing) == pytest.approx(4.4, abs=0.05)  # drag precision is one pixel
+    assert len(ctrl.regions) == 2 == len(ws.browser.mne.regions)
+    ws.undo_action.trigger()  # undoes the drag, including the merge
+    wait()
+    (back,) = [a for a in store.annotations() if a.label == "EMG-artifact"]
+    assert back.offset(loaded.timing) == pytest.approx(4.0, abs=0.05)
+    ws.redo_action.trigger()
+    wait()
+    (again,) = [a for a in store.annotations() if a.label == "EMG-artifact"]
+    assert again.offset(loaded.timing) == pytest.approx(4.4, abs=0.05)
+    # A separate (non-overlapping) EMG on the same channels stays separate.
+    drag(ws, 6.0, 6.5)
+    wait()
     assert sum(a.label == "EMG-artifact" for a in store.annotations()) == 2
-    assert len(ctrl.regions) == 3 == len(ws.browser.mne.regions)
     # 4. Table: select both EMG rows and merge them explicitly.
     ws.table.clearSelection()
     sm = ws.table.selectionModel()

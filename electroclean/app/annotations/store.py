@@ -5,6 +5,14 @@ The GUI only displays what the store contains and routes every user action
 (create, move, resize, relabel, change channels, delete, merge, undo, redo)
 through the methods below, so that validation and history are identical
 whether annotations are edited interactively or from a script.
+
+**Automatic merging** (the research team's choice). When an annotation is
+created or changed so that it overlaps in time another annotation of the same
+type with the same channel scope (both whole montage, or exactly the same
+channels), the two become one annotation spanning both. The older annotation
+keeps its identifier. The merge is part of the same undo step as the change
+that caused it. Annotations of the same type that only touch, or that cover
+different channels, stay separate.
 """
 
 from __future__ import annotations
@@ -46,10 +54,16 @@ class AnnotationStore:
         min_duration_samples: int = 1,
         max_history: int = 2000,
         initial: Iterable[ArtifactAnnotation] = (),
+        auto_merge: bool = True,
     ) -> None:
         self.recording = recording
         self.catalogue = catalogue
         self.min_duration_samples = int(min_duration_samples)
+        self.auto_merge = bool(auto_merge)
+        #: How many annotations the last change absorbed by automatic merging.
+        self.last_auto_merged = 0
+        #: Surviving identifier for each annotation identifier passed to the last change.
+        self.last_survivors: dict[str, str] = {}
         self.max_history = int(max_history)
         self._items: dict[str, ArtifactAnnotation] = {}
         self._undo: list[tuple[str, Snapshot]] = []
@@ -122,6 +136,40 @@ class AnnotationStore:
     def redo_description(self) -> str:
         return self._redo[-1][0] if self._redo else ""
 
+    @staticmethod
+    def _mergeable(a: ArtifactAnnotation, b: ArtifactAnnotation) -> bool:
+        return (
+            a.label == b.label
+            and a.channels == b.channels
+            and a.onset_sample < b.end_sample
+            and b.onset_sample < a.end_sample
+        )
+
+    def _absorb(self, items: dict[str, ArtifactAnnotation], annotation_id: str) -> tuple[str, int]:
+        """Merge everything overlapping ``items[annotation_id]`` (same type and channels) into one.
+
+        Returns the surviving identifier and the number of annotations absorbed.
+        """
+        current = items[annotation_id]
+        absorbed = 0
+        while True:
+            partners = [a for k, a in items.items() if k != current.annotation_id and self._mergeable(current, a)]
+            if not partners:
+                return current.annotation_id, absorbed
+            group = [current, *partners]
+            order = {k: i for i, k in enumerate(items)}  # insertion order: the oldest comes first
+            survivor = min(group, key=lambda a: order[a.annotation_id])
+            start = min(a.onset_sample for a in group)
+            stop = max(a.end_sample for a in group)
+            current = self._check(
+                survivor.with_changes(onset_sample=start, duration_samples=stop - start, modified_at=now_local_iso())
+            )
+            gone = {a.annotation_id for a in group} - {survivor.annotation_id}
+            kept = {k: (current if k == survivor.annotation_id else v) for k, v in items.items() if k not in gone}
+            items.clear()
+            items.update(kept)
+            absorbed += len(partners)
+
     def _commit(
         self,
         action: str,
@@ -129,6 +177,22 @@ class AnnotationStore:
         new_items: dict[str, ArtifactAnnotation],
         ids: tuple[str, ...],
     ) -> None:
+        self.last_auto_merged = 0
+        self.last_survivors = {i: i for i in ids}
+        if self.auto_merge and action in ("add", "update", "merge"):
+            new_items = dict(new_items)
+            for aid in ids:
+                live = self.last_survivors[aid]
+                if live not in new_items:
+                    continue
+                survivor, n = self._absorb(new_items, live)
+                self.last_auto_merged += n
+                for k, v in self.last_survivors.items():
+                    if v not in new_items:  # absorbed just now
+                        self.last_survivors[k] = survivor
+            if self.last_auto_merged:
+                description += f" (merged with {self.last_auto_merged} overlapping annotation(s) of the same type)"
+                ids = tuple(dict.fromkeys(self.last_survivors.values()))
         self._undo.append((description, self.snapshot()))
         if len(self._undo) > self.max_history:
             del self._undo[0]
@@ -189,7 +253,7 @@ class AnnotationStore:
         items = dict(self._items)
         items[ann.annotation_id] = ann
         self._commit("add", f"add {label}", items, (ann.annotation_id,))
-        return ann
+        return self._items[self.last_survivors[ann.annotation_id]]
 
     def add_interval(
         self,
@@ -234,7 +298,7 @@ class AnnotationStore:
         items[annotation_id] = updated
         what = description or "edit " + ", ".join(sorted(changes))
         self._commit("update", what, items, (annotation_id,))
-        return updated
+        return self._items[self.last_survivors[annotation_id]]
 
     def set_interval(self, annotation_id: str, t_start: float, t_stop: float) -> ArtifactAnnotation:
         try:
@@ -326,7 +390,7 @@ class AnnotationStore:
         items = {k: v for k, v in self._items.items() if k not in ids}
         items[merged.annotation_id] = merged
         self._commit("merge", f"merge {len(ids)} {merged.label} annotations", items, (merged.annotation_id,))
-        return merged
+        return self._items[self.last_survivors[merged.annotation_id]]
 
     def overlapping(self, annotation_id: str) -> list[ArtifactAnnotation]:
         """Other annotations whose intervals overlap the given one."""

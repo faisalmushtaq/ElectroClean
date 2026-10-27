@@ -73,21 +73,43 @@ def test_overlapping_different_categories_are_independent(store):
     assert len(store) == 2
 
 
-def test_repeated_same_label_not_merged_unless_requested(store):
+def test_repeated_same_label_annotations(store):
+    """Repeated annotations of one type stay separate; overlapping ones on the same channels merge."""
     a = store.add_interval("EMG-artifact", 1.0, 2.0)
-    b = store.add_interval("EMG-artifact", 1.5, 3.0)  # overlaps a
-    c = store.add_interval("EMG-artifact", 1.0, 2.0)  # identical interval
+    far = store.add_interval("EMG-artifact", 5.0, 6.0)  # repeated, not overlapping: separate
+    touching = store.add_interval("EMG-artifact", 2.0, 2.5)  # touches a: separate
     assert len(store) == 3
-    assert store.get(a.annotation_id).end_sample == 500
-    merged = store.merge([a.annotation_id, b.annotation_id])
-    assert (merged.onset_sample, merged.end_sample) == (250, 750)
-    assert len(store) == 2 and c.annotation_id in store
+    b = store.add_interval("EMG-artifact", 1.5, 3.0)  # overlaps a and touching: merged into a
+    assert b.annotation_id == a.annotation_id and store.last_auto_merged == 2
+    assert (b.onset_sample, b.end_sample) == (250, 750)
+    assert len(store) == 2 and far.annotation_id in store
+    assert "merged" in store.undo_description
+    store.undo()  # one step restores all three
+    assert len(store) == 3 and store.get(a.annotation_id).end_sample == 500
+    # Same type on different channels, or a different type, never merges.
+    c3 = store.add_interval("EMG-artifact", 1.2, 1.8, ["C3"])
+    blink = store.add_interval("Eye-blink-artifact", 1.2, 1.8)
+    assert len(store) == 5 and c3.annotation_id in store and blink.annotation_id in store
+    # Moving an annotation onto others of the same type and channels merges them; the oldest survives.
+    moved = store.set_interval(far.annotation_id, 1.5, 2.2)
+    assert moved.annotation_id == a.annotation_id and (moved.onset_sample, moved.end_sample) == (250, 625)
+    assert len(store) == 3
+    # Explicit merging of separate annotations still works.
+    later = store.add_interval("EMG-artifact", 4.0, 5.0)
+    merged = store.merge([moved.annotation_id, later.annotation_id])
+    assert (merged.onset_sample, merged.end_sample) == (250, 1250) and len(store) == 3
     with pytest.raises(AnnotationError):
-        d = store.add_interval("Chewing-artifact", 5, 6)
+        d = store.add_interval("Chewing-artifact", 8, 9)
         store.merge([merged.annotation_id, d.annotation_id])
-    store.undo()  # undo the add of d (merge raised before committing)
-    store.undo()  # undo the merge
-    assert {a.annotation_id, b.annotation_id, c.annotation_id} <= {x.annotation_id for x in store}
+
+
+def test_automatic_merging_can_be_switched_off(store):
+    from electroclean.app.annotations.store import AnnotationStore
+
+    plain = AnnotationStore(store.recording, store.catalogue, auto_merge=False)
+    plain.add_interval("EMG-artifact", 1.0, 2.0)
+    plain.add_interval("EMG-artifact", 1.5, 3.0)
+    assert len(plain) == 2
 
 
 def test_invalid_labels_and_ranges_rejected(store):

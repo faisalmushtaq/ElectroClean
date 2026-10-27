@@ -535,9 +535,14 @@ class AnnotationController(QObject):
         self.sync_now()
         self.selectionChanged.emit(ann.annotation_id)
         where = "whole montage" if ann.is_global else f"{len(ann.channels)} channel(s)"
-        self._say(
-            f"Added {ann.label} {ann.onset(self.recording.timing):.3f}–{ann.offset(self.recording.timing):.3f} s ({where})"
-        )
+        span = f"{ann.onset(self.recording.timing):.3f}–{ann.offset(self.recording.timing):.3f} s"
+        if self.store.last_auto_merged:
+            self._say(
+                f"Merged with {self.store.last_auto_merged} overlapping {ann.label} annotation(s) on the same "
+                f"channels: now {span} ({where}). {UNDO_HINT}."
+            )
+        else:
+            self._say(f"Added {ann.label} {span} ({where})")
         return ann.annotation_id
 
     # --------------------------------------------------------------- editing
@@ -547,10 +552,15 @@ class AnnotationController(QObject):
             return
         t0, t1 = region.getRegion()
         try:
-            self.store.set_interval(region.annotation_id, t0, t1)
+            ann = self.store.set_interval(region.annotation_id, t0, t1)
         except AnnotationError as exc:
             self._say(f"Change not applied: {exc}")
             self.schedule_sync(force=True)
+            return
+        if self.store.last_auto_merged:
+            self.selected_id = ann.annotation_id
+            self.selectionChanged.emit(ann.annotation_id)
+            self._say(f"Merged with {self.store.last_auto_merged} overlapping {ann.label} annotation(s) ({UNDO_HINT})")
 
     def toggle_annotation_channel(self, annotation_id: str, ch_name: str) -> None:
         if not self._check_editable():
