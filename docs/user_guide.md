@@ -70,7 +70,12 @@ example the padding at the very end of many EDF files); there is nothing there
 to annotate. Some headsets store information about the recording itself
 (timestamps, sample counters, contact quality, battery) as extra channels;
 these are not shown and cannot be annotated, and the *Recording* panel says
-how many were hidden.
+how many were hidden. Trigger channels, such as the Status channel of BioSemi
+recordings, are not shown either: when a recording has no other record of its
+events, the event lines come from them. If the traces of a recording look far
+too large or too small for EEG, ElectroClean adjusts the scale so that you can
+see them and says so in the *Recording* panel; tell your administrator, as the
+file probably states the wrong unit.
 
 Moving around:
 

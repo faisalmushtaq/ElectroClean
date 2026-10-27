@@ -309,6 +309,7 @@ def write_edf(
     record_duration_s: float = 1.0,
     n_records_in_header: int | None = None,
     meas_date: datetime = datetime(2024, 1, 1, 12, 0, 0),
+    triggers: dict[str, np.ndarray] | None = None,
 ) -> Path:
     """Write ``data_v`` (channels x samples, in volts) as an EDF or BDF file.
 
@@ -317,7 +318,9 @@ def write_edf(
     data records; like MNE's own EDF export, the padding is then marked with a
     ``BAD_ACQ_SKIP`` annotation. ``n_records_in_header`` overrides the number
     of records written in the header (``-1`` means unknown), to imitate
-    broken files.
+    broken files. ``triggers`` maps names of trigger channels (for example
+    ``Status``) to integer codes per sample; as in BioSemi files, their
+    physical range equals their digital range, so the codes are stored exactly.
     """
     spr = int(round(sfreq * record_duration_s))
     if abs(spr - sfreq * record_duration_s) > 1e-9:
@@ -338,6 +341,17 @@ def write_edf(
     phys_min = -phys_max
     digital = np.round((data_uv - phys_min[:, None]) / (phys_max - phys_min)[:, None] * (dmax - dmin) + dmin)
     digital = np.clip(digital, dmin, dmax).astype(np.int64)
+    units = ["uV"] * n_ch
+    if triggers:
+        codes = np.zeros((len(triggers), n_records * spr), dtype=np.int64)
+        for i, values in enumerate(triggers.values()):
+            codes[i, :n] = np.asarray(values, dtype=np.int64)[:n]
+        digital = np.vstack([digital, np.clip(codes, dmin, dmax)])
+        phys_min = np.concatenate([phys_min, np.full(len(triggers), float(dmin))])
+        phys_max = np.concatenate([phys_max, np.full(len(triggers), float(dmax))])
+        ch_names = list(ch_names) + list(triggers)
+        units += ["Boolean"] * len(triggers)
+        n_ch += len(triggers)
 
     # One TAL block per record: the time-keeping TAL, then the annotations starting in that record.
     per_record: list[bytes] = []
@@ -364,7 +378,7 @@ def write_edf(
     header += _num(float(record_duration_s), 8) + _num(ns, 4)
     header += b"".join(_ascii(lab, 16) for lab in labels)
     header += b"".join(_ascii("", 80) for _ in labels)
-    header += b"".join(_ascii("uV", 8) for _ in ch_names) + (_ascii("", 8) if plus else b"")
+    header += b"".join(_ascii(u, 8) for u in units) + (_ascii("", 8) if plus else b"")
     header += b"".join(_num(round(float(v), 3), 8) for v in phys_min) + (_num(-1, 8) if plus else b"")
     header += b"".join(_num(round(float(v), 3), 8) for v in phys_max) + (_num(1, 8) if plus else b"")
     header += b"".join(_num(dmin, 8) for _ in labels)

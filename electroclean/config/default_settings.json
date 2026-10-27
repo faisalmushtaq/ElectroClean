@@ -37,7 +37,8 @@
       "TIME_STAMP_s", "TIME_STAMP_ms", "OR_TIME_STAMP_s", "OR_TIME_STAMP_ms", "COUNTER", "INTERPOLATED",
       "RAW_CQ", "BATTERY", "BATTERY_PERCENT", "MarkerIndex", "MarkerType", "MarkerValueInt", "MARKER_HARDWARE",
       "CQ_*", "EQ_*"
-    ]
+    ],
+    "types": {}
   },
   "selection": {
     "strategy": "random",

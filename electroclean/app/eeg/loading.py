@@ -5,8 +5,10 @@
 ``mne.io.read_raw_bdf``, validates it against its BIDS metadata, collects the
 original events, and prepares a separate viewing copy to which the chosen
 display filters are applied. Channels that the settings hide (for example a
-headset's timestamp and contact-quality channels) are left out of the viewing
-copy. Source files are only ever opened for reading.
+headset's timestamp and contact-quality channels) and trigger channels (for
+example the Status channel of BioSemi files, which is read for the original
+events instead) are left out of the viewing copy. Source files are only ever
+opened for reading.
 """
 
 from __future__ import annotations
@@ -23,13 +25,16 @@ from typing import Any
 from electroclean.app.annotations.labels import LabelCatalogue
 from electroclean.app.annotations.model import RecordingInfo
 from electroclean.app.annotations.timing import RecordingTiming
+from electroclean.app.eeg.amplitude import AmplitudeReport, check_amplitudes
 from electroclean.app.eeg.channels import ChannelReport, apply_channel_metadata, check_channels
 from electroclean.app.eeg.events import (
+    SOURCE_NONE,
     EventCodeReport,
     OriginalEvents,
     check_event_codes,
     compare_with_markers,
     events_from_raw_annotations,
+    events_from_stim_channels,
     events_from_tsv,
 )
 from electroclean.app.eeg.filtering import FilterReport, apply_view_filters
@@ -86,6 +91,15 @@ class LoadedRecording:
     warnings: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     cache_path: Path | None = None
+    trigger_channels: list[str] = field(default_factory=list)  # hidden; read for the original events
+    amplitude_report: AmplitudeReport = field(default_factory=AmplitudeReport)
+
+    @property
+    def display_scalings(self) -> dict[str, float]:
+        """Display scales chosen for this recording because its amplitude is implausible (see amplitude.py).
+
+        They take precedence over the study's ``display.scalings`` for this recording only."""
+        return dict(self.amplitude_report.suggested_scalings)
 
     @property
     def timing(self) -> RecordingTiming:
@@ -261,6 +275,26 @@ def hidden_channels(ch_names: list[str], patterns: tuple[str, ...] | list[str]) 
     return [c for c in ch_names if any(fnmatch.fnmatchcase(c, p) for p in patterns)]
 
 
+def types_from_patterns(ch_names: list[str], patterns: tuple[tuple[str, str], ...]) -> dict[str, str]:
+    """Channel types from the ``channels.types`` setting: the first matching pattern wins."""
+    out: dict[str, str] = {}
+    for ch in ch_names:
+        for pattern, ch_type in patterns:
+            if fnmatch.fnmatchcase(ch, pattern):
+                out[ch] = ch_type
+                break
+    return out
+
+
+def resolve_channel_types(raw: Any, report: ChannelReport, settings: Settings) -> dict[str, str]:
+    """Each channel's type as it will be shown: the file's, then channels.tsv's, then the channels.types setting."""
+    types = dict(zip(raw.ch_names, raw.get_channel_types()))
+    if settings.apply_channel_types_from_bids:
+        types.update({ch: t for ch, t in report.types.items() if ch in types})
+    types.update(types_from_patterns(list(raw.ch_names), settings.channel_type_patterns))
+    return types
+
+
 def load_recording(
     files: RecordingFiles,
     settings: Settings,
@@ -297,6 +331,14 @@ def load_recording(
     warnings_out = list(edf_notes) + [f"MNE: {m}" for m in mne_messages]
     warnings_out.extend(f"BIDS: {w}" for w in files.sidecars.warnings)
 
+    say("Checking channels")
+    channel_report = check_channels(list(raw.ch_names), files.channels_tsv)
+    warnings_out.extend(f"Channels: {p}" for p in channel_report.problems)
+    ch_types = resolve_channel_types(raw, channel_report, settings)
+    # Trigger channels hold event codes, not signal: they are read for the original events and
+    # are never shown, annotated or counted in the whole montage.
+    triggers = [c for c in raw.ch_names if ch_types.get(c) == "stim"]
+
     say("Reading original events")
     if files.events_tsv is not None:
         try:
@@ -317,6 +359,9 @@ def load_recording(
     else:
         original = events_from_raw_annotations(raw, timing, files.vmrk if files.format == "brainvision" else files.path,
                                                files.format)
+        if original.source == SOURCE_NONE and triggers:
+            say(f"Reading triggers from the {', '.join(triggers)} channel" + ("s" if len(triggers) > 1 else ""))
+            original = events_from_stim_channels(raw, triggers, timing, files.path, files.format)
     from electroclean.app.io.export import ELECTROCLEAN_COLUMNS
 
     clash = [c for c in ELECTROCLEAN_COLUMNS if c in original.columns]
@@ -335,10 +380,6 @@ def load_recording(
 
     event_report = check_event_codes(original, catalogue)
     warnings_out.extend(f"Events: {line}" for line in event_report.summary_lines())
-
-    say("Checking channels")
-    channel_report = check_channels(list(raw.ch_names), files.channels_tsv)
-    warnings_out.extend(f"Channels: {p}" for p in channel_report.problems)
 
     events_sidecar, problems = load_json_chain(files.sidecars.events_json_chain)
     warnings_out.extend(f"BIDS: {p}" for p in problems)
@@ -370,12 +411,14 @@ def load_recording(
             f"{tail}; they are hatched in the viewer and filtered separately"
         )
 
-    hidden = hidden_channels(list(raw.ch_names), settings.hidden_channel_patterns)
-    shown = [c for c in raw.ch_names if c not in set(hidden)]
+    hidden_by_setting = hidden_channels(list(raw.ch_names), settings.hidden_channel_patterns)
+    hidden_set = set(hidden_by_setting) | set(triggers)
+    hidden = [c for c in raw.ch_names if c in hidden_set]
+    shown = [c for c in raw.ch_names if c not in hidden_set]
     if not shown:
         raise RecordingLoadError(
-            "Every channel of the recording matches the channels.hide setting, so nothing could be shown. "
-            "Change channels.hide in the study configuration.",
+            "Every channel of the recording matches the channels.hide setting or is a trigger channel, so nothing "
+            "could be shown. Change channels.hide or channels.types in the study configuration.",
             kind="no_channels",
         )
 
@@ -401,14 +444,18 @@ def load_recording(
         if hidden:
             view_raw.pick(shown)
     view_raw.set_annotations(None)
-    if hidden:
-        notes_hidden = [
-            f"{len(hidden)} channel(s) matching channels.hide are not shown and cannot be annotated: "
-            + ", ".join(hidden)
-        ]
-    else:
-        notes_hidden = []
-    notes_out = notes_hidden + list(
+    notes_out: list[str] = []
+    if hidden_by_setting:
+        notes_out.append(
+            f"{len(hidden_by_setting)} channel(s) matching channels.hide are not shown and cannot be annotated: "
+            + ", ".join(hidden_by_setting)
+        )
+    if triggers:
+        used = "; the original events were read from them" if original.stim_channels else ""
+        notes_out.append(
+            f"Trigger channel(s) not shown and not part of the montage{used}: " + ", ".join(triggers)
+        )
+    notes_out.extend(
         apply_channel_metadata(
             view_raw,
             channel_report,
@@ -416,15 +463,26 @@ def load_recording(
             show_bads=settings.show_bids_bad_channels,
         )
     )
+    notes_out.extend(_apply_type_patterns(view_raw, settings))
     if needs_data:
         say("Applying display filters")
     try:
-        filter_report = apply_view_filters(view_raw, filters, discontinuities, gaps)
+        filter_report = apply_view_filters(view_raw, filters, discontinuities, gaps, progress=say)
     except Exception as exc:
         raise RecordingLoadError(f"Filtering failed: {exc}", kind="filter_error") from exc
     filter_report.data_storage = storage
     for skipped in filter_report.skipped:
         warnings_out.append(f"Filters: {skipped}")
+
+    say("Checking the signal amplitude")
+    try:
+        amplitude_report = check_amplitudes(
+            view_raw, gaps=gaps, edge_samples=int(round(filter_report.transient_half_width_s * timing.sfreq))
+        )
+    except Exception as exc:  # noqa: BLE001 - the check must never stop a recording from opening
+        amplitude_report = AmplitudeReport()
+        warnings_out.append(f"The signal amplitude could not be checked: {exc}")
+    warnings_out.extend(amplitude_report.warnings)
 
     info = RecordingInfo(
         recording_id=files.recording_id,
@@ -451,4 +509,20 @@ def load_recording(
         warnings=warnings_out,
         notes=notes_out,
         cache_path=cache_path,
+        trigger_channels=triggers,
+        amplitude_report=amplitude_report,
     )
+
+
+def _apply_type_patterns(view_raw: Any, settings: Settings) -> list[str]:
+    """Apply the channels.types setting to the display copy (after channels.tsv, so the setting wins)."""
+    wanted = types_from_patterns(list(view_raw.ch_names), settings.channel_type_patterns)
+    current = dict(zip(view_raw.ch_names, view_raw.get_channel_types()))
+    mapping = {ch: t for ch, t in wanted.items() if current.get(ch) != t}
+    if not mapping:
+        return []
+    try:
+        view_raw.set_channel_types(mapping, on_unit_change="ignore", verbose="error")
+    except (ValueError, KeyError) as exc:
+        return [f"Could not apply the channels.types setting: {exc}"]
+    return [f"Display channel types set from the channels.types setting for {len(mapping)} channel(s)"]

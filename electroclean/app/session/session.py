@@ -431,6 +431,7 @@ class AnnotationSession:
                 "n_channels": len(lr.info.ch_names),
                 "ch_names": list(lr.info.ch_names),
                 "hidden_channels": list(lr.info.hidden_channels),
+                "trigger_channels": list(lr.trigger_channels),
                 "acquisition_gaps_samples": [list(g) for g in lr.acquisition_gaps],
                 "source_fingerprint": lr.fingerprint,
             },
@@ -450,7 +451,8 @@ class AnnotationSession:
                 "libraries": library_versions(),
             },
             "display": {
-                "scalings": dict(self.settings.display.scalings),
+                "scalings": {**self.settings.display.scalings, **lr.display_scalings},
+                "amplitude_check": lr.amplitude_report.to_dict(),
                 **self.display_state,
                 "note": "scale_factor multiplies the amplitude of every trace relative to scalings "
                 "(MNE's + and - keys); duration_s and n_channels are what was on screen at Save and Finish",
@@ -471,6 +473,7 @@ class AnnotationSession:
             "label_catalogue": self.catalogue.to_metadata(),
             "original_events": {
                 "source": lr.original_events.source,
+                "trigger_channels_read": list(lr.original_events.stim_channels),
                 "n_events": len(lr.original_events),
                 "sample_column_computed": lr.original_events.sample_computed,
                 "comparison_with_markers": lr.original_events.comparison,

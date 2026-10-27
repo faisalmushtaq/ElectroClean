@@ -22,6 +22,8 @@ STUDY_CONFIG_FILENAME = "electroclean_study.json"
 
 SELECTION_STRATEGIES = ("random", "seeded", "manual")
 RECORDING_EXTENSIONS = (".vhdr", ".edf", ".bdf")
+# Channel types that the channels.types setting may assign (MNE-Python's names).
+CHANNEL_TYPES = ("eeg", "eog", "ecg", "emg", "misc", "stim", "resp", "bio", "gsr", "temperature")
 FILTER_METHODS = ("fir", "iir")
 NOTCH_FREQUENCIES = (50.0, 60.0)
 
@@ -148,6 +150,8 @@ class Settings:
     min_duration_samples: int
     # The artifact types on the number keys 1 to 9 (and the toolbar's quick buttons), in key order.
     quick_labels: tuple[str, ...] = DEFAULT_QUICK_LABELS
+    # channels.types: (name pattern, MNE channel type) pairs, applied in order when a recording is loaded.
+    channel_type_patterns: tuple[tuple[str, str], ...] = ()
     raw: dict[str, Any] = field(repr=False, default_factory=dict)
 
     @classmethod
@@ -161,6 +165,11 @@ class Settings:
             locks = data["locks"]
             ann = data["annotation"]
             chans = data.get("channels", {}) or {}
+            types = chans.get("types", {}) or {}
+            if not isinstance(types, dict):
+                raise SettingsError(
+                    'channels.types must map channel-name patterns to channel types, for example {"EXG*": "misc"}'
+                )
             # Study files written before EDF support give a single "suffix".
             suffixes = [disc["suffix"]] if disc.get("suffix") else list(disc.get("suffixes", []))
             settings = cls(
@@ -188,6 +197,7 @@ class Settings:
                 register_lock_timeout_s=float(locks["register_lock_timeout_s"]),
                 min_duration_samples=int(ann["min_duration_samples"]),
                 quick_labels=tuple(str(x) for x in ann.get("quick_labels", DEFAULT_QUICK_LABELS)),
+                channel_type_patterns=tuple((str(k), str(v).strip().lower()) for k, v in types.items()),
                 raw=copy.deepcopy(data),
             )
         except KeyError as exc:  # pragma: no cover - defaults always complete
@@ -211,6 +221,13 @@ class Settings:
                 )
         if any(not p.strip() for p in self.hidden_channel_patterns):
             raise SettingsError("channels.hide must not contain empty patterns")
+        for pattern, ch_type in self.channel_type_patterns:
+            if not pattern.strip():
+                raise SettingsError("channels.types must not contain empty patterns")
+            if ch_type not in CHANNEL_TYPES:
+                raise SettingsError(
+                    f"channels.types: {pattern!r} is given the type {ch_type!r}; use one of {', '.join(CHANNEL_TYPES)}"
+                )
         if self.min_duration_samples < 1:
             raise SettingsError("annotation.min_duration_samples must be at least 1")
         if len(self.quick_labels) > 9:

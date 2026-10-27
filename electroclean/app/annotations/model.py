@@ -26,8 +26,9 @@ CHANNEL_CONVENTION = {
     "order": "Channels are stored in the recording's channel order without duplicates.",
     "hidden_channels": (
         "recording.ch_names lists the channels that were shown and could be annotated. Channels in the file "
-        "that the study settings hide (for example a headset's timestamp or contact-quality channels) are "
-        "listed in recording.hidden_channels, when there are any, and are never part of the whole montage."
+        "that the study settings hide (for example a headset's timestamp or contact-quality channels) and "
+        "trigger channels (for example BioSemi's Status channel) are listed in recording.hidden_channels, when "
+        "there are any, and are never part of the whole montage."
     ),
 }
 
@@ -41,7 +42,7 @@ class RecordingInfo:
     """Identity and timing of the recording an annotation set refers to.
 
     ``ch_names`` are the channels that could be annotated (the montage);
-    ``hidden_channels`` are channels in the file that the settings hid.
+    ``hidden_channels`` are channels in the file that the settings hid, and trigger channels.
     """
 
     recording_id: str
