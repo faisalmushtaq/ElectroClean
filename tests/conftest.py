@@ -27,6 +27,30 @@ SUB1 = "sub-001/eeg/sub-001_task-rest_eeg.vhdr"
 SUB2 = "sub-002/eeg/sub-002_task-rest_eeg.vhdr"
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _delete_windows_before_exit():
+    """Delete windows without a parent at the end of the run.
+
+    PySide can crash while Python shuts down if parentless windows that were shown (dialogs
+    created in tests with no parent) are still alive then. In the application every dialog has a
+    parent window, so this only concerns the tests.
+    """
+    yield
+    try:
+        from qtpy.QtCore import QCoreApplication, QEvent
+        from qtpy.QtWidgets import QApplication
+    except Exception:  # noqa: BLE001 - no Qt, nothing to clean up
+        return
+    app = QApplication.instance()
+    if app is None:
+        return
+    for widget in QApplication.topLevelWidgets():
+        if widget.parent() is None:
+            widget.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+    app.processEvents()
+
+
 @pytest.fixture
 def dataset(tmp_path: Path):
     """A fresh two-subject synthetic dataset (60 s, 250 Hz) per test."""

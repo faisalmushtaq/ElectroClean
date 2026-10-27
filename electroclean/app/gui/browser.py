@@ -86,7 +86,13 @@ class ElectroCleanBrowser(_pgf.MNEQtBrowser):
         self._ec_controller: AnnotationController | None = None
         self._ec_close_guard: Callable[[], bool] | None = None
         self._ec_help: Callable[[], None] | None = None
+        self._ec_resized: Callable[[], None] | None = None
         super().__init__(**kwargs)
+
+    def resizeEvent(self, event: Any) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        if self._ec_resized is not None:
+            self._ec_resized()
 
     def _toggle_help_fig(self) -> None:
         # MNE's help describes its own shortcuts (marking bad channels, Esc closes the

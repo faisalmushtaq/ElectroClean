@@ -284,7 +284,7 @@ class AnnotationWorkspace(QObject):
         self.draw_action.setToolTip(self.draw_action.toolTip() + " · Delete removes the selected annotation")
         self.delete_action.setToolTip("Delete the selected annotation (Delete or Backspace)")
         self._build_shortcuts()
-        b.installEventFilter(self)  # fits the type buttons to the window's width
+        b._ec_resized = self._fit_toolbar  # fits the toolbars to the window's width
         if self.read_only:
             for w in (self.label_combo, self.scope_whole, self.scope_channels, self.choose_channels_btn, self.save_btn,
                       *self.quick_buttons):
@@ -304,6 +304,12 @@ class AnnotationWorkspace(QObject):
         ends up in an overflow menu. The type buttons show their abbreviations when the row has room,
         otherwise only their keys (they keep their colour, number and tooltip, and the menu shows
         the type's name)."""
+        try:
+            self._fit_toolbar_now()
+        except RuntimeError:  # the window is being destroyed
+            pass
+
+    def _fit_toolbar_now(self) -> None:
         b = self.browser
         acts = getattr(self, "actions_toolbar", None)
         mne_bar = getattr(b.mne, "toolbar", None)
@@ -326,13 +332,6 @@ class AnnotationWorkspace(QObject):
                 btn.setText(btn.property("compact_text"))
             self._chips.layout().invalidate()
             self.toolbar.layout().invalidate()
-
-    def eventFilter(self, obj: Any, event: Any) -> bool:  # noqa: N802
-        from qtpy.QtCore import QEvent
-
-        if obj is self.browser and event.type() == QEvent.Resize:
-            self._fit_toolbar()
-        return False
 
     def _quick_labels(self) -> list[str]:
         """The types on keys 1 to 9: the study's choice, or the first specific types of the catalogue."""

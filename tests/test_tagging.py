@@ -314,24 +314,33 @@ def test_quick_labels_setting(qapp, layout, settings, catalogue, loaded):
         Settings.from_dict(data)
 
 
+def _full_labels_fit(ws) -> bool:
+    """Whether the type row fits the window with full labels (measured, then put back)."""
+    for b in ws.quick_buttons:
+        b.setText(b.property("full_text"))
+    ws._chips.layout().invalidate()
+    ws.toolbar.layout().invalidate()
+    needed = ws.toolbar.sizeHint().width()
+    ws._fit_toolbar()
+    return needed <= ws.browser.width() - 24
+
+
 def test_type_buttons_fit_laptop_screens(workspace):
     from qtpy.QtWidgets import QToolButton
 
     session, ws = workspace
     ext = ws.toolbar.findChild(QToolButton, "qt_toolbar_ext_button")
-    ws.browser.resize(1600, 950)
-    wait(150)
-    assert ws.quick_buttons[0].text().split() == ["1", "BLINK"]
-    for width, height in ((1325, 729), (1241, 684)):
+    for width, height in ((1920, 1080), (1600, 950), (1325, 729), (1241, 684), (1920, 1080)):
         ws.browser.resize(width, height)
         wait(150)
+        full = ws.quick_buttons[0].text().split() == ["1", "BLINK"]
+        # Full labels exactly when they fit (how wide they are depends on the system's fonts).
+        assert full == _full_labels_fit(ws), (width, ws.toolbar.sizeHint().width())
+        if not full:
+            assert ws.quick_buttons[0].text().split() == ["1"]
         if ws.toolbar.sizeHint().width() <= width:  # see test_save_and_finish_is_visible_on_laptop_screens
             assert not (ext and ext.isVisible())
             assert ws.choose_channels_btn.isVisible()
-    ws.browser.resize(1600, 950)
-    wait(150)
-    if ws.toolbar.sizeHint().width() <= 1600:
-        assert ws.quick_buttons[0].text().split() == ["1", "BLINK"]  # full labels again with room
 
 
 def test_the_keys_are_shown_at_the_bottom_of_the_window(workspace):

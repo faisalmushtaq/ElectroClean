@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
-from qtpy.QtCore import Qt
+from qtpy.QtCore import Qt, Signal
 from qtpy.QtGui import QColor, QIcon, QPixmap
 from qtpy.QtWidgets import (
     QCheckBox,
@@ -303,6 +303,23 @@ class ScriptedPrompts(UserPrompts):
         return self._answer("text", title, label, "")
 
 
+class SearchField(QLineEdit):
+    """A search box whose ↑ and ↓ keys move through the list below it.
+
+    The keys are handled here rather than by an event filter on the dialog: a dialog that
+    filters its own child's events can be called while it is being destroyed, which crashes
+    PySide."""
+
+    arrowPressed = Signal(int)  # +1 for ↓, -1 for ↑
+
+    def keyPressEvent(self, event: Any) -> None:  # noqa: N802 (Qt naming)
+        if event.key() in (Qt.Key_Down, Qt.Key_Up):
+            self.arrowPressed.emit(1 if event.key() == Qt.Key_Down else -1)
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+
 class ChannelDialog(QDialog):
     """Choosing channels, built for 20 to 260 of them.
 
@@ -347,10 +364,10 @@ class ChannelDialog(QDialog):
         self.whole.setChecked(whole_montage and self._allow_whole)
         layout.addWidget(self.whole)
 
-        self.filter = QLineEdit()
+        self.filter = SearchField()
         self.filter.setPlaceholderText("Find channels, e.g. Fp1, F, *z")
         self.filter.setClearButtonEnabled(True)
-        self.filter.installEventFilter(self)  # Down arrow moves into the list
+        self.filter.arrowPressed.connect(self._enter_list)  # Down arrow moves into the list
         layout.addWidget(self.filter)
         self.filter_help = style.label(
             'Type names or their beginnings, separated by commas (b1 finds B1 and B10 to B19). Put a name in '
@@ -564,18 +581,15 @@ class ChannelDialog(QDialog):
         else:
             self.count.setText(f"{n} of {total} selected")
 
-    def eventFilter(self, obj: Any, event: Any) -> bool:  # noqa: N802 (Qt naming)
-        from qtpy.QtCore import QEvent
-
-        if obj is self.filter and event.type() == QEvent.KeyPress and event.key() == Qt.Key_Down:
-            self.list.setFocus()
-            if self.list.currentItem() is None or self.list.currentItem().isHidden():
-                for i in range(self.list.count()):
-                    if not self.list.item(i).isHidden():
-                        self.list.setCurrentRow(i)
-                        break
-            return True
-        return super().eventFilter(obj, event)
+    def _enter_list(self, step: int) -> None:
+        if step < 0:
+            return
+        self.list.setFocus()
+        if self.list.currentItem() is None or self.list.currentItem().isHidden():
+            for i in range(self.list.count()):
+                if not self.list.item(i).isHidden():
+                    self.list.setCurrentRow(i)
+                    break
 
     def _checked(self) -> list[str]:
         return [
@@ -655,7 +669,7 @@ class TypePicker(QDialog):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(8)
         layout.addWidget(style.label(title, "heading"))
-        self.search = QLineEdit()
+        self.search = SearchField()
         self.search.setPlaceholderText("Type a name, code or abbreviation, e.g. blink, 103 or EMG")
         self.search.setClearButtonEnabled(True)
         layout.addWidget(self.search)
@@ -687,7 +701,8 @@ class TypePicker(QDialog):
         layout.addWidget(self.list, 1)
         layout.addWidget(style.label("Enter chooses · ↑ ↓ move · Esc closes", "caption"))
         self.search.textChanged.connect(self._filter)
-        self.search.installEventFilter(self)
+        self.search.arrowPressed.connect(self._move)
+        self.search.returnPressed.connect(self._choose_current)
         self.list.itemClicked.connect(self._choose_item)
         self.list.itemActivated.connect(self._choose_item)
         self.resize(420, 480)
@@ -743,20 +758,11 @@ class TypePicker(QDialog):
             target = rows[0]
         self.list.setCurrentRow(target)
 
-    def eventFilter(self, obj: Any, event: Any) -> bool:  # noqa: N802
-        from qtpy.QtCore import QEvent
-
-        if obj is self.search and event.type() == QEvent.KeyPress:
-            key = event.key()
-            if key in (Qt.Key_Down, Qt.Key_Up):
-                self._move(1 if key == Qt.Key_Down else -1)
-                return True
-            if key in (Qt.Key_Return, Qt.Key_Enter):
-                item = self.list.currentItem()
-                if item is not None and not item.isHidden() and item.data(Qt.UserRole):
-                    self._choose_item(item)
-                return True
-        return super().eventFilter(obj, event)
+    def _choose_current(self) -> None:
+        """Enter in the search box chooses the highlighted type."""
+        item = self.list.currentItem()
+        if item is not None and not item.isHidden() and item.data(Qt.UserRole):
+            self._choose_item(item)
 
     def _choose_item(self, item: Any) -> None:
         name = item.data(Qt.UserRole) if item is not None else None
