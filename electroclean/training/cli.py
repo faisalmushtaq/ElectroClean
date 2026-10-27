@@ -295,8 +295,10 @@ def cmd_resolve(a: argparse.Namespace) -> int:
             latest[str(e.get("recording_id", ""))] = e["event"]
     open_failures = sorted(rid for rid, ev in latest.items() if ev == "failure")
     if a.recording not in open_failures:
-        state = "is already marked resolved" if latest.get(a.recording) == "resolved" else "has no recorded load failure"
-        listing = (", ".join(open_failures[:10]) + (" ..." if len(open_failures) > 10 else "")) if open_failures else "none"
+        resolved = latest.get(a.recording) == "resolved"
+        state = "is already marked resolved" if resolved else "has no recorded load failure"
+        listing = ", ".join(open_failures[:10]) + (" ..." if len(open_failures) > 10 else "")
+        listing = listing or "none"
         raise CommandError(
             f"{a.recording} {state}.{did_you_mean(a.recording, open_failures)} Unresolved failures: {listing}. "
             "Recordings are named by their path below the dataset folder, as in failed_load.txt."
@@ -407,7 +409,8 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("set_id")
     sp.add_argument("--annotators", nargs="+", required=True)
     sp = add("resolve-failure", cmd_resolve, "Mark a recording's load failure as resolved")
-    sp.add_argument("recording", help="Recording as listed in failed_load.txt, e.g. sub-007/eeg/sub-007_task-rest_eeg.vhdr")
+    sp.add_argument("recording",
+                    help="Recording as listed in failed_load.txt, e.g. sub-007/eeg/sub-007_task-rest_eeg.vhdr")
     sp.add_argument("--note", required=True, help="What was done about it, for the record")
     return p
 

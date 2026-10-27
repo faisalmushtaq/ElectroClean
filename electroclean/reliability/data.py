@@ -11,6 +11,7 @@ from electroclean.app.annotations.model import AnnotationDocument, AnnotationErr
 from electroclean.app.annotations.timing import RecordingTiming
 from electroclean.app.io.atomic import sha256_file
 from electroclean.app.io.canonical import read_annotations_json
+from electroclean.hints import unknown_names
 from electroclean.reliability.config import AnalysisConfig
 
 
@@ -199,9 +200,15 @@ def _display_path(f: Path, bases: list[Path]) -> str:
     return f.name
 
 
-def load_dataset(paths: Iterable[Path | str], config: AnalysisConfig) -> AgreementDataset:
+def load_dataset(paths: Iterable[Path | str], config: AnalysisConfig, *, strict: bool = False) -> AgreementDataset:
+    """Read and group the annotation files; with ``strict``, unknown annotators are an error."""
     bases = [Path(p) for p in paths]
     files = collect_annotation_files(bases)
+    if not files:
+        raise FileNotFoundError(
+            "No annotation files (*_annotations.json) were found in " + ", ".join(str(b) for b in bases)
+            + ". Choose the folder that holds the annotators' results (normally Annotated_Events)."
+        )
     docs = []
     records = []
     for f in files:
@@ -222,6 +229,11 @@ def load_dataset(paths: Iterable[Path | str], config: AnalysisConfig) -> Agreeme
                 "status": "read",
             }
         )
+    if strict and config.annotators:
+        found = sorted({d.annotator_id for _s, d in docs})
+        msg = unknown_names("annotator", config.annotators, found)
+        if msg:
+            raise ValueError(msg)
     ds = build_dataset(docs, config, files=records)
     skipped = [r for r in records if r["status"].startswith("skipped")]
     ds.warnings.extend(f"{r['path']}: {r['status']}" for r in skipped)

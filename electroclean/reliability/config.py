@@ -56,6 +56,9 @@ class AnalysisConfig:
 
     # Report
     timeline_max_recordings: int = 12
+    # Categories with fewer annotations than this (all annotators and recordings together) are listed in the
+    # report's tables but left out of its figures, where they would look like real results.
+    min_events_per_category: int = 5
     extra_measures: tuple[str, ...] = field(default_factory=tuple)
 
     def validate(self) -> None:
@@ -80,6 +83,8 @@ class AnalysisConfig:
             raise ValueError("duplicate_policy must be 'latest' or 'error'")
         if self.onset_tolerance_s < 0 or self.offset_tolerance_s < 0:
             raise ValueError("Tolerances cannot be negative")
+        if self.min_events_per_category < 0:
+            raise ValueError("min_events_per_category cannot be negative")
 
     @property
     def matching_thresholds(self) -> tuple[float, ...]:

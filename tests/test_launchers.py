@@ -89,8 +89,10 @@ def test_check_environment_reports_missing_and_wrong_versions(tmp_path, monkeypa
     req = tmp_path / "requirements.txt"
     import pytest as pt
 
-    req.write_text(f"# comment\npytest=={pt.__version__}\nnot-a-real-package==1.0\npytest-other==0.1 ; python_version<'3'\n",
-                   encoding="utf-8")
+    req.write_text(
+        f"# comment\npytest=={pt.__version__}\nnot-a-real-package==1.0\npytest-other==0.1 ; python_version<'3'\n",
+        encoding="utf-8",
+    )
     monkeypatch.setattr(mod, "REQUIREMENTS", req)
     monkeypatch.setattr(mod, "MARKER", tmp_path / "marker")
     found = mod.problems(marker=False)
