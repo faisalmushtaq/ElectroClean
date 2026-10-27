@@ -14,6 +14,7 @@
       "time_and_channel"
     ],
     "include_any_artifact": true,
+    "include_group_rollups": true,
     "match_criterion": "iou",
     "iou_thresholds": [
       0.0,
@@ -38,75 +39,185 @@
   },
   "label_catalogue": {
     "catalogue_id": "electroclean-hed-score-artifacts",
-    "catalogue_version": "1.0.0",
-    "sha256": "758489482e27c1eb85b60bb3e1df1470913b673d9bfef6b51832825f5596faae",
+    "catalogue_version": "2.0.0",
+    "sha256": "34f144b5c8699afeb41dd6fc9a4fd343e602123e979ee41471971b4fec7800ad",
     "hed_library": "score",
     "hed_library_version": "2.2.0",
     "hed_standard_version": "8.5.0",
     "labels": [
       {
-        "value": 100,
-        "label": "Chewing-artifact"
-      },
-      {
-        "value": 101,
-        "label": "ECG-artifact"
-      },
-      {
-        "value": 102,
-        "label": "EMG-artifact"
-      },
-      {
         "value": 103,
-        "label": "Eye-blink-artifact"
+        "label": "Eye-blink-artifact",
+        "kind": "specific",
+        "parent": "Eye-artifact"
       },
       {
         "value": 104,
-        "label": "Horizontal-eye-movement-artifact"
-      },
-      {
-        "value": 105,
-        "label": "Slow-eye-movement-artifact"
+        "label": "Horizontal-eye-movement-artifact",
+        "kind": "specific",
+        "parent": "Eye-movement-artifact"
       },
       {
         "value": 106,
-        "label": "Vertical-eye-movement-artifact"
+        "label": "Vertical-eye-movement-artifact",
+        "kind": "specific",
+        "parent": "Eye-movement-artifact"
       },
       {
-        "value": 107,
-        "label": "Movement-artifact"
+        "value": 105,
+        "label": "Slow-eye-movement-artifact",
+        "kind": "specific",
+        "parent": "Eye-movement-artifact"
       },
       {
-        "value": 108,
-        "label": "Pulse-artifact"
+        "value": 117,
+        "label": "Nystagmus-artifact",
+        "kind": "specific",
+        "parent": "Eye-movement-artifact"
       },
       {
-        "value": 109,
-        "label": "Respiration-artifact"
+        "value": 133,
+        "label": "Eye-movement-artifact",
+        "kind": "group",
+        "parent": "Eye-artifact"
       },
       {
-        "value": 110,
-        "label": "Sweat-artifact"
+        "value": 132,
+        "label": "Eye-artifact",
+        "kind": "group",
+        "parent": "Biological-artifact"
+      },
+      {
+        "value": 102,
+        "label": "EMG-artifact",
+        "kind": "specific",
+        "parent": "Biological-artifact"
+      },
+      {
+        "value": 100,
+        "label": "Chewing-artifact",
+        "kind": "specific",
+        "parent": "Biological-artifact"
       },
       {
         "value": 111,
-        "label": "Tongue-movement-artifact"
+        "label": "Tongue-movement-artifact",
+        "kind": "specific",
+        "parent": "Biological-artifact"
       },
       {
-        "value": 112,
-        "label": "Induction-artifact"
+        "value": 107,
+        "label": "Movement-artifact",
+        "kind": "specific",
+        "parent": "Biological-artifact"
+      },
+      {
+        "value": 101,
+        "label": "ECG-artifact",
+        "kind": "specific",
+        "parent": "Biological-artifact"
+      },
+      {
+        "value": 108,
+        "label": "Pulse-artifact",
+        "kind": "specific",
+        "parent": "Biological-artifact"
+      },
+      {
+        "value": 109,
+        "label": "Respiration-artifact",
+        "kind": "specific",
+        "parent": "Biological-artifact"
+      },
+      {
+        "value": 110,
+        "label": "Sweat-artifact",
+        "kind": "specific",
+        "parent": "Biological-artifact"
+      },
+      {
+        "value": 120,
+        "label": "Rocking-patting-artifact",
+        "kind": "specific",
+        "parent": "Biological-artifact"
+      },
+      {
+        "value": 121,
+        "label": "Sucking-artifact",
+        "kind": "specific",
+        "parent": "Biological-artifact"
+      },
+      {
+        "value": 131,
+        "label": "Biological-artifact",
+        "kind": "group",
+        "parent": "Data-artifact"
       },
       {
         "value": 113,
-        "label": "Electrode-movement-artifact"
+        "label": "Electrode-movement-artifact",
+        "kind": "specific",
+        "parent": "Nonbiological-artifact"
       },
       {
         "value": 114,
-        "label": "Electrode-pops-artifact"
+        "label": "Electrode-pops-artifact",
+        "kind": "specific",
+        "parent": "Localized-channel-artifact"
       },
       {
         "value": 115,
-        "label": "Salt-bridge-artifact"
+        "label": "Salt-bridge-artifact",
+        "kind": "specific",
+        "parent": "Localized-channel-artifact"
+      },
+      {
+        "value": 136,
+        "label": "Localized-channel-artifact",
+        "kind": "group",
+        "parent": "Nonbiological-artifact"
+      },
+      {
+        "value": 112,
+        "label": "Induction-artifact",
+        "kind": "specific",
+        "parent": "Electrical-artifact"
+      },
+      {
+        "value": 116,
+        "label": "Line-noise-artifact",
+        "kind": "specific",
+        "parent": "Electrical-artifact"
+      },
+      {
+        "value": 135,
+        "label": "Electrical-artifact",
+        "kind": "group",
+        "parent": "Nonbiological-artifact"
+      },
+      {
+        "value": 118,
+        "label": "Artificial-ventilation-artifact",
+        "kind": "specific",
+        "parent": "Nonbiological-artifact"
+      },
+      {
+        "value": 119,
+        "label": "Dialysis-artifact",
+        "kind": "specific",
+        "parent": "Nonbiological-artifact"
+      },
+      {
+        "value": 134,
+        "label": "Nonbiological-artifact",
+        "kind": "group",
+        "parent": "Data-artifact"
+      },
+      {
+        "value": 130,
+        "label": "Data-artifact",
+        "kind": "group",
+        "parent": null
       }
     ]
   },
@@ -119,7 +230,7 @@
   "input_files": [
     {
       "path": "Annotated_Events/annotator-A01/sub-001/eeg/sub-001_task-rest_eeg_annotator-A01_annotations.json",
-      "sha256": "3f8e53e793d7dbaf16079a2494c0702cf2ed3ce7e8dd236ee4b7ac80108a30f9",
+      "sha256": "44dc325a8a647820f087805c3af4495b328d389ddbc48d6962fb9a6f1cf973da",
       "recording_id": "sub-001/eeg/sub-001_task-rest_eeg.vhdr",
       "annotator_id": "A01",
       "mode": "standard",
@@ -128,7 +239,7 @@
     },
     {
       "path": "Annotated_Events/annotator-A01/sub-002/eeg/sub-002_task-rest_eeg_annotator-A01_annotations.json",
-      "sha256": "e73e5268f2d0d100d766845a052e59fa384807c51b218544263d869c550d8e91",
+      "sha256": "483cb880bc1f6765f686f5272819653b23095ad6443bc03668b6be62dd77fcf9",
       "recording_id": "sub-002/eeg/sub-002_task-rest_eeg.vhdr",
       "annotator_id": "A01",
       "mode": "standard",
@@ -137,7 +248,7 @@
     },
     {
       "path": "Annotated_Events/annotator-A01/sub-003/eeg/sub-003_task-rest_eeg_annotator-A01_annotations.json",
-      "sha256": "ddf8c60afa5b8c839c476169b80af07452dffa120f1e2524584dcf5764a60ba8",
+      "sha256": "5082d80c2cdb3a8f599389223cc9b1d4039bffb4cdfae0fdef2e6409d385727f",
       "recording_id": "sub-003/eeg/sub-003_task-rest_eeg.vhdr",
       "annotator_id": "A01",
       "mode": "standard",
@@ -146,7 +257,7 @@
     },
     {
       "path": "Annotated_Events/annotator-A02/sub-001/eeg/sub-001_task-rest_eeg_annotator-A02_annotations.json",
-      "sha256": "4186b530ce3f91396c9c0157ea94f642248c1e59bb2e19e56bc1a2e4c280987e",
+      "sha256": "833a5e674c6d148e8cffce4e94b388282a2dc03abffcff2b0cd95dbba39e9983",
       "recording_id": "sub-001/eeg/sub-001_task-rest_eeg.vhdr",
       "annotator_id": "A02",
       "mode": "standard",
@@ -155,7 +266,7 @@
     },
     {
       "path": "Annotated_Events/annotator-A02/sub-002/eeg/sub-002_task-rest_eeg_annotator-A02_annotations.json",
-      "sha256": "83fa96af93d24680f39f18f4f2440356b3d0d4b9c3db1cb4a04b11a7be3a6ae0",
+      "sha256": "16f6b20024e066901cdcd952765e907e131fa1c9ef86b5003f3ddc34592b6c25",
       "recording_id": "sub-002/eeg/sub-002_task-rest_eeg.vhdr",
       "annotator_id": "A02",
       "mode": "standard",
@@ -164,7 +275,7 @@
     },
     {
       "path": "Annotated_Events/annotator-A02/sub-003/eeg/sub-003_task-rest_eeg_annotator-A02_annotations.json",
-      "sha256": "fd236157fb439c479660c3b2baa4e858744cb554938a32d6de3afba4cf8230ad",
+      "sha256": "e460bc476f3d68113c3fc39548f0dba0d90e4512ee5f43fa54c64e5f98b1e997",
       "recording_id": "sub-003/eeg/sub-003_task-rest_eeg.vhdr",
       "annotator_id": "A02",
       "mode": "standard",
@@ -173,7 +284,7 @@
     },
     {
       "path": "Annotated_Events/annotator-A03/sub-001/eeg/sub-001_task-rest_eeg_annotator-A03_annotations.json",
-      "sha256": "f65681361602cff18a54448cde82512aea5c8fe59412baf885aeab56c3d7b99a",
+      "sha256": "31633ec562fd5f02db1330e8d35f575f40584a5fb906123ff7a913fefe07abea",
       "recording_id": "sub-001/eeg/sub-001_task-rest_eeg.vhdr",
       "annotator_id": "A03",
       "mode": "standard",
@@ -182,7 +293,7 @@
     },
     {
       "path": "Annotated_Events/annotator-A03/sub-002/eeg/sub-002_task-rest_eeg_annotator-A03_annotations.json",
-      "sha256": "d127f9875d0f4b78de07f64d509889383c28d4a513b2f6a0934804ff36b8fed0",
+      "sha256": "9501a5cd8c121e52ed95e5ae37c4c9293209803202ed5a0d0d6d29f7e0131795",
       "recording_id": "sub-002/eeg/sub-002_task-rest_eeg.vhdr",
       "annotator_id": "A03",
       "mode": "standard",
@@ -191,7 +302,7 @@
     },
     {
       "path": "Annotated_Events/annotator-A03/sub-003/eeg/sub-003_task-rest_eeg_annotator-A03_annotations.json",
-      "sha256": "271b063dfa49d67775840a59dd26c307aa122b7ed70b58f550b940fdee52f81e",
+      "sha256": "33dd9100111a685450b725469db20f47301d879f7b2c01d7ffb7b81092b05255",
       "recording_id": "sub-003/eeg/sub-003_task-rest_eeg.vhdr",
       "annotator_id": "A03",
       "mode": "standard",

@@ -5,7 +5,7 @@
 ```bash
 python -m pip install -r requirements-dev.txt
 python -m pip install --no-deps -e .
-python -m pytest                 # everything (179 tests, about 35 s)
+python -m pytest                 # everything (about 195 tests, under a minute)
 python -m pytest -m "not gui"    # without Qt
 python -m pytest -m gui          # only the GUI tests
 ```
@@ -20,7 +20,7 @@ and dialogs are answered by `ScriptedPrompts`.
 ## Synthetic data
 
 `electroclean/synthetic.py` writes small BIDS datasets of BrainVision
-recordings (21 channels including HEOG and VEOG, 250 Hz) with:
+recordings (22 channels: 19 EEG, HEOG, VEOG and ECG, 250 Hz, 50 Hz mains) with:
 
 * background activity, alpha rhythm and mains interference;
 * artifacts at known positions: eye blinks, horizontal and slow eye
@@ -50,17 +50,17 @@ from it. Create a dataset with
 | 7 | Overlapping categories | `test_store.py::test_overlapping_different_categories_are_independent`; `test_gui.py::test_draw_edit_and_save` (drawn over an existing annotation) |
 | 8 | Sample and time conversion | `test_timing.py::test_sample_time_round_trip` (11 sampling rates, indices up to 10⁹), `test_mne_round_trip_respects_first_samp` |
 | 9 | Preservation of original events | `test_export.py::test_events_tsv_columns_and_original_rows_preserved` (byte-level), `test_vmrk_events_used_without_events_tsv` |
-| 10 | Conflicting event codes | `test_export.py::test_code_collision_and_mapping_checks`, `test_collision_rows_distinguished_in_export`; `test_loading.py::test_event_code_collision_requires_policy` |
-| 11 | Export of the 16 labels | `test_labels.py::test_catalogue_matches_specification_exactly`, `test_labels_exist_in_hed_score_2_2_0_snapshot`; `test_export.py::test_all_sixteen_labels_export_with_fixed_codes` |
+| 10 | Conflicting event codes | `test_export.py::test_original_codes_that_equal_artifact_codes_cannot_be_confused`, `test_original_code_report_never_blocks`, `test_exports_from_version_1_can_still_be_read`; `test_loading.py::test_original_codes_like_artifact_codes_load_without_a_policy` |
+| 11 | Export of the labels (all 29 HED-SCORE terms) | `test_labels.py::test_catalogue_contains_every_hed_score_artifact_term_with_fixed_codes`, `test_hierarchy_follows_the_schema`, `test_labels_exist_in_hed_score_2_2_0_snapshot`, `test_catalogue_versions_are_compatible_when_codes_agree`; `test_export.py::test_all_labels_export_with_fixed_codes` |
 | 12 | Round-trip export and import | `test_export.py::test_round_trip_tsv_and_json`, `test_written_canonical_file_reads_back`; `test_timing.py::test_mne_round_trip_respects_first_samp` |
-| 13 | Repeated annotations of one category | `test_store.py::test_repeated_same_label_not_merged_unless_requested` |
+| 13 | Repeated annotations of one category | `test_store.py::test_repeated_same_label_annotations` (separate unless they overlap on the same channels, then merged in one undo step), `test_automatic_merging_can_be_switched_off`; `test_gui.py::test_draw_edit_and_save` |
 | 14 | Missing or corrupted files | `test_loading.py::test_missing_companion_files_fail`, `test_truncated_data_file_fails`, `test_truncated_on_sample_boundary_detected_by_markers`, `test_corrupted_header_fails`, `test_malformed_events_tsv_fails`; `test_gui.py::test_failed_load_message_and_continue` |
 | 15 | Output write failure | `test_session.py::test_write_failure_never_marks_complete` (6 stages), `test_register_failure_is_recovered_on_next_start`, `test_crash_recovery`; `test_integrity.py` (failed roll-backs retried, failures after the register update, relocated results folder, unreadable journals) |
 | 16 | Per-annotator completion | `test_session.py::test_completion_is_per_annotator`; `test_gui.py::test_full_application_loop` |
 | 17 | Duplicate processing and overwriting | `test_session.py::test_completed_recording_not_reopened_or_overwritten`, `test_simultaneous_sessions_blocked_by_lock`, `test_stale_lock_from_dead_process_is_broken`; `test_integrity.py` (recovery during another session's save, stale-lock race, clock skew, heartbeat, leftover outputs) |
 | 18 | Inter-rater agreement on known examples | `test_reliability.py` (hand-computed 2×2 tables, kappa, Fleiss' kappa and alpha; comparison with reference implementations on random data; matching examples) |
 | 19 | Absent annotations and clean intervals | `test_reliability.py::test_clean_recording_and_absent_annotations`, `test_time_resolved_two_raters`; `test_export.py::test_empty_annotation_set_exports_cleanly`; `test_gui.py::test_save_with_no_annotations_needs_confirmation` |
-| 20 | Whole-montage and channel-specific | `test_reliability.py::test_whole_montage_versus_channel_specific`; `test_export.py::test_whole_montage_and_channel_encodings` |
+| 20 | Whole-montage and channel-specific | `test_reliability.py::test_whole_montage_versus_channel_specific`, `test_eog_and_ecg_channels_are_included_in_channel_analyses`; `test_export.py::test_whole_montage_and_channel_encodings` |
 
 End-to-end workflows: `test_integration.py::test_complete_workflow` (headless:
 discovery, selection, loading, annotation, validated export, register,
@@ -78,15 +78,31 @@ running while a recording opens, Ctrl shortcuts never reach MNE's single-key
 shortcuts, Draw/edit off blocks every edit, a skipped assessment recording is
 not reported as complete).
 
+Autosave is tested in `test_autosave.py` (when it writes, restoring with the
+time carried over, discarding, recordings that changed) and through the whole
+application in `test_gui.py::test_finish_later_and_continue_in_a_new_session`
+and `test_declined_autosave_is_set_aside_when_starting_afresh`. Group roll-ups
+are tested in `test_reliability.py::test_group_rollups_show_agreement_on_the_artifact_family`.
+
+## Every system, every change
+
+The GitHub Actions workflow `.github/workflows/build-apps.yml` runs the whole
+test-suite on Windows, macOS and Linux for every push, then builds the
+stand-alone application on each system and runs its self-test
+(`ElectroClean --self-test`), which loads a synthetic recording with filters,
+opens the real annotation window off screen, saves an annotation through Save
+and Finish and runs an agreement analysis. The same self-test can be run on
+any computer that will be used in a study.
+
 ## Checks that need a person
 
 Automated tests cannot judge how the application feels or looks on each
 system. Before a study, someone should check the following on each type of
 computer that annotators will use:
 
-1. The launcher starts ElectroClean on a fresh account (Windows: no console
-   window stays open; macOS: the first-run confirmation appears and then the
-   app opens).
+1. The stand-alone application (or the launcher) starts ElectroClean on a
+   fresh account (Windows: no console window stays open; macOS: the first-run
+   confirmation appears and then the app opens).
 2. Dragging on the EEG with a mouse and with a trackpad creates annotations
    where expected; edge dragging and Shift+drag behave as described; the
    right-click menu appears under the pointer.

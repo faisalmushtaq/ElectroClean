@@ -1,7 +1,7 @@
 {
   "schema": "electroclean.session",
   "schema_version": "1.0.0",
-  "session_id": "20261026T164623Z-16b8409d",
+  "session_id": "20261027T115233Z-366024a9",
   "mode": "standard",
   "context": {},
   "annotator": {
@@ -28,7 +28,7 @@
     "first_samp": 0,
     "meas_date": "2024-01-01T12:00:00+00:00",
     "duration_s": 60.0,
-    "n_channels": 21,
+    "n_channels": 22,
     "ch_names": [
       "Fp1",
       "Fp2",
@@ -50,64 +50,67 @@
       "O1",
       "O2",
       "HEOG",
-      "VEOG"
+      "VEOG",
+      "ECG"
     ],
     "source_fingerprint": {
       "vhdr": {
         "path": "sub-001/eeg/sub-001_task-rest_eeg.vhdr",
-        "size": 1023,
-        "mtime_ns": 1793033182566386333,
-        "sha256": "4b98efe8ba8c9e518be4d13e0f093f6577dc5e5d734c976957376a848e118dbd"
+        "size": 1041,
+        "mtime_ns": 1793101952320157530,
+        "sha256": "2ba95031595b2557e0c22c1431979db0d4c2a4da4bc3fd814792b727f738bfeb"
       },
       "eeg": {
         "path": "sub-001/eeg/sub-001_task-rest_eeg.eeg",
-        "size": 1260000,
-        "mtime_ns": 1793033182565183523,
-        "sha256": "398a2c44f1676dbb2e7dcea0a14ce07240acfbc810da844efc89b82a0eed945f"
+        "size": 1320000,
+        "mtime_ns": 1793101952319070893,
+        "sha256": "f049e39934f92a79b9d26b34ea1e79f57e667df53836d10895a3f722321cf061"
       },
       "vmrk": {
         "path": "sub-001/eeg/sub-001_task-rest_eeg.vmrk",
         "size": 1392,
-        "mtime_ns": 1793033182566278521,
+        "mtime_ns": 1793101952320061784,
         "sha256": "22fa2ca5f58043a805e73b001f51443864117904f8d9a0fd882ab8078214e1f5"
       },
       "channels_tsv": {
         "path": "sub-001/eeg/sub-001_task-rest_channels.tsv",
-        "size": 367,
-        "mtime_ns": 1793033182566545597,
-        "sha256": "fb7c4a95f705b23f6df1d41b1a1647eb112b58cf83d2b3a0dfa66e8c9b321e97"
+        "size": 384,
+        "mtime_ns": 1793101952320460523,
+        "sha256": "2606e8830e14c65eed97ea25c80f9f56708eb24e26134f516b754234c6927d82"
       },
       "events_tsv": {
         "path": "sub-001/eeg/sub-001_task-rest_events.tsv",
         "size": 928,
-        "mtime_ns": 1793033182566452219,
+        "mtime_ns": 1793101952320338475,
         "sha256": "23fbd318246db707134f26fd35f535df2bd25580d7cf8c17e33066b3b744c0a8"
       },
       "events_json": {
         "path": "sub-001/eeg/sub-001_task-rest_events.json",
         "size": 289,
-        "mtime_ns": 1793033182566510171,
+        "mtime_ns": 1793101952320412826,
         "sha256": "203b47891160359d51301343101c20872de346b32b5a97b29a70139958c62f00"
       },
       "eeg_json": {
         "path": "sub-001/eeg/sub-001_task-rest_eeg.json",
-        "size": 182,
-        "mtime_ns": 1793033182566584936,
-        "sha256": "8e99bb89b33acc525aca92ddbee5735b514d836771f22abe2ed0f1a660fb42f4"
+        "size": 255,
+        "mtime_ns": 1793101952320508400,
+        "sha256": "b4261e68d3afe2c97349082cc1460d8fb6e73c9427090698dd1e1ec35b914cac"
       }
     }
   },
   "timing": {
-    "session_opened": "2026-10-26T16:46:23.141+00:00",
-    "start_timestamp": "2026-10-26T16:46:23.141+00:00",
-    "finish_timestamp": "2026-10-26T16:46:23.141+00:00",
+    "session_opened": "2026-10-27T11:52:33.077+00:00",
+    "start_timestamp": "2026-10-27T11:52:33.077+00:00",
+    "finish_timestamp": "2026-10-27T11:52:33.077+00:00",
     "elapsed_seconds": 0.0,
-    "clock": "time.monotonic (started when the viewer became usable, stopped at Save and Finish)"
+    "clock": "time.monotonic (started when the viewer became usable, stopped at Save and Finish)",
+    "elapsed_in_earlier_sessions_seconds": 0.0,
+    "resumed_from_autosave": []
   },
   "application": {
     "name": "ElectroClean",
     "version": "1.0.0",
-    "platform": "Linux-6.18.44-fc-v153-x86_64-with-glibc2.39",
+    "platform": "Linux-6.18.44-fc-v165-x86_64-with-glibc2.39",
     "libraries": {
       "python": "3.13.17",
       "electroclean": "1.0.0",
@@ -126,20 +129,20 @@
       "highpass_enabled": true,
       "highpass_hz": 1.0,
       "notch_enabled": true,
-      "notch_hz": 60.0,
+      "notch_hz": 50.0,
       "notch_harmonics": false,
       "method": "fir",
       "iir_order": 4,
       "locked": false
     },
-    "summary": "High-pass 1 Hz, Notch 60 Hz, FIR",
+    "summary": "High-pass 1 Hz, Notch 50 Hz, FIR",
     "fixed_by_administrator": false,
     "design": {
       "settings": {
         "highpass_enabled": true,
         "highpass_hz": 1.0,
         "notch_enabled": true,
-        "notch_hz": 60.0,
+        "notch_hz": 50.0,
         "notch_harmonics": false,
         "method": "fir",
         "iir_order": 4,
@@ -172,7 +175,7 @@
           "mne_call": "mne.io.Raw.notch_filter",
           "parameters": {
             "freqs": [
-              60.0
+              50.0
             ],
             "method": "fir",
             "phase": "zero",
@@ -186,7 +189,7 @@
           "filter_length_samples": 1651,
           "filter_length_s": 6.604,
           "transient_half_width_s": 3.3,
-          "mne_log": "Filtering raw data in 1 contiguous segment\nSetting up band-stop filter from 59 - 61 Hz\n\nFIR filter parameters\n---------------------\nDesigning a one-pass, zero-phase, non-causal bandstop filter:\n- Windowed time-domain design (firwin) method\n- Hamming window with 0.0194 passband ripple and 53 dB stopband attenuation\n- Lower passband edge: 59.35\n- Lower transition bandwidth: 0.50 Hz (-6 dB cutoff frequency: 59.10 Hz)\n- Upper passband edge: 60.65 Hz\n- Upper transition bandwidth: 0.50 Hz (-6 dB cutoff frequency: 60.90 Hz)\n- Filter length: 1651 samples (6.604 s)\n\n"
+          "mne_log": "Filtering raw data in 1 contiguous segment\nSetting up band-stop filter from 49 - 51 Hz\n\nFIR filter parameters\n---------------------\nDesigning a one-pass, zero-phase, non-causal bandstop filter:\n- Windowed time-domain design (firwin) method\n- Hamming window with 0.0194 passband ripple and 53 dB stopband attenuation\n- Lower passband edge: 49.38\n- Lower transition bandwidth: 0.50 Hz (-6 dB cutoff frequency: 49.12 Hz)\n- Upper passband edge: 50.62 Hz\n- Upper transition bandwidth: 0.50 Hz (-6 dB cutoff frequency: 50.88 Hz)\n- Filter length: 1651 samples (6.604 s)\n\n"
         }
       ],
       "skipped": [],
@@ -213,7 +216,8 @@
         "O1",
         "O2",
         "HEOG",
-        "VEOG"
+        "VEOG",
+        "ECG"
       ],
       "data_storage": "in memory",
       "library_versions": {
@@ -228,13 +232,13 @@
     "n_whole_montage": 1,
     "n_channel_specific": 10,
     "by_label": {
-      "Chewing-artifact": 1,
-      "ECG-artifact": 1,
-      "EMG-artifact": 1,
       "Eye-blink-artifact": 3,
       "Horizontal-eye-movement-artifact": 1,
       "Slow-eye-movement-artifact": 1,
+      "EMG-artifact": 1,
+      "Chewing-artifact": 1,
       "Movement-artifact": 1,
+      "ECG-artifact": 1,
       "Electrode-pops-artifact": 2
     },
     "time_conventions": {
@@ -248,75 +252,185 @@
   },
   "label_catalogue": {
     "catalogue_id": "electroclean-hed-score-artifacts",
-    "catalogue_version": "1.0.0",
-    "sha256": "758489482e27c1eb85b60bb3e1df1470913b673d9bfef6b51832825f5596faae",
+    "catalogue_version": "2.0.0",
+    "sha256": "34f144b5c8699afeb41dd6fc9a4fd343e602123e979ee41471971b4fec7800ad",
     "hed_library": "score",
     "hed_library_version": "2.2.0",
     "hed_standard_version": "8.5.0",
     "labels": [
       {
-        "value": 100,
-        "label": "Chewing-artifact"
-      },
-      {
-        "value": 101,
-        "label": "ECG-artifact"
-      },
-      {
-        "value": 102,
-        "label": "EMG-artifact"
-      },
-      {
         "value": 103,
-        "label": "Eye-blink-artifact"
+        "label": "Eye-blink-artifact",
+        "kind": "specific",
+        "parent": "Eye-artifact"
       },
       {
         "value": 104,
-        "label": "Horizontal-eye-movement-artifact"
-      },
-      {
-        "value": 105,
-        "label": "Slow-eye-movement-artifact"
+        "label": "Horizontal-eye-movement-artifact",
+        "kind": "specific",
+        "parent": "Eye-movement-artifact"
       },
       {
         "value": 106,
-        "label": "Vertical-eye-movement-artifact"
+        "label": "Vertical-eye-movement-artifact",
+        "kind": "specific",
+        "parent": "Eye-movement-artifact"
       },
       {
-        "value": 107,
-        "label": "Movement-artifact"
+        "value": 105,
+        "label": "Slow-eye-movement-artifact",
+        "kind": "specific",
+        "parent": "Eye-movement-artifact"
       },
       {
-        "value": 108,
-        "label": "Pulse-artifact"
+        "value": 117,
+        "label": "Nystagmus-artifact",
+        "kind": "specific",
+        "parent": "Eye-movement-artifact"
       },
       {
-        "value": 109,
-        "label": "Respiration-artifact"
+        "value": 133,
+        "label": "Eye-movement-artifact",
+        "kind": "group",
+        "parent": "Eye-artifact"
       },
       {
-        "value": 110,
-        "label": "Sweat-artifact"
+        "value": 132,
+        "label": "Eye-artifact",
+        "kind": "group",
+        "parent": "Biological-artifact"
+      },
+      {
+        "value": 102,
+        "label": "EMG-artifact",
+        "kind": "specific",
+        "parent": "Biological-artifact"
+      },
+      {
+        "value": 100,
+        "label": "Chewing-artifact",
+        "kind": "specific",
+        "parent": "Biological-artifact"
       },
       {
         "value": 111,
-        "label": "Tongue-movement-artifact"
+        "label": "Tongue-movement-artifact",
+        "kind": "specific",
+        "parent": "Biological-artifact"
       },
       {
-        "value": 112,
-        "label": "Induction-artifact"
+        "value": 107,
+        "label": "Movement-artifact",
+        "kind": "specific",
+        "parent": "Biological-artifact"
+      },
+      {
+        "value": 101,
+        "label": "ECG-artifact",
+        "kind": "specific",
+        "parent": "Biological-artifact"
+      },
+      {
+        "value": 108,
+        "label": "Pulse-artifact",
+        "kind": "specific",
+        "parent": "Biological-artifact"
+      },
+      {
+        "value": 109,
+        "label": "Respiration-artifact",
+        "kind": "specific",
+        "parent": "Biological-artifact"
+      },
+      {
+        "value": 110,
+        "label": "Sweat-artifact",
+        "kind": "specific",
+        "parent": "Biological-artifact"
+      },
+      {
+        "value": 120,
+        "label": "Rocking-patting-artifact",
+        "kind": "specific",
+        "parent": "Biological-artifact"
+      },
+      {
+        "value": 121,
+        "label": "Sucking-artifact",
+        "kind": "specific",
+        "parent": "Biological-artifact"
+      },
+      {
+        "value": 131,
+        "label": "Biological-artifact",
+        "kind": "group",
+        "parent": "Data-artifact"
       },
       {
         "value": 113,
-        "label": "Electrode-movement-artifact"
+        "label": "Electrode-movement-artifact",
+        "kind": "specific",
+        "parent": "Nonbiological-artifact"
       },
       {
         "value": 114,
-        "label": "Electrode-pops-artifact"
+        "label": "Electrode-pops-artifact",
+        "kind": "specific",
+        "parent": "Localized-channel-artifact"
       },
       {
         "value": 115,
-        "label": "Salt-bridge-artifact"
+        "label": "Salt-bridge-artifact",
+        "kind": "specific",
+        "parent": "Localized-channel-artifact"
+      },
+      {
+        "value": 136,
+        "label": "Localized-channel-artifact",
+        "kind": "group",
+        "parent": "Nonbiological-artifact"
+      },
+      {
+        "value": 112,
+        "label": "Induction-artifact",
+        "kind": "specific",
+        "parent": "Electrical-artifact"
+      },
+      {
+        "value": 116,
+        "label": "Line-noise-artifact",
+        "kind": "specific",
+        "parent": "Electrical-artifact"
+      },
+      {
+        "value": 135,
+        "label": "Electrical-artifact",
+        "kind": "group",
+        "parent": "Nonbiological-artifact"
+      },
+      {
+        "value": 118,
+        "label": "Artificial-ventilation-artifact",
+        "kind": "specific",
+        "parent": "Nonbiological-artifact"
+      },
+      {
+        "value": 119,
+        "label": "Dialysis-artifact",
+        "kind": "specific",
+        "parent": "Nonbiological-artifact"
+      },
+      {
+        "value": 134,
+        "label": "Nonbiological-artifact",
+        "kind": "group",
+        "parent": "Data-artifact"
+      },
+      {
+        "value": 130,
+        "label": "Data-artifact",
+        "kind": "group",
+        "parent": null
       }
     ]
   },
@@ -332,9 +446,10 @@
       "consistent": true
     },
     "code_check": {
-      "policy": "require_explicit_policy",
-      "blocked": false,
-      "collisions": [],
+      "artifact_codes_column": "artifact_code",
+      "codes_also_used_for_artifacts": [],
+      "note": "Original values are kept unchanged in the value column; artifact codes are in the separate artifact_code column, so the two can never be confused.",
+      "artifact_label_rows": [],
       "value_meaning_conflicts": {},
       "label_value_conflicts": {},
       "repeated_values": {
@@ -347,8 +462,8 @@
   },
   "channel_check": {
     "channels_tsv": "sub-001_task-rest_channels.tsv",
-    "n_recording_channels": 21,
-    "n_tsv_channels": 21,
+    "n_recording_channels": 22,
+    "n_tsv_channels": 22,
     "missing_from_channels_tsv": [],
     "missing_from_recording": [],
     "order_differs": false,
@@ -373,7 +488,8 @@
       "O1": "eeg",
       "O2": "eeg",
       "HEOG": "eog",
-      "VEOG": "eog"
+      "VEOG": "eog",
+      "ECG": "ecg"
     },
     "bids_bad_channels": [],
     "problems": [],
@@ -381,7 +497,7 @@
   },
   "warnings": [],
   "notes": [
-    "Display channel types set from channels.tsv for 2 channel(s)"
+    "Display channel types set from channels.tsv for 3 channel(s)"
   ],
   "outputs": {
     "basename": "sub-001_task-rest_eeg_annotator-A01",

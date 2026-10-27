@@ -10,7 +10,7 @@ It has three parts that share one annotation file format:
 
 | Component | What it does | How to start it |
 |---|---|---|
-| **A. Annotation** | View continuous BrainVision EEG with MNE-Python's browser, mark artifact intervals with one of 16 HED-SCORE categories on the whole montage or on chosen channels, and save validated, BIDS-compatible outputs. | `electroclean` or a launcher in `launchers/` |
+| **A. Annotation** | View continuous BrainVision EEG with MNE-Python's browser, mark artifact intervals with any of the 29 HED-SCORE artifact terms on the whole montage or on chosen channels, and save validated, BIDS-compatible outputs. Work is saved automatically until it is finished. | The ElectroClean application, `electroclean`, or a launcher in `launchers/` |
 | **B. Inter-rater agreement** | Compare annotators by category, time and channel: time-resolved and event-based agreement, with an HTML report and tables. | `electroclean-agreement`, or *Tools → Inter-rater agreement analysis* |
 | **C. Training and assessment** | Practice with feedback against expert references, blinded competency assessment with administrator-defined criteria, and an optional short-segment quiz. | Training modes in the start window; `electroclean-admin` and *Tools → Administrator tools* |
 
@@ -21,12 +21,26 @@ files and metadata are never modified.
 
 ## Installation
 
-ElectroClean needs **Python 3.12 or 3.13** (64-bit) and runs on Windows,
-macOS and Linux. It was developed and tested on Linux with Python 3.13; the
-Windows and macOS launchers follow standard conventions but should be checked
-on those systems before a study starts (see `docs/testing_guide.md`).
+### Stand-alone application (recommended for annotators)
 
-### The simple way (no Python knowledge needed)
+Ready-to-run applications for Windows, macOS (Apple silicon, macOS 14 or
+later) and Linux are built automatically for every change pushed to this
+repository: open the repository's **Actions** tab, choose the latest
+*Build applications* run and download `ElectroClean-windows-…`,
+`ElectroClean-macos-…` or `ElectroClean-linux-…`. Unzip it and start
+*ElectroClean*. Nothing else needs to be installed. The applications are not
+signed with a developer certificate, so Windows and macOS ask for confirmation
+the first time; [docs/building_apps.md](docs/building_apps.md) explains this
+and how to build the applications yourself. Each application can check itself
+with `ElectroClean --self-test`.
+
+### From the source code
+
+ElectroClean needs **Python 3.12 or 3.13** (64-bit) and runs on Windows,
+macOS and Linux. The test-suite runs on all three systems for every change
+(see `.github/workflows/build-apps.yml`).
+
+**With the launchers (no Python knowledge needed)**
 
 1. Install Python 3.12 or newer from [python.org](https://www.python.org/downloads/).
    On Windows, tick *Add python.exe to PATH*.
@@ -45,14 +59,14 @@ operating system and Python version, run
 copy the folder, including `wheels`, to the offline computer. The launchers
 install from `wheels` automatically when it is present.
 
-### For developers
+**For developers**
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate            # Windows: .venv\Scripts\activate
 python -m pip install -r requirements-dev.txt
 python -m pip install --no-deps -e .
-python -m pytest                     # 179 tests, about 35 s
+python -m pytest                     # about 195 tests, under a minute
 electroclean                         # start the application
 ```
 
@@ -78,10 +92,13 @@ On the start window enter your annotator ID (letters and digits, for example
 `A01`), choose the folder with the recordings and press **Begin new session**.
 ElectroClean finds every `*_eeg.vhdr` file in that folder and its sub-folders,
 picks a recording you have not completed yet, asks which viewing filters to
-use (1 Hz high-pass and 60 Hz notch by default; they change only the display),
-and opens it. Choose the artifact type in the toolbar, choose *Whole montage*
-or *Selected channels*, and drag across the EEG to mark an interval. When you
-have reviewed the whole recording, press **Save and Finish**. The
+use (1 Hz high-pass and 50 Hz notch by default, with 60 Hz available; they
+change only the display), and opens it. Choose the artifact type in the
+toolbar, choose *Whole montage* or *Selected channels*, and drag across the EEG
+to mark an interval. Overlapping annotations of the same type on the same
+channels are merged into one. Your work is saved automatically as you go;
+you can close the recording and finish it later. When you have reviewed the
+whole recording, press **Save and Finish**. The
 [user guide](docs/user_guide.md) explains every step with screenshots.
 
 ## What is saved
@@ -93,7 +110,7 @@ whose names start with the recording's name and the annotator, for example
 
 | File | Contents |
 |---|---|
-| `…_events.tsv` | The recording's original events, unchanged, plus one row per artifact with `onset`, `duration`, `trial_type` (HED-SCORE label), `value` (code 100-115), `sample`, `channels` (JSON list; `[]` means the whole montage) and columns identifying the source, annotation and annotator. |
+| `…_events.tsv` | The recording's original events, unchanged, plus one row per artifact with `onset`, `duration`, `trial_type` (HED-SCORE term), `sample`, `channels` (JSON list; `[]` means the whole montage), `artifact_code` (fixed code, 100-136) and columns identifying the source, annotation and annotator. The `value` column keeps only the dataset's own marker codes, so they can never clash with artifact codes. |
 | `…_events.json` | BIDS sidecar describing every column, the artifact codes and their HED tags. |
 | `…_annotations.json` | The canonical, lossless record of the annotations, used by the agreement and training tools. |
 | `…_time_viewed.txt` | One number: seconds spent annotating, measured with a monotonic clock. |
@@ -107,13 +124,14 @@ annotator can still annotate the same recording. Load failures are recorded in
 [docs/file_formats.md](docs/file_formats.md); a real example is in
 [`examples/example_output`](examples/example_output/Annotated_Events/annotator-A01/sub-001/eeg).
 
-Example artifact rows from an exported events file:
+Example rows from an exported events file (an original event, then two
+artifacts):
 
 ```text
-onset   duration  trial_type               value  sample  channels               event_source           annotation_id  annotator_id  original_row
-2.996   0.428     Eye-blink-artifact       103    749     ["Fp1","Fp2","VEOG"]   electroclean_artifact  f70bc89f…      A01           n/a
-9.172   1.576     EMG-artifact             102    2293    ["F7","T7"]            electroclean_artifact  305eb9c7…      A01           n/a
-13.972  0.544     Electrode-pops-artifact  114    3493    ["C3"]                 electroclean_artifact  0a03e40a…      A01           n/a
+onset  duration  trial_type          value  sample  channels              artifact_code  event_source           annotation_id  annotator_id  original_row
+2.0    0.004     stimulus/1          1      500     n/a                   n/a            original:events_tsv    n/a            n/a           1
+2.996  0.428     Eye-blink-artifact  n/a    749     ["Fp1","Fp2","VEOG"]  103            electroclean_artifact  d404c776…      A01           n/a
+9.172  1.576     EMG-artifact        n/a    2293    ["F7","T7"]           102            electroclean_artifact  7a7ccd80…      A01           n/a
 ```
 
 ## Agreement analysis
@@ -150,7 +168,8 @@ assessment is blinded and ends with a reproducible competency report. See the
 | [Developer guide](docs/developer_guide.md) | Architecture, MNE integration, extension points |
 | [Testing guide](docs/testing_guide.md) | Running the tests, synthetic data, manual checks |
 | [Design decisions](docs/design_decisions.md) | How the specification was interpreted, and questions for the research team |
-| [HED-SCORE validation](docs/hed_score_validation.md) | Check of the 16 labels against HED SCORE 2.2.0 |
+| [HED-SCORE validation](docs/hed_score_validation.md) | Check of the 29 artifact terms against HED SCORE 2.2.0 |
+| [Building the applications](docs/building_apps.md) | Stand-alone applications for Windows, macOS and Linux |
 | [References](docs/references.md) | Literature cited in the documentation |
 
 ## Repository layout
@@ -165,8 +184,9 @@ electroclean/
 tests/              pytest suite (unit, integration and offscreen GUI tests)
 examples/           demo scripts and example outputs
 docs/               documentation and screenshots
-launchers/          double-click launchers
-scripts/            maintenance scripts (label validation, screenshots)
+launchers/          double-click launchers (run from the source code)
+packaging/          stand-alone application build (PyInstaller) and its self-test
+scripts/            maintenance scripts (label validation, screenshots, third-party notices)
 ```
 
 ## Acknowledgements
@@ -175,3 +195,11 @@ ElectroClean is built on [MNE-Python](https://mne.tools) and its Qt browser
 (Gramfort et al., 2013), uses the HED-SCORE artifact vocabulary (Hermes et
 al., 2025) and follows the EEG-BIDS conventions (Pernet et al., 2019). Full
 references are in [docs/references.md](docs/references.md).
+
+## Licence
+
+ElectroClean is free for research, teaching and any other non-commercial use
+under the [PolyForm Noncommercial License 1.0.0](LICENSE.md); commercial use
+needs permission from the copyright holders. The libraries it uses keep their
+own licences (see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md); Qt for
+Python is used under the LGPL 3.0).

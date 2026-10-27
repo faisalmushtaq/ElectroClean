@@ -26,19 +26,21 @@ electroclean/
     __main__.py            python -m electroclean
     synthetic.py           synthetic BrainVision/BIDS recordings with ground truth
     config/
-        artifact_labels.json            the 16 labels and codes (version-controlled)
+        artifact_labels.json            the 29 HED-SCORE artifact terms, codes and hierarchy
         hed_score_2.2.0_validation.json snapshot of the label check against HED SCORE
         default_settings.json           defaults; overridden by electroclean_study.json
         settings.py                     Settings, FilterSettings, StudyConfig
     app/
         common.py          identifiers, timestamps, modes
-        main.py            desktop entry point and crash handler
+        main.py            desktop entry point, crash handler, --self-test
+        selftest.py        end-to-end installation check (used by the stand-alone builds)
         annotations/       labels.py, timing.py, model.py, store.py, mne_bridge.py
         eeg/               loading.py, filtering.py, events.py, channels.py
         io/                discovery.py, bids.py, tsv.py, atomic.py, locking.py,
                            canonical.py, export.py, naming.py
         validation/        exports.py (read-back verification of outputs)
-        session/           session.py, transaction.py, register.py, failures.py, selection.py
+        session/           session.py, transaction.py, register.py, failures.py, selection.py,
+                           autosave.py
         gui/               browser.py (MNE integration), annotation_window.py,
                            start_window.py, filter_dialog.py, dialogs.py,
                            app_controller.py, workers.py, help_text.py
@@ -72,6 +74,18 @@ electroclean/
    five files (`io.export`, `io.canonical`), and
    `session.transaction.commit_outputs` stages, validates
    (`validation.exports`), commits and registers them.
+
+## Annotation store
+
+`annotations.store.AnnotationStore` holds the annotations, the undo and redo
+history and the listeners. Every change goes through `_commit`, which also
+performs the automatic merging chosen by the research team: after an add,
+update or merge, any annotation of the same label and identical channel scope
+that overlaps the changed one in time is absorbed into one annotation (the
+oldest identifier, by insertion order, survives), in the same undo step.
+`last_auto_merged` and `last_survivors` tell the caller what happened. The
+review store (your annotations next to the reference) is created with
+`auto_merge=False`.
 
 ## The save transaction
 
@@ -188,8 +202,10 @@ read the browser's changelog for changes to `AnnotRegion`, `RawViewBox`,
 
 * **Labels.** Edit `config/artifact_labels.json`, increase
   `catalogue_version`, re-run `scripts/validate_hed_labels.py` and update
-  `tests/test_labels.py`. Files made with different catalogues cannot be
-  compared, by design.
+  `tests/test_labels.py`. Never change or reuse a code: catalogue versions are
+  compatible (and their files comparable) only while every shared label keeps
+  its code. `LabelCatalogue.ancestors`/`descendants` give the hierarchy used
+  by the group roll-ups.
 * **Agreement measures.** `reliability.analysis.register_measure(name, func)`;
   see the reliability guide.
 * **Competency metrics.** Add an entry to `training.assessment.METRICS` and
@@ -199,9 +215,10 @@ read the browser's changelog for changes to `AnnotRegion`, `RawViewBox`,
   MNE reader means providing a different discovery suffix, header check and
   reader there. The rest of the application works on `RecordingInfo` and the
   display `Raw`.
-* **Autosave and session recovery** (not implemented, as allowed by the
-  specification): the store's snapshots could be written periodically to
-  `.electroclean/` and offered back by `AppController.begin`.
+* **Autosave.** `session.autosave` writes the canonical document, the
+  elapsed time and the source fingerprint atomically; `AnnotationSession`
+  writes it (throttled) from the annotation window's clock and accepts a
+  `resume` record; `AppController._resumable` and `_resume_for` offer it back.
 
 ## Conventions
 
@@ -215,5 +232,11 @@ while label strings keep the HED spelling *artifact*.
 `pyproject.toml` defines the package and three commands (`electroclean`,
 `electroclean-agreement`, `electroclean-admin`). `requirements.txt` pins every
 dependency; `requirements-dev.txt` adds pytest and pybv. The launchers in
-`launchers/` create `.venv` on first use. A frozen single-file application
-(for example with PyInstaller) has not been built; see the design decisions.
+`launchers/` create `.venv` on first use.
+
+The stand-alone applications are built with PyInstaller from
+`packaging/electroclean.spec` (`python packaging/build.py`); the GitHub
+Actions workflow `.github/workflows/build-apps.yml` runs the test-suite and
+builds and self-tests the applications on Windows, macOS and Linux for every
+push. See [building_apps.md](building_apps.md). After changing dependencies,
+regenerate `THIRD_PARTY_NOTICES.md` with `scripts/third_party_notices.py`.

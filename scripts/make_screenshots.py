@@ -20,6 +20,15 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 
 
+
+def desktop_size(ws) -> None:  # noqa: ANN001
+    """The off-screen 'screen' is small; show the annotation window at a typical desktop size."""
+    from qtpy.QtCore import Qt
+
+    ws.browser.resize(1600, 950)
+    ws.browser.resizeDocks([ws.annotation_dock], [470], Qt.Horizontal)
+    ws.browser.resizeDocks([ws.annotation_dock, ws.info_dock], [540, 340], Qt.Vertical)
+
 def main() -> int:
     out = Path(sys.argv[1]) if len(sys.argv) > 1 else REPO / "docs" / "images"
     out.mkdir(parents=True, exist_ok=True)
@@ -92,6 +101,7 @@ def main() -> int:
         session.start()
         ws = AnnotationWorkspace(session, settings, prompts=ScriptedPrompts())
         ws.show()
+        desktop_size(ws)
         QTest.qWaitForWindowExposed(ws.browser)
         st = session.store
         st.add_interval("Eye-blink-artifact", 2.96, 3.44, ["Fp1", "Fp2", "VEOG"])
@@ -151,6 +161,7 @@ def main() -> int:
                                      prompts=ScriptedPrompts(), read_only=True, display_prefix=prefix,
                                      window_title="ElectroClean – review: YOU versus REF")
         review.show()
+        desktop_size(review)
         QTest.qWaitForWindowExposed(review.browser)
         settle(300)
         review.controller.jump_to(sorted(store.annotations(), key=lambda a: a.onset_sample)[0].annotation_id)

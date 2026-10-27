@@ -49,7 +49,9 @@ Annotated_Events/
     .electroclean/
         locks/          lock files of open sessions and of the register
         staging/        saves in progress (normally empty)
-        interrupted/    files from saves that were interrupted and rolled back
+        autosave/       unfinished work, saved automatically (see below)
+        interrupted/    files from saves that were interrupted and rolled back, and
+                        autosaves that were not restored
 ```
 
 The base name is the recording's file name without `.vhdr` followed by
@@ -68,14 +70,16 @@ in order of onset. Columns, in this order:
    `channels`);
 2. any of `onset`, `duration`, `trial_type`, `value`, `sample`, `channels`
    that the original lacked;
-3. `event_source`, `annotation_id`, `annotator_id`, `original_row`.
+3. `artifact_code`, `event_source`, `annotation_id`, `annotator_id`,
+   `original_row`.
 
 | Column | Original event rows | Artifact rows |
 |---|---|---|
 | `onset` | original text | seconds, shortest exact decimal (`2.996`) |
 | `duration` | original text | seconds |
 | `trial_type` | original text | HED-SCORE label, e.g. `Eye-blink-artifact` |
-| `value` | original text | fixed code 100-115 |
+| `value` | original text | `n/a` |
+| `artifact_code` | `n/a` | fixed artifact code (100-121 for specific types, 130-136 for group terms) |
 | `sample` | original text; computed from `onset` if the original had no `sample` column | `onset_sample` |
 | `channels` | original text, or `n/a` | JSON array, e.g. `["Fp1","Fp2"]`; `[]` = whole montage |
 | `event_source` | `original:events_tsv` or `original:brainvision_vmrk` | `electroclean_artifact` |
@@ -88,25 +92,28 @@ The original table can be rebuilt exactly by keeping the rows whose
 keeping the original columns. The annotations can be rebuilt exactly from the
 artifact rows (see `electroclean.app.io.export.annotations_from_events_tsv`).
 
-**Event codes 100-115 in original events.** If any original event uses one
-of the artifact codes, or uses an artifact label as its `trial_type`, the
-recording cannot be opened until the administrator chooses a policy
-(`events.collision_policy`). With `preserve_and_flag`, original codes stay
-unchanged, `event_source` tells the rows apart, and the sidecar marks the
-code as ambiguous. Nothing is ever renumbered.
+**Why artifact codes have their own column.** The `value` column belongs to
+the dataset: it holds the marker codes of the recording system, which can be
+any numbers, including 100 to 136. ElectroClean therefore never writes into
+`value`; artifact rows leave it as `n/a` and carry their code in
+`artifact_code`. An original event coded 101 and an ECG artifact (code 101)
+can never be confused, codes stay the same in every dataset, and no setting is
+needed. Original codes that happen to equal artifact codes, and original
+events that already use HED-SCORE artifact names as `trial_type`, are noted in
+the session file. Files written by ElectroClean 1.0 kept artifact codes in
+`value`; `annotations_from_events_tsv` still reads them.
 
 ## `…_events.json`
 
 The original `events.json` (with BIDS inheritance applied), plus:
 
-* descriptions of `channels`, `event_source`, `annotation_id`, `annotator_id`
-  and `original_row`;
-* `trial_type.Levels` and `trial_type.HED` entries for the 16 labels, using
-  HED tags such as `sc:Eye-blink-artifact` (declare
+* descriptions of `channels`, `artifact_code` (with a `Levels` entry for every
+  code), `event_source`, `annotation_id`, `annotator_id` and `original_row`;
+  the original description of `value` is kept unchanged;
+* `trial_type.Levels` and `trial_type.HED` entries for the 29 artifact terms,
+  using HED tags such as `sc:Eye-blink-artifact` (declare
   `"HEDVersion": ["8.5.0", "sc:score_2.2.0"]` in `dataset_description.json` to
   validate them);
-* `value.Levels` entries for codes 100-115 (or an "ambiguous code" note when
-  an original event uses the same code);
 * `ElectroCleanMetadata`: recording, annotator, session, time conventions,
   the label catalogue and the result of the event-code check.
 
@@ -129,9 +136,10 @@ The original `events.json` (with BIDS inheritance applied), plus:
               "created_at": "2026-10-26T15:47:49.375+00:00", "app_version": "1.0.0", "context": {}},
   "time_conventions": {"onset_origin": "first_sample", "...": "..."},
   "channel_convention": {"empty_list_means": "The annotation applies to the whole recording montage ...", "...": "..."},
-  "label_catalogue": {"catalogue_id": "electroclean-hed-score-artifacts", "catalogue_version": "1.0.0",
+  "label_catalogue": {"catalogue_id": "electroclean-hed-score-artifacts", "catalogue_version": "2.0.0",
                       "sha256": "...", "hed_library": "score", "hed_library_version": "2.2.0",
-                      "labels": [{"value": 100, "label": "Chewing-artifact"}, "..."]},
+                      "labels": [{"value": 103, "label": "Eye-blink-artifact", "kind": "specific",
+                                  "parent": "Eye-artifact"}, "..."]},
   "n_annotations": 11,
   "annotations": [
     {"annotation_id": "f70bc89fe0bd420192ad932194bdad6d", "label": "Eye-blink-artifact", "value": 103,
@@ -162,12 +170,12 @@ A single number: seconds spent annotating, to the nearest millisecond, e.g.
 | `session_id`, `mode`, `context` | Session identity, mode and (for training) reference set |
 | `annotator` | ID and display name |
 | `recording` | Recording ID, file names, BIDS sidecars used, timing, channel names, source fingerprints |
-| `timing` | `session_opened`, `start_timestamp` (viewer ready), `finish_timestamp` (Save and Finish), `elapsed_seconds`, clock used |
+| `timing` | `session_opened`, `start_timestamp` (viewer ready), `finish_timestamp` (Save and Finish), `elapsed_seconds` (all the time spent on the recording, including earlier unfinished sessions), clock used, `elapsed_in_earlier_sessions_seconds` and `resumed_from_autosave` (the earlier sessions continued from an autosave) |
 | `application` | ElectroClean version, platform, versions of Python, MNE, mne-qt-browser, NumPy, SciPy, pandas, PySide6, pyqtgraph, matplotlib |
 | `filters` | Selected settings, whether fixed by the administrator, and `design`: the exact MNE calls and parameters, filter lengths, MNE's own description of each filter, edge-transient duration, discontinuities filtered separately, channels filtered and how the display data were stored |
 | `annotations` | Counts in total, by label, whole-montage and channel-specific |
 | `label_catalogue` | As in the annotations file |
-| `original_events` | Source, count, whether `sample` was computed, comparison of `events.tsv` with the marker file, event-code check |
+| `original_events` | Source, count, whether `sample` was computed, comparison of `events.tsv` with the marker file, the code check (original codes equal to artifact codes, artifact names used as `trial_type`, codes with several meanings) |
 | `channel_check` | Comparison of the recording's channels with `channels.tsv` |
 | `warnings`, `notes` | Everything shown in the viewer's *Recording* panel |
 | `outputs` | Base name and file names |
@@ -196,13 +204,17 @@ recording IDs completed in standard mode by that annotator, one per line
   separated by tabs.
 * `failure_log.jsonl`: one JSON object per line with the same information,
   the failure kind (`missing_companion`, `corrupt_recording`,
-  `inconsistent_recording`, `malformed_bids_metadata`, `event_code_collision`,
-  `filter_error`, `permission`), the size and modification time of every
-  file of the recording, and the settings that caused the failure. Lines with
-  `"event": "resolved"` lift a failure.
+  `inconsistent_recording`, `malformed_bids_metadata`, `filter_error`,
+  `permission`, `memory`, `unexpected_error`), the size and modification time
+  of every file of the recording, and the settings that caused the failure.
+  Lines with `"event": "resolved"` lift a failure. Failures of the last four
+  kinds may belong to one computer, so they only hold the recording back from
+  the annotator who met them.
 * `session_log.jsonl`: `session_started`, `session_completed`,
   `session_incomplete` (closed without saving), `export_failed`,
-  `session_saved_register_pending` and `export_recovery` events.
+  `session_saved_register_pending`, `export_recovery`, `completion_recovered`
+  and `leftover_outputs_moved` events. `session_incomplete` records whether
+  the work was kept for later (`kept_for_later`).
 
 ## `electroclean_study.json` (optional, in the dataset folder)
 
@@ -217,7 +229,6 @@ recording IDs completed in standard mode by that annotator, one per line
   "settings": {
     "filters": {"highpass_enabled": true, "highpass_hz": 1.0, "notch_enabled": true, "notch_hz": 50.0,
                 "method": "fir", "locked": true},
-    "events": {"collision_policy": "preserve_and_flag"},
     "output": {"directory": "/shared/drive/Annotated_Events"}
   },
   "training": {"reference_sets_dir": "derivatives/electroclean_reference_sets"},
@@ -230,11 +241,32 @@ The administrator tools edit this file and validate it before saving.
 
 ## `electroclean/config/artifact_labels.json`
 
-The version-controlled list of the 16 permitted labels with their fixed
-codes, short codes and display colours. The catalogue digest recorded in every
-output covers its identifier, version and the (code, label) pairs only, so
-changing a colour does not make files incompatible, while changing a code or
-label does.
+The version-controlled list of the 29 permitted artifact terms (catalogue
+2.0.0): every artifact term of HED SCORE 2.2.0. Each entry has its fixed code,
+label, short code, display colour, `kind` (`specific` or `group`), `parent`
+(the group term above it), `section` (the heading it is listed under) and the
+schema's description. Codes are never changed or reused: 100-115 are the 16
+types of catalogue 1.0.0, 116-121 the further specific types and 130-136 the
+group terms. The order of the list is the order annotators see, with each
+group term after its members.
+
+The catalogue digest recorded in every output covers its identifier, version
+and the (code, label) pairs only, so changing a colour does not make files
+incompatible. Two catalogue versions are compatible when every label they
+share has the same code; files made with compatible versions (for example
+1.0.0 and 2.0.0) are analysed together with the larger catalogue.
+
+## Autosave files (`.electroclean/autosave/<annotator>-<key>.json`)
+
+Unfinished work, written every few seconds while a recording is open (only
+when something changed, and at least once a minute while the timer runs):
+`schema` (`electroclean.autosave`), `saved_at`, `session_id`, `elapsed_s` (all
+time spent on the recording so far), `filters`, `previous_sessions`, the
+`source_fingerprint` of the recording and the `document` in the canonical
+annotations format. An autosave is never an output and never marks anything
+complete. It is removed after Save and Finish or when the annotator discards
+the work; one that no longer fits the recording, or that the annotator chose
+not to restore, is moved to `.electroclean/interrupted/autosave/`.
 
 ## Reference set folder
 

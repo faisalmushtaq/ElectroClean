@@ -106,6 +106,26 @@ Comparing it with the per-category rows separates detection disagreements
 from classification disagreements. When the analysis is limited to some
 categories (`categories`), ANY-artifact pools only those categories.
 
+**Group terms and roll-ups.** Annotators can choose a HED-SCORE group term
+(such as Eye-artifact) when the exact type is unclear. Every label, specific
+or group, has its own row, which counts only annotations with exactly that
+label. In addition, each group term has a **roll-up** row, named for example
+"Eye-artifact + subtypes", which counts annotations with the group term or any
+type below it. If one annotator marks a blink as Eye-blink-artifact and the
+other as Eye-artifact, they disagree in the Eye-blink-artifact row but agree in
+the Eye-artifact roll-up, which is the honest summary: they agree that it is
+an eye artifact, not on how specific to be. The roll-up of Data-artifact, the
+top of the hierarchy, would repeat ANY-artifact and is not reported. The
+micro-averaged event measures use the exact-label rows only, so every
+annotation is counted once. Set `include_group_rollups` to false to leave the
+roll-ups out.
+
+**Label catalogue versions.** Files made with different versions of
+ElectroClean's label catalogue are analysed together when the versions are
+compatible (every label they share has the same code, which ElectroClean
+guarantees by never reusing codes), using the larger catalogue; the report
+notes the versions.
+
 When a `reference_annotator` is set, pairwise statistics, including the mean
 pairwise kappa in `timeresolved_multirater.tsv`, use only the pairs that
 include the reference, while Fleiss' kappa and Krippendorff's alpha still use
@@ -196,7 +216,10 @@ Different recordings may have different channel sets: each recording is
 analysed with its own channels and the results are pooled. If annotators'
 files for the same recording list different channels (which should not
 happen), only the shared channels are used and a warning is given.
-`channel_exclude` removes channels (for example EOG) from channel analyses.
+EOG and ECG channels are part of the montage: by default they are included in
+the channel analyses like every other channel, and a whole-montage annotation
+covers them. `channel_exclude` removes channels (for example EOG) from channel
+analyses if a study decides otherwise.
 In time-and-channel mode, a channel-specific annotation none of whose
 channels remain in the analysis is left out entirely (it covers no analysed
 channel-seconds and takes no part in event matching); it still counts in

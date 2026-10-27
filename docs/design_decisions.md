@@ -14,7 +14,7 @@ research team.
 | Display filters | `Raw.filter`, `Raw.notch_filter`, `skip_by_annotation` | Applying them to a display copy only (in memory or memory-mapped), recording MNE's filter design, marking edge zones |
 | Continuous EEG viewer | mne-qt-browser: scrolling, zoom, scaling, channel paging, overview bar, time cursor, events | Annotation interaction (below), toolbar, panels, Save and Finish |
 | Annotation container | `mne.Annotations` with `ch_names` (channel-specific) and `extras` | Conversion both ways (`mne_bridge`), sample-exact model, undoable store |
-| Experimental events | `events_from_annotations` (BrainVision marker codes) | Preservation of `events.tsv` rows as text, collision and consistency checks |
+| Experimental events | `events_from_annotations` (BrainVision marker codes) | Preservation of `events.tsv` rows as text, a separate `artifact_code` column, consistency checks |
 | Export, completion, reliability, training | not provided | Everything in `io`, `session`, `validation`, `reliability`, `training` |
 
 ## Limitations of the standard MNE browser
@@ -89,8 +89,9 @@ discontinuities produce transients of up to half the filter length. With
 MNE's defaults the 1 Hz FIR high-pass is 3.3 s long and the FIR notch 6.6 s,
 so the first and last 5 s or so of a recording can be distorted. ElectroClean
 filters the segments between BrainVision "New Segment" markers separately,
-hatches the affected zones in the viewer, records the exact design in every
-session file, and offers an IIR alternative.
+hatches the affected zones in the viewer and records the exact design in
+every session file. The research team chose FIR filters (MNE's defaults) and a
+50 Hz notch by default, with 60 Hz available to annotators.
 
 **Completion and concurrency.** Completion is per annotator, mode and
 reference set. Lock files prevent the same annotator from opening one
@@ -103,9 +104,11 @@ implemented by remembering the size and modification time of the recording's
 files and the settings involved: a failure stops applying when the files or
 the setting change, or when an administrator marks it resolved.
 
-**Incomplete sessions.** As allowed by the specification, a session closed
-without Save and Finish is discarded (after confirmation) and logged as
-incomplete. Autosave is left for a later version.
+**Incomplete sessions and autosave.** Unfinished work is saved automatically
+while a recording is open and offered back at the next start or opening of the
+recording, with the time already spent carried over. An annotator who closes
+without Save and Finish can keep the work for later or discard it (after a
+second confirmation). Autosaves never count as results.
 
 **Time measurement.** The monotonic clock starts when the viewer is on screen
 and stops at Save and Finish. If saving fails the clock continues. Time when
@@ -121,48 +124,53 @@ recordings with the same file name in different folders apart.
 `channels.tsv` is used to check them, to give EOG and ECG channels a suitable
 scale, and to grey out channels marked bad; none of this changes any file.
 
-**Agreement for overlapping annotations by one annotator.** For
-time-resolved agreement, overlapping annotations of the same label by one
-annotator are combined. For event matching they remain separate events, so
-an annotator who splits one artifact into two annotations has one unmatched
-event.
+**Overlapping annotations of one type by one annotator.** At the research
+team's request these are merged automatically while annotating, when they
+overlap in time on the same channels (as one undoable step), so one artifact
+is one event. Annotations that only touch, or that cover different channels,
+stay separate. For time-resolved agreement, any remaining overlaps of one
+label (for example in files made before merging was introduced) are combined;
+for event matching they remain separate events.
 
-**HED-SCORE labels.** All 16 labels match HED SCORE 2.2.0 exactly (see
-[hed_score_validation.md](hed_score_validation.md)). The schema contains
-further artifact terms that are not in the requested list.
+**HED-SCORE labels.** At the research team's request ElectroClean offers all
+29 artifact terms of HED SCORE 2.2.0, including the seven group terms, with
+the original 16 codes unchanged (see
+[hed_score_validation.md](hed_score_validation.md)). Group terms have roll-up
+rows in the agreement analysis.
+
+**Event codes.** The specification placed artifact codes in `value`, which
+clashes with datasets whose own markers use 100 to 115 and needed an
+administrator decision for each such dataset. At the research team's request
+artifact codes now have their own `artifact_code` column, and `value` keeps
+only the dataset's markers, so a clash cannot occur.
 
 **Blinding.** Reference annotations are files on disk; annotators who look for
 them can find them. They can be kept in a separate location
 (`training.reference_sets_dir`).
 
-## Decisions for the research team
+## Decisions taken by the research team (27 October 2026)
 
-1. **Notch frequency.** The specification's default is 60 Hz. UK mains is
-   50 Hz; the recordings' `eeg.json` `PowerLineFrequency` is checked and a
-   mismatch is shown. Should the study default be 50 Hz, and should filters be
-   fixed for all annotators?
-2. **Filter design.** MNE's FIR defaults (long, sharp) or the IIR option
-   (shorter transients, more phase-sensitive in the transition band)?
-3. **Event-code policy** for datasets whose original events use 100 to 115.
-4. **Agreement settings to pre-register:** bin widths, the bin coverage rule,
-   the matching criterion, IoU thresholds or tolerances, one-to-one or
-   many-to-one matching, and whether EOG and ECG channels are included in
-   channel analyses.
-5. **Competency criteria:** which metrics, thresholds and categories, and the
+Notch filter 50 Hz by default with 60 Hz selectable; FIR filters; artifact
+codes in their own column; EOG and ECG channels included in channel analyses
+when present; overlapping annotations of one type on the same channels merged
+automatically; every HED-SCORE artifact term available, group terms included;
+stand-alone applications for Windows, macOS and Linux; free for research and
+other non-commercial use (PolyForm Noncommercial License 1.0.0); autosave.
+
+## Decisions still open
+
+1. **Agreement settings to pre-register:** bin widths, the bin coverage rule,
+   the matching criterion, IoU thresholds or tolerances, and one-to-one or
+   many-to-one matching.
+2. **Competency criteria:** which metrics, thresholds and categories, and the
    minimum number of reference events for a category to be judged.
-6. **Same-label overlaps by one annotator:** allow (current behaviour), warn,
-   or merge before analysis?
-7. **Repeat annotation** for intra-rater (test-retest) reliability: the code
+3. **Repeat annotation** for intra-rater (test-retest) reliability: the code
    supports repeats with an `_attempt-NN` suffix, but there is no study setting
    to schedule them yet.
-8. **Idle time:** should the time measurement exclude periods without any
+4. **Idle time:** should the time measurement exclude periods without any
    interaction?
-9. **Categories:** HED SCORE 2.2.0 also has Line-noise-artifact,
-   Nystagmus-artifact, Artificial-ventilation-artifact, Dialysis-artifact,
-   Rocking-patting-artifact and Sucking-artifact. Are any of these needed
-   (line noise, in particular, is hidden by the notch filter)?
-10. **Distribution:** the launchers need Python on each computer. A frozen
-    application (for example PyInstaller) could remove that requirement but
-    would need building and signing on Windows and macOS.
-11. **Licence** under which ElectroClean is shared (none has been chosen).
-12. **Autosave and recovery** of unfinished sessions in a later version.
+5. **Copyright holder** for the licence notice (currently "The ElectroClean
+   authors"), which may need to be agreed with the University.
+6. **Code signing** of the stand-alone applications (Apple and Windows
+   certificates), so that annotators are not asked to confirm the first start,
+   and whether an Intel macOS build is needed.

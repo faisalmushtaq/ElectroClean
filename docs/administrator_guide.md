@@ -28,10 +28,14 @@ boundary: anyone who can read the dataset folder can read its files.
 
 ## Fixing the viewing filters
 
-For a reliability study all annotators should see the same filtered signal.
+The defaults are a 1 Hz high-pass and a 50 Hz notch filter, both zero-phase FIR
+filters with MNE's default design; annotators may switch the notch to 60 Hz
+for recordings made with 60 Hz mains. For a reliability study all annotators
+should see the same filtered signal, so you can fix the filters:
 
 ```bash
-electroclean-admin fix-filters /data/MyStudy --notch 50          # 1 Hz high-pass, 50 Hz notch, FIR
+electroclean-admin fix-filters /data/MyStudy                     # 1 Hz high-pass, 50 Hz notch, FIR
+electroclean-admin fix-filters /data/MyStudy --notch 60          # for 60 Hz mains
 electroclean-admin fix-filters /data/MyStudy --no-highpass --notch off
 electroclean-admin unlock-filters /data/MyStudy
 ```
@@ -65,24 +69,19 @@ Completion is recorded per annotator: a recording completed by A01 remains
 available to A02. A recording an annotator has completed is never offered to
 them again and their files are never overwritten.
 
-## Original event codes 100 to 115
+## Original event codes and artifact codes
 
-The artifact codes are fixed at 100 to 115. If a recording's original events
-use one of these codes, or use an artifact label as their type, ElectroClean
-refuses to open that recording and logs the reason, because the exported
-events file would otherwise contain two meanings for one code. After checking
-the data, choose a policy:
-
-```bash
-electroclean-admin collision-policy /data/MyStudy preserve_and_flag
-```
-
-With `preserve_and_flag` the original codes are kept unchanged, the
-`event_source` column distinguishes original rows from artifact rows, and the
-events sidecar describes the code as ambiguous. Original codes are never
-renumbered. Repeated codes (many trials sharing one code) are normal and are
-only counted; a code used for different event types, or one type appearing
-with different codes, is reported in each session file for you to review.
+Artifact codes (100 to 121 for the specific types, 130 to 136 for the group
+terms) are written to their own `artifact_code` column. The `value` column
+keeps only the dataset's own marker codes, so a recording whose events already
+use, say, code 101 needs no special treatment: the original 101 stays in
+`value` and an ECG artifact gets 101 in `artifact_code`. There is nothing to
+configure. Original codes are never renumbered. Repeated codes (many trials
+sharing one code) are normal and are only counted; a code used for different
+event types, or one type appearing with different codes, is reported in each
+session file for you to review, as are original events that already use
+HED-SCORE artifact names. Older study files that still set
+`events.collision_policy` are accepted; the setting is no longer used.
 
 ## Load failures
 
@@ -110,6 +109,18 @@ the next start finds the interrupted save. If every file had been written and
 verified, the save is completed; otherwise the partial files are moved to
 `Annotated_Events/.electroclean/interrupted/` and the recording stays
 incomplete. Either way, a message tells the annotator what happened.
+
+## Unfinished work (autosave)
+
+While an annotator works, ElectroClean saves their unfinished annotations and
+time every few seconds in `Annotated_Events/.electroclean/autosave/`. If
+ElectroClean or the computer stops, or the annotator chooses *Close and
+finish later*, the next session offers to continue. Autosaves are never
+results: the agreement analysis and the completion register only ever see
+recordings finished with Save and Finish. An autosave that no longer matches
+its recording (because the recording files were replaced), or that the
+annotator chose not to restore, is moved to
+`.electroclean/interrupted/autosave/` rather than deleted.
 
 ## Training and competency assessment
 
@@ -254,8 +265,10 @@ text as the item's label.
 
 ## Before a study starts
 
-1. Run the test suite on the computers that will be used (see the testing
-   guide), including the manual checks listed there.
+1. On each computer that will be used, run the stand-alone application's
+   self-test (`ElectroClean --self-test`, or with the source code the test
+   suite; see the testing guide) and the manual checks listed in the testing
+   guide.
 2. Fix the viewing filters and choose the allocation.
 3. Check that every recording opens (any failures appear in the log).
 4. Agree the analysis settings for the agreement analysis and write them in a

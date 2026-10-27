@@ -84,7 +84,7 @@ def cmd_fix_filters(a: argparse.Namespace) -> int:
         highpass_enabled=not a.no_highpass,
         highpass_hz=a.highpass_hz,
         notch_enabled=a.notch != "off",
-        notch_hz=60.0 if a.notch == "off" else float(a.notch),
+        notch_hz=50.0 if a.notch == "off" else float(a.notch),
         notch_harmonics=a.harmonics,
         method=a.method,
     )
@@ -241,9 +241,10 @@ def build_parser() -> argparse.ArgumentParser:
     sp = add("fix-filters", cmd_fix_filters, "Fix the viewing filters for all annotators")
     sp.add_argument("--no-highpass", action="store_true")
     sp.add_argument("--highpass-hz", type=float, default=1.0)
-    sp.add_argument("--notch", choices=("50", "60", "off"), default="60")
+    sp.add_argument("--notch", choices=("50", "60", "off"), default="50")
     sp.add_argument("--harmonics", action="store_true")
-    sp.add_argument("--method", choices=("fir", "iir"), default="fir")
+    sp.add_argument("--method", choices=("fir", "iir"), default="fir",
+                    help="Filter design; the study uses FIR (IIR only for special purposes)")
     add("unlock-filters", cmd_unlock_filters, "Let annotators choose filters again")
     sp = add("allocation", cmd_allocation, "Choose random or seeded allocation")
     sp.add_argument("strategy", choices=("random", "seeded"))

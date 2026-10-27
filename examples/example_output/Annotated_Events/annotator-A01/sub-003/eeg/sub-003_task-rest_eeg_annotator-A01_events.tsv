@@ -1,42 +1,42 @@
-onset	duration	trial_type	value	sample	channels	event_source	annotation_id	annotator_id	original_row
-2.0	0.004	stimulus/1	1	500	n/a	original:events_tsv	n/a	n/a	1
-2.6	0.004	response	1001	650	n/a	original:events_tsv	n/a	n/a	2
-2.984	0.396	Eye-blink-artifact	103	746	["Fp1","Fp2","VEOG"]	electroclean_artifact	6f5a453b2cc24e35b4c5278329fe8625	A01	n/a
-6.0	0.004	stimulus/2	2	1500	n/a	original:events_tsv	n/a	n/a	3
-6.6	0.004	response	1001	1650	n/a	original:events_tsv	n/a	n/a	4
-9.168	1.608	EMG-artifact	102	2292	["F7","F8","T8"]	electroclean_artifact	76e30c67d2684143978ca197026eaebf	A01	n/a
-9.424	0.428	Eye-blink-artifact	103	2356	["Fp1","Fp2"]	electroclean_artifact	b2211ce9be714a59ba1d26bcf4fe0d0d	A01	n/a
-10.0	0.004	stimulus/1	1	2500	n/a	original:events_tsv	n/a	n/a	5
-10.6	0.004	response	1001	2650	n/a	original:events_tsv	n/a	n/a	6
-13.948	0.536	Electrode-pops-artifact	114	3487	["C3"]	electroclean_artifact	0438b6c7ae3d42798749c223635edca8	A01	n/a
-14.0	0.004	stimulus/2	2	3500	n/a	original:events_tsv	n/a	n/a	7
-14.6	0.004	response	1001	3650	n/a	original:events_tsv	n/a	n/a	8
-18.0	0.004	stimulus/1	1	4500	n/a	original:events_tsv	n/a	n/a	9
-18.124	1.064	Horizontal-eye-movement-artifact	104	4531	["F7","F8","HEOG"]	electroclean_artifact	f771a03deaec4cd1b0c08cedf2cd25d6	A01	n/a
-18.6	0.004	response	1001	4650	n/a	original:events_tsv	n/a	n/a	10
-22.0	0.004	stimulus/2	2	5500	n/a	original:events_tsv	n/a	n/a	11
-22.6	0.004	response	1001	5650	n/a	original:events_tsv	n/a	n/a	12
-23.916	2.084	Movement-artifact	107	5979	[]	electroclean_artifact	e58f61e2c4004c7d845e72eecec3fe16	A01	n/a
-26.0	0.004	stimulus/1	1	6500	n/a	original:events_tsv	n/a	n/a	13
-26.6	0.004	response	1001	6650	n/a	original:events_tsv	n/a	n/a	14
-29.936	3.108	Chewing-artifact	100	7484	["T7","T8"]	electroclean_artifact	8c603484a86e46a088b4f34667a5f451	A01	n/a
-30.0	0.004	stimulus/2	2	7500	n/a	original:events_tsv	n/a	n/a	15
-30.6	0.004	response	1001	7650	n/a	original:events_tsv	n/a	n/a	16
-34.0	0.004	stimulus/1	1	8500	n/a	original:events_tsv	n/a	n/a	17
-34.6	0.004	response	1001	8650	n/a	original:events_tsv	n/a	n/a	18
-35.124	0.52	Eye-blink-artifact	103	8781	["Fp1","VEOG"]	electroclean_artifact	752c9af0a0a04373aee4c4b5fcf1ceb6	A01	n/a
-38.0	0.004	stimulus/2	2	9500	n/a	original:events_tsv	n/a	n/a	19
-38.6	0.004	response	1001	9650	n/a	original:events_tsv	n/a	n/a	20
-39.988	4.024	Slow-eye-movement-artifact	105	9997	["F7","F8","HEOG"]	electroclean_artifact	d679b3032007453987cfa5b29ba648b4	A01	n/a
-42.0	0.004	stimulus/1	1	10500	n/a	original:events_tsv	n/a	n/a	21
-42.6	0.004	response	1001	10650	n/a	original:events_tsv	n/a	n/a	22
-46.0	0.004	stimulus/2	2	11500	n/a	original:events_tsv	n/a	n/a	23
-46.6	0.004	response	1001	11650	n/a	original:events_tsv	n/a	n/a	24
-46.988	5.0	ECG-artifact	101	11747	["T7","P7","O1"]	electroclean_artifact	b29758958cb241d0a3068481a25a5105	A01	n/a
-50.0	0.004	stimulus/1	1	12500	n/a	original:events_tsv	n/a	n/a	25
-50.6	0.004	response	1001	12650	n/a	original:events_tsv	n/a	n/a	26
-53.512	0.388	Electrode-pops-artifact	114	13378	["O2"]	electroclean_artifact	ade4580f173442c2aabfa569692358d5	A01	n/a
-54.0	0.004	stimulus/2	2	13500	n/a	original:events_tsv	n/a	n/a	27
-54.6	0.004	response	1001	13650	n/a	original:events_tsv	n/a	n/a	28
-58.0	0.004	stimulus/1	1	14500	n/a	original:events_tsv	n/a	n/a	29
-58.6	0.004	response	1001	14650	n/a	original:events_tsv	n/a	n/a	30
+onset	duration	trial_type	value	sample	channels	artifact_code	event_source	annotation_id	annotator_id	original_row
+2.0	0.004	stimulus/1	1	500	n/a	n/a	original:events_tsv	n/a	n/a	1
+2.6	0.004	response	1001	650	n/a	n/a	original:events_tsv	n/a	n/a	2
+2.984	0.396	Eye-blink-artifact	n/a	746	["Fp1","Fp2","VEOG"]	103	electroclean_artifact	1d5ff0066c3c4ef1adcb5a97e677dcd7	A01	n/a
+6.0	0.004	stimulus/2	2	1500	n/a	n/a	original:events_tsv	n/a	n/a	3
+6.6	0.004	response	1001	1650	n/a	n/a	original:events_tsv	n/a	n/a	4
+9.168	1.608	EMG-artifact	n/a	2292	["F7","F8","T8"]	102	electroclean_artifact	01e63f74d32d49b89200c89899bc3335	A01	n/a
+9.424	0.428	Eye-blink-artifact	n/a	2356	["Fp1","Fp2"]	103	electroclean_artifact	a01dc150182341f4bc9c9bb08981b88c	A01	n/a
+10.0	0.004	stimulus/1	1	2500	n/a	n/a	original:events_tsv	n/a	n/a	5
+10.6	0.004	response	1001	2650	n/a	n/a	original:events_tsv	n/a	n/a	6
+13.948	0.536	Electrode-pops-artifact	n/a	3487	["C3"]	114	electroclean_artifact	30aa78452d1042019356aacac460a6da	A01	n/a
+14.0	0.004	stimulus/2	2	3500	n/a	n/a	original:events_tsv	n/a	n/a	7
+14.6	0.004	response	1001	3650	n/a	n/a	original:events_tsv	n/a	n/a	8
+18.0	0.004	stimulus/1	1	4500	n/a	n/a	original:events_tsv	n/a	n/a	9
+18.124	1.064	Horizontal-eye-movement-artifact	n/a	4531	["F7","F8","HEOG"]	104	electroclean_artifact	109526516e2749fca73e279ae882c7c8	A01	n/a
+18.6	0.004	response	1001	4650	n/a	n/a	original:events_tsv	n/a	n/a	10
+22.0	0.004	stimulus/2	2	5500	n/a	n/a	original:events_tsv	n/a	n/a	11
+22.6	0.004	response	1001	5650	n/a	n/a	original:events_tsv	n/a	n/a	12
+23.916	2.084	Movement-artifact	n/a	5979	[]	107	electroclean_artifact	1e28c9d3db1f4147909708f4f57f54c6	A01	n/a
+26.0	0.004	stimulus/1	1	6500	n/a	n/a	original:events_tsv	n/a	n/a	13
+26.6	0.004	response	1001	6650	n/a	n/a	original:events_tsv	n/a	n/a	14
+29.936	3.108	Chewing-artifact	n/a	7484	["T7","T8"]	100	electroclean_artifact	701b78861b064b9088d4d6d865c9f731	A01	n/a
+30.0	0.004	stimulus/2	2	7500	n/a	n/a	original:events_tsv	n/a	n/a	15
+30.6	0.004	response	1001	7650	n/a	n/a	original:events_tsv	n/a	n/a	16
+34.0	0.004	stimulus/1	1	8500	n/a	n/a	original:events_tsv	n/a	n/a	17
+34.6	0.004	response	1001	8650	n/a	n/a	original:events_tsv	n/a	n/a	18
+35.124	0.52	Eye-blink-artifact	n/a	8781	["Fp1","VEOG"]	103	electroclean_artifact	313c4a8ce2fe425a9ee70059e1192456	A01	n/a
+38.0	0.004	stimulus/2	2	9500	n/a	n/a	original:events_tsv	n/a	n/a	19
+38.6	0.004	response	1001	9650	n/a	n/a	original:events_tsv	n/a	n/a	20
+39.988	4.024	Slow-eye-movement-artifact	n/a	9997	["F7","F8","HEOG"]	105	electroclean_artifact	54feb1a3b05042a29b7ca371cc9d479a	A01	n/a
+42.0	0.004	stimulus/1	1	10500	n/a	n/a	original:events_tsv	n/a	n/a	21
+42.6	0.004	response	1001	10650	n/a	n/a	original:events_tsv	n/a	n/a	22
+46.0	0.004	stimulus/2	2	11500	n/a	n/a	original:events_tsv	n/a	n/a	23
+46.6	0.004	response	1001	11650	n/a	n/a	original:events_tsv	n/a	n/a	24
+46.988	5.0	ECG-artifact	n/a	11747	["T7","P7","O1"]	101	electroclean_artifact	0e2cd3de0c194f08b2f0f3818402ddf3	A01	n/a
+50.0	0.004	stimulus/1	1	12500	n/a	n/a	original:events_tsv	n/a	n/a	25
+50.6	0.004	response	1001	12650	n/a	n/a	original:events_tsv	n/a	n/a	26
+53.512	0.388	Electrode-pops-artifact	n/a	13378	["O2"]	114	electroclean_artifact	a0cb7bc6bced4bac80827fa5ffd17861	A01	n/a
+54.0	0.004	stimulus/2	2	13500	n/a	n/a	original:events_tsv	n/a	n/a	27
+54.6	0.004	response	1001	13650	n/a	n/a	original:events_tsv	n/a	n/a	28
+58.0	0.004	stimulus/1	1	14500	n/a	n/a	original:events_tsv	n/a	n/a	29
+58.6	0.004	response	1001	14650	n/a	n/a	original:events_tsv	n/a	n/a	30

@@ -35,10 +35,11 @@ Press **Begin new session**.
 ![Viewing options](images/viewing_options.png)
 
 Before each recording opens you choose the filters used for display. By
-default a 1 Hz high-pass filter and a 60 Hz notch filter are applied. Choose
-50 Hz if your recordings were made where the mains supply is 50 Hz (as in the
-UK). These filters change only what you see: the recording file is never
-changed. If your administrator has fixed the filters, the options are shown
+default a 1 Hz high-pass filter and a 50 Hz notch filter (the mains frequency
+in the UK and Europe) are applied. Choose 60 Hz if your recordings were made
+where the mains supply is 60 Hz (as in North America). The filters are
+zero-phase FIR filters (MNE-Python's defaults) for everyone. These filters
+change only what you see: the recording file is never changed. If your administrator has fixed the filters, the options are shown
 but cannot be changed. Tick *Use these settings for the rest of this session*
 to skip this window for the next recordings.
 
@@ -84,9 +85,14 @@ ID, the mode, the filters and the number of annotations.
 
 ## 4. Marking artifacts
 
-1. Choose the **artifact type** in the toolbar. Only the 16 HED-SCORE
-   categories are available, from Chewing-artifact (100) to
-   Salt-bridge-artifact (115); hover over an entry to see its definition.
+1. Choose the **artifact type** in the toolbar. Every artifact term of
+   HED SCORE 2.2.0 is available (29 terms), listed under four headings: eye,
+   other biological, non-biological and type unknown. Hover over an entry to
+   see its definition. Most terms are specific types, such as
+   Eye-blink-artifact (103). The terms in italics are **group terms**, such
+   as Eye-movement-artifact (133) or Data-artifact (130): use them only when
+   you can see that there is an artifact of that family but cannot tell which
+   type it is.
 2. Choose what it affects:
    * **Whole montage** marks the interval on every channel.
    * **Selected channels** marks only the channels you choose. Click channel
@@ -98,9 +104,14 @@ ID, the mode, the filters and the number of annotations.
    annotations are shaded more strongly on their channels and carry `[ch]` in
    their label.
 
-You can drag over an existing annotation to add an overlapping one, for
-example muscle activity during an eye blink. Overlapping annotations are
-always kept separate, even when they have the same type.
+You can drag over an existing annotation to add an overlapping one of a
+different type, for example muscle activity during an eye blink; the two stay
+separate. If you draw (or move) an annotation so that it overlaps another
+annotation **of the same type on the same channels**, ElectroClean merges
+them into one annotation covering both, and says so in the status bar.
+Ctrl+Z (Cmd+Z on a Mac) undoes the change and the merge together. Annotations
+of the same type that only touch, or that are on different channels, are not
+merged.
 
 Boundaries are snapped to the nearest sample, so what you save is exactly
 what the data allow.
@@ -141,13 +152,26 @@ the recording has **not** been marked complete; your annotations stay open and
 you can try again. Afterwards you are asked whether to continue with another
 recording or quit.
 
-If you close the window without saving, ElectroClean asks for confirmation.
-Your annotations for that recording are then discarded and it stays
-incomplete, so it may be offered again later.
+**Your work is saved automatically.** While a recording is open,
+ElectroClean keeps a copy of your annotations and of the time you have spent,
+updated every few seconds. If the computer or ElectroClean stops, nothing is
+lost: the next time you start, ElectroClean asks *Continue unfinished work?*
+and reopens the recording with your annotations. An automatic copy is not a
+result: the recording only counts as done after Save and Finish.
+
+If you close the window without saving, you can choose:
+
+* **Close and finish later**: your annotations and time are kept, and
+  ElectroClean offers to continue the next time you start or open this
+  recording;
+* **Discard and close**: your annotations for this recording are deleted
+  (after a second confirmation) and the recording stays incomplete;
+* **Keep annotating**.
 
 **Time.** ElectroClean measures how long you spend on each recording, from
-the moment the viewer is ready until you press Save and Finish. The clock is
-shown in the *Recording* tab.
+the moment the viewer is ready until you press Save and Finish. If you finish
+a recording over several sessions, the times are added up. The clock is shown
+in the *Recording* tab.
 
 **If a recording cannot be opened**, you will see *Failed to load file. Would
 you like to continue with another recording or quit?* with the reason under
@@ -197,3 +221,16 @@ recording that you already have open elsewhere, to protect your work.
 *Where is my work?* In the results folder, under `annotator-<your ID>`, in
 sub-folders that mirror the dataset (see the README for the five files).
 Training and assessment work is kept separately under `training`.
+
+*My computer crashed while I was annotating.* Start ElectroClean again with
+the same annotator ID and dataset: it offers to continue the unfinished
+recording with your annotations and time restored.
+
+*Why did two of my annotations become one?* They were of the same type, on
+the same channels and overlapped in time, so ElectroClean merged them. If
+that was not what you meant, press Ctrl+Z (Cmd+Z on a Mac).
+
+*When should I use a group term such as Eye-artifact?* Only when the type
+is unclear. Choosing the specific type whenever you can makes the
+annotations more useful; the agreement analysis still credits a group term as
+agreement on the artifact family.

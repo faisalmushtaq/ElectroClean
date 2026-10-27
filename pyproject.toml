@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=69", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -9,6 +9,9 @@ description = "Desktop application for manual EEG artifact annotation, inter-rat
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [{ name = "ElectroClean contributors" }]
+# Free for research, teaching and other non-commercial use (source-available, not OSI open source).
+license = "PolyForm-Noncommercial-1.0.0"
+license-files = ["LICENSE.md", "THIRD_PARTY_NOTICES.md"]
 classifiers = [
   "Programming Language :: Python :: 3",
   "Operating System :: Microsoft :: Windows",

@@ -34,7 +34,8 @@ def install_exception_hook() -> None:
                 fh.write(f"\n=== {datetime.now().isoformat()} ===\n{text}")
         except OSError:
             pass
-        sys.__stderr__.write(text)
+        if sys.__stderr__ is not None:  # None in the windowed (frozen) Windows application
+            sys.__stderr__.write(text)
         try:
             from qtpy.QtWidgets import QApplication, QMessageBox
 
@@ -55,6 +56,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dataset", type=Path, help="Dataset folder to pre-select")
     p.add_argument("--annotator", help="Annotator ID to pre-fill")
     p.add_argument("--version", action="store_true", help="Print the version and exit")
+    p.add_argument("--self-test", nargs="?", const="", default=None, metavar="LOG_FILE",
+                   help="Check this installation end to end without a display (synthetic data), optionally "
+                        "copying the output to LOG_FILE, and exit with 0 if it passed")
     return p
 
 
@@ -65,6 +69,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.version:
         print(f"ElectroClean {__version__}")
         return 0
+    if args.self_test is not None:
+        from electroclean.app.selftest import run_self_test
+
+        return run_self_test(args.self_test or None)
     os.environ.setdefault("QT_API", "pyside6")
     import mne
     import pyqtgraph as pg

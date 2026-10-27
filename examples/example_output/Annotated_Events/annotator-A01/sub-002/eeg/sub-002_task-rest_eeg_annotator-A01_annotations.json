@@ -30,50 +30,51 @@
       "O1",
       "O2",
       "HEOG",
-      "VEOG"
+      "VEOG",
+      "ECG"
     ],
     "fingerprint": {
       "vhdr": {
         "path": "sub-002/eeg/sub-002_task-rest_eeg.vhdr",
-        "size": 1023,
-        "mtime_ns": 1793033182587852845,
-        "sha256": "bf2b13e4eb1abb3bd3a4c368f13ba84948d9369125621084b895767e8a644898"
+        "size": 1041,
+        "mtime_ns": 1793101952347509791,
+        "sha256": "39c9670180b236ad71c67a8cbeeadbce024b0ae7d9bdffe03af31af6f66daed7"
       },
       "eeg": {
         "path": "sub-002/eeg/sub-002_task-rest_eeg.eeg",
-        "size": 1260000,
-        "mtime_ns": 1793033182586671671,
-        "sha256": "53473902ba25b46f77ba4b86b9757ab178b2137cec1f9f301a1202254021a685"
+        "size": 1320000,
+        "mtime_ns": 1793101952346845037,
+        "sha256": "30bfb0ef69c5004d7df42aaaf17ded051f2e5b2900cf3900cfe1d2012eb7aa15"
       },
       "vmrk": {
         "path": "sub-002/eeg/sub-002_task-rest_eeg.vmrk",
         "size": 1392,
-        "mtime_ns": 1793033182587758217,
+        "mtime_ns": 1793101952347388330,
         "sha256": "50bdfcc2c130fb5dd2297db938f08df0d0b8a725754126bc167ae811dccaca99"
       },
       "channels_tsv": {
         "path": "sub-002/eeg/sub-002_task-rest_channels.tsv",
-        "size": 367,
-        "mtime_ns": 1793033182588081845,
-        "sha256": "fb7c4a95f705b23f6df1d41b1a1647eb112b58cf83d2b3a0dfa66e8c9b321e97"
+        "size": 384,
+        "mtime_ns": 1793101952347717630,
+        "sha256": "2606e8830e14c65eed97ea25c80f9f56708eb24e26134f516b754234c6927d82"
       },
       "events_tsv": {
         "path": "sub-002/eeg/sub-002_task-rest_events.tsv",
         "size": 928,
-        "mtime_ns": 1793033182587943160,
+        "mtime_ns": 1793101952347599440,
         "sha256": "23fbd318246db707134f26fd35f535df2bd25580d7cf8c17e33066b3b744c0a8"
       },
       "events_json": {
         "path": "sub-002/eeg/sub-002_task-rest_events.json",
         "size": 289,
-        "mtime_ns": 1793033182588039566,
+        "mtime_ns": 1793101952347672128,
         "sha256": "203b47891160359d51301343101c20872de346b32b5a97b29a70139958c62f00"
       },
       "eeg_json": {
         "path": "sub-002/eeg/sub-002_task-rest_eeg.json",
-        "size": 182,
-        "mtime_ns": 1793033182588125166,
-        "sha256": "8e99bb89b33acc525aca92ddbee5735b514d836771f22abe2ed0f1a660fb42f4"
+        "size": 255,
+        "mtime_ns": 1793101952347773231,
+        "sha256": "b4261e68d3afe2c97349082cc1460d8fb6e73c9427090698dd1e1ec35b914cac"
       }
     }
   },
@@ -82,9 +83,9 @@
     "display_name": "Demo A01"
   },
   "session": {
-    "session_id": "20261026T164623Z-5bcb98e1",
+    "session_id": "20261027T115234Z-4826eb7d",
     "mode": "standard",
-    "created_at": "2026-10-26T16:46:23.784+00:00",
+    "created_at": "2026-10-27T11:52:34.025+00:00",
     "app_version": "1.0.0",
     "context": {}
   },
@@ -104,82 +105,192 @@
   },
   "label_catalogue": {
     "catalogue_id": "electroclean-hed-score-artifacts",
-    "catalogue_version": "1.0.0",
-    "sha256": "758489482e27c1eb85b60bb3e1df1470913b673d9bfef6b51832825f5596faae",
+    "catalogue_version": "2.0.0",
+    "sha256": "34f144b5c8699afeb41dd6fc9a4fd343e602123e979ee41471971b4fec7800ad",
     "hed_library": "score",
     "hed_library_version": "2.2.0",
     "hed_standard_version": "8.5.0",
     "labels": [
       {
-        "value": 100,
-        "label": "Chewing-artifact"
-      },
-      {
-        "value": 101,
-        "label": "ECG-artifact"
-      },
-      {
-        "value": 102,
-        "label": "EMG-artifact"
-      },
-      {
         "value": 103,
-        "label": "Eye-blink-artifact"
+        "label": "Eye-blink-artifact",
+        "kind": "specific",
+        "parent": "Eye-artifact"
       },
       {
         "value": 104,
-        "label": "Horizontal-eye-movement-artifact"
-      },
-      {
-        "value": 105,
-        "label": "Slow-eye-movement-artifact"
+        "label": "Horizontal-eye-movement-artifact",
+        "kind": "specific",
+        "parent": "Eye-movement-artifact"
       },
       {
         "value": 106,
-        "label": "Vertical-eye-movement-artifact"
+        "label": "Vertical-eye-movement-artifact",
+        "kind": "specific",
+        "parent": "Eye-movement-artifact"
       },
       {
-        "value": 107,
-        "label": "Movement-artifact"
+        "value": 105,
+        "label": "Slow-eye-movement-artifact",
+        "kind": "specific",
+        "parent": "Eye-movement-artifact"
       },
       {
-        "value": 108,
-        "label": "Pulse-artifact"
+        "value": 117,
+        "label": "Nystagmus-artifact",
+        "kind": "specific",
+        "parent": "Eye-movement-artifact"
       },
       {
-        "value": 109,
-        "label": "Respiration-artifact"
+        "value": 133,
+        "label": "Eye-movement-artifact",
+        "kind": "group",
+        "parent": "Eye-artifact"
       },
       {
-        "value": 110,
-        "label": "Sweat-artifact"
+        "value": 132,
+        "label": "Eye-artifact",
+        "kind": "group",
+        "parent": "Biological-artifact"
+      },
+      {
+        "value": 102,
+        "label": "EMG-artifact",
+        "kind": "specific",
+        "parent": "Biological-artifact"
+      },
+      {
+        "value": 100,
+        "label": "Chewing-artifact",
+        "kind": "specific",
+        "parent": "Biological-artifact"
       },
       {
         "value": 111,
-        "label": "Tongue-movement-artifact"
+        "label": "Tongue-movement-artifact",
+        "kind": "specific",
+        "parent": "Biological-artifact"
       },
       {
-        "value": 112,
-        "label": "Induction-artifact"
+        "value": 107,
+        "label": "Movement-artifact",
+        "kind": "specific",
+        "parent": "Biological-artifact"
+      },
+      {
+        "value": 101,
+        "label": "ECG-artifact",
+        "kind": "specific",
+        "parent": "Biological-artifact"
+      },
+      {
+        "value": 108,
+        "label": "Pulse-artifact",
+        "kind": "specific",
+        "parent": "Biological-artifact"
+      },
+      {
+        "value": 109,
+        "label": "Respiration-artifact",
+        "kind": "specific",
+        "parent": "Biological-artifact"
+      },
+      {
+        "value": 110,
+        "label": "Sweat-artifact",
+        "kind": "specific",
+        "parent": "Biological-artifact"
+      },
+      {
+        "value": 120,
+        "label": "Rocking-patting-artifact",
+        "kind": "specific",
+        "parent": "Biological-artifact"
+      },
+      {
+        "value": 121,
+        "label": "Sucking-artifact",
+        "kind": "specific",
+        "parent": "Biological-artifact"
+      },
+      {
+        "value": 131,
+        "label": "Biological-artifact",
+        "kind": "group",
+        "parent": "Data-artifact"
       },
       {
         "value": 113,
-        "label": "Electrode-movement-artifact"
+        "label": "Electrode-movement-artifact",
+        "kind": "specific",
+        "parent": "Nonbiological-artifact"
       },
       {
         "value": 114,
-        "label": "Electrode-pops-artifact"
+        "label": "Electrode-pops-artifact",
+        "kind": "specific",
+        "parent": "Localized-channel-artifact"
       },
       {
         "value": 115,
-        "label": "Salt-bridge-artifact"
+        "label": "Salt-bridge-artifact",
+        "kind": "specific",
+        "parent": "Localized-channel-artifact"
+      },
+      {
+        "value": 136,
+        "label": "Localized-channel-artifact",
+        "kind": "group",
+        "parent": "Nonbiological-artifact"
+      },
+      {
+        "value": 112,
+        "label": "Induction-artifact",
+        "kind": "specific",
+        "parent": "Electrical-artifact"
+      },
+      {
+        "value": 116,
+        "label": "Line-noise-artifact",
+        "kind": "specific",
+        "parent": "Electrical-artifact"
+      },
+      {
+        "value": 135,
+        "label": "Electrical-artifact",
+        "kind": "group",
+        "parent": "Nonbiological-artifact"
+      },
+      {
+        "value": 118,
+        "label": "Artificial-ventilation-artifact",
+        "kind": "specific",
+        "parent": "Nonbiological-artifact"
+      },
+      {
+        "value": 119,
+        "label": "Dialysis-artifact",
+        "kind": "specific",
+        "parent": "Nonbiological-artifact"
+      },
+      {
+        "value": 134,
+        "label": "Nonbiological-artifact",
+        "kind": "group",
+        "parent": "Data-artifact"
+      },
+      {
+        "value": 130,
+        "label": "Data-artifact",
+        "kind": "group",
+        "parent": null
       }
     ]
   },
   "n_annotations": 10,
   "annotations": [
     {
-      "annotation_id": "cd0a758a4a374da1bb5e3b37eb982780",
+      "annotation_id": "68328f8ed4cb4e50a3419246b9c0e24d",
       "label": "Eye-blink-artifact",
       "value": 103,
       "onset": 3.012,
@@ -193,11 +304,11 @@
         "VEOG"
       ],
       "scope": "channels",
-      "created_at": "2026-10-26T16:46:23.783+00:00",
-      "modified_at": "2026-10-26T16:46:23.783+00:00"
+      "created_at": "2026-10-27T11:52:34.024+00:00",
+      "modified_at": "2026-10-27T11:52:34.024+00:00"
     },
     {
-      "annotation_id": "171b70edf98048d7b4df647ab8534b0c",
+      "annotation_id": "0ce07a786f204a069ea5a9e9e615832b",
       "label": "EMG-artifact",
       "value": 102,
       "onset": 9.228,
@@ -212,11 +323,11 @@
         "T8"
       ],
       "scope": "channels",
-      "created_at": "2026-10-26T16:46:23.783+00:00",
-      "modified_at": "2026-10-26T16:46:23.783+00:00"
+      "created_at": "2026-10-27T11:52:34.024+00:00",
+      "modified_at": "2026-10-27T11:52:34.024+00:00"
     },
     {
-      "annotation_id": "5ddc4befdab2453cb481add73102d7c6",
+      "annotation_id": "612f8885973046b6afe18434644c1358",
       "label": "Eye-blink-artifact",
       "value": 103,
       "onset": 9.512,
@@ -230,11 +341,11 @@
         "VEOG"
       ],
       "scope": "channels",
-      "created_at": "2026-10-26T16:46:23.783+00:00",
-      "modified_at": "2026-10-26T16:46:23.783+00:00"
+      "created_at": "2026-10-27T11:52:34.025+00:00",
+      "modified_at": "2026-10-27T11:52:34.025+00:00"
     },
     {
-      "annotation_id": "962c123ec713449da102c3e8389a0f7b",
+      "annotation_id": "4c1c86cb9e5c46a88b0404d8b27e7eb3",
       "label": "Electrode-pops-artifact",
       "value": 114,
       "onset": 13.992,
@@ -246,11 +357,11 @@
         "C3"
       ],
       "scope": "channels",
-      "created_at": "2026-10-26T16:46:23.783+00:00",
-      "modified_at": "2026-10-26T16:46:23.783+00:00"
+      "created_at": "2026-10-27T11:52:34.025+00:00",
+      "modified_at": "2026-10-27T11:52:34.025+00:00"
     },
     {
-      "annotation_id": "438f9dbac2a540238a28bada16be3d51",
+      "annotation_id": "f0946b75e2214917bc470ecbea2a8973",
       "label": "Horizontal-eye-movement-artifact",
       "value": 104,
       "onset": 18.068,
@@ -264,11 +375,11 @@
         "HEOG"
       ],
       "scope": "channels",
-      "created_at": "2026-10-26T16:46:23.783+00:00",
-      "modified_at": "2026-10-26T16:46:23.783+00:00"
+      "created_at": "2026-10-27T11:52:34.025+00:00",
+      "modified_at": "2026-10-27T11:52:34.025+00:00"
     },
     {
-      "annotation_id": "a86fa10de386428bbbbbdfb6ed32013a",
+      "annotation_id": "23c54a2e490944bb85f45bf50ed29630",
       "label": "Movement-artifact",
       "value": 107,
       "onset": 24.012,
@@ -278,11 +389,11 @@
       "end_sample": 6504,
       "channels": [],
       "scope": "whole_montage",
-      "created_at": "2026-10-26T16:46:23.783+00:00",
-      "modified_at": "2026-10-26T16:46:23.783+00:00"
+      "created_at": "2026-10-27T11:52:34.025+00:00",
+      "modified_at": "2026-10-27T11:52:34.025+00:00"
     },
     {
-      "annotation_id": "483e8fc573a643138753c548f62eae61",
+      "annotation_id": "d10455e5700842bb8208ec221d2b9650",
       "label": "Eye-blink-artifact",
       "value": 103,
       "onset": 35.168,
@@ -296,11 +407,11 @@
         "VEOG"
       ],
       "scope": "channels",
-      "created_at": "2026-10-26T16:46:23.783+00:00",
-      "modified_at": "2026-10-26T16:46:23.783+00:00"
+      "created_at": "2026-10-27T11:52:34.025+00:00",
+      "modified_at": "2026-10-27T11:52:34.025+00:00"
     },
     {
-      "annotation_id": "d8299e5bc9cc4402a2b7b7a52aac02e1",
+      "annotation_id": "6f577db7874f43ff886eb0504a498ce1",
       "label": "Slow-eye-movement-artifact",
       "value": 105,
       "onset": 40.088,
@@ -313,11 +424,11 @@
         "HEOG"
       ],
       "scope": "channels",
-      "created_at": "2026-10-26T16:46:23.783+00:00",
-      "modified_at": "2026-10-26T16:46:23.783+00:00"
+      "created_at": "2026-10-27T11:52:34.025+00:00",
+      "modified_at": "2026-10-27T11:52:34.025+00:00"
     },
     {
-      "annotation_id": "922a986e00154dbf898cf79591796c55",
+      "annotation_id": "fbed29d28df74a3081bd8f4692719676",
       "label": "ECG-artifact",
       "value": 101,
       "onset": 47.072,
@@ -331,11 +442,11 @@
         "O1"
       ],
       "scope": "channels",
-      "created_at": "2026-10-26T16:46:23.783+00:00",
-      "modified_at": "2026-10-26T16:46:23.783+00:00"
+      "created_at": "2026-10-27T11:52:34.025+00:00",
+      "modified_at": "2026-10-27T11:52:34.025+00:00"
     },
     {
-      "annotation_id": "d9e6effe78d64f67be0c604507bf5acd",
+      "annotation_id": "0fe91fb960c540ea8894ebe57a3ceeb3",
       "label": "Electrode-pops-artifact",
       "value": 114,
       "onset": 53.552,
@@ -347,8 +458,8 @@
         "O2"
       ],
       "scope": "channels",
-      "created_at": "2026-10-26T16:46:23.784+00:00",
-      "modified_at": "2026-10-26T16:46:23.784+00:00"
+      "created_at": "2026-10-27T11:52:34.025+00:00",
+      "modified_at": "2026-10-27T11:52:34.025+00:00"
     }
   ]
 }

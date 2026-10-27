@@ -42,20 +42,20 @@
   "inputs": {
     "reference_set": {
       "file": "demo-set/reference_set.json",
-      "sha256": "90cfcb87911db4c60d4262a20a6a557b5aed7550154d26c7757e55027f7d3e85"
+      "sha256": "eace6e477d4fa0349f115572ed2c8c32e380595e2f89da01854b49f790ea31a7"
     },
     "references": {
-      "sub-002/eeg/sub-002_task-rest_eeg.vhdr": "1fb255a6883106c212b594794b16da8bfe655f7780295ce18e68f68f8bf8b3b2",
-      "sub-003/eeg/sub-003_task-rest_eeg.vhdr": "c2bebc8f7bf905c7a0ce2d9a62b256da169579f1d2067c36549643195bac8d40"
+      "sub-002/eeg/sub-002_task-rest_eeg.vhdr": "cdfdb643035a8d54977b0d5045e61b364b09ca8eb2f52798744c553bfdbd3f1c",
+      "sub-003/eeg/sub-003_task-rest_eeg.vhdr": "c4942ccffc1ebe418f952224aa6993749f3f83062582ea56ef6480211cf5fd16"
     },
     "annotations": {
       "sub-002/eeg/sub-002_task-rest_eeg.vhdr": {
         "file": "training/demo-set/assessment/annotator-CAM/sub-002/eeg/sub-002_task-rest_eeg_annotator-CAM_annotations.json",
-        "sha256": "80846c1598def8942c486ab922133849e98a00712d72fe7566323a9d3256efe6"
+        "sha256": "5f1a1e18b718bbac22bec9d5f6102fdb8c7ee80b8786304cc7fdcf041316f4a9"
       },
       "sub-003/eeg/sub-003_task-rest_eeg.vhdr": {
         "file": "training/demo-set/assessment/annotator-CAM/sub-003/eeg/sub-003_task-rest_eeg_annotator-CAM_annotations.json",
-        "sha256": "6f1af82d6c23e3c1ec80704839b5860407f3176e06b15d9eab6c2e3b87d8d86e"
+        "sha256": "ce4ff3a2fad3e4147ac9a16ad7c6d71457dee791eaf57f8ccceb2a5af2a4997b"
       }
     }
   },
@@ -69,61 +69,13 @@
       "event_precision": 0.85,
       "time_kappa": 0.9040859543953192,
       "time_positive_agreement": 0.9321908869091527,
-      "channel_positive_agreement": 0.9066993328021122,
+      "channel_positive_agreement": 0.9031393656587123,
       "mean_iou": 0.8993582405274407,
       "mean_channel_jaccard": 0.9313725490196078,
       "label_accuracy": 0.9444444444444444,
       "false_positives_per_min": 1.0
     },
     "per_category": [
-      {
-        "category": "Chewing-artifact",
-        "reference_events": 2,
-        "your_events": 2,
-        "found": 2,
-        "event_f1": 1.0,
-        "event_recall": 1.0,
-        "event_precision": 1.0,
-        "time_kappa": 0.9911974930460193,
-        "time_positive_agreement": 0.9916359986617598,
-        "channel_positive_agreement": 0.8509340449866565,
-        "mean_iou": 0.9833764861294584,
-        "mean_channel_jaccard": 0.75,
-        "onset_diff_mean_s": -0.002,
-        "offset_diff_mean_s": -0.024
-      },
-      {
-        "category": "ECG-artifact",
-        "reference_events": 2,
-        "your_events": 2,
-        "found": 2,
-        "event_f1": 1.0,
-        "event_recall": 1.0,
-        "event_precision": 1.0,
-        "time_kappa": 0.9879319802523312,
-        "time_positive_agreement": 0.9889313745220367,
-        "channel_positive_agreement": 0.8974152449293403,
-        "mean_iou": 0.9780965240073913,
-        "mean_channel_jaccard": 0.8333333333333333,
-        "onset_diff_mean_s": -0.024,
-        "offset_diff_mean_s": -0.086
-      },
-      {
-        "category": "EMG-artifact",
-        "reference_events": 2,
-        "your_events": 0,
-        "found": 0,
-        "event_f1": 0.0,
-        "event_recall": 0.0,
-        "event_precision": null,
-        "time_kappa": -4.163336342344345e-15,
-        "time_positive_agreement": 0.0,
-        "channel_positive_agreement": 0.0,
-        "mean_iou": null,
-        "mean_channel_jaccard": null,
-        "onset_diff_mean_s": null,
-        "offset_diff_mean_s": null
-      },
       {
         "category": "Eye-blink-artifact",
         "reference_events": 6,
@@ -173,6 +125,38 @@
         "offset_diff_mean_s": 0.036
       },
       {
+        "category": "EMG-artifact",
+        "reference_events": 2,
+        "your_events": 0,
+        "found": 0,
+        "event_f1": 0.0,
+        "event_recall": 0.0,
+        "event_precision": null,
+        "time_kappa": -4.163336342344345e-15,
+        "time_positive_agreement": 0.0,
+        "channel_positive_agreement": 0.0,
+        "mean_iou": null,
+        "mean_channel_jaccard": null,
+        "onset_diff_mean_s": null,
+        "offset_diff_mean_s": null
+      },
+      {
+        "category": "Chewing-artifact",
+        "reference_events": 2,
+        "your_events": 2,
+        "found": 2,
+        "event_f1": 1.0,
+        "event_recall": 1.0,
+        "event_precision": 1.0,
+        "time_kappa": 0.9911974930460193,
+        "time_positive_agreement": 0.9916359986617598,
+        "channel_positive_agreement": 0.8509340449866565,
+        "mean_iou": 0.9833764861294584,
+        "mean_channel_jaccard": 0.75,
+        "onset_diff_mean_s": -0.002,
+        "offset_diff_mean_s": -0.024
+      },
+      {
         "category": "Movement-artifact",
         "reference_events": 2,
         "your_events": 2,
@@ -182,30 +166,30 @@
         "event_precision": 1.0,
         "time_kappa": 0.9757013855380153,
         "time_positive_agreement": 0.9765117441279361,
-        "channel_positive_agreement": 0.9765117441279362,
+        "channel_positive_agreement": 0.9765117441279361,
         "mean_iou": 0.9542366412213741,
         "mean_channel_jaccard": 1.0,
         "onset_diff_mean_s": 0.027999999999999997,
         "offset_diff_mean_s": 0.030000000000000002
       },
       {
-        "category": "Respiration-artifact",
-        "reference_events": 0,
-        "your_events": 1,
-        "found": 0,
-        "event_f1": 0.0,
-        "event_recall": null,
-        "event_precision": 0.0,
-        "time_kappa": 0.0,
-        "time_positive_agreement": 0.0,
-        "channel_positive_agreement": 0.0,
-        "mean_iou": null,
-        "mean_channel_jaccard": null,
-        "onset_diff_mean_s": null,
-        "offset_diff_mean_s": null
+        "category": "ECG-artifact",
+        "reference_events": 2,
+        "your_events": 2,
+        "found": 2,
+        "event_f1": 1.0,
+        "event_recall": 1.0,
+        "event_precision": 1.0,
+        "time_kappa": 0.9879319802523312,
+        "time_positive_agreement": 0.9889313745220367,
+        "channel_positive_agreement": 0.8974152449293403,
+        "mean_iou": 0.9780965240073913,
+        "mean_channel_jaccard": 0.8333333333333333,
+        "onset_diff_mean_s": -0.024,
+        "offset_diff_mean_s": -0.086
       },
       {
-        "category": "Tongue-movement-artifact",
+        "category": "Electrode-movement-artifact",
         "reference_events": 0,
         "your_events": 1,
         "found": 0,
@@ -235,6 +219,22 @@
         "mean_channel_jaccard": 1.0,
         "onset_diff_mean_s": 0.058666666666666666,
         "offset_diff_mean_s": -0.025333333333333333
+      },
+      {
+        "category": "Localized-channel-artifact",
+        "reference_events": 0,
+        "your_events": 1,
+        "found": 0,
+        "event_f1": 0.0,
+        "event_recall": null,
+        "event_precision": 0.0,
+        "time_kappa": 0.0,
+        "time_positive_agreement": 0.0,
+        "channel_positive_agreement": 0.0,
+        "mean_iou": null,
+        "mean_channel_jaccard": null,
+        "onset_diff_mean_s": null,
+        "offset_diff_mean_s": null
       }
     ],
     "missed": [
@@ -270,17 +270,17 @@
     "extra": [
       {
         "recording": "sub-002/eeg/sub-002_task-rest_eeg.vhdr",
-        "label": "Respiration-artifact",
+        "label": "Electrode-movement-artifact",
         "onset_s": 48.38,
         "offset_s": 49.368,
-        "channels": "O1,P7"
+        "channels": "O2,P3"
       },
       {
         "recording": "sub-003/eeg/sub-003_task-rest_eeg.vhdr",
-        "label": "Tongue-movement-artifact",
+        "label": "Localized-channel-artifact",
         "onset_s": 42.06,
         "offset_s": 42.868,
-        "channels": "F3,T7"
+        "channels": "Fz,T7"
       }
     ],
     "label_differences": [
@@ -305,6 +305,7 @@
         "time_and_channel"
       ],
       "include_any_artifact": true,
+      "include_group_rollups": true,
       "match_criterion": "iou",
       "iou_thresholds": [
         0.0,
@@ -360,15 +361,15 @@
     }
   ],
   "categories_not_judged": [
-    "Chewing-artifact",
-    "ECG-artifact",
-    "EMG-artifact",
     "Horizontal-eye-movement-artifact",
     "Slow-eye-movement-artifact",
+    "EMG-artifact",
+    "Chewing-artifact",
     "Movement-artifact",
-    "Respiration-artifact",
-    "Tongue-movement-artifact"
+    "ECG-artifact",
+    "Electrode-movement-artifact",
+    "Localized-channel-artifact"
   ],
-  "results_sha256": "457b22c37f7fc06f35c93529727e8071694927eaaa943b49ff94b9128b44b615",
-  "generated_at": "2026-10-26T16:46:27.381+00:00"
+  "results_sha256": "3b7a72ef15ad25167791da4a11db1fafd2f3c092a08795a38633cae8db53579e",
+  "generated_at": "2026-10-27T11:52:40.091+00:00"
 }
