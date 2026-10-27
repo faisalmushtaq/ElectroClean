@@ -102,6 +102,20 @@ class FilterSettings:
         return obj
 
 
+#: The artifact types on keys 1 to 9 unless a study chooses others (annotation.quick_labels).
+DEFAULT_QUICK_LABELS: tuple[str, ...] = (
+    "Eye-blink-artifact",
+    "Horizontal-eye-movement-artifact",
+    "EMG-artifact",
+    "Movement-artifact",
+    "Electrode-pops-artifact",
+    "Chewing-artifact",
+    "ECG-artifact",
+    "Line-noise-artifact",
+    "Data-artifact",  # the group term for an artifact whose type is unclear
+)
+
+
 @dataclass(frozen=True)
 class DisplaySettings:
     duration_s: float = 10.0
@@ -132,6 +146,8 @@ class Settings:
     recording_lock_stale_hours: float
     register_lock_timeout_s: float
     min_duration_samples: int
+    # The artifact types on the number keys 1 to 9 (and the toolbar's quick buttons), in key order.
+    quick_labels: tuple[str, ...] = DEFAULT_QUICK_LABELS
     raw: dict[str, Any] = field(repr=False, default_factory=dict)
 
     @classmethod
@@ -171,6 +187,7 @@ class Settings:
                 recording_lock_stale_hours=float(locks["recording_lock_stale_hours"]),
                 register_lock_timeout_s=float(locks["register_lock_timeout_s"]),
                 min_duration_samples=int(ann["min_duration_samples"]),
+                quick_labels=tuple(str(x) for x in ann.get("quick_labels", DEFAULT_QUICK_LABELS)),
                 raw=copy.deepcopy(data),
             )
         except KeyError as exc:  # pragma: no cover - defaults always complete
@@ -196,6 +213,10 @@ class Settings:
             raise SettingsError("channels.hide must not contain empty patterns")
         if self.min_duration_samples < 1:
             raise SettingsError("annotation.min_duration_samples must be at least 1")
+        if len(self.quick_labels) > 9:
+            raise SettingsError("annotation.quick_labels can name at most 9 artifact types (keys 1 to 9)")
+        if len(set(self.quick_labels)) != len(self.quick_labels):
+            raise SettingsError("annotation.quick_labels must not name an artifact type twice")
         if not self.output_directory_name or any(c in self.output_directory_name for c in "/\\:"):
             raise SettingsError("output.directory_name must be a plain folder name")
 

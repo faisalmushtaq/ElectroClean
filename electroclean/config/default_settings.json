@@ -48,6 +48,10 @@
     "register_lock_timeout_s": 30.0
   },
   "annotation": {
-    "min_duration_samples": 1
+    "min_duration_samples": 1,
+    "quick_labels": [
+      "Eye-blink-artifact", "Horizontal-eye-movement-artifact", "EMG-artifact", "Movement-artifact",
+      "Electrode-pops-artifact", "Chewing-artifact", "ECG-artifact", "Line-noise-artifact", "Data-artifact"
+    ]
   }
 }

@@ -129,6 +129,10 @@ QPushButton[kind="quiet"] {{ background: transparent; border: 1px solid transpar
 QPushButton[kind="quiet"]:hover {{ background: {c['hover']}; }}
 QPushButton[kind="quiet"]:disabled {{ color: {c['text_disabled']}; background: transparent; }}
 
+/* chips: the numbered artifact-type buttons (their checked colour is the type's own) */
+QPushButton[chip="true"] {{ padding: 3px 9px 3px 7px; border-radius: 11px; font-weight: 600; }}
+QPushButton[chip="true"]:hover {{ border-color: {c['text_secondary']}; }}
+
 /* segmented control: checkable buttons side by side */
 QPushButton[segment] {{ border-radius: 0; padding: 4px 12px; margin: 0; }}
 QPushButton[segment="first"] {{ border-top-left-radius: {RADIUS['control']}px; border-bottom-left-radius: {RADIUS['control']}px; }}

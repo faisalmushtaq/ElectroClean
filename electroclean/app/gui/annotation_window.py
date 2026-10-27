@@ -17,7 +17,7 @@ import html
 from typing import Any
 
 from qtpy.QtCore import QObject, Qt, QTimer, Signal
-from qtpy.QtGui import QAction, QKeySequence
+from qtpy.QtGui import QAction, QCursor, QKeySequence
 from qtpy.QtWidgets import (
     QAbstractItemView,
     QButtonGroup,
@@ -42,7 +42,7 @@ from electroclean.app.annotations.model import AnnotationError
 from electroclean.app.gui import style
 from electroclean.app.gui.browser import AnnotationController, check_browser_version, create_browser
 from electroclean.app.gui.dialogs import UserPrompts, colour_icon, fill_label_combo, readable_text_colour
-from electroclean.app.gui.help_text import HELP_HTML, UNDO_HINT
+from electroclean.app.gui.help_text import HELP_HTML, KEY_HINT, UNDO_HINT
 from electroclean.app.session.session import AnnotationSession, SessionError
 from electroclean.app.session.transaction import ExportCommitError
 from electroclean.app.validation.exports import ValidationError
@@ -162,30 +162,63 @@ class AnnotationWorkspace(QObject):
         self.toolbar = tb
         cat = self.session.catalogue
 
-        tb.addWidget(style.label(" Artifact ", "subtitle"))
+        # The caption reads "Draw as" while the type applies to the next annotation and "Change to"
+        # while annotations are selected: the buttons, the menu and the keys then change those.
+        self.type_caption = style.label(" Draw as ", "subtitle")
+        tb.addWidget(self.type_caption)
+        self.quick_labels = self._quick_labels()
+        self.controller.quick_labels = list(self.quick_labels)
+        chips = QWidget()
+        chip_layout = QHBoxLayout(chips)
+        chip_layout.setContentsMargins(0, 0, 4, 0)
+        chip_layout.setSpacing(3)
+        self.quick_buttons: list[QPushButton] = []
+        for key, name in enumerate(self.quick_labels, start=1):
+            lab = cat.get(name)
+            btn = QPushButton()
+            btn.setProperty("full_text", f" {key}  {lab.short_code}")
+            btn.setProperty("compact_text", f" {key}")
+            btn.setText(btn.property("full_text"))
+            btn.setCheckable(True)
+            btn.setFocusPolicy(Qt.NoFocus)
+            btn.setProperty("chip", True)
+            btn.setIcon(colour_icon(lab.colour, 10))
+            # The chosen type is filled with its own colour, as its annotations are drawn.
+            fg = readable_text_colour(lab.colour)
+            btn.setStyleSheet(
+                f"QPushButton:checked {{ background: {lab.colour}; color: {fg}; border-color: {lab.colour}; }}"
+            )
+            btn.setToolTip(
+                f"<b>{html.escape(lab.label)}</b> ({lab.value}) · key <b>{key}</b><br>"
+                f"{html.escape(self._hed.get(name, ''))}<br><br>"
+                "Click (or press the key) to draw this type next; with annotations selected, to change them to it."
+            )
+            btn.clicked.connect(lambda _=False, n=name: self.apply_type(n))
+            chip_layout.addWidget(btn)
+            self.quick_buttons.append(btn)
+        tb.addWidget(chips)
+        self._chips = chips
         self.label_combo = QComboBox()
         fill_label_combo(self.label_combo, cat)  # family headings, colours, group terms in italics
         # The closed menu is as wide as about 32 characters rather than the longest entry, so the row
         # fits on laptop screens; the open list is as wide as it needs to be.
         self.label_combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
-        self.label_combo.setMinimumContentsLength(32)
+        self.label_combo.setMinimumContentsLength(14)
         self.label_combo.setToolTip(
-            f"Only the {len(cat.labels)} HED-SCORE artifact terms can be used. Group terms (in italics) are for "
-            "artifacts whose exact type is unclear."
+            f"All {len(cat.labels)} HED-SCORE artifact types (press / to search them by name or code). Group terms, "
+            "in italics, are for artifacts whose exact type is unclear."
         )
         # Without keyboard focus the arrow, page and letter keys keep moving through the EEG
         # instead of silently changing the artifact type.
         self.label_combo.setFocusPolicy(Qt.NoFocus)
         self.label_combo.currentIndexChanged.connect(
-            lambda i: self.label_combo.itemData(i) and self.controller.set_current_label(self.label_combo.itemData(i))
+            lambda i: self.label_combo.itemData(i) and self.apply_type(self.label_combo.itemData(i))
         )
         tb.addWidget(self.label_combo)
-        self.active_label = QLabel()  # colour and short code of the active type (the menu shows its name)
-        tb.addWidget(self.active_label)
         tb.addSeparator()
 
-        tb.addWidget(style.label(" Applies to ", "subtitle"))
-        # A segmented control: two linked buttons, exactly one of them on.
+        # A segmented control: two linked buttons, exactly one of them on. Its two labels say what
+        # it is for, so it needs no caption (which also keeps the row within a laptop screen).
         self.scope_whole = QPushButton("Whole montage")
         self.scope_channels = QPushButton("Selected channels")
         style.segmented(self.scope_whole, self.scope_channels)
@@ -245,15 +278,212 @@ class AnnotationWorkspace(QObject):
         self.save_btn.clicked.connect(self.save_and_finish)
         self.save_action = tb.addWidget(self.save_btn)
         self.help_action = QAction("Help", b)
+        self.help_action.setToolTip("Keys and mouse actions (?)")
         self.help_action.triggered.connect(self.show_help)
         tb.addAction(self.help_action)
+        self.draw_action.setToolTip(self.draw_action.toolTip() + " · Delete removes the selected annotation")
+        self.delete_action.setToolTip("Delete the selected annotation (Delete or Backspace)")
+        self._build_shortcuts()
+        b.installEventFilter(self)  # fits the type buttons to the window's width
         if self.read_only:
-            for w in (self.label_combo, self.scope_whole, self.scope_channels, self.choose_channels_btn, self.save_btn):
+            for w in (self.label_combo, self.scope_whole, self.scope_channels, self.choose_channels_btn, self.save_btn,
+                      *self.quick_buttons):
                 w.setEnabled(False)
-            for a in (self.draw_action, self.delete_action, self.undo_action, self.redo_action):
+            for a in (self.draw_action, self.delete_action, self.undo_action, self.redo_action, *self.type_actions,
+                      self.find_type_action, self.mark_action, self.mark_start_action, self.mark_end_action,
+                      self.scope_action):
                 a.setEnabled(False)
             # Widgets in a toolbar are shown and hidden through their toolbar action.
             self.save_action.setVisible(False)
+
+    def _fit_toolbar(self) -> None:
+        """Show the type buttons' abbreviations when the row has room, otherwise only their keys.
+
+        On a laptop screen the full row would push the channel controls into the toolbar's overflow
+        menu; the buttons keep their colour, number and tooltip, and the menu shows the type's name."""
+        if not getattr(self, "quick_buttons", None):
+            return
+        for btn in self.quick_buttons:
+            btn.setText(btn.property("full_text"))
+        # The layouts cache their size hints; recalculate them for the full labels.
+        self._chips.layout().invalidate()
+        self.toolbar.layout().invalidate()
+        if self.toolbar.sizeHint().width() > self.browser.width() - 24:
+            for btn in self.quick_buttons:
+                btn.setText(btn.property("compact_text"))
+            self._chips.layout().invalidate()
+            self.toolbar.layout().invalidate()
+
+    def eventFilter(self, obj: Any, event: Any) -> bool:  # noqa: N802
+        from qtpy.QtCore import QEvent
+
+        if obj is self.browser and event.type() == QEvent.Resize:
+            self._fit_toolbar()
+        return False
+
+    def _quick_labels(self) -> list[str]:
+        """The types on keys 1 to 9: the study's choice, or the first specific types of the catalogue."""
+        cat = self.session.catalogue
+        chosen = [n for n in getattr(self.settings, "quick_labels", ()) if cat.is_permitted(n)][:9]
+        return chosen or list(cat.specific_labels)[:9]
+
+    def _build_shortcuts(self) -> None:
+        """Window-wide keys for annotating. None of them is one of MNE's own browsing keys."""
+        b = self.browser
+
+        def shortcut(text: str, keys: list[Any], slot: Any) -> QAction:
+            act = QAction(text, b)
+            act.setShortcuts([QKeySequence(k) for k in keys])
+            act.setShortcutContext(Qt.WindowShortcut)
+            act.triggered.connect(slot)
+            b.addAction(act)  # not shown anywhere; the window keeps it for its keys
+            return act
+
+        self.type_actions = []
+        digits = [Qt.Key_1, Qt.Key_2, Qt.Key_3, Qt.Key_4, Qt.Key_5, Qt.Key_6, Qt.Key_7, Qt.Key_8, Qt.Key_9]
+        for key, name in enumerate(self.quick_labels, start=1):
+            qt_key = digits[key - 1]
+            self.type_actions.append(shortcut(
+                f"Type {key}: {name}", [qt_key, Qt.KeypadModifier | qt_key], lambda _=False, n=name: self.apply_type(n)
+            ))
+        self.find_type_action = shortcut("Find a type…", [Qt.Key_Slash, QKeySequence.Find], lambda: self.find_type())
+        self.mark_action = shortcut("Mark start, then end", [Qt.Key_M], lambda: self.mark_key("toggle"))
+        self.mark_start_action = shortcut("Mark start", [Qt.Key_BracketLeft], lambda: self.mark_key("start"))
+        self.mark_end_action = shortcut("Mark end", [Qt.Key_BracketRight], lambda: self.mark_key("end"))
+        self.next_action = shortcut("Next annotation", [Qt.Key_N], lambda: self.controller.step_selection(1))
+        self.prev_action = shortcut("Previous annotation", [Qt.Key_P], lambda: self.controller.step_selection(-1))
+        self.scope_action = shortcut("Whole montage or selected channels", [Qt.Key_C], self.toggle_scope)
+        self.controller.requestTypeChange = self.change_type_of  # type: ignore[method-assign]
+        self.controller.annotationCreated.connect(self._reveal_in_table)
+
+    # ------------------------------------------------------- choosing types
+    def _target_ids(self) -> list[str]:
+        """The annotations that the type keys, buttons and menu change: the selected ones, if any."""
+        store = self.session.store
+        ids = [i for i in self._selected_ids() if i in store]
+        if not ids and self.controller.selected_id is not None and self.controller.selected_id in store:
+            ids = [self.controller.selected_id]
+        return ids
+
+    def apply_type(self, name: str) -> None:
+        """Keys 1 to 9, the type buttons, the menu and the picker all come here.
+
+        With annotations selected, they change to this type; otherwise it becomes the type of the
+        next annotation."""
+        cat = self.session.catalogue
+        cat.get(name)
+        ids = self._target_ids()
+        if ids and not self.read_only:
+            if not self.controller._check_editable():
+                self._refresh_type_display()
+                return
+            store = self.session.store
+            if all(store.get(i).label == name for i in ids):
+                self._show_message(f"Already {name}")
+            else:
+                self.controller.relabel_many(ids, name)
+                what = "the selected annotation" if len(ids) == 1 else f"{len(ids)} annotations"
+                self._show_message(
+                    f"Changed {what} to {name} ({UNDO_HINT}). Esc or a click on empty EEG ends the selection."
+                )
+        else:
+            self.controller.set_current_label(name)
+            self._show_message(f"Next: {name}. Drag across the EEG, or press M at the start and again at the end.")
+        self._refresh_type_display()
+
+    def find_type(self) -> None:
+        """/ : the searchable list of every type, under the type menu."""
+        ids = self._target_ids()
+        store = self.session.store
+        current = store.get(ids[0]).label if ids else self.controller.current_label
+        title = ("Change the selected annotation to" if len(ids) == 1 else f"Change {len(ids)} annotations to") \
+            if ids else "Type of the next annotation"
+        at = self.label_combo.mapToGlobal(self.label_combo.rect().bottomLeft())
+        chosen = self.prompts.choose_label(self.browser, title, self.session.catalogue, current,
+                                           quick=self.quick_labels, at=at)
+        if chosen:
+            self.apply_type(chosen)
+
+    def change_type_of(self, annotation_id: str, screen_pos: Any = None) -> None:
+        """Double-click on an annotation: choose its new type in the picker, opened at the pointer."""
+        if self.read_only or annotation_id not in self.session.store:
+            return
+        self.controller.select(annotation_id)
+        if not self.controller._check_editable():
+            return
+        current = self.session.store.get(annotation_id).label
+        at = screen_pos.toPoint() if hasattr(screen_pos, "toPoint") else screen_pos
+        chosen = self.prompts.choose_label(self.browser, f"Change {current} to", self.session.catalogue, current,
+                                           quick=self.quick_labels, at=at or QCursor.pos())
+        if chosen and chosen != current:
+            self.apply_type(chosen)
+
+    def toggle_scope(self) -> None:
+        """C: switch between the whole montage and the selected channels for the next annotation."""
+        (self.scope_channels if self.controller.scope == "whole" else self.scope_whole).click()
+        self._show_message(
+            "Next annotation: whole montage" if self.controller.scope == "whole" else
+            "Next annotation: selected channels (click channel names to choose them)"
+        )
+
+    # ------------------------------------------------------ keyboard marks
+    def pointer_time(self) -> float | None:
+        """The time under the mouse pointer, or None when it is not over the EEG."""
+        p = self.browser.mne
+        view = getattr(p, "view", None)
+        vb = getattr(p, "viewbox", None)
+        if view is None or vb is None:
+            return None
+        pos = view.mapFromGlobal(QCursor.pos())
+        if not view.rect().contains(pos):
+            return None
+        scene = view.mapToScene(pos)
+        if not vb.sceneBoundingRect().contains(scene):
+            return None
+        return float(vb.mapSceneToView(scene).x())
+
+    def mark_key(self, kind: str, t: float | None = None) -> None:
+        """M (start, then end), [ (start) and ] (end), at the pointer."""
+        if t is None:
+            t = self.pointer_time()
+        if t is None:
+            where = "ends" if kind == "end" or (kind == "toggle" and self.controller.mark_start is not None) else "starts"
+            key = {"start": "[", "end": "]"}.get(kind, "M")
+            self._show_message(f"Point at the EEG where the artifact {where}, then press {key}.")
+            return
+        if kind == "start":
+            self.controller.start_mark(t)
+        elif kind == "end":
+            self.controller.end_mark(t)
+        else:
+            self.controller.toggle_mark(t)
+
+    def _reveal_in_table(self, annotation_id: str) -> None:
+        """Scroll the list to a new annotation (without selecting it)."""
+        for r in range(self.table.rowCount()):
+            item = self.table.item(r, 0)
+            if item is not None and item.data(Qt.UserRole) == annotation_id:
+                self.table.scrollToItem(item)
+                break
+
+    def _refresh_type_display(self) -> None:
+        """Show the selected annotations' type while there is a selection, otherwise the next type."""
+        ids = self._target_ids()
+        store = self.session.store
+        if ids:
+            labels = {store.get(i).label for i in ids}
+            shown = next(iter(labels)) if len(labels) == 1 else None
+            self.type_caption.setText(" Change to ")
+            self.type_caption.setToolTip("Annotations are selected: a type button, key or menu choice changes them")
+        else:
+            shown = self.controller.current_label
+            self.type_caption.setText(" Draw as ")
+            self.type_caption.setToolTip("The type of the next annotation")
+        for name, btn in zip(self.quick_labels, self.quick_buttons):
+            btn.setChecked(name == shown)
+        self.label_combo.blockSignals(True)
+        self.label_combo.setCurrentIndex(self.label_combo.findData(shown) if shown else -1)
+        self.label_combo.blockSignals(False)
 
     def _build_annotation_panel(self) -> None:
         dock = QDockWidget("Annotations", self.browser)
@@ -356,6 +586,9 @@ class AnnotationWorkspace(QObject):
             + (f" ({html.escape(s.display_name)})" if s.display_name else "")
             + f"   |   Mode: {s.mode}   |   Filters: {s.filters.describe()}"
         )
+        # A reminder of the annotating keys, on the left; status messages replace it for a while.
+        self.hint_label = style.label("N / P  next, previous annotation" if self.read_only else KEY_HINT, "caption")
+        sb.addWidget(self.hint_label)
         sb.addPermanentWidget(self.status_fixed)
         self.status_progress = QLabel()
         sb.addPermanentWidget(self.status_progress)
@@ -400,19 +633,7 @@ class AnnotationWorkspace(QObject):
     # -------------------------------------------------------------- updates
     def _refresh_state(self) -> None:
         c = self.controller
-        lab = self.session.catalogue.get(c.current_label)
-        fg = readable_text_colour(lab.colour)
-        self.active_label.setText(f" {lab.short_code} ")
-        self.active_label.setToolTip(f"The next drag creates: {lab.label} (code {lab.value})")
-        # The badge takes the colour of the type, so it is the one place the colour is set here.
-        self.active_label.setStyleSheet(
-            f"QLabel {{ background: {lab.colour}; color: {fg}; font-weight: 600; border-radius: 5px; padding: 2px 6px; }}"
-        )
-        idx = self.label_combo.findData(c.current_label)
-        if idx >= 0 and idx != self.label_combo.currentIndex():
-            self.label_combo.blockSignals(True)
-            self.label_combo.setCurrentIndex(idx)
-            self.label_combo.blockSignals(False)
+        self._refresh_type_display()
         chans = c.selected_channels
         if c.scope == "whole":
             self.channels_summary.setText(" all channels ")
@@ -495,6 +716,7 @@ class AnnotationWorkspace(QObject):
         self.count_label.setText(f"{n} annotation(s): {n - n_ch} whole montage, {n_ch} channel-specific")
         self.status_progress.setText(f"   |   Annotations: {n}")
         self._update_actions()
+        self._refresh_type_display()
 
     def _update_clock(self) -> None:
         try:
@@ -529,11 +751,15 @@ class AnnotationWorkspace(QObject):
             self.controller.jump_to(ids[0])
         elif ids:
             self.controller.select(ids[0])
+        else:
+            self.controller.select(None)
         self._update_actions()
+        self._refresh_type_display()
 
     def _on_controller_selection(self, aid: str | None) -> None:
         if aid is not None and aid in self._selected_ids():
             self._update_actions()  # keep a multi-row selection made in the list
+            self._refresh_type_display()
             return
         self.table.blockSignals(True)
         self.table.clearSelection()
@@ -545,6 +771,7 @@ class AnnotationWorkspace(QObject):
                     break
         self.table.blockSignals(False)
         self._update_actions()
+        self._refresh_type_display()
 
     def _jump_row(self, row: int) -> None:
         item = self.table.item(row, 0)
@@ -609,7 +836,8 @@ class AnnotationWorkspace(QObject):
         if not ids or not self.controller._check_editable():
             return
         current = self.session.store.get(ids[0]).label
-        label = self.prompts.choose_label(self.browser, "Change label", self.session.catalogue, current)
+        label = self.prompts.choose_label(self.browser, "Change label", self.session.catalogue, current,
+                                          quick=self.quick_labels)
         if label is None or label == current and len(ids) == 1:
             return
         self.controller.relabel_many(ids, label)

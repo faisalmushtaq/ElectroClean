@@ -19,7 +19,6 @@ from qtpy.QtWidgets import (
     QDoubleSpinBox,
     QFormLayout,
     QHBoxLayout,
-    QLabel,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
@@ -181,26 +180,18 @@ class UserPrompts:
         item, ok = QInputDialog.getItem(parent, title, text, list(items), current, False)
         return item if ok else None
 
-    def choose_label(self, parent: QWidget | None, title: str, catalogue: Any, current: str | None) -> str | None:
-        """Pick an artifact type from the same grouped list as the toolbar; None if cancelled."""
-        from qtpy.QtWidgets import QComboBox, QDialogButtonBox
+    def choose_label(self, parent: QWidget | None, title: str, catalogue: Any, current: str | None, *,
+                     quick: Sequence[str] = (), at: Any = None) -> str | None:
+        """Pick an artifact type with the searchable type picker; None if cancelled.
 
-        dlg = QDialog(parent)
-        dlg.setWindowTitle(title)
-        layout = QVBoxLayout(dlg)
-        layout.addWidget(QLabel("New artifact type:"))
-        combo = QComboBox()
-        fill_label_combo(combo, catalogue)
-        if current is not None and combo.findData(current) >= 0:
-            combo.setCurrentIndex(combo.findData(current))
-        layout.addWidget(combo)
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.accepted.connect(dlg.accept)
-        buttons.rejected.connect(dlg.reject)
-        layout.addWidget(buttons)
-        if dlg.exec() != QDialog.Accepted:
+        ``quick`` are the types on keys 1 to 9 (shown with their key); ``at`` is a global point
+        where the picker opens as a pop-up (for example under the mouse), otherwise it is a dialog."""
+        picker = TypePicker(parent, catalogue, current, title=title, quick=quick, popup=at is not None)
+        if at is not None:
+            picker.place_at(at)
+        if picker.exec() != QDialog.Accepted:
             return None
-        return combo.currentData()
+        return picker.chosen
 
     def choose_from_list(self, parent: QWidget | None, title: str, items: Sequence[str]) -> str | None:
         """A list to pick one item from (double-click or OK); None if cancelled."""
@@ -299,7 +290,7 @@ class ScriptedPrompts(UserPrompts):
     def choose_item(self, parent, title, text, items, current=0):  # type: ignore[override]
         return self._answer("item", title, text, items[current] if items else None)
 
-    def choose_label(self, parent, title, catalogue, current):  # type: ignore[override]
+    def choose_label(self, parent, title, catalogue, current, **kw):  # type: ignore[override]
         return self._answer("label", title, "", current)
 
     def choose_from_list(self, parent, title, items):  # type: ignore[override]
@@ -443,3 +434,148 @@ class TimesDialog(QDialog):
 
     def values(self) -> tuple[float, float]:
         return self.start.value(), self.end.value()
+
+
+
+class TypePicker(QDialog):
+    """Find an artifact type by typing part of its name, its code or its abbreviation.
+
+    The list keeps the family headings of the toolbar menu. Typing filters it, the arrow keys
+    move through it, Enter (or a click) chooses and Esc closes. The types on the number keys are
+    shown with their key, as a reminder that they can be chosen without opening the picker.
+    """
+
+    def __init__(self, parent: QWidget | None, catalogue: Any, current: str | None, *, title: str = "Artifact type",
+                 quick: Sequence[str] = (), popup: bool = False) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        if popup:
+            self.setWindowFlags(Qt.Popup)  # closes when the user clicks elsewhere
+        self.catalogue = catalogue
+        self.chosen: str | None = None
+        keys = {name: i for i, name in enumerate(quick, start=1)}
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(8)
+        layout.addWidget(style.label(title, "heading"))
+        self.search = QLineEdit()
+        self.search.setPlaceholderText("Type a name, code or abbreviation, e.g. blink, 103 or EMG")
+        self.search.setClearButtonEnabled(True)
+        layout.addWidget(self.search)
+        self.list = QListWidget()
+        self.list.setUniformItemSizes(True)
+        self._entries: list[tuple[QListWidgetItem, Any]] = []  # (item, label or None for a heading)
+        section = None
+        for lab in catalogue.labels:
+            if lab.section and lab.section != section:
+                section = lab.section
+                head = QListWidgetItem(section)
+                head.setFlags(Qt.NoItemFlags)
+                font = head.font()
+                font.setBold(True)
+                head.setFont(font)
+                self.list.addItem(head)
+                self._entries.append((head, None))
+            key = keys.get(lab.label)
+            text = label_text(lab) + (f"     key {key}" if key else "")
+            item = QListWidgetItem(colour_icon(lab.colour), text)
+            item.setData(Qt.UserRole, lab.label)
+            item.setToolTip(lab.description or lab.label)
+            if lab.is_group:
+                font = item.font()
+                font.setItalic(True)
+                item.setFont(font)
+            self.list.addItem(item)
+            self._entries.append((item, lab))
+        layout.addWidget(self.list, 1)
+        layout.addWidget(style.label("Enter chooses · ↑ ↓ move · Esc closes", "caption"))
+        self.search.textChanged.connect(self._filter)
+        self.search.installEventFilter(self)
+        self.list.itemClicked.connect(self._choose_item)
+        self.list.itemActivated.connect(self._choose_item)
+        self.resize(420, 480)
+        self._select_label(current)
+        self.search.setFocus()
+
+    # ------------------------------------------------------------ behaviour
+    @staticmethod
+    def matches(lab: Any, text: str) -> bool:
+        """True if every word typed appears in the type's name, code or abbreviation."""
+        hay = f"{lab.label} {lab.value} {lab.short_code}".lower().replace("-", " ")
+        return all(word in hay for word in text.lower().replace("-", " ").split())
+
+    def visible_labels(self) -> list[str]:
+        return [lab.label for item, lab in self._entries if lab is not None and not item.isHidden()]
+
+    def _filter(self, text: str) -> None:
+        heading = None
+        heading_has_match = False
+        for item, lab in self._entries:
+            if lab is None:
+                if heading is not None:
+                    heading.setHidden(not heading_has_match)
+                heading, heading_has_match = item, False
+                continue
+            show = self.matches(lab, text) if text.strip() else True
+            item.setHidden(not show)
+            heading_has_match = heading_has_match or show
+        if heading is not None:
+            heading.setHidden(not heading_has_match)
+        visible = self.visible_labels()
+        current = self.list.currentItem()
+        if text.strip() and visible:
+            self._select_label(visible[0])  # Enter then chooses the best match
+        elif current is not None:
+            self.list.scrollToItem(current)
+
+    def _select_label(self, name: str | None) -> None:
+        for item, lab in self._entries:
+            if lab is not None and lab.label == name and not item.isHidden():
+                self.list.setCurrentItem(item)
+                self.list.scrollToItem(item)
+                return
+
+    def _move(self, step: int) -> None:
+        rows = [self.list.row(item) for item, lab in self._entries if lab is not None and not item.isHidden()]
+        if not rows:
+            return
+        cur = self.list.currentRow()
+        later = [r for r in rows if (r > cur if step > 0 else r < cur)]
+        target = (later[0] if step > 0 else later[-1]) if later else cur
+        if target not in rows:
+            target = rows[0]
+        self.list.setCurrentRow(target)
+
+    def eventFilter(self, obj: Any, event: Any) -> bool:  # noqa: N802
+        from qtpy.QtCore import QEvent
+
+        if obj is self.search and event.type() == QEvent.KeyPress:
+            key = event.key()
+            if key in (Qt.Key_Down, Qt.Key_Up):
+                self._move(1 if key == Qt.Key_Down else -1)
+                return True
+            if key in (Qt.Key_Return, Qt.Key_Enter):
+                item = self.list.currentItem()
+                if item is not None and not item.isHidden() and item.data(Qt.UserRole):
+                    self._choose_item(item)
+                return True
+        return super().eventFilter(obj, event)
+
+    def _choose_item(self, item: Any) -> None:
+        name = item.data(Qt.UserRole) if item is not None else None
+        if name:
+            self.chosen = name
+            self.accept()
+
+    def place_at(self, point: Any) -> None:
+        """Open with the top-left corner at a global point, kept on the screen."""
+        from qtpy.QtCore import QPoint
+        from qtpy.QtGui import QGuiApplication
+
+        pt = point.toPoint() if hasattr(point, "toPoint") else QPoint(point)
+        screen = QGuiApplication.screenAt(pt) or QGuiApplication.primaryScreen()
+        if screen is not None:
+            area = screen.availableGeometry()
+            pt.setX(max(area.left(), min(pt.x(), area.right() - self.width())))
+            pt.setY(max(area.top(), min(pt.y(), area.bottom() - self.height())))
+        self.move(pt)

@@ -48,7 +48,7 @@ from qtpy.QtWidgets import QMenu  # noqa: E402
 
 from electroclean.app.annotations.mne_bridge import to_mne_annotations  # noqa: E402
 from electroclean.app.annotations.model import AnnotationError  # noqa: E402
-from electroclean.app.gui.dialogs import add_label_menu  # noqa: E402
+from electroclean.app.gui.dialogs import add_label_menu, colour_icon  # noqa: E402
 from electroclean.app.gui.help_text import UNDO_HINT
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -128,15 +128,24 @@ class ElectroCleanBrowser(_pgf.MNEQtBrowser):
         super().keyPressEvent(event)
 
     def _check_close(self) -> None:
-        # MNE maps Escape to closing the window; ElectroClean uses it to clear the selection.
+        # MNE maps Escape to closing the window; ElectroClean uses it to cancel a started mark
+        # or clear the selection.
         if self._ec_controller is not None:
-            self._ec_controller.select(None)
+            self._ec_controller.escape()
         else:  # pragma: no cover
             super()._check_close()
 
 
 class ElectroCleanViewBox(RawViewBox):
     """Plot area: dragging creates an ElectroClean annotation."""
+
+    def mouseClickEvent(self, event: Any) -> None:  # noqa: N802
+        # A click on empty EEG clears the selection, as in most editors (and then places MNE's
+        # time cursor). Clicks on annotations and traces are handled by those items.
+        ctrl = _controller_of(self.weakmain())
+        if ctrl is not None and event.button() == Qt.LeftButton and ctrl.selected_id is not None:
+            ctrl.select(None)
+        super().mouseClickEvent(event)
 
     def mouseDragEvent(self, event: Any, axis: Any = None) -> None:  # noqa: N802
         ctrl = _controller_of(self.weakmain())
@@ -189,8 +198,9 @@ class ArtifactRegion(AnnotRegion):
         self._controller = weakref.ref(controller)
         self.setBounds((0, controller.duration_s))
         self.setToolTip(
-            f"{label}\nClick to select · drag an edge to resize · Shift+drag to move\n"
-            "Shift+click a channel to add/remove it · right-click for options"
+            f"{label}\nClick to select, then press 1 to 9 to change the type · double-click to choose any type\n"
+            "Drag an edge to resize · Shift+drag to move · Shift+click a channel to add or remove it\n"
+            "Right-click for more options"
         )
         self.label_item.setText(f"{label}{' [ch]' if channels else ''}")
 
@@ -232,7 +242,11 @@ class ArtifactRegion(AnnotRegion):
         ctrl = self._ctrl()
         if ctrl is None:
             return event.ignore()
-        if event.button() == Qt.LeftButton and event.modifiers() & Qt.ShiftModifier:
+        if event.button() == Qt.LeftButton and event.double():
+            ctrl.select(self.annotation_id)
+            ctrl.requestTypeChange(self.annotation_id, event.screenPos())
+            event.accept()
+        elif event.button() == Qt.LeftButton and event.modifiers() & Qt.ShiftModifier:
             scene_pos = self.mapToScene(event.pos())
             for t in self.mne.traces:
                 if t.shape().contains(t.mapFromScene(scene_pos)):
@@ -385,6 +399,7 @@ class AnnotationController(QObject):
     stateChanged = Signal()  # label, scope, channel selection or drawing mode changed
     statusMessage = Signal(str)
     annotationsChanged = Signal()
+    annotationCreated = Signal(str)  # id of a new annotation (it is not selected, see create_annotation)
 
     def __init__(self, browser: ElectroCleanBrowser, store: AnnotationStore, *,
                  transient_zones: list[tuple[float, float]] | None = None,
@@ -405,6 +420,9 @@ class AnnotationController(QObject):
         self.regions: dict[str, ArtifactRegion] = {}
         self._drag_preview: pg.LinearRegionItem | None = None
         self._drag_start: float | None = None
+        self.mark_start: float | None = None  # first press of M (or [): the start of a keyboard mark
+        self._mark_line: pg.InfiniteLine | None = None
+        self.quick_labels: list[str] = []  # the types on keys 1 to 9, in key order (set by the window)
         self._sync_pending = False
         self._base_colours: dict[str, Any] = {}
         self._zone_items: list[pg.LinearRegionItem] = []
@@ -529,6 +547,11 @@ class AnnotationController(QObject):
 
     # -------------------------------------------------------------- drawing
     def begin_drag(self, x0: float, x1: float) -> None:
+        # Starting a new annotation ends work on the selected one, so that the number keys
+        # choose the type of the next annotation again.
+        self.cancel_mark(quiet=True)
+        if self.selected_id is not None:
+            self.select(None)
         self._drag_start = x0
         colour = QColor(self.catalogue.colour_for(self.current_label))
         colour.setAlpha(60)
@@ -562,9 +585,10 @@ class AnnotationController(QObject):
         except AnnotationError as exc:
             self._say(f"Annotation not created: {exc}")
             return None
-        self.selected_id = ann.annotation_id
+        # The new annotation is drawn but not selected: the number keys then still choose the type
+        # of the next annotation. Clicking an annotation selects it for changes.
         self.sync_now()
-        self.selectionChanged.emit(ann.annotation_id)
+        self.annotationCreated.emit(ann.annotation_id)
         where = "whole montage" if ann.is_global else f"{len(ann.channels)} channel(s)"
         span = f"{ann.onset(self.recording.timing):.3f}–{ann.offset(self.recording.timing):.3f} s"
         if self.store.last_auto_merged:
@@ -575,6 +599,111 @@ class AnnotationController(QObject):
         else:
             self._say(f"Added {ann.label} {span} ({where})")
         return ann.annotation_id
+
+    # ------------------------------------------------------ keyboard marking
+    def start_mark(self, t: float) -> None:
+        """First press of M (or [): remember where the artifact starts and show a dashed line there.
+
+        The line stays while the annotator scrolls, so an artifact longer than the screen can be
+        marked by pressing M at its start and again at its end."""
+        if not self._check_editable():
+            return
+        self.cancel_mark(quiet=True)
+        if self.selected_id is not None:
+            self.select(None)
+        t = self.clamp_time(t)
+        self.mark_start = t
+        colour = QColor(self.catalogue.colour_for(self.current_label))
+        self._mark_line = pg.InfiniteLine(
+            pos=t, angle=90, movable=False, pen=pg.mkPen(colour, width=2, style=Qt.DashLine),
+            label="start", labelOpts={"position": 0.97, "color": colour, "movable": False},
+        )
+        self._mark_line.setZValue(6)
+        self.browser.mne.plt.addItem(self._mark_line, ignoreBounds=True)
+        self.stateChanged.emit()
+        self._say(
+            f"Start of {self.current_label} marked at {t:.3f} s. Point at the end (scroll if you need to) "
+            "and press M again. Esc cancels."
+        )
+
+    def end_mark(self, t: float) -> str | None:
+        """Second press of M (or ]): create the annotation from the marked start to here."""
+        if self.mark_start is None:
+            self._say("Press M (or [) with the pointer at the start of the artifact first, then M (or ]) at its end.")
+            return None
+        start = self.mark_start
+        self.cancel_mark(quiet=True)
+        t = self.clamp_time(t)
+        if abs(t - start) < 1e-9:
+            self._say("The start and end are at the same time: point at the end of the artifact and press M.")
+            self.start_mark(start)
+            return None
+        return self.create_annotation(min(start, t), max(start, t))
+
+    def toggle_mark(self, t: float) -> str | None:
+        """M: the first press marks the start, the second the end."""
+        if self.mark_start is None:
+            self.start_mark(t)
+            return None
+        return self.end_mark(t)
+
+    def cancel_mark(self, quiet: bool = False) -> bool:
+        """Remove a started keyboard mark; True if there was one."""
+        had = self.mark_start is not None
+        self.mark_start = None
+        if self._mark_line is not None:
+            with contextlib.suppress(Exception):
+                self.browser.mne.plt.removeItem(self._mark_line)
+            self._mark_line = None
+        if had:
+            self.stateChanged.emit()
+            if not quiet:
+                self._say("Mark cancelled")
+        return had
+
+    def escape(self) -> None:
+        """Esc: cancel a started mark, otherwise clear the selection."""
+        if not self.cancel_mark():
+            self.select(None)
+
+    # ------------------------------------------------------------ navigation
+    def step_selection(self, step: int) -> str | None:
+        """N / P: select the next (+1) or previous (-1) annotation in time and bring it into view.
+
+        Without a selection, N starts from the left edge of the screen and P from its right edge."""
+        anns = sorted(self.store.annotations(), key=lambda a: (a.onset_sample, a.end_sample, a.annotation_id))
+        if not anns:
+            self._say("There are no annotations yet")
+            return None
+        ids = [a.annotation_id for a in anns]
+        if self.selected_id in ids:
+            i = ids.index(self.selected_id) + step
+        else:
+            p = self.browser.mne
+            t0 = float(p.t_start)
+            sf = self.recording.timing.sfreq
+            if step > 0:
+                later = [k for k, a in enumerate(anns) if a.onset_sample / sf >= t0 - 1e-9]
+                i = later[0] if later else len(anns)
+            else:
+                t1 = t0 + float(p.duration)
+                earlier = [k for k, a in enumerate(anns) if a.onset_sample / sf < t1]
+                i = earlier[-1] if earlier else -1
+        if not 0 <= i < len(anns):
+            self._say("That was the last annotation" if step > 0 else "That was the first annotation")
+            return None
+        ann = anns[i]
+        self.jump_to(ann.annotation_id)
+        timing = self.recording.timing
+        self._say(
+            f"{i + 1} of {len(anns)}: {ann.label} {ann.onset(timing):.3f}–{ann.offset(timing):.3f} s. "
+            "Press 1 to 9 to change its type, Delete to remove it, N or P to move on."
+        )
+        return ann.annotation_id
+
+    # Hook replaced by the workspace (opens the type picker for one annotation).
+    def requestTypeChange(self, annotation_id: str, screen_pos: Any) -> None:  # noqa: N802
+        self._say("Right-click the annotation to change its type")
 
     # --------------------------------------------------------------- editing
     def on_region_edited(self, region: ArtifactRegion) -> None:
@@ -622,7 +751,7 @@ class AnnotationController(QObject):
         if not self._check_editable():
             return
         if self.selected_id is None:
-            self._say("Select an annotation first (click it or choose it in the list)")
+            self._say(f"Nothing is selected: click an annotation (or press N) to select it, or {UNDO_HINT} the last change")
             return
         self.delete(self.selected_id)
 
@@ -666,9 +795,18 @@ class AnnotationController(QObject):
         menu = QMenu(self.browser)
         menu.setAttribute(Qt.WA_DeleteOnClose)
         menu.addSection(f"{ann.label}")
-        relabel = menu.addMenu("Change label to")
+        menu.setToolTipsVisible(True)
+        for key, name in enumerate(self.quick_labels, start=1):
+            lab = self.catalogue.get(name)
+            act = menu.addAction(colour_icon(lab.colour), f"{lab.label}  ({lab.value})")
+            act.setShortcut(str(key))  # shown in the menu as a reminder of the key
+            act.setToolTip(lab.description or lab.label)
+            act.setEnabled(name != ann.label)
+            act.triggered.connect(lambda _=False, n=name: self.relabel(annotation_id, n))
+        relabel = menu.addMenu("Other type" if self.quick_labels else "Change type to")
         relabel.setToolTipsVisible(True)
         add_label_menu(relabel, self.catalogue, ann.label, lambda lab: self.relabel(annotation_id, lab))
+        menu.addSeparator()
         menu.addAction("Edit channels…", lambda: self.requestChannelEdit(annotation_id))
         if not ann.is_global:
             menu.addAction("Apply to whole montage", lambda: self.set_annotation_channels(annotation_id, []))
