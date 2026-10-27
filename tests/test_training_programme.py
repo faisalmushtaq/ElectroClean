@@ -23,7 +23,6 @@ from electroclean.app.gui.dialogs import ScriptedPrompts  # noqa: E402
 from electroclean.app.gui.start_window import StartRequest  # noqa: E402
 from electroclean.app.io.canonical import write_annotations_json  # noqa: E402
 from electroclean.app.io.discovery import discover_recordings  # noqa: E402
-from electroclean.app.session.interaction_log import InteractionLog  # noqa: E402
 from electroclean.app.session.register import CompletionRegister  # noqa: E402
 from electroclean.synthetic import truth_document, write_recording  # noqa: E402
 from electroclean.training.examples import EXAMPLE_SET_ID, create_example_training_set  # noqa: E402
@@ -210,7 +209,8 @@ def _finish_with_show_me(ws):
 def test_programme_path_stages_unlock_in_order(qapp, example, tmp_path):
     root, rs = example
     ctrl = _start(root)
-    ctrl.log = InteractionLog(tmp_path / "visit.jsonl")
+    log_path = ctrl.log.path  # the visit's own log, opened by begin() and fed by the recorder
+    assert log_path is not None and log_path.parent.name == "annotator-T01"
     path = ctrl.training_path
     assert path.isVisible() and not ctrl.start_window.isVisible()
     states = {s.key: s.status for s in path.states}
@@ -279,13 +279,24 @@ def test_programme_path_stages_unlock_in_order(qapp, example, tmp_path):
     states = {s.key: s.status for s in path.states}
     assert states["practice"] == "completed" and path.next.stage is None
     assert path.continue_btn.isHidden()
-    # The visit's log has the training events.
-    ctrl.log.close()
-    kinds = [json.loads(line)["type"] for line in (tmp_path / "visit.jsonl").read_text(encoding="utf-8").splitlines()]
-    for kind in ("training_path_opened", "stage_started", "guided_step_started", "guided_check", "guided_show_me",
-                 "guided_step_completed", "guided_recording_completed", "practice_scored", "stage_completed"):
-        assert kind in kinds, kind
+    # The visit's log has the training events, and the activity tables summarise them per recording.
     leave_programme(ctrl)
+    kinds = [json.loads(line)["type"] for line in log_path.read_text(encoding="utf-8").splitlines()]
+    for kind in ("training_path_opened", "stage_started", "guided_step_started", "guided_check", "guided_show_me",
+                 "guided_step_completed", "guided_recording_completed", "practice_scored", "stage_completed",
+                 "recording_opened", "shortcut", "log_closed"):  # Enter continued: a shortcut
+        assert kind in kinds, kind
+    from electroclean.activity.logs import read_logs
+    from electroclean.activity.summary import summarise
+
+    visits, _warnings = read_logs([log_path])
+    rows = [r for r in summarise(visits).recordings if r["segment"] == "recording"]
+    guided = [r for r in rows if r["mode"] == "guided"]
+    practice = [r for r in rows if r["mode"] == "practice"]
+    assert [r["recording"] for r in guided] == list(rs.guided_recordings)
+    assert guided[0]["guided_steps"] == 6 and guided[0]["guided_attempts"] >= 2 and guided[0]["guided_show_me"] == 4
+    assert guided[0]["guided_stars_mean"] == pytest.approx((2 + 3 + 4) / 6)
+    assert len(practice) == 1 and practice[0]["practice_passed"] is True and practice[0]["practice_score"] == 1.0
     assert ctrl.start_window.isVisible() and not path.isVisible()
     ctrl.start_window.hide()
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -86,6 +87,7 @@ class ReviewSession:
         self.context_id = set_id
         self.filters = filters
         self.recording_id = loaded.info.recording_id
+        self.session_id = f"review-{uuid.uuid4().hex[:12]}"  # names the window in the interaction log
         self.elapsed_s = 0.0
 
     def start_timer(self) -> None:
@@ -202,14 +204,26 @@ def show_practice_feedback(ctrl: AppController, session: AnnotationSession, load
 
         flags = review_flags(fb, list(mine.annotations), list(ref.annotations), loaded.timing.sfreq)
         add_review_flags(ctrl, ws, flags)
-        ctrl.log.event("practice_review_opened", recording=rid, flags=len(flags))
+        recorder = getattr(ctrl, "recorder", None)
+        if recorder is not None:  # clicks, keys and views in the review are logged with the recording
+            recorder.attach_workspace(ws)
+        ctrl.log.event("practice_review_opened", recording=rid, flags=len(flags),
+                       missed=sum(f["kind"] == "MISSED" for f in flags), extra=sum(f["kind"] == "EXTRA" for f in flags),
+                       type_differences=sum(f["kind"] == "TYPE" for f in flags))
     except Exception as exc:
+        recorder = getattr(ctrl, "recorder", None)
+        if recorder is not None:
+            recorder.detach_workspace()
         ctrl.prompts.error(ctrl.parent_widget, "Review unavailable", f"The review could not be opened: {exc}")
         ctrl.after_practice_feedback(loaded)
         return
     ctrl.review_workspace = ws
 
     def review_closed() -> None:
+        ctrl.log.event("practice_review_closed", recording=rid)
+        recorder = getattr(ctrl, "recorder", None)
+        if recorder is not None:
+            recorder.detach_workspace()
         ctrl.review_workspace = None  # release the window and the recording's display data
         ctrl.after_practice_feedback(loaded)
 
@@ -445,11 +459,16 @@ class QuizWindow(QMainWindow):
         self.view_layout.addWidget(self.browser)
         self.browser.show()
         self.quiz.item_shown()
+        _log(self.ctrl).event("quiz_item_shown", item_id=item.item_id, index=n, n_items=len(self.quiz.items),
+                              quiz_mode=self.quiz.mode)
 
     def answer(self, label: str) -> bool:
         """Record an answer for the current item (also used by tests)."""
         correct = self.quiz.answer(label)
         item = self.quiz.items[self.quiz.current_index() - 1]
+        record = self.quiz.answers.get(item.item_id, {})
+        _log(self.ctrl).event("quiz_answer", item_id=item.item_id, answer=label, correct=bool(correct),
+                              response_time_s=record.get("response_time_s"), quiz_mode=self.quiz.mode)
         if self.quiz.feedback_immediately:
             verdict = "Correct." if correct else f"Not quite: the expected answer is {item.correct_label}."
             self.feedback.setText(f"<b>{verdict}</b> {html.escape(item.explanation)}")
@@ -474,6 +493,8 @@ class QuizWindow(QMainWindow):
         self._done = True
         path = self.quiz.save(self.ctrl.layout)
         s = self.quiz.score()
+        _log(self.ctrl).event("quiz_finished", n_items=s.get("n_items"), n_correct=s.get("n_correct"),
+                              proportion_correct=s.get("proportion_correct"), quiz_mode=self.quiz.mode)
         self._release()
         self.ctrl.history.append({"event": "quiz_finished", "score": s, "path": str(path)})
         self.ctrl.prompts.inform(
@@ -483,6 +504,13 @@ class QuizWindow(QMainWindow):
         )
         self.close()
         self.ctrl._back_to_start()
+
+
+def _log(ctrl: Any) -> Any:
+    """The visit's interaction log (a no-op log when there is none)."""
+    from electroclean.app.session.interaction_log import NULL_LOG
+
+    return getattr(ctrl, "log", None) or NULL_LOG
 
 
 def start_quiz(ctrl: AppController) -> bool:
@@ -1456,10 +1484,15 @@ class AdminDialog(QDialog):
         prog.clicked.connect(self.show_progress)
         fails = QPushButton("Show unresolved load failures")
         fails.clicked.connect(self.show_failures)
+        activity = QPushButton("Activity and learning curves…")
+        activity.setToolTip("Tables and a report from the interaction logs: time, clicks, keys and how annotators "
+                            "got faster (only the annotator typed on the left, if any)")
+        activity.clicked.connect(self.show_activity)
         row.addWidget(self.p_annotator)
         row.addWidget(rep)
         row.addWidget(prog)
         row.addWidget(fails)
+        row.addWidget(activity)
         v.addLayout(row)
         self.p_text = QTextBrowser()
         v.addWidget(self.p_text)
@@ -1519,6 +1552,27 @@ class AdminDialog(QDialog):
                                 + (" (passed)" if r["practice_passed"] else "") + "</td>"
                                 f"<td>{r['assessment_completed']} of {r['assessment_total']}</td></tr>" for r in rows)
                             + "</table>")
+
+    def show_activity(self) -> None:
+        """Write the activity tables and report (electroclean-activity) for this study's results folder."""
+        from datetime import datetime
+
+        from electroclean.activity.cli import NoLogsError, summary_text, write_activity
+
+        root = self._layout().root
+        aid = self.p_annotator.text().strip().upper()
+        out = root / "activity_reports" / datetime.now().strftime("%Y%m%dT%H%M%S")
+        try:
+            tables, paths = write_activity([root], out, annotators=[aid] if aid else None)
+        except NoLogsError as exc:
+            self.p_text.setHtml(f"<p>{html.escape(str(exc))}</p>")
+            return
+        except Exception as exc:
+            self._error(exc)
+            return
+        self.p_text.setHtml("<pre>" + html.escape(summary_text(tables, paths)) + "</pre>")
+        if "report" in paths and not self.ctrl.synchronous_loading:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(paths["report"])))
 
     def show_failures(self) -> None:
         from electroclean.app.io.discovery import discover_recordings

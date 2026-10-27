@@ -48,6 +48,11 @@
     "recording_lock_stale_hours": 2.0,
     "register_lock_timeout_s": 30.0
   },
+  "logging": {
+    "interactions": true,
+    "pointer_hz": 5.0,
+    "idle_after_s": 30.0
+  },
   "annotation": {
     "min_duration_samples": 1,
     "quick_labels": [

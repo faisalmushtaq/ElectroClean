@@ -73,8 +73,10 @@ class InteractionLog:
         """Seconds since the visit started (the ``t`` of an event logged now)."""
         return time.monotonic() - self._t0
 
-    def event(self, kind: str, **fields: Any) -> None:
-        """Record one event. Never raises: logging must not interrupt annotation."""
+    def event(self, kind: str, /, **fields: Any) -> None:
+        """Record one event. Never raises: logging must not interrupt annotation.
+
+        ``kind`` is positional only, so an event may have a field that is itself called ``kind``."""
         if self._fh is None:
             return
         with self._lock:

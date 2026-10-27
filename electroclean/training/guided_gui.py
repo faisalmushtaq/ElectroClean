@@ -419,9 +419,12 @@ class GuidedCoach(QObject):
         self.matched[i] = result.candidate_id or ""
         self.stars[i] = stars_for(self.failed.get(i, 0), i in self.shown)
         self.seconds[i] = time.monotonic() - self._step_t0
+        shown = i in self.shown
+        # attempts: the trainee's own tries at this step, the one that matched included (not a shown answer)
         self.log.event("guided_step_completed", recording=self.recording_id, step=i + 1,
-                       failed_attempts=self.failed.get(i, 0), shown=i in self.shown, stars=self.stars[i],
-                       seconds=round(self.seconds[i], 3), annotation_id=self.matched[i])
+                       attempts=self.failed.get(i, 0) + (0 if shown else 1), failed_attempts=self.failed.get(i, 0),
+                       used_show_me=shown, stars=self.stars[i], seconds=round(self.seconds[i], 3),
+                       annotation_id=self.matched[i], label=self.steps[i].target.label, guidance=self.guidance)
         self._start_step(i + 1)
 
     # ------------------------------------------------------------ finishing

@@ -27,6 +27,7 @@ it) gets an ``_attempt-02`` entity rather than overwriting the first.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path, PurePosixPath
 
 from electroclean.app.common import safe_component, validate_mode
@@ -73,6 +74,22 @@ class OutputLayout:
     @property
     def failed_load_txt(self) -> Path:
         return self.root / "failed_load.txt"
+
+    @property
+    def interaction_logs(self) -> Path:
+        """The interaction logs of every visit (see electroclean/app/session/interaction_log.py)."""
+        return self.root / "interaction_logs"
+
+    def visit_log_path(self, annotator_id: str, mode: str, started: datetime) -> Path:
+        """``interaction_logs/annotator-<ID>/<YYYYMMDDTHHMMSS>_<mode>.jsonl``, unique within its folder."""
+        folder = self.interaction_logs / f"annotator-{safe_component(annotator_id)}"
+        stem = f"{started.strftime('%Y%m%dT%H%M%S')}_{safe_component(mode)}"
+        path = folder / f"{stem}.jsonl"
+        n = 2
+        while path.exists():
+            path = folder / f"{stem}-{n}.jsonl"
+            n += 1
+        return path
 
     @property
     def failure_log(self) -> Path:
