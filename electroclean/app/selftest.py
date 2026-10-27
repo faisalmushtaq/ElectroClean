@@ -106,7 +106,18 @@ def _annotate_in_window(root: Path, rid: str, annotator: str, t0: float, t1: flo
                                     loaded=loaded, annotator_id=annotator)
         session.start()
         prompts = ScriptedPrompts()
-        ws = AnnotationWorkspace(session, settings, prompts=prompts)
+        # The interaction log of this short visit (checked below and by the activity analysis).
+        from datetime import datetime
+
+        from electroclean.app.gui.interaction_capture import InteractionRecorder
+        from electroclean.app.session.interaction_log import InteractionLog
+
+        log_path = layout.visit_log_path(annotator, "standard", datetime.now())
+        log = InteractionLog(log_path, {"annotator_id": annotator, "mode": "standard", "self_test": True})
+        recorder = InteractionRecorder(log, pointer_hz=settings.logging_pointer_hz,
+                                       idle_after_s=settings.logging_idle_after_s)
+        ws = AnnotationWorkspace(session, settings, prompts=prompts, log=log)
+        recorder.attach_workspace(ws)
         finished: list[Any] = []
         ws.finished.connect(finished.append)
         ws.show()
@@ -119,6 +130,17 @@ def _annotate_in_window(root: Path, rid: str, annotator: str, t0: float, t1: flo
         _check(aid is not None and len(session.store) == 1, "could not create an annotation in the window")
         _check(ws.save_and_finish() is True, f"Save and Finish failed: {prompts.log[-1] if prompts.log else ''}")
         _process_events()
+        log.event("recording_finished", n_annotations=len(session.store))
+        recorder.close("self_test")
+        from electroclean.activity.logs import read_visit_log
+        from electroclean.activity.summary import summarise
+
+        visit = read_visit_log(log_path)
+        kinds = {e["type"] for e in visit.events}
+        _check({"recording_opened", "annotation_created", "recording_finished"} <= kinds,
+               f"the interaction log is incomplete (events: {sorted(kinds)})")
+        rows = summarise([visit]).recordings
+        _check(len(rows) == 1 and rows[0]["annotations_created"] == 1, "the interaction log could not be summarised")
         _check(finished and finished[0] is not None, "Save and Finish did not report a result")
         _check(CompletionRegister(layout).is_completed(rid, annotator), "the recording was not marked complete")
         paths = finished[0].commit.paths
@@ -211,6 +233,11 @@ def _run(work: Path, say) -> None:  # noqa: ANN001
            "the agreement report has no figures")
     say(f"4. agreement analysis: {len(result.tables)} tables, {len(pairwise)} pairwise rows, "
         f"report {report.stat().st_size // 1024} KB")
+    from electroclean.activity.cli import write_activity
+
+    act, act_paths = write_activity([layout.root], work / "activity")
+    _check(len(act.recordings) == 2 and act_paths["report"].is_file(), "the activity report could not be written")
+    say(f"   interaction logs: {len(act.visits)} visits, activity report {act_paths['report'].stat().st_size // 1024} KB")
 
     # 5. An EDF+ recording like a headset export: read, checked, filtered, housekeeping channels hidden.
     from electroclean.app.annotations.labels import default_catalogue

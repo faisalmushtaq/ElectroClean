@@ -29,6 +29,11 @@ from electroclean.app.gui import style
 from electroclean.config.settings import SettingsError, StudyConfig, load_settings
 
 
+#: What annotators are told when the study records how they use ElectroClean (logging.interactions).
+LOGGING_NOTICE = ("This study records how you use ElectroClean (times, clicks, keys and what is on screen) for "
+                  "research. Ask your study administrator if you have questions.")
+
+
 @dataclass
 class StartRequest:
     annotator_id: str
@@ -121,6 +126,10 @@ class StartWindow(QMainWindow):
         dl.addLayout(orow)
         self.study_label = style.label("–", "caption", wrap=True)
         dl.addWidget(self.study_label)
+        # Shown when the study records interaction logs (logging.interactions).
+        self.logging_note = style.label(LOGGING_NOTICE, "caption", wrap=True)
+        self.logging_note.setVisible(False)
+        dl.addWidget(self.logging_note)
         layout.addWidget(data)
 
         # What to do
@@ -277,6 +286,7 @@ class StartWindow(QMainWindow):
 
         root = self.dataset_root()
         self.study = None
+        self.logging_note.setVisible(False)
         self._reference_sets = []
         self._recording_ids = None
         self._out = None
@@ -297,6 +307,7 @@ class StartWindow(QMainWindow):
             self._update_begin()
             return
         self.study = study
+        self.logging_note.setVisible(bool(settings.logging_interactions))
         if study is None:
             self.study_label.setText("Default settings (this folder has no study configuration)")
         else:

@@ -431,6 +431,26 @@ the *Quiz* tab, or `"include_none_option": true` in the `quiz` entry of
 `reference_set.json`), clean segments can be included by giving that text as
 the item's label.
 
+## Interaction logs (research data)
+
+By default ElectroClean keeps a log of every visit in `interaction_logs` in the
+results folder: the time of every click, key press and shortcut, what part of
+the recording was on screen, every annotation created, changed or deleted, the
+dialogs shown and the answers given, and when the annotator was idle or working
+in another program. Text typed into fields is never recorded, nor anything
+typed into password fields, nor the display name. The start window tells
+annotators that their use of ElectroClean is recorded; they must also be told
+what is recorded and why, and agree to it, under the study's ethics approval,
+in the same way as for any other data collected from participants. A study that
+does not need the logs switches them off with
+`{"settings": {"logging": {"interactions": false}}}`; `logging.pointer_hz` (5 by
+default, 0 for none) sets how often the pointer position over the EEG is
+recorded, and `logging.idle_after_s` (30 s) how long without input counts as
+idle. In the administrator tools, *Progress and reports* then
+**Activity and learning curves…** writes tables and a report of time, clicks,
+keys and learning curves (also `electroclean-activity` from a terminal); every
+event and column is described in [interaction logs](activity_logs.md).
+
 ## Before a study starts
 
 1. On each computer that will be used, run the stand-alone application's

@@ -36,6 +36,12 @@ def install_exception_hook() -> None:
             pass
         if sys.__stderr__ is not None:  # None in the windowed (frozen) Windows application
             sys.__stderr__.write(text)
+        try:  # into the open visit's interaction log too
+            from electroclean.app.gui.interaction_capture import log_exception
+
+            log_exception(text)
+        except Exception:
+            pass
         try:
             from qtpy.QtWidgets import QApplication, QMessageBox
 

@@ -41,6 +41,7 @@ dev = ["pytest>=8"]
 electroclean = "electroclean.app.main:main"
 electroclean-agreement = "electroclean.reliability.cli:main"
 electroclean-admin = "electroclean.training.cli:main"
+electroclean-activity = "electroclean.activity.cli:main"
 
 [tool.setuptools.dynamic]
 version = { attr = "electroclean.__version__" }

@@ -15,6 +15,7 @@ from __future__ import annotations
 import os
 import traceback
 import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -86,6 +87,7 @@ class AppController(QObject):
         super().__init__()
         style.apply_theme()
         self.log = NULL_LOG  # the current visit's interaction log, opened by begin()
+        self.recorder: Any = None  # feeds self.log while a visit is open (interaction_capture.py)
         self.prompts = prompts or UserPrompts()
         self.synchronous_loading = synchronous_loading  # used by tests
         self.catalogue = default_catalogue()
@@ -124,7 +126,39 @@ class AppController(QObject):
     def _context_id(self) -> str:
         return self.request.reference_set_id if self.request and self.request.mode != "standard" else ""
 
+    # ------------------------------------------------------ interaction log
+    def _open_visit_log(self, request: StartRequest) -> None:
+        """Start the visit's interaction log (if the study records interactions)."""
+        self._close_visit_log("new_visit")
+        s = self.settings
+        if s is None or self.layout is None or not s.logging_interactions:
+            return
+        from electroclean.app.gui.interaction_capture import InteractionRecorder, visit_header
+        from electroclean.app.session.interaction_log import InteractionLog
+
+        try:
+            started = datetime.now()
+            path = self.layout.visit_log_path(request.annotator_id, request.mode, started)
+            header = visit_header(self, request)
+            log = InteractionLog(path, header)
+        except OSError as exc:
+            self.history.append({"event": "interaction_log_unavailable", "error": str(exc)})
+            return
+        self.log = log
+        self.recorder = InteractionRecorder(log, pointer_hz=s.logging_pointer_hz, idle_after_s=s.logging_idle_after_s,
+                                            parent=self)
+        log.event("visit_started", mode=request.mode, choose_recording=bool(request.choose_recording),
+                  reference_set=header["reference_set"], assessment_kind=header["assessment_kind"])
+
+    def _close_visit_log(self, reason: str) -> None:
+        rec, self.recorder = self.recorder, None
+        if rec is not None:
+            rec.close(reason)
+            rec.deleteLater()
+        self.log = NULL_LOG
+
     def _back_to_start(self) -> None:
+        self._close_visit_log("back_to_start")
         self.start_window.refresh()
         self.start_window.show()
         self.start_window.raise_()
@@ -204,8 +238,12 @@ class AppController(QObject):
                 )
                 self.reference_set = None
                 return False
-            if request.mode in ("assessment", "practice") and request.assessment_kind == "quiz":
-                return self.start_quiz()
+        self._open_visit_log(request)
+        if request.mode in ("assessment", "practice") and request.assessment_kind == "quiz":
+            if not self.start_quiz():
+                self._close_visit_log("quiz_not_started")
+                return False
+            return True
         self.start_window.hide()
         self.next_recording()
         return True
@@ -412,6 +450,7 @@ class AppController(QObject):
         if owner is not None:
             self.session_excluded.add(files.recording_id)
             self.history.append({"event": "session_blocked", "recording_id": files.recording_id})
+            self.log.event("recording_unavailable", recording_id=files.recording_id, reason="open in another session")
             go_on = self.prompts.ask(
                 self.parent_widget,
                 "Recording unavailable",
@@ -427,6 +466,7 @@ class AppController(QObject):
                 self._back_to_start()
             return
         self.history.append({"event": "loading", "recording_id": files.recording_id})
+        self.log.event("recording_loading", recording_id=files.recording_id)
         cache = os.environ.get("ELECTROCLEAN_CACHE")  # optional folder for large memory-mapped copies
         worker = LoadWorker(files, self.settings, self.filters, self.catalogue, Path(cache) if cache else None)
         self.worker = worker
@@ -465,6 +505,7 @@ class AppController(QObject):
             pass
         self.session_excluded.add(files.recording_id)
         self.history.append({"event": "load_failed", "recording_id": files.recording_id, "kind": kind})
+        self.log.event("load_failed", recording_id=files.recording_id, kind=kind, reason=message.strip()[:500])
         reason = message.strip().split("\n")[0]
         if len(reason) > 300:
             reason = reason[:297].rstrip() + "..."
@@ -568,6 +609,7 @@ class AppController(QObject):
                 prompts=self.prompts,
                 title_suffix=_training_title_suffix(self, req.mode),  # e.g. "assessment recording 1 of 2"
                 view_state=getattr(self, "_view_state", None),
+                log=self.log,
             )
         except Exception as exc:
             session.abandon(reason=f"viewer could not be opened: {exc}", keep_autosave=True)
@@ -575,6 +617,9 @@ class AppController(QObject):
             self._on_load_failed(loaded.files, exc, traceback.format_exc())
             return
         self.workspace = ws
+        if self.recorder is not None:
+            self.recorder.attach_workspace(ws, resumed=resume is not None,
+                                           restored=getattr(resume, "n_annotations", 0) or 0)
         ws.finished.connect(self._on_finished)
         ws.closedWithoutSaving.connect(self._on_closed)
         self.history.append({"event": "opened", "recording_id": loaded.info.recording_id, "session_id": session.session_id})
@@ -592,6 +637,15 @@ class AppController(QObject):
         assert self.request is not None
         session, loaded = self.session, self.loaded
         self._remember_view()
+        if session is not None:
+            counts: dict[str, int] = {}
+            for a in session.store.annotations():
+                counts[a.label] = counts.get(a.label, 0) + 1
+            self.log.event("recording_finished", session_id=session.session_id,
+                           n_annotations=getattr(result, "n_annotations", len(session.store)),
+                           counts_by_label=counts, elapsed_s=round(float(getattr(result, "elapsed_s", 0.0) or 0.0), 3))
+        if self.recorder is not None:
+            self.recorder.detach_workspace()
         self.workspace = None
         if session is not None:
             # Saved (even if its register update is still pending): never offer it again in this session.
@@ -623,6 +677,10 @@ class AppController(QObject):
 
     def _on_closed(self) -> None:
         self._remember_view()
+        self.log.event("closed_without_saving",
+                       n_annotations=len(self.session.store) if self.session is not None else 0)
+        if self.recorder is not None:
+            self.recorder.detach_workspace()
         if self.loaded is not None:
             self.loaded.close()
         self.workspace = None
@@ -649,6 +707,7 @@ class AppController(QObject):
 
     def quit(self) -> None:
         self.history.append({"event": "quit"})
+        self._close_visit_log("quit")
         self.start_window.hide()
         app = QApplication.instance()
         if app is not None and not self.synchronous_loading:

@@ -750,7 +750,8 @@ class AnnotationWorkspace(QObject):
         except RuntimeError:  # window already destroyed
             return
         if not self.read_only and not self._finished:
-            self.session.autosave()
+            if self.session.autosave():
+                self.log.event("autosave", n_annotations=len(self.session.store))
         if not self.read_only and not self._finished and not self.session.heartbeat() and not self._lock_warned:
             self._lock_warned = True
             self._show_message(
@@ -911,6 +912,7 @@ class AnnotationWorkspace(QObject):
         QTimer.singleShot(0, self._viewer_ready)
 
     def _viewer_ready(self) -> None:
+        self.log.event("viewer_ready", window_px=[self.browser.width(), self.browser.height()])
         self.session.start_timer()
         self._update_clock()
         self.controller.relayout_labels()

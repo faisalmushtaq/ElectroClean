@@ -164,6 +164,15 @@ gives immediate feedback and a side-by-side review against the reference;
 assessment is blinded and ends with a reproducible competency report. See the
 [administrator guide](docs/administrator_guide.md).
 
+## Interaction logs
+
+ElectroClean keeps a time-stamped log of each annotator's visit: clicks, keys
+and shortcuts, what was on screen, every change to the annotations, dialogs and
+idle periods (never the text typed into fields). `electroclean-activity` turns
+the logs into tables (time, clicks and keys per recording, how much of each
+recording was seen) and a report with learning curves, to show for example
+whether annotators got faster. See [interaction logs](docs/activity_logs.md).
+
 ## Documentation
 
 | Document | For |
@@ -171,6 +180,7 @@ assessment is blinded and ends with a reproducible competency report. See the
 | [User guide](docs/user_guide.md) | Annotators |
 | [Administrator guide](docs/administrator_guide.md) | Study set-up, allocation, reference sets, competency criteria |
 | [Reliability analysis guide](docs/reliability_guide.md) | Agreement measures and their interpretation |
+| [Interaction logs](docs/activity_logs.md) | What is recorded about annotators' work, and the activity tables and learning curves |
 | [File formats](docs/file_formats.md) | Every output and configuration file |
 | [Developer guide](docs/developer_guide.md) | Architecture, MNE integration, extension points |
 | [Testing guide](docs/testing_guide.md) | Running the tests, synthetic data, manual checks |

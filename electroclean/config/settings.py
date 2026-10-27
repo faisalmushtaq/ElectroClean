@@ -152,6 +152,10 @@ class Settings:
     quick_labels: tuple[str, ...] = DEFAULT_QUICK_LABELS
     # channels.types: (name pattern, MNE channel type) pairs, applied in order when a recording is loaded.
     channel_type_patterns: tuple[tuple[str, str], ...] = ()
+    # logging: the interaction log of each visit (research data; see docs/activity_logs.md).
+    logging_interactions: bool = True
+    logging_pointer_hz: float = 5.0  # pointer samples per second over the EEG (0: none)
+    logging_idle_after_s: float = 30.0  # seconds without input after which the annotator counts as idle
     raw: dict[str, Any] = field(repr=False, default_factory=dict)
 
     @classmethod
@@ -165,6 +169,7 @@ class Settings:
             locks = data["locks"]
             ann = data["annotation"]
             chans = data.get("channels", {}) or {}
+            logs = data.get("logging", {}) or {}
             types = chans.get("types", {}) or {}
             if not isinstance(types, dict):
                 raise SettingsError(
@@ -198,6 +203,9 @@ class Settings:
                 min_duration_samples=int(ann["min_duration_samples"]),
                 quick_labels=tuple(str(x) for x in ann.get("quick_labels", DEFAULT_QUICK_LABELS)),
                 channel_type_patterns=tuple((str(k), str(v).strip().lower()) for k, v in types.items()),
+                logging_interactions=bool(logs.get("interactions", True)),
+                logging_pointer_hz=float(logs.get("pointer_hz", 5.0)),
+                logging_idle_after_s=float(logs.get("idle_after_s", 30.0)),
                 raw=copy.deepcopy(data),
             )
         except KeyError as exc:  # pragma: no cover - defaults always complete
@@ -234,6 +242,10 @@ class Settings:
             raise SettingsError("annotation.quick_labels can name at most 9 artifact types (keys 1 to 9)")
         if len(set(self.quick_labels)) != len(self.quick_labels):
             raise SettingsError("annotation.quick_labels must not name an artifact type twice")
+        if not 0 <= self.logging_pointer_hz <= 60:
+            raise SettingsError("logging.pointer_hz must be between 0 (no pointer samples) and 60")
+        if not 5 <= self.logging_idle_after_s <= 3600:
+            raise SettingsError("logging.idle_after_s must be between 5 and 3600 seconds")
         if not self.output_directory_name or any(c in self.output_directory_name for c in "/\\:"):
             raise SettingsError("output.directory_name must be a plain folder name")
 

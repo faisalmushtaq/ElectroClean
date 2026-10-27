@@ -48,6 +48,8 @@ Annotated_Events/
     training/<reference set>/assessment/annotator-A01/...
     training/<reference set>/reports/annotator-A01_competency_report.{json,html}
     training/<reference set>/quiz/annotator-A01_quiz_<mode>_<session>.json
+    interaction_logs/annotator-A01/<YYYYMMDDTHHMMSS>_<mode>.jsonl   one log per visit
+    activity_reports/<date and time>/   tables and report made from the logs
     .electroclean/
         locks/          lock files of open sessions and of the register
         staging/        saves in progress (normally empty)
@@ -233,6 +235,10 @@ recording IDs completed in standard mode by that annotator, one per line
   `session_saved_register_pending`, `export_recovery`, `completion_recovered`
   and `leftover_outputs_moved` events. `session_incomplete` records whether
   the work was kept for later (`kept_for_later`).
+* `interaction_logs/annotator-<ID>/<YYYYMMDDTHHMMSS>_<mode>.jsonl`: one log per
+  visit of everything the annotator did (JSON Lines: a header, then one event
+  per line). The format, every event kind and the tables made from the logs
+  are described in [interaction logs](activity_logs.md).
 
 ## `electroclean_study.json` (optional, in the dataset folder)
 
