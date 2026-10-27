@@ -100,10 +100,10 @@ are tested in `test_reliability.py::test_group_rollups_show_agreement_on_the_art
 ## Windows, macOS and Linux
 
 The GitHub Actions workflow `.github/workflows/build-apps.yml` runs the whole
-test-suite on Linux for every push. When started by hand, for pull requests
-into main and for version tags, it runs the test-suite on Windows, macOS and
-Linux, then builds the stand-alone application on each system and runs its
-self-test
+test-suite on Windows, macOS and Linux for every push to main, for pull
+requests into main, for version tags and when started by hand (other branches:
+Linux only), then builds the stand-alone application on each system and runs
+its self-test
 (`ElectroClean --self-test`), which loads a synthetic recording with filters,
 opens the real annotation window off screen, saves an annotation through Save
 and Finish, runs an agreement analysis and reads an EDF+ recording. The same self-test can be run on
