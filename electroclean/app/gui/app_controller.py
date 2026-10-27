@@ -22,6 +22,7 @@ from qtpy.QtCore import QObject, Qt, QTimer
 from qtpy.QtWidgets import QApplication, QMessageBox, QProgressDialog, QWidget
 
 from electroclean.app.annotations.labels import default_catalogue
+from electroclean.app.common import friendly_time
 from electroclean.app.eeg.loading import LoadedRecording, RecordingLoadError
 from electroclean.app.gui.dialogs import UserPrompts
 from electroclean.app.gui.filter_dialog import FilterDialog
@@ -118,6 +119,7 @@ class AppController(QObject):
     def begin(self, request: StartRequest) -> bool:
         """Start a sequence of annotation sessions. Returns False if it could not start."""
         self.request = request
+        self._view_state: dict[str, float] = {}  # amplitude scale etc., carried from one recording to the next
         overrides: dict[str, Any] = {}
         if request.output_root is not None:
             overrides["output"] = {"directory": str(request.output_root)}
@@ -381,8 +383,9 @@ class AppController(QObject):
             go_on = self.prompts.ask(
                 self.parent_widget,
                 "Recording unavailable",
-                f"{files.recording_id} is open in another session (computer {owner.get('host', '?')}, "
-                f"since {owner.get('created_utc', '?')}).\n\nContinue with another recording?",
+                f"{files.recording_id} is open in another session on computer {owner.get('host', '?')} "
+                f"(opened {friendly_time(owner.get('created_utc'))}). It cannot be opened twice at the same time."
+                "\n\nContinue with another recording?",
                 yes="Continue",
                 no="Stop",
             )
@@ -430,10 +433,18 @@ class AppController(QObject):
             pass
         self.session_excluded.add(files.recording_id)
         self.history.append({"event": "load_failed", "recording_id": files.recording_id, "kind": kind})
+        reason = message.strip().split("\n")[0]
+        if len(reason) > 300:
+            reason = reason[:297].rstrip() + "..."
         go_on = self.prompts.ask(
             self.parent_widget,
             "Failed to load file",
             FAILED_TO_LOAD,
+            informative=(
+                f"Recording: {files.recording_id}\nReason: {reason}\n\nThis has been recorded in failed_load.txt "
+                "in the results folder for the study administrator, and the recording will not be offered again "
+                "until the problem is fixed."
+            ),
             details=f"Recording: {files.recording_id}\n\n{message}",
             yes="Continue with another recording",
             no="Quit",
@@ -524,6 +535,7 @@ class AppController(QObject):
                 self.settings,
                 prompts=self.prompts,
                 title_suffix={"practice": "practice", "assessment": "assessment"}.get(req.mode, ""),
+                view_state=getattr(self, "_view_state", None),
             )
         except Exception as exc:
             session.abandon(reason=f"viewer could not be opened: {exc}", keep_autosave=True)
@@ -537,9 +549,17 @@ class AppController(QObject):
         ws.show()
 
     # ------------------------------------------------------------ finishing
+    def _remember_view(self) -> None:
+        ws = self.workspace
+        if ws is not None:
+            state = ws.view_state()
+            if state:
+                self._view_state = state
+
     def _on_finished(self, result: Any) -> None:
         assert self.request is not None
         session, loaded = self.session, self.loaded
+        self._remember_view()
         self.workspace = None
         if session is not None:
             # Saved (even if its register update is still pending): never offer it again in this session.
@@ -570,6 +590,7 @@ class AppController(QObject):
         self._continue_or_quit(text)
 
     def _on_closed(self) -> None:
+        self._remember_view()
         if self.loaded is not None:
             self.loaded.close()
         self.workspace = None
@@ -579,15 +600,18 @@ class AppController(QObject):
         self._continue_or_quit("The recording was closed without saving and remains incomplete.")
 
     def _continue_or_quit(self, text: str) -> None:
-        go_on = self.prompts.ask(
+        go_on, back, leave = "Continue with another recording", "Back to the start window", "Quit"
+        choice = self.prompts.choose(
             self.parent_widget,
             "Continue?",
-            f"{text}\n\nWould you like to continue with another recording or quit?",
-            yes="Continue with another recording",
-            no="Quit",
+            f"{text}\n\nWhat would you like to do next? (The start window is where you can change the mode, "
+            "the dataset or the annotator.)",
+            [go_on, back, leave],
         )
-        if go_on:
+        if choice == go_on:
             self.next_recording()
+        elif choice == back:
+            self._back_to_start()
         else:
             self.quit()
 

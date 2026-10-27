@@ -76,7 +76,7 @@ class StartWindow(QMainWindow):
         self.annotator = QComboBox()
         self.annotator.setEditable(True)
         self.annotator.setInsertPolicy(QComboBox.NoInsert)
-        self.annotator.lineEdit().setPlaceholderText("e.g. A01")
+        self.annotator.lineEdit().setPlaceholderText("type or choose your ID, e.g. A01")
         self.annotator.setToolTip("Letters and digits only. This identifier appears in every output file name.")
         self.display_name = QLineEdit()
         self.display_name.setPlaceholderText("optional, e.g. your initials or name")
@@ -100,6 +100,7 @@ class StartWindow(QMainWindow):
         orow = QHBoxLayout()
         self.output_label = QLabel("–")
         self.output_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.output_label.setMinimumWidth(120)
         out_btn = QPushButton("Change…")
         out_btn.clicked.connect(self._browse_output)
         orow.addWidget(self.output_label, 1)
@@ -181,14 +182,26 @@ class StartWindow(QMainWindow):
         if event.isAccepted():
             self.closedByUser.emit()
     def _restore(self) -> None:
+        # The folder is restored. The last annotator ID is offered in the list but not filled in,
+        # so that on a shared computer nobody saves work under the previous person's ID by mistake.
         s = app_settings()
         self.dataset.setText(str(s.value("dataset", "")))
-        last = str(s.value("annotator", ""))
-        if last:
-            self.annotator.setEditText(last)
-        self.display_name.setText(str(s.value("display_name", "")))
+        self._last_annotator = str(s.value("annotator", ""))
+        self._last_display_name = str(s.value("display_name", ""))
+        self._offer_last_annotator()
         if self.dataset.text():
             self.refresh()
+        blocked = self.annotator.blockSignals(True)
+        self.annotator.setEditText("")
+        self.annotator.blockSignals(blocked)
+        self._update_progress()
+
+    def _offer_last_annotator(self) -> None:
+        last = getattr(self, "_last_annotator", "")
+        if last and self.annotator.findData(last) < 0:
+            blocked = self.annotator.blockSignals(True)
+            self.annotator.addItem(f"{last} (used last on this computer)", last)
+            self.annotator.blockSignals(blocked)
 
     def _save(self, req: StartRequest) -> None:
         s = app_settings()
@@ -234,26 +247,31 @@ class StartWindow(QMainWindow):
     def refresh(self) -> None:
         """Re-read the study configuration and progress for the chosen folder."""
         from electroclean.app.io.discovery import discover_recordings
-        from electroclean.app.io.naming import OutputLayout
-        from electroclean.app.session.register import CompletionRegister
 
         root = self.dataset_root()
         self.study = None
         self._reference_sets = []
+        self._recording_ids = None
+        self._out = None
         if root is None or not root.is_dir():
-            self.study_label.setText("Choose a dataset folder")
-            self.progress_label.setText("–")
+            self.study_label.setText("–")
+            self.progress_label.setText(
+                "Choose a dataset folder" if root is None
+                else "<span style='color:#B71C1C'>Folder not found. Check the path or use Browse…</span>"
+            )
             self.output_label.setText("–")
             self._fill_reference_sets()
+            self._update_begin()
             return
         try:
             settings, study = load_settings(root)
         except (SettingsError, OSError) as exc:
             self.study_label.setText(f"<span style='color:#B71C1C'>Study configuration problem: {exc}</span>")
+            self._update_begin()
             return
         self.study = study
         if study is None:
-            self.study_label.setText("Default settings (no electroclean_study.json in this folder)")
+            self.study_label.setText("Default settings (this folder has no study configuration)")
         else:
             locked = " · filters fixed by administrator" if settings.filters.locked else ""
             self.study_label.setText(
@@ -264,10 +282,15 @@ class StartWindow(QMainWindow):
             self.annotator.clear()
             for a in study.annotators:
                 self.annotator.addItem(a.annotator_id + (f" – {a.display_name}" if a.display_name else ""), a.annotator_id)
+            self._offer_last_annotator()
             self.annotator.setEditText(current)
             self.annotator.blockSignals(False)
         out = self.output_root()
-        self.output_label.setText(str(out))
+        self._out = out
+        full = str(out)
+        metrics = self.output_label.fontMetrics()
+        self.output_label.setText(metrics.elidedText(full, Qt.ElideMiddle, 420))
+        self.output_label.setToolTip(full)
         try:
             recs = discover_recordings(
                 root,
@@ -277,16 +300,10 @@ class StartWindow(QMainWindow):
             )
         except OSError as exc:
             self.progress_label.setText(f"Cannot read folder: {exc}")
+            self._update_begin()
             return
-        text = f"{len(recs)} recording(s) found"
-        try:
-            aid = normalise_annotator_id(self._annotator_text())
-            done = CompletionRegister(OutputLayout(out)).completed(aid) if out else set()
-            done &= {r.recording_id for r in recs}
-            text += f" · {len(done)} completed by {aid} · {len(recs) - len(done)} remaining"
-        except Exception:
-            pass
-        self.progress_label.setText(text)
+        self._recording_ids = {r.recording_id for r in recs}
+        self._update_progress()
         try:
             from electroclean.training.reference import find_reference_sets, reference_sets_dir
 
@@ -295,6 +312,40 @@ class StartWindow(QMainWindow):
         except Exception as exc:  # training is optional
             self.study_label.setText(self.study_label.text() + f"<br><small>Reference sets unavailable: {exc}</small>")
         self._fill_reference_sets()
+
+    def _update_progress(self) -> None:
+        """The progress line for the chosen folder and the annotator ID typed (cheap: reads the register)."""
+        from electroclean.app.io.naming import OutputLayout
+        from electroclean.app.session.register import CompletionRegister
+
+        ids = getattr(self, "_recording_ids", None)
+        if ids is None:
+            self._update_begin()
+            return
+        if not ids:
+            self.progress_label.setText(
+                "<span style='color:#B71C1C'>No recordings found.</span> ElectroClean looks in this folder and its "
+                "sub-folders for files whose names end in _eeg.vhdr, _eeg.edf or _eeg.bdf."
+            )
+            self.progress_label.setWordWrap(True)
+            self._update_begin()
+            return
+        text = f"{len(ids)} recording(s) found"
+        try:
+            aid = normalise_annotator_id(self._annotator_text())
+            done = CompletionRegister(OutputLayout(self._out)).completed(aid) if self._out else set()
+            done &= ids
+            text += f" · {len(done)} completed by {aid} · {len(ids) - len(done)} remaining"
+        except Exception:
+            pass
+        self.progress_label.setText(text)
+        self._update_begin()
+
+    def _update_begin(self) -> None:
+        ids = getattr(self, "_recording_ids", None)
+        if hasattr(self, "begin_btn"):
+            self.begin_btn.setEnabled(bool(ids))
+            self.begin_btn.setToolTip("" if ids else "Choose a folder that contains recordings first")
 
     def _fill_reference_sets(self) -> None:
         self.reference_combo.blockSignals(True)
@@ -315,6 +366,11 @@ class StartWindow(QMainWindow):
         return text.split(" – ")[0].strip()
 
     def _annotator_changed(self, _text: str) -> None:
+        aid_typed = self._annotator_text()
+        last = getattr(self, "_last_annotator", "")
+        if last and aid_typed.upper() == last.upper() and not self.display_name.text():
+            self.display_name.setText(getattr(self, "_last_display_name", ""))
+        self._update_progress()
         if self.study is not None:
             aid = self._annotator_text()
             for a in self.study.annotators:

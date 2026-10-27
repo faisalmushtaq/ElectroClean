@@ -125,6 +125,8 @@ class AnnotationSession:
         self.register = CompletionRegister(layout, settings.register_lock_timeout_s)
         self.session_log = SessionLog(layout)
         self.resumed_from = resume
+        # Set by the annotation window: amplitude scale, seconds and channels shown at Save and Finish.
+        self.display_state: dict[str, Any] = {}
         self.previous_sessions: list[dict[str, Any]] = []
         if resume is not None:
             initial_annotations = list(resume.document.annotations)
@@ -446,6 +448,12 @@ class AnnotationSession:
                 "version": __version__,
                 "platform": platform.platform(),
                 "libraries": library_versions(),
+            },
+            "display": {
+                "scalings": dict(self.settings.display.scalings),
+                **self.display_state,
+                "note": "scale_factor multiplies the amplitude of every trace relative to scalings "
+                "(MNE's + and - keys); duration_s and n_channels are what was on screen at Save and Finish",
             },
             "filters": {
                 "selected": self.filters.to_dict(),

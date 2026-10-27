@@ -108,12 +108,23 @@ def select_next(
         elif n_completed == n_assigned and n_assigned > 0:
             result.message = "All eligible recordings have been completed. Thank you!"
         elif n_assigned == 0:
-            result.message = "No recordings were found in the selected folder."
-        else:
             result.message = (
-                f"No recordings are currently available: {n_completed} completed, {n_failed} could not be "
-                "loaded, and the rest were skipped in this session."
+                "No recordings were found in this folder or its sub-folders. ElectroClean looks for files "
+                "whose names end in _eeg.vhdr (BrainVision), _eeg.edf (EDF) or _eeg.bdf (BDF)."
             )
+        else:
+            n_skipped = sum(1 for r in reasons.values() if r == "skipped earlier in this session")
+            parts = []
+            if n_completed:
+                parts.append(f"{n_completed} completed by you")
+            if n_failed:
+                parts.append(
+                    f"{n_failed} could not be opened (they are listed in failed_load.txt in the results folder; "
+                    "please tell the study administrator)"
+                )
+            if n_skipped:
+                parts.append(f"{n_skipped} skipped earlier in this session (they are offered again next time)")
+            result.message = "No other recordings are available now: " + "; ".join(parts) + "."
         return result
     if strategy == "random":
         chooser = rng or random.SystemRandom()

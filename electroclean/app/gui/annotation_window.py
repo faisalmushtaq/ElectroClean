@@ -41,7 +41,7 @@ from qtpy.QtWidgets import (
 
 from electroclean.app.annotations.model import AnnotationError
 from electroclean.app.gui.browser import AnnotationController, check_browser_version, create_browser
-from electroclean.app.gui.dialogs import UserPrompts, colour_icon, readable_text_colour
+from electroclean.app.gui.dialogs import UserPrompts, colour_icon, fill_label_combo, readable_text_colour
 from electroclean.app.gui.help_text import HELP_HTML, UNDO_HINT
 from electroclean.app.session.session import AnnotationSession, SessionError
 from electroclean.app.session.transaction import ExportCommitError
@@ -77,7 +77,10 @@ class AnnotationWorkspace(QObject):
         display_prefix: dict[str, str] | None = None,
         title_suffix: str = "",
         window_title: str | None = None,
+        view_state: dict[str, float] | None = None,
     ) -> None:
+        """``view_state`` (from :meth:`view_state` of the previous window) carries the amplitude
+        scale, the seconds and the number of channels shown over to the next recording."""
         super().__init__()
         self.session = session
         self.settings = settings
@@ -98,12 +101,15 @@ class AnnotationWorkspace(QObject):
             event_id=eid,
             label_colours={lab.label: lab.colour for lab in cat.labels},
             title=title,
-            duration_s=settings.display.duration_s,
-            n_channels=settings.display.n_channels,
+            duration_s=float((view_state or {}).get("duration_s") or settings.display.duration_s),
+            n_channels=int((view_state or {}).get("n_channels") or settings.display.n_channels),
             scalings=settings.display.scalings,
             theme=settings.display.theme,
             overview_mode=settings.display.overview_mode,
         )
+        factor = float((view_state or {}).get("scale_factor") or 1.0)
+        if factor > 0 and abs(factor - 1.0) > 1e-9:
+            self.browser.scale_all(step=factor)
         zones = self.loaded.filter_report.transient_zones(self.loaded.timing.n_samples)
         sf = self.loaded.timing.sfreq
         gaps = [(a / sf, b / sf) for a, b in self.loaded.acquisition_gaps]
@@ -157,26 +163,7 @@ class AnnotationWorkspace(QObject):
 
         tb.addWidget(QLabel(" Artifact: "))
         self.label_combo = QComboBox()
-        self.label_combo.setMaxVisibleItems(36)
-        section = None
-        for lab in cat.labels:
-            if lab.section and lab.section != section:
-                # A heading for each family (not selectable).
-                section = lab.section
-                self.label_combo.addItem(f"— {section} —")
-                head = self.label_combo.model().item(self.label_combo.count() - 1)
-                head.setEnabled(False)
-                head.setSelectable(False)
-            text = f"{lab.label}  ({lab.value})"
-            if lab.is_group:
-                text += "  – exact type unclear"
-            self.label_combo.addItem(colour_icon(lab.colour), text, lab.label)
-            idx = self.label_combo.count() - 1
-            self.label_combo.setItemData(idx, self._hed.get(lab.label, lab.label), Qt.ToolTipRole)
-            if lab.is_group:
-                font = self.label_combo.font()
-                font.setItalic(True)
-                self.label_combo.setItemData(idx, font, Qt.FontRole)
+        fill_label_combo(self.label_combo, cat)  # family headings, colours, group terms in italics
         self.label_combo.setToolTip(
             f"Only the {len(cat.labels)} HED-SCORE artifact terms can be used. Group terms (in italics) are for "
             "artifacts whose exact type is unclear."
@@ -271,6 +258,9 @@ class AnnotationWorkspace(QObject):
         self.table.verticalHeader().setVisible(False)
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeToContents)
+        # The channel list takes the remaining width (and is elided there) rather than adding a scroll bar.
+        header.setSectionResizeMode(5, QHeaderView.Stretch)
+        self.table.setTextElideMode(Qt.ElideRight)
         header.setStretchLastSection(True)
         self.table.setWordWrap(False)
         w.setMinimumWidth(440)
@@ -465,7 +455,7 @@ class AnnotationWorkspace(QObject):
             label_item = QTableWidgetItem(colour_icon(lab.colour), prefix.get(a.annotation_id, "") + a.label)
             label_item.setData(Qt.UserRole, a.annotation_id)
             label_item.setToolTip(self._hed.get(a.label, a.label))
-            chans = "All (whole montage)" if a.is_global else ", ".join(a.channels)
+            chans = "Whole montage" if a.is_global else ", ".join(a.channels)
             values = [
                 label_item,
                 QTableWidgetItem(str(lab.value)),
@@ -600,10 +590,9 @@ class AnnotationWorkspace(QObject):
         ids = self._selected_ids()
         if not ids or not self.controller._check_editable():
             return
-        labels = list(self.session.catalogue.label_names)
-        current = labels.index(self.session.store.get(ids[0]).label)
-        label = self.prompts.choose_item(self.browser, "Change label", "New artifact type:", labels, current)
-        if label is None:
+        current = self.session.store.get(ids[0]).label
+        label = self.prompts.choose_label(self.browser, "Change label", self.session.catalogue, current)
+        if label is None or label == current and len(ids) == 1:
             return
         self.controller.relabel_many(ids, label)
 
@@ -654,6 +643,18 @@ class AnnotationWorkspace(QObject):
         self._update_clock()
         self.controller.relayout_labels()
 
+    def view_state(self) -> dict[str, float]:
+        """What the annotator set with MNE's keys: amplitude scale, seconds and channels shown."""
+        p = self.browser.mne
+        try:
+            return {
+                "scale_factor": float(p.scale_factor),
+                "duration_s": float(p.duration),
+                "n_channels": int(p.n_channels),
+            }
+        except (AttributeError, TypeError, ValueError):  # pragma: no cover - defensive
+            return {}
+
     def save_and_finish(self) -> bool:
         if self.read_only or self._finished:
             return False
@@ -682,6 +683,7 @@ class AnnotationWorkspace(QObject):
         if not ok:
             return False
         self.save_btn.setEnabled(False)
+        self.session.display_state = self.view_state()
         try:
             result = self.session.finish()
         except ExportCommitError as exc:
@@ -731,7 +733,7 @@ class AnnotationWorkspace(QObject):
             "Close without saving?",
             "This recording has not been saved with Save and Finish, so it is not complete.\n\n"
             f"{later}: your {n} annotation(s) and the time spent are kept, and ElectroClean offers to "
-            "continue the next time you open this recording.\n"
+            "continue the next time you open this recording.\n\n"
             f"{discard}: your annotations for this recording are deleted.",
             [later, discard, stay],
             default=0,

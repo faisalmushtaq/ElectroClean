@@ -43,11 +43,12 @@ import pyqtgraph as pg  # noqa: E402
 from mne_qt_browser._graphic_items import AnnotRegion, DataTrace  # noqa: E402
 from mne_qt_browser._widgets import RawViewBox  # noqa: E402
 from qtpy.QtCore import QObject, Qt, QTimer, Signal  # noqa: E402
-from qtpy.QtGui import QBrush, QColor  # noqa: E402
+from qtpy.QtGui import QBrush, QColor, QFontMetrics  # noqa: E402
 from qtpy.QtWidgets import QMenu  # noqa: E402
 
 from electroclean.app.annotations.mne_bridge import to_mne_annotations  # noqa: E402
 from electroclean.app.annotations.model import AnnotationError  # noqa: E402
+from electroclean.app.gui.dialogs import add_label_menu  # noqa: E402
 from electroclean.app.gui.help_text import UNDO_HINT
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -56,6 +57,10 @@ if TYPE_CHECKING:  # pragma: no cover
 TESTED_MNE_QT_BROWSER = "0.7.5"
 HIGHLIGHT_COLOUR = "#D81B60"  # selected channels (magenta, distinct from label colours)
 EVENT_COLOUR = "#00838F"  # original experimental markers
+# Trace colours by channel type. MNE draws ECG in magenta, which could be mistaken for the
+# selected-channel highlight, so ECG is dark brown here; everything else stays black.
+TRACE_COLOURS = {"eeg": "k", "eog": "k", "ecg": "#5D4037", "emg": "k", "misc": "k", "stim": "k", "resp": "k",
+                 "bio": "k", "gsr": "k", "temperature": "k"}
 
 
 @contextlib.contextmanager
@@ -199,14 +204,22 @@ class ArtifactRegion(AnnotRegion):
         if ctrl is not None:
             ctrl.on_region_edited(self)
 
+    def label_text_size(self) -> tuple[float, float]:
+        """Width and height of the label in pixels, measured with its own font."""
+        metrics = QFontMetrics(self.label_item.textItem.font())
+        return float(metrics.horizontalAdvance(self.label_item.textItem.toPlainText()) + 12), float(metrics.height() + 2)
+
     def update_label_pos(self) -> None:
         # Labels sit at the top of the plot (event labels are at the bottom),
-        # staggered in rows so that neighbouring labels do not overlap.
+        # staggered in rows so that neighbouring labels do not overlap. Rows are spaced by the
+        # height of the text in pixels, converted to the plot's channel units.
         rgn = self.getRegion()
         vb = self.mne.viewbox
         if vb:
-            ymin = vb.viewRange()[1][0]
-            self.label_item.setPos(sum(rgn) / 2, ymin + 0.3 + 0.62 * self.label_row)
+            y0, y1 = vb.viewRange()[1]
+            units_per_px = abs(y1 - y0) / max(1.0, float(vb.height()))
+            line_px = self.label_text_size()[1]
+            self.label_item.setPos(sum(rgn) / 2, min(y0, y1) + (4 + line_px * (0.5 + self.label_row)) * units_per_px)
 
     def mouseClickEvent(self, event: Any) -> None:  # noqa: N802
         ctrl = self._ctrl()
@@ -297,6 +310,7 @@ def create_browser(
         show_scrollbars=True,
         show_scalebars=True,
         annotation_colors=dict(label_colours),
+        color=dict(TRACE_COLOURS),
         theme=theme,
         overview_mode=overview_mode,
         splash=False,
@@ -639,10 +653,8 @@ class AnnotationController(QObject):
         menu.setAttribute(Qt.WA_DeleteOnClose)
         menu.addSection(f"{ann.label}")
         relabel = menu.addMenu("Change label to")
-        for lab in self.catalogue.label_names:
-            act = relabel.addAction(lab)
-            act.setEnabled(lab != ann.label)
-            act.triggered.connect(lambda _=False, lab=lab: self.relabel(annotation_id, lab))
+        relabel.setToolTipsVisible(True)
+        add_label_menu(relabel, self.catalogue, ann.label, lambda lab: self.relabel(annotation_id, lab))
         menu.addAction("Edit channels…", lambda: self.requestChannelEdit(annotation_id))
         if not ann.is_global:
             menu.addAction("Apply to whole montage", lambda: self.set_annotation_channels(annotation_id, []))
@@ -773,7 +785,9 @@ class AnnotationController(QObject):
         rows_end: list[float] = []
         for ann in sorted(anns, key=lambda a: (a.onset_sample, a.annotation_id)):
             mid = (ann.onset(timing) + ann.offset(timing)) / 2
-            half = max(ann.duration(timing), (len(ann.label) + 5) * 7 * s_per_px) / 2
+            region = self.regions.get(ann.annotation_id)
+            text_px = region.label_text_size()[0] if region is not None else (len(ann.label) + 5) * 8.0
+            half = max(ann.duration(timing), text_px * s_per_px) / 2
             start, end = mid - half, mid + half
             for row, row_end in enumerate(rows_end):
                 if start >= row_end:
@@ -782,9 +796,8 @@ class AnnotationController(QObject):
             else:
                 row = len(rows_end)
                 rows_end.append(end)
-            region = self.regions.get(ann.annotation_id)
             if region is not None:
-                region.label_row = row % 6
+                region.label_row = row % 8
                 region.update_label_pos()
 
     def relayout_labels(self, *args: Any) -> None:

@@ -105,7 +105,7 @@ class FilterSettings:
 @dataclass(frozen=True)
 class DisplaySettings:
     duration_s: float = 10.0
-    n_channels: int = 20
+    n_channels: int = 32
     scalings: dict[str, float] = field(default_factory=dict)
     theme: str = "light"
     overview_mode: str = "channels"

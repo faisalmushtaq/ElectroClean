@@ -300,7 +300,7 @@ def test_failed_load_message_and_continue(qapp, dataset):
     asked = [t for k, _title, t in prompts.log if k == "ask"]
     assert sum(FAILED_TO_LOAD in t for t in asked) == 1
     informed = [t for k, _title, t in prompts.log if k == "inform"]
-    assert any("could not be loaded" in t for t in informed)
+    assert any("could not be opened" in t and "failed_load.txt" in t for t in informed)
     reg = CompletionRegister(ctrl.layout)
     assert reg.completed("A01") == {SUB2}  # the failed file is never marked complete
     line = ctrl.layout.failed_load_txt.read_text(encoding="utf-8").strip().split("\t")

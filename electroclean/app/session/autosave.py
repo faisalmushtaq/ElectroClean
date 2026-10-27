@@ -63,10 +63,11 @@ class AutosaveRecord:
         return len(self.document.annotations)
 
     def describe(self) -> str:
-        minutes = self.elapsed_s / 60.0
+        from electroclean.app.common import friendly_duration, friendly_time
+
         return (
-            f"{self.n_annotations} annotation(s) and {minutes:.1f} min of work on {self.recording_id}, "
-            f"saved automatically at {self.saved_at}"
+            f"{self.n_annotations} annotation(s) and {friendly_duration(self.elapsed_s)} of work on "
+            f"{self.recording_id}, saved automatically {friendly_time(self.saved_at)}"
         )
 
     def problems_with(self, loaded: Any) -> list[str]:

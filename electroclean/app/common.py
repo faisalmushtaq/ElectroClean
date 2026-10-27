@@ -25,6 +25,42 @@ def now_utc_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
 
 
+def friendly_time(iso: str | None, now: datetime | None = None) -> str:
+    """An ISO time stamp as people say it, in local time: "today at 18:18", "yesterday at 09:05",
+    "on 21 October 2026 at 14:00". Unreadable values are returned unchanged."""
+    if not iso:
+        return "an unknown time"
+    try:
+        when = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+    except ValueError:
+        return str(iso)
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    when = when.astimezone()
+    today = (now or datetime.now(timezone.utc)).astimezone().date()
+    clock = when.strftime("%H:%M")
+    days = (today - when.date()).days
+    if days == 0:
+        return f"today at {clock}"
+    if days == 1:
+        return f"yesterday at {clock}"
+    return f"on {when.day} {when.strftime('%B %Y')} at {clock}"
+
+
+def friendly_duration(seconds: float) -> str:
+    """"less than a minute", "1 minute", "12 minutes", "1 hour 5 minutes"."""
+    minutes = int(round(max(0.0, float(seconds)) / 60.0))
+    if minutes < 1:
+        return "less than a minute"
+    hours, mins = divmod(minutes, 60)
+    parts = []
+    if hours:
+        parts.append(f"{hours} hour{'s' if hours != 1 else ''}")
+    if mins or not hours:
+        parts.append(f"{mins} minute{'s' if mins != 1 else ''}")
+    return " ".join(parts)
+
+
 def compact_utc_stamp() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
@@ -48,10 +84,12 @@ def normalise_annotator_id(value: str) -> str:
     macOS).
     """
     candidate = (value or "").strip()
+    if not candidate:
+        raise IdentifierError("Please enter your annotator ID, for example A01.")
     if not ANNOTATOR_ID_PATTERN.match(candidate):
         raise IdentifierError(
-            "Annotator ID must be 1-32 letters or digits only (no spaces, hyphens or "
-            f"underscores), for example A01. Got: {value!r}"
+            f"\"{candidate}\" cannot be used as an annotator ID. Use only letters and digits (no spaces, "
+            "hyphens or underscores), at most 32 of them, for example A01."
         )
     return candidate.upper()
 

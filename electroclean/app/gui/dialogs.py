@@ -36,6 +36,56 @@ def colour_icon(colour: str, size: int = 14) -> QIcon:
     return QIcon(pix)
 
 
+def label_text(lab: Any) -> str:
+    """How an artifact type is shown in every list: name, code, and a note for group terms."""
+    text = f"{lab.label}  ({lab.value})"
+    return text + "  – exact type unclear" if lab.is_group else text
+
+
+def fill_label_combo(combo: Any, catalogue: Any) -> None:
+    """Fill a combo box with the artifact types under their (unselectable) family headings.
+
+    Group terms are in italics; each entry's tooltip is its HED SCORE description. The pop-up
+    list is made wide enough for the longest entry.
+    """
+    combo.clear()
+    combo.setMaxVisibleItems(36)
+    section = None
+    for lab in catalogue.labels:
+        if lab.section and lab.section != section:
+            section = lab.section
+            combo.addItem(f"— {section} —")
+            head = combo.model().item(combo.count() - 1)
+            head.setEnabled(False)
+            head.setSelectable(False)
+        combo.addItem(colour_icon(lab.colour), label_text(lab), lab.label)
+        idx = combo.count() - 1
+        combo.setItemData(idx, lab.description or lab.label, Qt.ToolTipRole)
+        if lab.is_group:
+            font = combo.font()
+            font.setItalic(True)
+            combo.setItemData(idx, font, Qt.FontRole)
+    view = combo.view()
+    view.setMinimumWidth(view.sizeHintForColumn(0) + 40)
+
+
+def add_label_menu(menu: Any, catalogue: Any, current: str | None, on_choose: Any) -> None:
+    """Add the artifact types to a QMenu, under section headings, as in the toolbar."""
+    section = None
+    for lab in catalogue.labels:
+        if lab.section and lab.section != section:
+            section = lab.section
+            menu.addSection(section)
+        act = menu.addAction(colour_icon(lab.colour), label_text(lab))
+        act.setToolTip(lab.description or lab.label)
+        if lab.is_group:
+            font = act.font()
+            font.setItalic(True)
+            act.setFont(font)
+        act.setEnabled(lab.label != current)
+        act.triggered.connect(lambda _=False, name=lab.label: on_choose(name))
+
+
 def readable_text_colour(colour: str) -> str:
     c = QColor(colour)
     luminance = 0.299 * c.red() + 0.587 * c.green() + 0.114 * c.blue()
@@ -52,6 +102,7 @@ class UserPrompts:
         text: str,
         *,
         details: str = "",
+        informative: str = "",
         yes: str = "Yes",
         no: str = "No",
         icon: QMessageBox.Icon = QMessageBox.Question,
@@ -61,6 +112,8 @@ class UserPrompts:
         box.setIcon(icon)
         box.setWindowTitle(title)
         box.setText(text)
+        if informative:
+            box.setInformativeText(informative)
         if details:
             box.setDetailedText(details)
         yes_btn = box.addButton(yes, QMessageBox.AcceptRole)
@@ -123,6 +176,27 @@ class UserPrompts:
 
         item, ok = QInputDialog.getItem(parent, title, text, list(items), current, False)
         return item if ok else None
+
+    def choose_label(self, parent: QWidget | None, title: str, catalogue: Any, current: str | None) -> str | None:
+        """Pick an artifact type from the same grouped list as the toolbar; None if cancelled."""
+        from qtpy.QtWidgets import QComboBox, QDialogButtonBox
+
+        dlg = QDialog(parent)
+        dlg.setWindowTitle(title)
+        layout = QVBoxLayout(dlg)
+        layout.addWidget(QLabel("New artifact type:"))
+        combo = QComboBox()
+        fill_label_combo(combo, catalogue)
+        if current is not None and combo.findData(current) >= 0:
+            combo.setCurrentIndex(combo.findData(current))
+        layout.addWidget(combo)
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dlg.accept)
+        buttons.rejected.connect(dlg.reject)
+        layout.addWidget(buttons)
+        if dlg.exec() != QDialog.Accepted:
+            return None
+        return combo.currentData()
 
     def choose_from_list(self, parent: QWidget | None, title: str, items: Sequence[str]) -> str | None:
         """A list to pick one item from (double-click or OK); None if cancelled."""
@@ -191,6 +265,8 @@ class ScriptedPrompts(UserPrompts):
         return fallback
 
     def ask(self, parent, title, text, **kw) -> bool:  # type: ignore[override]
+        if kw.get("informative"):
+            text = f"{text}\n\n{kw['informative']}"
         return bool(self._answer("ask", title, text, self.default))
 
     def choose(self, parent, title, text, options, **kw):  # type: ignore[override]
@@ -218,6 +294,9 @@ class ScriptedPrompts(UserPrompts):
 
     def choose_item(self, parent, title, text, items, current=0):  # type: ignore[override]
         return self._answer("item", title, text, items[current] if items else None)
+
+    def choose_label(self, parent, title, catalogue, current):  # type: ignore[override]
+        return self._answer("label", title, "", current)
 
     def choose_from_list(self, parent, title, items):  # type: ignore[override]
         return self._answer("list", title, "", items[0] if items else None)
