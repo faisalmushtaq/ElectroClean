@@ -36,14 +36,18 @@ def test_unfinished_work_is_restored_with_its_time(layout, settings, catalogue, 
     s = _open(layout, settings, catalogue, loaded)
     s.store.add_interval("EMG-artifact", 2.0, 3.0)
     time.sleep(0.05)
+    # The autosave holds the time spent when it was written. Writing it (with a flush to disk) can take
+    # tens of milliseconds, notably on Windows, so the clock is read on both sides of the save.
+    before = s.elapsed_s
     s.autosave(force=True)
-    first_elapsed = s.elapsed_s
+    after = s.elapsed_s
     s.lock.release()  # the computer crashed: no Save and Finish, no abandon
     record = find_autosave(layout, SUB1, "A01", "standard", "")
     assert record is not None and record.problems_with(loaded) == []
+    assert before - 0.001 <= record.elapsed_s <= after + 0.001
     s2 = _open(layout, settings, catalogue, loaded, resume=record)
     assert [a.label for a in s2.store.annotations()] == ["EMG-artifact"]
-    assert s2.elapsed_s >= record.elapsed_s >= first_elapsed - 0.01
+    assert s2.elapsed_s >= record.elapsed_s
     res = s2.finish()
     assert res.elapsed_s >= record.elapsed_s
     meta = json.loads(res.commit.paths["session_json"].read_text(encoding="utf-8"))
