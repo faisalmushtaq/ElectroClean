@@ -290,6 +290,7 @@ def test_dialogs_idle_periods_and_closing(qapp, tmp_path):
     rec = InteractionRecorder(log, pointer_hz=5, idle_after_s=30)
     assert current_recorder() is rec
     box = QMessageBox(QMessageBox.Question, "Save and Finish", "Save 3 annotations?")
+    box.setProperty("ec_title", "Save and Finish")  # as UserPrompts does: macOS ignores message-box titles
     yes = box.addButton("Save and Finish", QMessageBox.AcceptRole)
     box.addButton("Keep annotating", QMessageBox.RejectRole)
     box.show()

@@ -112,6 +112,7 @@ class UserPrompts:
         box = QMessageBox(parent)
         box.setIcon(icon)
         box.setWindowTitle(title)
+        box.setProperty("ec_title", title)  # macOS ignores message-box titles; the interaction log reads this
         box.setText(text)
         if informative:
             box.setInformativeText(informative)
@@ -130,6 +131,7 @@ class UserPrompts:
         box = QMessageBox(parent)
         box.setIcon(icon)
         box.setWindowTitle(title)
+        box.setProperty("ec_title", title)  # macOS ignores message-box titles; the interaction log reads this
         box.setText(text)
         buttons = [box.addButton(o, QMessageBox.ActionRole) for o in options]
         box.setDefaultButton(buttons[default])
@@ -141,12 +143,14 @@ class UserPrompts:
 
     def inform(self, parent: QWidget | None, title: str, text: str, *, details: str = "") -> None:
         box = QMessageBox(QMessageBox.Information, title, text, QMessageBox.Ok, parent)
+        box.setProperty("ec_title", title)
         if details:
             box.setDetailedText(details)
         box.exec()
 
     def error(self, parent: QWidget | None, title: str, text: str, *, details: str = "") -> None:
         box = QMessageBox(QMessageBox.Critical, title, text, QMessageBox.Ok, parent)
+        box.setProperty("ec_title", title)
         if details:
             box.setDetailedText(details)
         box.exec()

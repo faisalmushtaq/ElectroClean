@@ -112,6 +112,18 @@ def _is_secret(w: QObject) -> bool:
     return False
 
 
+
+def window_title(widget: Any) -> str:
+    """A window's title. On macOS Qt ignores the titles of message boxes (Apple's guidelines), so
+    ElectroClean's prompts also keep theirs in the ``ec_title`` property, which is used then."""
+    try:
+        title = widget.windowTitle() or str(widget.property("ec_title") or "")
+        if not title and type(widget).__name__ == "QMessageBox":  # any other message box: its first line
+            title = (widget.text().strip().splitlines() or [""])[0][:120]
+        return title
+    except RuntimeError:  # already deleted
+        return ""
+
 class InteractionRecorder(QObject):
     """Feeds one visit's :class:`InteractionLog` from the application's input and the open window."""
 
@@ -416,7 +428,7 @@ class InteractionRecorder(QObject):
             elif et in (QEvent.WindowActivate, QEvent.WindowDeactivate):
                 if isinstance(obj, QWidget) and obj.isWindow():
                     kind = "window_activated" if et == QEvent.WindowActivate else "window_deactivated"
-                    self.log.event(kind, top_window=type(obj).__name__, title=obj.windowTitle())
+                    self.log.event(kind, top_window=type(obj).__name__, title=window_title(obj))
         except Exception as exc:  # noqa: BLE001 - never interfere with the application
             with contextlib.suppress(Exception):
                 self.log.event("log_problem", where="event_filter", error=str(exc))
@@ -572,7 +584,7 @@ class InteractionRecorder(QObject):
                 win = w.window()
                 if win is not None:
                     info["top_window"] = type(win).__name__
-                    info["title"] = win.windowTitle()
+                    info["title"] = window_title(win)
                 self._edited[id(w)] = (weakref.ref(w), info)
             return
         name = QKeySequence(ev.key()).toString() or str(ev.key())
@@ -626,7 +638,7 @@ class InteractionRecorder(QObject):
     def _dialog_shown(self, dlg: QDialog) -> None:
         if id(dlg) in self._dialogs:
             return
-        title = dlg.windowTitle()
+        title = window_title(dlg)
         self._dialogs[id(dlg)] = title
         fields: dict[str, Any] = {"dialog": type(dlg).__name__, "title": title}
         if isinstance(dlg, QMessageBox):
@@ -637,7 +649,7 @@ class InteractionRecorder(QObject):
         self.log.event("dialog_shown", **fields)
 
     def _dialog_closed(self, dlg: QDialog) -> None:
-        title = self._dialogs.pop(id(dlg), dlg.windowTitle())
+        title = self._dialogs.pop(id(dlg), window_title(dlg))
         fields: dict[str, Any] = {"dialog": type(dlg).__name__, "title": title}
         with contextlib.suppress(Exception):
             fields["accepted"] = dlg.result() == QDialog.Accepted
