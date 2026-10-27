@@ -346,7 +346,7 @@ def test_synthetic_raters_end_to_end(tmp_path):
              & (tr.representation == "exact") & (tr.channel_mode == "time_only")]
     assert 0.3 < float(sim.cohen_kappa.iloc[0]) < 1.0
     paths = write_outputs(res, tmp_path / "out")
-    html = paths["report"].read_text()
+    html = paths["report"].read_text(encoding="utf-8")
     assert "Agreement by artifact category" in html and "<img" in html
     assert (tmp_path / "out" / "events_matched.tsv").exists()
 

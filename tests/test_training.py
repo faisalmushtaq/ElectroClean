@@ -139,7 +139,8 @@ def test_reference_set_provenance_and_integrity(tmp_path):
         rs2.add_reference(e1, use="assessment", method="consensus", experts=["E1"])
     # Tampering with a reference file is detected.
     path = rs2.reference_path("rec.vhdr")
-    path.write_text(path.read_text().replace('"Eye-blink-artifact"', '"Eye-blink-artifact" '))
+    path.write_text(path.read_text(encoding="utf-8").replace('"Eye-blink-artifact"', '"Eye-blink-artifact" '),
+                    encoding="utf-8")
     with pytest.raises(ReferenceSetError):
         rs2.reference_document("rec.vhdr")
     with pytest.raises(ReferenceSetError):
@@ -240,7 +241,7 @@ def test_competency_report_workflow(training_dataset):
     rep2 = competency_report(layout, rs, "CAM")
     assert rep1["results_sha256"] == rep2["results_sha256"]  # reproducible
     saved_path = layout.root / "training" / "pilot" / "reports" / "annotator-CAM_competency_report.json"
-    saved = json.loads(saved_path.read_text())
+    saved = json.loads(saved_path.read_text(encoding="utf-8"))
     assert saved["results_sha256"] == rep1["results_sha256"]
     assert verify_competency_report(saved_path)
     assert "Eye-blink-artifact" in {c["where"] for c in rep1["checks"]}
@@ -249,7 +250,7 @@ def test_competency_report_workflow(training_dataset):
     rs.save()
     assert competency_report(layout, rs, "CAM")["results_sha256"] == rep1["results_sha256"]
     saved["metrics"]["overall"]["event_f1"] = 1.0
-    saved_path.write_text(json.dumps(saved))
+    saved_path.write_text(json.dumps(saved), encoding="utf-8")
     assert not verify_competency_report(saved_path)
 
 
@@ -274,7 +275,7 @@ def test_quiz_session(tmp_path, training_dataset):
     assert (s["n_correct"], s["n_items"]) == (2, 3)
     assert s["confusion"]["Movement-artifact"] == {"EMG-artifact": 1}
     path = q.save(OutputLayout(root / "Annotated_Events"))
-    data = json.loads(path.read_text())
+    data = json.loads(path.read_text(encoding="utf-8"))
     assert data["score"]["n_correct"] == 2 and len(data["answers"]) == 3
     rs.quiz["include_none_option"] = True
     assert QuizSession(rs, "CAM", "practice").options(CAT.label_names)[-1] == NONE_OPTION
@@ -322,7 +323,7 @@ def test_admin_cli_end_to_end(training_dataset, capsys):
     assert main(["create-reference-set", str(root), "cons", "--method", "consensus", "--experts", "E1", "E2"]) == 0
     assert main(["build-consensus", str(root), "cons", str(f1), str(f2), "--use", "assessment",
                  "--disagreements", str(root / "dis.tsv")]) == 0
-    assert (root / "dis.tsv").read_text().startswith("kind\tlabel")
+    assert (root / "dis.tsv").read_text(encoding="utf-8").startswith("kind\tlabel")
     assert main(["show", str(root)]) == 0
     assert "secret" not in capsys.readouterr().out
 

@@ -12,10 +12,10 @@ def test_recursive_discovery_and_exclusions(rich_dataset):
     root, truths = rich_dataset
     # Put decoys where discovery must not look.
     (root / "derivatives" / "x").mkdir(parents=True)
-    (root / "derivatives" / "x" / "sub-001_task-rest_eeg.vhdr").write_text("decoy")
+    (root / "derivatives" / "x" / "sub-001_task-rest_eeg.vhdr").write_text("decoy", encoding="utf-8")
     (root / ".hidden").mkdir()
-    (root / ".hidden" / "sub-005_task-rest_eeg.vhdr").write_text("decoy")
-    (root / "sub-001" / "eeg" / "notes_eeg.txt").write_text("not a recording")
+    (root / ".hidden" / "sub-005_task-rest_eeg.vhdr").write_text("decoy", encoding="utf-8")
+    (root / "sub-001" / "eeg" / "notes_eeg.txt").write_text("not a recording", encoding="utf-8")
     recs = discover_recordings(root)
     assert [r.recording_id for r in recs] == sorted(truths)
 
@@ -45,8 +45,10 @@ def test_bids_inheritance_and_specificity(dataset):
     root, _ = dataset
     # A top-level sidecar applies to every task-rest recording, but the
     # subject-level file is more specific and wins for overlapping keys.
-    (root / "task-rest_events.json").write_text(json.dumps({"value": {"Description": "top"}, "extra": 1}))
-    (root / "task-oddball_events.json").write_text(json.dumps({"value": {"Description": "other task"}}))
+    (root / "task-rest_events.json").write_text(json.dumps({"value": {"Description": "top"}, "extra": 1}),
+                                               encoding="utf-8")
+    (root / "task-oddball_events.json").write_text(json.dumps({"value": {"Description": "other task"}}),
+                                                  encoding="utf-8")
     vhdr = root / "sub-001" / "eeg" / "sub-001_task-rest_eeg.vhdr"
     res = resolve_sidecars(vhdr, root)
     assert [p.name for p in res.events_json_chain] == ["task-rest_events.json", "sub-001_task-rest_events.json"]
@@ -57,10 +59,10 @@ def test_sidecars_not_cross_matched_between_runs(tmp_path):
     d = root / "sub-01" / "eeg"
     d.mkdir(parents=True)
     for name in ("sub-01_task-a_run-1_eeg.vhdr", "sub-01_task-a_run-2_events.tsv", "rec1_events.tsv"):
-        (d / name).write_text("x")
+        (d / name).write_text("x", encoding="utf-8")
     res = resolve_sidecars(d / "sub-01_task-a_run-1_eeg.vhdr", root)
     assert res.events_tsv is None
-    (d / "rec2_eeg.vhdr").write_text("x")
+    (d / "rec2_eeg.vhdr").write_text("x", encoding="utf-8")
     res = resolve_sidecars(d / "rec2_eeg.vhdr", root)
     assert res.events_tsv is None  # non-BIDS rec1_events.tsv must not apply to rec2
 

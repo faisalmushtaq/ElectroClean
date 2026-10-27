@@ -56,7 +56,7 @@ def test_recovery_leaves_a_save_in_progress_alone(layout, settings, catalogue, l
 
 def test_breaking_a_stale_lock_never_steals_a_fresh_one(tmp_path):
     path = tmp_path / "register.lock"
-    path.write_text(json.dumps({"pid": 999999, "host": socket.gethostname()}))  # crashed process
+    path.write_text(json.dumps({"pid": 999999, "host": socket.gethostname()}), encoding="utf-8")  # crashed process
     x, y = FileLock(path, {"who": "X"}, stale_after_s=300), FileLock(path, {"who": "Y"}, stale_after_s=300)
     original = FileLock._break_stale
     state = {"raced": False}
@@ -174,8 +174,8 @@ def test_failed_rollback_is_retried(layout, settings, catalogue, loaded, monkeyp
 def test_unreadable_journal_keeps_staged_files(layout):
     staging = layout.staging / "S1"
     staging.mkdir(parents=True)
-    (staging / "transaction.json").write_text("{not json")
-    (staging / "x_events.tsv").write_text("onset\n")
+    (staging / "transaction.json").write_text("{not json", encoding="utf-8")
+    (staging / "x_events.tsv").write_text("onset\n", encoding="utf-8")
     (action,) = recover_interrupted_exports(layout, CompletionRegister(layout))
     assert action.action == "rolled_back"
     assert (layout.quarantine / "S1" / "x_events.tsv").exists()
@@ -207,7 +207,7 @@ def test_completed_list_is_regenerated_if_it_was_not_written(layout):
     reg.add(entry)
     layout.completed_list("A01").unlink()
     assert reg.add(entry) is False  # already registered
-    assert layout.completed_list("A01").read_text() == SUB1 + "\n"
+    assert layout.completed_list("A01").read_text(encoding="utf-8") == SUB1 + "\n"
 
 
 # --------------------------------------------------------------- leftovers
@@ -227,7 +227,7 @@ def test_unregistered_complete_outputs_are_registered_at_start(layout, settings,
 def test_incomplete_leftover_outputs_are_moved_aside_at_start(layout, settings, catalogue, loaded):
     final_dir = layout.root.joinpath(*FINAL)
     final_dir.mkdir(parents=True)
-    (final_dir / "sub-001_task-rest_eeg_annotator-A01_events.tsv").write_text("onset\tduration\n")
+    (final_dir / "sub-001_task-rest_eeg_annotator-A01_events.tsv").write_text("onset\tduration\n", encoding="utf-8")
     s = _open(layout, settings, catalogue, loaded)
     assert any("moved to" in w for w in loaded.warnings)
     s.finish()  # not blocked by the leftover
@@ -264,11 +264,11 @@ def test_results_folder_excluded_by_path_not_name(tmp_path, dataset):
 def test_sidecars_with_bom_or_nan_and_inherited_fingerprints(dataset, settings, catalogue):
     root, _ = dataset
     ev_json = root / "sub-001" / "eeg" / "sub-001_task-rest_events.json"
-    original = json.loads(ev_json.read_text())
+    original = json.loads(ev_json.read_text(encoding="utf-8"))
     original["TestNote"] = "made in Notepad"
     ev_json.write_bytes(b"\xef\xbb\xbf" + json.dumps(original).encode())
     inherited = root / "task-rest_events.json"
-    inherited.write_text('{"value": {"Description": "code"}, "Offset": NaN}')
+    inherited.write_text('{"value": {"Description": "code"}, "Offset": NaN}', encoding="utf-8")
     rec = {r.recording_id: r for r in discover_recordings(root)}[SUB1]
     lr = load_recording(rec, settings, settings.filters, catalogue)
     try:
@@ -286,8 +286,8 @@ def test_sidecars_with_bom_or_nan_and_inherited_fingerprints(dataset, settings, 
 def test_events_tsv_with_electroclean_columns_refused_at_load(dataset, settings, catalogue):
     root, _ = dataset
     ev = root / "sub-001" / "eeg" / "sub-001_task-rest_events.tsv"
-    lines = ev.read_text().splitlines()
-    ev.write_text("\n".join([lines[0] + "\tannotator_id"] + [ln + "\tX" for ln in lines[1:]]) + "\n")
+    lines = ev.read_text(encoding="utf-8").splitlines()
+    ev.write_text("\n".join([lines[0] + "\tannotator_id"] + [ln + "\tX" for ln in lines[1:]]) + "\n", encoding="utf-8")
     rec = {r.recording_id: r for r in discover_recordings(root)}[SUB1]
     with pytest.raises(RecordingLoadError, match="ElectroClean uses"):
         load_recording(rec, settings, settings.filters, catalogue)

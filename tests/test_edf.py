@@ -54,7 +54,7 @@ def test_discovery_finds_every_supported_format(tmp_path, edf_root):
     write_edf_recording(upper, "sub-03_task-rest")
     (upper / "sub-03_task-rest_eeg.edf").rename(upper / "sub-03_task-rest_eeg.EDF")
     (edf_root / "sub-04").mkdir()
-    (edf_root / "sub-04" / "notes_eeg.txt").write_text("not a recording")
+    (edf_root / "sub-04" / "notes_eeg.txt").write_text("not a recording", encoding="utf-8")
     recs = {r.recording_id: r for r in discover_recordings(edf_root)}
     assert sorted(recs) == [REC, "sub-02/eeg/sub-02_task-rest_eeg.bdf", "sub-03/eeg/sub-03_task-rest_eeg.EDF"]
     edf = recs[REC]
@@ -245,16 +245,17 @@ def test_session_saves_and_validates_edf_outputs(edf_root):
     lines = paths["events_tsv"].read_text(encoding="utf-8").splitlines()
     header = lines[0].split("\t")
     assert header[:5] == ["onset", "duration", "trial_type", "trigger_code", "sample"]
-    original = (edf_root / "sub-01" / "eeg" / "sub-01_task-rest_events.tsv").read_text().splitlines()[1:]
+    events_tsv = edf_root / "sub-01" / "eeg" / "sub-01_task-rest_events.tsv"
+    original = events_tsv.read_text(encoding="utf-8").splitlines()[1:]
     assert [ln.split("\t")[:5] for ln in lines[1:] if "original:events_tsv" in ln] == [o.split("\t") for o in original]
     blink = next(ln.split("\t") for ln in lines if "Eye-blink-artifact" in ln)
     assert blink[header.index("sample")] == "384" and blink[header.index("artifact_code")] == "103"
-    sidecar = json.loads(paths["events_json"].read_text())
+    sidecar = json.loads(paths["events_json"].read_text(encoding="utf-8"))
     assert sidecar["sample"]["Description"].startswith("Stimulus software timestamp. On rows with event_source")
-    canonical = json.loads(paths["annotations_json"].read_text())
+    canonical = json.loads(paths["annotations_json"].read_text(encoding="utf-8"))
     assert canonical["recording"]["ch_names"] == list(ALL_CHANNELS)
     assert canonical["recording"]["hidden_channels"] == list(HOUSEKEEPING)
-    meta = json.loads(paths["session_json"].read_text())
+    meta = json.loads(paths["session_json"].read_text(encoding="utf-8"))
     assert meta["recording"]["format"] == "EDF" and meta["recording"]["file"] == "sub-01_task-rest_eeg.edf"
     assert meta["recording"]["vhdr"] is None and meta["recording"]["acquisition_gaps_samples"] == [[5184, 5248]]
     # Whole-montage annotations cover the shown channels only in channel-level agreement.

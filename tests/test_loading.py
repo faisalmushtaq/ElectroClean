@@ -141,7 +141,8 @@ def test_truncated_on_sample_boundary_detected_by_markers(dataset, catalogue, se
 def test_corrupted_header_fails(dataset, catalogue, settings):
     root, _ = dataset
     vhdr = root / "sub-001" / "eeg" / "sub-001_task-rest_eeg.vhdr"
-    vhdr.write_text(vhdr.read_text().replace("SamplingInterval=4000", "SamplingInterval=abc"))
+    vhdr.write_text(vhdr.read_text(encoding="utf-8").replace("SamplingInterval=4000", "SamplingInterval=abc"),
+                    encoding="utf-8")
     rec = {r.recording_id: r for r in discover_recordings(root)}[SUB1]
     with pytest.raises(RecordingLoadError):
         load_recording(rec, settings, settings.filters, catalogue)
@@ -150,7 +151,7 @@ def test_corrupted_header_fails(dataset, catalogue, settings):
 def test_malformed_events_tsv_fails(dataset, catalogue, settings):
     root, _ = dataset
     ev = root / "sub-001" / "eeg" / "sub-001_task-rest_events.tsv"
-    ev.write_text(ev.read_text() + "1.0\t0.1\n")
+    ev.write_text(ev.read_text(encoding="utf-8") + "1.0\t0.1\n", encoding="utf-8")
     rec = {r.recording_id: r for r in discover_recordings(root)}[SUB1]
     with pytest.raises(RecordingLoadError) as err:
         load_recording(rec, settings, settings.filters, catalogue)
@@ -161,8 +162,11 @@ def test_inconsistent_channels_and_bad_json_are_warnings(dataset, catalogue, set
     root, _ = dataset
     d = root / "sub-001" / "eeg"
     ch = d / "sub-001_task-rest_channels.tsv"
-    ch.write_text(ch.read_text().replace("Fp1\tEEG", "FP1\tEEG").replace("O2\tEEG\tµV\tgood", "O2\tEEG\tµV\tbad"))
-    (d / "sub-001_task-rest_eeg.json").write_text("{ not json")
+    # Explicit encodings: channels.tsv is UTF-8 ("µV"), and Windows' default encoding is not.
+    text = ch.read_text(encoding="utf-8")
+    ch.write_text(text.replace("Fp1\tEEG", "FP1\tEEG").replace("O2\tEEG\tµV\tgood", "O2\tEEG\tµV\tbad"),
+                  encoding="utf-8")
+    (d / "sub-001_task-rest_eeg.json").write_text("{ not json", encoding="utf-8")
     rec = {r.recording_id: r for r in discover_recordings(root)}[SUB1]
     lr = load_recording(rec, settings, settings.filters, catalogue)
     assert lr.channel_report.missing_from_tsv == ["Fp1"]
@@ -182,7 +186,7 @@ def test_original_codes_like_artifact_codes_load_without_a_policy(rich_dataset, 
     lr.close()
     # An old study file that still sets the retired policy is accepted.
     (root / "electroclean_study.json").write_text(
-        json.dumps({"settings": {"events": {"collision_policy": "preserve_and_flag"}}})
+        json.dumps({"settings": {"events": {"collision_policy": "preserve_and_flag"}}}), encoding="utf-8"
     )
     settings, _ = load_settings(root)
     load_recording(rec, settings, settings.filters, catalogue).close()

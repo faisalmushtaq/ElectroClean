@@ -46,7 +46,7 @@ def test_unfinished_work_is_restored_with_its_time(layout, settings, catalogue, 
     assert s2.elapsed_s >= record.elapsed_s >= first_elapsed - 0.01
     res = s2.finish()
     assert res.elapsed_s >= record.elapsed_s
-    meta = json.loads(res.commit.paths["session_json"].read_text())
+    meta = json.loads(res.commit.paths["session_json"].read_text(encoding="utf-8"))
     assert meta["timing"]["elapsed_in_earlier_sessions_seconds"] == pytest.approx(record.elapsed_s)
     assert meta["timing"]["resumed_from_autosave"][0]["session_id"] == s.session_id
     assert not s2.autosave_path.exists()  # saved: the autosave is removed

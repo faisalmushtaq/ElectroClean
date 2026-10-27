@@ -65,7 +65,7 @@ def test_complete_workflow(dataset, tmp_path):
             assert sorted(map(key, doc.annotations)) == sorted(map(key, simulated.annotations))
             from_tsv = annotations_from_events_tsv(paths["events_tsv"].read_bytes(), doc.recording, cat)
             assert sorted(map(key, from_tsv)) == sorted(map(key, simulated.annotations))
-            meta = json.loads(paths["session_json"].read_text())
+            meta = json.loads(paths["session_json"].read_text(encoding="utf-8"))
             assert meta["recording"]["source_fingerprint"]["eeg"]["sha256"]
     assert register.completed("A01") == register.completed("A02") == set(truths)
     # Source data untouched.

@@ -44,12 +44,27 @@ def wait(ms: int = 30) -> None:
     QApplication.processEvents()
 
 
+def desktop_size(ws) -> None:
+    """Give the window the size it has on a desktop.
+
+    The offscreen test "screen" is only 800 x 600, so the window would otherwise be fitted to it and
+    the EEG plot left a few hundred pixels wide. How wide exactly depends on the fonts of the machine,
+    and at that width a drag that starts 0.2 s from an annotation edge grabs the edge instead, so the
+    tests behaved differently on different computers.
+    """
+    ws.browser.resize(1600, 950)
+    ws.browser.resizeDocks([ws.annotation_dock], [470], Qt.Horizontal)
+    ws.browser.resizeDocks([ws.annotation_dock, ws.info_dock], [540, 340], Qt.Vertical)
+    wait(80)
+
+
 def open_workspace(layout, settings, catalogue, loaded, prompts=None, **kw):
     session = make_session(layout, settings, catalogue, loaded, **kw)
     session.start()
     ws = AnnotationWorkspace(session, settings, prompts=prompts or ScriptedPrompts())
     ws.show()
     QTest.qWaitForWindowExposed(ws.browser)
+    desktop_size(ws)
     wait(80)
     return session, ws
 
@@ -160,7 +175,7 @@ def test_draw_edit_and_save(qapp, layout, settings, catalogue, loaded):
     assert finished and finished[0].n_annotations == 2
     assert CompletionRegister(layout).is_completed(SUB1, "A01")
     assert any(k == "ask" and "Save and Finish" in t for k, t, _ in prompts.log)
-    meta = json.loads(finished[0].commit.paths["session_json"].read_text())
+    meta = json.loads(finished[0].commit.paths["session_json"].read_text(encoding="utf-8"))
     assert meta["annotations"]["n_channel_specific"] == 2
 
 
@@ -288,7 +303,7 @@ def test_failed_load_message_and_continue(qapp, dataset):
     assert any("could not be loaded" in t for t in informed)
     reg = CompletionRegister(ctrl.layout)
     assert reg.completed("A01") == {SUB2}  # the failed file is never marked complete
-    line = ctrl.layout.failed_load_txt.read_text().strip().split("\t")
+    line = ctrl.layout.failed_load_txt.read_text(encoding="utf-8").strip().split("\t")
     assert line[1] == SUB1
 
 
@@ -568,5 +583,5 @@ def test_edf_recording_in_the_application(qapp, dataset):
     reg = CompletionRegister(ctrl.layout)
     assert edf_id in reg.completed("A01")
     out = ctrl.layout.root / "annotator-A01" / "sub-050" / "eeg" / "sub-050_task-rest_eeg_annotator-A01_annotations.json"
-    doc = json.loads(out.read_text())
+    doc = json.loads(out.read_text(encoding="utf-8"))
     assert doc["annotations"][0]["channels"] == ["O1"]

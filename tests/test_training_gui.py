@@ -215,14 +215,14 @@ def test_closing_the_quiz_early_saves_incomplete_answers(qapp, ref_set):
     win.close()
     wait()
     (saved,) = (ctrl.layout.root / "training" / "pilot" / "quiz").glob("annotator-CAM_quiz_*.json")
-    data = json.loads(saved.read_text())
+    data = json.loads(saved.read_text(encoding="utf-8"))
     assert data["completed"] is False and len(data["answers"]) == 1
     assert ctrl.quiz_window is None and ctrl.start_window.isVisible()
 
 
 def test_admin_tools_report_a_malformed_study_file(qapp, ref_set):
     root, _, _ = ref_set
-    admin.study_config_path(root).write_text('{"study_id": "x", oops}')
+    admin.study_config_path(root).write_text('{"study_id": "x", oops}', encoding="utf-8")
     prompts = ScriptedPrompts()
     ctrl = AppController(prompts=prompts, synchronous_loading=True)
     ctrl.open_admin(root)

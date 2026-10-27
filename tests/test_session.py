@@ -43,8 +43,8 @@ def test_full_session_outputs(layout, settings, catalogue, loaded):
         ]
     )
     assert res.commit.final_dir == layout.root / "annotator-A01" / "sub-001" / "eeg"
-    assert float(res.commit.paths["time_viewed"].read_text()) == pytest.approx(res.elapsed_s)
-    meta = json.loads(res.commit.paths["session_json"].read_text())
+    assert float(res.commit.paths["time_viewed"].read_text(encoding="utf-8")) == pytest.approx(res.elapsed_s)
+    meta = json.loads(res.commit.paths["session_json"].read_text(encoding="utf-8"))
     for key in ("start_timestamp", "finish_timestamp", "elapsed_seconds"):
         assert meta["timing"][key] is not None
     assert meta["annotator"] == {"annotator_id": "A01", "display_name": "Dr Test"}
@@ -69,8 +69,8 @@ def test_completion_is_per_annotator(dataset, layout, settings, catalogue, recor
     # The second annotator can complete the same recording independently.
     _finish(make_session(layout, settings, catalogue, loaded, "A02"))
     assert reg.annotators_for(SUB1) == {"A01", "A02"}
-    assert layout.completed_list("A01").read_text() == SUB1 + "\n"
-    assert layout.completed_list("A02").read_text() == SUB1 + "\n"
+    assert layout.completed_list("A01").read_text(encoding="utf-8") == SUB1 + "\n"
+    assert layout.completed_list("A02").read_text(encoding="utf-8") == SUB1 + "\n"
 
 
 def test_completed_recording_not_reopened_or_overwritten(layout, settings, catalogue, loaded):
@@ -104,10 +104,11 @@ def test_stale_lock_from_dead_process_is_broken(tmp_path):
     path = tmp_path / "x.lock"
     import socket
 
-    path.write_text(json.dumps({"pid": 999999, "host": socket.gethostname(), "created_epoch": time.time()}))
+    path.write_text(json.dumps({"pid": 999999, "host": socket.gethostname(), "created_epoch": time.time()}),
+                    encoding="utf-8")
     FileLock(path).acquire()
     path2 = tmp_path / "y.lock"
-    path2.write_text(json.dumps({"pid": 1, "host": "elsewhere", "created_epoch": time.time() - 7200}))
+    path2.write_text(json.dumps({"pid": 1, "host": "elsewhere", "created_epoch": time.time() - 7200}), encoding="utf-8")
     old = time.time() - 7200  # age is judged from the lock file's modification time
     os.utime(path2, (old, old))
     with pytest.raises(LockError):
@@ -209,7 +210,7 @@ def test_source_change_during_session_blocks_completion(layout, settings, catalo
     s.start_timer()
     ev = loaded.files.events_tsv
     time.sleep(0.01)
-    ev.write_text(ev.read_text())  # touched: new modification time
+    ev.write_text(ev.read_text(encoding="utf-8"), encoding="utf-8")  # touched: new modification time
     with pytest.raises(SessionError):
         s.finish()
     assert not CompletionRegister(layout).is_completed(SUB1, "A01")
@@ -224,7 +225,7 @@ def test_failure_log_and_exclusion(dataset, layout, settings, catalogue):
     with pytest.raises(RecordingLoadError) as err:
         load_recording(recs[SUB2], settings, settings.filters, catalogue)
     log.record(recs[SUB2], SUB2, err.value.kind, str(err.value), annotator_id="A01")
-    line = layout.failed_load_txt.read_text().strip().split("\t")
+    line = layout.failed_load_txt.read_text(encoding="utf-8").strip().split("\t")
     assert line[1] == SUB2 and "truncated" in line[2]
     assert set(log.unresolved(list(recs.values()), {})) == {SUB2}
     sel = select_next(list(recs.values()), annotator_id="A01", completed=set(), failed=log.unresolved(list(recs.values()), {}),

@@ -55,7 +55,7 @@ def test_events_tsv_columns_and_original_rows_preserved(layout, settings, catalo
     _, originals = original_rows_from_events_tsv(text)
     assert [r[:5] for r in originals] == loaded.original_events.rows
     # Byte-level check: every original line appears verbatim at the start of an output line.
-    src_lines = loaded.files.events_tsv.read_text().splitlines()[1:]
+    src_lines = loaded.files.events_tsv.read_text(encoding="utf-8").splitlines()[1:]
     out_lines = text.splitlines()
     for line in src_lines:
         assert any(o.startswith(line + "\t") for o in out_lines)
@@ -196,16 +196,16 @@ def test_original_codes_that_equal_artifact_codes_cannot_be_confused(rich_datase
     s.start()
     s.start_timer()
     res = s.finish()
-    text = res.commit.paths["events_tsv"].read_text()
+    text = res.commit.paths["events_tsv"].read_text(encoding="utf-8")
     cols, rows = parse_tsv_text(text)
     idx = {c: i for i, c in enumerate(cols)}
     assert {r[idx["event_source"]] for r in rows if r[idx["value"]] == "101"} == {"original:events_tsv"}
     (art,) = [r for r in rows if r[idx["event_source"]] == "electroclean_artifact"]
     assert (art[idx["value"]], art[idx["artifact_code"]], art[idx["trial_type"]]) == ("n/a", "101", "ECG-artifact")
-    sidecar = json.loads(res.commit.paths["events_json"].read_text())
+    sidecar = json.loads(res.commit.paths["events_json"].read_text(encoding="utf-8"))
     assert sidecar["artifact_code"]["Levels"]["101"] == "ECG-artifact"
     assert "101" not in (sidecar["value"].get("Levels") or {}) or "ECG" not in sidecar["value"]["Levels"]["101"]
-    meta = json.loads(res.commit.paths["session_json"].read_text())
+    meta = json.loads(res.commit.paths["session_json"].read_text(encoding="utf-8"))
     assert meta["original_events"]["code_check"]["codes_also_used_for_artifacts"] == [101]
     lr.close()
 
