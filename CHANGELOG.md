@@ -33,6 +33,16 @@ chooser finds channels by name, ticks whole regions or banks with one click
 and lays many channels out in columns, the list of annotations shows how many
 channels each covers, and the time-resolved agreement analysis is about six
 times faster on recordings with many channels, with identical results.
+Trigger channels such as BioSemi's Status channel now provide the original
+events when a recording has no other record of them, and are no longer shown
+or counted as part of the montage; a study can set channel types by name
+pattern (`channels.types`). A recording whose amplitude is far outside what
+the body produces, which almost always means the file states the wrong unit,
+is shown at a scale that makes its traces visible, with a warning, instead of
+appearing blank. The display filters work on blocks of channels and report
+their progress, so a 30-minute, 128-channel recording at 1024 Hz needs about
+half the memory it did (2.2 GB instead of 4 GB) and opens in about 40
+seconds.
 
 ## 1.1.0
 
