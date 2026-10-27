@@ -250,16 +250,20 @@ class AnnotationWorkspace(QObject):
         layout.setContentsMargins(4, 4, 4, 4)
         self.count_label = QLabel()
         layout.addWidget(self.count_label)
-        self.table = QTableWidget(0, 6)
-        self.table.setHorizontalHeaderLabels(["Label", "Code", "Start (s)", "End (s)", "Duration (s)", "Channels"])
+        # Duration is in each row's tooltip: with it as a column the channel list had no room in the panel.
+        self.table = QTableWidget(0, 5)
+        self.table.setHorizontalHeaderLabels(["Label", "Code", "Start (s)", "End (s)", "Channels"])
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.verticalHeader().setVisible(False)
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeToContents)
-        # The channel list takes the remaining width (and is elided there) rather than adding a scroll bar.
-        header.setSectionResizeMode(5, QHeaderView.Stretch)
+        # Long labels are elided (full name in the tooltip) and the channel list takes the remaining
+        # width, rather than the panel needing a horizontal scroll bar.
+        header.setSectionResizeMode(0, QHeaderView.Interactive)
+        header.resizeSection(0, 200)
+        header.setSectionResizeMode(4, QHeaderView.Stretch)
         self.table.setTextElideMode(Qt.ElideRight)
         header.setStretchLastSection(True)
         self.table.setWordWrap(False)
@@ -454,17 +458,18 @@ class AnnotationWorkspace(QObject):
             lab = cat.get(a.label)
             label_item = QTableWidgetItem(colour_icon(lab.colour), prefix.get(a.annotation_id, "") + a.label)
             label_item.setData(Qt.UserRole, a.annotation_id)
-            label_item.setToolTip(self._hed.get(a.label, a.label))
+            label_item.setToolTip(f"{a.label}\n{self._hed.get(a.label, '')}".strip())
             chans = "Whole montage" if a.is_global else ", ".join(a.channels)
             values = [
                 label_item,
                 QTableWidgetItem(str(lab.value)),
                 QTableWidgetItem(f"{a.onset(timing):.3f}"),
                 QTableWidgetItem(f"{a.offset(timing):.3f}"),
-                QTableWidgetItem(f"{a.duration(timing):.3f}"),
                 QTableWidgetItem(chans),
             ]
-            values[5].setToolTip(chans)
+            for item in values[1:4]:
+                item.setToolTip(f"{a.onset(timing):.3f} to {a.offset(timing):.3f} s, duration {a.duration(timing):.3f} s")
+            values[4].setToolTip(chans)
             for c, item in enumerate(values):
                 self.table.setItem(r, c, item)
         self.table.clearSelection()

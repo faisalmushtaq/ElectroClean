@@ -138,7 +138,7 @@ The original `events.json` (with BIDS inheritance applied), plus:
   },
   "annotator": {"annotator_id": "A01", "display_name": "Demo A01"},
   "session": {"session_id": "20261026T154749Z-e6797cfe", "mode": "standard",
-              "created_at": "2026-10-26T15:47:49.375+00:00", "app_version": "1.0.0", "context": {}},
+              "created_at": "2026-10-26T15:47:49.375+00:00", "app_version": "1.1.0", "context": {}},
   "time_conventions": {"onset_origin": "first_sample", "...": "..."},
   "channel_convention": {"empty_list_means": "The annotation applies to the whole recording montage ...", "...": "..."},
   "label_catalogue": {"catalogue_id": "electroclean-hed-score-artifacts", "catalogue_version": "2.0.0",

@@ -1,7 +1,7 @@
 {
   "schema": "electroclean.session",
   "schema_version": "1.0.0",
-  "session_id": "20261027T184857Z-43904389",
+  "session_id": "20261027T185934Z-3477e1eb",
   "mode": "standard",
   "context": {},
   "annotator": {
@@ -61,63 +61,63 @@
       "vhdr": {
         "path": "sub-002/eeg/sub-002_task-rest_eeg.vhdr",
         "size": 1041,
-        "mtime_ns": 1793126935163024833,
+        "mtime_ns": 1793127572353031377,
         "sha256": "39c9670180b236ad71c67a8cbeeadbce024b0ae7d9bdffe03af31af6f66daed7"
       },
       "eeg": {
         "path": "sub-002/eeg/sub-002_task-rest_eeg.eeg",
         "size": 1320000,
-        "mtime_ns": 1793126935158169813,
+        "mtime_ns": 1793127572352088308,
         "sha256": "30bfb0ef69c5004d7df42aaaf17ded051f2e5b2900cf3900cfe1d2012eb7aa15"
       },
       "vmrk": {
         "path": "sub-002/eeg/sub-002_task-rest_eeg.vmrk",
         "size": 1392,
-        "mtime_ns": 1793126935162854143,
+        "mtime_ns": 1793127572352835364,
         "sha256": "50bdfcc2c130fb5dd2297db938f08df0d0b8a725754126bc167ae811dccaca99"
       },
       "channels_tsv": {
         "path": "sub-002/eeg/sub-002_task-rest_channels.tsv",
         "size": 384,
-        "mtime_ns": 1793126935163297967,
+        "mtime_ns": 1793127572353380691,
         "sha256": "2606e8830e14c65eed97ea25c80f9f56708eb24e26134f516b754234c6927d82"
       },
       "events_tsv": {
         "path": "sub-002/eeg/sub-002_task-rest_events.tsv",
         "size": 928,
-        "mtime_ns": 1793126935163162033,
+        "mtime_ns": 1793127572353203787,
         "sha256": "23fbd318246db707134f26fd35f535df2bd25580d7cf8c17e33066b3b744c0a8"
       },
       "events_json": {
         "path": "sub-002/eeg/sub-002_task-rest_events.json",
         "size": 289,
-        "mtime_ns": 1793126935163248916,
+        "mtime_ns": 1793127572353312441,
         "sha256": "203b47891160359d51301343101c20872de346b32b5a97b29a70139958c62f00"
       },
       "eeg_json": {
         "path": "sub-002/eeg/sub-002_task-rest_eeg.json",
         "size": 255,
-        "mtime_ns": 1793126935163355880,
+        "mtime_ns": 1793127572353497014,
         "sha256": "b4261e68d3afe2c97349082cc1460d8fb6e73c9427090698dd1e1ec35b914cac"
       }
     }
   },
   "timing": {
-    "session_opened": "2026-10-27T18:48:57.289+00:00",
-    "start_timestamp": "2026-10-27T18:48:57.289+00:00",
-    "finish_timestamp": "2026-10-27T18:48:57.289+00:00",
-    "elapsed_seconds": 0.0,
+    "session_opened": "2026-10-27T18:59:34.543+00:00",
+    "start_timestamp": "2026-10-27T18:59:34.543+00:00",
+    "finish_timestamp": "2026-10-27T18:59:34.543+00:00",
+    "elapsed_seconds": 0.001,
     "clock": "time.monotonic (started when the viewer became usable, stopped at Save and Finish)",
     "elapsed_in_earlier_sessions_seconds": 0.0,
     "resumed_from_autosave": []
   },
   "application": {
     "name": "ElectroClean",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "platform": "Linux-6.18.44-fc-v165-x86_64-with-glibc2.39",
     "libraries": {
       "python": "3.13.17",
-      "electroclean": "1.0.0",
+      "electroclean": "1.1.0",
       "mne": "1.13.2",
       "mne_qt_browser": "0.7.5",
       "numpy": "2.5.4",
@@ -127,6 +127,16 @@
       "pyqtgraph": "0.14.0",
       "matplotlib": "3.11.2"
     }
+  },
+  "display": {
+    "scalings": {
+      "eeg": 5e-05,
+      "eog": 0.00015,
+      "ecg": 0.0005,
+      "emg": 0.0001,
+      "misc": 0.001
+    },
+    "note": "scale_factor multiplies the amplitude of every trace relative to scalings (MNE's + and - keys); duration_s and n_channels are what was on screen at Save and Finish"
   },
   "filters": {
     "selected": {

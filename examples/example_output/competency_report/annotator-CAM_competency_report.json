@@ -21,7 +21,7 @@
         "TRUTH"
       ],
       "adjudicator": "",
-      "added_at": "2026-10-27T18:53:04.663+00:00"
+      "added_at": "2026-10-27T18:59:41.141+00:00"
     },
     "sub-003/eeg/sub-003_task-rest_eeg.vhdr": {
       "method": "single_expert",
@@ -29,7 +29,7 @@
         "TRUTH"
       ],
       "adjudicator": "",
-      "added_at": "2026-10-27T18:53:04.667+00:00"
+      "added_at": "2026-10-27T18:59:41.144+00:00"
     }
   },
   "required_recordings": [
@@ -61,25 +61,25 @@
   "inputs": {
     "reference_set": {
       "file": "demo-set/reference_set.json",
-      "sha256": "a0ddcf91895584bb39eb8306cab37b343c9bb45a57efc55f82cf6fd0682c393c"
+      "sha256": "72b11706db937be3c87ecc9728ee13b65840c91b9a1b1fa0bd3badd8010a15ff"
     },
     "references": {
-      "sub-002/eeg/sub-002_task-rest_eeg.vhdr": "4ae4838d61327f96d69b2cce166d69675acca16c23a1dda4828792a7704d39d0",
-      "sub-003/eeg/sub-003_task-rest_eeg.vhdr": "ee856fcd8fc4bd550e828e5e69d50de2f4018943a1ca68fdcd5b58f62f0bc285"
+      "sub-002/eeg/sub-002_task-rest_eeg.vhdr": "723525e0e4616a1909fba7b18a7c3c394170b638e27610fc3652caa7dd21391f",
+      "sub-003/eeg/sub-003_task-rest_eeg.vhdr": "0cc30cda507986586d1bdbb1ac7e8a2fde8f93506161c75c100b7da9f6117aba"
     },
     "annotations": {
       "sub-002/eeg/sub-002_task-rest_eeg.vhdr": {
         "file": "training/demo-set/assessment/annotator-CAM/sub-002/eeg/sub-002_task-rest_eeg_annotator-CAM_annotations.json",
-        "sha256": "522181f864d82932bff97651f378103ecb2d6c54102fae55cafb9f5f9db76b6b"
+        "sha256": "e2c1aa19e99327456bad1ed6e70bbf9837975306866fa0aeb5614c87837158f4"
       },
       "sub-003/eeg/sub-003_task-rest_eeg.vhdr": {
         "file": "training/demo-set/assessment/annotator-CAM/sub-003/eeg/sub-003_task-rest_eeg_annotator-CAM_annotations.json",
-        "sha256": "c13f0c98f27a6434f937b6c0fb5b10ab24c01c57c49e925a8d059dbffa668907"
+        "sha256": "ac495ab60bffe90f2d5a98e26b0b3ae7945f1ce5ad9386b1521677c3566d7e51"
       }
     }
   },
   "software": {
-    "electroclean": "1.0.0"
+    "electroclean": "1.1.0"
   },
   "metrics": {
     "overall": {
@@ -348,6 +348,7 @@
       "duplicate_policy": "latest",
       "channel_exclude": [],
       "timeline_max_recordings": 12,
+      "min_events_per_category": 5,
       "extra_measures": []
     }
   },
@@ -389,6 +390,6 @@
     "Electrode-movement-artifact",
     "Localized-channel-artifact"
   ],
-  "results_sha256": "ca5d4aeea66d1f9c9742bb6ac3fbca31f25d4fc7fb78de22d1b116a3d0f7149f",
-  "generated_at": "2026-10-27T18:53:05.658+00:00"
+  "results_sha256": "3060def4d1d13a9b19aca6bb80469be71559f75ca57717c77b01b66edee8b37f",
+  "generated_at": "2026-10-27T18:59:41.999+00:00"
 }

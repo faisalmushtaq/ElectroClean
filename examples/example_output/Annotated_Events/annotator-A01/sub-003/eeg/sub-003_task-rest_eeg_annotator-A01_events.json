@@ -132,10 +132,10 @@
     "Description": "1-based row number in the original events file (n/a for artifact rows)."
   },
   "ElectroCleanMetadata": {
-    "GeneratedBy": "ElectroClean 1.0.0",
+    "GeneratedBy": "ElectroClean 1.1.0",
     "recording_id": "sub-003/eeg/sub-003_task-rest_eeg.vhdr",
     "annotator_id": "A01",
-    "session_id": "20261027T184857Z-a6a99d4f",
+    "session_id": "20261027T185935Z-61f81b13",
     "original_events_source": "events_tsv",
     "original_sample_column_computed": false,
     "time_conventions": {
