@@ -16,6 +16,7 @@ zones and so that the reliability analysis can take them into account.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -35,6 +36,8 @@ HIGHPASS_FIR_PARAMS = {**FIR_FIXED_PARAMS, "l_trans_bandwidth": "auto"}
 NOTCH_FIR_PARAMS = {**FIR_FIXED_PARAMS, "notch_widths": None, "trans_bandwidth": 1.0}
 SKIP_BY_ANNOTATION = ("edge", "bad_acq_skip")
 BOUNDARY_DESCRIPTION = "EDGE boundary"
+# Channels are filtered in blocks of about this much data; MNE's working copy is about the same size.
+FILTER_BLOCK_BYTES = 128 * 1024 * 1024
 
 _LENGTH_RE = re.compile(r"Filter length:\s*(\d+)\s*samples")
 
@@ -60,6 +63,7 @@ class FilterReport:
     filtered_channels: list[str] = field(default_factory=list)
     data_storage: str = "none"
     library_versions: dict[str, str] = field(default_factory=dict)
+    channel_blocks: int = 0
 
     @property
     def transient_half_width_s(self) -> float:
@@ -109,6 +113,7 @@ class FilterReport:
             "acquisition_gaps_not_filtered_samples": [list(g) for g in self.acquisition_gaps],
             "edge_transient_half_width_s": self.transient_half_width_s,
             "filtered_channels": self.filtered_channels,
+            "filtered_in_channel_blocks": self.channel_blocks,
             "data_storage": self.data_storage,
             "library_versions": self.library_versions,
         }
@@ -153,17 +158,28 @@ def _iir_ringing(sfreq: float, l_freq: float | None, h_freq: float | None, order
         return 0
 
 
+def channel_blocks(picks: list[int], n_times: int, block_bytes: int | None = None) -> list[list[int]]:
+    """Split channel indices into blocks of at most ``block_bytes`` (default :data:`FILTER_BLOCK_BYTES`)
+    of float64 data, with at least one channel per block."""
+    if block_bytes is None:
+        block_bytes = FILTER_BLOCK_BYTES
+    per_block = max(1, int(block_bytes // max(1, n_times * 8)))
+    return [list(picks[i:i + per_block]) for i in range(0, len(picks), per_block)]
+
+
 def apply_view_filters(
     raw: Any,
     settings: FilterSettings,
     discontinuity_samples: list[int],
     acquisition_gaps: list[tuple[int, int]] | tuple[tuple[int, int], ...] = (),
+    progress: Callable[[str], None] | None = None,
 ) -> FilterReport:
     """Filter a *preloaded viewing copy* in place and describe what was done.
 
     Each continuous segment is filtered on its own: segments are separated by
     ``discontinuity_samples`` and by ``acquisition_gaps`` (sample ranges
-    without recorded data, which are left unfiltered).
+    without recorded data, which are left unfiltered). Channels are filtered in
+    blocks (see :func:`channel_blocks`); ``progress`` is told after each block.
     """
     import mne
     import scipy
@@ -206,57 +222,74 @@ def apply_view_filters(
         descriptions = [BOUNDARY_DESCRIPTION] * len(breaks) + ["BAD_ACQ_SKIP"] * len(gaps)
         boundaries = mne.Annotations(onsets, durations, descriptions, orig_time=raw.annotations.orig_time)
         raw.set_annotations(saved + boundaries if len(saved) else boundaries)
+    hp = float(settings.highpass_hz)
+    hp_params: dict[str, Any] | None = None
+    if settings.highpass_enabled:
+        if hp >= sfreq / 2:
+            report.skipped.append(f"High-pass {hp} Hz skipped: not below Nyquist ({sfreq / 2} Hz)")
+        elif settings.method == "fir":
+            hp_params = {"l_freq": hp, "h_freq": None, **HIGHPASS_FIR_PARAMS}
+        else:
+            hp_params = {
+                "l_freq": hp,
+                "h_freq": None,
+                "method": "iir",
+                "phase": "zero",
+                "iir_params": {"order": int(settings.iir_order), "ftype": "butter", "output": "sos"},
+            }
+    freqs = notch_frequencies(settings, sfreq)
+    if settings.notch_enabled and not freqs:
+        report.skipped.append(f"Notch at {settings.notch_hz} Hz skipped: not below Nyquist ({sfreq / 2} Hz)")
+    notch_params: dict[str, Any] | None = None
+    if freqs:
+        if settings.method == "fir":
+            notch_params = {"freqs": freqs, **NOTCH_FIR_PARAMS}
+        else:
+            notch_params = {
+                "freqs": freqs,
+                "method": "iir",
+                "phase": "zero",
+                "iir_params": {"order": int(settings.iir_order), "ftype": "butter", "output": "sos"},
+            }
+
+    # MNE filters a copy of the channels it is given, so filtering every channel at once needs as
+    # much memory again as the recording (4 GB for a 30-minute, 128-channel, 1024 Hz file). Blocks
+    # of channels keep that copy small, give the same result (each channel is filtered on its own)
+    # and let the progress message move.
+    blocks = channel_blocks(picks, n_times)
+    report.channel_blocks = len(blocks)
+    logs = {"high-pass": "", "notch": ""}
     try:
-        if settings.highpass_enabled:
-            hp = float(settings.highpass_hz)
-            if hp >= sfreq / 2:
-                report.skipped.append(f"High-pass {hp} Hz skipped: not below Nyquist ({sfreq / 2} Hz)")
-            else:
-                if settings.method == "fir":
-                    params = {"l_freq": hp, "h_freq": None, **HIGHPASS_FIR_PARAMS}
-                else:
-                    params = {
-                        "l_freq": hp,
-                        "h_freq": None,
-                        "method": "iir",
-                        "phase": "zero",
-                        "iir_params": {"order": int(settings.iir_order), "ftype": "butter", "output": "sos"},
-                    }
+        done = 0
+        for i, block in enumerate(blocks):
+            verbose = "info" if i == 0 else "error"  # every block uses the same design: log it once
+            if hp_params is not None:
                 with catch_logging() as log:
-                    raw.filter(
-                        picks=picks, skip_by_annotation=SKIP_BY_ANNOTATION, n_jobs=None, verbose="info", **params
-                    )
-                text = log.getvalue()
-                step = FilterStep("high-pass", "mne.io.Raw.filter", _jsonable(params), mne_log=text)
-                _set_lengths(step, text, settings, sfreq, hp, None)
-                report.steps.append(step)
-        freqs = notch_frequencies(settings, sfreq)
-        if settings.notch_enabled and not freqs:
-            report.skipped.append(
-                f"Notch at {settings.notch_hz} Hz skipped: not below Nyquist ({sfreq / 2} Hz)"
-            )
-        if freqs:
-            if settings.method == "fir":
-                params = {"freqs": freqs, **NOTCH_FIR_PARAMS}
-            else:
-                params = {
-                    "freqs": freqs,
-                    "method": "iir",
-                    "phase": "zero",
-                    "iir_params": {"order": int(settings.iir_order), "ftype": "butter", "output": "sos"},
-                }
-            with catch_logging() as log:
-                raw.notch_filter(
-                    picks=picks, skip_by_annotation=SKIP_BY_ANNOTATION, n_jobs=None, verbose="info", **params
-                )
-            text = log.getvalue()
-            step = FilterStep("notch", "mne.io.Raw.notch_filter", _jsonable(params), mne_log=text)
-            # MNE's default notch width is freq / 200 with a 1 Hz transition band.
-            f0 = freqs[0]
-            _set_lengths(step, text, settings, sfreq, f0 + f0 / 400 + 0.5, f0 - f0 / 400 - 0.5)
-            report.steps.append(step)
+                    raw.filter(picks=block, skip_by_annotation=SKIP_BY_ANNOTATION, n_jobs=None, verbose=verbose,
+                               **hp_params)
+                if i == 0:
+                    logs["high-pass"] = log.getvalue()
+            if notch_params is not None:
+                with catch_logging() as log:
+                    raw.notch_filter(picks=block, skip_by_annotation=SKIP_BY_ANNOTATION, n_jobs=None,
+                                     verbose=verbose, **notch_params)
+                if i == 0:
+                    logs["notch"] = log.getvalue()
+            done += len(block)
+            if progress is not None:
+                progress(f"Applying display filters: {done} of {len(picks)} channels")
     finally:
         raw.set_annotations(saved)
+    if hp_params is not None:
+        step = FilterStep("high-pass", "mne.io.Raw.filter", _jsonable(hp_params), mne_log=logs["high-pass"])
+        _set_lengths(step, logs["high-pass"], settings, sfreq, hp, None)
+        report.steps.append(step)
+    if notch_params is not None:
+        step = FilterStep("notch", "mne.io.Raw.notch_filter", _jsonable(notch_params), mne_log=logs["notch"])
+        # MNE's default notch width is freq / 200 with a 1 Hz transition band.
+        f0 = freqs[0]
+        _set_lengths(step, logs["notch"], settings, sfreq, f0 + f0 / 400 + 0.5, f0 - f0 / 400 - 0.5)
+        report.steps.append(step)
     return report
 
 

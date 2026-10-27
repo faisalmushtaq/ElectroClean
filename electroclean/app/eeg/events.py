@@ -1,8 +1,10 @@
 """Original experimental events: loading, display and code-conflict checks.
 
 Original events come from the recording's BIDS ``events.tsv`` when one exists
-(its rows are kept exactly as strings) and otherwise from the BrainVision
-marker file or the EDF+/BDF+ annotations, as read by MNE. They are never edited. In the viewer they are drawn
+(its rows are kept exactly as strings), otherwise from the BrainVision marker
+file or the EDF+/BDF+ annotations, as read by MNE, and otherwise from the
+recording's trigger (stimulus) channels, such as the Status channel of BioSemi
+BDF files. They are never edited. In the viewer they are drawn
 as vertical event lines, which cannot be moved or deleted, while artifact
 annotations are drawn as shaded intervals.
 """
@@ -25,7 +27,11 @@ SOURCE_EVENTS_TSV = "events_tsv"
 SOURCE_VMRK = "brainvision_vmrk"
 SOURCE_EDF = "edf_annotations"
 SOURCE_BDF = "bdf_annotations"
+SOURCE_STIM = "stim_channel"
 SOURCE_NONE = "none"
+# BioSemi's Status channel carries the trigger codes in its lower 16 bits and system flags
+# (CMS in range, battery low and so on) above them; only the trigger bits are read.
+BDF_TRIGGER_MASK = 0xFFFF
 # Annotations describing the recording itself rather than an experimental event.
 NON_EVENT_PREFIXES = ("new segment", "bad_acq_skip")
 MAX_ROW_PROBLEMS = 10
@@ -75,9 +81,22 @@ class OriginalEvents:
     sample_column_ignored: bool = False
     problems: list[str] = field(default_factory=list)
     comparison: dict[str, Any] = field(default_factory=dict)
+    stim_channels: list[str] = field(default_factory=list)  # for SOURCE_STIM: the channels read
 
     def __len__(self) -> int:
         return len(self.rows)
+
+    def describe_source(self) -> str:
+        """Where the events came from, in words (for the Recording panel)."""
+        if self.source == SOURCE_STIM:
+            names = ", ".join(self.stim_channels) or "trigger"
+            return f"the {names} channel" + ("s" if len(self.stim_channels) > 1 else "")
+        return {
+            SOURCE_EVENTS_TSV: "events.tsv",
+            SOURCE_VMRK: "the BrainVision marker file",
+            SOURCE_EDF: "the EDF+ annotations",
+            SOURCE_BDF: "the BDF+ annotations",
+        }.get(self.source, "none")
 
     def column(self, name: str) -> list[str]:
         if name not in self.columns:
@@ -220,6 +239,47 @@ def events_from_raw_annotations(
     ev = OriginalEvents(source=source if len(rows) else SOURCE_NONE, path=path, columns=columns, rows=rows)
     _parse_rows(ev, timing)
     return ev
+
+
+def events_from_stim_channels(
+    raw: Any, stim_channels: list[str], timing: RecordingTiming, path: Path | None, file_format: str
+) -> OriginalEvents:
+    """Build event rows from trigger channels with ``mne.find_events``.
+
+    Used only when a recording has neither an events.tsv nor marker annotations. Every
+    change of a trigger channel to a non-zero code is an event (``consecutive=True``, so a
+    code that follows another without returning to zero is not lost), single-sample pulses
+    included. For BDF files only the lower 16 bits of the Status channel are used. ``value``
+    is the trigger code; ``trial_type`` and ``duration`` are n/a, because the file gives
+    neither names nor durations for the codes.
+    """
+    import mne
+
+    columns = ["onset", "duration", "trial_type", "value", "sample", "stim_channel"]
+    rows: list[list[str]] = []
+    problems: list[str] = []
+    found: list[tuple[int, int, str]] = []
+    mask = BDF_TRIGGER_MASK if file_format == "bdf" else None
+    for ch in stim_channels:
+        try:
+            ev = mne.find_events(
+                raw, stim_channel=ch, shortest_event=1, consecutive=True, mask=mask, mask_type="and",
+                initial_event=False, verbose="error",
+            )
+        except Exception as exc:  # noqa: BLE001 - a broken trigger channel must not stop annotation
+            problems.append(f"Triggers could not be read from {ch}: {exc}")
+            continue
+        found.extend((int(s) - timing.first_samp, int(code), ch) for s, _, code in ev)
+    found.sort(key=lambda x: (x[0], x[2]))
+    for sample, code, ch in found:
+        rows.append([format_seconds(sample / timing.sfreq), "n/a", "n/a", str(code), str(sample), ch])
+    out = OriginalEvents(
+        source=SOURCE_STIM if rows else SOURCE_NONE, path=path, columns=columns, rows=rows,
+        stim_channels=list(stim_channels) if rows else [],
+    )
+    _parse_rows(out, timing)
+    out.problems.extend(problems)
+    return out
 
 
 def compare_with_markers(

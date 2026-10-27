@@ -43,9 +43,36 @@ announces (for example an interrupted copy) is refused, as is an EDF+D file,
 whose data records are not contiguous in time (MNE reads such files as if they
 were continuous, so annotation times would be wrong). When the original
 events have no `events.tsv`, the annotations stored in an EDF+ or BDF+ file
-are used as the original events. Stretches the file marks as `BAD_ACQ_SKIP`
+are used as the original events, and when the file has none either, the
+triggers on its trigger channels are: every change of the channel to a non-zero
+code is an event (read with MNE's `find_events`), and for BDF files only the
+lower 16 bits of BioSemi's Status channel count, because the upper bits carry
+system flags such as CMS and battery. Stretches the file marks as `BAD_ACQ_SKIP`
 (MNE writes this, for example, for the padding of the last data record when it
 exports EDF) are hatched in the viewer and filtered separately.
+
+Trigger channels (MNE's type `stim`: BioSemi's `Status` channel, any channel
+named `Trigger` or `Status`, and channels that the `channels.tsv` file types as
+`TRIG`) hold event codes rather than signal. They are never shown, cannot be
+annotated and are not part of the whole montage, so they do not count in the
+channel analyses; they are listed with the hidden channels in every
+annotation and session file.
+
+The setting `channels.types` gives channels a type by name, with the same
+wildcards as `channels.hide`; the first matching pattern applies, and it takes
+precedence over the file and over `channels.tsv`. The type decides the scale
+and the filters of a channel in the display, and the type `stim` makes a
+channel a trigger channel. BioSemi's external channels `EXG1` to `EXG8`, for
+example, are read as EEG; if they carry EOG, ECG or nothing at all, a study
+file can say so:
+
+```json
+{"settings": {"channels": {"types": {"EXG1": "eog", "EXG2": "eog", "EXG5": "ecg", "EXG6": "ecg", "EXG*": "misc"}}}}
+```
+
+The types allowed are `eeg`, `eog`, `ecg`, `emg`, `misc`, `stim`, `resp`,
+`bio`, `gsr` and `temperature`. EOG and ECG channels stay part of the montage
+and of the agreement analysis.
 
 Some headsets, Emotiv's among them, export housekeeping signals as extra
 "EEG" channels: timestamps, sample counters, contact and signal quality, battery
@@ -101,6 +128,28 @@ signals, and `1e-4` (a 200 µV scale bar) keeps neighbouring channels apart:
 ```json
 {"settings": {"display": {"scalings": {"eeg": 1e-4}}}}
 ```
+
+When a recording opens, ElectroClean measures the amplitude of its EEG, EOG,
+EMG and ECG channels in a few short stretches spread through the recording (the
+median over channels of the 99.5th percentile of each channel's deviation from
+its median). An amplitude outside what the body produces (below 0.25 µV, or
+above 2.5 mV for EEG, 5 mV for EOG and EMG and 20 mV for ECG) almost always means
+that the file states the wrong unit, for example microvolts stored as volts.
+The traces would then be invisible, because the viewer hides samples beyond
+1.5 times the scale. In that case the Recording panel says so, and the display
+scale of that type is set for that recording to a round value just above the
+amplitude, so that the traces can be seen. The scale bar still shows the
+amplitude as the file states it. The scale chosen and the measured amplitudes
+are written to the session file (`display` in session.json). Check such a
+recording with whoever exported it before it is annotated.
+
+Long high-density recordings need a lot of memory. A display copy smaller
+than `loading.preload_memory_limit_mb` (2048 MB by default) is kept in memory,
+and a larger one in a temporary memory-mapped file; the filters work on blocks
+of channels of about 128 MB, so they need little memory beyond the copy
+itself, and the loading window counts the channels as they are filtered. A
+30-minute, 128-channel BDF file recorded at 1024 Hz needs about 2.2 GB and opens
+in about 40 seconds.
 
 ## Which recordings each annotator sees
 

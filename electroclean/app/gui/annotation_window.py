@@ -104,7 +104,7 @@ class AnnotationWorkspace(QObject):
             title=title,
             duration_s=float((view_state or {}).get("duration_s") or settings.display.duration_s),
             n_channels=int((view_state or {}).get("n_channels") or settings.display.n_channels),
-            scalings=settings.display.scalings,
+            scalings={**settings.display.scalings, **self.loaded.display_scalings},  # see eeg/amplitude.py
             theme=settings.display.theme,
             overview_mode=settings.display.overview_mode,
         )
@@ -365,6 +365,11 @@ class AnnotationWorkspace(QObject):
         s = self.session
         t = lr.timing
         fr = lr.filter_report
+        n_hidden_by_setting = len(lr.info.hidden_channels) - len(lr.trigger_channels)
+        hidden = "; ".join(
+            ([f"{n_hidden_by_setting} hidden by the channels.hide setting"] if n_hidden_by_setting else [])
+            + ([f"{len(lr.trigger_channels)} trigger channel(s) not shown"] if lr.trigger_channels else [])
+        )
         rows = [
             ("Recording", lr.info.recording_id),
             ("Annotator", s.annotator_id + (f" – {s.display_name}" if s.display_name else "")),
@@ -373,10 +378,10 @@ class AnnotationWorkspace(QObject):
             ("Duration", f"{t.duration_s:.1f} s ({format_hms(t.duration_s)})"),
             ("Format", lr.files.format_name),
             ("Channels", str(len(lr.info.ch_names))
-             + (f" shown ({len(lr.info.hidden_channels)} hidden by the channels.hide setting)" if lr.info.hidden_channels else "")),
+             + (f" shown ({hidden})" if hidden else "")),
             ("Viewing filters", s.filters.describe() + (" (fixed by administrator)" if s.filters.locked else "")),
             ("Filter edge zones", f"±{fr.transient_half_width_s:.2f} s at edges and discontinuities"),
-            ("Original events", f"{len(lr.original_events)} from {lr.original_events.source.replace('_', ' ')}"),
+            ("Original events", f"{len(lr.original_events)} from {lr.original_events.describe_source()}"),
         ]
         out = ["<table cellspacing='3'>"]
         for k, v in rows:

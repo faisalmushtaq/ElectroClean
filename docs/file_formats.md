@@ -23,8 +23,9 @@ into place in one step, so a file is either complete or absent.
   `electroclean.app.annotations.mne_bridge` converts both ways.
 * **Channels.** A list of channel names exactly as stored in the recording.
   An **empty list means the whole recording montage** (every channel that was
-  shown, which is every channel in the recording unless the `channels.hide`
-  setting hid some) over the annotated interval. Selecting every channel explicitly
+  shown, which is every channel in the recording except those the
+  `channels.hide` setting hid and trigger channels such as BioSemi's Status)
+  over the annotated interval. Selecting every channel explicitly
   is stored as the full list, so the annotator's choice is kept.
 
 ## Output folder
@@ -69,7 +70,10 @@ in order of onset. Columns, in this order:
 1. every column of the original `events.tsv`, in its original order (if the
    recording has no `events.tsv`, the BrainVision markers or the EDF+/BDF+
    annotations read by MNE are used, with columns `onset`, `duration`,
-   `trial_type`, `value`, `sample`, `channels`);
+   `trial_type`, `value`, `sample`, `channels`; if it has neither, the
+   triggers of its trigger channels are used, with columns `onset`,
+   `duration` (`n/a`), `trial_type` (`n/a`), `value` (the trigger code),
+   `sample` and `stim_channel`);
 2. any of `onset`, `duration`, `trial_type`, `value`, `sample`, `channels`
    that the original lacked;
 3. `artifact_code`, `event_source`, `annotation_id`, `annotator_id`,
@@ -84,7 +88,7 @@ in order of onset. Columns, in this order:
 | `artifact_code` | `n/a` | fixed artifact code (100-121 for specific types, 130-136 for group terms) |
 | `sample` | original text; computed from `onset` if the original had no `sample` column | `onset_sample` (also when the dataset uses `sample` for something else, such as a stimulus-software timestamp; `events.json` then says so) |
 | `channels` | original text, or `n/a` | JSON array, e.g. `["Fp1","Fp2"]`; `[]` = whole montage |
-| `event_source` | `original:events_tsv`, `original:brainvision_vmrk`, `original:edf_annotations` or `original:bdf_annotations` | `electroclean_artifact` |
+| `event_source` | `original:events_tsv`, `original:brainvision_vmrk`, `original:edf_annotations`, `original:bdf_annotations` or `original:stim_channel` | `electroclean_artifact` |
 | `annotation_id` | `n/a` | stable 32-character identifier |
 | `annotator_id` | `n/a` | annotator ID |
 | `original_row` | 1-based row number in the original file | `n/a` |
@@ -156,8 +160,9 @@ The original `events.json` (with BIDS inheritance applied), plus:
 ```
 
 `ch_names` are the channels that were shown and could be annotated. When the
-`channels.hide` setting hid channels of the recording, they are listed in
-`recording.hidden_channels` (the key is absent otherwise). `fingerprint` has
+`channels.hide` setting hid channels of the recording, or the recording has
+trigger channels, they are listed in `recording.hidden_channels` (the key is
+absent otherwise). `fingerprint` has
 the roles `vhdr`, `eeg` and `vmrk` for BrainVision and `eeg` alone for EDF and
 BDF, followed by the BIDS sidecars.
 
@@ -180,13 +185,14 @@ A single number: seconds spent annotating, to the nearest millisecond, e.g.
 |---|---|
 | `session_id`, `mode`, `context` | Session identity, mode and (for training) reference set |
 | `annotator` | ID and display name |
-| `recording` | Recording ID, `format` (`BrainVision`, `EDF` or `BDF`), `file` and the BrainVision file names (`vhdr`, `eeg`, `vmrk`, null for EDF and BDF), BIDS sidecars used, timing, channel names, `hidden_channels`, `acquisition_gaps_samples` (stretches marked `BAD_ACQ_SKIP`, as [start, stop) samples), source fingerprints |
+| `recording` | Recording ID, `format` (`BrainVision`, `EDF` or `BDF`), `file` and the BrainVision file names (`vhdr`, `eeg`, `vmrk`, null for EDF and BDF), BIDS sidecars used, timing, channel names, `hidden_channels`, `trigger_channels` (the hidden channels that are trigger channels), `acquisition_gaps_samples` (stretches marked `BAD_ACQ_SKIP`, as [start, stop) samples), source fingerprints |
 | `timing` | `session_opened`, `start_timestamp` (viewer ready), `finish_timestamp` (Save and Finish), `elapsed_seconds` (all the time spent on the recording, including earlier unfinished sessions), clock used, `elapsed_in_earlier_sessions_seconds` and `resumed_from_autosave` (the earlier sessions continued from an autosave) |
 | `application` | ElectroClean version, platform, versions of Python, MNE, mne-qt-browser, NumPy, SciPy, pandas, PySide6, pyqtgraph, matplotlib |
-| `filters` | Selected settings, whether fixed by the administrator, and `design`: the exact MNE calls and parameters, filter lengths, MNE's own description of each filter, edge-transient duration, discontinuities filtered separately, channels filtered and how the display data were stored |
+| `display` | `scalings` used (the study's, or for a type with an implausible amplitude the scale chosen for this recording), `amplitude_check` (the measured amplitude per channel type and any scale set automatically), and the amplitude factor, seconds and channels on screen at Save and Finish |
+| `filters` | Selected settings, whether fixed by the administrator, and `design`: the exact MNE calls and parameters, filter lengths, MNE's own description of each filter, edge-transient duration, discontinuities filtered separately, channels filtered, the number of blocks of channels they were filtered in, and how the display data were stored |
 | `annotations` | Counts in total, by label, whole-montage and channel-specific |
 | `label_catalogue` | As in the annotations file |
-| `original_events` | Source, count, whether `sample` was computed, comparison of `events.tsv` with the marker file, the code check (original codes equal to artifact codes, artifact names used as `trial_type`, codes with several meanings) |
+| `original_events` | Source, the trigger channels read (when the events come from them), count, whether `sample` was computed, comparison of `events.tsv` with the marker file, the code check (original codes equal to artifact codes, artifact names used as `trial_type`, codes with several meanings) |
 | `channel_check` | Comparison of the recording's channels with `channels.tsv` |
 | `warnings`, `notes` | Everything shown in the viewer's *Recording* panel |
 | `outputs` | Base name and file names |
@@ -243,7 +249,7 @@ recording IDs completed in standard mode by that annotator, one per line
                 "method": "fir", "locked": true},
     "output": {"directory": "/shared/drive/Annotated_Events"},
     "discovery": {"suffixes": ["_eeg.vhdr", "_eeg.edf", "_eeg.bdf"]},
-    "channels": {"hide": ["TIME_STAMP_*", "COUNTER", "CQ_*", "EQ_*"]}
+    "channels": {"hide": ["TIME_STAMP_*", "COUNTER", "CQ_*", "EQ_*"], "types": {"EXG*": "misc"}}
   },
   "training": {"reference_sets_dir": "derivatives/electroclean_reference_sets"},
   "admin_passphrase": {"algorithm": "pbkdf2_sha256", "iterations": 200000, "salt": "…", "hash": "…"}

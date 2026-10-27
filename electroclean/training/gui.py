@@ -390,7 +390,7 @@ class QuizWindow(QMainWindow):
         seg = mne.io.RawArray(lr.view_raw.get_data(start=start, stop=stop), lr.view_raw.info.copy(), verbose="error")
         b = create_browser(
             seg, events=None, event_id=None, label_colours={}, title="quiz segment", duration_s=tmax - tmin,
-            n_channels=len(seg.ch_names), scalings=self.ctrl.settings.display.scalings,
+            n_channels=len(seg.ch_names), scalings={**self.ctrl.settings.display.scalings, **lr.display_scalings},
             theme=self.ctrl.settings.display.theme,
         )
         make_readonly(b)

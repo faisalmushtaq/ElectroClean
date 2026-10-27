@@ -281,9 +281,17 @@ def build_events_sidecar(
             "original:brainvision_vmrk": "Marker from the BrainVision .vmrk file (read with MNE-Python).",
             "original:edf_annotations": "Annotation from the EDF+ file itself (read with MNE-Python).",
             "original:bdf_annotations": "Annotation from the BDF+ file itself (read with MNE-Python).",
+            "original:stim_channel": (
+                "Trigger read from the recording's trigger channel with mne.find_events (every change to a "
+                "non-zero code; for BDF files the lower 16 bits of the Status channel)."
+            ),
             ARTIFACT_SOURCE: "Artifact annotation created with ElectroClean.",
         },
     }
+    if "stim_channel" in base_cols:
+        out.setdefault("stim_channel", {
+            "Description": "Trigger channel the original event was read from (n/a on artifact rows)."
+        })
     out["annotation_id"] = {"Description": "Stable identifier of the ElectroClean artifact annotation (n/a for original rows)."}
     out["annotator_id"] = {"Description": "Identifier of the annotator who created the artifact annotation (n/a for original rows)."}
     out["original_row"] = {"Description": "1-based row number in the original events file (n/a for artifact rows)."}
