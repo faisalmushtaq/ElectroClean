@@ -2,9 +2,9 @@
 
 The MNE browser is a ``QMainWindow``; ElectroClean adds to it
 
-* an *Artifact annotation* toolbar (artifact type, active-type indicator,
-  whole-montage / selected-channels switch, channel chooser, draw on/off,
-  delete, undo, redo, help and Save and Finish);
+* two toolbars: next to MNE's icons, draw on/off, delete, undo, redo, Save
+  and Finish and help; below them, the artifact type, active-type indicator,
+  whole-montage / selected-channels switch and channel chooser;
 * an *Annotations* panel listing every annotation with buttons to jump to,
   retime, relabel, change channels, merge and delete;
 * *Recording* and *Help* panels; and
@@ -138,6 +138,15 @@ class AnnotationWorkspace(QObject):
     # ------------------------------------------------------------------ UI
     def _build_toolbar(self) -> None:
         b = self.browser
+        # Two rows. The first, next to MNE's own icons, holds the editing actions and Save and
+        # Finish, right-aligned; the second holds what to draw (artifact type and channels). A
+        # single row needs about 1400 pixels, so on a laptop screen Save and Finish would end up
+        # in the toolbar's overflow menu.
+        acts = QToolBar("Annotation actions", b)
+        acts.setObjectName("electroclean_actions")
+        acts.setMovable(False)
+        b.addToolBar(Qt.TopToolBarArea, acts)
+        self.actions_toolbar = acts
         b.addToolBarBreak(Qt.TopToolBarArea)
         tb = QToolBar("Artifact annotation", b)
         tb.setObjectName("electroclean_toolbar")
@@ -202,8 +211,11 @@ class AnnotationWorkspace(QObject):
         self.channels_summary = QLabel()
         self.channels_summary.setMaximumWidth(170)
         tb.addWidget(self.channels_summary)
-        tb.addSeparator()
 
+        tb = acts
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        tb.addWidget(spacer)
         self.draw_action = QAction("Draw/edit", b)
         self.draw_action.setCheckable(True)
         self.draw_action.setChecked(True)
@@ -222,9 +234,7 @@ class AnnotationWorkspace(QObject):
         self.redo_action.setShortcuts([QKeySequence("Ctrl+Y"), QKeySequence("Ctrl+Shift+Z")])
         self.redo_action.triggered.connect(self.controller.redo)
         tb.addAction(self.redo_action)
-        spacer = QWidget()
-        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        tb.addWidget(spacer)
+        tb.addSeparator()
         self.save_btn = QPushButton("  Save and Finish  ")
         self.save_btn.setStyleSheet(
             "QPushButton { background: #2E7D32; color: white; font-weight: bold; padding: 4px 10px; border-radius: 4px; }"
@@ -233,7 +243,6 @@ class AnnotationWorkspace(QObject):
         self.save_btn.setToolTip("Validate and save your annotations, then mark this recording complete")
         self.save_btn.clicked.connect(self.save_and_finish)
         self.save_action = tb.addWidget(self.save_btn)
-        # Help comes last: on a narrow screen the toolbar's overflow menu takes it before Save.
         self.help_action = QAction("Help", b)
         self.help_action.triggered.connect(self.show_help)
         tb.addAction(self.help_action)
