@@ -24,10 +24,11 @@ files and metadata are never modified.
 ### Stand-alone application (recommended for annotators)
 
 Ready-to-run applications for Windows, macOS (Apple silicon, macOS 14 or
-later) and Linux are built automatically for every change pushed to this
-repository: open the repository's **Actions** tab, choose the latest
-*Build applications* run and download `ElectroClean-windows-…`,
-`ElectroClean-macos-…` or `ElectroClean-linux-…`. Unzip it and start
+later) and Linux are built by GitHub Actions: open the repository's
+**Actions** tab, choose *Build applications*, press *Run workflow* (or open a
+run started by a version tag such as `v1.1.0`) and, when it has finished,
+download `ElectroClean-windows-…`, `ElectroClean-macos-…` or
+`ElectroClean-linux-…`. Unzip it and start
 *ElectroClean*. Nothing else needs to be installed. The applications are not
 signed with a developer certificate, so Windows and macOS ask for confirmation
 the first time; [docs/building_apps.md](docs/building_apps.md) explains this
@@ -37,8 +38,9 @@ with `ElectroClean --self-test`.
 ### From the source code
 
 ElectroClean needs **Python 3.12 or 3.13** (64-bit) and runs on Windows,
-macOS and Linux. The test-suite runs on all three systems for every change
-(see `.github/workflows/build-apps.yml`).
+macOS and Linux. The test-suite runs on Linux for every push, and on all
+three systems whenever the applications are built (see
+`.github/workflows/build-apps.yml`).
 
 **With the launchers (no Python knowledge needed)**
 

@@ -84,11 +84,13 @@ application in `test_gui.py::test_finish_later_and_continue_in_a_new_session`
 and `test_declined_autosave_is_set_aside_when_starting_afresh`. Group roll-ups
 are tested in `test_reliability.py::test_group_rollups_show_agreement_on_the_artifact_family`.
 
-## Every system, every change
+## Windows, macOS and Linux
 
 The GitHub Actions workflow `.github/workflows/build-apps.yml` runs the whole
-test-suite on Windows, macOS and Linux for every push, then builds the
-stand-alone application on each system and runs its self-test
+test-suite on Linux for every push. When started by hand, for pull requests
+into main and for version tags, it runs the test-suite on Windows, macOS and
+Linux, then builds the stand-alone application on each system and runs its
+self-test
 (`ElectroClean --self-test`), which loads a synthetic recording with filters,
 opens the real annotation window off screen, saves an annotation through Save
 and Finish and runs an agreement analysis. The same self-test can be run on
