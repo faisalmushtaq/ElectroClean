@@ -197,19 +197,26 @@ you chose a different type.
 
 ![Practice feedback](images/practice_feedback.png)
 
-Press **Review in the viewer** to see your annotations (`YOU:`) and the
-reference (`REF:`) together. The review window is read-only.
+Press **Review in the viewer** to see your annotations (`YOU:`, shaded) and
+the reference (`REF:`, hatched with dotted edges) together. The review window
+is read-only; press **Finish review** (or close the window) when you are done.
+The window title shows how far you are, for example "practice recording 2 of
+5".
 
 ![Review against the reference](images/practice_review.png)
 
 **Competency assessment.** Choose *Competency assessment*. You annotate the
 assessment recordings without feedback. When all of them are complete,
-ElectroClean produces your competency report and tells you where it was
-saved.
+ElectroClean shows your result and the criteria you were assessed against,
+and tells you what to do next. The full report, with the details of every
+recording, is saved for your study administrator.
 
 **Short segments quiz.** Some reference sets include a quiz: you see short
 EEG segments, one at a time, and choose the main artifact type in the shaded
-part. In the assessment version you see your score at the end. If you close
+part. The answers are grouped under the same headings as in the annotation
+window; a group term (in italics) is the right choice when the exact type
+cannot be told. In the practice version you see the answer and an explanation
+after each segment; in the assessment version you see your score at the end. If you close
 the quiz window before the end, ElectroClean asks for confirmation and saves
 the answers given so far, marked as incomplete.
 
