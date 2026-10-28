@@ -17,7 +17,7 @@ import path from 'node:path';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
-import { signIn, waitForRoute, waitForTraces, annotations, eegPoint, drag, clickDialogButton } from './e2e/helpers.mjs';
+import { signIn, waitForRoute, waitForTraces, annotations, eegPoint, drag, clickDialogButton, pressSave } from './e2e/helpers.mjs';
 
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
@@ -129,8 +129,7 @@ async function main() {
     await page.setInputFiles('input[data-log="file-input"]', filesFor(demo, fileName));
   }
   async function saveAndFinish(page) {
-    await page.click('.ws-actions button.primary');
-    await page.waitForSelector('.dialog');
+    await pressSave(page);
     await clickDialogButton(page, 'Save and Finish');
   }
   const coach = async (page) => (await page.textContent('.coach')).replace(/\s+/g, ' ');

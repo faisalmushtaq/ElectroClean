@@ -8,7 +8,7 @@
 // consensus and adjudicated references, the example set's files and the results zip) is answered
 // with an error that says so, and how to try it with `electroclean-web demo`.
 
-import { CATALOGUE, DEFAULT_DISPLAY, DEFAULT_FILTERS, DEFAULT_HIDE, DEFAULT_LOGGING, DEFAULT_QUICK_LABELS, DEFAULT_SCALINGS } from './demo_catalogue.js';
+import { CATALOGUE, DEFAULT_ANNOTATION, DEFAULT_DISPLAY, DEFAULT_FILTERS, DEFAULT_HIDE, DEFAULT_LOGGING, DEFAULT_QUICK_LABELS, DEFAULT_SCALINGS } from './demo_catalogue.js';
 import { ApiError } from './http.js';
 import { sha256Hex } from '../data/sha256.js';
 import { newId, nowLocalIso } from '../util.js';
@@ -68,7 +68,7 @@ export function defaultSettings() {
     channels: { hide: [...DEFAULT_HIDE], types: {} },
     selection: { strategy: 'manual', seed: null },
     logging: { ...DEFAULT_LOGGING },
-    annotation: { min_duration_samples: 1, quick_labels: [...DEFAULT_QUICK_LABELS] },
+    annotation: { min_duration_samples: 1, ...DEFAULT_ANNOTATION, quick_labels: [...DEFAULT_QUICK_LABELS] },
     loading: { apply_channel_types_from_bids: true, show_bids_bad_channels: true },
   };
 }
@@ -247,7 +247,9 @@ export class DemoAdmin {
       study_id: 'demo', name: this.s.name,
       filters: { ...st.filters },
       display: { duration_s: st.display.duration_s, n_channels: st.display.n_channels, scalings: { ...st.display.scalings } },
-      annotation: { min_duration_samples: st.annotation.min_duration_samples, quick_labels: [...st.annotation.quick_labels] },
+      // a demonstration saved before the comfort settings existed takes their defaults
+      annotation: { min_duration_samples: st.annotation.min_duration_samples, quick_labels: [...st.annotation.quick_labels],
+        ...Object.fromEntries(Object.entries(DEFAULT_ANNOTATION).map(([k, d]) => [k, st.annotation[k] ?? d])) },
       logging,
       logging_notice: logging.interactions ? this.s.logging_notice : '',
     };

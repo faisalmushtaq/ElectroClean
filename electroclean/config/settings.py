@@ -27,10 +27,24 @@ RECORDING_EXTENSIONS = (".vhdr", ".edf", ".bdf")
 CHANNEL_TYPES = ("eeg", "eog", "ecg", "emg", "misc", "stim", "resp", "bio", "gsr", "temperature")
 FILTER_METHODS = ("fir", "iir")
 NOTCH_FREQUENCIES = (50.0, 60.0)
+COVERAGE_CHECKS = ("warn", "off")
 
 
 class SettingsError(ValueError):
     """Raised when a settings or study configuration file is invalid."""
+
+
+def _minutes(value: Any, name: str) -> float:
+    """A number of minutes from a settings file, or a plain-words error."""
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        raise SettingsError(f"{name} must be a number of minutes")
+    try:
+        out = float(value)
+    except ValueError as exc:
+        raise SettingsError(f"{name} must be a number of minutes, not {value!r}") from exc
+    if out != out or out in (float("inf"), float("-inf")):
+        raise SettingsError(f"{name} must be a number of minutes")
+    return out
 
 
 def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -157,6 +171,10 @@ class Settings:
     logging_interactions: bool = True
     logging_pointer_hz: float = 5.0  # pointer samples per second over the EEG (0: none)
     logging_idle_after_s: float = 30.0  # seconds without input after which the annotator counts as idle
+    # annotation: comfort for long sessions in the browser (docs/web/using.md, "Pausing and breaks").
+    break_reminder_minutes: float = 50.0  # minutes of work since the last break before a reminder (0: none)
+    idle_pause_minutes: float = 3.0  # minutes without input after which the clock pauses itself (0: never)
+    coverage_check: str = "warn"  # "warn": Save and Finish lists the parts never on screen; "off"
     raw: dict[str, Any] = field(repr=False, default_factory=dict)
 
     @classmethod
@@ -203,6 +221,10 @@ class Settings:
                 register_lock_timeout_s=float(locks["register_lock_timeout_s"]),
                 min_duration_samples=int(ann["min_duration_samples"]),
                 quick_labels=tuple(str(x) for x in ann.get("quick_labels", DEFAULT_QUICK_LABELS)),
+                break_reminder_minutes=_minutes(ann.get("break_reminder_minutes", 50.0),
+                                                "annotation.break_reminder_minutes"),
+                idle_pause_minutes=_minutes(ann.get("idle_pause_minutes", 3.0), "annotation.idle_pause_minutes"),
+                coverage_check=str(ann.get("coverage_check", "warn")),
                 channel_type_patterns=tuple((str(k), str(v).strip().lower()) for k, v in types.items()),
                 logging_interactions=bool(logs.get("interactions", True)),
                 logging_pointer_hz=float(logs.get("pointer_hz", 5.0)),
@@ -243,6 +265,14 @@ class Settings:
             raise SettingsError("annotation.quick_labels can name at most 9 artifact types (keys 1 to 9)")
         if len(set(self.quick_labels)) != len(self.quick_labels):
             raise SettingsError("annotation.quick_labels must not name an artifact type twice")
+        if not 0 <= self.break_reminder_minutes <= 240:
+            raise SettingsError("annotation.break_reminder_minutes must be between 0 (no reminders) and 240 minutes")
+        if not 0 <= self.idle_pause_minutes <= 60:
+            raise SettingsError("annotation.idle_pause_minutes must be between 0 (never pause by itself) and 60 "
+                                "minutes")
+        if self.coverage_check not in COVERAGE_CHECKS:
+            raise SettingsError('annotation.coverage_check must be "warn" (list the parts not yet viewed before '
+                                'Save and Finish) or "off"')
         if not 0 <= self.logging_pointer_hz <= 60:
             raise SettingsError("logging.pointer_hz must be between 0 (no pointer samples) and 60")
         if not 5 <= self.logging_idle_after_s <= 3600:

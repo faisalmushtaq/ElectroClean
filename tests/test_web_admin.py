@@ -116,18 +116,24 @@ def test_settings_are_read_changed_and_checked(client: TestClient, admin: Api) -
     out = admin.admin_ok("settings_update", {
         "name": "Pilot study", "logging_notice": "We record clicks and keys for the pilot.",
         "settings": {"filters": {"notch_hz": 60.0, "locked": True},
-                     "annotation": {"quick_labels": ["EMG-artifact", "Eye-blink-artifact"]}}})
+                     "annotation": {"quick_labels": ["EMG-artifact", "Eye-blink-artifact"],
+                                    "break_reminder_minutes": 45, "idle_pause_minutes": 0, "coverage_check": "off"}}})
     assert out["name"] == "Pilot study" and out["settings"]["filters"]["notch_hz"] == 60.0
     assert out["logging_notice_is_default"] is False
     me = Api(client, "A01").ok("get", "/me")
     assert me["study"]["name"] == "Pilot study" and me["study"]["filters"]["locked"] is True
     assert me["study"]["annotation"]["quick_labels"] == ["EMG-artifact", "Eye-blink-artifact"]
+    comfort = {k: me["study"]["annotation"][k]
+               for k in ("break_reminder_minutes", "idle_pause_minutes", "coverage_check")}
+    assert comfort == {"break_reminder_minutes": 45.0, "idle_pause_minutes": 0.0, "coverage_check": "off"}
     assert me["study"]["logging_notice"] == "We record clicks and keys for the pilot."
     assert client.get("/api/v1/health").json()["study"] == "Pilot study"
     # the study file is what the desktop's tools read
     for bad, words in (({"selection": {"strategy": "whenever"}}, "selection.strategy"),
                        ({"logging": {"idle_after_s": 1}}, "idle_after_s"),
                        ({"annotation": {"quick_labels": ["EMG-artifact"] * 2}}, "twice"),
+                       ({"annotation": {"idle_pause_minutes": 90}}, "idle_pause_minutes must be between 0"),
+                       ({"annotation": {"coverage_check": "always"}}, "coverage_check"),
                        ({"filters": {"highpass_hz": "high"}}, ""),
                        ({"output": {"directory_name": "x"}}, "cannot be changed"),
                        ({"filters": {"colour": "red"}}, "no setting filters.colour"),

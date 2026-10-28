@@ -90,7 +90,8 @@ electroclean/web/static/          the browser application (plain ES modules, no 
     js/main.js, js/app.js         start-up; the backend, signing in and the moves between views
     js/catalogue.js, js/util.js   the label catalogue; small helpers
     js/views/                     sign in (with its illustration, eegart.js and montage.js), the
-                                  annotator's recordings, opening a recording
+                                  annotator's recordings and progress (progress.js), opening a
+                                  recording
     js/api/                       the Backend interface: http.js (a study server), firebase.js (a
                                   study on Firebase), demo.js and demo_admin.js (the demonstration,
                                   in the browser), choose.js (which of them), demo_catalogue.js,
@@ -101,16 +102,19 @@ electroclean/web/static/          the browser application (plain ES modules, no 
                                   synthetic.js; registering them: register.js, bids.js, events.js,
                                   mnewarn.js, pyfmt.js, pyjson.js
     js/viewer/                    drawing the EEG, axes, overview, navigation; touch.js for two
-                                  fingers, long presses and double taps on a touch screen
+                                  fingers, long presses and double taps on a touch screen;
+                                  coverage.js for the parts of a recording viewed so far
     js/annotate/                  the annotation view (workspace.js), the annotation store, the
-                                  dialogs, the help and the session with its drafts
+                                  dialogs, the help, the session with its drafts, and clock.js,
+                                  the working-time clock that stops while the annotator is paused
     js/training/                  the training path, the coach, the practice review, the
                                   demonstration's guided rules and practice scoring, and the
                                   short-segment quiz (quiz.js)
     js/admin/                     the admin area (area.js) and its sections: overview, recordings,
                                   annotators, assignments, training, analyses, results, records and
                                   settings; model.js holds its rules without the page, ui.js its pieces
-    js/ui/                        dialogs, menus, building elements, the colours for the canvas
+    js/ui/                        dialogs, menus, building elements, the colours for the canvas,
+                                  each annotator's display comfort (comfort.js)
     js/log/                       the interaction logger
 electroclean/app/                 the Python core: annotations, reading recordings with MNE-Python
                                   (eeg/), files and the export (io/), the journalled save (session/)

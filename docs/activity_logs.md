@@ -106,10 +106,15 @@ logger itself could not record).
 recording's `_session.json`, `mode`,
 `duration_s`, `sfreq`, `n_samples`, `n_channels_shown`, `n_channels_hidden`,
 `format`, `filters` and `filter_settings`, `original_events`, `resumed`,
-`annotations_restored`, `window_px`); `viewer_ready` (the viewer is on screen and
+`annotations_restored`, `window_px`, and in the browser `comfort`, the
+annotator's display choices, and for work that is saved `elapsed_restored_s`, the
+time worked before when a draft was restored, and `viewed_fraction`); `viewer_ready` (the viewer is on screen and
 the clock starts); `autosave` (`n_annotations`, when a draft is sent to the study); `recording_finished`
 (`session_id`, `n_annotations`, `counts_by_label`, `elapsed_s` as measured by the
-session clock); `closed_without_saving` (`n_annotations`); `load_failed`
+session clock, which in the browser leaves out the time paused, and in the browser also
+`viewed_fraction`, the proportion of the recording that was on the screen, from 0 to 1, leaving out
+stretches without data, `paused_s`, the seconds paused while the recording was open, and
+`n_pauses`); `closed_without_saving` (`n_annotations`); `load_failed`
 (`recording_id`, `kind`, `reason`); `recording_unavailable` (`recording_id`,
 `reason`).
 
@@ -145,6 +150,22 @@ seconds), `ch_start` and `n_channels` (the channels shown), `first_channel` and
 browser, when the page gains or loses the focus).
 `app_state` (`state`: `active`, `inactive`, `hidden` or `suspended`).
 `idle_start` (`last_input_t`, `after_s`) and `idle_end` (`idle_s`).
+
+**Pauses, breaks and what has been viewed (in the browser).** `pause` (`reason`:
+`button` or `key` when the annotator paused, `idle` after the study's minutes without input,
+`hidden` when the page was out of sight for more than ten seconds, `break` for Take a break; the
+`elapsed_s` worked so far; for `idle` also `idle_s`, the seconds since the last input, which are
+still counted as work; for `hidden` also `hidden_s`, the seconds since the page was hidden, which
+are not, since the pause starts when the page was hidden) and `resume` (the pause's `reason`,
+`paused_s`, its length, `via`: `button`, `key`, `save` or `close` when Save and Finish or Close
+ended it, `counts_as_break`, true for Take a break or a pause of five minutes or more, and
+`elapsed_s`). `break_reminder` (`worked_s` since the last break and the study's `interval_s`) and
+`break_reminder_closed` (`choice`: `take_break`, `remind_later` or `paused` when a pause put it
+away). `next_unviewed` (`from_s` and `to_s` of the stretch shown, `n_unviewed`, the stretches left,
+and `via`). `coverage_check`, before Save and Finish (`viewed_fraction`, `n_unviewed`,
+`unviewed_s`, and `choice`: `save` for Save anyway, `goto` for Go to the first, or `cancel`). A
+change of the annotator's display comfort is a `state` event with `comfort` (`trace`, `names`
+and `panel`).
 
 **Dialogs.** `dialog_shown` (`dialog` class, `title`; for messages also the
 `text`, `informative` text and the `buttons` offered) and `dialog_closed`
@@ -194,7 +215,8 @@ stage and the next step), `stage_started`, `stage_completed` and
 `guidance` level), `guided_check` after every change (`matched`, `problems`
 such as `type`, `start`, `end`, `scope` or `channels`, the differences in
 seconds and the messages shown), `guided_show_me`, `guided_step_completed`
-(`attempts`, `failed_attempts`, `stars`, `seconds`, `used_show_me`) and
+(`attempts`, `failed_attempts`, `stars`, `seconds`, which in the browser leaves out the time
+paused during the step, `used_show_me`) and
 `guided_recording_completed` (steps, stars, attempts and time for the
 recording). After a practice recording: `practice_scored` (`event_f1`,
 `label_accuracy`, `passed`, and the numbers missed, extra and of another type),

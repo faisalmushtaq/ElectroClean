@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { signIn, state, waitForRoute, waitForTraces, eegPoint, drag, clickDialogButton } from './helpers.mjs';
+import { signIn, state, waitForRoute, waitForTraces, eegPoint, drag, clickDialogButton, pressSave } from './helpers.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const STATIC = path.resolve(HERE, '..', '..', 'electroclean', 'web', 'static');
@@ -256,7 +256,7 @@ export const tests = [
         await waitForTraces(page);
         await page.keyboard.press('1');
         await drag(page, await eegPoint(page, 3.0), await eegPoint(page, 3.4));
-        await page.click('.ws-actions button.primary');
+        await pressSave(page);
         await clickDialogButton(page, 'Save and Finish');
         await waitForRoute(page, 'home', 30000);
         await page.locator('.dialog-buttons button').first().click();

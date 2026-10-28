@@ -300,7 +300,15 @@ a change to apply to it.
 random among those they have not finished, in a reproducible order made from a seed and the
 annotator's ID, or in the order they were assigned. Unfinished work always comes first.
 **Annotation** chooses the artifact types on the number keys 1 to 9, in the order the toolbar shows
-them, and the shortest annotation in samples. **Interaction log** chooses whether the study records
+them, and the shortest annotation in samples. Under Long sessions it also sets three comforts for
+annotators who work for hours: after how many minutes of work since their last break they are
+offered a break (50 by default), after how many minutes without any input the working-time clock
+pauses itself (3 by default), and whether Save and Finish first lists the parts of the recording that
+have never been on the screen, with Go to the first and Save anyway (on by default). A value of 0
+turns the reminder or the pause off. The time annotators work on each recording is research data,
+and it always leaves out the time they were paused, whether they pressed Pause, stopped giving input
+or left the page out of sight for more than ten seconds; the annotators' guide describes what they
+see. **Interaction log** chooses whether the study records
 how annotators use ElectroClean (clicks, keys and what is on the screen, never what they type), how
 often the pointer is sampled over the EEG, after how many seconds without input an annotator counts
 as idle, and the notice each annotator reads once after signing in; say there what is recorded and
