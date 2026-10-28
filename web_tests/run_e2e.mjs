@@ -1,6 +1,9 @@
 // End-to-end tests of the browser application, with Playwright.
 //
-//   node web_tests/run_e2e.mjs [name-filter] [--screenshots DIR] [--headed]
+//   node web_tests/run_e2e.mjs [name-filter] [--screenshots DIR] [--scale N] [--headed]
+//
+// --scale draws pages at N device pixels per CSS pixel (2 for a retina screen) for screenshots to
+// review; tests that choose their own scale keep it.
 //
 // Serves electroclean/web/static with `python -m http.server`, runs a stand-in study server
 // (GET /api/v1/health, POST /login and the few calls the sign-in needs, as docs/web/api.md) and a
@@ -28,7 +31,8 @@ const args = process.argv.slice(2);
 const opt = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : null; };
 const shotsDir = opt('--screenshots') || process.env.ELECTROCLEAN_SCREENSHOTS || null;
 const headed = args.includes('--headed');
-const filter = args.find((a, i) => !a.startsWith('--') && !(i > 0 && args[i - 1].startsWith('--screenshots'))) || '';
+const defaultScale = Number(opt('--scale')) || 1;
+const filter = args.find((a, i) => !a.startsWith('--') && !(i > 0 && ['--screenshots', '--scale'].includes(args[i - 1]))) || '';
 
 function freePort() {
   return new Promise((resolve) => {
@@ -168,7 +172,7 @@ async function main() {
       const ctx = {
         assert, base, api: `http://127.0.0.1:${apiPort}`, cfgBase: `http://127.0.0.1:${cfgPort}/`, stub: stub.state, cfg: cfg.state, study,
         shots: shotsDir, errors,
-        async newPage({ width = 1600, height = 950, url = base, scale = 1 } = {}) {
+        async newPage({ width = 1600, height = 950, url = base, scale = defaultScale } = {}) {
           const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: scale, acceptDownloads: true, locale: 'en-GB' });
           const page = await context.newPage();
           page.on('pageerror', (e) => errors.push(`pageerror: ${(e.stack || e.message).split("\n").slice(0, 4).join(" | ")}`));

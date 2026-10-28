@@ -1,10 +1,10 @@
 """Make the browser application's font files (electroclean/web/static/fonts) from the fonts' sources.
 
-The application uses two typefaces under the SIL Open Font License 1.1: Newsreader, a serif with
-optical sizes, for headings and text (roman and italic), and JetBrains Mono for labels and figures.
-They are served with the application, so that annotators' browsers ask no other site for them. This
-script cuts each variable font down to the characters the application shows and saves it as woff2,
-keeping the optical-size axis and the weights the application uses. It needs fontTools and brotli
+The application uses one typeface under the SIL Open Font License 1.1: Newsreader, a serif with
+optical sizes, for everything (roman and italic). It is served with the application, so that
+annotators' browsers ask no other site for it. This script cuts each variable font down to the
+characters the application shows and saves it as woff2, keeping the optical-size axis, the weights
+the application uses and its tabular figures. It needs fontTools and brotli
 (`pip install fonttools brotli`).
 
 Download the sources from the Google Fonts repository into one folder, then run, for example:
@@ -12,9 +12,9 @@ Download the sources from the Google Fonts repository into one folder, then run,
     python scripts/make_web_fonts.py ~/Downloads/fonts electroclean/web/static/fonts
 
 with these files in the source folder (https://github.com/google/fonts, folder ofl/<family>):
-``Newsreader[opsz,wght].ttf``, ``Newsreader-Italic[opsz,wght].ttf`` and ``JetBrainsMono[wght].ttf``.
-Each family's OFL.txt is kept beside its font as ``<Family>-OFL.txt``. Neither family has a Reserved
-Font Name, so the cut-down fonts keep their names.
+``Newsreader[opsz,wght].ttf`` and ``Newsreader-Italic[opsz,wght].ttf``. The family's OFL.txt is kept
+beside the fonts as ``Newsreader-OFL.txt``. The family has no Reserved Font Name, so the cut-down fonts
+keep their names.
 """
 from __future__ import annotations
 
@@ -29,7 +29,6 @@ UNICODES = (
 JOBS = [
     ("Newsreader[opsz,wght].ttf", "Newsreader-Variable.woff2", {"wght": (400, 600)}),
     ("Newsreader-Italic[opsz,wght].ttf", "Newsreader-Italic-Variable.woff2", {"wght": (400, 600)}),
-    ("JetBrainsMono[wght].ttf", "JetBrainsMono-Variable.woff2", {}),
 ]
 
 

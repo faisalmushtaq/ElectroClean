@@ -6,14 +6,14 @@ export const COLOURS = Object.freeze({
   window: '#FDFCFB', // the page
   surface: '#FFFFFF',
   surface_alt: '#F3EFE8',
-  hover: '#F1EDE6',
-  pressed: '#E8E3DA',
-  border: '#8C8984',
-  separator: '#E4E0DA', // the hairline
-  text: '#1E1E1E',
-  text_secondary: '#64625E',
-  text_tertiary: '#6B6863',
-  text_disabled: '#A8A5A0',
+  hover: '#F4F1EC',
+  pressed: '#EAE6DF',
+  border: '#8C8A86',
+  separator: '#E6E3DF', // the hairline
+  text: '#242422',
+  text_secondary: '#63615D',
+  text_tertiary: '#6B6965',
+  text_disabled: '#A8A6A2',
   accent: '#2B4392', // the one accent: ink blue
   accent_soft: '#E9EDF7',
   destructive: '#A8321C',
@@ -27,10 +27,10 @@ export const COLOURS = Object.freeze({
   event: '#00796B', // original experimental events (teal)
   trace: '#1E1E1E',
   trace_ecg: '#5D4037',
-  trace_bad: '#A8A5A0',
+  trace_bad: '#A8A6A2',
   grid: '#EFECE7',
   hatch: '#BDB8B0',
 });
 
-// Labels, channel names and figures on the canvas are set in the monospaced face, as elsewhere.
-export const FONT = '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+// Labels, channel names and figures on the canvas are set in the application's one typeface.
+export const FONT = '"Newsreader", "Iowan Old Style", "Palatino Linotype", Georgia, serif';

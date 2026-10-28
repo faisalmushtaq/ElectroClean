@@ -65,11 +65,14 @@ export const tests = [
         await page.mouse.click(p.x - 40, p.y);
       }
       await drag(page, await eegPoint(page, 3.0, 'Fp1'), await eegPoint(page, 3.4, 'Fp1'));
-      await waitForCoach(page, /✓ Right type, timing and channels\. Press Continue \(Enter\) for the next one\./);
+      await waitForCoach(page, /Right type, timing and channels\. Press Continue \(Enter\) for the next one\./);
       await t.screenshot(page, 'guided_matched');
       await page.keyboard.press('Enter');
       await waitForCoach(page, /Step 2 of 6/);
-      assert.match(await coachText(page), /★★☆ {2}2 of 3 stars so far \(18 possible\)/);
+      assert.match(await coachText(page), /2 of 3 stars so far \(18 possible\)/);
+      // the stars are drawn: two filled and one empty
+      assert.equal(await page.locator('.coach-stars .ico-star').count(), 2);
+      assert.equal(await page.locator('.coach-stars .ico-star-empty').count(), 1);
       // The rest with Show me.
       await page.keyboard.press('c'); // back to the whole montage
       await showMeToTheEnd(page);

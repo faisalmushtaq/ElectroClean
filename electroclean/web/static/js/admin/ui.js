@@ -3,7 +3,7 @@
 // They use the application's own classes (app.css) and a few of their own (admin.css).
 
 import { h, clear } from '../ui/dom.js';
-import { downloadFiles } from '../views/common.js';
+import { downloadFiles, icon } from '../views/common.js';
 import { base64ToBytes, fileParts, problemText } from './model.js';
 
 let uid = 0;
@@ -204,8 +204,8 @@ export function dataTable(columns, rows = [], { empty = 'Nothing here yet.', pag
         columns.map((c) => h(`td${c.num ? '.num' : ''}${c.cls ? `.${c.cls}` : ''}`, { 'data-title': c.title }, c.render ? c.render(r) : String(r[c.key] ?? '')))))));
     wrap.append(h('div.table-scroll', {}, table));
     if (pages > 1) {
-      const prev = h('button.btn.small', { type: 'button', disabled: page === 0, onclick: () => { page -= 1; render(); } }, '‹ Previous');
-      const next = h('button.btn.small', { type: 'button', disabled: page >= pages - 1, onclick: () => { page += 1; render(); } }, 'Next ›');
+      const prev = h('button.btn.small', { type: 'button', disabled: page === 0, onclick: () => { page -= 1; render(); } }, icon('arrow-left'), 'Previous');
+      const next = h('button.btn.small', { type: 'button', disabled: page >= pages - 1, onclick: () => { page += 1; render(); } }, 'Next', icon('arrow-right'));
       wrap.append(h('div.row.pager', {}, prev, h('span.caption', {}, `Page ${page + 1} of ${pages} · ${data.length} in all`), next));
     }
   };

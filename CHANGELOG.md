@@ -53,15 +53,19 @@ answered.
 
 The browser application has a design of its own, editorial and precise, so
 that the EEG stands out. Pages are a warm off-white with faint column guides,
-and the EEG is drawn on white; headings and text are set in Newsreader, a serif
-with optical sizes, at regular weight with tight tracking, and figures, codes,
-keys and the EEG's channel names and time axis in JetBrains Mono; nothing is
-set in capitals. Lines are 1-pixel hairlines, panels are square, and buttons
-and badges are pills: black for the one action that moves you forward (Open
-next recording, Save and Finish), with a single ink blue for links, selection
-and highlights. The fonts are
-served with the application, so annotators' browsers ask no other site for
-them. The sign-in page sets the name in large type over an illustration of
+and the EEG is drawn on white. Everything, the EEG's channel names and time
+axis included, is set in one typeface, Newsreader, a serif with optical sizes:
+headings in a sturdy cut with tight tracking, figures in tabular digits so that
+columns line up, and nothing in capitals. Text sizes come from one scale of
+whole pixels, each on a whole-pixel line, and spacing from steps of 4 and 8
+pixels, so that letters and lines fall on the screen's pixels and look sharp.
+Lines are 1-pixel hairlines and panels are square. Buttons are flat grey pills
+without outlines and badges are outlined pills, so that the two never look
+alike; black marks the one action that moves you forward (Open next recording,
+Save and Finish), and a single ink blue marks links, selection and highlights.
+Arrows, ticks, chevrons and the training stars are drawn icons in the colour of
+the text around them. The font is served with the application, so annotators'
+browsers ask no other site for it. The sign-in page sets the name in large type over an illustration of
 many EEG traces with the 10-20 montage, the admin area counts its sections in
 brackets and shows the study's figures in a grid, pages come in with a short
 fade that stops when a person asks for reduced motion, and every text colour

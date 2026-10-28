@@ -1,6 +1,7 @@
 // Pop-up menus: the right-click menu on annotations and the full type menu of the toolbar.
 
 import { h } from './dom.js';
+import { icon } from '../views/common.js';
 
 let current = null;
 
@@ -28,7 +29,7 @@ export function showMenu(items, x, y, { className = '', minWidth = 0 } = {}) {
       it.swatch ? h('span.swatch', { style: { background: it.swatch } }) : null,
       h('span.menu-label', {}, it.label),
       it.shortcut ? h('span.menu-shortcut', {}, it.shortcut) : null,
-      it.submenu ? h('span.menu-arrow', {}, '›') : null);
+      it.submenu ? h('span.menu-arrow', {}, icon('chevron-right')) : null);
       if (it.submenu) {
         const open = () => {
           closeSub();

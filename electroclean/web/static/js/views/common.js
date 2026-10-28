@@ -1,4 +1,4 @@
-// Pieces shared by the views: the header bar, the brand mark and the small-screen notice.
+// Pieces shared by the views: the header bar, the brand mark, the icons and the small-screen notice.
 
 import { h } from '../ui/dom.js';
 
@@ -19,6 +19,22 @@ export function brandMark(size = 28, colour = '#1E1E1E') {
   Object.entries({ fill: 'none', stroke: colour, 'stroke-width': 1.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }).forEach(([k, v]) => path.setAttribute(k, String(v)));
   svg.append(circle, path);
   return svg;
+}
+
+/** A drawn icon in the colour of the text around it (the --i-* masks of app.css): arrow-right,
+ * arrow-left, arrow-up, arrow-down, arrow-up-right, chevron-down, chevron-right, check, close, star
+ * and star-empty. Icons stand beside words, so they are hidden from screen readers. */
+export function icon(name) {
+  return h(`span.ico.ico-${name}`, { 'aria-hidden': 'true' });
+}
+
+/** Stars earned out of those possible, drawn (★★☆ for 2 of 3); one star for long counts, whose
+ * number the text beside it gives. */
+export function starIcons(stars, maxStars) {
+  const n = maxStars <= 9 ? maxStars : 1;
+  const out = h('span.stars', { 'aria-hidden': 'true' });
+  for (let i = 0; i < n; i++) out.append(icon(i < stars ? 'star' : 'star-empty'));
+  return out;
 }
 
 /** The header bar. Administrators also get the way into the admin area (or, inside it, back to their recordings). */

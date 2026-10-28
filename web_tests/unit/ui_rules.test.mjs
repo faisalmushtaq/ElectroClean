@@ -89,7 +89,6 @@ test('stars, instructions and step text', () => {
   assert.equal(rules.starsFor(2, false), 2);
   assert.equal(rules.starsFor(3, false), 1);
   assert.equal(rules.starsFor(0, true), 1);
-  assert.equal(rules.starText(2, 3), '★★☆');
   assert.equal(rules.instruction('EMG-artifact', 'show'), 'Mark this EMG-artifact');
   assert.equal(rules.instruction('EMG-artifact', 'find'), 'Find the EMG-artifact on this screen');
   assert.equal(rules.instruction(null, 'find_unnamed'), 'Find the next artifact');

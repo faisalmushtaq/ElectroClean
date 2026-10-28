@@ -85,7 +85,6 @@ third-party packages; its display filters reproduce the filter designs of MNE-Py
 SDK, version 12.19.0, from Google (https://www.gstatic.com/firebasejs/), under the
 Apache License 2.0 (https://github.com/firebase/firebase-js-sdk).
 
-It is set in two typefaces served with it (`electroclean/web/static/fonts`, made by
-`scripts/make_web_fonts.py`), each under the SIL Open Font License 1.1, whose text is beside the
-font: Newsreader (https://github.com/productiontype/Newsreader) and JetBrains Mono
-(https://github.com/JetBrains/JetBrainsMono).
+It is set in one typeface served with it (`electroclean/web/static/fonts`, made by
+`scripts/make_web_fonts.py`), Newsreader (https://github.com/productiontype/Newsreader), under
+the SIL Open Font License 1.1, whose text is beside the font.

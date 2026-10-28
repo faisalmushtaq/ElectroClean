@@ -237,22 +237,32 @@ second brief kept that structure and moved its voice towards an editorial
 register: warm off-white pages, a serif for headings and text, generous space,
 pill-shaped buttons and one accent colour. On review, the accent became ink
 blue and every label written in spaced capitals went back to ordinary case.
-The result is what the application uses now.
+A final review asked for crisper type and controls and for one consistent
+finish on every page, which the rules below provide.
 
 Pages are #FDFCFB with a warmer band (#FAF6F0) for side panels, and faint
 column guides (three columns of the page's width) sit behind the pages around
 the EEG and stop where the EEG begins, so that nothing competes with the
-traces, which are drawn on white. Headings and text are set in Newsreader, a
-serif with optical sizes, at regular weight with tight tracking (page titles at
-44 pixels, the sign-in page's name at up to 88), and small labels and column
-headings in the same serif, small and grey; figures, codes, file names, keys
-and channel names are set in JetBrains Mono. Nothing is set in capitals: the
+traces, which are drawn on white. One typeface, Newsreader, a serif with
+optical sizes, sets everything, the canvas included: text at its own optical
+size, and headings at a sturdy text cut (optical size 24) at regular weight
+with tight tracking, because the display cut's hairline strokes looked fragile
+on screen. Figures use the font's tabular digits, so that columns of numbers
+line up without a monospaced face. Sizes come from one scale of whole pixels
+(12, 14, 16, 20, 28, 40, 56 and 72), each with a line height in whole pixels,
+and spacing from steps of 4 and 8 pixels: fractional sizes such as 13.5 pixels
+and unitless line heights put letters and lines between the screen's pixels,
+which softens them. Nothing is set in capitals: the
 artifact types' short codes are shown in ordinary case (Blink, Move) unless
 they are acronyms (EMG, ECG, HEM), while the catalogue, the saved files and
 the logs keep the codes as they are. Every divider is a 1-pixel
-hairline (#E4E0DA); panels and tables are square, and buttons, badges and the
-type buttons of the toolbar are pills. Black (#1E1E1E) marks the one action
-that moves a person forward, with an arrow, and what is pressed; a single ink
+hairline (#E6E3DF); panels and tables are square. Buttons, including the type
+buttons of the toolbar, are flat grey pills without outlines, and badges are
+outlined pills, so that a status never looks like something to press. Arrows,
+ticks, chevrons and stars are icons drawn on a 16-pixel grid and used as masks
+in the colour of the text, because a font's arrows differ from face to face and
+Newsreader has none. Black (#0D0D0D) marks the one action that moves a person
+forward, with an arrow, and what is pressed; a single ink
 blue (#2B4392) marks links, selection, focus and the one figure worth
 noticing, such as the work done on the admin overview. Messages are tinted
 blocks with a 3-pixel bar in their colour. The colours of the 29 artifact types
@@ -263,15 +273,16 @@ The sign-in page shows an illustration drawn for ElectroClean: many EEG-like
 traces across a dark field, warm at the top and cool below, like a long exposure of a
 recording, drawn from a fixed seed, with the 10-20 montage as a small
 wireframe whose three outer nodes turn slowly (and stand still when a person
-asks for reduced motion). Pages come in with a short rise and fade, which
-reduced motion also turns off. Fonts with licences that allow them to be
-shared were chosen throughout, so that all of them can be served with the
-application: Newsreader and JetBrains Mono are under the SIL Open Font License.
+asks for reduced motion). Pages come in with a short fade, which reduced
+motion also turns off; nothing moves while it fades, so text is never drawn
+between pixels. Newsreader is under the SIL Open Font License, which allows it
+to be served with the application.
 
 The rules are checked by `web_tests/unit/ui_design.test.mjs`: the canvas colours
 match the style sheet, every text colour meets WCAG 2.1 AA on the backgrounds
-it is shown on, there are no shadows and no capitals, gradients draw only
-lines, and every font is served with its licence.
+it is shown on, every size comes from the scale, there are no shadows,
+gradients or capitals, no arrow or tick comes from a font, every icon the
+scripts use has a drawing, and the font is served with its licence.
 
 ## Web-only (28 October 2026)
 

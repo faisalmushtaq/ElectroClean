@@ -2,7 +2,7 @@
 // Continue button for the next step.
 
 import { h } from '../ui/dom.js';
-import { starText } from './rules.js';
+import { icon, starIcons } from '../views/common.js';
 import { minutesText } from './coach.js';
 
 export const STAGE_TEXT = {
@@ -52,12 +52,12 @@ export function trainingPath(data, { annotatorId, message = '', onContinue, onBa
     if (s.status === 'locked') detail = 'Unlocks when you complete the stage before.';
     const state = current ? '.current' : s.status === 'locked' || s.status === 'not_used' ? '.locked' : '';
     return h(`article.card.stage${state}`, { 'data-stage': s.key },
-      h('div.stage-head', {}, h(`span.badge${s.status === 'completed' ? '.done' : s.status === 'locked' || s.status === 'not_used' ? '.locked' : ''}`, {}, s.status === 'completed' ? '✓' : String(i + 1)),
+      h('div.stage-head', {}, h(`span.badge${s.status === 'completed' ? '.done' : s.status === 'locked' || s.status === 'not_used' ? '.locked' : ''}`, {}, s.status === 'completed' ? icon('check') : String(i + 1)),
         h('h2', {}, s.title || STAGE_TITLES[s.key])),
       h('div', {}, h(`span.chip${chipState ? `.${chipState}` : ''}`, {}, chip)),
       h('p.caption', {}, STAGE_TEXT[s.key] || ''),
       s.total ? h('p.subtitle', {}, `${s.done} of ${s.total} ${unit} done`) : null,
-      s.key === 'guided' && s.max_stars ? h('p.subtitle', {}, `${starText(s.stars, s.max_stars)}  ${s.stars} of ${s.max_stars} stars`) : null,
+      s.key === 'guided' && s.max_stars ? h('p.subtitle', {}, starIcons(s.stars, s.max_stars), `${s.stars} of ${s.max_stars} stars`) : null,
       detail ? h('p.caption', {}, detail) : null);
   });
   const cont = data.next
