@@ -26,6 +26,31 @@ launchers and the self-test are gone, and installing ElectroClean no longer
 installs Qt. Version 1.1.0 remains on the Releases page as the last desktop
 release, and the results folders it wrote are read by the analyses unchanged.
 
+The admin area has sections for the overview, annotators, recordings,
+assignments, training, analyses, results, records and the study's settings.
+Lead researchers invite annotators (by an invitation link on Firebase, or with
+a temporary password on the ElectroClean server), switch accounts off and on,
+and keep notes about people and recordings. Recordings are added from the
+administrator's own computer: the browser reads the chosen folder or files,
+builds each recording's manifest with the same rules as `electroclean-web
+register`, shows what it found and sends only the manifests, and a recording
+that someone has saved results for is replaced only by the very same file.
+Reference sets take their references from someone's saved annotations, from an
+annotation file, from a consensus of several experts (with every stretch where
+they disagreed listed for adjudication) or from an adjudicated consensus. The
+agreement and activity analyses and the competency reports run on the study
+and appear on the page with their tables, and every result can be downloaded
+as one zip file. Every change an administrator makes, in the admin area or
+with the commands, is written to the study's audit log, shown under Records
+with each visit to the study.
+
+Annotators can choose channels from a list built for montages of any size,
+with a search field and buttons that tick whole regions or banks of channels at
+once. The short-segment quiz runs in the browser and is scored by the study, which
+keeps each correct answer until the segment has been answered; it can be
+stopped and resumed later, or ended early with the score of the segments
+answered.
+
 The browser application follows the visual principles worked out for the
 desktop windows after 1.1.0: the EEG is the content, so the controls around it
 are quiet, with light surfaces, grey secondary text and one accent colour, and
