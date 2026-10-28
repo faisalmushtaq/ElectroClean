@@ -9,7 +9,14 @@
 // The Firebase SDK is loaded (as ES modules from gstatic.com) only when this backend is used, so
 // the demonstration and server modes never load it.
 
-import { ApiError } from './http.js';
+import { ADMIN_OP, ApiError } from './http.js';
+
+/** The admin operations that only read (docs/web/api.md, "Administration"), which may be retried. */
+const ADMIN_READS = new Set(['overview', 'progress', 'audit', 'visits', 'sets_list', 'quiz_items', 'set_guided_notes']);
+
+export function isAdminRead(op) {
+  return ADMIN_READS.has(op) || /_(list|get)$/.test(String(op));
+}
 
 export const FIREBASE_VERSION = '12.19.0';
 export const SDK_BASE = `https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/`;
@@ -212,6 +219,16 @@ export class FirebaseBackend {
   closeVisit(visitId, reason) { return this._call('ec_visit_close', { visit_id: visitId, reason }); }
 
   adminProgress() { return this._call('ec_admin_progress', {}, { retry: true }); }
+
+  /**
+   * One operation of the admin area: the callable function ec_admin with {op, ...body}. Only the
+   * operations that read are asked again after a failure (isAdminRead); one that changes the study
+   * is never repeated, because the first attempt may have been carried out.
+   */
+  admin(op, body = {}) {
+    if (!ADMIN_OP.test(String(op))) return Promise.reject(new ApiError(400, 'bad_request', 'That is not an operation of the admin area.'));
+    return this._call('ec_admin', { ...(body || {}), op }, { retry: isAdminRead(op) });
+  }
 
   get canDownloadRecordings() { return false; }
 }

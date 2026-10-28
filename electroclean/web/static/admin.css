@@ -1,0 +1,210 @@
+/* The admin area (js/admin/), loaded when an administrator first opens it. It uses the tokens
+   and components of app.css (cards, chips, buttons, fields, tables, messages) and adds its own
+   layout: the list of sections, grids of cards that become one column on narrow screens, and
+   tables whose rows become small cards on a phone, so nothing scrolls sideways. */
+
+.view.admin { min-height: 100vh; }
+.admin-chip { margin-left: 2px; }
+.admin-switch { font-weight: 600; }
+
+.admin-layout {
+  display: grid; grid-template-columns: 210px minmax(0, 1fr); max-width: 1440px; margin: 0 auto; align-items: start;
+}
+.admin-nav { position: sticky; top: 0; padding: 22px 10px 22px 16px; align-self: start; }
+.admin-nav ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.admin-nav-link {
+  display: block; padding: 7px 12px; border-radius: var(--radius); color: var(--text); text-decoration: none; font-weight: 500;
+  white-space: nowrap;
+}
+.admin-nav-link:hover { background: var(--hover); }
+.admin-nav-link[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.admin-body { padding: 24px 24px 56px 16px; min-width: 0; }
+.admin-main { min-width: 0; }
+.admin-demo-note { margin-bottom: 16px; }
+
+.admin-section { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.admin-section .card + .card { margin-top: 0; }
+.admin-head h1 { outline: none; }
+.admin-head h2 { font-size: 20px; margin: 0 0 2px; outline: none; }
+.admin-head .subtitle { margin: 0; max-width: 820px; }
+.admin-stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.admin-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; min-width: 0; }
+.admin-grid.wide-first { grid-template-columns: minmax(0, 1.7fr) minmax(300px, 1fr); }
+.admin-grid.side-first { grid-template-columns: minmax(240px, 0.75fr) minmax(0, 2.25fr); }
+.admin-card { min-width: 0; }
+.admin-card h3:first-child { margin-top: 0; }
+.admin-detail:empty { display: none; }
+.quick-links { margin-top: -4px; }
+.admin-loading { margin: 8px 0; }
+.block { display: block; }
+.caption.block { margin-top: 1px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ----------------------------------------------------------------- messages */
+.admin-msg:empty { display: none; }
+.admin-msg > div { margin: 10px 0 0; }
+.banner.error-banner { background: #FBEDEC; border-color: #E3B5B2; color: var(--destructive); }
+.admin-result:empty { display: none; }
+.admin-result { margin-top: 12px; }
+.secret { margin: 12px 0 0; }
+.secret-row { flex-wrap: wrap; margin: 6px 0; }
+.secret-value {
+  font: 600 15px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--surface); color: var(--text);
+  border: 1px solid var(--success-border); border-radius: var(--radius); padding: 4px 10px; word-break: break-all; user-select: all;
+}
+pre.command {
+  background: var(--surface-alt); border: 1px solid var(--separator); border-radius: var(--radius); padding: 8px 10px; margin: 6px 0 0;
+  white-space: pre-wrap; word-break: break-all; font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--text);
+}
+code.fingerprint { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; word-break: break-all; }
+ul.compact { margin: 4px 0 0; font-size: 13px; }
+.failures ul, .admin-review ul.warnings { margin: 4px 0 0; padding-left: 18px; }
+ul.warnings li { font-size: 12.5px; }
+
+/* -------------------------------------------------------------- stat tiles */
+.stat-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+.stat-tile {
+  display: flex; flex-direction: column; gap: 2px; background: var(--surface); border: 1px solid var(--separator);
+  border-radius: var(--radius-card); padding: 14px 16px;
+}
+.stat-value { font-size: 26px; font-weight: 650; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.stat-label { font-weight: 600; }
+
+/* ----------------------------------------------------------------- tables */
+.admin-table { min-width: 0; }
+.table-scroll { overflow-x: auto; }
+table.admin-list { margin: 4px 0; }
+table.admin-list td { vertical-align: top; }
+table.admin-list td.actions, table.admin-list td.num { white-space: nowrap; }
+table.admin-list .file { overflow-wrap: anywhere; word-break: normal; }
+.admin-table .empty { margin: 8px 0; }
+.pager { justify-content: space-between; margin-top: 6px; flex-wrap: wrap; }
+.chips-inline { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+table.admin-info th { width: 1%; }
+.audit-details summary { cursor: pointer; color: var(--accent); }
+.audit-details pre { font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-all; margin: 4px 0 0; max-width: 420px; }
+
+/* ----------------------------------------------------------------- fields */
+.admin-form { min-width: 0; }
+.admin-field { margin: 0 0 10px; min-width: 0; }
+.admin-field .form-label { margin-top: 0; }
+.admin-field .caption { margin: 3px 0 0; }
+.field.num { max-width: 160px; }
+.field.area { height: auto; padding: 8px 10px; resize: vertical; font: 14px/1.45 var(--font); }
+.field.small { height: 30px; font-size: 13px; }
+select.field { padding: 0 8px; }
+.row.wrap { flex-wrap: wrap; align-items: flex-start; gap: 4px 16px; }
+.row.wrap > .admin-field { flex: 1 1 180px; }
+.row.filters { flex-wrap: wrap; margin: 4px 0 6px; }
+.row.filters .field { width: auto; flex: 1 1 150px; min-width: 0; }
+.row.inline-form { flex-wrap: wrap; }
+.row.controls { flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: 8px; }
+.row.controls > .field { width: auto; flex: 0 1 240px; }
+.row.controls > .field.num { flex: 0 1 110px; }
+.row.controls label.check { margin: 0; }
+.row.inline-form .field { width: auto; flex: 1 1 200px; }
+.sentence { align-items: center; gap: 6px 8px; margin: 4px 0 12px; }
+.sentence .field.num { width: 90px; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0 16px; }
+.form-grid.narrow { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+.form-grid .field.num { max-width: none; }
+.admin-fieldset { border: none; padding: 0; margin: 0 0 10px; min-width: 0; }
+.admin-fieldset legend { font-weight: 600; font-size: 13px; padding: 0; margin-bottom: 4px; }
+.radio-col { display: flex; flex-direction: column; }
+.radio-col label.check { margin: 3px 0; align-items: flex-start; }
+.radio-col input { margin-top: 2px; }
+.radio-col .caption.block { font-size: 12px; }
+.admin-checks { border: 1px solid var(--separator); border-radius: 8px; padding: 6px 12px 10px; margin: 0 0 12px; min-width: 0; }
+.admin-checks legend { font-weight: 600; font-size: 13px; padding: 0 4px; }
+.check-tools { flex-wrap: wrap; margin-bottom: 6px; }
+.check-tools .field { flex: 1 1 160px; width: auto; }
+.check-list { max-height: 240px; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0 12px; }
+.check-item { display: flex; align-items: flex-start; gap: 7px; padding: 4px 2px; cursor: pointer; min-width: 0; }
+.check-item input { flex: none; margin-top: 3px; }
+.check-text { min-width: 0; overflow-wrap: break-word; }
+.check-item .caption { font-size: 11.5px; }
+.rec-name { display: inline-block; min-width: 0; }
+.rec-name .file { font-weight: 500; }
+.rec-name .folder { font-size: 12px; }
+.admin-details { margin: 0 0 10px; }
+.admin-details > summary { cursor: pointer; font-weight: 600; color: var(--accent); padding: 2px 0; }
+.admin-details[open] > summary { margin-bottom: 10px; }
+.source-part { border-left: 3px solid var(--accent-soft); padding-left: 12px; margin: 0 0 12px; }
+.note-row { border-top: 1px solid var(--separator); padding-top: 8px; }
+.note-row .row { gap: 8px; align-items: center; }
+.note-row .admin-msg > div { margin: 0; padding: 4px 10px; }
+.criteria { margin-bottom: 12px; }
+.criterion { padding: 8px 0 6px; border-bottom: 1px solid var(--separator); }
+.criterion label.check { margin: 0 0 4px; font-weight: 500; }
+.criterion .row { margin-left: 21px; flex-wrap: wrap; }
+.criterion .row .field { width: auto; }
+.criterion .row .field.num { width: 110px; }
+.criterion .caption { margin: 4px 0 0 21px; }
+.criterion .op { font-weight: 700; width: 14px; text-align: center; }
+.key-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px 16px; margin-bottom: 12px; }
+.key-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.key-row .field { flex: 1; min-width: 0; }
+.pattern-row { margin-bottom: 6px; flex-wrap: wrap; }
+.pattern-row .field { width: auto; flex: 1 1 140px; }
+.sticky-save {
+  position: sticky; bottom: 0; z-index: 5; background: var(--window); padding: 10px 0; margin: 0; border-top: 1px solid var(--separator);
+}
+
+/* ---------------------------------------------------------------- confirming */
+.confirm-strip { background: #FBEDEC; border: 1px solid #E3B5B2; border-radius: 8px; padding: 10px 12px; }
+.confirm-strip p { margin: 0 0 6px; color: var(--text); white-space: normal; }
+.confirm-strip .btn-row { margin-top: 0; }
+.inline-confirm { display: inline-block; text-align: left; }
+.inline-confirm .confirm-strip { max-width: 320px; }
+
+/* ----------------------------------------------------------- reference sets */
+.set-list { display: flex; flex-direction: column; gap: 6px; }
+.set-item {
+  display: flex; flex-direction: column; gap: 1px; text-align: left; padding: 9px 12px; border: 1px solid var(--separator);
+  border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; cursor: pointer;
+}
+.set-item:hover { background: var(--surface-alt); }
+.set-item[aria-current="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.set-name { font-weight: 600; }
+.admin-tabs { padding: 0; margin-bottom: 0; flex-wrap: wrap; }
+
+/* ----------------------------------------------------------------- progress */
+.admin-progress { margin: 12px 0 4px; }
+.admin-progress .progress { margin: 6px 0 0; }
+.admin-progress.indeterminate .progress-bar { animation: admin-slide 1.4s ease-in-out infinite; }
+@keyframes admin-slide { 0% { margin-left: -35%; } 100% { margin-left: 100%; } }
+@media (prefers-reduced-motion: reduce) { .admin-progress.indeterminate .progress-bar { animation: none; width: 100% !important; opacity: 0.5; } }
+
+/* ------------------------------------------------------------------ reports */
+.report-frame { display: block; width: 100%; height: 72vh; min-height: 420px; border: 1px solid var(--separator); border-radius: 8px; background: #FFFFFF; margin-top: 10px; }
+.downloads { margin-bottom: 4px; }
+
+/* ------------------------------------------------------------ narrow screens */
+@media (max-width: 1100px) {
+  .admin-grid, .admin-grid.wide-first, .admin-grid.side-first { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 900px) {
+  .admin-layout { grid-template-columns: minmax(0, 1fr); }
+  .admin-nav { position: static; padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--separator); }
+  .admin-nav ul { flex-direction: row; flex-wrap: wrap; gap: 4px; }
+  .admin-nav-link { padding: 5px 10px; }
+  .admin-body { padding: 18px 16px 48px; }
+}
+@media (max-width: 640px) {
+  .view.admin .app-header { height: auto; min-height: 52px; flex-wrap: wrap; padding: 8px 16px; row-gap: 4px; }
+  .view.admin .who { flex-wrap: wrap; gap: 4px; }
+  .view.admin .who-name, .view.admin .brand-study { display: none; }
+  .card { padding: 16px; }
+  .stat-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Each row of a table becomes a small card with the column names beside the values. */
+  table.admin-list, table.admin-list tbody, table.admin-list tr, table.admin-list td { display: block; width: 100%; }
+  table.admin-list thead { display: none; }
+  table.admin-list tr { border: 1px solid var(--separator); border-radius: 8px; margin: 0 0 8px; padding: 4px 10px; }
+  table.admin-list td { border: none; padding: 4px 0; text-align: left !important; display: flex; gap: 10px; }
+  table.admin-list td::before { content: attr(data-title); flex: none; width: 92px; color: var(--text-secondary); font-size: 12px; font-weight: 600; }
+  table.admin-list td[data-title=""]::before { content: none; }
+  table.admin-list td.actions { justify-content: flex-end; }
+  table.admin-list td > * { min-width: 0; }
+  .field.num { max-width: none; }
+  .report-frame { height: 60vh; }
+}

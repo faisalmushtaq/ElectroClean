@@ -20,15 +20,22 @@ export function brandMark(size = 28) {
   return svg;
 }
 
-export function appHeader(app, { title = '' } = {}) {
+/** The header bar. Administrators also get the way into the admin area (or, inside it, back to their recordings). */
+export function appHeader(app, { title = '', admin = false } = {}) {
   const me = app.me;
   const study = me && me.study ? me.study.name : app.backend && app.backend.health ? app.backend.health.study : '';
+  const switcher = app.isAdmin
+    ? h('button.btn.quiet.admin-switch', { type: 'button', 'data-log': admin ? 'leave-admin' : 'admin',
+      onclick: () => (admin ? app.showHome() : app.showAdmin('admin')) }, admin ? 'My recordings' : 'Admin')
+    : null;
   return h('header.app-header', {},
     h('div.brand', {}, brandMark(26), h('span.brand-name', {}, 'ElectroClean'),
       study && !(app.backend && app.backend.isDemo) ? h('span.brand-study', {}, study) : null, title ? h('span.brand-study', {}, title) : null,
+      admin ? h('span.chip.active.admin-chip', {}, 'Admin') : null,
       app.backend && app.backend.isDemo ? h('span.chip.warning', {}, 'Demonstration') : null),
     me ? h('div.who', {},
-      h('span', {}, `${me.annotator_id}${me.display_name ? ` · ${me.display_name}` : ''}`),
+      switcher,
+      h('span.who-name', {}, `${me.annotator_id}${me.display_name ? ` · ${me.display_name}` : ''}`),
       h('button.btn.quiet', { type: 'button', 'data-log': 'sign-out', onclick: () => app.signOut() }, 'Sign out')) : null);
 }
 
