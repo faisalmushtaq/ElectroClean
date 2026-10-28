@@ -3,8 +3,9 @@
 import { signIn, waitForRoute } from './helpers.mjs';
 
 async function signInToStub(t, page) {
+  // Connecting replaces the sign-in card once the server has answered.
+  await page.waitForFunction(() => /Study: Stub study/.test(document.querySelector('.signin-card')?.textContent || ''), null, { timeout: 10000 });
   await page.waitForSelector('#signin-id');
-  t.assert.match(await page.textContent('.signin-card'), /Study: Stub study/);
   await page.fill('#signin-id', 'S01');
   await page.fill('#signin-password', 'wrong');
   await page.click('form.signin-form button[type="submit"]');
