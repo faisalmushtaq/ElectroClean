@@ -228,6 +228,13 @@ async function main() {
       await page.waitForSelector('.secret-value', { timeout: 60000 });
       assert.match(await page.textContent('.secret-value'), /^https?:\/\//);
       await page.waitForSelector('tr[data-key="A07"]', { timeout: 60000 });
+      // Firebase's own link counts as an invitation, and Progress reads the study through the function.
+      await page.click('.admin-section[data-section="annotators"] [data-tab="invitations"]');
+      await page.waitForFunction(() => /Invited on/.test(document.querySelector('[data-panel="invitations"] tr[data-key="A07"]')?.innerText || ''), null, { timeout: 60000 });
+      await go('Progress', 'admin-progress');
+      await page.waitForSelector('.admin-section[data-section="progress"] .stat-tile', { timeout: 120000 });
+      await page.waitForSelector('.admin-section[data-section="progress"] svg.chart-svg');
+      await shot(page, 'admin_progress');
 
       // Recordings chosen on this computer: the study's own, so all three are already registered.
       await go('Recordings', 'admin-recordings');

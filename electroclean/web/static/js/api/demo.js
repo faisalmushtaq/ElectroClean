@@ -161,6 +161,14 @@ export class DemoBackend {
     const user = saved ? this._admin.user(saved.annotator_id) : null;
     this.annotatorId = user && user.status === 'active' ? user.annotator_id : null;
     this.visits = new Map();
+    // Another tab of the demonstration (a person opening their invitation link, say) changed the
+    // state kept in this browser: carry on from it, so that this tab does not write an older copy back.
+    if (storage === local && typeof window !== 'undefined' && window.addEventListener) {
+      window.addEventListener('storage', (e) => {
+        if (e.key !== STATE_KEY || !e.newValue) return;
+        try { this.state = { ...emptyState(), ...JSON.parse(e.newValue) }; } catch { /* kept as it was */ }
+      });
+    }
   }
 
   get isDemo() { return true; }
@@ -190,12 +198,26 @@ export class DemoBackend {
         `The annotator ID or password is not right. In the demonstration, sign in as A01, T01 or ADMIN with the password ${DEMO_PASSWORD}.`);
     }
     if (user.status !== 'active') throw new ApiError(403, 'account_disabled', 'This account has been switched off. Ask the study team.');
+    return this._signInAs(user);
+  }
+
+  _signInAs(user) {
+    const aid = user.annotator_id;
     this.annotatorId = aid;
     this._admin.touch(aid);
     const token = `demo-${newId()}`;
     this.tokens.set(TOKEN_KEY, { annotator_id: aid, token });
     return { token, expires_in_s: 43200, annotator_id: aid, display_name: user.display_name, role: user.role };
   }
+
+  /** The demonstration takes private invitation links (?invite=<token>) made in its admin area, in this browser. */
+  get acceptsInvites() { return true; }
+
+  /** POST /invite/check: whose invitation a link's token is. */
+  async inviteCheck(token) { return this._admin.inviteCheck(token); }
+
+  /** POST /invite/accept: choose the password with the invitation and sign in. */
+  async inviteAccept(token, password) { return this._signInAs(this._admin.inviteAccept(token, password)); }
 
   async logout() {
     this.annotatorId = null;

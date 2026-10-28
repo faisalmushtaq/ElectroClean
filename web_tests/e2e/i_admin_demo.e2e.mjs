@@ -289,7 +289,7 @@ export const tests = [
       await waitForRoute(page, 'admin-records');
       await page.waitForSelector('.admin-section[data-section="records"] td');
       assert.equal(await page.isVisible('.small-screen'), false);
-      for (const [title, route] of [['Overview', 'admin'], ['Annotators', 'admin-annotators'], ['Recordings', 'admin-recordings'],
+      for (const [title, route] of [['Overview', 'admin'], ['Progress', 'admin-progress'], ['Annotators', 'admin-annotators'], ['Recordings', 'admin-recordings'],
         ['Assignments', 'admin-assignments'], ['Training', 'admin-training'], ['Analyses', 'admin-analyses'], ['Results', 'admin-results'],
         ['Records', 'admin-records'], ['Study settings', 'admin-settings']]) {
         await goSection(page, title, route);

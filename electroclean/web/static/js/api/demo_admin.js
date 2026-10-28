@@ -42,6 +42,55 @@ const SERVER_ONLY = {
 };
 
 const bad = (message, code = 'bad_request', status = 400) => new ApiError(status, code, message);
+// How long an invitation link lasts unless the administrator chooses otherwise, and the longest allowed.
+const INVITE_DAYS = 14;
+const INVITE_MAX_DAYS = 90;
+const DAY_MS = 86400000;
+// stats: the days of the daily completions, the days whose pace projects the finish, and the
+// fewest completions in them for a projection (electroclean/web/admin.py).
+const STATS_DAYS = 30;
+const PACE_DAYS = 14;
+const PACE_MIN = 3;
+/** What a person is told when an invitation link cannot be used (electroclean/web/service.py, INVITE_PROBLEMS). */
+const INVITE_PROBLEMS = {
+  unknown: [404, 'This invitation link is not known to the study. It may have been replaced by a newer link or withdrawn. Ask the study team for a new one.'],
+  used: [409, 'This invitation link has been used already. Sign in with your annotator ID and the password you chose, or ask the study team for a new link.'],
+  expired: [409, 'This invitation link has expired. Ask the study team for a new one.'],
+};
+const inviteProblem = (reason) => new ApiError(INVITE_PROBLEMS[reason][0], `invite_${reason}`, INVITE_PROBLEMS[reason][1]);
+
+/** A random invitation token (32 bytes, URL-safe base64), as the study server makes them. */
+export function inviteToken() {
+  const bytes = new Uint8Array(32);
+  if (globalThis.crypto && globalThis.crypto.getRandomValues) globalThis.crypto.getRandomValues(bytes);
+  else for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+const tokenHash = (token) => sha256Hex(new TextEncoder().encode(String(token)));
+
+/** The local date (YYYY-MM-DD) at the start of a time stamp, as the study server reads it. */
+const dayOf = (stamp) => (/^\d{4}-\d{2}-\d{2}/.test(String(stamp || '')) ? String(stamp).slice(0, 10) : null);
+
+function medianOf(values) {
+  const v = values.filter((x) => typeof x === 'number' && Number.isFinite(x)).sort((a, b) => a - b);
+  if (!v.length) return null;
+  const m = Math.floor(v.length / 2);
+  return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+}
+
+function secondsOf(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const v = Number(value);
+  return Number.isFinite(v) && v >= 0 ? v : null;
+}
+
+/** The local date `n` days after a YYYY-MM-DD date. */
+function addDays(iso, n) {
+  const d = new Date(`${iso}T12:00:00`);
+  d.setDate(d.getDate() + n);
+  return nowLocalIso(d).slice(0, 10);
+}
 const notFound = (message) => new ApiError(404, 'not_found', message);
 const conflict = (code, message) => new ApiError(409, code, message);
 
@@ -314,8 +363,11 @@ export class DemoAdmin {
         const subs = this.b.state.submissions.filter((s) => s.key === key);
         const draft = this.b.state.drafts[key];
         const last = [...subs.map((s) => s.saved_at), draft ? draft.saved_at : ''].filter(Boolean).sort().pop() || null;
+        const latest = subs.length ? subs[subs.length - 1] : null;
+        const elapsed = latest ? secondsOf((latest.session || {}).elapsed_s) : draft ? secondsOf(draft.elapsed_s) : null;
         out.push({ annotator_id: u.annotator_id, recording_id: a.rid, mode: a.mode, context_id: a.context_id || '',
-          status: this.b._status(u.annotator_id, a), attempts: subs.length, last_activity: last });
+          status: this.b._status(u.annotator_id, a), attempts: subs.length, last_activity: last, elapsed_s: elapsed,
+          n_annotations: latest ? (latest.annotations || []).length : null, saved_at: latest ? latest.saved_at : null });
       }
     }
     return out;
@@ -324,7 +376,85 @@ export class DemoAdmin {
   _userRecord(u, items) {
     const mine = items.filter((i) => i.annotator_id === u.annotator_id);
     const { builtin, ...rest } = u; // eslint-disable-line no-unused-vars
-    return { ...rest, assigned: mine.length, done: mine.filter((i) => i.status === 'done').length, programme: u.programme || null };
+    return { ...rest, assigned: mine.length, done: mine.filter((i) => i.status === 'done').length, programme: u.programme || null,
+      invitation: this._invitationOut(u.annotator_id) };
+  }
+
+  // ------------------------------------------------------------- invitations
+  // Kept as the study server keeps them (electroclean/web/accounts.py): one per account, its token
+  // only as a SHA-256 hash with its expiry, ended when used, replaced, withdrawn or switched off.
+  get _invites() {
+    if (!this.s.invites || typeof this.s.invites !== 'object') this.s.invites = {};
+    return this.s.invites;
+  }
+
+  _invitationOut(aid) {
+    const inv = this._invites[aid];
+    if (!inv) return { state: 'none', invited_at: null, expires_at: null, ended_at: null };
+    const state = inv.state === 'invited' && inv.expires_ms < Date.now() ? 'expired' : inv.state;
+    return { state, invited_at: inv.created_at, expires_at: inv.expires_at, ended_at: inv.ended_at || null };
+  }
+
+  _endInvitation(aid, state) {
+    const inv = this._invites[aid];
+    if (!inv || inv.state !== 'invited') return false;
+    Object.assign(inv, { state, hash: '', ended_at: nowLocalIso() });
+    return true;
+  }
+
+  _inviteDays(body) {
+    if (body.expires_days === undefined || body.expires_days === null) return INVITE_DAYS;
+    const d = Number(body.expires_days);
+    if (!Number.isFinite(d) || d < 1 || d > INVITE_MAX_DAYS) throw bad(`expires_days must be from 1 to ${INVITE_MAX_DAYS}`);
+    return d;
+  }
+
+  _makeInvitation(aid, days) {
+    const u = this._userOr404(aid);
+    if (u.status !== 'active') throw conflict('disabled', `${u.annotator_id} is switched off; switch the account on before inviting them`);
+    const token = inviteToken();
+    const expiresMs = Date.now() + days * DAY_MS;
+    const expires = nowLocalIso(new Date(expiresMs));
+    this._invites[u.annotator_id] = { hash: tokenHash(token), state: 'invited', created_at: nowLocalIso(), created_by: this.b.annotatorId || '',
+      expires_at: expires, expires_ms: expiresMs, ended_at: null };
+    return { invite_token: token, invite_link: null, expires_at: expires };
+  }
+
+  /** The invitation a token belongs to, with its account, or null (an account switched off has none). */
+  _invitationOf(token) {
+    if (typeof token !== 'string' || token.length < 20 || token.length > 200) return null;
+    const hash = tokenHash(token);
+    for (const [aid, inv] of Object.entries(this._invites)) {
+      // A used invitation keeps the hash of its token, so that the link can say it was used.
+      if ((inv.hash && inv.hash === hash) || (inv.state === 'accepted' && inv.used_hash === hash)) {
+        const u = this.user(aid);
+        return u && u.status === 'active' ? { aid, inv, u } : null;
+      }
+    }
+    return null;
+  }
+
+  /** POST /invite/check: whose invitation a link is, for the welcome card. */
+  inviteCheck(token) {
+    const found = this._invitationOf(token);
+    if (!found) throw inviteProblem('unknown');
+    const { aid, inv, u } = found;
+    if (inv.state === 'accepted') throw inviteProblem('used');
+    if (inv.state !== 'invited') throw inviteProblem('unknown');
+    if (inv.expires_ms < Date.now()) throw inviteProblem('expired');
+    return { annotator_id: aid, display_name: u.display_name || '', study_name: this.s.name, expires_at: inv.expires_at };
+  }
+
+  /** POST /invite/accept: the person's own password, set once; the invitation ends. */
+  inviteAccept(token, password) {
+    if (typeof password !== 'string' || password.length < 8 || password.length > 200) throw bad('Choose a password of at least 8 characters.', 'bad_password');
+    this.inviteCheck(token);
+    const { aid, inv, u } = this._invitationOf(token);
+    const salt = newId().slice(0, 16);
+    this.s.passwords[aid] = { salt, hash: passwordHash(password, salt) };
+    Object.assign(inv, { state: 'accepted', used_hash: inv.hash, hash: '', ended_at: nowLocalIso() });
+    this.b._save();
+    return u;
   }
 
   async _recordingRecord(r, items) {
@@ -458,15 +588,39 @@ export class DemoAdmin {
     if (!['annotator', 'admin'].includes(role)) throw bad('The role is annotator or admin.');
     let temporary = null;
     let password = body.password ? String(body.password) : '';
+    const invite = body.invite === true;
+    if (invite && password) throw bad('Give a password or ask for an invitation link, not both');
+    const days = invite ? this._inviteDays(body) : INVITE_DAYS;
     if (password && password.length < 8) throw bad('A password has at least 8 characters.');
-    if (!password) { temporary = makePassword(); password = temporary; }
+    // With an invitation nobody knows the first password: the person chooses their own.
+    if (invite) password = inviteToken();
+    else if (!password) { temporary = makePassword(); password = temporary; }
     const salt = newId().slice(0, 16);
     this.s.passwords[id] = { salt, hash: passwordHash(password, salt) };
     const u = { annotator_id: id, display_name: String(body.display_name || '').trim(), email, role, status: 'active',
       created_at: nowLocalIso(), last_seen: null, notes: '', programme: null };
     this.s.users.push(u);
-    this._audit('user_add', `Added ${id}${u.display_name ? ` (${u.display_name})` : ''}${role === 'admin' ? ' as an administrator' : ''}`, { annotator_id: id, role });
-    return { user: this._userRecord(u, this._items(id)), invite_link: null, temporary_password: temporary };
+    const inv = invite ? this._makeInvitation(id, days) : null;
+    this._audit('user_add', `Added ${id}${u.display_name ? ` (${u.display_name})` : ''}${role === 'admin' ? ' as an administrator' : ''}` +
+      (inv ? ` with an invitation link (until ${inv.expires_at.slice(0, 10)})` : ''), { annotator_id: id, role, invited: invite, expires_at: inv ? inv.expires_at : null });
+    const out = { user: this._userRecord(u, this._items(id)), invite_link: null, temporary_password: temporary };
+    if (inv) Object.assign(out, { invite_token: inv.invite_token, expires_at: inv.expires_at });
+    return out;
+  }
+
+  op_user_invite(body) {
+    const u = this._userOr404(body.annotator_id);
+    const inv = this._makeInvitation(u.annotator_id, this._inviteDays(body));
+    this._audit('user_invite', `Made an invitation link for ${u.annotator_id} (until ${inv.expires_at.slice(0, 10)}); any earlier link stops working`,
+      { annotator_id: u.annotator_id, expires_at: inv.expires_at });
+    return { ...inv, invitation: this._invitationOut(u.annotator_id) };
+  }
+
+  op_user_invite_revoke(body) {
+    const u = this._userOr404(body.annotator_id);
+    if (!this._endInvitation(u.annotator_id, 'revoked')) throw conflict('no_invitation', `${u.annotator_id} has no invitation link that is still open.`);
+    this._audit('user_invite_revoke', `Withdrew the invitation link of ${u.annotator_id}`, { annotator_id: u.annotator_id });
+    return { invitation: this._invitationOut(u.annotator_id) };
   }
 
   op_user_update(body) {
@@ -483,6 +637,7 @@ export class DemoAdmin {
       if (!['active', 'disabled'].includes(body.status)) throw bad('An account is active or disabled.');
       if (self) throw conflict('self', 'You cannot switch off your own account.');
       u.status = body.status;
+      if (body.status === 'disabled') this._endInvitation(u.annotator_id, 'revoked');
       changes.push(body.status === 'disabled' ? 'switched off' : 'switched on');
     }
     if (body.display_name !== undefined) { u.display_name = String(body.display_name).trim(); changes.push('name'); }
@@ -506,6 +661,7 @@ export class DemoAdmin {
     this.s.users = this.s.users.filter((x) => x !== u);
     this.s.assignments = this.s.assignments.filter((a) => a.annotator_id !== u.annotator_id);
     delete this.s.passwords[u.annotator_id];
+    delete this._invites[u.annotator_id];
     for (const set of this.s.sets) set.allowed_annotators = set.allowed_annotators.filter((x) => x !== u.annotator_id);
     this._audit('user_remove', `Removed ${u.annotator_id} from the study (their results and logs stay)`, { annotator_id: u.annotator_id });
     return {};
@@ -874,6 +1030,95 @@ export class DemoAdmin {
         items: items.filter((i) => i.annotator_id === u.annotator_id).map(({ annotator_id, ...rest }) => rest), // eslint-disable-line no-unused-vars
         programme: u.programme === this.b._trainingSetId() ? this.b._trainingView(u.annotator_id) : null,
       })),
+    };
+  }
+
+  /** How far the study has got and how long the work takes (docs/web/api.md, `stats`; electroclean/web/admin.py). */
+  op_stats(body) {
+    const work = body.work || 'study';
+    if (!['study', 'all'].includes(work)) throw bad("work must be 'study' (the study's own annotation) or 'all' (training too)");
+    const counted = (mode) => work === 'all' || mode === 'standard';
+    const scopeOf = (mode, ctx) => (mode === 'standard' || !ctx ? 'study' : `set:${ctx}`);
+    const today = nowLocalIso().slice(0, 10);
+    const days = Array.from({ length: STATS_DAYS }, (_, i) => addDays(today, i - STATS_DAYS + 1));
+    const index = new Map(days.map((d, i) => [d, i]));
+    const subs = this.b.state.submissions.filter((s) => counted(s.mode));
+    const daily = (rows) => {
+      const out = new Array(STATS_DAYS).fill(0);
+      for (const s of rows) { const i = index.get(dayOf(s.saved_at)); if (i !== undefined) out[i] += 1; }
+      return out;
+    };
+    const since = (rows, n) => {
+      const first = addDays(today, -(n - 1));
+      return rows.filter((s) => { const d = dayOf(s.saved_at); return d && d >= first && d <= today; }).length;
+    };
+    const elapsedOf = (s) => secondsOf((s.session || {}).elapsed_s);
+    const items = this._items().filter((i) => counted(i.mode));
+    const totals = { assigned: 0, done: 0, in_progress: 0, todo: 0 };
+    const recordings = new Map();
+    let draftS = 0;
+    const people = this.s.users.map((u) => {
+      const aid = u.annotator_id;
+      const active = u.status === 'active';
+      const mine = items.filter((i) => i.annotator_id === aid);
+      const saved = subs.filter((s) => s.annotator_id === aid);
+      const counts = { done: 0, in_progress: 0, todo: 0 };
+      for (const i of mine) counts[i.status] = (counts[i.status] || 0) + 1;
+      let inProgressS = 0;
+      const last = [u.last_seen || '', ...this.s.visits.filter((v) => v.annotator_id === aid).map((v) => v.started_at || '')];
+      for (const i of mine) {
+        if (i.status === 'in_progress') {
+          const d = this.b.state.drafts[this.b._key(aid, i.recording_id, i.mode, i.context_id)];
+          if (d) { inProgressS += secondsOf(d.elapsed_s) || 0; last.push(d.saved_at || ''); }
+        }
+        if (active) {
+          const scope = scopeOf(i.mode, i.context_id);
+          const key = `${scope}|${i.recording_id}`;
+          if (!recordings.has(key)) {
+            const rec = this.record(scope, i.recording_id);
+            recordings.set(key, { scope, recording_id: i.recording_id, file_name: rec ? rec.file_name : i.recording_id.split('/').pop(), assigned: 0, done: 0, in_progress: 0 });
+          }
+          const r = recordings.get(key);
+          r.assigned += 1;
+          if (i.status === 'done' || i.status === 'in_progress') r[i.status] += 1;
+        }
+      }
+      if (active) {
+        totals.assigned += mine.length;
+        for (const k of ['done', 'in_progress', 'todo']) totals[k] += counts[k];
+        draftS += inProgressS;
+      }
+      const times = saved.map(elapsedOf).filter((t) => t !== null);
+      last.push(...saved.map((s) => s.saved_at || ''));
+      return {
+        annotator_id: aid, display_name: u.display_name || '', role: u.role, status: u.status, assigned: mine.length, ...counts,
+        share_done: mine.length ? counts.done / mine.length : null, time_s: times.reduce((a, b) => a + b, 0), in_progress_s: inProgressS,
+        median_s: medianOf(times), median_annotations: medianOf(saved.map((s) => (s.annotations || []).length)),
+        last_active: last.filter(Boolean).sort().pop() || null, done_7d: since(saved, 7), daily: daily(saved),
+      };
+    });
+    for (const r of recordings.values()) {
+      const rows = subs.filter((s) => s.recording_id === r.recording_id && scopeOf(s.mode, s.context_id) === r.scope);
+      const n = rows.map((s) => (s.annotations || []).length);
+      Object.assign(r, { median_s: medianOf(rows.map(elapsedOf).filter((t) => t !== null)), median_annotations: medianOf(n),
+        min_annotations: n.length ? Math.min(...n) : null, max_annotations: n.length ? Math.max(...n) : null, saved: rows.length });
+    }
+    const times = subs.map(elapsedOf).filter((t) => t !== null);
+    const remaining = totals.assigned - totals.done;
+    const recent = since(subs, PACE_DAYS);
+    const pace = recent / PACE_DAYS;
+    let projection = { status: 'not_enough', date: null };
+    if (totals.assigned && !remaining) projection = { status: 'complete', date: null };
+    else if (remaining && recent >= PACE_MIN) projection = { status: 'projected', date: addDays(today, Math.ceil(remaining / pace)) };
+    const m = medianOf(times);
+    return {
+      generated_at: nowLocalIso(), work, today, days,
+      totals: { ...totals, share_done: totals.assigned ? totals.done / totals.assigned : null, remaining,
+        annotator_hours: (times.reduce((a, b) => a + b, 0) + draftS) / 3600, median_minutes: m === null ? null : m / 60,
+        done_7d: since(subs, 7), done_30d: since(subs, 30), pace_per_day: pace, pace_days: PACE_DAYS, projection },
+      daily: daily(subs),
+      annotators: people,
+      recordings: [...recordings.values()].sort((a, b) => (a.scope !== 'study') - (b.scope !== 'study') || a.scope.localeCompare(b.scope) || a.recording_id.localeCompare(b.recording_id)),
     };
   }
 

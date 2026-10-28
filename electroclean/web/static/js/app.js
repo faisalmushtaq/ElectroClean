@@ -17,14 +17,37 @@ import { PracticeReview, reviewAnnotations } from './training/review.js';
 import { trainingPath } from './training/path.js';
 import { QuizView } from './training/quiz.js';
 import { signinView } from './views/signin.js';
+import { inviteView } from './views/invite.js';
 import { homeView } from './views/home.js';
 import { OpenView } from './views/open.js';
 import { appHeader, downloadFiles, smallScreenNotice } from './views/common.js';
-import { nowLocalIso } from './util.js';
+import { nowLocalIso, session } from './util.js';
 
 const VIEWS = ['signin', 'home', 'open', 'annotate', 'review', 'training', 'quiz'];
 /** The admin area's plain hashes (js/admin/model.js lists its sections). */
 const ADMIN_ROUTE = /^admin(-[a-z]+)?$/;
+/** The token of a private invitation link, kept for the browser tab until it is used. */
+const INVITE_KEY = 'electroclean.invite';
+
+/**
+ * The token of an invitation link (?invite=<token>), taken out of the address at once so that it
+ * stays out of the history and bookmarks; kept for the tab until it is used.
+ */
+function takeInvite() {
+  let token = null;
+  try {
+    const q = new URLSearchParams(location.search);
+    token = q.get('invite');
+    if (token) {
+      q.delete('invite');
+      const rest = q.toString();
+      history.replaceState(history.state, '', `${location.pathname}${rest ? `?${rest}` : ''}${location.hash}`);
+      session.set(INVITE_KEY, token);
+    }
+  } catch { /* an address without one */ }
+  if (!token) token = session.get(INVITE_KEY, null);
+  return typeof token === 'string' && /^[A-Za-z0-9_-]{20,200}$/.test(token) ? token : null;
+}
 
 // The file readers are loaded when the first recording is opened (the demonstration may not need them).
 let recordingModule = null;
@@ -67,6 +90,7 @@ export class App {
     // A bookmarked section of the admin area opens again once its administrator has signed in.
     const asked = (location.hash || '').replace(/^#/, '');
     if (ADMIN_ROUTE.test(asked)) this._adminReturn = asked;
+    const invite = takeInvite();
     this._render(h('main.page.loading', {}, h('p.subtitle', {}, 'Starting ElectroClean…')), 'signin');
     let where;
     try { where = await findBackend(); } catch { where = { kind: 'demo', source: 'none' }; }
@@ -79,6 +103,11 @@ export class App {
       this.showSignin();
       return;
     }
+    if (invite && this.backend.acceptsInvites) {
+      await this.showInvite(invite);
+      return;
+    }
+    if (invite) session.remove(INVITE_KEY); // Firebase's invitations are its own links
     if (this.backend.signedIn) {
       try {
         await this._afterSignIn({ quiet: true });
@@ -124,6 +153,32 @@ export class App {
   // ================================================================= signing in
   showSignin(opts = {}) {
     this._render(signinView(this, opts), 'signin');
+  }
+
+  /** The welcome card of an invitation link: whose it is, then choosing a password. */
+  async showInvite(token) {
+    this._render(h('main.page.loading', {}, h('p.subtitle', {}, 'Checking your invitation…')), 'signin');
+    let info = null;
+    let problem = '';
+    try {
+      info = await this.backend.inviteCheck(token);
+    } catch (exc) {
+      problem = exc.message;
+      if (exc.code && /^invite_/.test(exc.code)) session.remove(INVITE_KEY);
+    }
+    this._render(inviteView(this, token, { info, problem }), 'signin');
+  }
+
+  /** Set the password with the invitation and sign in (POST /invite/accept). */
+  async acceptInvite(token, password) {
+    await this.backend.inviteAccept(token, password);
+    session.remove(INVITE_KEY);
+    await this._afterSignIn({ quiet: false });
+  }
+
+  leaveInvite() {
+    session.remove(INVITE_KEY);
+    this.showSignin();
   }
 
   async signIn(id, password) {

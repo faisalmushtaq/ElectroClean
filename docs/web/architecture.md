@@ -107,9 +107,11 @@ electroclean/web/static/          the browser application (plain ES modules, no 
     js/training/                  the training path, the coach, the practice review, the
                                   demonstration's guided rules and practice scoring, and the
                                   short-segment quiz (quiz.js)
-    js/admin/                     the admin area (area.js) and its sections: overview, recordings,
-                                  annotators, assignments, training, analyses, results, records and
-                                  settings; model.js holds its rules without the page, ui.js its pieces
+    js/admin/                     the admin area (area.js: the grouped menu and Find) and its
+                                  sections: overview, progress (with chart.js, its SVG chart),
+                                  recordings, annotators (with invitations), assignments, training,
+                                  analyses, results, records and settings; model.js holds its rules
+                                  without the page, ui.js its pieces
     js/ui/                        dialogs, menus, building elements, the colours for the canvas
     js/log/                       the interaction logger
 electroclean/app/                 the Python core: annotations, reading recordings with MNE-Python

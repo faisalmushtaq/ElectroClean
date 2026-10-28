@@ -25,7 +25,7 @@ export class OverviewSection {
       sectionHead('Overview', 'The study at a glance. Choose a section to change something.'),
       this.msg, this.tiles,
       h('div.btn-row.quick-links', {}, go('recordings', 'Add recordings'), go('annotators', 'Add an annotator'),
-        go('assignments', 'Assign recordings'), go('results', 'See progress')),
+        go('assignments', 'Assign recordings'), go('progress', 'See progress')),
       h('div.admin-grid', {},
         card('Recent changes', this.recent, h('div.btn-row', {}, h('button.btn.quiet', { type: 'button', onclick: () => area.go('records') }, 'All records…'))),
         card('Recently saved work', this.saved)));

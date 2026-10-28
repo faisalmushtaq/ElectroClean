@@ -81,3 +81,21 @@ test('events can be sent while the page closes (keepalive)', async () => {
   assert.equal(calls[0].keepalive, true);
   assert.deepEqual(JSON.parse(calls[0].body), { events: [{ t: 1, type: 'key' }] });
 });
+
+test('an invitation link is checked and accepted without a sign-in, then signs the person in', async () => {
+  reply = (url) => (url.endsWith('/invite/check') ? { status: 200, body: { annotator_id: 'A11', study_name: 'S' } }
+    : url.endsWith('/invite/accept') ? { status: 200, body: { token: 'NEW', annotator_id: 'A11' } }
+      : { status: 200, body: {} });
+  const b = new HttpBackend('https://s.org');
+  assert.equal(b.acceptsInvites, true);
+  assert.equal((await b.inviteCheck('t'.repeat(43))).annotator_id, 'A11');
+  assert.equal(calls[0].url, 'https://s.org/api/v1/invite/check');
+  assert.equal(calls[0].headers.Authorization, undefined);
+  assert.deepEqual(JSON.parse(calls[0].body), { token: 't'.repeat(43) });
+  await b.inviteAccept('t'.repeat(43), 'a long password');
+  assert.equal(calls[1].url, 'https://s.org/api/v1/invite/accept');
+  assert.equal(calls[1].headers.Authorization, undefined);
+  assert.deepEqual(JSON.parse(globalThis.sessionStorage.getItem('electroclean.token')), { server: 'https://s.org', token: 'NEW' });
+  reply = () => ({ status: 409, body: { error: 'invite_used', message: 'This invitation link has been used already.' } });
+  await assert.rejects(() => b.inviteCheck('t'.repeat(43)), (e) => e.code === 'invite_used' && /used already/.test(e.message));
+});
