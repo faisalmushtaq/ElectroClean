@@ -6,11 +6,21 @@ in **samples** of the recording where an annotation is concerned, and in
 seconds elsewhere. Errors are `{"error": "<code>", "message": "<text for the
 annotator>"}` with an HTTP status of 400, 401, 403, 404, 409 or 422.
 
-Authentication is a session cookie (`ec_session`, HttpOnly, SameSite=Lax,
-Secure when served over HTTPS) set by `POST /login`. Every request except
-`GET /health` and `POST /login` must carry the header `X-ElectroClean: 1`
-(a simple guard against cross-site requests). The browser application is
-served by the same server, so no cross-origin requests are needed.
+Authentication is a bearer token: `POST /login` returns `"token"`, and every
+other request except `GET /health` sends `Authorization: Bearer <token>`. The
+browser keeps the token in memory and in `sessionStorage` (never in
+`localStorage`), so it ends with the browser tab. Tokens expire after 12 hours
+without use and on `POST /logout`. Every request except `GET /health` also
+carries the header `X-ElectroClean: 1`.
+
+The application is usually served from GitHub Pages
+(`https://<owner>.github.io/<repo>/…`) while the server runs elsewhere, so the
+server answers CORS requests from the origins listed in its setting
+`ELECTROCLEAN_ALLOWED_ORIGINS` (comma-separated; the demo and local servers
+also allow the origin they serve the application from), allowing the
+`Authorization`, `Content-Type` and `X-ElectroClean` headers and no cookies.
+When the server also serves the application itself (same origin), the same
+token scheme is used.
 
 ## Shared shapes
 
@@ -46,10 +56,10 @@ Draft = {"annotations": [Annotation], "view": {"start_s": 12.0, "duration_s": 10
 
 ## Signing in
 
-`GET /health` → `{"ok": true, "version": "1.1.0"}`.
+`GET /health` → `{"ok": true, "version": "1.1.0", "study": "<name>", "demo": false}` (no authentication; CORS open to any origin, so the application can check an address before signing in).
 
 `POST /login` `{"annotator_id": "A01", "password": "…"}` →
-`{"annotator_id": "A01", "display_name": "…", "role": "annotator" | "admin"}`
+`{"token": "…", "expires_in_s": 43200, "annotator_id": "A01", "display_name": "…", "role": "annotator" | "admin"}`
 (401 `bad_credentials` otherwise). `POST /logout` → `{}`.
 
 `GET /me` →

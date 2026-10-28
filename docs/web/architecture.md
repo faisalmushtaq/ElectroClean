@@ -6,6 +6,29 @@ drive) and opens them in a web page; the page reads the file directly from
 their disk, so the EEG is never uploaded. A light server holds the study's
 records and receives the results.
 
+## Where it runs
+
+The browser application is a set of static files (no build step), published
+on **GitHub Pages**: the released version at the site's root and previews of
+work in progress under `preview/`. Pages only serves files, so it runs the
+application in one of two ways:
+
+* **Demonstration**, with no server at all: built-in example recordings, demo
+  accounts and the training rules run in the browser, and results stay in the
+  browser. This is the default when no study server is configured.
+* **Study**, connected to the study's own server (Python, `electroclean-web`,
+  hosted for example on Railway or a university server). The server address
+  comes from the link the administrator sends (`?server=https://…`), from an
+  optional `config.json` beside the application, or from the sign-in screen, and
+  is remembered in the browser.
+
+The server can also serve the application itself (same origin), which is how
+it runs locally and how a study can avoid GitHub Pages altogether. Because the
+application on github.io and a server elsewhere are different sites, browsers
+would treat a session cookie as a third-party cookie and many block those, so
+the server signs requests with a bearer token (`Authorization: Bearer …`,
+returned by sign-in) and allows the application's origin through CORS.
+
 ## Who does what
 
 **The browser** reads EDF, EDF+, BDF and BrainVision files, computes the
