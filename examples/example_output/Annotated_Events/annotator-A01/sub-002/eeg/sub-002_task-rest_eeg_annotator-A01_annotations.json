@@ -37,43 +37,43 @@
       "vhdr": {
         "path": "sub-002/eeg/sub-002_task-rest_eeg.vhdr",
         "size": 1041,
-        "mtime_ns": 1793127572353031377,
+        "mtime_ns": 1793186360896013967,
         "sha256": "39c9670180b236ad71c67a8cbeeadbce024b0ae7d9bdffe03af31af6f66daed7"
       },
       "eeg": {
         "path": "sub-002/eeg/sub-002_task-rest_eeg.eeg",
         "size": 1320000,
-        "mtime_ns": 1793127572352088308,
+        "mtime_ns": 1793186360894834450,
         "sha256": "30bfb0ef69c5004d7df42aaaf17ded051f2e5b2900cf3900cfe1d2012eb7aa15"
       },
       "vmrk": {
         "path": "sub-002/eeg/sub-002_task-rest_eeg.vmrk",
         "size": 1392,
-        "mtime_ns": 1793127572352835364,
+        "mtime_ns": 1793186360895759128,
         "sha256": "50bdfcc2c130fb5dd2297db938f08df0d0b8a725754126bc167ae811dccaca99"
       },
       "channels_tsv": {
         "path": "sub-002/eeg/sub-002_task-rest_channels.tsv",
         "size": 384,
-        "mtime_ns": 1793127572353380691,
+        "mtime_ns": 1793186360896671435,
         "sha256": "2606e8830e14c65eed97ea25c80f9f56708eb24e26134f516b754234c6927d82"
       },
       "events_tsv": {
         "path": "sub-002/eeg/sub-002_task-rest_events.tsv",
         "size": 928,
-        "mtime_ns": 1793127572353203787,
+        "mtime_ns": 1793186360896278170,
         "sha256": "23fbd318246db707134f26fd35f535df2bd25580d7cf8c17e33066b3b744c0a8"
       },
       "events_json": {
         "path": "sub-002/eeg/sub-002_task-rest_events.json",
         "size": 289,
-        "mtime_ns": 1793127572353312441,
+        "mtime_ns": 1793186360896487561,
         "sha256": "203b47891160359d51301343101c20872de346b32b5a97b29a70139958c62f00"
       },
       "eeg_json": {
         "path": "sub-002/eeg/sub-002_task-rest_eeg.json",
         "size": 255,
-        "mtime_ns": 1793127572353497014,
+        "mtime_ns": 1793186360896904260,
         "sha256": "b4261e68d3afe2c97349082cc1460d8fb6e73c9427090698dd1e1ec35b914cac"
       }
     }
@@ -83,9 +83,9 @@
     "display_name": "Demo A01"
   },
   "session": {
-    "session_id": "20261027T185934Z-3477e1eb",
+    "session_id": "20261028T111922Z-cdd443af",
     "mode": "standard",
-    "created_at": "2026-10-27T18:59:34.543+00:00",
+    "created_at": "2026-10-28T11:19:22.740+00:00",
     "app_version": "1.1.0",
     "context": {}
   },
@@ -102,7 +102,7 @@
     "empty_list_means": "The annotation applies to the whole recording montage, i.e. every channel in recording.ch_names, over the annotated time interval.",
     "non_empty_list_means": "The annotation applies only to the listed channels.",
     "order": "Channels are stored in the recording's channel order without duplicates.",
-    "hidden_channels": "recording.ch_names lists the channels that were shown and could be annotated. Channels in the file that the study settings hide (for example a headset's timestamp or contact-quality channels) are listed in recording.hidden_channels, when there are any, and are never part of the whole montage."
+    "hidden_channels": "recording.ch_names lists the channels that were shown and could be annotated. Channels in the file that the study settings hide (for example a headset's timestamp or contact-quality channels) and trigger channels (for example BioSemi's Status channel) are listed in recording.hidden_channels, when there are any, and are never part of the whole montage."
   },
   "label_catalogue": {
     "catalogue_id": "electroclean-hed-score-artifacts",
@@ -291,7 +291,7 @@
   "n_annotations": 10,
   "annotations": [
     {
-      "annotation_id": "723737f6e34a46a7a20c7c302bc2f388",
+      "annotation_id": "3da4eeca86e7456aa6a8912424c1acfa",
       "label": "Eye-blink-artifact",
       "value": 103,
       "onset": 3.012,
@@ -305,11 +305,11 @@
         "VEOG"
       ],
       "scope": "channels",
-      "created_at": "2026-10-27T18:59:34.543+00:00",
-      "modified_at": "2026-10-27T18:59:34.543+00:00"
+      "created_at": "2026-10-28T11:19:22.740+00:00",
+      "modified_at": "2026-10-28T11:19:22.740+00:00"
     },
     {
-      "annotation_id": "d0394776521a4c81a78a5d0b0309b408",
+      "annotation_id": "389607fa9c8b428d9e3714f6627b0965",
       "label": "EMG-artifact",
       "value": 102,
       "onset": 9.228,
@@ -324,11 +324,11 @@
         "T8"
       ],
       "scope": "channels",
-      "created_at": "2026-10-27T18:59:34.543+00:00",
-      "modified_at": "2026-10-27T18:59:34.543+00:00"
+      "created_at": "2026-10-28T11:19:22.740+00:00",
+      "modified_at": "2026-10-28T11:19:22.740+00:00"
     },
     {
-      "annotation_id": "b6877cc9f04643e1ab5f03e0fa53f1c0",
+      "annotation_id": "709166d326fd41078a5cb7a75fd2373a",
       "label": "Eye-blink-artifact",
       "value": 103,
       "onset": 9.512,
@@ -342,11 +342,11 @@
         "VEOG"
       ],
       "scope": "channels",
-      "created_at": "2026-10-27T18:59:34.543+00:00",
-      "modified_at": "2026-10-27T18:59:34.543+00:00"
+      "created_at": "2026-10-28T11:19:22.740+00:00",
+      "modified_at": "2026-10-28T11:19:22.740+00:00"
     },
     {
-      "annotation_id": "1d661b40d29c4fad874aecf1f4f9de01",
+      "annotation_id": "fc00e1a96dc4469088cc0fcf0201da42",
       "label": "Electrode-pops-artifact",
       "value": 114,
       "onset": 13.992,
@@ -358,11 +358,11 @@
         "C3"
       ],
       "scope": "channels",
-      "created_at": "2026-10-27T18:59:34.543+00:00",
-      "modified_at": "2026-10-27T18:59:34.543+00:00"
+      "created_at": "2026-10-28T11:19:22.740+00:00",
+      "modified_at": "2026-10-28T11:19:22.740+00:00"
     },
     {
-      "annotation_id": "854732de8c6e4349b3760f6867cf9697",
+      "annotation_id": "dbb134b37e4b4df7a7c5a8f7b067a4b8",
       "label": "Horizontal-eye-movement-artifact",
       "value": 104,
       "onset": 18.068,
@@ -376,11 +376,11 @@
         "HEOG"
       ],
       "scope": "channels",
-      "created_at": "2026-10-27T18:59:34.543+00:00",
-      "modified_at": "2026-10-27T18:59:34.543+00:00"
+      "created_at": "2026-10-28T11:19:22.740+00:00",
+      "modified_at": "2026-10-28T11:19:22.740+00:00"
     },
     {
-      "annotation_id": "a4d75d05cf3a4ae493d009688d976529",
+      "annotation_id": "79027cda36734ac2a4b5c4e654551ee1",
       "label": "Movement-artifact",
       "value": 107,
       "onset": 24.012,
@@ -390,11 +390,11 @@
       "end_sample": 6504,
       "channels": [],
       "scope": "whole_montage",
-      "created_at": "2026-10-27T18:59:34.543+00:00",
-      "modified_at": "2026-10-27T18:59:34.543+00:00"
+      "created_at": "2026-10-28T11:19:22.740+00:00",
+      "modified_at": "2026-10-28T11:19:22.740+00:00"
     },
     {
-      "annotation_id": "c610980f267148eca191f54ee0a3eff9",
+      "annotation_id": "2d9ce2e59f8e4ebabf35928792cbb6ee",
       "label": "Eye-blink-artifact",
       "value": 103,
       "onset": 35.168,
@@ -408,11 +408,11 @@
         "VEOG"
       ],
       "scope": "channels",
-      "created_at": "2026-10-27T18:59:34.543+00:00",
-      "modified_at": "2026-10-27T18:59:34.543+00:00"
+      "created_at": "2026-10-28T11:19:22.740+00:00",
+      "modified_at": "2026-10-28T11:19:22.740+00:00"
     },
     {
-      "annotation_id": "a3abd66b31504907822c6f290281fe1b",
+      "annotation_id": "3427086a94c94ba6b802de4acca9f2a3",
       "label": "Slow-eye-movement-artifact",
       "value": 105,
       "onset": 40.088,
@@ -425,11 +425,11 @@
         "HEOG"
       ],
       "scope": "channels",
-      "created_at": "2026-10-27T18:59:34.543+00:00",
-      "modified_at": "2026-10-27T18:59:34.543+00:00"
+      "created_at": "2026-10-28T11:19:22.740+00:00",
+      "modified_at": "2026-10-28T11:19:22.740+00:00"
     },
     {
-      "annotation_id": "8827523a10044a5f9dc2a43d71943066",
+      "annotation_id": "877a9bfafdf54c9ba4a9205074d66ca2",
       "label": "ECG-artifact",
       "value": 101,
       "onset": 47.072,
@@ -443,11 +443,11 @@
         "O1"
       ],
       "scope": "channels",
-      "created_at": "2026-10-27T18:59:34.543+00:00",
-      "modified_at": "2026-10-27T18:59:34.543+00:00"
+      "created_at": "2026-10-28T11:19:22.740+00:00",
+      "modified_at": "2026-10-28T11:19:22.740+00:00"
     },
     {
-      "annotation_id": "be2e90ad484b444ea758716809a2c3d1",
+      "annotation_id": "a110517c234c47b082e868eee3891edd",
       "label": "Electrode-pops-artifact",
       "value": 114,
       "onset": 53.552,
@@ -459,8 +459,8 @@
         "O2"
       ],
       "scope": "channels",
-      "created_at": "2026-10-27T18:59:34.543+00:00",
-      "modified_at": "2026-10-27T18:59:34.543+00:00"
+      "created_at": "2026-10-28T11:19:22.740+00:00",
+      "modified_at": "2026-10-28T11:19:22.740+00:00"
     }
   ]
 }

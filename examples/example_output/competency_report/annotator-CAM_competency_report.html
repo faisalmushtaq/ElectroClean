@@ -1,7 +1,7 @@
 <!DOCTYPE html><html lang='en'><head><meta charset='utf-8'><title>Competency report</title>
 <style>body{font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;max-width:1100px;margin:2em auto;padding:0 1em;color:#0b0b0b;background:#fcfcfb;line-height:1.45} table{border-collapse:collapse;font-size:13px;margin:0.4em 0 1em} td,th{border-top:1px solid #e4e3df;padding:4px 8px;text-align:left;vertical-align:top} th{background:#f1f0ec;font-weight:600} td.num{text-align:right;font-variant-numeric:tabular-nums} td.cat{white-space:nowrap} .wide{overflow-x:auto} .muted{color:#52514e} dt{font-weight:600;margin-top:0.4em} dd{margin-left:1.2em} .status{padding:0.5em 0.8em;border-radius:6px;display:inline-block}</style></head><body>
 <h1>Competency report: annotator CAM</h1>
-<p class='muted'>Reference set demo-set (Demonstration reference set) · generated 2026-10-27T18:59:41.999+00:00 · ElectroClean 1.1.0</p>
+<p class='muted'>Reference set demo-set (Demonstration reference set) · generated 2026-10-28T11:19:31.029+00:00 · ElectroClean 1.1.0</p>
 <h2 class='status' style='color:#1B5E20;border:2px solid #1B5E20'>Meets the competency criteria.</h2>
 <p>Next step for the annotator: Your study administrator will confirm what happens next.</p>
 <h3>Criteria</h3>
@@ -55,28 +55,28 @@
 <p>An annotation matched a reference artifact when they had an overlap in time of at least 20% (intersection over union); each artifact could match at most one annotation. Total time assessed: 2.0 minutes.</p>
 <h3>Glossary</h3><dl><dt>Event F1 (time only)</dt><dd>Combines sensitivity and precision (their harmonic mean): 1 means every reference artifact was found and nothing extra was marked; 0 means no artifact was found.</dd><dt>Sensitivity: proportion of reference events found</dt><dd>The proportion of the reference&#x27;s artifacts that the annotator found.</dd><dt>Precision: proportion of your events that match the reference</dt><dd>The proportion of the annotator&#x27;s annotations that match an artifact in the reference.</dd><dt>Cohen&#x27;s kappa over time (exact)</dt><dd>Agreement, moment by moment, on whether an artifact is present, corrected for the agreement expected by chance: 1 is perfect agreement, 0 is no better than chance.</dd><dt>Positive agreement over time (exact)</dt><dd>Agreement on the time marked as artifact: twice the time both marked, divided by the time each marked. Clean time that both left unmarked does not count.</dd><dt>Positive agreement over time and channels</dt><dd>Positive agreement counted separately for every channel, so choosing the wrong channels lowers it.</dd><dt>Mean temporal overlap (IoU) of matched events</dt><dd>For artifacts that were found: the time both marked divided by the time either marked (intersection over union), averaged. 1 means identical start and end.</dd><dt>Mean channel overlap (Jaccard) of matched events</dt><dd>For artifacts that were found: the channels both chose divided by the channels either chose, averaged (a whole-montage annotation counts as every channel).</dd><dt>Same label as the reference for detected artifacts</dt><dd>The proportion of found artifacts that were given the same artifact type as in the reference.</dd><dt>Extra events (matching no reference artifact) per minute</dt><dd>Annotations that match no reference artifact of any type, per minute of recording (lower is better). An artifact found with a different type counts under &#x27;Same label&#x27; instead.</dd></dl>
 <h3>How each assessment reference was made</h3><table><tr><th>Recording</th><th>Reference</th><th>Added</th></tr>
-<tr><td class='cat'>sub-002/eeg/sub-002_task-rest_eeg.vhdr</td><td>one expert&#x27;s annotations: TRUTH</td><td class='cat'>2026-10-27 18:59</td></tr>
-<tr><td class='cat'>sub-003/eeg/sub-003_task-rest_eeg.vhdr</td><td>one expert&#x27;s annotations: TRUTH</td><td class='cat'>2026-10-27 18:59</td></tr>
+<tr><td class='cat'>sub-002/eeg/sub-002_task-rest_eeg.vhdr</td><td>one expert&#x27;s annotations: TRUTH</td><td class='cat'>2026-10-28 11:19</td></tr>
+<tr><td class='cat'>sub-003/eeg/sub-003_task-rest_eeg.vhdr</td><td>one expert&#x27;s annotations: TRUTH</td><td class='cat'>2026-10-28 11:19</td></tr>
 </table>
 <p class='muted'>Declared when the reference set was created: one expert&#x27;s annotations: TRUTH. Notes: Synthetic ground truth used as the reference.</p>
 <h3>Reproducibility</h3><pre>{
   &quot;reference_set&quot;: {
     &quot;file&quot;: &quot;demo-set/reference_set.json&quot;,
-    &quot;sha256&quot;: &quot;72b11706db937be3c87ecc9728ee13b65840c91b9a1b1fa0bd3badd8010a15ff&quot;
+    &quot;sha256&quot;: &quot;06e7b8d257dca0d96243cc510194d13e64c21005103f99d9b4a419855f5aa847&quot;
   },
   &quot;references&quot;: {
-    &quot;sub-002/eeg/sub-002_task-rest_eeg.vhdr&quot;: &quot;723525e0e4616a1909fba7b18a7c3c394170b638e27610fc3652caa7dd21391f&quot;,
-    &quot;sub-003/eeg/sub-003_task-rest_eeg.vhdr&quot;: &quot;0cc30cda507986586d1bdbb1ac7e8a2fde8f93506161c75c100b7da9f6117aba&quot;
+    &quot;sub-002/eeg/sub-002_task-rest_eeg.vhdr&quot;: &quot;f9d59ae25ef26e49b87aa549d3fce84546e924e0d6864dfc4bf9ff7982cb363f&quot;,
+    &quot;sub-003/eeg/sub-003_task-rest_eeg.vhdr&quot;: &quot;f3b94d1f609b85a7fafc7933cbe8a1edb1b02bc8928428ae81d2050b41fefda1&quot;
   },
   &quot;annotations&quot;: {
     &quot;sub-002/eeg/sub-002_task-rest_eeg.vhdr&quot;: {
       &quot;file&quot;: &quot;training/demo-set/assessment/annotator-CAM/sub-002/eeg/sub-002_task-rest_eeg_annotator-CAM_annotations.json&quot;,
-      &quot;sha256&quot;: &quot;e2c1aa19e99327456bad1ed6e70bbf9837975306866fa0aeb5614c87837158f4&quot;
+      &quot;sha256&quot;: &quot;50e803e1c6ab571ebc107c306eb3f2674402682306fe02cee1e6837c158e42c9&quot;
     },
     &quot;sub-003/eeg/sub-003_task-rest_eeg.vhdr&quot;: {
       &quot;file&quot;: &quot;training/demo-set/assessment/annotator-CAM/sub-003/eeg/sub-003_task-rest_eeg_annotator-CAM_annotations.json&quot;,
-      &quot;sha256&quot;: &quot;ac495ab60bffe90f2d5a98e26b0b3ae7945f1ce5ad9386b1521677c3566d7e51&quot;
+      &quot;sha256&quot;: &quot;5e241e56eafef46194401f879ce1fd0b8eb0255b22b04a591ca5a7462e32f261&quot;
     }
   }
 }</pre>
-<p class='muted'>Results digest: 3060def4d1d13a9b19aca6bb80469be71559f75ca57717c77b01b66edee8b37f</p></body></html>
+<p class='muted'>Results digest: 590a233514b084bb6263830abd56e400623a19ea62e32bafd5ed0cdb9d0bb636</p></body></html>

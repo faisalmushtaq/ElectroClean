@@ -1,7 +1,7 @@
 {
   "schema": "electroclean.session",
   "schema_version": "1.0.0",
-  "session_id": "20261027T185933Z-3baa3524",
+  "session_id": "20261028T111921Z-2c8b8d66",
   "mode": "standard",
   "context": {},
   "annotator": {
@@ -56,56 +56,57 @@
       "ECG"
     ],
     "hidden_channels": [],
+    "trigger_channels": [],
     "acquisition_gaps_samples": [],
     "source_fingerprint": {
       "vhdr": {
         "path": "sub-001/eeg/sub-001_task-rest_eeg.vhdr",
         "size": 1041,
-        "mtime_ns": 1793127572308292848,
+        "mtime_ns": 1793186360853328066,
         "sha256": "2ba95031595b2557e0c22c1431979db0d4c2a4da4bc3fd814792b727f738bfeb"
       },
       "eeg": {
         "path": "sub-001/eeg/sub-001_task-rest_eeg.eeg",
         "size": 1320000,
-        "mtime_ns": 1793127572307259966,
+        "mtime_ns": 1793186360851809481,
         "sha256": "f049e39934f92a79b9d26b34ea1e79f57e667df53836d10895a3f722321cf061"
       },
       "vmrk": {
         "path": "sub-001/eeg/sub-001_task-rest_eeg.vmrk",
         "size": 1392,
-        "mtime_ns": 1793127572308073276,
+        "mtime_ns": 1793186360852942022,
         "sha256": "22fa2ca5f58043a805e73b001f51443864117904f8d9a0fd882ab8078214e1f5"
       },
       "channels_tsv": {
         "path": "sub-001/eeg/sub-001_task-rest_channels.tsv",
         "size": 384,
-        "mtime_ns": 1793127572308734100,
+        "mtime_ns": 1793186360854105900,
         "sha256": "2606e8830e14c65eed97ea25c80f9f56708eb24e26134f516b754234c6927d82"
       },
       "events_tsv": {
         "path": "sub-001/eeg/sub-001_task-rest_events.tsv",
         "size": 928,
-        "mtime_ns": 1793127572308533484,
+        "mtime_ns": 1793186360853676336,
         "sha256": "23fbd318246db707134f26fd35f535df2bd25580d7cf8c17e33066b3b744c0a8"
       },
       "events_json": {
         "path": "sub-001/eeg/sub-001_task-rest_events.json",
         "size": 289,
-        "mtime_ns": 1793127572308650720,
+        "mtime_ns": 1793186360853921627,
         "sha256": "203b47891160359d51301343101c20872de346b32b5a97b29a70139958c62f00"
       },
       "eeg_json": {
         "path": "sub-001/eeg/sub-001_task-rest_eeg.json",
         "size": 255,
-        "mtime_ns": 1793127572308844243,
+        "mtime_ns": 1793186360854287960,
         "sha256": "b4261e68d3afe2c97349082cc1460d8fb6e73c9427090698dd1e1ec35b914cac"
       }
     }
   },
   "timing": {
-    "session_opened": "2026-10-27T18:59:33.146+00:00",
-    "start_timestamp": "2026-10-27T18:59:33.146+00:00",
-    "finish_timestamp": "2026-10-27T18:59:33.146+00:00",
+    "session_opened": "2026-10-28T11:19:21.970+00:00",
+    "start_timestamp": "2026-10-28T11:19:21.970+00:00",
+    "finish_timestamp": "2026-10-28T11:19:21.971+00:00",
     "elapsed_seconds": 0.0,
     "clock": "time.monotonic (started when the viewer became usable, stopped at Save and Finish)",
     "elapsed_in_earlier_sessions_seconds": 0.0,
@@ -114,17 +115,14 @@
   "application": {
     "name": "ElectroClean",
     "version": "1.1.0",
-    "platform": "Linux-6.18.44-fc-v165-x86_64-with-glibc2.39",
+    "platform": "Linux-6.18.44-fc-v180-x86_64-with-glibc2.39",
     "libraries": {
       "python": "3.13.17",
       "electroclean": "1.1.0",
       "mne": "1.13.2",
-      "mne_qt_browser": "0.7.5",
       "numpy": "2.5.4",
       "scipy": "1.18.1",
       "pandas": "3.1.0",
-      "PySide6": "6.12.0",
-      "pyqtgraph": "0.14.0",
       "matplotlib": "3.11.2"
     }
   },
@@ -135,6 +133,15 @@
       "ecg": 0.0005,
       "emg": 0.0001,
       "misc": 0.001
+    },
+    "amplitude_check": {
+      "measure": "median over channels of the 99.5th percentile of |x - median| in sampled windows (V)",
+      "amplitudes_v": {
+        "eeg": 1.824610759746106e-05,
+        "eog": 4.222190185979912e-05,
+        "ecg": 0.0007765717877396284
+      },
+      "display_scalings_set_automatically": {}
     },
     "note": "scale_factor multiplies the amplitude of every trace relative to scalings (MNE's + and - keys); duration_s and n_channels are what was on screen at Save and Finish"
   },
@@ -234,6 +241,7 @@
         "VEOG",
         "ECG"
       ],
+      "filtered_in_channel_blocks": 1,
       "data_storage": "in memory",
       "library_versions": {
         "mne": "1.13.2",
@@ -451,6 +459,7 @@
   },
   "original_events": {
     "source": "events_tsv",
+    "trigger_channels_read": [],
     "n_events": 30,
     "sample_column_computed": false,
     "comparison_with_markers": {

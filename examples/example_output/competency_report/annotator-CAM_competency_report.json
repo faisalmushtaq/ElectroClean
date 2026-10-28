@@ -21,7 +21,7 @@
         "TRUTH"
       ],
       "adjudicator": "",
-      "added_at": "2026-10-27T18:59:41.141+00:00"
+      "added_at": "2026-10-28T11:19:30.039+00:00"
     },
     "sub-003/eeg/sub-003_task-rest_eeg.vhdr": {
       "method": "single_expert",
@@ -29,7 +29,7 @@
         "TRUTH"
       ],
       "adjudicator": "",
-      "added_at": "2026-10-27T18:59:41.144+00:00"
+      "added_at": "2026-10-28T11:19:30.045+00:00"
     }
   },
   "required_recordings": [
@@ -61,20 +61,20 @@
   "inputs": {
     "reference_set": {
       "file": "demo-set/reference_set.json",
-      "sha256": "72b11706db937be3c87ecc9728ee13b65840c91b9a1b1fa0bd3badd8010a15ff"
+      "sha256": "06e7b8d257dca0d96243cc510194d13e64c21005103f99d9b4a419855f5aa847"
     },
     "references": {
-      "sub-002/eeg/sub-002_task-rest_eeg.vhdr": "723525e0e4616a1909fba7b18a7c3c394170b638e27610fc3652caa7dd21391f",
-      "sub-003/eeg/sub-003_task-rest_eeg.vhdr": "0cc30cda507986586d1bdbb1ac7e8a2fde8f93506161c75c100b7da9f6117aba"
+      "sub-002/eeg/sub-002_task-rest_eeg.vhdr": "f9d59ae25ef26e49b87aa549d3fce84546e924e0d6864dfc4bf9ff7982cb363f",
+      "sub-003/eeg/sub-003_task-rest_eeg.vhdr": "f3b94d1f609b85a7fafc7933cbe8a1edb1b02bc8928428ae81d2050b41fefda1"
     },
     "annotations": {
       "sub-002/eeg/sub-002_task-rest_eeg.vhdr": {
         "file": "training/demo-set/assessment/annotator-CAM/sub-002/eeg/sub-002_task-rest_eeg_annotator-CAM_annotations.json",
-        "sha256": "e2c1aa19e99327456bad1ed6e70bbf9837975306866fa0aeb5614c87837158f4"
+        "sha256": "50e803e1c6ab571ebc107c306eb3f2674402682306fe02cee1e6837c158e42c9"
       },
       "sub-003/eeg/sub-003_task-rest_eeg.vhdr": {
         "file": "training/demo-set/assessment/annotator-CAM/sub-003/eeg/sub-003_task-rest_eeg_annotator-CAM_annotations.json",
-        "sha256": "ac495ab60bffe90f2d5a98e26b0b3ae7945f1ce5ad9386b1521677c3566d7e51"
+        "sha256": "5e241e56eafef46194401f879ce1fd0b8eb0255b22b04a591ca5a7462e32f261"
       }
     }
   },
@@ -390,6 +390,6 @@
     "Electrode-movement-artifact",
     "Localized-channel-artifact"
   ],
-  "results_sha256": "3060def4d1d13a9b19aca6bb80469be71559f75ca57717c77b01b66edee8b37f",
-  "generated_at": "2026-10-27T18:59:41.999+00:00"
+  "results_sha256": "590a233514b084bb6263830abd56e400623a19ea62e32bafd5ed0cdb9d0bb636",
+  "generated_at": "2026-10-28T11:19:31.029+00:00"
 }
