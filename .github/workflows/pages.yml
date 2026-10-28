@@ -35,9 +35,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if [ ! -f src/electroclean/web/static/index.html ]; then
-            echo "::notice::This branch has no browser application yet; nothing to publish."
-            exit 0
+          app=src/electroclean/web/static
+          if [ ! -f "$app/index.html" ]; then
+            # No application on this branch yet: publish a holding page, so that the gh-pages
+            # branch exists and can be chosen in Settings, Pages.
+            app=holding
+            mkdir -p "$app"
+            printf '%s\n' '<!doctype html><meta charset="utf-8"><title>ElectroClean</title>' \
+              '<p>ElectroClean in the browser is being built. This page will show the preview when it is ready.</p>' \
+              > "$app/index.html"
           fi
           git init -q site
           cd site
@@ -53,11 +59,11 @@ jobs:
           if [ "$BRANCH" = "main" ]; then
             # The released application at the root; the preview stays.
             find . -mindepth 1 -maxdepth 1 ! -name .git ! -name preview -exec rm -rf {} +
-            cp -R ../src/electroclean/web/static/. .
+            cp -R "../$app/." .
           else
             rm -rf preview
             mkdir preview
-            cp -R ../src/electroclean/web/static/. preview/
+            cp -R "../$app/." preview/
           fi
           # Serve every file as it is (Jekyll would hide files whose names start with "_").
           touch .nojekyll
