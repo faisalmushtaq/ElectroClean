@@ -76,8 +76,9 @@ request or response must be made in `electroclean/web/service.py` (or `coach.py`
 the route in `electroclean/web/app.py`, the Firebase table in `api.md`, and in `js/api/http.js`,
 `js/api/firebase.js` and the in-browser demonstration `js/api/demo.js`; then run the end-to-end
 tests against the real server and the emulators, which are what catch mismatches. Firebase
-functions can answer slowly after a quiet period, so browser code must stay correct when an answer
-arrives late or a person presses a key again while waiting.
+functions can answer slowly after a quiet period or fail once, so browser code must stay correct when
+an answer arrives late or a person presses a key again while waiting; only calls that read may be
+retried automatically, never calls that save, score or count an attempt.
 
 ## Writing style for text in the repository
 
