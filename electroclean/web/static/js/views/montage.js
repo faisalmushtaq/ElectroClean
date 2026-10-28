@@ -1,6 +1,7 @@
-// The figure beside the sign-in form: the 10-20 electrode montage drawn as a technical wireframe
-// (a dashed head outline, the 19 electrodes joined to Cz by faint lines, and three coloured nodes
-// on a slowly turning orbit, which stands still when the person asks for reduced motion).
+// A small figure on the sign-in page's illustration: the 10-20 electrode montage drawn as a
+// wireframe in light lines (a dashed head outline, the 19 electrodes joined to Cz by faint lines,
+// and three nodes on a slowly turning orbit, which stands still when the person asks for reduced
+// motion).
 
 const SVG = 'http://www.w3.org/2000/svg';
 
@@ -24,8 +25,8 @@ export function montageFigure() {
   const C = 200; // the centre of the 400 × 400 drawing
   const HEAD = 140; // the head outline
   const R = 0.84 * HEAD; // the electrodes, inside the outline
-  const ink = '#3A3A38';
-  const forest = '#1A3C2B';
+  const ink = '#FDFCFB';
+  const centre = '#FFFFFF';
   const svg = el('svg', { viewBox: '0 0 400 400', class: 'montage', 'aria-hidden': 'true', focusable: 'false' });
   // Guides: the two axes and a ring at half the radius, as on a drawing board.
   svg.append(
@@ -46,12 +47,12 @@ export function montageFigure() {
     const px = C + x * R;
     const py = C - y * R;
     if (name === 'Cz') {
-      nodes.append(el('rect', { x: px - 8, y: py - 8, width: 16, height: 16, fill: forest }));
+      nodes.append(el('circle', { cx: px, cy: py, r: 8, fill: centre }));
       nodes.append(el('text', { x: px + 12, y: py - 10, class: 'montage-label' }, document.createTextNode(name)));
       continue;
     }
     lines.append(el('line', { x1: C, y1: C, x2: px, y2: py }));
-    nodes.append(el('rect', { x: px - 4, y: py - 4, width: 8, height: 8, fill: '#F7F7F5', stroke: ink, 'stroke-width': 1 }));
+    nodes.append(el('circle', { cx: px, cy: py, r: 4, fill: 'none', stroke: ink, 'stroke-opacity': 0.8, 'stroke-width': 1 }));
     const right = x >= 0;
     nodes.append(el('text', { x: px + (right ? 8 : -8), y: py + 14, 'text-anchor': right ? 'start' : 'end', class: 'montage-label' },
       document.createTextNode(name)));
@@ -61,12 +62,12 @@ export function montageFigure() {
   const ORBIT = 176;
   const orbit = el('g', { class: 'orbit' },
     el('circle', { cx: C, cy: C, r: ORBIT, fill: 'none', stroke: ink, 'stroke-opacity': 0.3, 'stroke-dasharray': '1 6' }));
-  [['#FF8C69', -90], ['#9EFFBF', 30], ['#F4D35E', 150]].forEach(([fill, deg]) => {
+  [['#FF8B1A', -90], ['#3FB58A', 30], ['#4FA3E8', 150]].forEach(([fill, deg]) => {
     const a = (deg * Math.PI) / 180;
     const x = C + ORBIT * Math.cos(a);
     const y = C + ORBIT * Math.sin(a);
     orbit.append(el('line', { x1: C, y1: C, x2: x, y2: y, stroke: ink, 'stroke-opacity': 0.12 }));
-    orbit.append(el('rect', { x: x - 6, y: y - 6, width: 12, height: 12, fill, stroke: ink, 'stroke-width': 1 }));
+    orbit.append(el('circle', { cx: x, cy: y, r: 6, fill }));
   });
   svg.append(orbit);
   // Coordinates in the corners, as on a drawing.

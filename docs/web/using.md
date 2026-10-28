@@ -31,7 +31,7 @@ The record contains clicks, key presses and what is on the screen, never anythin
 ## Your recordings
 
 The first page lists the recordings assigned to you, with their status (to do, in progress or done),
-and one dark green button, Open next recording, for the one to do next. Annotators in a training
+and one black button, Open next recording, for the one to do next. Annotators in a training
 programme go straight to their training path instead (see below).
 
 ## Opening a recording
@@ -158,7 +158,7 @@ look at" takes you to each of them, and N and P step through it.
 Some studies also offer a quiz, listed on your first page (and on the training path for trainees)
 with its number of segments and when you learn your results: whether each answer is right,
 straight away, or your result at the end. A quiz shows short pieces of EEG, each with a stretch
-shaded in dark green, and the question "Which artifact type is the main one in the shaded segment?". It
+shaded in green, and the question "Which artifact type is the main one in the shaded segment?". It
 tests whether you recognise the types; marking where an artifact starts and ends is assessed
 separately, in whole recordings.
 

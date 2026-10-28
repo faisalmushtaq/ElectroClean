@@ -60,10 +60,10 @@ the guides in `docs/` and `docs/web/`) is updated in the same commit, with a par
 researchers, in plain words.
 
 The application's look is one design system, described at the top of `app.css` and in
-`docs/design_decisions.md` ("Visual design of the browser application"): paper, hairlines and forest
-green, flat (no shadows), corners of 0 or 2 pixels, Space Grotesk for headings, Instrument Sans for
-text and JetBrains Mono for labels and figures, served from `static/fonts`. Use its tokens rather than
-new colours, keep coral, mint and gold for fills and accent bars, and run
+`docs/design_decisions.md` ("Visual design of the browser application"): warm off-white pages,
+hairlines, square panels and pill-shaped buttons, black for the step forward and one green accent,
+flat (no shadows), Newsreader for headings and text and JetBrains Mono for figures and small labels,
+served from `static/fonts`. Use its tokens rather than new colours, and run
 `web_tests/unit/ui_design.test.mjs`, which checks contrast and these rules.
 
 The browser application has no build step: plain ES modules under `electroclean/web/static`, with

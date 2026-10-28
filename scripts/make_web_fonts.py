@@ -1,18 +1,19 @@
 """Make the browser application's font files (electroclean/web/static/fonts) from the fonts' sources.
 
-The application uses three typefaces under the SIL Open Font License 1.1: Space Grotesk for headings,
-Instrument Sans for text and JetBrains Mono for labels and figures. They are served with the
-application, so that annotators' browsers ask no other site for them. This script cuts each variable
-font down to the characters the application shows and saves it as woff2, keeping the weight axis
-(Instrument Sans at its normal width). It needs fontTools and brotli (`pip install fonttools brotli`).
+The application uses two typefaces under the SIL Open Font License 1.1: Newsreader, a serif with
+optical sizes, for headings and text (roman and italic), and JetBrains Mono for labels and figures.
+They are served with the application, so that annotators' browsers ask no other site for them. This
+script cuts each variable font down to the characters the application shows and saves it as woff2,
+keeping the optical-size axis and the weights the application uses. It needs fontTools and brotli
+(`pip install fonttools brotli`).
 
 Download the sources from the Google Fonts repository into one folder, then run, for example:
 
     python scripts/make_web_fonts.py ~/Downloads/fonts electroclean/web/static/fonts
 
 with these files in the source folder (https://github.com/google/fonts, folder ofl/<family>):
-``SpaceGrotesk[wght].ttf``, ``JetBrainsMono[wght].ttf`` and ``InstrumentSans[wdth,wght].ttf``.
-Each family's OFL.txt is kept beside its font as ``<Family>-OFL.txt``. None of the three has a Reserved
+``Newsreader[opsz,wght].ttf``, ``Newsreader-Italic[opsz,wght].ttf`` and ``JetBrainsMono[wght].ttf``.
+Each family's OFL.txt is kept beside its font as ``<Family>-OFL.txt``. Neither family has a Reserved
 Font Name, so the cut-down fonts keep their names.
 """
 from __future__ import annotations
@@ -24,10 +25,11 @@ UNICODES = (
     "U+0020-007E,U+00A0-00FF,U+0100-017F,U+0192,U+02C6,U+02DA,U+02DC,U+2010-2027,U+2030-203A,U+2044,"
     "U+20AC,U+2122,U+2190-2195,U+2212,U+2264,U+2265,U+2248,U+2260,U+00B5,U+03BC,U+2713,U+2715,U+25A0,U+25CF"
 )
+# (source, target, axis limits): Newsreader keeps its optical sizes and the weights 400 to 600.
 JOBS = [
-    ("SpaceGrotesk[wght].ttf", "SpaceGrotesk-Variable.woff2", {}),
+    ("Newsreader[opsz,wght].ttf", "Newsreader-Variable.woff2", {"wght": (400, 600)}),
+    ("Newsreader-Italic[opsz,wght].ttf", "Newsreader-Italic-Variable.woff2", {"wght": (400, 600)}),
     ("JetBrainsMono[wght].ttf", "JetBrainsMono-Variable.woff2", {}),
-    ("InstrumentSans[wdth,wght].ttf", "InstrumentSans-Variable.woff2", {"wdth": 100}),
 ]
 
 

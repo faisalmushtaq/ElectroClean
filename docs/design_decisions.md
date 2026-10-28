@@ -230,38 +230,44 @@ change.
 ## Visual design of the browser application (28 October 2026)
 
 When the desktop application was retired, the project lead asked for a more
-distinctive look and supplied a design brief, a "technical minimalist" system: a paper
-background (#F7F7F5) with a mosaic of rectangular panels drawn in hairlines,
-forest green (#1A3C2B) as the primary colour with coral, mint and gold as
-accents, Space Grotesk for headings and a monospaced face for labels, 1-pixel
-lines at 20 % of #3A3A38 for every divider, no shadows, corners of 0 or 2
-pixels, bento grids separated by 1-pixel gaps, status badges with a square dot,
-L-shaped corner markers on framed forms, and an abstract wireframe figure with
-a dashed orbit beside the main text.
+distinctive look, and the design was worked out in two steps. A first brief
+set a technical, minimal system: hairlines, square panels, flat colour,
+monospaced labels and an abstract wireframe figure beside the main text. A
+second brief kept that structure and moved its voice towards an editorial
+register: warm off-white pages, a serif for headings and text, generous space,
+pill-shaped buttons and one green accent. The result is what the application
+uses now.
 
-The brief was written for a marketing page, and ElectroClean is a working tool,
-so it was adapted. Headings are smaller in the application (34 pixels for a
-page title) and keep the brief's tight setting; only the sign-in page uses
-display type (up to 92 pixels). The mosaic sits behind the pages around the
-EEG and stops where the EEG begins, so that nothing competes with the traces,
-and the EEG itself is drawn on white. Coral, mint and gold are too light for
-text on paper, so they appear only as fills and accent bars with dark text
-beside them, and the colours of the 29 artifact types are unchanged, because
-they belong to the label catalogue and were chosen to stay distinguishable.
-The brief's General Sans is under a licence that forbids sharing its font
-files, so text is set in Instrument Sans, a similar
-neo-grotesque under the SIL Open Font License, like Space Grotesk and JetBrains
-Mono; all three are served with the application. The abstract figure became
-the 10-20 electrode montage, with Cz as the central node and three nodes on a
-slowly turning orbit that stands still when a person asks for reduced motion.
-Monospaced capitals are used for short labels (field labels, column headings,
-badges, tabs, the admin area's numbered sections) and kept out of sentences
-and of narrow columns, where they would be cut. The brief's testimonial cards
-and image treatment have no counterpart in the application.
+Pages are #FDFCFB with a warmer band (#FAF6F0) for side panels, and faint
+column guides (three columns of the page's width) sit behind the pages around
+the EEG and stop where the EEG begins, so that nothing competes with the
+traces, which are drawn on white. Headings and text are set in Newsreader, a
+serif with optical sizes, at regular weight with tight tracking (page titles at
+44 pixels, the sign-in page's name at up to 88); figures, codes, file names,
+keys, channel names, column headings and small labels are set in JetBrains
+Mono, in spaced capitals where the label is short. Every divider is a 1-pixel
+hairline (#E4E0DA); panels and tables are square, and buttons, badges and the
+type buttons of the toolbar are pills. Black (#1E1E1E) marks the one action
+that moves a person forward, with an arrow, and what is pressed; a single
+green (#067843) marks links, selection, focus and the one figure worth
+noticing, such as the work done on the admin overview. Messages are tinted
+blocks with a 3-pixel bar in their colour. The colours of the 29 artifact types
+are unchanged, because they belong to the label catalogue and were chosen to
+stay distinguishable.
+
+The sign-in page shows an illustration drawn for ElectroClean: many EEG-like
+traces across a dark field in warm and cool light, like a long exposure of a
+recording, drawn from a fixed seed, with the 10-20 montage as a small
+wireframe whose three outer nodes turn slowly (and stand still when a person
+asks for reduced motion). Pages come in with a short rise and fade, which
+reduced motion also turns off. Fonts with licences that allow them to be
+shared were chosen throughout, so that all of them can be served with the
+application: Newsreader and JetBrains Mono are under the SIL Open Font License.
 
 The rules are checked by `web_tests/unit/ui_design.test.mjs`: the canvas colours
-match the style sheet, every text colour meets WCAG 2.1 AA on its background,
-there are no shadows, and every font is served with its licence.
+match the style sheet, every text colour meets WCAG 2.1 AA on the backgrounds
+it is shown on, there are no shadows, gradients draw only lines, and every font
+is served with its licence.
 
 ## Web-only (28 October 2026)
 

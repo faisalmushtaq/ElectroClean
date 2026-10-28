@@ -84,12 +84,13 @@ electroclean/web/                 the server (FastAPI), the service layer it sha
 electroclean/web/firebase/        the Cloud Functions (functions/main.py) and the administrator's access
 electroclean/web/static/          the browser application (plain ES modules, no build step)
     index.html, app.css           the page and the application's design system (tokens, components)
-    fonts/                        Space Grotesk, Instrument Sans and JetBrains Mono (woff2, with
-                                  their licences; made by scripts/make_web_fonts.py)
+    fonts/                        Newsreader and JetBrains Mono (woff2, with their licences; made
+                                  by scripts/make_web_fonts.py)
     admin.css                     the admin area's own layout, loaded when it is first opened
     js/main.js, js/app.js         start-up; the backend, signing in and the moves between views
     js/catalogue.js, js/util.js   the label catalogue; small helpers
-    js/views/                     sign in, the annotator's recordings, opening a recording
+    js/views/                     sign in (with its illustration, eegart.js and montage.js), the
+                                  annotator's recordings, opening a recording
     js/api/                       the Backend interface: http.js (a study server), firebase.js (a
                                   study on Firebase), demo.js and demo_admin.js (the demonstration,
                                   in the browser), choose.js (which of them), demo_catalogue.js,
