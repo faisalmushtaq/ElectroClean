@@ -357,11 +357,14 @@ reference sets.
 ### The short-segment quiz (annotators)
 
 A reference set with quiz items offers its quiz to the annotators allowed to
-use the set. `POST /quiz/{set_id}` (`ec_quiz` with `{"set_id", "action"}` on
+use the set; `GET /me` lists them as `"quizzes": [{"set_id", "name", "n_items",
+"finished": false}]` (empty when there are none). `POST /quiz/{set_id}` (`ec_quiz` with `{"set_id", "action"}` on
 Firebase, `StudyService.quiz`) with `{"action": "get"}` →
 `{"set_id", "name", "items": [{"item_id", "recording_id", "file_name", "start_s", "end_s", "context_s", "options": [label]}], "answered": {"<item_id>": {"label", "correct"}}, "feedback": "immediate" | "end", "finished": false}`
 (items in the annotator's own order, `electroclean.training.quiz.item_order`,
-without the answers); `{"action": "answer", "item_id", "label"}` →
+without the answers), with `"recordings": {"<recording_id>": Manifest}` for the
+recordings the items come from, so that the browser can check the files the
+annotator opens against their fingerprints and show them; `{"action": "answer", "item_id", "label"}` →
 `{"correct": bool | null, "correct_label": str | null, "explanation": str | null}`
 (null until the end when feedback comes at the end); `{"action": "finish"}` →
 `{"score": {...}}` (as `QuizSession.score()`; the result is saved like the
