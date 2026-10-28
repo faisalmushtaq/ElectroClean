@@ -1,11 +1,12 @@
 """A self-contained HTML report of annotator activity with learning curves.
 
-Charts are inline SVG (no external files or scripts), drawn with the reference data-visualisation
-palette: one colour per annotator in a fixed order, a 2 px line with 8 px markers, hairline
-gridlines, a legend for two or more annotators, direct labels at the line ends when they do not
-collide, and a crosshair with a tooltip on hover. With more than eight annotators, every annotator
-is drawn in grey and the median across annotators carries the colour. Every value is also in the
-tables below the charts.
+The page follows the reports' shared design (``electroclean.report_style``). Charts are inline SVG
+(no external files or scripts): a 2 px line with 8 px markers, hairline gridlines, a legend for two
+or more annotators, direct labels at the line ends when they do not collide, and a crosshair with a
+tooltip on hover. One annotator's line is drawn in the design's ink blue; two to eight annotators each
+have a colour of the reference data-visualisation palette, in its fixed order. With more than eight
+annotators, every annotator is drawn in grey and the median across annotators carries the colour.
+Every value is also in the tables below the charts.
 """
 
 from __future__ import annotations
@@ -19,10 +20,10 @@ from typing import Any
 
 from electroclean import __version__
 from electroclean.activity.summary import ActivityTables
+from electroclean.report_style import BASE_CSS
 
-#: Categorical slots (light, dark): the validated reference palette, in its fixed order.
-SERIES = [("#2a78d6", "#3987e5"), ("#eb6834", "#d95926"), ("#1baf7a", "#199e70"), ("#eda100", "#c98500"),
-          ("#e87ba4", "#d55181"), ("#008300", "#008300"), ("#6250d6", "#9085e9"), ("#e34948", "#e66767")]
+#: Categorical slots for two to eight annotators: the validated reference palette, in its fixed order.
+SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"]
 
 W, H = 760, 300
 ML, MR, MT, MB = 58, 140, 16, 46
@@ -99,7 +100,8 @@ def line_chart(chart_id: str, series: list[dict[str, Any]], *, unit: str, digits
             out.append(f'<text class="tick" x="{sx(x):.1f}" y="{MT + ph + 18}" text-anchor="middle">{x}</text>')
     out.append(f'<text class="axislabel" x="{ML + pw / 2:.1f}" y="{H - 8}" text-anchor="middle">'
                'Recording, in the order each annotator did them (1 = first)</text>')
-    many = sum(1 for s in series if s.get("kind") != "median") > len(SERIES)
+    lines = sum(1 for s in series if s.get("kind") != "median")
+    many, single = lines > len(SERIES), lines == 1
     ends: list[tuple[float, str, str]] = []
     data = []
     slot = 0
@@ -112,6 +114,8 @@ def line_chart(chart_id: str, series: list[dict[str, Any]], *, unit: str, digits
             cls = "median"
         elif many:
             cls = "muted"
+        elif single:
+            cls = "single"
         else:
             cls = f"s{slot % len(SERIES) + 1}"
             slot += 1
@@ -200,8 +204,9 @@ def _change_table(rows: list[dict[str, Any]]) -> str:
         first = median(spa[:k]) if k else float("nan")
         last = median(spa[-k:]) if k else float("nan")
         change = (last - first) / first * 100 if k and first > 0 else float("nan")
-        body.append(f"<tr><td>{_esc(ann)}</td><td>{len(rs)}</td><td>{_fmt(sum(mins), 1)}</td>"
-                    f"<td>{_fmt(first, 1)}</td><td>{_fmt(last, 1)}</td><td>{_fmt(change, 0)}</td></tr>")
+        body.append(f'<tr><td>{_esc(ann)}</td><td class="num">{len(rs)}</td><td class="num">{_fmt(sum(mins), 1)}</td>'
+                    f'<td class="num">{_fmt(first, 1)}</td><td class="num">{_fmt(last, 1)}</td>'
+                    f'<td class="num">{_fmt(change, 0)}</td></tr>')
     return ("<table><thead><tr><th>Annotator</th><th>Finished recordings</th><th>Active minutes</th>"
             "<th>Seconds per annotation, first recordings</th><th>Seconds per annotation, last recordings</th>"
             "<th>Change (%)</th></tr></thead><tbody>" + "".join(body) + "</tbody></table>")
@@ -257,7 +262,8 @@ def report_html(tables: ActivityTables, *, files: dict[str, str] | None = None) 
                 short = str(v).rsplit("/", 1)[-1]
                 cells.append(f'<td class="rec" title="{_esc(v)}">{_esc(short)}</td>')
                 continue
-            cells.append(f"<td>{_fmt(v, digits) if isinstance(v, float) else _esc(v)}</td>")
+            num = ' class="num"' if isinstance(v, (int, float)) and not isinstance(v, bool) else ""
+            cells.append(f"<td{num}>{_fmt(v, digits) if isinstance(v, float) else _esc(v)}</td>")
         body.append(f"<tr>{''.join(cells)}</tr>")
     parts.append(f'<section class="card"><h2>Every recording</h2><p class="sub">One row per annotator, recording and '
                  "visit. All the columns are in recordings.tsv.</p><div class=scroll><table><thead><tr>"
@@ -282,43 +288,43 @@ def report_html(tables: ActivityTables, *, files: dict[str, str] | None = None) 
 
 
 def _css() -> str:
-    light = "".join(f"--series-{i + 1}:{lt};" for i, (lt, _dk) in enumerate(SERIES))
-    dark = "".join(f"--series-{i + 1}:{dk};" for i, (_lt, dk) in enumerate(SERIES))
+    series = "".join(f"--series-{i + 1}:{c};" for i, c in enumerate(SERIES))
     series_rules = "".join(
         f".line.s{i + 1}{{stroke:var(--series-{i + 1})}}.dot.s{i + 1}{{fill:var(--series-{i + 1})}}"
         f".key.s{i + 1}{{background:var(--series-{i + 1})}}" for i in range(len(SERIES)))
-    dark_vars = (f"color-scheme:dark;--surface-1:#1a1a19;--page:#0d0d0d;--text-primary:#f0efec;--text-secondary:#c3c2b7;"
-                 f"--muted:#898781;--grid:#2c2c2a;--axis:#383835;--border:rgba(255,255,255,.10);--tip:#2c2c2a;{dark}")
     return (
-        ":root{color-scheme:light;--surface-1:#fcfcfb;--page:#f9f9f7;--text-primary:#0b0b0b;--text-secondary:#52514e;"
-        f"--muted:#898781;--grid:#e1e0d9;--axis:#c3c2b7;--border:rgba(11,11,11,.10);--tip:#ffffff;{light}}}"
-        f"@media (prefers-color-scheme:dark){{:root:not([data-theme=\"light\"]){{{dark_vars}}}}}"
-        f":root[data-theme=\"dark\"]{{{dark_vars}}}"
-        "body{margin:0;background:var(--page);color:var(--text-primary);font:15px/1.5 system-ui,-apple-system,"
-        "\"Segoe UI\",sans-serif}main{max-width:1000px;margin:0 auto;padding:24px 16px 48px}"
-        "h1{font-size:26px;margin:0 0 4px}h2{font-size:17px;margin:0 0 4px}.sub,.subtitle{color:var(--text-secondary);"
-        "margin:0 0 12px}.card{background:var(--surface-1);border:1px solid var(--border);border-radius:10px;"
-        "padding:16px 18px;margin:16px 0}.tiles{display:flex;flex-wrap:wrap;gap:12px;margin:16px 0}"
-        ".tile{background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:10px 16px;"
-        "min-width:140px}.tile .label{color:var(--text-secondary);font-size:13px}.tile .value{font-size:24px;"
-        "font-weight:600}.plot{position:relative}svg.chart{width:100%;height:auto;display:block;overflow:visible}"
-        ".grid{stroke:var(--grid);stroke-width:1}.axis{stroke:var(--axis);stroke-width:1}"
-        ".tick{fill:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}.axislabel{fill:var(--text-secondary);"
-        "font-size:12px}.endlabel{fill:var(--text-secondary);font-size:12px}"
-        ".line{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}.dot{stroke:var(--surface-1);"
-        "stroke-width:2}.hit{fill:transparent}.line.median{stroke:var(--text-primary);stroke-width:8;opacity:.14}"
-        ".line.muted{stroke:var(--muted);stroke-width:1.5}.dot.muted{fill:var(--muted)}"
-        ".crosshair{stroke:var(--axis);stroke-width:1}"
+        BASE_CSS + f":root{{{series}}}"
+        "body{margin:0}main{max-width:1000px;margin:0 auto;padding:40px 24px 64px}"
+        "h2{margin:0 0 6px}.sub,.subtitle{color:var(--secondary);margin:0 0 14px}.subtitle{font-size:14px}"
+        ".card{background:var(--white);border:1px solid var(--hairline);padding:24px 22px;margin:20px 0}"
+        # Headline figures: large serif numerals over small labels, in cells split by hairline gaps.
+        ".tiles{display:flex;flex-wrap:wrap;gap:1px;background:var(--hairline);border:1px solid var(--hairline);"
+        "margin:28px 0}.tile{flex:1 1 150px;box-sizing:border-box;display:flex;flex-direction:column-reverse;"
+        "justify-content:flex-end;gap:10px;background:var(--page);padding:20px 22px 18px}"
+        ".tile .label{font-size:13px;line-height:1.35;color:var(--secondary)}"
+        ".tile .value{font-size:44px;font-weight:400;line-height:1;letter-spacing:-0.02em;color:var(--ink);"
+        "font-variant-numeric:lining-nums tabular-nums}"
+        ".plot{position:relative}svg.chart{width:100%;height:auto;display:block;overflow:visible}"
+        ".grid{stroke:var(--hairline);stroke-width:1}.axis{stroke:var(--header-rule);stroke-width:1}"
+        ".tick{fill:var(--secondary);font-family:var(--font-mono);font-size:11px;font-variant-numeric:tabular-nums}"
+        ".axislabel{fill:var(--secondary);font-size:13px}.endlabel{fill:var(--secondary);font-size:13px}"
+        ".line{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}"
+        ".dot{stroke:var(--white);stroke-width:2}.hit{fill:transparent}"
+        ".line.median{stroke:var(--ink);stroke-width:8;opacity:.14}"
+        ".line.muted{stroke:var(--edge);stroke-width:1.5}.dot.muted{fill:var(--edge)}"
+        ".line.single{stroke:var(--accent)}.dot.single{fill:var(--accent)}"
+        ".crosshair{stroke:var(--edge);stroke-width:1}"
         f"{series_rules}"
-        ".legend{list-style:none;padding:0;margin:0 0 8px;display:flex;flex-wrap:wrap;gap:4px 16px;"
-        "color:var(--text-secondary);font-size:13px}.key{display:inline-block;width:14px;height:3px;border-radius:2px;"
-        "margin-right:6px;vertical-align:middle}.key.median{background:var(--text-primary);height:8px;opacity:.25}.key.muted{background:var(--muted)}"
-        ".tooltip{position:absolute;pointer-events:none;background:var(--tip);color:var(--text-primary);"
-        "border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:12px;box-shadow:0 2px 8px "
-        "rgba(0,0,0,.12);white-space:nowrap}.tooltip .row{display:flex;align-items:center;gap:6px}"
-        "table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;padding:5px 8px;"
-        "border-bottom:1px solid var(--grid);font-variant-numeric:tabular-nums}th{color:var(--text-secondary);"
-        "font-weight:600}.scroll{overflow-x:auto}td.rec{white-space:nowrap}"
+        ".legend{list-style:none;padding:0;margin:0 0 10px;display:flex;flex-wrap:wrap;gap:4px 18px;"
+        "font-size:13px;color:var(--secondary)}.key{display:inline-block;width:14px;"
+        "height:3px;margin-right:7px;vertical-align:middle}.key.median{background:var(--ink);height:8px;opacity:.25}"
+        ".key.muted{background:var(--edge)}.key.single{background:var(--accent)}"
+        ".tooltip{position:absolute;pointer-events:none;background:var(--white);color:var(--body);"
+        "border:1px solid var(--header-rule);padding:7px 10px;font-size:13px;"
+        "line-height:1.5;white-space:nowrap}.tooltip .row{display:flex;align-items:center;gap:6px}"
+        "table{width:100%;font-size:13.5px;line-height:1.45}th,td{text-align:left;padding:6px 8px}"
+        "tbody tr:last-child td{border-bottom:0}.scroll{overflow-x:auto}"
+        "td.rec{white-space:nowrap;font-family:var(--font-mono);font-size:.86em}"
     )
 
 

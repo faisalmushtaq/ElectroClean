@@ -47,6 +47,7 @@ electroclean/
     __main__.py            python -m electroclean: the commands and how to start the demonstration
     synthetic.py           synthetic BrainVision, EDF and BDF recordings with ground truth
     hints.py               "did you mean" suggestions for mistyped names
+    report_style.py        the look shared by the HTML reports: colours, fonts, base style sheet
     config/
         artifact_labels.json            the 29 HED-SCORE artifact terms, codes and hierarchy
         hed_score_2.2.0_validation.json snapshot of the label check against HED SCORE

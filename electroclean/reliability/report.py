@@ -1,11 +1,14 @@
 """Readable HTML report for an agreement analysis.
 
 Figures are static PNG images (matplotlib) embedded in the page, each
-accompanied by the table it was drawn from. Colours: three slots of the
-Okabe and Ito colour-blind-safe palette for the three agreement measures,
-always paired with distinct marker shapes or line styles so that colour is
-never the only cue, and a single-hue blue ramp for heat maps. Category
-identity in timelines is carried by labelled rows, not by colour.
+accompanied by the table it was drawn from. The page and the figures follow
+the reports' shared design (``electroclean.report_style``). Colours: the
+ink blue of that design and the vermillion and reddish purple of the Okabe
+and Ito colour-blind-safe palette for the three agreement measures, always
+paired with distinct marker shapes or line styles so that colour is never
+the only cue, and a single-hue ink-blue ramp for heat maps, boxes and
+timelines. Category identity in timelines is carried by labelled rows, not
+by colour.
 
 The HTML tables use readable column headings (with the TSV column name in a
 tooltip); the TSV files keep their column names for scripts.
@@ -14,9 +17,11 @@ tooltip); the TSV files keep their column names for scripts.
 from __future__ import annotations
 
 import base64
+import functools
 import html
 import io
 import json
+from collections.abc import Callable
 from typing import Any
 
 import matplotlib
@@ -25,18 +30,25 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
-from matplotlib.colors import LinearSegmentedColormap  # noqa: E402
+from matplotlib.colors import LinearSegmentedColormap, to_hex  # noqa: E402
 
 from electroclean.reliability.config import ANY_ARTIFACT  # noqa: E402
+from electroclean.report_style import BASE_CSS, COLOURS, chart_font, contrast_ratio  # noqa: E402
 
-# Okabe-Ito blue, vermillion and bluish green (checked for colour-vision deficiencies, all pairs).
-SERIES = ["#0072B2", "#D55E00", "#009E73"]
+# The design's ink blue, Okabe-Ito vermillion and Okabe-Ito reddish purple, each at least 3:1 on white.
+# Under simulated protan, deutan and tritan vision every pair stays at least 37 CIELAB units apart (the
+# Okabe-Ito blue, vermillion and bluish green used before came within 16).
+SERIES = [COLOURS["accent"], "#D55E00", "#CC79A7"]
 MARKERS = ["o", "s", "D"]
 LINESTYLES = ["-", "--", ":"]
-BLUE_RAMP = ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"]
-INK = "#0b0b0b"
-INK_2 = "#52514e"
-GRID = "#e4e3df"
+#: Single-hue ramp from the design's soft ink blue through the accent to a darker tone, in nearly even
+#: steps of lightness (CIELAB L* 94, 82, 70, 57, 44, 31, 20).
+BLUE_RAMP = ["#E9EDF7", "#C7CBE4", "#A5A8D1", "#8085BC", "#5963A7", "#2B4392", "#182C67"]
+INK = COLOURS["ink"]
+TEXT = COLOURS["body"]  # chart titles
+TEXT_2 = COLOURS["secondary"]  # every other text of a chart
+GRID = COLOURS["hairline"]
+SPINE = COLOURS["edge"]
 CMAP = LinearSegmentedColormap.from_list("ec_blue", BLUE_RAMP)
 
 POOLED = "ALL (pooled)"
@@ -108,12 +120,44 @@ NOWRAP = {"category", "pair", "recording", "reference", "compared", "label_rater
 VALUE_TITLES = {"channel_mode": {"time_only": "time only", "time_and_channel": "time and channel"}}
 
 
+@functools.lru_cache(maxsize=1)
+def _chart_rc() -> dict[str, Any]:
+    """matplotlib settings of the charts: the design's serif when one is installed, and its colours."""
+    rc: dict[str, Any] = {
+        "text.color": TEXT_2, "axes.labelcolor": TEXT_2, "axes.titlecolor": TEXT, "legend.labelcolor": TEXT_2,
+        "axes.edgecolor": SPINE, "axes.linewidth": 0.6, "xtick.color": SPINE, "ytick.color": SPINE,
+        "xtick.labelcolor": TEXT_2, "ytick.labelcolor": TEXT_2, "xtick.major.width": 0.6, "ytick.major.width": 0.6,
+    }
+    font = chart_font()
+    if font:
+        rc["font.family"] = [font]
+    return rc
+
+
+def _chart(draw: Callable[..., str | None]) -> Callable[..., str | None]:
+    """Draws a figure with the charts' settings (fonts, text colours and spines)."""
+
+    @functools.wraps(draw)
+    def wrapper(*args: Any, **kwargs: Any) -> str | None:
+        with plt.rc_context(_chart_rc()):
+            return draw(*args, **kwargs)
+
+    return wrapper
+
+
 def _style(ax: Any) -> None:
     ax.spines[["top", "right"]].set_visible(False)
-    ax.spines[["left", "bottom"]].set_color(GRID)
-    ax.tick_params(colors=INK_2, labelsize=9)
+    ax.spines[["left", "bottom"]].set_color(SPINE)
+    ax.spines[["left", "bottom"]].set_linewidth(0.6)
+    ax.tick_params(color=SPINE, labelcolor=TEXT_2, labelsize=9, width=0.6)
     ax.grid(axis="x", color=GRID, linewidth=0.8)
     ax.set_axisbelow(True)
+
+
+def _value_colour(v: float) -> str:
+    """Ink or white for a value printed on a heat-map cell: whichever contrasts more with the cell."""
+    cell = to_hex(CMAP(v))
+    return "white" if contrast_ratio("#FFFFFF", cell) > contrast_ratio(INK, cell) else INK
 
 
 def _png(fig: Any) -> str:
@@ -139,6 +183,10 @@ def _cell(v: Any) -> str:
     return html.escape(str(v))
 
 
+def _is_number(v: Any) -> bool:
+    return isinstance(v, (int, float, np.integer, np.floating)) and not isinstance(v, (bool, np.bool_))
+
+
 def _table(df: pd.DataFrame | None, max_rows: int = 400, caption: str = "") -> str:
     """HTML table with readable headings; the TSV column name is in each heading's tooltip."""
     cap = f"<p class='caption'>{caption}</p>" if caption else ""
@@ -156,7 +204,8 @@ def _table(df: pd.DataFrame | None, max_rows: int = 400, caption: str = "") -> s
     for _, r in shown.iterrows():
         tds = []
         for c, v in zip(cols, r.tolist()):
-            cls = " class='nowrap'" if c in NOWRAP else ""
+            classes = (["nowrap"] if c in NOWRAP else []) + (["num"] if _is_number(v) else [])  # numbers: monospaced
+            cls = f" class='{' '.join(classes)}'" if classes else ""
             v = VALUE_TITLES.get(c, {}).get(v, v) if isinstance(v, str) else v
             tds.append(f"<td{cls}>{_cell(v)}</td>")
         rows.append("<tr>" + "".join(tds) + "</tr>")
@@ -204,6 +253,7 @@ def _too_few_note(excluded: list[str], counts: dict[str, int], minimum: int) -> 
 
 
 # ------------------------------------------------------------------ figures
+@_chart
 def fig_category_agreement(summary: pd.DataFrame) -> str | None:
     if summary.empty:
         return None
@@ -216,15 +266,16 @@ def fig_category_agreement(summary: pd.DataFrame) -> str | None:
         vals = summary.set_index("category").loc[cats, col].to_numpy(dtype=float)
         ax.scatter(vals, y + (i - 1) * 0.22, s=42, color=SERIES[i], marker=MARKERS[i], label=name, zorder=3,
                    edgecolors="white", linewidths=1.0)
-    ax.set_yticks(y, cats, color=INK)
+    ax.set_yticks(y, cats, color=TEXT_2)
     ax.set_xlim(-0.25, 1.02)
-    ax.axvline(0, color=GRID, linewidth=1)
-    ax.set_xlabel("Agreement (pooled over recordings, mean over annotator pairs)", color=INK_2)
+    ax.axvline(0, color=COLOURS["header_rule"], linewidth=1)
+    ax.set_xlabel("Agreement (pooled over recordings, mean over annotator pairs)", color=TEXT_2)
     _style(ax)
     ax.legend(loc="lower center", bbox_to_anchor=(0.5, 1.0), ncol=3, frameon=False, fontsize=9)
     return _png(fig)
 
 
+@_chart
 def fig_pair_heatmap(df: pd.DataFrame, value: str, title: str, order: list[str] | None = None) -> str | None:
     if df.empty:
         return None
@@ -236,20 +287,24 @@ def fig_pair_heatmap(df: pd.DataFrame, value: str, title: str, order: list[str] 
     fig, ax = plt.subplots(figsize=(max(6, 0.55 * piv.shape[1] + 2.5), 0.45 * piv.shape[0] + 1.6))
     data = piv.to_numpy(dtype=float)
     im = ax.imshow(np.ma.masked_invalid(data), cmap=CMAP, vmin=0, vmax=1, aspect="auto")
-    ax.set_xticks(range(piv.shape[1]), piv.columns, rotation=45, ha="right", fontsize=8, color=INK)
-    ax.set_yticks(range(piv.shape[0]), piv.index, fontsize=9, color=INK)
+    ax.set_xticks(range(piv.shape[1]), piv.columns, rotation=45, ha="right", fontsize=8, color=TEXT_2)
+    ax.set_yticks(range(piv.shape[0]), piv.index, fontsize=9, color=TEXT_2)
+    ax.tick_params(color=SPINE, width=0.6)
     for (i, j), v in np.ndenumerate(data):
         txt = "n/a" if np.isnan(v) else f"{v:.2f}"
-        colour = "white" if (not np.isnan(v) and v > 0.55) else INK
+        colour = INK if np.isnan(v) else _value_colour(v)
         ax.text(j, i, txt, ha="center", va="center", fontsize=8, color=colour)
-    ax.set_title(title, fontsize=10, color=INK, loc="left")
+    ax.set_title(title, fontsize=10, color=TEXT, loc="left")
     cb = fig.colorbar(im, ax=ax, fraction=0.03, pad=0.02)
-    cb.ax.tick_params(labelsize=8, colors=INK_2)
+    cb.ax.tick_params(labelsize=8, color=SPINE, labelcolor=TEXT_2, width=0.6)
+    cb.outline.set_edgecolor(COLOURS["header_rule"])
+    cb.outline.set_linewidth(0.6)
     for s in ax.spines.values():
         s.set_visible(False)
     return _png(fig)
 
 
+@_chart
 def fig_f1_vs_threshold(ev: pd.DataFrame) -> str | None:
     micro = ev[ev["category"] == MICRO]
     if micro.empty or micro["threshold"].isna().all():
@@ -264,8 +319,8 @@ def fig_f1_vs_threshold(ev: pd.DataFrame) -> str | None:
                 marker=MARKERS[i], markersize=11 if first else 5, markerfacecolor="white" if first else SERIES[i],
                 markeredgecolor=SERIES[i], markeredgewidth=2 if first else 0.8,
                 label=COLUMN_TITLES.get(mode, (mode.replace("_", " "), ""))[0], zorder=3 + i)
-    ax.set_xlabel("Minimum IoU for a match (0 = any overlap)", color=INK_2)
-    ax.set_ylabel("F1 (micro-average, mean over pairs)", color=INK_2)
+    ax.set_xlabel("Minimum IoU for a match (0 = any overlap)", color=TEXT_2)
+    ax.set_ylabel("F1 (micro-average, mean over pairs)", color=TEXT_2)
     ax.set_ylim(0, 1.02)
     _style(ax)
     ax.grid(axis="y", color=GRID, linewidth=0.8)
@@ -273,6 +328,7 @@ def fig_f1_vs_threshold(ev: pd.DataFrame) -> str | None:
     return _png(fig)
 
 
+@_chart
 def fig_timing(matched: pd.DataFrame, order: list[str] | None = None) -> str | None:
     if matched.empty:
         return None
@@ -285,18 +341,19 @@ def fig_timing(matched: pd.DataFrame, order: list[str] | None = None) -> str | N
         data = [matched.loc[matched["category"] == c, col].to_numpy() for c in cats]
         bp = ax.boxplot(data, orientation="horizontal", widths=0.5, patch_artist=True, showfliers=True,
                         medianprops={"color": INK, "linewidth": 1.5},
-                        boxprops={"facecolor": BLUE_RAMP[1], "edgecolor": BLUE_RAMP[4]},
-                        whiskerprops={"color": BLUE_RAMP[4]}, capprops={"color": BLUE_RAMP[4]},
-                        flierprops={"markerfacecolor": BLUE_RAMP[4], "markeredgecolor": "white", "markersize": 5})
+                        boxprops={"facecolor": BLUE_RAMP[1], "edgecolor": BLUE_RAMP[5]},
+                        whiskerprops={"color": BLUE_RAMP[5]}, capprops={"color": BLUE_RAMP[5]},
+                        flierprops={"markerfacecolor": BLUE_RAMP[5], "markeredgecolor": "white", "markersize": 5})
         del bp
-        ax.axvline(0, color=INK_2, linewidth=1)
-        ax.set_title(title, fontsize=10, color=INK, loc="left")
+        ax.axvline(0, color=SPINE, linewidth=0.8)
+        ax.set_title(title, fontsize=10, color=TEXT, loc="left")
         _style(ax)
-    axes[0].set_yticks(range(1, len(cats) + 1), cats, fontsize=9, color=INK)
+    axes[0].set_yticks(range(1, len(cats) + 1), cats, fontsize=9, color=TEXT_2)
     axes[0].invert_yaxis()  # first category at the top, as in the tables
     return _png(fig)
 
 
+@_chart
 def fig_timeline(group: Any, cats: list[str]) -> str | None:
     rows: list[tuple[str, str]] = []
     for c in cats:
@@ -313,14 +370,14 @@ def fig_timeline(group: Any, cats: list[str]) -> str | None:
         for ann in group.docs[a].annotations:
             if ann.label != c:
                 continue
-            colour = BLUE_RAMP[4] if ann.is_global else BLUE_RAMP[2]
+            colour = BLUE_RAMP[5] if ann.is_global else BLUE_RAMP[3]
             ax.barh(y, ann.duration_samples / sf, left=ann.onset_sample / sf, height=0.62, color=colour,
                     edgecolor="white", linewidth=0.5)
     labels = [f"{c} · {a}" for c, a in rows]
-    ax.set_yticks(range(len(rows)), labels, fontsize=7.5, color=INK)
+    ax.set_yticks(range(len(rows)), labels, fontsize=7.5, color=TEXT_2)
     ax.invert_yaxis()
     ax.set_xlim(0, group.timing.duration_s)
-    ax.set_xlabel("Time (s)", color=INK_2)
+    ax.set_xlabel("Time (s)", color=TEXT_2)
     prev = None
     for y, (c, _a) in enumerate(rows):
         if prev is not None and c != prev:
@@ -328,7 +385,7 @@ def fig_timeline(group: Any, cats: list[str]) -> str | None:
         prev = c
     _style(ax)
     ax.set_title(f"{group.recording_id}  (dark = whole montage, light = selected channels)", fontsize=9,
-                 color=INK, loc="left")
+                 color=TEXT, loc="left")
     return _png(fig)
 
 
@@ -371,22 +428,42 @@ COLUMN_TITLES.update({
 
 
 # -------------------------------------------------------------------- page
-CSS = """
-body { font-family: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #0b0b0b;
-       background: #fcfcfb; max-width: 1150px; margin: 2em auto; padding: 0 1em; line-height: 1.45; }
-h1 { font-size: 1.6em; } h2 { margin-top: 2em; border-bottom: 1px solid #e4e3df; padding-bottom: .2em; }
-table.data { border-collapse: collapse; font-size: 12.5px; margin: .6em 0; }
-table.data th { background: #f1f0ec; text-align: left; padding: 4px 8px; position: sticky; top: 0;
-       vertical-align: bottom; cursor: help; }
-table.data td { padding: 3px 8px; border-top: 1px solid #ecebe7; font-variant-numeric: tabular-nums; }
+CSS = BASE_CSS + """
+body { max-width: 1150px; margin: 0 auto; padding: 40px 24px 64px; }
+h2 { margin: 56px 0 16px; padding-top: 18px; border-top: 1px solid var(--hairline); }
+h3 { margin: 32px 0 10px; }
+table.data { font-size: 13.5px; line-height: 1.45; margin: .5em 0 1.2em; border: 1px solid var(--hairline); }
+table.data th { padding: 9px 10px 7px; position: sticky; top: 0; background: var(--white); cursor: help; }
+table.data td { padding: 4px 10px; }
+table.data tr:last-child td { border-bottom: 0; }
 .nowrap { white-space: nowrap; }
-.muted { color: #52514e; font-size: .92em; } .caption { color: #33322f; font-size: .92em; margin: .8em 0 .2em; }
-.box { background: #f4f7fb; border-left: 4px solid #0072B2; padding: .6em 1em; margin: 1em 0; }
-.key { background: #f3f9f6; border-left: 4px solid #009E73; padding: .6em 1em; margin: 1em 0; }
-.warn { background: #fff4e5; border-left: 4px solid #D55E00; padding: .6em 1em; margin: 1em 0; }
-figure { margin: 1em 0; } figure img { max-width: 100%; }
-figcaption { color: #52514e; font-size: .9em; } code { background: #f1f0ec; padding: 0 3px; }
-details { margin: .6em 0; } .scroll { max-height: 420px; overflow: auto; }
+.muted { color: var(--secondary); font-size: .93em; }
+.caption { color: var(--secondary); font-size: .93em; margin: 1.4em 0 .4em; }
+.box, .key, .warn { border: 1px solid var(--hairline); border-left: 3px solid var(--edge); background: var(--panel);
+       padding: 16px 20px; margin: 20px 0; }
+.key { background: var(--white); border-left-color: var(--accent); }
+.key td.num { color: var(--accent); }
+.warn { background: var(--warning-bg); border-left-color: var(--warning-text); color: var(--warning-text); }
+.warn b { color: inherit; }
+.box > b:first-child, .key > b:first-child, .warn > b:first-child { display: block; margin-bottom: 6px;
+       font-size: 13px; color: var(--secondary); }
+.key > b:first-child { color: var(--accent); }
+.warn > b:first-child { color: var(--warning-text); }
+figure { margin: 20px 0; padding: 16px; background: var(--white); border: 1px solid var(--hairline);
+       width: fit-content; max-width: 100%; box-sizing: border-box; }
+figure img { display: block; max-width: 100%; height: auto; }
+figcaption { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--hairline); color: var(--secondary);
+       font-size: 14px; }
+details { margin: .8em 0; overflow-x: auto; }
+summary { cursor: pointer; font-size: 13px; color: var(--secondary); }
+.scroll { max-height: 420px; overflow: auto; margin: .5em 0 1.2em; padding: 0 12px; background: var(--white);
+       border: 1px solid var(--hairline); }
+.scroll table.data { margin: 0; border: 0; }
+/* Narrower than the widest tables (as in the admin area's frame): a wide table scrolls sideways on its own. */
+@media (max-width: 1180px) {
+  table.data { display: block; width: fit-content; max-width: 100%; overflow-x: auto; }
+  .scroll table.data { display: table; max-width: none; }
+}
 """
 
 
