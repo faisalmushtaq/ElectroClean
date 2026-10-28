@@ -215,7 +215,7 @@ async function main() {
       await signIn(page, 'admin@example.org', PASSWORD);
       await waitForRoute(page, 'admin', 60000);
       await page.waitForSelector('.stat-tile', { timeout: 60000 });
-      assert.match((await page.innerText('.admin-main')).replace(/\s+/g, ' '), /\d+ Recordings registered for the study/);
+      assert.match((await page.innerText('.admin-main')).replace(/\s+/g, ' '), /\d+ Recordings registered for the study/i); // the label is shown in capitals
       const go = async (title, route) => { await page.locator('.admin-nav a', { hasText: title }).click(); await waitForRoute(page, route); };
 
       // An annotator invited by email: Firebase Authentication makes the account, the page shows the link once.

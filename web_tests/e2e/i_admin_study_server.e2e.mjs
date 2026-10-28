@@ -97,7 +97,7 @@ export const tests = [
         return;
       }
       const text = (await page.innerText('.admin-main')).replace(/\s+/g, ' ');
-      assert.match(text, /\d+ Recordings registered for the study/);
+      assert.match(text, /\d+ Recordings registered for the study/i); // the label is shown in capitals
       await t.screenshot(page, 'admin_server_overview');
     },
   },

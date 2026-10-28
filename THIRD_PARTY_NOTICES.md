@@ -84,3 +84,9 @@ third-party packages; its display filters reproduce the filter designs of MNE-Py
 (both under BSD licences, listed above). For a study on Firebase it loads the Firebase JavaScript
 SDK, version 12.19.0, from Google (https://www.gstatic.com/firebasejs/), under the
 Apache License 2.0 (https://github.com/firebase/firebase-js-sdk).
+
+It is set in three typefaces served with it (`electroclean/web/static/fonts`, made by
+`scripts/make_web_fonts.py`), each under the SIL Open Font License 1.1, whose text is beside the
+font: Space Grotesk (https://github.com/floriankarsten/space-grotesk), Instrument Sans
+(https://github.com/Instrument/instrument-sans) and JetBrains Mono
+(https://github.com/JetBrains/JetBrainsMono).

@@ -148,7 +148,7 @@ export const tests = [
       assert.equal('annotators' in sent.config || 'modes' in sent.config, false);
       const text = await page.innerText('.admin-section[data-section="analyses"]');
       assert.match(text, /One recording has only one annotator\./);
-      assert.match(text, /kappa any artifact\s+0\.712/);
+      assert.match(text, /kappa any artifact\s+0\.712/i); // the label is shown in capitals
       const frame = page.frameLocator('iframe.report-frame').first();
       assert.equal(await frame.locator('h1').textContent(), 'Agreement report');
       await frame.locator('body[data-ran="yes"]').waitFor({ timeout: 5000 }); // the report's own script runs in its sandbox

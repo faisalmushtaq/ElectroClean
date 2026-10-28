@@ -97,7 +97,7 @@ export const tests = [
       await signIn(page, 'ADMIN');
       await waitForRoute(page, 'admin');
       await page.waitForSelector('.stat-tile');
-      assert.match(await sectionText(page), /3 Recordings registered for the study 2 Annotators and 1 administrator/);
+      assert.match(await sectionText(page), /3 Recordings registered for the study 2 Annotators and 1 administrator/i); // labels shown in capitals
       assert.ok(await noSideways(page));
       await t.screenshot(page, 'admin_overview');
       // From the keyboard: a section's link, then the focus is on that section's heading; Back returns.
@@ -271,7 +271,7 @@ export const tests = [
         await waitForRoute(page, 'admin');
         await page.waitForSelector('.stat-tile');
         assert.match(await sectionText(page), /sub-new01_task-rest_eeg\.edf/);
-        assert.match(await sectionText(page), /4 Recordings registered/);
+        assert.match(await sectionText(page), /4 Recordings registered/i);
       } finally {
         data.cleanup();
       }

@@ -97,6 +97,12 @@ def main() -> int:
         f"SDK, version {firebase_sdk_version()}, from Google (https://www.gstatic.com/firebasejs/), under the",
         "Apache License 2.0 (https://github.com/firebase/firebase-js-sdk).",
         "",
+        "It is set in three typefaces served with it (`electroclean/web/static/fonts`, made by",
+        "`scripts/make_web_fonts.py`), each under the SIL Open Font License 1.1, whose text is beside the",
+        "font: Space Grotesk (https://github.com/floriankarsten/space-grotesk), Instrument Sans",
+        "(https://github.com/Instrument/instrument-sans) and JetBrains Mono",
+        "(https://github.com/JetBrains/JetBrainsMono).",
+        "",
     ]
     out = REPO / "THIRD_PARTY_NOTICES.md"
     out.write_text("\n".join(lines), encoding="utf-8")

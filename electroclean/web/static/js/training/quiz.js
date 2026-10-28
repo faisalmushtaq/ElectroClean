@@ -20,7 +20,7 @@ export const NONE_OPTION = 'No artifact / none of these';
 export const QUESTION = 'Which artifact type is the main one in the shaded segment?';
 /** The label of the shaded segment in the viewer (drawn in the accent colour). */
 const SEGMENT_LABEL = '\u0000quiz-segment';
-const SEGMENT_COLOUR = '#0066CC';
+const SEGMENT_COLOUR = '#1A3C2B'; // forest, the design's colour for what is chosen
 
 // ------------------------------------------------------------------ pure helpers
 /** Python's round(): halves to the even neighbour (the desktop application cut segments with it). */

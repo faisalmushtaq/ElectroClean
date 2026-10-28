@@ -59,6 +59,13 @@ the guides in `docs/` and `docs/web/`) is updated in the same commit, with a par
 `from __future__ import annotations`. Errors that can reach a person are written for annotators and
 researchers, in plain words.
 
+The application's look is one design system, described at the top of `app.css` and in
+`docs/design_decisions.md` ("Visual design of the browser application"): paper, hairlines and forest
+green, flat (no shadows), corners of 0 or 2 pixels, Space Grotesk for headings, Instrument Sans for
+text and JetBrains Mono for labels and figures, served from `static/fonts`. Use its tokens rather than
+new colours, keep coral, mint and gold for fills and accent bars, and run
+`web_tests/unit/ui_design.test.mjs`, which checks contrast and these rules.
+
 The browser application has no build step: plain ES modules under `electroclean/web/static`, with
 every path relative so that it works under `/preview/` on GitHub Pages (workers are created with
 `new URL("./worker.js", import.meta.url)`), and plain `#name` routes only. External scripts come

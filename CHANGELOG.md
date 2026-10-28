@@ -51,11 +51,18 @@ keeps each correct answer until the segment has been answered; it can be
 stopped and resumed later, or ended early with the score of the segments
 answered.
 
-The browser application follows the visual principles worked out for the
-desktop windows after 1.1.0: the EEG is the content, so the controls around it
-are quiet, with light surfaces, grey secondary text and one accent colour, and
-each page has one blue button for the step that moves you forward (Open next
-recording, Save and Finish).
+The browser application has a design of its own, technical and quiet like a
+well-drawn instrument panel, so that the EEG stands out. Pages are a warm
+off-white ('paper') with a faint mosaic of panels behind them; everything is
+flat and drawn with 1-pixel hairlines and square corners; forest green marks
+the one action that moves you forward (Open next recording, Save and Finish)
+and what is selected, with coral, mint and gold as accent bars. Headings are
+set in Space Grotesk, text in Instrument Sans, and labels, keys, figures and
+the EEG's channel names and time axis in JetBrains Mono; the fonts are served
+with the application, so annotators' browsers ask no other site for them. The
+sign-in page shows the 10-20 montage as a wireframe, the admin area numbers its
+sections and shows the study's figures in a grid, and every text colour meets
+WCAG 2.1 AA.
 
 Marking artifacts is quick by keyboard and by mouse. The nine most common
 types are on the keys 1 to 9 and on numbered, colour-coded buttons, and the /
