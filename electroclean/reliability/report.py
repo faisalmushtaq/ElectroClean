@@ -430,15 +430,15 @@ COLUMN_TITLES.update({
 # -------------------------------------------------------------------- page
 CSS = BASE_CSS + """
 body { max-width: 1150px; margin: 0 auto; padding: 40px 24px 64px; }
-h2 { margin: 56px 0 16px; padding-top: 18px; border-top: 1px solid var(--hairline); }
-h3 { margin: 32px 0 10px; }
-table.data { font-size: 13.5px; line-height: 1.45; margin: .5em 0 1.2em; border: 1px solid var(--hairline); }
-table.data th { padding: 9px 10px 7px; position: sticky; top: 0; background: var(--white); cursor: help; }
-table.data td { padding: 4px 10px; }
+h2 { margin: 56px 0 16px; padding-top: 16px; border-top: 1px solid var(--hairline); }
+h3 { margin: 32px 0 12px; }
+table.data { font-size: 14px; line-height: 20px; margin: 8px 0 20px; border: 1px solid var(--hairline); }
+table.data th { padding: 8px 12px; position: sticky; top: 0; background: var(--white); cursor: help; }
+table.data td { padding: 4px 12px; }
 table.data tr:last-child td { border-bottom: 0; }
 .nowrap { white-space: nowrap; }
-.muted { color: var(--secondary); font-size: .93em; }
-.caption { color: var(--secondary); font-size: .93em; margin: 1.4em 0 .4em; }
+.muted { color: var(--secondary); font-size: 14px; line-height: 20px; }
+.caption { color: var(--secondary); font-size: 14px; line-height: 20px; margin: 24px 0 8px; }
 .box, .key, .warn { border: 1px solid var(--hairline); border-left: 3px solid var(--edge); background: var(--panel);
        padding: 16px 20px; margin: 20px 0; }
 .key { background: var(--white); border-left-color: var(--accent); }
@@ -446,17 +446,17 @@ table.data tr:last-child td { border-bottom: 0; }
 .warn { background: var(--warning-bg); border-left-color: var(--warning-text); color: var(--warning-text); }
 .warn b { color: inherit; }
 .box > b:first-child, .key > b:first-child, .warn > b:first-child { display: block; margin-bottom: 6px;
-       font-size: 13px; color: var(--secondary); }
+       font-size: 14px; line-height: 20px; color: var(--secondary); }
 .key > b:first-child { color: var(--accent); }
 .warn > b:first-child { color: var(--warning-text); }
 figure { margin: 20px 0; padding: 16px; background: var(--white); border: 1px solid var(--hairline);
        width: fit-content; max-width: 100%; box-sizing: border-box; }
 figure img { display: block; max-width: 100%; height: auto; }
-figcaption { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--hairline); color: var(--secondary);
-       font-size: 14px; }
-details { margin: .8em 0; overflow-x: auto; }
-summary { cursor: pointer; font-size: 13px; color: var(--secondary); }
-.scroll { max-height: 420px; overflow: auto; margin: .5em 0 1.2em; padding: 0 12px; background: var(--white);
+figcaption { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--hairline); color: var(--secondary);
+       font-size: 14px; line-height: 20px; }
+details { margin: 12px 0; overflow-x: auto; }
+summary { cursor: pointer; font-size: 14px; line-height: 20px; color: var(--secondary); }
+.scroll { max-height: 420px; overflow: auto; margin: 8px 0 20px; padding: 0 12px; background: var(--white);
        border: 1px solid var(--hairline); }
 .scroll table.data { margin: 0; border: 0; }
 /* Narrower than the widest tables (as in the admin area's frame): a wide table scrolls sideways on its own. */

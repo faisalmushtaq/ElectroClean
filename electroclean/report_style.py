@@ -3,16 +3,18 @@
 The agreement report (``reliability/report.py``), the activity report (``activity/report.py``) and
 the competency report (``training/assessment.py``) are stand-alone pages: they are downloaded, and
 the admin area shows them in a frame. Each embeds its own style sheet, which starts with
-``BASE_CSS`` below. Fonts are named through stacks that end in fonts every system has, so a report
-fetches nothing (no font files and no other addresses) and still reads well where the design's
-fonts are not installed.
+``BASE_CSS`` below. The typeface is named through a stack that ends in fonts every system has, so
+a report fetches nothing (no font files and no other addresses) and still reads well where
+Newsreader is not installed.
 
-The design is editorial and precise: a warm off-white page, serif type with headings at regular
-weight, hairline rules, one ink-blue accent and monospaced numbers. Panels, tables and figures have
-square corners and hairline frames, with no shadows or gradients. Tables of data and figures are
-white, and the header row of a table sits on a slightly stronger rule. Column headings and small
-labels are the serif at a small size in a secondary grey, in ordinary case: no text is set in
-capitals. JetBrains Mono is kept for numbers, codes and figures. Ink blue marks links and
+The design is editorial and precise: a warm off-white page, one serif typeface with headings at
+regular weight, hairline rules and one ink-blue accent. Sizes are whole pixels on whole-pixel lines,
+as in the application, and numbers use tabular figures so that columns line up; only code and
+commands are set in the system's monospaced font. Panels, tables and figures have square corners
+and hairline frames, with no shadows or gradients. Tables of data and figures are white, and the
+header row of a table sits on a slightly stronger rule. Column headings and small labels are the
+serif at a small size in a secondary grey, in ordinary case: no text is set in capitals. Ink blue
+marks links and
 highlighted figures and is the colour of a chart with one series. Warnings, errors and successes
 are framed blocks on a tinted background with a 3-pixel bar on the left. Every text colour meets
 the WCAG 2.1 AA contrast ratio of 4.5:1 on the background it is used on (``TEXT_PAIRS``, checked
@@ -26,13 +28,13 @@ COLOURS: dict[str, str] = {
     "panel": "#FAF6F0",  # secondary bands and panels
     "white": "#FFFFFF",  # tables of data and figures
     "fill": "#F3EFE8",  # a quiet filled cell
-    "ink": "#1E1E1E",  # headings and strong text
-    "body": "#3B3A38",
-    "secondary": "#64625E",
-    "tertiary": "#6B6863",
-    "hairline": "#E4E0DA",  # dividers and table rules
-    "header_rule": "#CFCAC2",  # the rule under the header row of a table
-    "edge": "#8C8984",  # edges of controls; chart spines
+    "ink": "#0D0D0D",  # headings and strong text
+    "body": "#242422",
+    "secondary": "#63615D",
+    "tertiary": "#6B6965",
+    "hairline": "#E6E3DF",  # dividers and table rules
+    "header_rule": "#D0CDC8",  # the rule under the header row of a table
+    "edge": "#8C8A86",  # edges of controls; chart spines
     "accent": "#2B4392",  # ink blue: links, highlighted figures, the series of a single-series chart
     "accent_deep": "#213573",
     "accent_soft": "#E9EDF7",  # highlighted cells
@@ -58,7 +60,7 @@ TEXT_PAIRS: list[tuple[str, str]] = [
 ]
 
 FONT_SERIF = '"Newsreader", "Iowan Old Style", "Palatino Linotype", Georgia, serif'
-FONT_MONO = '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
+FONT_CODE = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"  # code and commands only
 #: The serif faces of ``FONT_SERIF`` for matplotlib, which uses the first one installed (or its own
 #: default sans when none is; the reports never ship fonts).
 CHART_SERIFS = ("Newsreader", "Iowan Old Style", "Palatino Linotype", "Georgia")
@@ -93,25 +95,25 @@ _VARIABLES = "".join(f"--{name.replace('_', '-')}:{value};" for name, value in C
 
 #: The custom properties and the rules for plain elements that every report shares.
 BASE_CSS = (
-    f":root{{color-scheme:light;{_VARIABLES}--font-serif:{FONT_SERIF};--font-mono:{FONT_MONO}}}"
+    f":root{{color-scheme:light;{_VARIABLES}--font-serif:{FONT_SERIF};--font-code:{FONT_CODE}}}"
     "html{background:var(--page)}"
-    "body{background:var(--page);color:var(--body);font-family:var(--font-serif);font-size:15.5px;line-height:1.55;"
-    "overflow-wrap:break-word;-webkit-font-smoothing:antialiased}"
-    "h1,h2,h3,h4{font-family:var(--font-serif);font-weight:400;color:var(--ink)}"
-    "h1{font-size:40px;line-height:1;letter-spacing:-0.03em;margin:0 0 14px}"
-    "h2{font-size:26px;line-height:1.1;letter-spacing:-0.02em}"
-    "h3{font-size:19px;line-height:1.25;letter-spacing:-0.01em}"
+    "body{background:var(--page);color:var(--body);font-family:var(--font-serif);font-size:16px;line-height:24px;"
+    "overflow-wrap:break-word;-webkit-font-smoothing:antialiased;font-variant-numeric:lining-nums}"
+    "h1,h2,h3,h4{font-family:var(--font-serif);font-weight:400;color:var(--ink);font-variation-settings:'opsz' 24}"
+    "h1{font-size:40px;line-height:40px;letter-spacing:-0.04em;margin:0 0 16px}"
+    "h2{font-size:28px;line-height:32px;letter-spacing:-0.03em}"
+    "h3{font-size:20px;line-height:24px;letter-spacing:-0.02em}"
     "b,strong{color:var(--ink);font-weight:600}"
     "a{color:var(--accent)}"
-    "code,pre{font-family:var(--font-mono)}"
-    "code{font-size:.85em;color:var(--ink);background:var(--fill);padding:1px 4px}"
-    "pre{font-size:12px;line-height:1.55;color:var(--body);background:var(--white);border:1px solid var(--hairline);"
-    "padding:14px 16px;overflow-x:auto}"
+    "code,pre{font-family:var(--font-code)}"
+    "code{font-size:13px;color:var(--ink);background:var(--fill);padding:0 4px}"
+    "pre{font-size:13px;line-height:20px;color:var(--body);background:var(--white);border:1px solid var(--hairline);"
+    "padding:16px;overflow-x:auto}"
     "table{border-collapse:collapse;background:var(--white)}"
-    "th{font-size:13px;font-weight:400;line-height:1.35;color:var(--secondary);text-align:left;"
+    "th{font-size:14px;font-weight:400;line-height:20px;color:var(--secondary);text-align:left;"
     "vertical-align:bottom;border-bottom:1px solid var(--header-rule)}"
     "td{border-bottom:1px solid var(--hairline)}"
-    "td.num{font-family:var(--font-mono);font-size:.94em;font-variant-numeric:tabular-nums}"
+    "td.num{font-variant-numeric:tabular-nums lining-nums}"
     # On a narrow screen a wide table scrolls sideways on its own instead of widening the page.
     "@media (max-width:720px){table{display:block;width:fit-content;max-width:100%;overflow-x:auto}"
     ".scroll table,.wide table{display:table;max-width:none}}"

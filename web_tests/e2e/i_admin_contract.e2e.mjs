@@ -152,6 +152,8 @@ export const tests = [
       const frame = page.frameLocator('iframe.report-frame').first();
       assert.equal(await frame.locator('h1').textContent(), 'Agreement report');
       await frame.locator('body[data-ran="yes"]').waitFor({ timeout: 5000 }); // the report's own script runs in its sandbox
+      // the report is set in the application's typeface, which the frame receives with the page
+      assert.match(await frame.locator('head style').first().textContent(), /font-family:"Newsreader";src:url\(data:/);
       assert.equal(await page.locator('iframe.report-frame').first().getAttribute('sandbox'), 'allow-scripts');
       const tsv = await download(page, () => page.locator('.downloads button', { hasText: 'events_summary.tsv' }).click());
       assert.deepEqual(tsv, { name: 'events_summary.tsv', text: 'category\tf1\nANY-artifact\t0.8\n' });

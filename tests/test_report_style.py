@@ -11,7 +11,7 @@ from electroclean.activity.report import _css as activity_css
 from electroclean.activity.report import line_chart
 from electroclean.reliability.report import CSS as AGREEMENT_CSS
 from electroclean.reliability.report import INK, _table, _value_colour
-from electroclean.report_style import COLOURS, FONT_MONO, FONT_SERIF, TEXT_PAIRS, contrast_ratio
+from electroclean.report_style import COLOURS, FONT_CODE, FONT_SERIF, TEXT_PAIRS, contrast_ratio
 from electroclean.training.assessment import _CSS as COMPETENCY_CSS
 from electroclean.training.assessment import competency_html
 
@@ -32,12 +32,15 @@ def test_every_report_is_flat_and_fetches_nothing(name):
     assert "@font-face" not in css and "@import" not in css and "url(" not in css and "http" not in css
     assert f"--page:{COLOURS['page']}" in css and f"--accent:{COLOURS['accent']}" in css
     assert "uppercase" not in css and "small-caps" not in css  # no text set in capitals
-    # Every font comes from the two stacks, which end in a family every system has.
-    assert {f.strip() for f in re.findall(r"font-family:([^;}]+)", css)} <= {"var(--font-serif)", "var(--font-mono)"}
-    assert FONT_SERIF.endswith(", serif") and FONT_MONO.endswith(", monospace")
+    # One typeface (the code stack only for code), each stack ending in a family every system has.
+    assert {f.strip() for f in re.findall(r"font-family:([^;}]+)", css)} <= {"var(--font-serif)", "var(--font-code)"}
+    assert FONT_SERIF.endswith(", serif") and FONT_CODE.endswith(", monospace")
+    # Whole pixels on whole-pixel lines, as in the application: sharp text and rules.
+    assert not re.search(r"\d+\.\d+px", css), "a fractional pixel size"
+    assert all(v.strip().endswith("px") for v in re.findall(r"line-height:([^;}]+)", css)), "a line height in em or unitless"
 
 
-def test_numbers_in_the_agreement_tables_are_marked_for_the_monospaced_font():
+def test_numbers_in_the_agreement_tables_are_marked_for_tabular_figures():
     page = _table(pd.DataFrame({"category": ["Eye-blink-artifact"], "f1": [0.5], "n_reference": [3]}))
     assert "<td class='nowrap'>Eye-blink-artifact</td>" in page
     assert "<td class='num'>0.500</td>" in page and "<td class='num'>3</td>" in page

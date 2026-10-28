@@ -535,7 +535,7 @@ def _clean(obj: Any) -> Any:
 _CSS = BASE_CSS + (
     "body{max-width:1100px;margin:0 auto;padding:40px 24px 64px} "
     "h3{margin:44px 0 12px;padding-top:16px;border-top:1px solid var(--hairline)} "
-    "table{font-size:14px;line-height:1.45;margin:0.5em 0 1.2em;border:1px solid var(--hairline)} "
+    "table{font-size:14px;line-height:20px;margin:8px 0 20px;border:1px solid var(--hairline)} "
     "td,th{padding:6px 10px;text-align:left;vertical-align:top} th{vertical-align:bottom} "
     "tr:last-child td{border-bottom:0} td.num{text-align:right} "
     "td.cat{white-space:nowrap} .wide{overflow-x:auto} .muted{color:var(--secondary)} "
@@ -581,7 +581,7 @@ def competency_summary_html(report: dict[str, Any]) -> str:
     rs = report["reference_set"]
     colour = _STATUS_COLOUR.get(report["status"], COLOURS["body"])
     p = [f"<h2>Assessment: {html.escape(rs.get('name') or rs['set_id'])}</h2>",
-         f"<p style='color:{colour};font-size:15px'><b>{html.escape(report['status_text'])}</b></p>",
+         f"<p style='color:{colour};font-size:16px'><b>{html.escape(report['status_text'])}</b></p>",
          f"<p>{html.escape(NEXT_STEPS.get(report['status'], ''))}</p>"]
     if report.get("checks"):
         p.append("<h3>Criteria</h3>")

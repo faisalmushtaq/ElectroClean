@@ -295,12 +295,45 @@ export function downloadBase64(name, b64, type = 'application/octet-stream') {
 
 // ------------------------------------------------------------------ reports
 /**
+ * The application's typeface as a style rule with the font inside it (a data URL), for reports in
+ * a sandboxed frame, which cannot load the font file itself. Read once; '' if it cannot be read.
+ */
+let reportFontCss = null;
+function reportFont() {
+  if (!reportFontCss) {
+    reportFontCss = fetch(new URL('../../fonts/Newsreader-Variable.woff2', import.meta.url))
+      .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(String(r.status)))))
+      .then((blob) => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob);
+      }))
+      .then((url) => `<style>@font-face{font-family:"Newsreader";src:url(${url}) format("woff2");font-weight:400 600;font-style:normal}</style>`)
+      .catch(() => '');
+  }
+  return reportFontCss;
+}
+
+/** The report's page with the typeface added at the start of its head. */
+export function withReportFont(html, css) {
+  const page = String(html || '');
+  if (!css) return page;
+  const head = /<head[^>]*>/i.exec(page);
+  return head ? page.slice(0, head.index + head[0].length) + css + page.slice(head.index + head[0].length) : css + page;
+}
+
+/**
  * A report written by the study (agreement, activity, competency) in a sandboxed frame: its own
- * scripts may draw its charts, but it has no access to this page, its sign-in or its storage.
+ * scripts may draw its charts, but it has no access to this page, its sign-in or its storage. The
+ * report names Newsreader, which the frame receives with the page, so that the report is set in the
+ * application's typeface; a downloaded report keeps to the fonts of the computer it is opened on.
  */
 export function reportFrame(html, title) {
   const frame = h('iframe.report-frame', { title, sandbox: 'allow-scripts', referrerpolicy: 'no-referrer', loading: 'lazy' });
-  frame.srcdoc = String(html || '');
+  // The font is read once; the report waits for it at most briefly, then shows without it.
+  const wait = new Promise((resolve) => setTimeout(() => resolve(''), 1500));
+  Promise.race([reportFont(), wait]).then((css) => { frame.srcdoc = withReportFont(html, css); });
   return frame;
 }
 
