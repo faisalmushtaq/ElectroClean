@@ -166,6 +166,28 @@ def test_size_and_shape_limits(manifests: dict[str, dict[str, Any]]) -> None:
 
 
 # ------------------------------------------------------------- the example set
+def _to_12_digits(value: Any) -> Any:
+    """Numbers to 12 significant digits: the amplitude estimates can differ in their last digit or
+    two between processors (Windows, macOS and Linux) through rounding alone."""
+    if isinstance(value, float):
+        return float(f"{value:.12g}")
+    if isinstance(value, dict):
+        return {k: _to_12_digits(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_to_12_digits(v) for v in value]
+    return value
+
+
+def test_synthetic_recordings_are_the_same_bytes_on_every_system(tmp_path: Path) -> None:
+    from electroclean.synthetic import write_recording
+
+    write_recording(tmp_path, "sub-01_task-rest", sfreq=250.0, duration_s=8.0, seed=1, discontinuity_s=4.0)
+    texts = [p for p in tmp_path.iterdir() if p.suffix in (".vhdr", ".vmrk", ".tsv", ".json")]
+    assert len(texts) == 6
+    for p in texts:
+        assert b"\r" not in p.read_bytes(), f"{p.name} has Windows line endings"
+
+
 def test_the_kept_example_manifests_are_those_mne_makes() -> None:
     """If this fails, the example set, the simulation or the loader changed: run
     ``python -m electroclean.web.example`` and commit electroclean/config/example_set_manifests.json."""
@@ -178,9 +200,9 @@ def test_the_kept_example_manifests_are_those_mne_makes() -> None:
     kept = build_example(settings, default_catalogue(), use_mne=False)
     assert (live.registered_with, kept.registered_with) == ("mne", "template")
     assert live.recordings_zip == kept.recordings_zip  # the same recordings, byte for byte
-    by_id = {m["recording_id"]: _stable(m) for m in live.manifests}
-    assert by_id == {m["recording_id"]: _stable(m) for m in template_manifests()}
-    assert {m["recording_id"]: _stable(m) for m in kept.manifests} == by_id
+    by_id = {m["recording_id"]: _to_12_digits(_stable(m)) for m in live.manifests}
+    assert by_id == {m["recording_id"]: _to_12_digits(_stable(m)) for m in template_manifests()}
+    assert {m["recording_id"]: _to_12_digits(_stable(m)) for m in kept.manifests} == by_id
     for m in kept.manifests:  # each would be accepted from a browser too
         assert check_manifest(copy.deepcopy(m), scope="set:example", suffixes=SUFFIXES)["recording_id"]
 

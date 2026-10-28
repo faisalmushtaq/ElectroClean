@@ -173,7 +173,18 @@ def synthesise_signal(
 
 def _write_tsv(path: Path, columns: list[str], rows: list[list[str]]) -> None:
     lines = ["\t".join(columns)] + ["\t".join(r) for r in rows]
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+
+
+def _lf_line_endings(path: Path) -> None:
+    """Give a text file written by another library the line endings of every file written here.
+
+    Every text file of a synthetic recording ends its lines with LF on every system, so that the
+    same recording is the same bytes on Windows, macOS and Linux (the example training set's kept
+    registrations are checked against them byte for byte)."""
+    data = path.read_bytes()
+    if b"\r\n" in data:
+        path.write_bytes(data.replace(b"\r\n", b"\n"))
 
 
 def _append_new_segment(vmrk: Path, sample0: int) -> None:
@@ -182,7 +193,7 @@ def _append_new_segment(vmrk: Path, sample0: int) -> None:
     numbers = [int(ln.split("=")[0][2:]) for ln in lines if ln.startswith("Mk") and "=" in ln]
     nxt = (max(numbers) + 1) if numbers else 1
     lines.append(f"Mk{nxt}=New Segment,,{sample0 + 1},1,0,20240101120000000000")
-    vmrk.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    vmrk.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
 
 
 def write_recording(
@@ -236,6 +247,8 @@ def write_recording(
         meas_date=datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
         overwrite=True,
     )
+    for ext in (".vhdr", ".vmrk"):
+        _lf_line_endings(folder / f"{fname_base}{ext}")
     if discontinuity_s is not None:
         _append_new_segment(folder / f"{fname_base}.vmrk", int(round(discontinuity_s * sfreq)))
     if write_bids_sidecars:
@@ -255,7 +268,7 @@ def write_recording(
                 },
                 indent=2,
             ),
-            encoding="utf-8",
+            encoding="utf-8", newline="\n",
         )
         _write_tsv(
             folder / f"{stem}_channels.tsv",
@@ -278,7 +291,7 @@ def write_recording(
                 },
                 indent=2,
             ),
-            encoding="utf-8",
+            encoding="utf-8", newline="\n",
         )
     timing = RecordingTiming(sfreq=float(sfreq), n_samples=n, first_samp=0)
     return folder / f"{fname_base}.vhdr", plan, timing
@@ -456,7 +469,7 @@ def write_edf_recording(
                  "sample": {"Description": "Stimulus software timestamp."}},
                 indent=2,
             ),
-            encoding="utf-8",
+            encoding="utf-8", newline="\n",
         )
         types = {c: "EEG" for c in names} if all_channels_typed_eeg else {
             **{c: "EEG" for c in EEG_CHANNELS}, "HEOG": "HEOG", "VEOG": "VEOG", "ECG": "ECG",
@@ -466,7 +479,7 @@ def write_edf_recording(
         (folder / f"{stem}_eeg.json").write_text(
             json.dumps({"TaskName": "rest", "SamplingFrequency": sfreq, "PowerLineFrequency": line_freq,
                         "RecordingDuration": duration_s}, indent=2),
-            encoding="utf-8",
+            encoding="utf-8", newline="\n",
         )
     spr = int(round(sfreq))  # one-second data records; the last one is padded
     return path, plan, RecordingTiming(sfreq=float(sfreq), n_samples=-(-n // spr) * spr, first_samp=0)
@@ -537,7 +550,7 @@ def make_synthetic_dataset(
             },
             indent=2,
         ),
-        encoding="utf-8",
+        encoding="utf-8", newline="\n",
     )
     truths: dict[str, AnnotationDocument] = {}
     specs = []
