@@ -44,6 +44,18 @@ Brodbeck, C., Goj, R., Jas, M., Brooks, T., Parkkonen, L., & Hämäläinen, M.
 (2013). MEG and EEG data analysis with MNE-Python. *Frontiers in Neuroscience*,
 7, 267. https://doi.org/10.3389/fnins.2013.00267
 
+## Web platform and cloud services
+
+Microsoft. (2025). Access shared items (Microsoft Graph v1.0). Microsoft Learn.
+https://learn.microsoft.com/en-us/graph/api/shares-get?view=graph-rest-1.0
+(how a sharing URL is encoded as `u!` and unpadded base64url; anonymous access
+does not work for OneDrive for Business and SharePoint)
+
+Microsoft. (2025). Download driveItem content (Microsoft Graph v1.0). Microsoft
+Learn. https://learn.microsoft.com/en-us/graph/api/driveitem-get-content?view=graph-rest-1.0
+(the `/content` request answers with a redirect to a pre-authenticated
+download address, which a request that needs a CORS preflight cannot follow)
+
 ## Filtering
 
 Widmann, A., Schröger, E., & Maess, B. (2015). Digital filter design for

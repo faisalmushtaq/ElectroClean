@@ -57,6 +57,35 @@ If you worked on the recording before without finishing it, ElectroClean offers 
 unfinished work, with the number of annotations and the time spent. Choose Restore and continue, or
 Start afresh to begin again.
 
+## Opening a recording from a link
+
+Your study team may keep the recordings in Dropbox or OneDrive and send you a link to each one
+instead of the file. Paste the link into Open from a link, under the place where you drop files,
+and press Open the link. For a BrainVision recording paste the links of its three files, one per
+line. The page fetches the file straight from Dropbox or OneDrive into this browser, showing how
+much of it has arrived, and then reads it, checks its fingerprint and opens it exactly as if you
+had chosen it on your computer. The file never passes through the study, and the study never sees
+the link: the link is not stored, not sent anywhere but to the service that holds the file, and
+not written to the interaction log.
+
+To share a file from Dropbox, choose Share on the file itself (not on its folder), make sure the
+link is for anyone who has it, and choose Copy link. In OneDrive, choose Share, then Anyone with the
+link can view, and copy the link. Links to other web addresses work too when the server that holds
+the file allows web pages to read it. Treat a share link as you would the file: anyone who has it
+can download the recording until its owner switches the link off, so send it only to the person
+who annotates the recording and switch it off when the study no longer needs it.
+
+Some links cannot be read by a web page. Google Drive never allows it, OneDrive for work or
+school (SharePoint) usually does not, and a link that is not shared with everyone, has expired or
+points to a folder fails too. ElectroClean then says what went wrong in plain words and offers
+the next step in the same place: Download the file opens the link in a new tab, where your browser
+downloads the file, and then choose the downloaded file opens the usual file chooser so that you
+can pick it from your Downloads folder (on an iPad, Downloads in the Files app). ElectroClean
+cannot reach your Downloads folder, so delete the downloaded file there yourself when you have
+finished with it: in the Files app on an iPad, press and hold the file and choose Delete; on a
+Mac, drag it from Downloads in the Finder to the Bin; in Windows, select it in File Explorer and
+press Delete.
+
 ## The annotation view
 
 The EEG fills most of the window, one channel per row with its name on the left, the time along the
@@ -224,5 +253,7 @@ results), the page says so.
 
 If the page says the study does not answer, check your internet connection and try again; if it
 keeps happening, tell your study team. If a file is not recognised although it should be, make sure
-you chose the study's copy of the recording and, for BrainVision, all three of its files. If your
+you chose the study's copy of the recording and, for BrainVision, all three of its files. If a link
+does not open, download the file with the button ElectroClean offers and choose it, or ask your
+study team for a link that anyone with it can open. If your
 sign-in has ended, sign in again: your unsaved work is still in the browser.

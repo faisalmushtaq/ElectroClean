@@ -98,7 +98,8 @@ electroclean/web/static/          the browser application (plain ES modules, no 
     js/data/                      reading recordings: recording.js, worker.js, engine.js, files.js,
                                   edf.js, brainvision.js, channels.js, filters.js, fft.js, pool.js,
                                   filterworker.js, sha256.js, hashworker.js, amplitude.js, util.js,
-                                  synthetic.js; registering them: register.js, bids.js, events.js,
+                                  synthetic.js; links.js and fetch_links.js (recordings opened from
+                                  a link); registering them: register.js, bids.js, events.js,
                                   mnewarn.js, pyfmt.js, pyjson.js
     js/viewer/                    drawing the EEG, axes, overview, navigation; touch.js for two
                                   fingers, long presses and double taps on a touch screen
@@ -216,6 +217,22 @@ channels; `filters.js` and `fft.js` are the display filters, `pool.js` and
 `filterworker.js` share them among several processor cores; `sha256.js` and
 `hashworker.js` compute fingerprints; `amplitude.js` is the plausibility check
 of the amplitude; `util.js` holds small helpers.
+
+`links.js` turns a share link into the address its file is fetched from
+(Dropbox's `www.dropbox.com/scl/fi/…` and `/s/…` links become
+`dl.dropboxusercontent.com/…?dl=1`, which answers any web page with
+`Access-Control-Allow-Origin: *`; a OneDrive link becomes
+`api.onedrive.com/v1.0/shares/u!<base64url of the link>/root/content`, as
+Microsoft's documentation of the shares API describes the encoding), and
+`fetch_links.js` fetches a list of `{role, url}` pairs with a stream reader,
+without cookies, referrer or custom headers (so that no preflight request is
+needed), into `File` objects named from `Content-Disposition` or the link. Those
+files then take the same path as files chosen on the computer. The list of
+pairs is the form an administrator's link for each registered file will take
+when Open fetches it automatically; the panel of the open view
+(`js/views/links_panel.js`) builds it from the links pasted one per line.
+A file larger than 2 GiB is refused, since it is held in memory until it is
+opened.
 
 ### What is read, and how it compares with MNE-Python
 

@@ -5,6 +5,17 @@ Each section below describes the changes in one version of ElectroClean;
 
 ## Unreleased
 
+Annotators can open a recording from a Dropbox or OneDrive link (or any web
+address that lets web pages read its file): Open from a link, on the page
+that opens recordings, takes one link per file, turns share links into the
+addresses their files are downloaded from, fetches the file straight from the
+service with its progress, and opens it as if it had been chosen on the
+computer, with the same fingerprint check. The study never receives the file
+or the link, and the link is neither stored nor logged. When a service does
+not let web pages read the file (Google Drive, most work and school OneDrive
+links, links that are not public), the page says why in plain words and
+offers the next step: download the file in a new tab, then choose it.
+
 ElectroClean now runs in the web browser only, and the desktop application
 has been removed. Annotators open the browser application from a link, sign
 in, and open the recordings they were given from their own computer; the page

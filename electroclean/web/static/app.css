@@ -438,6 +438,13 @@ ul.examples b { font-weight: 400; color: var(--ink); }
 .step.done .step-icon { background: var(--accent); color: #FFFFFF; }
 .step.failed .step-icon { background: var(--danger-bg); color: var(--destructive); }
 .result { margin-top: 12px; }
+/* "Open from a link" (js/views/links_panel.js), under the drop zone */
+.link-panel { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--hairline); }
+.link-panel h3 { margin-top: 0; }
+.link-panel .field.area { height: auto; min-height: 80px; padding: 8px 12px; resize: vertical; font: var(--t-14); word-break: break-all; }
+.link-status:empty { display: none; }
+.link-status { margin-top: 12px; }
+.link-status .banner .btn-row { margin: 8px 0 12px; }
 .example-card { margin-top: 16px; }
 
 /* training path: three stages in a bento row; the current stage carries an ink bar */
@@ -746,6 +753,7 @@ ul.warnings { font: var(--t-14); }
   input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; }
   .field { height: 44px; font: var(--t-16); }
   .field.area { height: auto; }
+  .link-panel .field.area { font: var(--t-16); }
 }
 
 /* Pages come in gently: a short fade of the main column (opacity only, so that text is never

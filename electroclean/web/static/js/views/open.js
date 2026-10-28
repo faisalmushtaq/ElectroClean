@@ -4,6 +4,7 @@
 import { h, clear } from '../ui/dom.js';
 import { appHeader, icon } from './common.js';
 import { CAN_CHOOSE_FOLDER, acceptFiles } from '../util.js';
+import { linkPanel } from './links_panel.js';
 
 const FORMAT_HINT = {
   edf: 'Choose the .edf file.',
@@ -53,6 +54,7 @@ export class OpenView {
       const files = [...(e.dataTransfer ? e.dataTransfer.files : [])];
       if (files.length) this.handle(files);
     });
+    this.links = this.linkSection();
     this.steps = h('ol.steps', { hidden: true, 'aria-live': 'polite' });
     this.result = h('div.result');
     const name = expected ? expected.file_name : null;
@@ -72,8 +74,13 @@ export class OpenView {
         h('h1', {}, name ? `Open ${name}` : 'Open a recording from your computer'),
         h('p.subtitle', {}, 'The recording is read here, in your browser, and is never uploaded. Only its fingerprint (a checksum of the file) is sent to the study, to recognise it.'),
         h('p', {}, FORMAT_HINT[format] || 'Choose an EDF or BDF file, or the .vhdr, .vmrk and .eeg files of a BrainVision recording (or their folder).'),
-        h('section.card', {}, this.drop, this.steps, this.result),
+        h('section.card', {}, this.drop, this.links.el, this.steps, this.result),
         example));
+  }
+
+  /** "Open from a link" (js/views/links_panel.js): the fetched files take the same path as chosen ones. */
+  linkSection() {
+    return linkPanel({ onFiles: (files) => this.handle(files), chooseFile: () => this.fileInput.click() });
   }
 
   async handle(files, fromFolder = false) {

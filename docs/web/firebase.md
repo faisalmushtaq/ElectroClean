@@ -271,6 +271,9 @@ training progress and quiz answers, the interaction logs (times, clicks, keys an
 screen; never typed text or passwords) and the audit log of the administrators' changes (which
 never holds a password or a password link). Firebase Authentication holds each
 person's email address and a hash of their password. Everything is in Google's London region, in a
-project only you administer; browsers can read or write none of it directly. To end a study, export
+project only you administer; browsers can read or write none of it directly. Firestore holds no
+EEG: annotators open the recordings from their own computers, or from a Dropbox or OneDrive link
+that their browser reads straight from that service, and neither the file nor the link reaches
+Firebase. To end a study, export
 the results, then delete its data in the console (Firestore, `studies/<id>`) and its users
 (Authentication), or delete the whole project.
