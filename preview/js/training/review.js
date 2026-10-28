@@ -86,7 +86,7 @@ export class PracticeReview {
     this.el = h('section.review.card', { 'aria-label': 'Practice result' },
       h('h2', {}, 'Practice result'), verdict, summary,
       this.flags.length ? [h('h3', {}, `What to look at (${this.flags.length})`), h('p.caption', {}, 'Click an item, or press N and P, to go to it.'), list]
-        : h('p.success', {}, '✓ Nothing missed, nothing extra and every type matches the experts.'),
+        : h('p.success', {}, 'Nothing missed, nothing extra and every type matches the experts.'),
       h('p.caption', {}, 'Your annotations are labelled YOU and the experts\' REF.'),
       this.backend.isDemo ? h('p.caption.demo-note', {}, DEMO_NOTICE) : null);
     this.ws.reviewHost.appendChild(this.el);

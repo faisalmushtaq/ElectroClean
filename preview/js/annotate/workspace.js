@@ -16,6 +16,7 @@ import { logger, keyName } from '../log/logger.js';
 import { channelsText, clamp, formatHms, local, readableTextColour, UNDO_HINT, CTRL, debounce } from '../util.js';
 import { isTyping } from '../ui/dom.js';
 import { displayCode } from '../catalogue.js';
+import { icon } from '../views/common.js';
 
 const MODE_TEXT = { standard: 'Annotation', guided: 'Guided training', practice: 'Practice', assessment: 'Assessment', tryout: 'Try-out', review: 'Practice review' };
 const DRAG_PX = 3;
@@ -107,8 +108,8 @@ export class Workspace {
   _header() {
     const s = this.s;
     const title = h('div.ws-title', {},
-      this.closeBtn = h('button.btn.quiet', { type: 'button', 'data-log': 'close', onclick: () => this.close() },
-        this.kind === 'review' ? '‹ Training path' : '‹ Close'),
+      this.closeBtn = h('button.btn.quiet.back', { type: 'button', 'data-log': 'close', onclick: () => this.close() },
+        icon('arrow-left'), this.kind === 'review' ? 'Training path' : 'Close'),
       h('div.ws-name', {}, h('h1', { title: s.recordingId }, s.recording.fileName),
         h('span.chip', { class: this.kind === 'tryout' ? 'warning' : 'active' }, MODE_TEXT[this.kind === 'annotate' ? s.mode : this.kind] || s.mode)),
       this.kind === 'tryout' ? h('span.ws-banner', {}, 'This file is not part of the study, so nothing you mark is saved.') : null);
@@ -218,7 +219,7 @@ export class Workspace {
     this.countLabel = h('p.caption.count');
     this.tbody = h('tbody');
     this.table = h('table.ann-table', { 'aria-label': 'Annotations' },
-      h('thead', {}, h('tr', {}, h('th', {}, 'Label'), h('th.code', {}, 'Code'), h('th.num', {}, 'Start (s)'), h('th.num', {}, 'End (s)'), h('th', {}, 'Channels'))),
+      h('thead', {}, h('tr', {}, h('th', {}, 'Label'), h('th.code', {}, 'Code'), h('th.num', { title: 'Start, in seconds' }, 'Start'), h('th.num', { title: 'End, in seconds' }, 'End'), h('th', {}, 'Channels'))),
       this.tbody);
     this.tableWrap = h('div.table-wrap', {}, this.table);
     const btn = (label, fn, cls = '') => h(`button.btn${cls}`, { type: 'button', onclick: fn }, label);
@@ -464,7 +465,7 @@ export class Workspace {
       } else {
         this.typeMenuBtn.append(h('span.type-name.muted', {}, 'Several types'));
       }
-      this.typeMenuBtn.append(h('span.chev', { 'aria-hidden': 'true' }, '▾'));
+      this.typeMenuBtn.append(h('span.chev', {}, icon('chevron-down')));
       this.scopeWhole.setAttribute('aria-pressed', String(this.scope === 'whole'));
       this.scopeSome.setAttribute('aria-pressed', String(this.scope === 'channels'));
       const ch = this.selectedChannels;
@@ -1148,7 +1149,7 @@ export class Workspace {
       buttons: [{ label: 'Keep annotating', value: false }, { label: 'Save and Finish', value: true, kind: 'primary' }], cancelValue: false }).then(Boolean);
   }
 
-  /** Close (the ‹ Close button, or leaving the page's view): unfinished work is kept for later or discarded, as the annotator chooses. */
+  /** Close (the Close button, or leaving the page's view): unfinished work is kept for later or discarded, as the annotator chooses. */
   async close() {
     const s = this.s;
     if (this.kind === 'review') { this.app.leaveRecording(this, 'review_closed'); return true; }

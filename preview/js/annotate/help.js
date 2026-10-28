@@ -2,19 +2,22 @@
 
 import { IS_MAC, CTRL } from '../util.js';
 
-const HOME_END = IS_MAC ? 'fn+← / fn+→' : 'Home / End';
-const PAGE = IS_MAC ? 'fn+↑ / fn+↓' : 'Page Up / Page Down';
+// The arrow keys are drawn icons (app.css), since the typeface has no arrows.
+const ARROW_NAMES = { left: 'Left arrow', right: 'Right arrow', up: 'Up arrow', down: 'Down arrow' };
+const arrow = (dir) => `<kbd aria-label="${ARROW_NAMES[dir]}"><span class="ico ico-arrow-${dir}" aria-hidden="true"></span></kbd>`;
+const HOME_END = IS_MAC ? `<kbd>fn</kbd>+${arrow('left')} / <kbd>fn</kbd>+${arrow('right')}` : '<kbd>Home</kbd> / <kbd>End</kbd>';
+const PAGE = IS_MAC ? `<kbd>fn</kbd>+${arrow('up')} / <kbd>fn</kbd>+${arrow('down')}` : '<kbd>Page Up</kbd> / <kbd>Page Down</kbd>';
 
 export const KEY_HINT = 'Drag to mark  ·  1–9 type  ·  M start, M end  ·  / find a type  ·  N / P next, previous  ·  ? help';
-export const REVIEW_HINT = 'N / P  next, previous item to look at  ·  ← → scroll  ·  ? help';
+export const REVIEW_HINT = 'N / P  next, previous item to look at  ·  arrow keys scroll  ·  ? help';
 
 export const HELP_HTML = `
 <h3>Moving around the recording</h3>
 <table class="keys">
-<tr><td><kbd>←</kbd> / <kbd>→</kbd></td><td>scroll back / forward (Shift: a whole page)</td></tr>
-<tr><td><kbd>↑</kbd> / <kbd>↓</kbd></td><td>scroll up / down through channels (Shift: a whole page)</td></tr>
-<tr><td><kbd>${HOME_END}</kbd></td><td>show less / more time</td></tr>
-<tr><td><kbd>${PAGE}</kbd></td><td>show fewer / more channels</td></tr>
+<tr><td>${arrow('left')} / ${arrow('right')}</td><td>scroll back / forward (Shift: a whole page)</td></tr>
+<tr><td>${arrow('up')} / ${arrow('down')}</td><td>scroll up / down through channels (Shift: a whole page)</td></tr>
+<tr><td>${HOME_END}</td><td>show less / more time</td></tr>
+<tr><td>${PAGE}</td><td>show fewer / more channels</td></tr>
 <tr><td><kbd>−</kbd> / <kbd>+</kbd></td><td>decrease / increase amplitude</td></tr>
 <tr><td>Wheel or trackpad</td><td>scroll through time (Shift+wheel: through the channels)</td></tr>
 <tr><td>Click empty EEG</td><td>place a time cursor showing the exact time</td></tr>
