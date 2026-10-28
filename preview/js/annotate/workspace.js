@@ -15,6 +15,7 @@ import { edgeHalfWidthS } from '../data/synthetic.js';
 import { logger, keyName } from '../log/logger.js';
 import { channelsText, clamp, formatHms, local, readableTextColour, UNDO_HINT, CTRL, debounce } from '../util.js';
 import { isTyping } from '../ui/dom.js';
+import { displayCode } from '../catalogue.js';
 
 const MODE_TEXT = { standard: 'Annotation', guided: 'Guided training', practice: 'Practice', assessment: 'Assessment', tryout: 'Try-out', review: 'Practice review' };
 const DRAG_PX = 3;
@@ -140,7 +141,7 @@ export class Workspace {
         title: `${l.label} (${l.value}) · key ${i + 1}\n${l.description}\n\nClick (or press the key) to draw this type next; with annotations selected, to change them to it.`,
         onclick: () => { logger.noteInput(`button:${i + 1} ${l.short_code}`); this.applyType(name); },
         style: { '--chip-colour': l.colour, '--chip-text': readableTextColour(l.colour) },
-      }, h('span.swatch', { style: { background: l.colour } }), h('span.chip-key', {}, String(i + 1)), h('span.chip-code', {}, l.short_code));
+      }, h('span.swatch', { style: { background: l.colour } }), h('span.chip-key', {}, String(i + 1)), h('span.chip-code', {}, displayCode(l.short_code)));
       b.tabIndex = -1;
       b.addEventListener('mousedown', (e) => e.preventDefault()); // a click leaves the keyboard focus with the EEG
       return b;

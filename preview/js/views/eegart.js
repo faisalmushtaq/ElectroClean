@@ -2,7 +2,7 @@
 // and cool light, like a long exposure of a recording with many channels. It is drawn from a fixed
 // seed, so it is the same every time, and drawn again only when its size changes.
 
-const PALETTE = ['#FFC48A', '#FF8B1A', '#F4D35E', '#9ED9A6', '#3FB58A', '#4FA3E8', '#B9A7F2']; // top to bottom
+const PALETTE = ['#FFC48A', '#FF9A3C', '#F4D35E', '#EADDBF', '#9CC3EE', '#5E8FE0', '#8FA3C7']; // top to bottom: warm to cool
 
 function seeded(seed) {
   let a = seed >>> 0;
@@ -39,7 +39,7 @@ function draw(canvas) {
   g.fillStyle = '#121211';
   g.fillRect(0, 0, w, h);
   // Soft light behind the traces: warm low on the left, cool high on the right.
-  for (const [x, y, r, c, a] of [[0.15, 0.85, 0.75, '255, 139, 26', 0.30], [0.9, 0.15, 0.7, '79, 163, 232', 0.22], [0.55, 0.5, 0.5, '6, 120, 67', 0.20]]) {
+  for (const [x, y, r, c, a] of [[0.15, 0.85, 0.75, '255, 139, 26', 0.30], [0.9, 0.15, 0.7, '79, 143, 232', 0.24], [0.55, 0.5, 0.5, '43, 67, 146', 0.24]]) {
     const glow = g.createRadialGradient(x * w, y * h, 0, x * w, y * h, r * Math.max(w, h));
     glow.addColorStop(0, `rgba(${c}, ${a})`);
     glow.addColorStop(1, `rgba(${c}, 0)`);
