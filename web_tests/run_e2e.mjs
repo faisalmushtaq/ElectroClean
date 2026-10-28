@@ -142,13 +142,17 @@ async function main() {
   const venv = path.join(REPO, '.venv', 'bin', 'python');
   const python = process.env.ELECTROCLEAN_PYTHON || (fs.existsSync(venv) ? venv : 'python3');
   const py = spawn(python, ['-m', 'http.server', String(port), '--bind', '127.0.0.1', '--directory', STATIC], { stdio: ['ignore', 'ignore', 'pipe'] });
+  // http.server logs every request to stderr: read it (keeping the end for diagnostics), or the pipe
+  // fills up after a few hundred requests and the server stops answering.
+  let staticLog = '';
+  py.stderr.on('data', (d) => { staticLog = (staticLog + d).slice(-4000); });
   const { CATALOGUE } = await import(pathToFileURL(path.join(STATIC, 'js', 'api', 'demo_catalogue.js')).href);
   const stub = stubStudy(CATALOGUE);
   const cfg = configStatic();
   await new Promise((r) => stub.server.listen(apiPort, '127.0.0.1', r));
   await new Promise((r) => cfg.server.listen(cfgPort, '127.0.0.1', r));
   const base = `http://127.0.0.1:${port}/`;
-  await waitForHttp(base);
+  await waitForHttp(base).catch((exc) => { throw new Error(`${exc.message}\n${staticLog}`); });
   const browser = await chromium.launch({ headless: !headed });
   if (shotsDir) fs.mkdirSync(shotsDir, { recursive: true });
   const specs = fs.readdirSync(path.join(HERE, 'e2e')).filter((f) => f.endsWith('.e2e.mjs') && f.includes(filter)).sort();

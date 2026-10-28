@@ -54,6 +54,7 @@ function setUpStudy() {
   py('register', path.join(demo, 'training-source'), ...store);
   py('add-user', 'A01', ...store, '--email', 'a01@example.org', '--password', PASSWORD, '--name', 'Annotator one');
   py('add-user', 'T01', ...store, '--email', 't01@example.org', '--password', PASSWORD, '--name', 'Trainee one');
+  py('add-user', 'ADMIN', ...store, '--email', 'admin@example.org', '--password', PASSWORD, '--name', 'Study lead', '--admin');
   py('assign', 'A01', '--all', ...store);
   py('assign', 'T01', '--programme', 'example', ...store);
   return demo;
@@ -208,6 +209,43 @@ async function main() {
       assert.match(review, /You found 0 of 15 reference artifacts/);
       await shot(page, 'practice_review');
       await page.evaluate(() => globalThis.ElectroClean.flushLog());
+    }],
+    ['a lead researcher runs the study from the admin area on Firebase', async () => {
+      const page = await newPage();
+      await signIn(page, 'admin@example.org', PASSWORD);
+      await waitForRoute(page, 'admin', 60000);
+      await page.waitForSelector('.stat-tile', { timeout: 60000 });
+      assert.match((await page.innerText('.admin-main')).replace(/\s+/g, ' '), /\d+ Recordings registered for the study/);
+      const go = async (title, route) => { await page.locator('.admin-nav a', { hasText: title }).click(); await waitForRoute(page, route); };
+
+      // An annotator invited by email: Firebase Authentication makes the account, the page shows the link once.
+      await go('Annotators', 'admin-annotators');
+      const form = page.locator('form.admin-form').first();
+      await form.locator('input').nth(0).fill('A07');
+      await form.locator('input').nth(1).fill('Annotator seven');
+      await form.locator('input[type="email"]').fill('a07@example.org');
+      await page.click('[data-log="user-add"]');
+      await page.waitForSelector('.secret-value', { timeout: 60000 });
+      assert.match(await page.textContent('.secret-value'), /^https?:\/\//);
+      await page.waitForSelector('tr[data-key="A07"]', { timeout: 60000 });
+
+      // Recordings chosen on this computer: the study's own, so all three are already registered.
+      await go('Recordings', 'admin-recordings');
+      await page.setInputFiles('input[data-log="register-folder"]', path.join(demo, 'recordings', 'study'));
+      await page.waitForSelector('[data-log="register"]', { timeout: 120000 });
+      assert.match(await page.innerText('.admin-review'), /Found 3 recordings/);
+      await page.click('[data-log="register"]');
+      await page.waitForFunction(() => /skipped 3/.test(document.querySelector('.admin-review')?.innerText || ''), null, { timeout: 120000 });
+
+      // The activity analysis runs in the function, from the interaction logs of the visits above.
+      await go('Analyses', 'admin-analyses');
+      await page.click('[data-log="activity-run"]');
+      await page.waitForSelector('.admin-section[data-section="analyses"] iframe.report-frame', { timeout: 300000 });
+      await shot(page, 'admin_activity');
+
+      // The change log names the new account.
+      await go('Records', 'admin-records');
+      await page.waitForFunction(() => /A07/.test(document.querySelector('.admin-section[data-section="records"]')?.innerText || ''), null, { timeout: 60000 });
     }],
   ];
 
