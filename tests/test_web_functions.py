@@ -144,7 +144,7 @@ def test_the_admin_area_and_the_quiz_as_callables(main) -> None:
     assert o["counts"]["recordings"] == 3
     with pytest.raises(https_fn.HttpsError) as e:
         call(main, "ec_admin", {"study": "demo", "op": "nothing"}, ADMIN)
-    assert e.value.code.value == "not-found" and e.value.details["error"] == "unknown_operation"
+    assert e.value.code.value == "not-found" and e.value.details["error"] == "not_found"
     with pytest.raises(https_fn.HttpsError) as e:
         call(main, "ec_admin", {"study": "demo", "op": "user_update", "annotator_id": "ADMIN", "role": "annotator"},
              ADMIN)

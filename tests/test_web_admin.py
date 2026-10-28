@@ -82,7 +82,7 @@ def test_only_administrators_use_the_admin_area(client: TestClient, admin: Api) 
     for op in OPERATIONS:
         r = a01.admin(op, {})
         assert r.status_code == 403 and r.json()["error"] == "forbidden", op
-    assert admin.admin_error("no_such_operation", {}, 404, "unknown_operation")
+    assert admin.admin_error("no_such_operation", {}, 404, "not_found")
     r = client.post("/api/v1/admin/overview", json={}, headers=H)
     assert r.status_code == 401
     r = client.post("/api/v1/admin/overview", json={}, headers={"Authorization": f"Bearer {admin.token}"})
@@ -141,6 +141,14 @@ def test_settings_are_read_changed_and_checked(client: TestClient, admin: Api) -
     assert "filters.notch_hz" in entry["summary"] and entry["details"]["changes"]["filters.notch_hz"] == 60.0
     admin.admin_ok("settings_update", {"logging_notice": ""})  # back to ElectroClean's own notice
     assert admin.admin_ok("settings_get")["logging_notice_is_default"] is True
+    # the admin area sends display.scalings as a whole: a type left out goes back to the default
+    scal = dict(s["settings"]["display"]["scalings"], eeg=0.0001)
+    admin.admin_ok("settings_update", {"settings": {"display": {"scalings": scal}}})
+    del scal["misc"]
+    out = admin.admin_ok("settings_update", {"settings": {"display": {"scalings": scal}}})
+    assert out["settings"]["display"]["scalings"]["eeg"] == 0.0001
+    assert out["settings"]["display"]["scalings"]["misc"] == s["settings"]["display"]["scalings"]["misc"]
+    assert Api(client, "A01").ok("get", "/me")["study"]["display"]["scalings"]["eeg"] == 0.0001
 
 
 # ------------------------------------------------------------------------ accounts
@@ -478,8 +486,14 @@ def test_set_settings_and_deletion(client: TestClient, admin: Api, study: Path) 
     for bad in ({"practice_pass": {"event_f1": 2}}, {"guided_tolerance": {"channel_jaccard": 0}},
                 {"criteria": {"criteria": [{"metric": "telepathy", "threshold": 1}]}},
                 {"criteria": {"criteria": [{"threshold": 1}]}}, {"quiz": {"feedback": "sometimes"}},
+                {"criteria": {"criteria": [{"metric": "event_f1", "threshold": "high"}]}},
+                {"criteria": {"criteria": [], "min_reference_events": None}},
+                {"criteria": {"criteria": [{"metric": "label_accuracy", "threshold": 0.5, "scope": "each_category"}]}},
+                {"practice_pass": {"event_f1": "most"}}, {"practice_pass": {"speed": 1}},
+                {"guided_tolerance": {"accepted_labels": {"Eye-blink-artifact": ["Nope"]}}},
                 {"quiz": {"colour": 1}}):
-        admin.admin_error("set_update", {"set_id": "s2", **bad}, 400, "invalid_set")
+        r = admin.admin_error("set_update", {"set_id": "s2", **bad}, 400, "invalid_set")
+        assert "Traceback" not in r["message"] and "argument" not in r["message"], r["message"]
     admin.admin_error("set_update", {"set_id": "s2", "practice_review": "yes"}, 400, "bad_request")
     admin.admin_error("set_update", {"set_id": "s2"}, 400, "bad_request")
     admin.admin_error("set_update", {"set_id": "nope", "name": "x"}, 404, "no_reference_set")
@@ -542,6 +556,13 @@ def test_analyses_on_demand(client: TestClient, admin: Api, recordings: Path, st
     assert r["tables"]["events_summary.tsv"].split("\t")[0] == "category"
     only = admin.admin_ok("agreement", {"annotator_ids": ["A01", "A02"], "recording_ids": [SUB1]})
     assert only["summary"]["n_recordings"] == 1
+    # what the admin area sends: every setting but annotators, modes and extra_measures
+    from electroclean.reliability.config import AnalysisConfig
+
+    sent = {k: v for k, v in AnalysisConfig().to_dict().items() if k not in ("annotators", "modes", "extra_measures")}
+    assert sent["categories"] is None
+    full = admin.admin_ok("agreement", {"modes": ["standard"], "config": sent})
+    assert full["summary"]["config"]["iou_thresholds"] == list(AnalysisConfig().iou_thresholds)
     admin.admin_error("agreement", {"recording_ids": [SUB2]}, 422, "not_enough")
     admin.admin_error("agreement", {"config": {"resolutions_s": [-1]}}, 400, "invalid_config")
     admin.admin_error("agreement", {"config": {"no_such_setting": 1}}, 400, "invalid_config")

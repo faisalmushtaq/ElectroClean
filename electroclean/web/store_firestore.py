@@ -369,11 +369,12 @@ class FirestoreStore(Store):
             if self._sets_cache is not None and now - self._sets_cache[0] < CACHE_S:
                 return self._sets_cache[1]
             out = []
-            for snap in self.doc.collection("reference_sets").stream():
+            # Only the digests are read; a set's contents only when this instance has no copy of that version.
+            for snap in self.doc.collection("reference_sets").select(["digest"]).stream():
                 d = snap.to_dict() or {}
                 folder = self.cache_dir / "reference_sets" / f"{snap.id}-{d.get('digest', 'x')[:16]}"
                 if not (folder / "reference_set.json").is_file():
-                    payload = self._get_blob(snap)
+                    payload = self._get_blob(snap.reference.get())
                     tmp = folder.with_name(folder.name + f".tmp{time.monotonic_ns()}")
                     tmp.mkdir(parents=True, exist_ok=True)  # a new set has no files besides its definition
                     for rel, b64 in payload["files"].items():

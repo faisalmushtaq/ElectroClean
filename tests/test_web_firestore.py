@@ -333,7 +333,7 @@ def test_the_admin_area_on_firestore(service: StudyService, recordings: Path, tm
     from electroclean.synthetic import write_edf_recording
     from tests.web_helpers import build_manifests
 
-    assert admin_err(service, "no_such_op", {}).code == "unknown_operation"
+    assert admin_err(service, "no_such_op", {}).code == "not_found"
     with pytest.raises(ApiError) as e:
         service.call("admin", A01, {"op": "overview"})
     assert e.value.code == "forbidden"
@@ -561,7 +561,7 @@ def test_admin_and_quiz_callables(study: str) -> None:
     status, body = callable_("ec_admin", {"study": study, "op": "overview"}, admin)
     assert status == 200 and body["result"]["counts"]["recordings"] == 3
     _, body = callable_("ec_admin", {"study": study, "op": "no_such_op"}, admin)
-    assert body["error"]["status"] == "NOT_FOUND" and body["error"]["details"]["error"] == "unknown_operation"
+    assert body["error"]["status"] == "NOT_FOUND" and body["error"]["details"]["error"] == "not_found"
     # an account made through the functions, in the Auth emulator
     email = f"a07-{study}@example.org"
     _, body = callable_("ec_admin", {"study": study, "op": "user_add", "annotator_id": "A07", "email": email}, admin)
@@ -588,6 +588,43 @@ def test_admin_and_quiz_callables(study: str) -> None:
     assert body["result"]["user"]["status"] == "disabled"
     _, body = callable_("ec_me", {"study": study}, a07)
     assert body["error"]["details"]["error"] == "not_in_study"
+
+
+@pytest.mark.skipif(not (AUTH and FUNCTIONS), reason="needs the Auth and Functions emulators")
+def test_the_analyses_and_the_example_set_in_the_functions(study: str, recordings: Path) -> None:
+    """In the functions' own environment: vendored code, matplotlib, no Qt and no MNE-Python."""
+    import base64
+    import io
+    import zipfile
+
+    service = StudyService(FirestoreStore(firestore_client(PROJECT), study))
+    ok(service, "submit", A01, submission(recordings, SUB1, [BLINK, EMG]))
+    ok(service, "submit", A02, submission(recordings, SUB1, [ann("e" * 32, "Eye-blink-artifact", 510, 95,
+                                                                 ["Fp1", "Fp2"])]))
+    v = ok(service, "visit_open", A01, {})
+    ok(service, "visit_events", A01, {"visit_id": v["visit_id"], "events": [{"t": 1.0, "type": "key"}]})
+    admin = sign_in(f"admin-{study}@example.org")
+    status, body = callable_("ec_admin", {"study": study, "op": "agreement"}, admin)
+    assert status == 200, body
+    assert "<img" in body["result"]["report_html"] and "events_summary.tsv" in body["result"]["tables"]
+    _, body = callable_("ec_admin", {"study": study, "op": "activity"}, admin)
+    assert "A01" in body["result"]["tables"]["visits.tsv"]
+    _, body = callable_("ec_admin", {"study": study, "op": "results_zip"}, admin)
+    names = zipfile.ZipFile(io.BytesIO(base64.b64decode(body["result"]["base64"]))).namelist()
+    assert "Annotated_Events/completion_register.tsv" in names
+    # the example set, made without MNE-Python from the kept registrations
+    sid = f"t{uuid.uuid4().hex[:10]}"
+    run_cli("init-study", "--study", sid)
+    run_cli("add-user", "ADMIN", "--study", sid, "--email", f"admin-{sid}@example.org", "--password", PASSWORD,
+            "--admin")
+    admin2 = sign_in(f"admin-{sid}@example.org")
+    status, body = callable_("ec_admin", {"study": sid, "op": "set_example_create"}, admin2)
+    assert status == 200, body
+    z = zipfile.ZipFile(io.BytesIO(base64.b64decode(body["result"]["recordings_zip"]["base64"])))
+    assert f"electroclean-example-set/{GUIDED1}" in z.namelist()
+    _, body = callable_("ec_admin", {"study": sid, "op": "audit", "limit": 1}, admin2)
+    entry = body["result"]["entries"][0]
+    assert entry["op"] == "set_example_create" and entry["details"]["registered_with"] == "template"
 
 
 @pytest.mark.skipif(not AUTH, reason="needs the Auth emulator")

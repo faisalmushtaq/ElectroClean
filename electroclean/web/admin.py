@@ -130,6 +130,58 @@ def _plain(value: Any, what: str) -> dict[str, Any]:
     return value
 
 
+def _numbers(value: Any, what: str, keys: tuple[str, ...]) -> dict[str, float]:
+    """An object of the named numbers (only those), each a finite number."""
+    d = _plain(value, what)
+    out = {}
+    for k, v in d.items():
+        if k not in keys:
+            raise ApiError(400, "invalid_set", f"{what} has no setting {k!r}; it has {', '.join(keys)}")
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v):
+            raise ApiError(400, "invalid_set", f"{what}.{k} must be a number")
+        out[k] = float(v)
+    return out
+
+
+def _accepted(value: Any, catalogue: Any) -> dict[str, list[str]]:
+    if not isinstance(value, dict) or not all(isinstance(v, list) for v in value.values()):
+        raise ApiError(400, "invalid_set", "guided_tolerance.accepted_labels must map an artifact type to the types "
+                       "also accepted for it")
+    labels = [str(k) for k in value] + [str(x) for v in value.values() for x in v]
+    unknown = sorted({lab for lab in labels if not catalogue.is_permitted(lab)})
+    if unknown:
+        raise ApiError(400, "invalid_set", f"guided_tolerance.accepted_labels: {unknown[0]} is not an artifact type "
+                       "of the catalogue")
+    return {str(k): [str(x) for x in v] for k, v in value.items()}
+
+
+def _criteria(value: Any) -> dict[str, Any]:
+    """Competency criteria checked as the desktop checks them, with plain reasons."""
+    from electroclean.training.assessment import METRICS, CompetencyCriteria
+
+    d = _plain(value, "criteria")
+    items = d.get("criteria", [])
+    if not isinstance(items, list):
+        raise ApiError(400, "invalid_set", "criteria.criteria must be a list of criteria")
+    for i, c in enumerate(items, start=1):
+        if not isinstance(c, dict) or c.get("metric") not in METRICS:
+            raise ApiError(400, "invalid_set", f"Criterion {i} must name one of the measures "
+                           f"{', '.join(sorted(METRICS))}")
+        t = c.get("threshold")
+        if isinstance(t, bool) or not isinstance(t, (int, float)) or not math.isfinite(t):
+            raise ApiError(400, "invalid_set", f"Criterion {i} ({c['metric']}) needs a number as its threshold")
+    n = d.get("min_reference_events", 3)
+    if isinstance(n, bool) or not isinstance(n, int) or n < 1:
+        raise ApiError(400, "invalid_set", "criteria.min_reference_events must be a whole number of at least 1")
+    cats = d.get("categories")
+    if cats is not None and (not isinstance(cats, list) or not all(isinstance(x, str) for x in cats)):
+        raise ApiError(400, "invalid_set", "criteria.categories must be a list of artifact types, or null for all")
+    try:
+        return CompetencyCriteria.from_dict(d).to_dict()
+    except ValueError as exc:
+        raise ApiError(400, "invalid_set", f"The competency criteria cannot be used: {exc}") from exc
+
+
 # ---------------------------------------------------------------------- the operations
 class Admin:
     def __init__(self, service: StudyService) -> None:
@@ -143,7 +195,7 @@ class Admin:
         if not user.is_admin:
             raise ApiError(403, "forbidden", "Only study administrators can use the admin area")
         if not isinstance(op, str) or op not in OPERATIONS:
-            raise ApiError(404, "unknown_operation", f"There is no administrative operation {op!r}")
+            raise ApiError(404, "not_found", f"This server does not offer the administrative operation {op!r}")
         if not isinstance(body, dict):
             raise _bad("The request must be a JSON object")
         self.store.refresh()
@@ -714,17 +766,19 @@ class Admin:
                                                          minimum=0)))
                 changed.append("allowed annotators")
             if body.get("practice_pass") is not None:
-                rs.set_practice_pass({**rs.practice_pass, **_plain(body["practice_pass"], "practice_pass")})
+                rs.set_practice_pass({**rs.practice_pass, **_numbers(body["practice_pass"], "practice_pass",
+                                                                     ("event_f1", "label_accuracy"))})
                 changed.append("practice pass mark")
             if body.get("guided_tolerance") is not None:
-                rs.set_guided_tolerance({**dict(rs.guided.get("tolerance") or {}),
-                                         **_plain(body["guided_tolerance"], "guided_tolerance")})
+                given = _plain(body["guided_tolerance"], "guided_tolerance")
+                numbers = _numbers({k: v for k, v in given.items() if k != "accepted_labels"}, "guided_tolerance",
+                                   ("seconds", "fraction", "channel_jaccard"))
+                if "accepted_labels" in given:
+                    numbers["accepted_labels"] = _accepted(given["accepted_labels"], self.store.catalogue)
+                rs.set_guided_tolerance({**dict(rs.guided.get("tolerance") or {}), **numbers})
                 changed.append("guided tolerance")
             if body.get("criteria") is not None:
-                try:
-                    rs.set_criteria(_plain(body["criteria"], "criteria"))
-                except KeyError as exc:
-                    raise ApiError(400, "invalid_set", f"Each criterion needs {exc}") from exc
+                rs.set_criteria(_criteria(body["criteria"]))
                 changed.append("competency criteria")
             if body.get("quiz") is not None:
                 quiz = _plain(body["quiz"], "quiz")

@@ -275,8 +275,9 @@ events (409 `visit_closed`); another annotator's visit is 404 `unknown_visit`.
 Lead researchers (accounts with the role `admin`) run the study from the
 **admin area** of the browser application. Every administrative operation is
 `POST /admin/{op}` with a JSON body (403 `forbidden` for anyone else, 404
-`unknown_operation` for an `op` that does not exist) and, on Firebase, the one
-callable function `ec_admin` with `{"study", "op", ...the body}`; in the
+`not_found` for an `op` the server does not offer, as an older server answers;
+the admin area then says the operation is not offered yet) and, on Firebase,
+the one callable function `ec_admin` with `{"study", "op", ...the body}`; in the
 service layer it is `StudyService.admin(op, user, body)`
 (`electroclean/web/admin.py`), so the ElectroClean server and Firebase behave
 the same. Every operation that changes something appends an entry to the
