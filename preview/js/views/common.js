@@ -4,20 +4,20 @@ import { h } from '../ui/dom.js';
 
 const SVG = 'http://www.w3.org/2000/svg';
 
-export function brandMark(size = 28) {
+export function brandMark(size = 28, colour = '#1E1E1E') {
   const svg = document.createElementNS(SVG, 'svg');
   svg.setAttribute('viewBox', '0 0 32 32');
   svg.setAttribute('width', String(size));
   svg.setAttribute('height', String(size));
   svg.setAttribute('aria-hidden', 'true');
   svg.classList.add('brand-mark');
-  // A square of forest green with a white EEG trace, drawn with square ends like the rest of the design.
-  const rect = document.createElementNS(SVG, 'rect');
-  Object.entries({ x: 0, y: 0, width: 32, height: 32, fill: '#1A3C2B' }).forEach(([k, v]) => rect.setAttribute(k, String(v)));
+  // A head seen from above (a thin circle) with an EEG trace running through it, drawn in one line weight.
+  const circle = document.createElementNS(SVG, 'circle');
+  Object.entries({ cx: 16, cy: 16, r: 14.25, fill: 'none', stroke: colour, 'stroke-width': 1.5 }).forEach(([k, v]) => circle.setAttribute(k, String(v)));
   const path = document.createElementNS(SVG, 'path');
-  path.setAttribute('d', 'M5 17h4l2.5-6 3.5 12 3-9 2 3h7');
-  Object.entries({ fill: 'none', stroke: '#FFFFFF', 'stroke-width': 2, 'stroke-linecap': 'square', 'stroke-linejoin': 'miter' }).forEach(([k, v]) => path.setAttribute(k, String(v)));
-  svg.append(rect, path);
+  path.setAttribute('d', 'M3.5 16.5h5l2.4-5.5 3.6 11.5 3.1-9 2 3.5h8.9');
+  Object.entries({ fill: 'none', stroke: colour, 'stroke-width': 1.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }).forEach(([k, v]) => path.setAttribute(k, String(v)));
+  svg.append(circle, path);
   return svg;
 }
 
@@ -30,7 +30,7 @@ export function appHeader(app, { title = '', admin = false } = {}) {
       onclick: () => (admin ? app.showHome() : app.showAdmin('admin')) }, admin ? 'My recordings' : 'Admin')
     : null;
   return h('header.app-header', {},
-    h('div.brand', {}, brandMark(32), h('span.brand-name', {}, 'ElectroClean'),
+    h('div.brand', {}, brandMark(26), h('span.brand-name', {}, 'ElectroClean'),
       study && !(app.backend && app.backend.isDemo) ? h('span.brand-study', {}, study) : null, title ? h('span.brand-study', {}, title) : null,
       admin ? h('span.chip.active.admin-chip', {}, 'Admin') : null,
       app.backend && app.backend.isDemo ? h('span.chip.warning', {}, 'Demonstration') : null),
