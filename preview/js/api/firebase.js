@@ -211,6 +211,11 @@ export class FirebaseBackend {
 
   guidedShowMe(recordingId, body) { return this._call('ec_guided_show_me', { recording_id: recordingId, ...body }); }
 
+  /** The short-segment quiz: only "get" reads, so only it is asked again; an answer is never repeated. */
+  quiz(setId, body) {
+    return this._call('ec_quiz', { set_id: setId, ...body }, { retry: Boolean(body && body.action === 'get') });
+  }
+
   openVisit(body) { return this._call('ec_visit_open', body); }
 
   /** A callable function cannot use fetch(keepalive): the call on page hide is best effort. */

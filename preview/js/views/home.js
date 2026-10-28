@@ -4,6 +4,7 @@ import { h } from '../ui/dom.js';
 import { appHeader } from './common.js';
 import { ask } from '../ui/dialog.js';
 import { formatHms } from '../util.js';
+import { quizCard } from '../training/quiz.js';
 
 const STATUS = { todo: ['To do', ''], in_progress: ['In progress', 'active'], done: ['Done', 'done'] };
 const MODES = { standard: 'Annotation', guided: 'Guided training', practice: 'Practice', assessment: 'Assessment' };
@@ -73,5 +74,5 @@ export function homeView(app) {
   return h('div.view.home', { 'data-view': 'home' }, appHeader(app),
     h('main.page', {},
       h('h1', {}, `Hello${app.me && app.me.display_name ? `, ${app.me.display_name}` : ''}`),
-      h('div.home-grid', {}, h('div.col', {}, nextCard, list), demo ? h('div.col', {}, demo) : null)));
+      h('div.home-grid', {}, h('div.col', {}, nextCard, list, quizCard(app)), demo ? h('div.col', {}, demo) : null)));
 }

@@ -23,7 +23,19 @@ function nextText(next) {
   return `Next: ${STAGE_TITLES[next.stage] || next.stage}.`;
 }
 
-export function trainingPath(data, { annotatorId, message = '', onContinue, onBack }) {
+/** The quizzes of the programme's reference sets, under the stages (null when there are none). */
+function quizSection(quizzes, onQuiz) {
+  if (!quizzes || !quizzes.length || !onQuiz) return null;
+  return h('section.card.quiz-card', { 'data-log': 'quiz-card' },
+    h('h2', {}, quizzes.length === 1 ? 'Short-segment quiz' : 'Short-segment quizzes'),
+    h('p.caption', {}, 'Short pieces of EEG: choose the main artifact type in each. You can take it at any stage of the programme.'),
+    h('ul.quiz-list', {}, quizzes.map((q) => h('li', { 'data-set': q.set_id },
+      h('div', {}, h('b', {}, q.name || q.set_id), h('br'), h('span.caption', {}, `${q.n_items} segment${q.n_items === 1 ? '' : 's'}`)),
+      q.finished ? h('span.chip.done', {}, 'Finished')
+        : h('button.btn.small', { type: 'button', 'data-log': `quiz-${q.set_id}`, onclick: () => onQuiz(q) }, 'Take the quiz')))));
+}
+
+export function trainingPath(data, { annotatorId, message = '', onContinue, onBack, quizzes = [], onQuiz = null }) {
   const pc = (v) => `${Math.round((v || 0) * 100)}%`;
   const cards = data.stages.map((s, i) => {
     const [chip, chipState] = CHIPS[s.status] || [s.status, ''];
@@ -58,5 +70,6 @@ export function trainingPath(data, { annotatorId, message = '', onContinue, onBa
     message ? h('p.success', { role: 'status' }, message) : null,
     h('div.stages', {}, cards),
     h('p.subtitle.next-text', {}, nextText(data.next)),
-    h('div.btn-row.spread', {}, back, cont));
+    h('div.btn-row.spread', {}, back, cont),
+    quizSection(quizzes, onQuiz));
 }
