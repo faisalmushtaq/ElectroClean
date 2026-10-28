@@ -30,7 +30,7 @@ and the recordings of the study.
 Download ElectroClean (the repository, or its source archive) and, in a terminal in its folder:
 
 ```
-python -m pip install -r requirements-web.txt
+python -m pip install -r requirements.txt
 python -m pip install --no-deps -e .
 electroclean-web --help
 ```

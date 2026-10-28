@@ -181,7 +181,7 @@ async function main() {
       };
       const t0 = Date.now();
       if (t.needs === 'study' && !study) {
-        console.log(`skip ${file} › ${t.name} (the study server needs the packages of requirements-web.txt)`);
+        console.log(`skip ${file} › ${t.name} (the study server needs the packages of requirements.txt)`);
         continue;
       }
       try {

@@ -11,7 +11,7 @@ for example a university server.
 In the ElectroClean folder:
 
 ```
-python -m pip install -r requirements-web.txt
+python -m pip install -r requirements.txt
 python -m pip install --no-deps -e .
 ```
 
