@@ -274,11 +274,12 @@ export const tests = [
     name: 'the admin area in a window 400 pixels wide: every section without sideways scrolling',
     async run(t) {
       const { assert } = t;
-      const page = await t.newPage({ width: 400, height: 800 });
+      // A bookmarked section opens again once the administrator has signed in.
+      const page = await t.newPage({ width: 400, height: 800, url: `${t.base}#admin-records` });
       await page.waitForSelector('form.signin-form');
       await signIn(page, 'ADMIN');
-      await waitForRoute(page, 'admin');
-      await page.waitForSelector('.stat-tile');
+      await waitForRoute(page, 'admin-records');
+      await page.waitForSelector('.admin-section[data-section="records"] td');
       assert.equal(await page.isVisible('.small-screen'), false);
       for (const [title, route] of [['Overview', 'admin'], ['Annotators', 'admin-annotators'], ['Recordings', 'admin-recordings'],
         ['Assignments', 'admin-assignments'], ['Training', 'admin-training'], ['Analyses', 'admin-analyses'], ['Results', 'admin-results'],

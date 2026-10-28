@@ -41,6 +41,8 @@ export class AnalysesSection {
     this.agreementHost = h('div.admin-stack');
     this.activityHost = h('div.admin-stack');
     this.competencyHost = h('div.admin-stack');
+    // Results stay when the forms are made again (when the lists of people or recordings changed).
+    this.results = { agreement: h('div.admin-stack'), activity: h('div.admin-stack'), competency: h('div.admin-stack') };
     this.el = h('section.admin-section', { 'data-section': 'analyses' },
       sectionHead('Analyses', 'The study computes these from the saved annotations and the interaction logs, with the same code as the command-line tools. Large studies take a while.'),
       this.msg, this.agreementHost, this.activityHost, this.competencyHost);
@@ -59,8 +61,10 @@ export class AnalysesSection {
       this.msg.problem(exc);
       return;
     }
-    if (!this.built) {
-      this.built = true;
+    const lists = JSON.stringify([this.users.map((u) => u.annotator_id), this.recordings.map((r) => r.recording_id), this.sets.map((x) => x.set_id)]);
+    if (lists !== this.lists) {
+      this.lists = lists;
+      for (const host of [this.agreementHost, this.activityHost, this.competencyHost]) clear(host);
       this._agreementForm();
       this._activityForm();
       this._competencyForm();
@@ -125,7 +129,7 @@ export class AnalysesSection {
     syncCriterion();
     const msg = messageArea();
     const progress = progressLine();
-    const result = h('div.admin-stack');
+    const result = this.results.agreement;
     const run = h('button.btn.primary', { type: 'button', 'data-log': 'agreement-run' }, 'Run the agreement analysis');
     const config = () => {
       const cfg = {
@@ -199,7 +203,7 @@ export class AnalysesSection {
       { legend: 'Annotators (none ticked: everyone)', name: 'activity-annotators' });
     const msg = messageArea();
     const progress = progressLine();
-    const result = h('div.admin-stack');
+    const result = this.results.activity;
     const run = h('button.btn.primary', { type: 'button', 'data-log': 'activity-run' }, 'Run the activity analysis');
     run.addEventListener('click', () => this._run('activity', run, progress, msg, async () => {
       clear(result);
@@ -219,7 +223,7 @@ export class AnalysesSection {
     const who = select(this.users.map((u) => [u.annotator_id, `${u.annotator_id}${u.display_name ? ` · ${u.display_name}` : ''}`]));
     const msg = messageArea();
     const progress = progressLine();
-    const result = h('div.admin-stack');
+    const result = this.results.competency;
     const run = h('button.btn.primary', { type: 'button', 'data-log': 'competency-run' }, 'Write the competency report');
     run.disabled = !this.sets.length;
     run.addEventListener('click', () => this._run('competency', run, progress, msg, async () => {

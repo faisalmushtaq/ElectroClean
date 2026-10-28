@@ -63,6 +63,9 @@ export class App {
 
   // ===================================================================== start
   async boot() {
+    // A bookmarked section of the admin area opens again once its administrator has signed in.
+    const asked = (location.hash || '').replace(/^#/, '');
+    if (ADMIN_ROUTE.test(asked)) this._adminReturn = asked;
     this._render(h('main.page.loading', {}, h('p.subtitle', {}, 'Starting ElectroClean…')), 'signin');
     let where;
     try { where = await findBackend(); } catch { where = { kind: 'demo', source: 'none' }; }
@@ -155,7 +158,9 @@ export class App {
     await this.loadAssignments();
     const want = (location.hash || '').replace(/^#/, '');
     // Administrators start in the admin area (or where a reload left them); they can still annotate.
-    if (this.isAdmin && (ADMIN_ROUTE.test(want) || !want || want === 'signin')) await this.showAdmin(ADMIN_ROUTE.test(want) ? want : 'admin');
+    const back = this._adminReturn;
+    this._adminReturn = null;
+    if (this.isAdmin && (ADMIN_ROUTE.test(want) || !want || want === 'signin')) await this.showAdmin(ADMIN_ROUTE.test(want) ? want : back || 'admin');
     else if (this.me.programme && (!want || want === 'signin' || want === 'training' || quiet)) await this.showTraining();
     else this.showHome();
   }
@@ -191,6 +196,7 @@ export class App {
   sessionExpired() {
     if (this._expiring) return;
     this._expiring = true;
+    if (ADMIN_ROUTE.test(this.route || '')) this._adminReturn = this.route;
     if (this.ws) {
       this.ws.s.saveLocal();
       this.ws.destroy();

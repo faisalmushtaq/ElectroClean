@@ -226,7 +226,7 @@ export class TrainingSection {
     const use = radios(`new-use-${s.set_id}`, Object.entries(USES).map(([v, t]) => [v, t]), '');
     const kinds = [
       ['annotator', 'Someone\'s saved annotations', 'An expert annotates the recording in this study (in Annotation mode), and their saved work becomes the reference.'],
-      ['document', 'An annotation file', 'An ElectroClean _annotations.json, for example from the desktop application.'],
+      ['document', 'An annotation file', 'An ElectroClean _annotations.json, for example one saved in another ElectroClean study.'],
       ['consensus', 'A consensus of several annotators', 'Where enough of them agree, sample by sample, for each artifact type.'],
       ['adjudicated', 'An adjudicated consensus', 'An adjudicator\'s saved annotations, made after reviewing the experts\' disagreements.'],
     ];
