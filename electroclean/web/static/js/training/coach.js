@@ -34,8 +34,10 @@ export class GuidedCoach {
     this.stars = [];
     this.shownNow = false;
     this.last = null;
-    this.busy = false;
+    this.busy = false; // a check is being made
+    this.acting = false; // Continue or Show me is waiting for the study's answer
     this.pending = false;
+    this.continueWanted = false; // Continue was pressed while a check was on its way
     this.flashed = false;
     this.stepT0 = performance.now();
     this._timer = null;
@@ -94,6 +96,7 @@ export class GuidedCoach {
   _startStep(step) {
     this.step = step;
     this.last = null;
+    this.continueWanted = false;
     this.shownNow = false;
     this.flashed = false;
     this.stepT0 = performance.now();
@@ -111,6 +114,7 @@ export class GuidedCoach {
     this.continueBtn.textContent = 'Continue';
     this.continueBtn.hidden = false;
     this.showMeBtn.hidden = false;
+    this.showMeBtn.disabled = false;
     this.continueBtn.disabled = true;
     this._stars();
     const v = this.ws.viewer;
@@ -139,7 +143,7 @@ export class GuidedCoach {
   }
 
   async check({ initial = false } = {}) {
-    if (this.busy) { this.pending = true; return; }
+    if (this.busy || this.acting) { this.pending = true; return; }
     if (!this.step && !this.complete) return;
     this.busy = true;
     const annotations = this.ws.store.toJSON();
@@ -148,12 +152,13 @@ export class GuidedCoach {
       r = await this.backend.guidedCheck(this.rid, { step: this.complete ? this.nSteps : this.step.step, annotations });
     } catch (exc) {
       this.busy = false;
+      this.continueWanted = false;
       if (exc.status === 409) { await this.refresh(); return; }
       this._feedback(`The coach could not check your work: ${exc.message}`, 'banner');
       return;
     }
     this.busy = false;
-    if (this.pending) { this.pending = false; this.check(); return; }
+    if (this.pending && !this.acting) { this.pending = false; this.check(); return; }
     this.last = r;
     if (!initial) {
       logger.event('guided_check', { recording: this.rid, step: this.step ? this.step.step : this.nSteps, matched: r.matched, candidate: r.candidate_id,
@@ -161,6 +166,10 @@ export class GuidedCoach {
     }
     if (this.complete) { this._showCompleteCheck(r); return; }
     this._showResult(r);
+    if (this.continueWanted) {
+      this.continueWanted = false;
+      if (r.can_continue) this.continue();
+    }
   }
 
   _showResult(r) {
@@ -214,23 +223,39 @@ export class GuidedCoach {
       : `Up to ${STARS_FIRST} stars for each artifact you match yourself.`;
   }
 
-  canContinue() { return !this.complete && !this.busy && Boolean(this.last && this.last.can_continue); }
+  canContinue() { return !this.complete && !this.busy && !this.acting && Boolean(this.last && this.last.can_continue); }
+
+  /** Whether Enter or Space means Continue now: also while a check is on its way, which then
+   *  decides (a slow answer must not swallow the key). */
+  takesContinueKey() { return !this.complete && !this.acting && Boolean(this.last && this.last.can_continue); }
+
+  /** One action at a time: while the study answers Continue or Show me, neither can be pressed again
+   *  (a slow answer, such as a function's cold start, must not place an annotation twice). */
+  _acting(on) {
+    this.acting = on;
+    this.showMeBtn.disabled = on;
+    this.continueBtn.disabled = on || !(this.last && this.last.can_continue);
+  }
 
   async continue() {
+    if (this.busy && this.takesContinueKey()) { this.continueWanted = true; return; }
     if (!this.canContinue()) return;
     const step = this.step;
     const stars = this.last.stars || 0;
     const candidate = this.last.candidate_id;
     let next;
-    this.continueBtn.disabled = true;
+    this._acting(true);
     try {
       next = await this.backend.guidedContinue(this.rid, { step: step.step });
     } catch (exc) {
+      this._acting(false);
+      this.pending = false;
       if (exc.status === 409) { await this.refresh(); return; }
       this._feedback(`The coach could not go on: ${exc.message}`, 'banner');
-      this.continueBtn.disabled = false;
       return;
     }
+    this._acting(false);
+    this.pending = false; // a check of the step just completed is no longer wanted
     if (candidate) this.matchedIds.add(candidate);
     this.stars.push(stars);
     logger.event('guided_step_completed', { recording: this.rid, step: step.step, stars, used_show_me: this.shownNow,
@@ -247,15 +272,22 @@ export class GuidedCoach {
   }
 
   async showMe() {
-    if (this.complete || !this.step || !this.ws.editable) return;
+    if (this.complete || !this.step || !this.ws.editable || this.acting) return;
+    const step = this.step;
     let r;
+    this._acting(true);
     try {
-      r = await this.backend.guidedShowMe(this.rid, { step: this.step.step });
+      r = await this.backend.guidedShowMe(this.rid, { step: step.step });
     } catch (exc) {
-      if (exc.status === 409) { await this.refresh(); return; }
+      this._acting(false);
+      if (exc.status === 409) { this.pending = false; await this.refresh(); return; }
       this._feedback(`The coach could not show the answer: ${exc.message}`, 'banner');
+      if (this.pending) { this.pending = false; this.check(); }
       return;
     }
+    this._acting(false);
+    this.pending = false; // checked below, with the experts' annotation in place
+    if (this.complete || this.step !== step) return; // the coach has moved on meanwhile
     const t = r.annotation;
     const cand = this.last ? this.last.candidate_id : null;
     const store = this.ws.store;

@@ -67,7 +67,7 @@ export class FirebaseBackend {
    * @param {{config: object, study: string, region?: string, sdk: object, onUnauthorized?: () => void}} opts
    * `sdk` is {app, auth, functions}: the three Firebase modules (or test doubles of them).
    */
-  constructor({ config, study, region = DEFAULT_REGION, sdk, onUnauthorized = null }) {
+  constructor({ config, study, region = DEFAULT_REGION, sdk, onUnauthorized = null, emulators = null }) {
     this.kind = 'firebase';
     this.signInWith = 'email';
     this.study = study || '';
@@ -80,12 +80,24 @@ export class FirebaseBackend {
     this.auth = sdk.auth.getAuth(this.app);
     this.functions = sdk.functions.getFunctions(this.app, this.region);
     this.health = { ok: true, study: this.study, demo: false, firebase: true, project: config && config.projectId };
+    if (emulators) this._useEmulators(emulators);
     this._persistence = null;
   }
 
-  static async create({ config, study, region, sdkBase, sdk = null, onUnauthorized = null }) {
+  /** For testing on the Firebase Emulator Suite: {auth: 'http://127.0.0.1:9099', functions: '127.0.0.1:5001'}. */
+  _useEmulators({ auth = null, functions = null }) {
+    if (auth) this.sdk.auth.connectAuthEmulator(this.auth, auth, { disableWarnings: true });
+    if (functions) {
+      const m = /^(?:https?:\/\/)?([^:/]+):(\d+)\/?$/.exec(String(functions));
+      if (!m) throw new Error(`emulators.functions must be host:port, not ${functions}`);
+      this.sdk.functions.connectFunctionsEmulator(this.functions, m[1], Number(m[2]));
+    }
+    this.health.emulators = true;
+  }
+
+  static async create({ config, study, region, sdkBase, sdk = null, onUnauthorized = null, emulators = null }) {
     const modules = sdk || await loadFirebaseSdk(sdkBase || SDK_BASE);
-    const backend = new FirebaseBackend({ config, study, region, sdk: modules, onUnauthorized });
+    const backend = new FirebaseBackend({ config, study, region, sdk: modules, onUnauthorized, emulators });
     await backend.ready();
     return backend;
   }

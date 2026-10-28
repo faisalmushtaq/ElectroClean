@@ -25,9 +25,11 @@ function fakeSdk({ handlers = {}, users = { 'ann@example.org': { password: 'righ
       },
       sendPasswordResetEmail: async (auth, email) => { state.resets.push(email); },
       signOut: async () => { state.currentUser = null; },
+      connectAuthEmulator: (auth, url) => { state.authEmulator = url; },
     },
     functions: {
       getFunctions: (app, region) => ({ app, region }),
+      connectFunctionsEmulator: (fns, host, port) => { state.functionsEmulator = `${host}:${port}`; },
       httpsCallable: (fns, name) => async (data) => {
         calls.push({ name, region: fns.region, data });
         const h = handlers[name];
@@ -91,4 +93,16 @@ test('HttpsError becomes the same errors as the server gives', async () => {
   const offline = toApiError(new FakeHttpsError('unavailable', 'unavailable'));
   assert.equal(offline.code, 'network');
   assert.equal(authError({ code: 'auth/too-many-requests' }).status, 429);
+});
+
+test('config.json can point the backend at the Firebase emulators, for testing', async () => {
+  const { sdk, state } = fakeSdk();
+  const plain = await FirebaseBackend.create({ config: {}, study: 's', sdk });
+  assert.equal(state.authEmulator, undefined);
+  assert.equal(plain.health.emulators, undefined);
+  const b = await FirebaseBackend.create({ config: {}, study: 's', sdk, emulators: { auth: 'http://127.0.0.1:9099', functions: 'http://127.0.0.1:5001' } });
+  assert.equal(state.authEmulator, 'http://127.0.0.1:9099');
+  assert.equal(state.functionsEmulator, '127.0.0.1:5001');
+  assert.equal(b.health.emulators, true);
+  assert.throws(() => new FirebaseBackend({ config: {}, study: 's', sdk, emulators: { functions: 'nowhere' } }), /host:port/);
 });

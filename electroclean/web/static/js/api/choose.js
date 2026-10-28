@@ -5,7 +5,9 @@
 //   ?server=https://…            a study server (remembered in this browser)
 //   config.json beside index.html
 //       {"firebase": {...}, "study": "<id>", "functions_region": "europe-west2"}   a study on Firebase
-//                                (?study=<id> picks another study of the same project)
+//                                (?study=<id> picks another study of the same project; "emulators":
+//                                {"auth": "http://127.0.0.1:9099", "functions": "127.0.0.1:5001"} for
+//                                testing on the Firebase Emulator Suite)
 //       {"server": "https://…"}  a study server
 //   the server remembered in this browser
 //   the server that serves this page itself (api/v1/health beside index.html)
@@ -68,7 +70,8 @@ export async function findBackend() {
   if (cfg && cfg.firebase && typeof cfg.firebase === 'object') {
     return {
       kind: 'firebase', config: cfg.firebase, study: q.get('study') || cfg.study || '',
-      region: cfg.functions_region || cfg.region || 'europe-west2', sdkBase: cfg.sdk_base || undefined, source: 'config',
+      region: cfg.functions_region || cfg.region || 'europe-west2', sdkBase: cfg.sdk_base || undefined,
+      emulators: cfg.emulators && typeof cfg.emulators === 'object' ? cfg.emulators : null, source: 'config',
     };
   }
   if (cfg && typeof cfg.server === 'string' && cfg.server) {

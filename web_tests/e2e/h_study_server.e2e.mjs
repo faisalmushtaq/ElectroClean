@@ -173,8 +173,9 @@ export const tests = [
         for (let i = 0; i < 20 && !/Recording complete/.test(await coachText(page)); i++) {
           await page.locator('.coach button', { hasText: 'Show me' }).click();
           await waitForCoach(page, /This is how the experts marked it/);
-          await page.keyboard.press('Enter');
-          await page.waitForTimeout(200);
+          const before = await page.textContent('.coach-header');
+        await page.keyboard.press('Enter');
+        await page.waitForFunction((h) => document.querySelector('.coach-header')?.textContent !== h, before, { timeout: 30000 });
         }
         await waitForCoach(page, /Recording complete/);
       };
