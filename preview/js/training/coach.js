@@ -1,7 +1,7 @@
 // The coach of guided training ("Learn with the experts"): one of the experts' annotations at a
-// time, checked after every change. The checking is done by the study (server or demonstration),
-// which keeps the experts' answers; the coach shows the instruction, the feedback and the stars,
-// as the desktop coach (electroclean/training/guided_gui.py) does.
+// time, checked after every change. The checking is done by the study, which keeps the experts'
+// answers (the server or functions with electroclean/training/guided.py, the demonstration with
+// rules.js); the coach shows the instruction, the feedback and the stars.
 
 import { h, clear, richText } from '../ui/dom.js';
 import { inform } from '../ui/dialog.js';
@@ -55,7 +55,7 @@ export class GuidedCoach {
     this.starsEl = h('p.caption.coach-stars');
     this.showMeBtn = h('button.btn.quiet', { type: 'button', title: "Place the experts' annotation for you (this step then earns one star)", onclick: () => this.showMe() }, 'Show me');
     this.continueBtn = h('button.btn.primary', { type: 'button', title: 'Go on to the next artifact (Enter or Space)', disabled: true, onclick: () => this.continue() }, 'Continue');
-    // Like the desktop's NoFocus buttons: Space and Enter stay the window's own keys.
+    // The buttons never take the keyboard focus, so Space and Enter stay the view's own keys.
     for (const b of [this.showMeBtn, this.continueBtn]) { b.tabIndex = -1; b.addEventListener('mousedown', (e) => e.preventDefault()); }
     this.el = h('section.coach.card', { 'aria-label': 'Learn with the experts' },
       h('div.coach-scroll', {}, this.header, this.progress, this.title, this.feedback, this.body, this.description, this.note, this.starsEl,

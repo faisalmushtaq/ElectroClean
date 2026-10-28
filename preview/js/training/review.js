@@ -1,6 +1,7 @@
 // The review of a practice recording after it is saved: the trainee's annotations and the
 // experts' side by side, the disagreements labelled on the EEG (MISSED, EXTRA, TYPE) and listed
-// under "What to look at", which N and P step through (as guided_gui.add_review_flags).
+// under "What to look at", which N and P step through. The flags come from the study's practice
+// feedback (electroclean/training/review.py on the server, scoring.js in the demonstration).
 
 import { h } from '../ui/dom.js';
 import { safeFragment } from '../ui/sanitize.js';

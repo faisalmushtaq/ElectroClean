@@ -218,7 +218,7 @@ export function problemText(exc) {
 }
 
 // ------------------------------------------------------------- numbers and ids
-/** Numbers separated by spaces or commas, with a plain-words error (reliability.gui.parse_numbers). */
+/** Numbers separated by spaces or commas, with a plain-words error (the agreement analysis's time bins and thresholds). */
 export function parseNumbers(text, what, example) {
   const parts = String(text || '').replace(/,/g, ' ').split(/\s+/).filter(Boolean);
   if (!parts.length) throw new Error(`${what}: give at least one number, for example ${example}.`);

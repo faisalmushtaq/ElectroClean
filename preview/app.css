@@ -1,7 +1,8 @@
-/* ElectroClean in the browser. The design system of the desktop application
-   (electroclean/app/gui/style.py): quiet controls so the EEG stands out, one primary action per
-   view in the accent colour, cards on an 8-pixel grid, and text colours that meet WCAG 2.1 AA.
-   The page is light only (color-scheme: light); every colour is set here. */
+/* ElectroClean in the browser. The application's design system, carried over from the former
+   desktop application: quiet controls so the EEG stands out, one primary action per view in the
+   accent colour, cards on an 8-pixel grid, and text colours that meet WCAG 2.1 AA. The page is
+   light only (color-scheme: light); every colour is set here, and js/ui/theme.js repeats the
+   colours that are drawn on canvas. */
 
 :root {
   color-scheme: light;
@@ -430,8 +431,7 @@ ul.warnings { font-size: 12.5px; }
 }
 
 /* ------------------------------------------------------------ the short-segment quiz
-   (js/training/quiz.js): the segment on the left, the question and answers on the right, as the
-   desktop's quiz window. */
+   (js/training/quiz.js): the segment on the left, the question and answers on the right. */
 .quiz-card { margin-top: 16px; }
 ul.quiz-list, ul.quiz-files { list-style: none; padding: 0; margin: 8px 0; }
 ul.quiz-list li, ul.quiz-files li {

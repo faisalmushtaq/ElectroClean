@@ -1,6 +1,6 @@
-// The short-segment quiz (as the desktop's QuizWindow in electroclean/training/gui.py): one short EEG
+// The short-segment quiz, which follows the quiz of the former desktop application: one short EEG
 // segment at a time, with the question "Which artifact type is the main one in the shaded
-// segment?", the answers grouped by family as in the annotation window, feedback after each answer
+// segment?", the answers grouped by family as in the annotation view, feedback after each answer
 // or at the end as the quiz requires, and the score. The segments are shown from the annotator's own
 // copies of the recordings, opened from their computer and checked against the fingerprints in the
 // study's manifests; the EEG never leaves the computer. The study keeps the answers and the
@@ -23,7 +23,7 @@ const SEGMENT_LABEL = '\u0000quiz-segment';
 const SEGMENT_COLOUR = '#0066CC';
 
 // ------------------------------------------------------------------ pure helpers
-/** Python's round(): halves to the even neighbour (the desktop cuts segments with it). */
+/** Python's round(): halves to the even neighbour (the desktop application cut segments with it). */
 function pyRound(x) {
   const f = Math.floor(x);
   const d = x - f;
@@ -40,7 +40,7 @@ export function nextIndex(items, answered) {
 
 /**
  * The samples of an item's segment with its context, and of the shaded part within it, as the
- * desktop cuts them (tmin = start - context, tmax = end + context, within the recording).
+ * desktop application cut them (tmin = start - context, tmax = end + context, within the recording).
  * @returns {{s0: number, s1: number, h0: number, h1: number}} h0, h1 relative to s0
  */
 export function segmentBounds(item, sfreq, nSamples) {
@@ -56,8 +56,8 @@ export function segmentBounds(item, sfreq, nSamples) {
 }
 
 /**
- * The answers under their family headings, in the order given (as the desktop lists them): an
- * answer that is not in the catalogue (the "no artifact" answer) comes under "Other".
+ * The answers under their family headings, in the order given (the catalogue's, as the study sends
+ * them): an answer that is not in the catalogue (the "no artifact" answer) comes under "Other".
  * @param {string[]} options
  * @param {import('../catalogue.js').Catalogue} catalogue
  */
@@ -108,7 +108,8 @@ export function verdictText(result) {
 
 /**
  * "You answered 4 of 6 segments correctly (67%)." For a quiz finished before every segment was
- * answered (an incomplete result), the proportion is of the segments answered, as the desktop's.
+ * answered (an incomplete result), the proportion is of the segments answered, as in
+ * QuizSession.score() (electroclean/training/quiz.py).
  */
 export function scoreText(score) {
   const items = score.n_items ?? score.n_answered ?? 0;
@@ -127,7 +128,7 @@ export function feedbackText(feedback) {
   return '';
 }
 
-/** The quiz mode as the desktop's logs name it: feedback after each answer is practice. */
+/** The quiz mode as the logs and the saved results name it: feedback after each answer is practice. */
 export function quizMode(feedback) {
   return feedback === 'immediate' ? 'practice' : 'assessment';
 }
@@ -485,7 +486,7 @@ export class QuizView {
     this.submitBtn.textContent = 'Sending…';
     let res;
     try {
-      // the time from showing the segment to the answer, kept with the answer as the desktop keeps it
+      // the time from showing the segment to the answer, kept with the answer in the saved result
       res = await this.backend.quiz(this.setId, { action: 'answer', item_id: item.item_id, label, response_time_s: rt });
     } catch (exc) {
       this.busy = false;
