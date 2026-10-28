@@ -11,11 +11,12 @@ export function brandMark(size = 28) {
   svg.setAttribute('height', String(size));
   svg.setAttribute('aria-hidden', 'true');
   svg.classList.add('brand-mark');
+  // A square of forest green with a white EEG trace, drawn with square ends like the rest of the design.
   const rect = document.createElementNS(SVG, 'rect');
-  Object.entries({ x: 1, y: 1, width: 30, height: 30, rx: 8, fill: '#0066CC' }).forEach(([k, v]) => rect.setAttribute(k, String(v)));
+  Object.entries({ x: 0, y: 0, width: 32, height: 32, fill: '#1A3C2B' }).forEach(([k, v]) => rect.setAttribute(k, String(v)));
   const path = document.createElementNS(SVG, 'path');
   path.setAttribute('d', 'M5 17h4l2.5-6 3.5 12 3-9 2 3h7');
-  Object.entries({ fill: 'none', stroke: '#FFFFFF', 'stroke-width': 2.2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }).forEach(([k, v]) => path.setAttribute(k, String(v)));
+  Object.entries({ fill: 'none', stroke: '#FFFFFF', 'stroke-width': 2, 'stroke-linecap': 'square', 'stroke-linejoin': 'miter' }).forEach(([k, v]) => path.setAttribute(k, String(v)));
   svg.append(rect, path);
   return svg;
 }
@@ -29,7 +30,7 @@ export function appHeader(app, { title = '', admin = false } = {}) {
       onclick: () => (admin ? app.showHome() : app.showAdmin('admin')) }, admin ? 'My recordings' : 'Admin')
     : null;
   return h('header.app-header', {},
-    h('div.brand', {}, brandMark(26), h('span.brand-name', {}, 'ElectroClean'),
+    h('div.brand', {}, brandMark(32), h('span.brand-name', {}, 'ElectroClean'),
       study && !(app.backend && app.backend.isDemo) ? h('span.brand-study', {}, study) : null, title ? h('span.brand-study', {}, title) : null,
       admin ? h('span.chip.active.admin-chip', {}, 'Admin') : null,
       app.backend && app.backend.isDemo ? h('span.chip.warning', {}, 'Demonstration') : null),

@@ -3,6 +3,7 @@
 
 import { h } from '../ui/dom.js';
 import { brandMark } from './common.js';
+import { montageFigure } from './montage.js';
 import { inform } from '../ui/dialog.js';
 
 export function signinView(app, { message = '', error = '' } = {}) {
@@ -100,12 +101,22 @@ export function signinView(app, { message = '', error = '' } = {}) {
       h('button.btn.small', { type: 'button', onclick: () => app.useDemo() }, 'Try the demonstration instead'))) : null;
 
   const card = h('div.card.signin-card', {},
-    h('div.brand.big', {}, brandMark(36), h('span.brand-name', {}, 'ElectroClean')),
     h('h1', {}, 'Sign in'), studyLine,
     message ? h('p.success', { role: 'status' }, message) : null,
     problem, b ? form : null, demoHint, connect);
-  const view = h('main.page.signin', { 'data-view': 'signin' }, card,
+  // The page: the name in large type with what ElectroClean is for, the form, and the montage.
+  const status = !b ? h('span.chip', {}, 'Connecting')
+    : b.isDemo ? h('span.chip.warning', {}, 'Demonstration')
+      : h('span.chip.active', {}, b.kind === 'firebase' ? 'Study on Firebase' : 'Study server');
+  const intro = h('div.signin-intro', {},
+    h('div.brand.signin-status', {}, brandMark(32), status),
+    h('p.signin-display', {}, 'ElectroClean'),
+    h('p.signin-lede', {}, 'Artifact annotation for continuous EEG', h('br'), 'Recordings stay on this computer'),
+    card,
     h('p.caption.footnote', {}, 'Your EEG recordings stay on your computer: ElectroClean reads them in this browser and sends only your annotations to the study.'));
+  const figure = h('figure.signin-figure', { 'aria-hidden': 'true' }, montageFigure(),
+    h('figcaption.figure-caption', {}, 'Fig. 01 · the 10-20 montage, 19 electrodes'));
+  const view = h('main.page.signin', { 'data-view': 'signin' }, h('div.signin-layout', {}, intro, figure));
   setTimeout(() => (b ? idField : null)?.focus(), 0);
   return view;
 }
