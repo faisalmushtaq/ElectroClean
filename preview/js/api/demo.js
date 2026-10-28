@@ -1,20 +1,23 @@
 // The demonstration: the Backend interface of http.js, entirely in the browser.
 //
-// Two demo accounts (A01 annotates, T01 follows the training programme; password "demo"), three
-// built-in example recordings with simulated artifacts (synthetic.js), a register of their
-// fingerprints so a downloaded example opened from the computer is recognised, drafts and
-// results kept in this browser (and downloadable), the guided training rules (training/rules.js)
-// and the practice scoring (training/scoring.js). In a real study the server does this work and
-// keeps the experts' answers to itself.
+// Three demo accounts (A01 annotates, T01 follows the training programme, ADMIN runs the study in
+// the admin area; password "demo"), three built-in example recordings with simulated artifacts
+// (synthetic.js), a register of their fingerprints so a downloaded example opened from the
+// computer is recognised, drafts and results kept in this browser (and downloadable), the guided
+// training rules (training/rules.js) and the practice scoring (training/scoring.js). In a real
+// study the server does this work and keeps the experts' answers to itself. The admin area's
+// operations (accounts, assignments, recordings added from this computer, settings, reference
+// sets, the audit log) work on the same state, in demo_admin.js.
 
 import {
-  CATALOGUE, DEFAULT_DISPLAY, DEFAULT_FILTERS, DEFAULT_LOGGING, DEFAULT_QUICK_LABELS, DEFAULT_SCALINGS,
+  CATALOGUE, DEFAULT_QUICK_LABELS,
 } from './demo_catalogue.js';
 import {
   channelType, demoSpecs, exampleNote, makeSyntheticRecording, syntheticEdfBytes, truthAnnotations,
 } from '../data/synthetic.js';
 import { ApiError } from './http.js';
 import { DEMO_NOTICE } from './notice.js';
+import { DemoAdmin } from './demo_admin.js';
 
 export { DEMO_NOTICE };
 import * as rules from '../training/rules.js';
@@ -26,9 +29,11 @@ const TOKEN_KEY = 'electroclean.demo.token';
 export const DEMO_PASSWORD = 'demo';
 const FIND_WINDOW_S = 10;
 
+/** The built-in accounts (the admin area can add others, kept in this browser). */
 export const ACCOUNTS = Object.freeze({
   A01: { display_name: 'Demo annotator', role: 'annotator', programme: false },
   T01: { display_name: 'Demo trainee', role: 'annotator', programme: true },
+  ADMIN: { display_name: 'Demo administrator', role: 'admin', programme: false },
 });
 
 const SPECS = demoSpecs();
@@ -69,10 +74,6 @@ export function exampleRecording(recordingId) {
 
 function fileNameOf(spec) { return `${spec.stem}_eeg.edf`; }
 
-function quickKeys() {
-  return Object.fromEntries(DEFAULT_QUICK_LABELS.map((n, i) => [n, i + 1]));
-}
-
 const LABELS = new Map(CATALOGUE.labels.map((l) => [l.label, l]));
 
 function emptyState() {
@@ -89,8 +90,10 @@ export class DemoBackend {
     this.tokens = tokens;
     this.health = { ok: true, version: 'web', study: 'Demonstration', demo: true };
     this.state = { ...emptyState(), ...(storage.get(STATE_KEY, null) || {}) };
+    this._admin = new DemoAdmin(this);
     const saved = tokens.get(TOKEN_KEY, null);
-    this.annotatorId = saved && ACCOUNTS[saved.annotator_id] ? saved.annotator_id : null;
+    const user = saved ? this._admin.user(saved.annotator_id) : null;
+    this.annotatorId = user && user.status === 'active' ? user.annotator_id : null;
     this.visits = new Map();
   }
 
@@ -105,21 +108,27 @@ export class DemoBackend {
     return this.annotatorId;
   }
 
-  _account() { return ACCOUNTS[this._aid()]; }
+  _account() { return this._admin.user(this._aid()); }
+
+  /** True when the account follows the demonstration's training programme. */
+  _inProgramme(aid) { return this._admin.programmeOf(aid) === TRAINING_SET.set_id; }
 
   // ------------------------------------------------------------------ signing in
   async getHealth() { return this.health; }
 
   async login(annotatorId, password) {
     const aid = String(annotatorId || '').trim().toUpperCase();
-    if (!ACCOUNTS[aid] || password !== DEMO_PASSWORD) {
+    const user = this._admin.user(aid);
+    if (!user || !this._admin.passwordOk(aid, password)) {
       throw new ApiError(401, 'bad_credentials',
-        'The annotator ID or password is not right. In the demonstration, sign in as A01 or T01 with the password demo.');
+        `The annotator ID or password is not right. In the demonstration, sign in as A01, T01 or ADMIN with the password ${DEMO_PASSWORD}.`);
     }
+    if (user.status !== 'active') throw new ApiError(403, 'account_disabled', 'This account has been switched off. Ask the study team.');
     this.annotatorId = aid;
+    this._admin.touch(aid);
     const token = `demo-${newId()}`;
     this.tokens.set(TOKEN_KEY, { annotator_id: aid, token });
-    return { token, expires_in_s: 43200, annotator_id: aid, display_name: ACCOUNTS[aid].display_name, role: ACCOUNTS[aid].role };
+    return { token, expires_in_s: 43200, annotator_id: aid, display_name: user.display_name, role: user.role };
   }
 
   async logout() {
@@ -130,35 +139,72 @@ export class DemoBackend {
 
   async me() {
     const aid = this._aid();
-    const acc = ACCOUNTS[aid];
-    const { method, iir_order, ...filters } = DEFAULT_FILTERS; // eslint-disable-line no-unused-vars
+    const acc = this._account();
+    if (!acc) throw new ApiError(401, 'not_signed_in', 'Please sign in again.');
     return {
       annotator_id: aid, display_name: acc.display_name, role: acc.role,
-      study: {
-        study_id: 'demo', name: 'Demonstration',
-        filters: { ...filters, locked: false },
-        display: { ...DEFAULT_DISPLAY },
-        annotation: { min_duration_samples: 1, quick_labels: [...DEFAULT_QUICK_LABELS] },
-        logging: { ...DEFAULT_LOGGING },
-        logging_notice: 'This demonstration records how you use ElectroClean (clicks, keys and what is on the ' +
-          'screen, never what you type) and keeps the record in this browser only. In a real study the record ' +
-          'goes to the study team, as the study\'s information sheet explains.',
-      },
+      study: this._admin.studyBlock(),
       catalogue: CATALOGUE,
-      programme: acc.programme ? { set_id: TRAINING_SET.set_id, name: TRAINING_SET.name } : null,
+      programme: this._inProgramme(aid) ? { set_id: TRAINING_SET.set_id, name: this._exampleSet().name } : null,
     };
   }
 
   // ------------------------------------------------------------ assignments
   _assignmentsFor(aid) {
-    if (ACCOUNTS[aid].programme) {
+    if (this._inProgramme(aid)) {
       return [
         ...TRAINING_SET.guided.map((g) => ({ rid: g.rid, mode: 'guided', context_id: TRAINING_SET.set_id })),
         ...TRAINING_SET.practice.map((rid) => ({ rid, mode: 'practice', context_id: TRAINING_SET.set_id })),
       ];
     }
-    return SPECS.map((s) => ({ rid: recordingIdOf(s), mode: 'standard', context_id: '' }));
+    return this._admin.standardAssignments(aid).filter((a) => this._recordingInfo(a.rid));
   }
+
+  /** What saving and listing need of a recording: a built-in example or one added in the admin area. */
+  _recordingInfo(rid, rec = null) {
+    const spec = RID.get(rid);
+    if (spec && (!rec || rec.builtin)) {
+      return { rid, builtin: true, spec, file_name: fileNameOf(spec), format: 'edf', sfreq: spec.sfreq, n_samples: spec.nSamples,
+        ch_names: [...spec.channels], size_bytes: exampleRecording(rid).sizeBytes, stem: spec.stem };
+    }
+    const r = rec && rec.manifest ? rec : this._admin.registered(rid);
+    if (!r) return null;
+    const m = r.manifest;
+    return { rid, builtin: false, record: r, file_name: m.file_name, format: m.format, sfreq: Number(m.timing.sfreq),
+      n_samples: Number(m.timing.n_samples), ch_names: [...m.ch_names], size_bytes: Number(r.size_bytes),
+      stem: (m.files && m.files.stem) || String(m.file_name).replace(/(_eeg)?\.[^.]+$/, '') };
+  }
+
+  // For the admin area (demo_admin.js).
+  _builtIn() {
+    return {
+      recordings: SPECS.map((s) => ({ recording_id: recordingIdOf(s), file_name: fileNameOf(s), sfreq: s.sfreq, n_samples: s.nSamples,
+        n_channels: s.channels.length, size_bytes: exampleRecording(recordingIdOf(s)).sizeBytes })),
+      trainingSet: TRAINING_SET,
+    };
+  }
+
+  _trainingSetId() { return TRAINING_SET.set_id; }
+
+  _truthOf(rid) { const spec = RID.get(rid); return spec ? truthAnnotations(spec) : []; }
+
+  _exampleNoteOf(rid, a) { const spec = RID.get(rid); return spec ? exampleNote(a.label, a.duration_samples / spec.sfreq, a.channels) : ''; }
+
+  /** The demonstration training set as the admin area keeps it (its pass mark and matching can be changed). */
+  _exampleSet() {
+    return this._admin.s.sets.find((x) => x.set_id === TRAINING_SET.set_id) ||
+      { name: TRAINING_SET.name, practice_pass: TRAINING_SET.pass, guided_tolerance: null, recordings: [] };
+  }
+
+  /** The types on the number keys, as the coach names them ("press 1"). */
+  _quickKeys() {
+    const chosen = this._admin.s.settings.annotation.quick_labels;
+    return Object.fromEntries((chosen && chosen.length ? chosen : DEFAULT_QUICK_LABELS).map((n, i) => [n, i + 1]));
+  }
+
+  _passRule() { return { ...TRAINING_SET.pass, ...(this._exampleSet().practice_pass || {}) }; }
+
+  _tolerance() { return { ...rules.DEFAULT_TOLERANCE, ...(this._exampleSet().guided_tolerance || {}) }; }
 
   _key(aid, rid, mode, ctx) { return `${aid}|${rid}|${mode}|${ctx || ''}`; }
 
@@ -182,11 +228,11 @@ export class DemoBackend {
   async assignments() {
     const aid = this._aid();
     const items = this._assignmentsFor(aid).map((a) => {
-      const spec = RID.get(a.rid);
+      const info = this._recordingInfo(a.rid);
       return {
-        recording_id: a.rid, file_name: fileNameOf(spec), format: 'edf', mode: a.mode, context_id: a.context_id,
-        status: this._status(aid, a), duration_s: spec.nSamples / spec.sfreq, n_channels: spec.channels.length,
-        size_bytes: exampleRecording(a.rid).sizeBytes,
+        recording_id: a.rid, file_name: info.file_name, format: info.format, mode: a.mode, context_id: a.context_id,
+        status: this._status(aid, a), duration_s: info.n_samples / info.sfreq, n_channels: info.ch_names.length,
+        size_bytes: info.size_bytes,
       };
     });
     return { items, next: this._next(aid) };
@@ -194,7 +240,7 @@ export class DemoBackend {
 
   _next(aid) {
     const list = this._assignmentsFor(aid);
-    if (ACCOUNTS[aid].programme) {
+    if (this._inProgramme(aid)) {
       const t = this._trainingNext(aid);
       return t ? t.recording_id : null;
     }
@@ -214,7 +260,7 @@ export class DemoBackend {
       bad_channels: [],
       original_events: spec.events.map((e) => ({ onset_sample: Math.round(e.onsetS * sf), duration_samples: 0, label: e.label })),
       gaps: spec.gaps.map((g) => [...g]),
-      display: { scalings: { ...DEFAULT_SCALINGS }, warnings: [...rec.warnings] },
+      display: { scalings: { ...this._admin.s.settings.display.scalings }, warnings: [...rec.warnings] },
       fingerprint: null,
     };
   }
@@ -226,17 +272,28 @@ export class DemoBackend {
 
   async match(body) {
     const aid = this._aid();
+    const sha = String(body.sha256 || '').toLowerCase();
     let found = null;
     for (const spec of SPECS) {
       const rec = exampleRecording(recordingIdOf(spec));
       if (body.size_bytes !== rec.sizeBytes) continue;
       const fp = await this._fingerprint(spec);
-      if (fp.hex === String(body.sha256 || '').toLowerCase()) { found = { spec, fp, exact: true }; break; }
+      if (fp.hex === sha) { found = { spec, fp, exact: true }; break; }
+    }
+    const added = this._admin.registeredRecordings();
+    if (!found) {
+      const reg = added.find((r) => r.sha256 === sha && Number(r.size_bytes) === Number(body.size_bytes));
+      if (reg) found = { reg, exact: true };
     }
     if (!found) {
       const spec = SPECS.find((s) => s.sfreq === Number(body.sfreq) && s.nSamples === Number(body.n_samples) &&
         fileNameOf(s) === body.file_name && JSON.stringify(s.channels) === JSON.stringify(body.ch_names || []));
       if (spec) found = { spec, fp: await this._fingerprint(spec), exact: false };
+    }
+    if (!found) {
+      const reg = added.find((r) => Number(r.sfreq) === Number(body.sfreq) && Number(r.n_samples) === Number(body.n_samples) &&
+        r.file_name === body.file_name && JSON.stringify(r.manifest.ch_names) === JSON.stringify(body.ch_names || []));
+      if (reg) found = { reg, exact: false };
     }
     const base = { recording_id: null, mode: 'standard', context_id: '', manifest: null, draft: null, differences: [] };
     if (!found) {
@@ -244,7 +301,8 @@ export class DemoBackend {
         message: 'This file is not one of the recordings of this study. You can still look at it and try the tools, ' +
           'but nothing you mark is saved.' };
     }
-    const rid = recordingIdOf(found.spec);
+    const rid = found.spec ? recordingIdOf(found.spec) : found.reg.recording_id;
+    const fileName = found.spec ? fileNameOf(found.spec) : found.reg.file_name;
     const assignment = this._assignmentsFor(aid).find((a) => a.rid === rid);
     if (!assignment) {
       return { ...base, status: 'not_assigned', recording_id: rid, message: 'This recording of the study is not one of yours at the moment.' };
@@ -258,20 +316,21 @@ export class DemoBackend {
     const repeatable = mode === 'practice' && !this._practicePassed(aid);
     if (this.state.done[key] && !repeatable) {
       return { ...base, status: 'done', recording_id: rid, mode, context_id: ctx,
-        message: `You have already finished ${fileNameOf(found.spec)}.` };
+        message: `You have already finished ${fileName}.` };
     }
-    const manifest = { ...this._manifest(found.spec), fingerprint: found.fp };
+    const manifest = found.spec ? { ...this._manifest(found.spec), fingerprint: found.fp } : this._admin.publicManifestOf(found.reg);
     const draft = this.state.drafts[key] || null;
     if (found.exact) {
       return { ...base, status: 'matched', recording_id: rid, mode, context_id: ctx, manifest, draft,
-        message: `This is ${fileNameOf(found.spec)}, one of your recordings.` };
+        message: `This is ${fileName}, one of your recordings.` };
     }
+    const studySize = manifest.fingerprint.size_bytes;
     const differences = ['Its fingerprint (SHA-256) differs from the study\'s copy, so its contents are not exactly the same.'];
-    if (body.size_bytes !== found.fp.size_bytes) {
-      differences.push(`Its size is ${body.size_bytes.toLocaleString('en-GB')} bytes; the study's copy has ${found.fp.size_bytes.toLocaleString('en-GB')}.`);
+    if (body.size_bytes !== studySize) {
+      differences.push(`Its size is ${Number(body.size_bytes).toLocaleString('en-GB')} bytes; the study's copy has ${studySize.toLocaleString('en-GB')}.`);
     }
     return { ...base, status: 'matched_metadata', recording_id: rid, mode, context_id: ctx, manifest, draft, differences,
-      message: `This file has the name, sampling rate, length and channels of ${fileNameOf(found.spec)}, but it is not exactly the study's copy.` };
+      message: `This file has the name, sampling rate, length and channels of ${fileName}, but it is not exactly the study's copy.` };
   }
 
   // ------------------------------------------------------------------- drafts
@@ -294,12 +353,14 @@ export class DemoBackend {
   // ------------------------------------------------------------------- saving
   _validate(annotations, manifest) {
     const chans = new Set(manifest.ch_names);
+    const shortest = Math.max(1, Number(this._admin.s.settings.annotation.min_duration_samples) || 1);
     for (const a of annotations || []) {
       const fail = (why) => { throw new ApiError(422, 'invalid_annotation', `${a.label || 'An annotation'} at sample ${a.onset_sample}: ${why}`); };
       if (!a.annotation_id) fail('it has no identifier');
       if (!LABELS.has(a.label)) fail('the artifact type is not in the catalogue');
       if (!Number.isInteger(a.onset_sample) || !Number.isInteger(a.duration_samples)) fail('onset and duration must be whole samples');
       if (a.onset_sample < 0 || a.duration_samples < 1 || a.onset_sample + a.duration_samples > manifest.n_samples) fail('it lies outside the recording');
+      if (a.duration_samples < shortest) fail(`it is shorter than the study's shortest annotation (${shortest} samples)`);
       if (!Array.isArray(a.channels) || a.channels.some((c) => !chans.has(c))) fail('a channel is not in the recording');
     }
   }
@@ -307,19 +368,20 @@ export class DemoBackend {
   async submit(body) {
     const aid = this._aid();
     const rid = body.recording_id;
-    const spec = RID.get(rid);
+    const info = this._recordingInfo(rid);
+    const spec = info && info.builtin ? info.spec : null;
     const assignment = this._assignmentsFor(aid).find((a) => a.rid === rid && a.mode === body.mode);
-    if (!spec || !assignment) throw new ApiError(404, 'not_found', 'This recording is not one of yours.');
+    if (!info || !assignment) throw new ApiError(404, 'not_found', 'This recording is not one of yours.');
     const key = this._key(aid, rid, body.mode, body.context_id);
     if (this.state.done[key] && !(body.mode === 'practice' && !this._practicePassed(aid))) {
       throw new ApiError(409, 'already_done', 'This recording has already been saved.');
     }
-    const manifest = this._manifest(spec);
+    const manifest = spec ? this._manifest(spec) : this._admin.publicManifestOf(info.record);
     this._validate(body.annotations, manifest);
     let feedback = null;
     if (body.mode === 'guided') this._checkGuidedComplete(aid, rid, body.annotations);
     if (body.mode === 'practice') {
-      feedback = practiceFeedback(truthAnnotations(spec), body.annotations, { passRule: TRAINING_SET.pass });
+      feedback = practiceFeedback(truthAnnotations(spec), body.annotations, { passRule: this._passRule() });
       feedback.summary_html = summaryHtml(feedback);
       feedback.demo_notice = DEMO_NOTICE;
       const list = this.state.practice[`${aid}|${rid}`] || [];
@@ -331,13 +393,14 @@ export class DemoBackend {
     this.state.submissions.push({
       key, annotator_id: aid, recording_id: rid, mode: body.mode, context_id: body.context_id || '', attempt, saved_at,
       annotations: body.annotations, session: body.session || {}, sha256: body.sha256 || '',
+      recording: { file_name: info.file_name, sfreq: info.sfreq, n_samples: info.n_samples, ch_names: info.ch_names, size_bytes: info.size_bytes },
       guided: body.mode === 'guided' ? this.state.guided[`${aid}|${rid}`]?.summary || null : null,
       feedback: feedback ? { passed: feedback.passed, metrics: feedback.metrics } : null,
     });
     this.state.done[key] = { saved_at, attempt };
     delete this.state.drafts[key];
     this._save();
-    const stem = spec.stem;
+    const stem = info.stem;
     const tag = `annotator-${aid}`;
     return {
       saved: true, attempt, feedback, next: this._next(aid), demo_notice: DEMO_NOTICE,
@@ -368,8 +431,12 @@ export class DemoBackend {
   }
 
   async training() {
-    const aid = this._aid();
-    if (!ACCOUNTS[aid].programme) throw new ApiError(404, 'no_programme', 'You are not in a training programme.');
+    return this._trainingView(this._aid());
+  }
+
+  /** GET /training for one account (the admin area's progress shows it for every trainee). */
+  _trainingView(aid) {
+    if (!this._inProgramme(aid)) throw new ApiError(404, 'no_programme', 'You are not in a training programme.');
     const ctx = TRAINING_SET.set_id;
     const gDone = TRAINING_SET.guided.filter((g) => this.state.done[this._key(aid, g.rid, 'guided', ctx)]);
     const summaries = TRAINING_SET.guided.map((g) => this.state.guided[`${aid}|${g.rid}`]?.summary).filter(Boolean);
@@ -383,14 +450,14 @@ export class DemoBackend {
     const practiceTime = this.state.submissions.filter((s) => s.annotator_id === aid && s.mode === 'practice')
       .reduce((a, s) => a + (s.session.elapsed_s || 0), 0);
     return {
-      set_id: TRAINING_SET.set_id, name: TRAINING_SET.name,
+      set_id: TRAINING_SET.set_id, name: this._exampleSet().name,
       stages: [
         { key: 'guided', title: STAGE_TITLES.guided, status: gStatus, done: gDone.length, total: TRAINING_SET.guided.length,
           stars: sum('stars'), max_stars: sum('max_stars'), best_score: null, time_s: sum('time_s') },
         { key: 'practice', title: STAGE_TITLES.practice, status: pStatus, done: pDone.length, total: TRAINING_SET.practice.length,
           stars: 0, max_stars: 0, best_score: attempts.length ? Math.max(...attempts.map((r) => r.event_f1)) : null,
           best_label_accuracy: attempts.length ? Math.max(...attempts.map((r) => r.label_accuracy)) : null,
-          pass_rule: describePassRule(TRAINING_SET.pass), time_s: practiceTime },
+          pass_rule: describePassRule(this._passRule()), time_s: practiceTime },
         { key: 'assessment', title: STAGE_TITLES.assessment, status: 'not_used', done: 0, total: 0, stars: 0, max_stars: 0,
           best_score: null, time_s: 0 },
       ],
@@ -402,10 +469,12 @@ export class DemoBackend {
     const spec = RID.get(rid);
     const entry = TRAINING_SET.guided.find((g) => g.rid === rid);
     if (!spec || !entry) throw new ApiError(404, 'not_found', 'This is not a guided training recording.');
+    const chosen = (this._exampleSet().recordings || []).find((r) => r.recording_id === rid);
+    const guidance = chosen && ['show', 'find', 'find_unnamed'].includes(chosen.guidance) ? chosen.guidance : entry.guidance;
     const truth = truthAnnotations(spec);
     const notes = Object.fromEntries(truth.map((a) => [a.annotation_id,
-      exampleNote(a.label, a.duration_samples / spec.sfreq, a.channels)]));
-    return { spec, guidance: entry.guidance, steps: rules.buildSteps(truth, notes), sfreq: spec.sfreq };
+      this._admin.guidedNote(TRAINING_SET.set_id, a.annotation_id) ?? exampleNote(a.label, a.duration_samples / spec.sfreq, a.channels)]));
+    return { spec, guidance, steps: rules.buildSteps(truth, notes), sfreq: spec.sfreq };
   }
 
   _guidedState(aid, rid) {
@@ -421,7 +490,7 @@ export class DemoBackend {
     const { spec, guidance, steps, sfreq } = setup;
     const t = steps[i].target;
     const named = guidance !== 'find_unnamed';
-    const window = DEFAULT_DISPLAY.duration_s;
+    const window = Number(this._admin.s.settings.display.duration_s) || 10;
     const dur = spec.nSamples / sfreq;
     const t0 = t.onset_sample / sfreq;
     const t1 = (t.onset_sample + t.duration_samples) / sfreq;
@@ -455,8 +524,8 @@ export class DemoBackend {
       .map((i) => ({ step: i + 1, stars: st.stars[i], annotation_id: st.matched[i] }));
     return {
       n_steps: setup.steps.length, guidance: setup.guidance,
-      tolerance: { seconds: rules.DEFAULT_TOLERANCE.seconds, fraction: rules.DEFAULT_TOLERANCE.fraction,
-        channel_jaccard: rules.DEFAULT_TOLERANCE.channel_jaccard },
+      tolerance: { seconds: this._tolerance().seconds, fraction: this._tolerance().fraction,
+        channel_jaccard: this._tolerance().channel_jaccard },
       completed,
       current: st.complete || st.index >= setup.steps.length ? null : this._stepJson(setup, st.index),
       summary: st.summary,
@@ -467,8 +536,8 @@ export class DemoBackend {
   _check(setup, st, annotations) {
     const { steps, sfreq } = setup;
     const step = steps[st.index];
-    const result = rules.checkStep(step, annotations, sfreq, rules.DEFAULT_TOLERANCE,
-      { taken: new Set(Object.values(st.matched)), quickKeys: quickKeys() });
+    const result = rules.checkStep(step, annotations, sfreq, this._tolerance(),
+      { taken: new Set(Object.values(st.matched)), quickKeys: this._quickKeys() });
     const extra = rules.extras(steps, annotations, st.matched, result, st.index);
     return { result, extra };
   }
@@ -562,7 +631,7 @@ export class DemoBackend {
     const anns = annotations || [];
     for (let i = 0; i < setup.steps.length; i++) {
       const others = new Set(Object.entries(st.matched).filter(([k]) => Number(k) !== i).map(([, v]) => v));
-      const r = rules.checkStep(setup.steps[i], anns, setup.sfreq, rules.DEFAULT_TOLERANCE, { taken: others, quickKeys: quickKeys() });
+      const r = rules.checkStep(setup.steps[i], anns, setup.sfreq, this._tolerance(), { taken: others, quickKeys: this._quickKeys() });
       if (!r.matched) {
         throw new ApiError(422, 'guided_changed', `Step ${i + 1} (${setup.steps[i].target.label}) no longer matches the ` +
           `experts' annotation:\n\n${r.messages.join('\n')}\n\nPut it right, then save again.`);
@@ -578,12 +647,15 @@ export class DemoBackend {
   async openVisit(body) {
     const aid = this._aid();
     const visit_id = `${aid}-${Date.now().toString(36)}-${newId().slice(0, 6)}`;
+    const started_at = nowLocalIso();
     this.visits.set(visit_id, {
-      header: { visit_id, annotator_id: aid, started_at: nowLocalIso(), client: 'web', programme: Boolean(body && body.programme),
+      header: { visit_id, annotator_id: aid, started_at, client: 'web', programme: Boolean(body && body.programme),
         browser: body && body.client },
       events: [], closed: null,
     });
-    return { visit_id, logging: { ...DEFAULT_LOGGING } };
+    this._admin.visitOpened({ visit_id, annotator_id: aid, mode: (body && body.mode) || (body && body.programme ? 'training' : 'standard'),
+      context_id: (body && body.context_id) || '', started_at, closed_at: null, n_events: 0 });
+    return { visit_id, logging: { ...this._admin.s.settings.logging } };
   }
 
   async sendEvents(visitId, events) {
@@ -599,6 +671,7 @@ export class DemoBackend {
   async closeVisit(visitId, reason) {
     const v = this.visits.get(visitId);
     if (v) v.closed = { reason, at: nowLocalIso() };
+    this._admin.visitClosed(visitId, v ? v.events.length : 0);
     return {};
   }
 
@@ -622,14 +695,16 @@ export class DemoBackend {
   resultsDocument() {
     const docs = this.state.submissions.map((s) => {
       const spec = RID.get(s.recording_id);
-      const sf = spec.sfreq;
+      const rec = s.recording || (spec ? { sfreq: spec.sfreq, n_samples: spec.nSamples, ch_names: [...spec.channels],
+        size_bytes: exampleRecording(s.recording_id).sizeBytes } : { sfreq: 1, n_samples: 0, ch_names: [], size_bytes: 0 });
+      const sf = rec.sfreq;
       const used = [...new Set(s.annotations.map((a) => a.label))].map((l) => LABELS.get(l)).filter(Boolean);
       return {
         schema: 'electroclean.annotations', schema_version: '1.0.0',
-        recording: { recording_id: s.recording_id, relative_path: s.recording_id, sfreq: sf, n_samples: spec.nSamples,
-          first_samp: 0, meas_date: '2026-01-01T10:00:00+00:00', duration_s: spec.nSamples / sf, ch_names: [...spec.channels],
-          fingerprint: { algorithm: 'sha256', role: 'eeg', hex: s.sha256, size_bytes: exampleRecording(s.recording_id).sizeBytes } },
-        annotator: { annotator_id: s.annotator_id, display_name: ACCOUNTS[s.annotator_id]?.display_name || '' },
+        recording: { recording_id: s.recording_id, relative_path: s.recording_id, sfreq: sf, n_samples: rec.n_samples,
+          first_samp: 0, meas_date: spec ? '2026-01-01T10:00:00+00:00' : null, duration_s: rec.n_samples / sf, ch_names: [...rec.ch_names],
+          fingerprint: { algorithm: 'sha256', role: 'eeg', hex: s.sha256, size_bytes: rec.size_bytes } },
+        annotator: { annotator_id: s.annotator_id, display_name: this._admin.user(s.annotator_id)?.display_name || ACCOUNTS[s.annotator_id]?.display_name || '' },
         session: { session_id: `${s.annotator_id}-${s.saved_at}`, mode: s.mode, created_at: s.saved_at, app_version: 'web demonstration',
           context: { context_id: s.context_id, attempt: s.attempt, browser_session: s.session, guided: s.guided, practice: s.feedback } },
         time_conventions: {
@@ -666,6 +741,10 @@ export class DemoBackend {
   }
 
   get hasResults() { return this.state.submissions.length > 0; }
+
+  // ------------------------------------------------------------ administration
+  /** The admin area's operations (docs/web/api.md, "Administration"), in this browser: demo_admin.js. */
+  async admin(op, body = {}) { return this._admin.run(op, body || {}); }
 
   /** Forget everything saved by the demonstration in this browser. */
   reset() {

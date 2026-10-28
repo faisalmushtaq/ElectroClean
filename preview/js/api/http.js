@@ -8,6 +8,8 @@
 import { session } from '../util.js';
 
 const TOKEN_KEY = 'electroclean.token';
+/** The names of the admin area's operations: lower-case letters and underscores (overview, user_add, ...). */
+export const ADMIN_OP = /^[a-z][a-z_]{0,40}$/;
 
 export class ApiError extends Error {
   constructor(status, code, message, body = null) {
@@ -168,6 +170,13 @@ export class HttpBackend {
 
   closeVisit(visitId, reason, { keepalive = false } = {}) {
     return this._request('POST', `/visits/${encodeURIComponent(visitId)}/close`, { reason }, { keepalive });
+  }
+
+  // ------------------------------------------------------------- administration
+  /** One operation of the admin area: POST /admin/{op} with a JSON body (docs/web/api.md, "Administration"). */
+  admin(op, body = {}) {
+    if (!ADMIN_OP.test(String(op))) return Promise.reject(new ApiError(400, 'bad_request', 'That is not an operation of the admin area.'));
+    return this._request('POST', `/admin/${op}`, body || {});
   }
 
   // ----------------------------------------------------------------- downloads
