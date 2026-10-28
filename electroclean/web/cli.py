@@ -83,6 +83,14 @@ def _is_firebase(store: Any) -> bool:
     return getattr(store, "kind", "") == "firestore"
 
 
+def _audit(store: Any, op: str, summary: str, **details: Any) -> None:
+    """The study's audit log records what the commands change, by "command"."""
+    from electroclean.web.audit import record
+    from electroclean.web.store import BY_COMMAND
+
+    record(store, BY_COMMAND, op, summary + " (electroclean-web)", details)
+
+
 def _settings_file(path: Path | None) -> dict[str, Any]:
     if path is None:
         return {}
@@ -104,14 +112,18 @@ def cmd_init_study(a: argparse.Namespace) -> int:
         from electroclean.web.store_firestore import FirestoreStore
 
         try:
-            FirestoreStore.create_study(firestore_client(a.firebase_project), a.study, name=a.name or a.study,
-                                        settings=settings, exist_ok=a.update)
+            store = FirestoreStore.create_study(firestore_client(a.firebase_project), a.study, name=a.name or a.study,
+                                                settings=settings, exist_ok=a.update)
         except (StoreError, ValueError) as exc:
             raise CommandError(str(exc)) from exc
+        _audit(store, "settings_update" if a.update else "study_create",
+               ("Changed the study's name or settings" if a.update else f"Created the study {a.study}"),
+               name=a.name or a.study, settings=settings)
         print(f"Study {a.study} is ready in the Firebase project {a.firebase_project}.")
         return 0
     if not a.study_dir:
         raise CommandError("Say where: --firebase-project P --study S, or --study-dir DIR")
+    from electroclean.web.store_files import FilesStore
     from electroclean.web.study import StudyError, WebStudy
 
     try:
@@ -119,6 +131,13 @@ def cmd_init_study(a: argparse.Namespace) -> int:
                               settings=settings, exist_ok=a.update)
     except (StudyError, ValueError) as exc:
         raise CommandError(str(exc)) from exc
+    files = FilesStore(study.root)
+    try:
+        _audit(files, "settings_update" if a.update else "study_create",
+               ("Changed the study's name or settings" if a.update else f"Created the study {study.study_id}"),
+               name=study.name, settings=settings)
+    finally:
+        files.close()
     print(f"Study folder ready: {study.root}")
     return 0
 
@@ -140,7 +159,20 @@ def cmd_register(a: argparse.Namespace) -> int:
     store = open_store(a)
     print(f"Registering the recordings in {a.dataset} (each is opened and checked, as by the desktop application):")
     reg = register_dataset(a.dataset, store, check_filters=not a.no_filter_check, include_sets=not a.no_sets)
+    _audit_registration(store, reg, f"from the folder {Path(a.dataset).name}")
     return _report_registration(reg)
+
+
+def _audit_registration(store: Any, reg: Any, where: str) -> None:
+    from electroclean.web.audit import count
+
+    if not reg.manifests and not reg.reference_sets:
+        return
+    sets = [d.get("set_id") for d, _f in reg.reference_sets]
+    _audit(store, "recordings_register", f"Registered {count(len(reg.manifests), 'recording')}"
+           + (f" and {count(len(sets), 'reference set')}" if sets else "") + f" {where}",
+           added=[m["recording_id"] for m in reg.manifests], scopes=sorted({m["scope"] for m in reg.manifests}),
+           reference_sets=sets, failed=[r for r, _why in reg.failed])
 
 
 def cmd_export_manifests(a: argparse.Namespace) -> int:
@@ -169,6 +201,7 @@ def cmd_import_manifests(a: argparse.Namespace) -> int:
         reg = import_bundle(a.bundle, store)
     except ValueError as exc:
         raise CommandError(str(exc)) from exc
+    _audit_registration(store, reg, f"from the file {Path(a.bundle).name}")
     print(f"Imported {len(reg.manifests)} recording(s) and {len(reg.reference_sets)} reference set(s).")
     return 0
 
@@ -185,28 +218,20 @@ def cmd_add_user(a: argparse.Namespace) -> int:
     if _is_firebase(store):
         if not a.email:
             raise CommandError("Give the annotator's email address with --email (they sign in with it)")
-        from electroclean.web.firebase import claims_for, firebase_app
+        from electroclean.web.firebase import AuthProblem, ensure_auth_user, firebase_app
 
-        from firebase_admin import auth
-
-        app = firebase_app(a.firebase_project)
         password = a.password
         try:
-            try:
-                user = auth.get_user_by_email(a.email, app=app)
-                if password:
-                    auth.update_user(user.uid, password=password, display_name=a.name or None, app=app)
-            except auth.UserNotFoundError:
-                user = auth.create_user(email=a.email, password=password or None, display_name=a.name or None,
-                                        app=app)
-            claims = claims_for(user.custom_claims, aid, store.study_id, role)
-            auth.set_custom_user_claims(user.uid, claims, app=app)
-        except (ValueError, auth.EmailAlreadyExistsError) as exc:
-            raise CommandError(str(exc)) from exc
-        store.put_user(aid, display_name=a.name or "", role=role, uid=user.uid, email=a.email)
+            uid, link = ensure_auth_user(firebase_app(a.firebase_project), email=a.email, annotator_id=aid,
+                                         study=store.study_id, role=role, display_name=a.name or "",
+                                         password=password or None)
+        except AuthProblem as exc:
+            raise CommandError(exc.message) from exc
+        store.put_user(aid, display_name=a.name or "", role=role, uid=uid, email=a.email)
+        _audit(store, "user_add", f"Added {aid} as {'an administrator' if role == 'admin' else 'an annotator'}",
+               annotator_id=aid, display_name=a.name or "", role=role, email=a.email)
         print(f"{aid} ({a.email}) can sign in to study {store.study_id} as {role}.")
-        if not password:
-            link = auth.generate_password_reset_link(a.email, app=app)
+        if link:
             print("Send them this link to choose their password (it works once):")
             print(link)
         return 0
@@ -217,8 +242,13 @@ def cmd_add_user(a: argparse.Namespace) -> int:
             raise CommandError("The passwords differ")
     try:
         store.db.add_user(aid, password, display_name=a.name or "", role=role, replace=a.replace)
+        if a.email:
+            store.db.update_user(aid, email=a.email)
     except AccountError as exc:
         raise CommandError(str(exc)) from exc
+    _audit(store, "user_add", (f"Set a new password for {aid}" if a.replace else
+                               f"Added {aid} as {'an administrator' if role == 'admin' else 'an annotator'}"),
+           annotator_id=aid, display_name=a.name or "", role=role)
     print(f"{aid} can sign in to the server as {role}.")
     return 0
 
@@ -238,8 +268,10 @@ def cmd_assign(a: argparse.Namespace) -> int:
             except Exception as exc:  # noqa: BLE001
                 raise CommandError(str(exc)) from exc
         store.enrol(aid, a.programme or None)
-        print(f"{aid} " + (f"takes the training programme {a.programme}." if a.programme else
-                           "no longer takes a training programme."))
+        said = (f"takes the training programme {a.programme}" if a.programme else
+                "no longer takes a training programme")
+        _audit(store, "programme_set", f"{aid} {said}", annotator_id=aid, set_id=a.programme or None)
+        print(f"{aid} {said}.")
         return 0
     mode = a.mode
     ctx = a.set or ""
@@ -252,9 +284,10 @@ def cmd_assign(a: argparse.Namespace) -> int:
         except Exception as exc:  # noqa: BLE001
             raise CommandError(str(exc)) from exc
         scope = set_scope(rs.set_id) if rs.self_contained else SCOPE_STUDY
-    registered = sorted(m["recording_id"] for m in store.manifests() if m["scope"] == scope)
-    if a.all:
-        wanted = registered
+    in_scope = [m for m in store.manifests() if m["scope"] == scope]
+    registered = sorted(m["recording_id"] for m in in_scope)
+    if a.all:  # recordings retired in the admin area are offered for no new assignments
+        wanted = sorted(m["recording_id"] for m in in_scope if not (m.get("registration") or {}).get("retired"))
     else:
         wanted = list(a.recordings or [])
         unknown = [r for r in wanted if r not in registered]
@@ -266,6 +299,10 @@ def cmd_assign(a: argparse.Namespace) -> int:
         n = store.assign(aid, wanted, mode=mode, context_id=ctx)
     except (StoreError, ValueError) as exc:
         raise CommandError(str(exc)) from exc
+    from electroclean.web.audit import count
+
+    _audit(store, "assign", f"Assigned {count(len(wanted), 'recording')} to {aid} ({mode}{', ' + ctx if ctx else ''})"
+           f": {n} new", annotator_ids=[aid], recording_ids=wanted, mode=mode, context_id=ctx, added=n)
     print(f"Assigned {n} recording(s) to {aid} ({mode}{', ' + ctx if ctx else ''}); "
           f"{len(wanted) - n} were assigned already.")
     return 0
@@ -349,6 +386,7 @@ def cmd_example_set(a: argparse.Namespace) -> int:
     except ReferenceSetError as exc:
         raise CommandError(f"{exc} (in {where})") from exc
     reg = register_dataset(where, store)
+    _audit_registration(store, reg, "of ElectroClean's example training set")
     rec = where / "derivatives" / "electroclean_reference_sets" / EXAMPLE_SET_ID / "recordings"
     print(f"The example training set ({EXAMPLE_SET_ID}) is in the study. Its recordings, to give to trainees, are in "
           f"{rec}. Enrol a trainee with: electroclean-web assign <ID> --programme {EXAMPLE_SET_ID}")

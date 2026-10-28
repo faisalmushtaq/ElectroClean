@@ -70,6 +70,93 @@ def claims_for(existing: dict[str, Any] | None, annotator_id: str, study: str, r
     return {"annotator_id": annotator_id, "role": role, "roles": roles, "studies": sorted(roles)}
 
 
+def claims_without(existing: dict[str, Any] | None, study: str) -> dict[str, Any]:
+    """The claims with one study taken out (the annotator ID stays while other studies remain)."""
+    claims = dict(existing or {})
+    roles = {k: v for k, v in dict(claims.get("roles") or {}).items() if k != study}
+    if not roles:
+        return {}
+    return {**claims, "roles": roles, "studies": sorted(roles), "role": roles[sorted(roles)[0]]}
+
+
+class AuthProblem(ValueError):
+    """Firebase Authentication refused (``code`` names why: email_in_use, invalid_email, weak_password)."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code, self.message = code, message
+
+
+def ensure_auth_user(app: Any, *, email: str, annotator_id: str, study: str, role: str, display_name: str = "",
+                     password: str | None = None, update_existing: bool = True) -> tuple[str, str | None]:
+    """The Firebase user with this email address (created if needed) with the claims of the study.
+
+    Returns its uid and, when no password was given, a link with which the person chooses one.
+    ``update_existing`` sets the given password and name on a user who already exists."""
+    from firebase_admin import auth
+
+    try:
+        try:
+            user = auth.get_user_by_email(email, app=app)
+            if update_existing and (password or display_name):
+                auth.update_user(user.uid, password=password or None, display_name=display_name or None, app=app)
+        except auth.UserNotFoundError:
+            user = auth.create_user(email=email, password=password or None, display_name=display_name or None,
+                                    app=app)
+        try:
+            claims = claims_for(user.custom_claims, annotator_id, study, role)
+        except ValueError as exc:
+            raise AuthProblem("email_in_use", f"{email} already signs in as another annotator ID: {exc}") from exc
+        auth.set_custom_user_claims(user.uid, claims, app=app)
+        link = None if password else auth.generate_password_reset_link(email, app=app)
+    except auth.EmailAlreadyExistsError as exc:
+        raise AuthProblem("email_in_use", f"{email} already has a Firebase account") from exc
+    except ValueError as exc:
+        if isinstance(exc, AuthProblem):
+            raise
+        raise AuthProblem("invalid_account", f"Firebase refused the account: {exc}") from exc
+    return user.uid, link
+
+
+def password_link(app: Any, email: str) -> str:
+    """A link that lets the person choose a new password (it works once)."""
+    from firebase_admin import auth
+
+    return auth.generate_password_reset_link(email, app=app)
+
+
+def set_role(app: Any, uid: str, annotator_id: str, study: str, role: str) -> None:
+    from firebase_admin import auth
+
+    user = auth.get_user(uid, app=app)
+    auth.set_custom_user_claims(uid, claims_for(user.custom_claims, annotator_id, study, role), app=app)
+
+
+def set_disabled(app: Any, uid: str, disabled: bool) -> None:
+    """Disabling stops sign-in and ends the sessions the person has (their refresh tokens are revoked)."""
+    from firebase_admin import auth
+
+    auth.update_user(uid, disabled=disabled, app=app)
+    if disabled:
+        auth.revoke_refresh_tokens(uid, app=app)
+
+
+def leave_study(app: Any, uid: str, study: str) -> None:
+    """Take the study out of the user's claims; a user who takes part in no other study is deleted."""
+    from firebase_admin import auth
+
+    try:
+        user = auth.get_user(uid, app=app)
+    except auth.UserNotFoundError:
+        return
+    claims = claims_without(user.custom_claims, study)
+    if not claims.get("roles"):
+        auth.delete_user(uid, app=app)
+        return
+    auth.set_custom_user_claims(uid, claims, app=app)
+    auth.revoke_refresh_tokens(uid, app=app)
+
+
 def role_in(claims: dict[str, Any], study: str) -> str | None:
     """The role the claims give in a study, or None if they give none."""
     roles = claims.get("roles")

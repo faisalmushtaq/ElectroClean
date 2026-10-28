@@ -338,6 +338,15 @@ def create_app(study_dir: Path | str, *, demo: bool = False, allowed_origins: li
         return FileResponse(path, media_type="application/zip", filename=f"{store.study_id}_results.zip",
                             background=BackgroundTask(path.unlink, missing_ok=True))
 
+    @app.post(p + "/admin/{op}")
+    async def admin_op(request: Request, op: str) -> JSONResponse:
+        """Every operation of the admin area (docs/web/api.md, "Administration")."""
+        return await authed(request, "admin", {**await body_of(request), "op": op})
+
+    @app.post(p + "/quiz/{set_id:path}")
+    async def quiz(request: Request, set_id: str) -> JSONResponse:
+        return await authed(request, "quiz", {**await body_of(request), "set_id": set_id})
+
     @app.api_route(p + "/{rest:path}", methods=["GET", "POST", "PUT", "DELETE"])
     async def api_not_found(rest: str) -> JSONResponse:
         return error_response(404, "not_found", f"There is no {p}/{rest}")
@@ -368,25 +377,7 @@ def create_app(study_dir: Path | str, *, demo: bool = False, allowed_origins: li
 
 
 def results_zip(store: FilesStore) -> Path:
-    """A zip of the study's results folder (results, interaction logs, training progress and reports)."""
-    import tempfile
-    import zipfile
+    """A zip of the study's results folder (results, interaction logs, training progress, reports, quizzes)."""
+    from electroclean.web.export import results_zip_file
 
-    from electroclean.app.common import now_local_iso
-    from electroclean.app.io.naming import INTERNAL_DIR
-
-    root = store.layout.root
-    tmp = tempfile.NamedTemporaryFile(prefix="electroclean-results-", suffix=".zip", delete=False)
-    tmp.close()
-    base = root.name or "Annotated_Events"
-    with zipfile.ZipFile(tmp.name, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        if root.is_dir():
-            for path in sorted(root.rglob("*")):
-                rel = path.relative_to(root)
-                if (rel.parts and rel.parts[0] == INTERNAL_DIR) or not path.is_file():
-                    continue
-                zf.write(path, f"{base}/{rel.as_posix()}")
-        zf.writestr(f"{base}/README.txt", f"Results of the ElectroClean study {store.name}, downloaded "
-                    f"{now_local_iso()}.\nAnalyse them with electroclean-agreement and electroclean-activity, as for "
-                    "the desktop application.\n")
-    return Path(tmp.name)
+    return results_zip_file(store)

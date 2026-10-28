@@ -30,7 +30,7 @@ OPERATIONS = {"ec_me": "me", "ec_assignments": "assignments", "ec_match": "match
               "ec_guided_get": "guided_get", "ec_guided_check": "guided_check",
               "ec_guided_continue": "guided_continue", "ec_guided_show_me": "guided_show_me",
               "ec_visit_open": "visit_open", "ec_visit_events": "visit_events", "ec_visit_close": "visit_close",
-              "ec_admin_progress": "admin_progress"}
+              "ec_admin_progress": "admin_progress", "ec_admin": "admin", "ec_quiz": "quiz"}
 
 
 def load_main():
@@ -126,6 +126,42 @@ def test_administrators_need_the_claim_and_the_account(main) -> None:
     # a claim alone is not enough: A01's account in the study is an annotator's
     with pytest.raises(https_fn.HttpsError):
         call(main, "ec_admin_progress", {"study": "demo"}, {**A01, "roles": {"demo": "admin"}, "role": "admin"})
+
+
+ADMIN = {"annotator_id": "ADMIN", "roles": {"demo": "admin"}, "studies": ["demo"], "role": "admin"}
+
+
+def test_the_admin_area_and_the_quiz_as_callables(main) -> None:
+    endpoint = main.ec_admin.__firebase_endpoint__
+    assert endpoint.availableMemoryMb == 2048 and endpoint.timeoutSeconds == 540
+    with pytest.raises(https_fn.HttpsError) as e:
+        call(main, "ec_admin", {"study": "demo", "op": "overview"}, A01)
+    assert e.value.code.value == "permission-denied" and e.value.details["error"] == "forbidden"
+    with pytest.raises(https_fn.HttpsError) as e:  # the claim alone is not enough
+        call(main, "ec_admin", {"study": "demo", "op": "overview"}, {**A01, "roles": {"demo": "admin"}})
+    assert e.value.details["error"] == "forbidden"
+    o = call(main, "ec_admin", {"study": "demo", "op": "overview"}, ADMIN)
+    assert o["counts"]["recordings"] == 3
+    with pytest.raises(https_fn.HttpsError) as e:
+        call(main, "ec_admin", {"study": "demo", "op": "nothing"}, ADMIN)
+    assert e.value.code.value == "not-found" and e.value.details["error"] == "not_found"
+    with pytest.raises(https_fn.HttpsError) as e:
+        call(main, "ec_admin", {"study": "demo", "op": "user_update", "annotator_id": "ADMIN", "role": "annotator"},
+             ADMIN)
+    assert e.value.code.value == "already-exists" and e.value.details["error"] == "self"
+    item = call(main, "ec_admin", {"study": "demo", "op": "quiz_item_add", "set_id": "example",
+                                   "recording_id": GUIDED1, "start_s": 4.0, "end_s": 4.4,
+                                   "correct_label": "Eye-blink-artifact"}, ADMIN)["item"]
+    g = call(main, "ec_quiz", {"study": "demo", "set_id": "example", "action": "get"}, A01)
+    assert [i["item_id"] for i in g["items"]] == [item["item_id"]] and GUIDED1 in g["recordings"]
+    r = call(main, "ec_quiz", {"study": "demo", "set_id": "example", "action": "answer", "item_id": item["item_id"],
+                               "label": "Eye-blink-artifact"}, A01)
+    assert r["correct"] is True
+    assert call(main, "ec_quiz", {"study": "demo", "set_id": "example", "action": "finish"}, A01)["score"][
+        "n_correct"] == 1
+    assert call(main, "ec_me", {"study": "demo"}, A01)["quizzes"][0]["finished"] is True
+    entries = call(main, "ec_admin", {"study": "demo", "op": "audit", "limit": 5}, ADMIN)["entries"]
+    assert entries[0]["op"] == "quiz_item_add" and entries[0]["by"] == "ADMIN"
 
 
 def test_unexpected_errors_are_hidden(main, monkeypatch: pytest.MonkeyPatch) -> None:

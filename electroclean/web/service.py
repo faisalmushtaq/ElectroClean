@@ -37,6 +37,7 @@ from electroclean.web.store import MODES, Store, User, item_key
 ANN_ID_RE = re.compile(r"^[0-9A-Za-z_-]{1,64}$")
 STAMP_RE = re.compile(r"^[0-9T:.+\-Z ]{0,40}$")
 SHA_RE = re.compile(r"^[0-9a-f]{64}$")
+SESSION_RE = re.compile(r"^[0-9a-f]{32}$")
 MAX_ANNOTATIONS = 20000
 #: What annotators are told when the study records how they use ElectroClean (as on the desktop).
 LOGGING_NOTICE = ("This study records how you use ElectroClean (times, clicks, keys and what is on screen) for "
@@ -47,7 +48,8 @@ __all__ = ["ApiError", "StudyService", "WorkItem", "annotation_dict", "parse_ann
 
 # ------------------------------------------------------------------ annotations
 def _int(value: Any, what: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or int(value) != value:
+    if (isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value)
+            or int(value) != value):
         raise ApiError(422, "invalid_annotation", f"{what} must be a whole number of samples")
     return int(value)
 
@@ -162,11 +164,17 @@ class StudyService:
 
     def __init__(self, store: Store) -> None:
         self.store = store
+        from electroclean.web.admin import Admin
+        from electroclean.web.analyses import Analyses
         from electroclean.web.coach import Coach
+        from electroclean.web.quiz import Quizzes
         from electroclean.web.visits import Visits
 
         self.coach = Coach(self)
         self.visits = Visits(self)
+        self.administration = Admin(self)
+        self.analyses = Analyses(self)
+        self.quizzes = Quizzes(self)
 
     # ----------------------------------------------------------------- basics
     @property
@@ -207,7 +215,7 @@ class StudyService:
             "annotation": {"min_duration_samples": s.min_duration_samples,
                            "quick_labels": [q for q in s.quick_labels if cat.is_permitted(q)]},
             "logging": self.logging_info(),
-            "logging_notice": LOGGING_NOTICE if s.logging_interactions else "",
+            "logging_notice": (self.store.logging_notice or LOGGING_NOTICE) if s.logging_interactions else "",
         }
 
     def logging_info(self) -> dict[str, Any]:
@@ -233,7 +241,8 @@ class StudyService:
             except ReferenceSetError:
                 prog = None
         return {"annotator_id": user.annotator_id, "display_name": user.display_name, "role": user.role,
-                "study": self.study_info(), "catalogue": self.catalogue_info(), "programme": prog}
+                "study": self.study_info(), "catalogue": self.catalogue_info(), "programme": prog,
+                "quizzes": self.quizzes.available(user)}
 
     # ---------------------------------------------------------- what to do
     def work_items(self, user: User) -> list[WorkItem]:
@@ -514,6 +523,13 @@ class StudyService:
                 guided_summary = self.coach.verify_for_saving(user, rs, rid, anns, loaded.info.timing.sfreq)
                 context["guided"] = dict(guided_summary)
         client = clean_json(info.get("client")) if isinstance(info.get("client"), dict) else {}
+        session_id = info.get("session_id")
+        if session_id is not None:
+            if not isinstance(session_id, str) or not SESSION_RE.match(session_id.lower()):
+                raise ApiError(400, "bad_request", "session.session_id must be 32 hexadecimal characters")
+            session_id = session_id.lower()
+            if any(e.get("session_id") == session_id for e in self.store.completion_entries(user.annotator_id)):
+                session_id = None  # already the ID of a saved result: this save gets its own
         view = info.get("view") if isinstance(info.get("view"), dict) else {}
         display_state = {k: float(view[k]) for k in ("start_s", "duration_s", "first_channel", "n_channels",
                                                      "scale_factor")
@@ -524,7 +540,7 @@ class StudyService:
             s = WebSession(layout=layout, settings=self.settings, filters=filters, catalogue=self.store.catalogue,
                            loaded=loaded, annotator_id=user.annotator_id, display_name=user.display_name,
                            mode=item.mode, context=context, initial_annotations=anns, allow_repeat=item.repeat,
-                           autosave_enabled=False, client=client, server=self.store.kind)
+                           autosave_enabled=False, client=client, server=self.store.kind, session_id=session_id)
             s.display_state = display_state
             return s
 
@@ -596,17 +612,32 @@ class StudyService:
             out.append(entry)
         return {"study": self.store.name, "generated_at": now_local_iso(), "annotators": out}
 
-    #: Operation name -> method, for the HTTP routes and the Firebase functions.
+    def admin(self, op: Any, user: User, body: dict[str, Any] | None = None) -> dict[str, Any]:
+        """One operation of the admin area (docs/web/api.md, "Administration"; electroclean/web/admin.py)."""
+        return self.administration.run(op, user, body or {})
+
+    # ------------------------------------------------------------------ quiz
+    def quiz(self, user: User, set_id: Any, body: dict[str, Any] | None = None) -> dict[str, Any]:
+        """The short-segment quiz of a reference set: get, answer, finish (electroclean/web/quiz.py)."""
+        return self.quizzes.run(user, set_id, body or {})
+
+    #: Operation name -> method, for the HTTP routes and the Firebase functions. ``admin`` takes the
+    #: operation in the body's ``op`` and ``quiz`` the set in its ``set_id``.
     OPERATIONS = ("me", "assignments", "match", "put_draft", "delete_draft", "submit", "training", "guided_get",
                   "guided_check", "guided_continue", "guided_show_me", "visit_open", "visit_events", "visit_close",
-                  "admin_progress")
+                  "admin_progress", "admin", "quiz")
 
     def call(self, operation: str, user: User, body: dict[str, Any] | None) -> dict[str, Any]:
         if operation not in self.OPERATIONS:
             raise ApiError(404, "not_found", f"Unknown operation {operation}")
         if body is not None and not isinstance(body, dict):
             raise ApiError(400, "bad_request", "The request must be a JSON object")
-        return getattr(self, operation)(user, body or {})
+        body = body or {}
+        if operation == "admin":
+            return self.admin(body.get("op"), user, {k: v for k, v in body.items() if k != "op"})
+        if operation == "quiz":
+            return self.quiz(user, body.get("set_id"), {k: v for k, v in body.items() if k != "set_id"})
+        return getattr(self, operation)(user, body)
 
 
 def _rid(body: dict[str, Any]) -> str:

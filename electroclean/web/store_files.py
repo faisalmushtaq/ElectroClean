@@ -9,7 +9,10 @@ Results go straight into ElectroClean's usual folders below the study (``Annotat
 from __future__ import annotations
 
 import json
+import logging
 import re
+import shutil
+import tempfile
 import threading
 from collections.abc import Callable
 from datetime import datetime
@@ -19,15 +22,27 @@ from typing import TYPE_CHECKING, Any
 from electroclean.app.io.atomic import atomic_write_bytes, atomic_write_json
 from electroclean.app.session.register import CompletionRegister, RegisterError
 from electroclean.config.settings import Settings
-from electroclean.web.accounts import Accounts
-from electroclean.web.store import Assignment, SavedResult, Store, StoreError, User
+from electroclean.web.accounts import AccountError, AccountExists, Accounts
+from electroclean.web.store import (
+    AccountProblem,
+    Assignment,
+    Credentials,
+    ResultExists,
+    SavedResult,
+    Store,
+    StoreError,
+    User,
+    generated_password,
+)
 from electroclean.web.study import StudyError, WebStudy
 
 if TYPE_CHECKING:
     from electroclean.training.programme import Progress
     from electroclean.training.reference import ReferenceSet
 
+log = logging.getLogger("electroclean.web")
 ATTEMPT_RE = re.compile(r"_attempt-(\d+)$")
+SET_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 
 
 def _jsonl(obj: dict[str, Any]) -> str:
@@ -48,6 +63,35 @@ class FilesStore(Store):
         self.demo = demo
         self._log_locks: dict[str, threading.Lock] = {}
         self._log_locks_guard = threading.Lock()
+        #: What the journalled saves of an earlier run left behind and what was done about it.
+        self.recovered = self.recover_interrupted()
+
+    def recover_interrupted(self) -> list[dict[str, Any]]:
+        """The desktop's recovery of interrupted saves (``recover_interrupted_exports``), run when the study
+        folder is opened and after a save whose register update was interrupted: a save whose files were
+        all written and verified is rolled forward (the register is updated), anything else rolled back
+        (its files kept in ``.electroclean/interrupted/``). Saves still in progress are left alone."""
+        from electroclean.app.session.failures import SessionLog
+        from electroclean.app.session.transaction import recover_interrupted_exports
+        from electroclean.web import audit
+
+        layout = self.layout
+        if not layout.staging.exists():
+            return []
+        register = CompletionRegister(layout, self.settings.register_lock_timeout_s)
+        try:
+            actions = recover_interrupted_exports(layout, register, SessionLog(layout))
+        except Exception:  # noqa: BLE001 - the study must still open; the next opening tries again
+            log.exception("Interrupted saves in %s could not be checked", layout.root)
+            return []
+        out = []
+        for a in actions:
+            out.append({"session_id": a.session_id, "action": a.action, "message": a.message})
+            if a.action in ("rolled_forward", "rolled_back", "rollback_incomplete"):
+                log.warning("Interrupted save %s: %s", a.session_id, a.message)
+                audit.record(self, "server", "save_recovered", a.message,
+                             {"session_id": a.session_id, "action": a.action})
+        return out
 
     def close(self) -> None:
         self.db.close()
@@ -70,6 +114,21 @@ class FilesStore(Store):
         return self.study.settings
 
     @property
+    def settings_overrides(self) -> dict[str, Any]:
+        return dict(self.study.raw_config.get("settings") or {})
+
+    @property
+    def logging_notice(self) -> str:
+        return str(self.study.raw_config.get("logging_notice") or "")
+
+    def update_study(self, *, name: str | None = None, overrides: dict[str, Any] | None = None,
+                     logging_notice: str | None = None) -> None:
+        try:
+            self.study.update(name=name, overrides=overrides, logging_notice=logging_notice)
+        except StudyError as exc:
+            raise ValueError(str(exc)) from exc
+
+    @property
     def layout(self) -> Any:
         return self.study.layout
 
@@ -86,22 +145,85 @@ class FilesStore(Store):
     def add_manifest(self, m: dict[str, Any]) -> None:
         self.study.manifests.add(m)
 
+    def remove_manifest(self, scope: str, recording_id: str) -> None:
+        self.study.manifests.remove(scope, recording_id)
+
     # --------------------------------------------------------- reference sets
     def reference_sets(self) -> list[ReferenceSet]:
         return self.study.reference_sets()
 
-    def add_reference_set(self, definition: dict[str, Any], files: dict[str, bytes]) -> None:
+    @staticmethod
+    def _set_files(definition: dict[str, Any], files: dict[str, bytes]) -> tuple[str, dict[Path, bytes]]:
         set_id = str(definition["set_id"])
-        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", set_id):
+        if not SET_ID_RE.fullmatch(set_id):
             raise StoreError(f"Unsuitable reference set ID {set_id!r}")
-        folder = self.study.reference_sets_dir / set_id
         recordings_dir = str(definition.get("recordings_dir") or "")
+        out: dict[Path, bytes] = {}
         for rel, data in files.items():
             parts = PurePosixPath(rel).parts
-            if not parts or ".." in parts or PurePosixPath(rel).is_absolute() or (recordings_dir and parts[0] == recordings_dir):
+            if (not parts or ".." in parts or PurePosixPath(rel).is_absolute() or rel == "reference_set.json"
+                    or (recordings_dir and parts[0] == recordings_dir)):
                 raise StoreError(f"Refusing to store {rel!r} with reference set {set_id}")
-            atomic_write_bytes(folder / Path(*parts), data)
+            out[Path(*parts)] = data
+        return set_id, out
+
+    def add_reference_set(self, definition: dict[str, Any], files: dict[str, bytes]) -> None:
+        set_id, clean = self._set_files(definition, files)
+        folder = self.study.reference_sets_dir / set_id
+        for rel, data in clean.items():
+            atomic_write_bytes(folder / rel, data)
         atomic_write_json(folder / "reference_set.json", definition)
+
+    def _set_folder(self, set_id: str) -> Path:
+        if not SET_ID_RE.fullmatch(str(set_id or "")):
+            raise StoreError(f"Unsuitable reference set ID {set_id!r}")
+        return self.study.reference_sets_dir / set_id
+
+    def reference_set_payload(self, set_id: str) -> tuple[dict[str, Any], dict[str, bytes]]:
+        from electroclean.training.reference import ReferenceSetError
+        from electroclean.web.registration import reference_set_payload
+
+        folder = self._set_folder(set_id)
+        try:
+            return reference_set_payload(folder)
+        except ReferenceSetError as exc:
+            raise StoreError(str(exc)) from exc
+
+    def put_reference_set(self, definition: dict[str, Any], files: dict[str, bytes]) -> None:
+        """Written beside the study, then moved into place, so a reader never sees half a set."""
+        set_id, clean = self._set_files(definition, files)
+        folder = self.study.reference_sets_dir / set_id
+        scratch = self.root / ".electroclean-tmp"
+        scratch.mkdir(exist_ok=True)
+        new = Path(tempfile.mkdtemp(prefix=f"{set_id}.", dir=scratch))
+        try:
+            for rel, data in clean.items():
+                atomic_write_bytes(new / rel, data)
+            atomic_write_json(new / "reference_set.json", definition)
+            folder.parent.mkdir(parents=True, exist_ok=True)
+            old = None
+            if folder.exists():
+                old = Path(tempfile.mkdtemp(prefix=f"{set_id}.old.", dir=scratch))
+                old.rmdir()
+                folder.rename(old)
+            new.rename(folder)
+            if old is not None:
+                shutil.rmtree(old, ignore_errors=True)
+        finally:
+            if new.exists():
+                shutil.rmtree(new, ignore_errors=True)
+
+    def delete_reference_set(self, set_id: str) -> None:
+        folder = self._set_folder(set_id)
+        if folder.exists():
+            scratch = self.root / ".electroclean-tmp"
+            scratch.mkdir(exist_ok=True)
+            gone = Path(tempfile.mkdtemp(prefix=f"{set_id}.deleted.", dir=scratch))
+            gone.rmdir()
+            folder.rename(gone)
+            shutil.rmtree(gone, ignore_errors=True)
+        self.db.delete_quiz_states(set_id)
+        self.db.delete_guided_states(set_id)
 
     # -------------------------------------------------- people and their work
     def user(self, annotator_id: str) -> User | None:
@@ -110,12 +232,57 @@ class FilesStore(Store):
     def users(self) -> list[dict[str, Any]]:
         return self.db.users()
 
+    def user_records(self) -> list[dict[str, Any]]:
+        return self.db.user_records()
+
+    def create_account(self, annotator_id: str, *, display_name: str, role: str, email: str,
+                       password: str | None) -> Credentials:
+        temporary = None if password else generated_password()
+        try:
+            self.db.add_user(annotator_id, password or str(temporary), display_name=display_name, role=role)
+        except AccountExists as exc:
+            raise AccountProblem("user_exists", f"{annotator_id.upper()} already has an account in this "
+                                 "study") from exc
+        except AccountError as exc:
+            raise AccountProblem("invalid_user", str(exc), 400) from exc
+        if email:
+            self.db.update_user(annotator_id, email=email)
+        return {"invite_link": None, "temporary_password": temporary}
+
+    def update_account(self, annotator_id: str, *, display_name: str | None = None, role: str | None = None,
+                       status: str | None = None, notes: str | None = None) -> None:
+        try:
+            self.db.update_user(annotator_id, display_name=display_name, role=role, notes=notes,
+                                disabled=None if status is None else status == "disabled")
+        except AccountError as exc:
+            raise AccountProblem("invalid_user", str(exc), 400) from exc
+
+    def reset_password(self, annotator_id: str) -> Credentials:
+        temporary = generated_password()
+        try:
+            self.db.set_password(annotator_id, temporary)
+        except AccountError as exc:
+            raise AccountProblem("invalid_user", str(exc), 400) from exc
+        return {"invite_link": None, "temporary_password": temporary}
+
+    def remove_account(self, annotator_id: str) -> None:
+        aid = str(annotator_id).upper()
+        self.db.delete_user(aid)
+        shutil.rmtree(self.study.drafts_dir / f"annotator-{aid}", ignore_errors=True)
+
     def assignments(self, annotator_id: str | None = None) -> list[Assignment]:
         return self.db.assignments(annotator_id)
 
     def assign(self, annotator_id: str, recording_ids: list[str], *, mode: str = "standard",
                context_id: str = "") -> int:
         return self.db.assign(annotator_id, recording_ids, mode=mode, context_id=context_id)
+
+    def unassign_item(self, annotator_id: str, recording_id: str, mode: str, context_id: str) -> bool:
+        return self.db.unassign_item(annotator_id, recording_id, mode, context_id)
+
+    def remove_assignments(self, *, recording_id: str | None = None, context_id: str | None = None,
+                           modes: tuple[str, ...] | None = None) -> int:
+        return self.db.remove_assignments(recording_id=recording_id, context_id=context_id, modes=modes)
 
     def programme(self, annotator_id: str) -> str | None:
         return self.db.programme(annotator_id)
@@ -177,6 +344,18 @@ class FilesStore(Store):
             files = {p.name: p.read_bytes() for p in result.commit.paths.values()}
             m = ATTEMPT_RE.search(result.output_basename)
             attempt = int(m.group(1)) if m else 1
+        else:  # the files were written and verified but the register could not be updated: roll it forward now
+            self.recover_interrupted()
+            entry = next((e for e in self.completion_entries(session.annotator_id)
+                          if e.get("session_id") == session.session_id), None)
+            if entry is not None:
+                from electroclean.app.io.naming import OUTPUT_SUFFIXES
+
+                folder = _inside(self.layout.root, entry["output_dir"])
+                paths = [folder / f"{entry['output_basename']}{s}" for s in OUTPUT_SUFFIXES.values()]
+                files = {p.name: p.read_bytes() for p in paths if p.is_file()}
+                m = ATTEMPT_RE.search(entry["output_basename"])
+                attempt = int(m.group(1)) if m else 1
         return SavedResult(session=session, result=result, files=files, attempt=attempt)
 
     def progress(self, rs: ReferenceSet, annotator_id: str) -> Progress:
@@ -195,6 +374,57 @@ class FilesStore(Store):
             return str(json.loads(path.read_text(encoding="utf-8")).get("status_text", ""))
         except (OSError, ValueError):
             return ""
+
+    def saved_files(self, annotator_id: str, recording_id: str, mode: str, context_id: str) -> dict[str, bytes]:
+        from electroclean.app.io.naming import OUTPUT_SUFFIXES
+
+        mine = [e for e in self.completion_entries(annotator_id) if e.get("recording_id") == recording_id
+                and e.get("mode", "standard") == mode and e.get("context", "") == (context_id if mode != "standard"
+                                                                                     else "")
+                and e.get("status") == "completed" and e.get("output_dir") and e.get("output_basename")]
+        if not mine:
+            return {}
+        last = max(mine, key=lambda e: (e.get("completed_at", ""), e.get("output_basename", "")))
+        folder = _inside(self.layout.root, last["output_dir"])
+        out = {}
+        for suffix in OUTPUT_SUFFIXES.values():
+            p = folder / f"{last['output_basename']}{suffix}"
+            if p.is_file():
+                out[p.name] = p.read_bytes()
+        return out
+
+    def results_tree(self, dest: Path, *, logs: bool = False, annotator_ids: set[str] | None = None,
+                     modes: set[str] | None = None) -> Path:
+        return self.layout.root
+
+    def put_result_file(self, rel_path: str, data: bytes) -> None:
+        path = _inside(self.layout.root, rel_path)
+        if path.exists():
+            raise ResultExists(f"{rel_path} has already been saved")
+        try:
+            atomic_write_bytes(path, data, overwrite=False)
+        except OSError as exc:
+            if path.exists():
+                raise ResultExists(f"{rel_path} has already been saved") from exc
+            raise
+
+    # ------------------------------------------------------------------- quiz
+    def quiz_state(self, annotator_id: str, set_id: str) -> dict[str, Any] | None:
+        return self.db.quiz_state(annotator_id, set_id)
+
+    def update_quiz_state(self, annotator_id: str, set_id: str,
+                          change: Callable[[dict[str, Any] | None], dict[str, Any] | None]) -> dict[str, Any] | None:
+        return self.db.update_quiz_state(annotator_id, set_id, change)
+
+    # ------------------------------------------------------------------ audit
+    def audit_append(self, entry: dict[str, Any]) -> None:
+        self.db.audit_append(entry)
+
+    def audit_page(self, before: str | None, limit: int) -> tuple[list[dict[str, Any]], str | None]:
+        try:
+            return self.db.audit_page(before, limit)
+        except AccountError as exc:
+            raise StoreError(str(exc)) from exc
 
     # ----------------------------------------------------------------- visits
     def _log_lock(self, visit_id: str) -> threading.Lock:
@@ -232,3 +462,16 @@ class FilesStore(Store):
     def visit_close(self, visit_id: str, event: dict[str, Any]) -> None:
         self.visit_append(visit_id, [event])
         self.db.close_visit(visit_id)
+
+    def visit_records(self, annotator_id: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+        return [{"visit_id": v["visit_id"], "annotator_id": v["annotator_id"], "mode": v["mode"],
+                 "context_id": v["context_id"], "started_at": v["opened_at"], "closed_at": v["closed_at"] or None,
+                 "n_events": int(v["seq"])} for v in self.db.visit_rows(annotator_id, limit)]
+
+
+def _inside(root: Path, rel: str) -> Path:
+    """``root / rel``, refusing anything that would leave ``root``."""
+    parts = PurePosixPath(str(rel)).parts
+    if not parts or ".." in parts or PurePosixPath(str(rel)).is_absolute() or "\\" in str(rel):
+        raise StoreError(f"Refusing a path outside the results folder: {rel!r}")
+    return root.joinpath(*parts)

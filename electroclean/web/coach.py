@@ -199,7 +199,8 @@ class Coach:
     def _matched(st: dict[str, Any]) -> dict[int, str]:
         return {int(k): v for k, v in st["matched"].items()}
 
-    def _view_for(self, guidance: str, steps: list[Step], i: int, sfreq: float, n_samples: int) -> dict[str, Any] | None:
+    def _view_for(self, guidance: str, steps: list[Step], i: int, sfreq: float,
+                  n_samples: int) -> dict[str, Any] | None:
         t = steps[i].target
         total = n_samples / sfreq
         display = float(self.service.settings.display.duration_s)

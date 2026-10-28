@@ -7,10 +7,13 @@
     {"collectionGroup": "submissions", "fieldPath": "blob", "indexes": []},
     {"collectionGroup": "submissions", "fieldPath": "entry", "indexes": []},
     {"collectionGroup": "reports", "fieldPath": "blob", "indexes": []},
+    {"collectionGroup": "result_files", "fieldPath": "blob", "indexes": []},
     {"collectionGroup": "chunks", "fieldPath": "data", "indexes": []},
     {"collectionGroup": "batches", "fieldPath": "blob", "indexes": []},
     {"collectionGroup": "visits", "fieldPath": "header_json", "indexes": []},
     {"collectionGroup": "guided", "fieldPath": "state_json", "indexes": []},
-    {"collectionGroup": "progress", "fieldPath": "data_json", "indexes": []}
+    {"collectionGroup": "progress", "fieldPath": "data_json", "indexes": []},
+    {"collectionGroup": "quiz", "fieldPath": "state_json", "indexes": []},
+    {"collectionGroup": "audit", "fieldPath": "details_json", "indexes": []}
   ]
 }

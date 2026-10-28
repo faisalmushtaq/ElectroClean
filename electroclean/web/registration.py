@@ -99,10 +99,14 @@ def collect(dataset_root: Path | str, settings: Any, catalogue: Any, *, check_fi
     return reg
 
 
-def store_registration(store: Store, reg: Registration) -> None:
+def store_registration(store: Store, reg: Registration, *, by: str = "command", via: str = "command") -> None:
+    """Store the reference sets and manifests; a recording registered again keeps its notes and retirement."""
     for definition, files in reg.reference_sets:
         store.add_reference_set(definition, files)
     for m in reg.manifests:
+        old = dict((store.manifest(m["scope"], m["recording_id"]) or {}).get("registration") or {})
+        m["registration"] = {"registered_at": now_local_iso(), "registered_by": by, "registered_via": via,
+                             "notes": old.get("notes", ""), "retired": bool(old.get("retired", False))}
         store.add_manifest(m)
 
 

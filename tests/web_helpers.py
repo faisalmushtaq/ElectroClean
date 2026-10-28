@@ -87,6 +87,23 @@ class Api:
         assert r.status_code == 200, f"{method.upper()} {path}: {r.status_code} {r.text}"
         return r.json()
 
+    def admin(self, op: str, body: dict[str, Any] | None = None) -> Any:
+        """``POST /admin/{op}``: the response (check ``status_code`` yourself)."""
+        return self.post(f"/admin/{op}", body or {})
+
+    def admin_ok(self, op: str, body: dict[str, Any] | None = None) -> Any:
+        r = self.admin(op, body)
+        assert r.status_code == 200, f"admin {op}: {r.status_code} {r.text}"
+        return r.json()
+
+    def admin_error(self, op: str, body: dict[str, Any] | None, status: int, code: str) -> dict[str, Any]:
+        r = self.admin(op, body)
+        assert (r.status_code, r.json().get("error")) == (status, code), f"admin {op}: {r.status_code} {r.text}"
+        return r.json()
+
+    def quiz(self, set_id: str, body: dict[str, Any]) -> Any:
+        return self.post(f"/quiz/{set_id}", body)
+
 
 def submission(recordings: Path, rid: str, annotations: list[dict[str, Any]], mode: str = "standard",
                context: str = "", elapsed: float = 61.5) -> dict[str, Any]:
@@ -110,3 +127,22 @@ def reference_annotations(study_or_store: Any, set_id: str, rid: str) -> list[An
 
 def as_wire(a: Any, aid: str | None = None) -> dict[str, Any]:
     return ann(aid or a.annotation_id, a.label, a.onset_sample, a.duration_samples, list(a.channels))
+
+
+def build_manifests(folder: Path, scope: str = "study") -> list[dict[str, Any]]:
+    """The manifests of every recording in a folder, as the desktop's registration makes them (MNE-Python),
+    which is what the browser's registration (js/data/register.js) builds too."""
+    from electroclean.app.annotations.labels import default_catalogue
+    from electroclean.config.settings import load_settings
+    from electroclean.web.registration import collect
+
+    settings, _ = load_settings(None)
+    reg = collect(folder, settings, default_catalogue(), include_sets=False, say=lambda _m: None)
+    assert not reg.failed, reg.failed
+    for m in reg.manifests:
+        m["scope"] = scope
+    return reg.manifests
+
+
+def admin_audit(api: Api, n: int = 50) -> list[dict[str, Any]]:
+    return api.admin_ok("audit", {"limit": n})["entries"]

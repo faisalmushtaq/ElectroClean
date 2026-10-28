@@ -4,8 +4,8 @@
 
     STUDY_DIR/
         electroclean_study.json          the study's settings (the desktop application's study file)
-        server.sqlite                    accounts, sign-in tokens, assignments, visits, guided progress
-                                         (see accounts.py)
+        server.sqlite                    accounts, sign-in tokens, assignments, visits, guided and quiz
+                                         progress, the audit log (see accounts.py)
         manifests/<key>.json             one per registered recording (see manifest.py)
         drafts/annotator-<ID>/<key>.json unfinished work sent by the browser
         derivatives/electroclean_reference_sets/<set>/   training reference sets (never sent out)
@@ -127,6 +127,30 @@ class WebStudy:
     @property
     def name(self) -> str:
         return str(self.raw_config.get("name") or self.study_id)
+
+    def update(self, *, name: str | None = None, overrides: dict[str, Any] | None = None,
+               logging_notice: str | None = None) -> None:
+        """Change the study's name, its settings (the ``settings`` block) or its logging notice.
+
+        The new study file is read with the desktop application's own machinery before it replaces the
+        old one, so settings it would refuse are never saved (:class:`StudyError` with the reason)."""
+        import tempfile
+
+        data = self.raw_config
+        if name is not None:
+            data["name"] = name
+        if overrides is not None:
+            data["settings"] = overrides
+        if logging_notice is not None:
+            data["logging_notice"] = logging_notice
+        with tempfile.TemporaryDirectory(prefix="electroclean-study-") as tmp:
+            atomic_write_json(Path(tmp) / STUDY_CONFIG_FILENAME, data)
+            try:
+                load_settings(Path(tmp))
+            except (ValueError, TypeError, KeyError, AttributeError) as exc:
+                raise StudyError(str(exc)) from exc
+        atomic_write_json(self.config_path, data)
+        self._settings = None
 
     # --------------------------------------------------------------- paths
     @property

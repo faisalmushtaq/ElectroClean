@@ -13,6 +13,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 import uuid
 from pathlib import Path
 from typing import Any
@@ -235,6 +236,44 @@ def test_large_drafts_are_split_over_documents(service: StudyService) -> None:
     assert len(back["draft"]["annotations"]) == 20000
 
 
+def test_pieces_of_interrupted_writes_are_cleaned_up(service: StudyService, tmp_path: Path) -> None:
+    import base64
+
+    store = service.store
+    key = item_key(SUB1, "standard", "")
+    noise = base64.b64encode(os.urandom(2_000_000)).decode("ascii")  # does not compress: split over documents
+    store.put_draft("A01", key, {"recording_id": SUB1, "saved_at": "now", "draft": {"annotations": [],
+                                                                                  "noise": noise}})
+    store.put_draft("A01", key, {"recording_id": SUB1, "saved_at": "later", "draft": {"annotations": [],
+                                                                                    "noise": noise}})
+    ref = store.doc.collection("drafts").document(f"A01_{key}")
+    current = ref.get().to_dict()["chunk_prefix"]
+    assert current and ref.get().to_dict()["chunks"] >= 2
+    # the first version's chunks are young, so they wait for the clean-up: make them old
+    for c in ref.collection("chunks").stream():
+        if not c.id.startswith(current):
+            c.reference.update({"written_at": 1.0})
+    # what an instance stopped mid-write leaves: chunks of a document never written, and of an older version
+    lost = store.doc.collection("submissions").document("A01_lost_01")
+    lost.collection("chunks").document("0123456789ab-0000").set({"data": b"x", "prefix": "0123456789ab",
+                                                                 "written_at": 1.0})
+    ref.collection("chunks").document("ba9876543210-0000").set({"data": b"y", "prefix": "ba9876543210",
+                                                                "written_at": 1.0})
+    ref.collection("chunks").document("cccccccccccc-0000").set({"data": b"z", "prefix": "cccccccccccc",
+                                                                "written_at": time.time()})  # a write in progress
+    done = store.recover_interrupted()
+    assert sorted(d["document"] for d in done) == sorted([f"drafts/A01_{key}", "submissions/A01_lost_01"])
+    left = sorted(c.id for c in ref.collection("chunks").stream())
+    assert "ba9876543210-0000" not in left and "cccccccccccc-0000" in left
+    assert all(c.startswith((current, "cccccccccccc")) for c in left)
+    assert not list(lost.collection("chunks").stream())
+    back = store.draft("A01", key)  # the draft itself is intact
+    assert back["saved_at"] == "later" and back["draft"]["noise"] == noise
+    assert store.recover_interrupted() == []
+    # the export cleans up too
+    assert cli(["export", "--firebase-project", PROJECT, "--study", store.study_id, "--to", str(tmp_path / "x")]) == 0
+
+
 def test_a_guided_check_on_firestore_does_not_import_pandas(study: str) -> None:
     main_py = REPO / "electroclean" / "web" / "firebase" / "functions" / "main.py"
     code = f"""
@@ -272,11 +311,193 @@ def test_admin_commands(template: Path, tmp_path: Path, capsys: pytest.CaptureFi
     run_cli("import-manifests", str(bundle), "--study", sid2)
     assert len(FirestoreStore(firestore_client(PROJECT), sid2).manifests()) == 3
     cfg = tmp_path / "config.json"
-    assert cli(["config", "--firebase-project", PROJECT, "--study", sid, "--api-key", "AIza-test", "--app-id", "1:2:web:3",
-                "--out", str(cfg)]) == 0
+    assert cli(["config", "--firebase-project", PROJECT, "--study", sid, "--api-key", "AIza-test",
+                "--app-id", "1:2:web:3", "--out", str(cfg)]) == 0
     c = json.loads(cfg.read_text())
     assert c["study"] == sid and c["firebase"]["projectId"] == PROJECT and c["firebase"]["apiKey"] == "AIza-test"
     assert c["firebase"]["authDomain"] == f"{PROJECT}.firebaseapp.com" and c["functions_region"] == "europe-west2"
+
+
+# ------------------------------------------------------------- the admin area
+def admin_ok(service: StudyService, op: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
+    return service.call("admin", ADMIN, {"op": op, **(body or {})})
+
+
+def admin_err(service: StudyService, op: str, body: dict[str, Any]) -> ApiError:
+    with pytest.raises(ApiError) as e:
+        service.call("admin", ADMIN, {"op": op, **body})
+    return e.value
+
+
+def test_the_admin_area_on_firestore(service: StudyService, recordings: Path, tmp_path: Path) -> None:
+    from electroclean.synthetic import write_edf_recording
+    from tests.web_helpers import build_manifests
+
+    assert admin_err(service, "no_such_op", {}).code == "not_found"
+    with pytest.raises(ApiError) as e:
+        service.call("admin", A01, {"op": "overview"})
+    assert e.value.code == "forbidden"
+    o = admin_ok(service, "overview")
+    assert o["counts"]["recordings"] == 3 and o["counts"]["admins"] == 1
+    # settings, read afresh by the next call
+    admin_ok(service, "settings_update", {"name": "Renamed", "settings": {"filters": {"notch_hz": 60.0}},
+                                          "logging_notice": "Clicks and keys are recorded."})
+    s = admin_ok(service, "settings_get")
+    assert s["name"] == "Renamed" and s["settings"]["filters"]["notch_hz"] == 60.0
+    assert admin_err(service, "settings_update", {"settings": {"selection": {"strategy": "x"}}}).code == \
+        "invalid_settings"
+    fresh = StudyService(FirestoreStore(firestore_client(PROJECT), service.store.study_id))
+    assert ok(fresh, "me", A01)["study"]["logging_notice"] == "Clicks and keys are recorded."
+    # recordings from the browser
+    folder = tmp_path / "data"
+    write_edf_recording(folder / "sub-201" / "eeg", "sub-201_task-rest", duration_s=10.0, seed=21)
+    manifests = build_manifests(folder)
+    r = admin_ok(service, "recordings_register", {"scope": "study", "manifests": manifests})
+    rid = manifests[0]["recording_id"]
+    assert r["added"] == [rid]
+    rec = next(x for x in admin_ok(service, "recordings_list", {"scope": "study"})["recordings"]
+               if x["recording_id"] == rid)
+    assert rec["registered_via"] == "browser" and rec["registered_by"] == "ADMIN"
+    admin_ok(service, "recording_update", {"scope": "study", "recording_id": rid, "retired": True, "notes": "x"})
+    assert admin_ok(service, "assign", {"annotator_ids": ["A02"], "all": True})["retired"] == 1
+    admin_ok(service, "recording_remove", {"scope": "study", "recording_id": rid})
+    # work to analyse and to build references from
+    ok(service, "submit", A01, submission(recordings, SUB1, [BLINK, EMG]))
+    ok(service, "submit", A02, submission(recordings, SUB1, [ann("e" * 32, "Eye-blink-artifact", 510, 95,
+                                                                 ["Fp1", "Fp2"])]))
+    assert admin_err(service, "unassign", {"annotator_id": "A01", "recording_id": SUB1}).code == "done"
+    admin_ok(service, "unassign", {"annotator_id": "A01", "recording_id": SUB3})
+    assert SUB3 not in [i["recording_id"] for i in ok(service, "assignments", A01)["items"]]
+    admin_ok(service, "set_create", {"set_id": "pilot", "name": "Pilot"})
+    r = admin_ok(service, "set_add_reference", {"set_id": "pilot", "recording_id": SUB1, "use": "practice",
+                                                "source": {"kind": "consensus", "annotator_ids": ["A01", "A02"]}})
+    assert r["set"]["recordings"][0]["provenance"]["method"] == "consensus" and r["disagreements"]
+    assert service.store.manifest("set:pilot", SUB1) is not None
+    admin_ok(service, "set_update", {"set_id": "pilot", "criteria": {"criteria": [
+        {"metric": "event_f1", "threshold": 0.5}]}, "quiz": {"feedback": "end"}})
+    admin_ok(service, "quiz_item_add", {"set_id": "pilot", "recording_id": SUB1, "start_s": 1.0, "end_s": 2.0,
+                                        "correct_label": "Eye-blink-artifact"})
+    # the quiz
+    g = service.call("quiz", A01, {"set_id": "pilot", "action": "get"})
+    assert g["feedback"] == "end" and list(g["recordings"]) == [SUB1]
+    service.call("quiz", A01, {"set_id": "pilot", "action": "answer", "item_id": "q01", "label": "EMG-artifact"})
+    assert service.call("quiz", A01, {"set_id": "pilot", "action": "finish"})["score"]["n_correct"] == 0
+    assert ok(service, "me", A01)["quizzes"] == [{"set_id": "pilot", "name": "Pilot", "n_items": 1,
+                                                 "finished": True, "feedback": "end"}]
+    # analyses
+    ag = admin_ok(service, "agreement", {})
+    assert ag["summary"]["n_comparable_recordings"] == 1 and "events_summary.tsv" in ag["tables"]
+    v = ok(service, "visit_open", A01, {})
+    ok(service, "visit_events", A01, {"visit_id": v["visit_id"], "events": [{"t": 1.0, "type": "key"}]})
+    ok(service, "visit_close", A01, {"visit_id": v["visit_id"]})
+    assert "A01" in admin_ok(service, "activity", {})["tables"]["visits.tsv"]
+    vs = admin_ok(service, "visits", {"annotator_id": "A01"})["visits"]
+    assert vs[0]["visit_id"] == v["visit_id"] and vs[0]["n_events"] == 3
+    assert admin_ok(service, "visits", {})["visits"][0]["visit_id"] == v["visit_id"]
+    z = admin_ok(service, "results_zip", {})
+    import base64
+    import io
+    import zipfile
+
+    names = zipfile.ZipFile(io.BytesIO(base64.b64decode(z["base64"]))).namelist()
+    assert any("/training/pilot/quiz/annotator-A01_quiz_assessment_" in n for n in names)
+    # the audit log, newest first, in pages
+    first = admin_ok(service, "audit", {"limit": 3})
+    assert first["entries"][0]["op"] == "quiz_item_add" and first["next"]
+    second = admin_ok(service, "audit", {"limit": 3, "before": first["next"]})
+    assert second["entries"][0]["at"] <= first["entries"][-1]["at"]
+    assert admin_err(service, "audit", {"before": "nonsense"}).code == "bad_request"
+    # deleting a set others use is refused; an unused one goes, with its recordings
+    assert admin_err(service, "set_delete", {"set_id": "pilot"}).code == "in_use"  # A01 finished its quiz
+    admin_ok(service, "set_create", {"set_id": "spare"})
+    admin_ok(service, "set_delete", {"set_id": "spare"})
+    assert "spare" not in {x["set_id"] for x in admin_ok(service, "sets_list")["sets"]}
+
+
+def test_the_example_set_without_mne_on_firestore(template: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """As in the functions, which do not include MNE-Python: the kept registrations are used."""
+    import electroclean.web.example as example
+
+    sid = f"t{uuid.uuid4().hex[:10]}"
+    run_cli("init-study", "--study", sid)
+    store = FirestoreStore(firestore_client(PROJECT), sid)
+    store.put_user("ADMIN", role="admin")
+    real = example.build_example
+    monkeypatch.setattr(example, "build_example", lambda s, c, **_k: real(s, c, use_mne=False))
+    svc = StudyService(store)
+    r = admin_ok(svc, "set_example_create")
+    assert r["recordings_zip"]["size_bytes"] > 1_000_000 and len(r["set"]["recordings"]) == 3
+    assert all(x["registered"] for x in r["set"]["recordings"])
+    assert admin_err(svc, "set_example_create", {}).code == "set_exists"
+    store.put_user("T01")
+    admin_ok(svc, "programme_set", {"annotator_id": "T01", "set_id": "example"})
+    assert ok(svc, "guided_get", T01, {"recording_id": GUIDED1})["n_steps"] == 6
+
+
+def firebase_service(study: str) -> StudyService:
+    from electroclean.web.firebase import firebase_app
+
+    return StudyService(FirestoreStore(firestore_client(PROJECT), study, auth_app=firebase_app(PROJECT)))
+
+
+def oob_code(link: str) -> str:
+    from urllib.parse import parse_qs, urlparse
+
+    return parse_qs(urlparse(link).query)["oobCode"][0]
+
+
+def choose_password(link: str, password: str) -> None:
+    r = httpx.post(f"http://{AUTH}/identitytoolkit.googleapis.com/v1/accounts:resetPassword?key=fake-key",
+                   json={"oobCode": oob_code(link), "newPassword": password})
+    assert r.status_code == 200, r.text
+
+
+@pytest.mark.skipif(not AUTH, reason="needs the Auth emulator")
+def test_accounts_with_firebase_authentication(study: str) -> None:
+    from firebase_admin import auth
+
+    from electroclean.web.firebase import firebase_app
+
+    svc = firebase_service(study)
+    app = firebase_app(PROJECT)
+    email = f"a05-{study}@example.org"
+    out = admin_ok(svc, "user_add", {"annotator_id": "A05", "display_name": "Five", "email": email})
+    assert out["temporary_password"] is None and "oobCode" in out["invite_link"]
+    assert out["user"]["email"] == email and out["user"]["status"] == "active"
+    user = auth.get_user_by_email(email, app=app)
+    assert user.custom_claims["annotator_id"] == "A05" and user.custom_claims["roles"] == {study: "annotator"}
+    choose_password(out["invite_link"], "a-chosen-password")
+    sign_in(email, "a-chosen-password")
+    assert admin_err(svc, "user_add", {"annotator_id": "A05", "email": "other@example.org"}).code == "user_exists"
+    assert admin_err(svc, "user_add", {"annotator_id": "A06"}).code == "email_required"
+    assert admin_err(svc, "user_add", {"annotator_id": "A06", "email": email}).code == "email_in_use"
+    with_password = admin_ok(svc, "user_add", {"annotator_id": "A06", "email": f"a06-{study}@example.org",
+                                               "password": "another-password"})
+    assert with_password["invite_link"] is None
+    sign_in(f"a06-{study}@example.org", "another-password")
+    # role, status, password link
+    admin_ok(svc, "user_update", {"annotator_id": "A05", "role": "admin"})
+    assert auth.get_user(user.uid, app=app).custom_claims["roles"] == {study: "admin"}
+    admin_ok(svc, "user_update", {"annotator_id": "A05", "status": "disabled"})
+    assert auth.get_user(user.uid, app=app).disabled is True
+    assert svc.store.user("A05") is None  # the functions refuse the account at once
+    r = httpx.post(f"http://{AUTH}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=fake-key",
+                   json={"email": email, "password": "a-chosen-password", "returnSecureToken": True})
+    assert r.status_code == 400 and "USER_DISABLED" in r.text
+    admin_ok(svc, "user_update", {"annotator_id": "A05", "status": "active"})
+    sign_in(email, "a-chosen-password")
+    link = admin_ok(svc, "user_reset_password", {"annotator_id": "A05"})["invite_link"]
+    choose_password(link, "a-newer-password")
+    sign_in(email, "a-newer-password")
+    assert admin_err(svc, "user_update", {"annotator_id": "ADMIN", "status": "disabled"}).code == "self"
+    # leaving the study: the Firebase user goes too when it takes part in no other study
+    admin_ok(svc, "user_remove", {"annotator_id": "A05"})
+    with pytest.raises(auth.UserNotFoundError):
+        auth.get_user(user.uid, app=app)
+    assert "A05" not in {u["annotator_id"] for u in admin_ok(svc, "users_list")["users"]}
+    log = admin_ok(svc, "audit", {"limit": 20})["entries"]
+    assert {"user_add", "user_update", "user_reset_password", "user_remove"} <= {e["op"] for e in log}
+    assert "oobCode" not in json.dumps(log) and "another-password" not in json.dumps(log)
 
 
 # ------------------------------------------------- sign-in, callables, rules
@@ -329,6 +550,81 @@ def test_callables_end_to_end(study: str, recordings: Path) -> None:
     _, body = callable_("ec_guided_check", {"study": study, "recording_id": GUIDED1, "step": 1, "annotations": []},
                         trainee)
     assert body["result"]["problems"] == ["missing"]
+
+
+@pytest.mark.skipif(not (AUTH and FUNCTIONS), reason="needs the Auth and Functions emulators")
+def test_admin_and_quiz_callables(study: str) -> None:
+    admin = sign_in(f"admin-{study}@example.org")
+    annotator = sign_in(f"a01-{study}@example.org")
+    _, body = callable_("ec_admin", {"study": study, "op": "overview"}, annotator)
+    assert body["error"]["status"] == "PERMISSION_DENIED" and body["error"]["details"]["error"] == "forbidden"
+    status, body = callable_("ec_admin", {"study": study, "op": "overview"}, admin)
+    assert status == 200 and body["result"]["counts"]["recordings"] == 3
+    _, body = callable_("ec_admin", {"study": study, "op": "no_such_op"}, admin)
+    assert body["error"]["status"] == "NOT_FOUND" and body["error"]["details"]["error"] == "not_found"
+    # an account made through the functions, in the Auth emulator
+    email = f"a07-{study}@example.org"
+    _, body = callable_("ec_admin", {"study": study, "op": "user_add", "annotator_id": "A07", "email": email}, admin)
+    assert "oobCode" in body["result"]["invite_link"], body
+    choose_password(body["result"]["invite_link"], "a-seventh-password")
+    a07 = sign_in(email, "a-seventh-password")
+    _, body = callable_("ec_me", {"study": study}, a07)
+    assert body["result"]["annotator_id"] == "A07" and body["result"]["quizzes"] == []
+    # the quiz
+    _, body = callable_("ec_admin", {"study": study, "op": "quiz_item_add", "set_id": "example",
+                                     "recording_id": GUIDED1, "start_s": 4.0, "end_s": 4.4,
+                                     "correct_label": "Eye-blink-artifact"}, admin)
+    item = body["result"]["item"]["item_id"]
+    _, body = callable_("ec_quiz", {"study": study, "set_id": "example", "action": "get"}, a07)
+    assert [i["item_id"] for i in body["result"]["items"]] == [item]
+    _, body = callable_("ec_quiz", {"study": study, "set_id": "example", "action": "answer", "item_id": item,
+                                    "label": "Eye-blink-artifact"}, a07)
+    assert body["result"]["correct"] is True
+    _, body = callable_("ec_quiz", {"study": study, "set_id": "example", "action": "finish"}, a07)
+    assert body["result"]["score"]["n_correct"] == 1
+    # disabled in the admin area: refused at once, even with a token still valid
+    _, body = callable_("ec_admin", {"study": study, "op": "user_update", "annotator_id": "A07",
+                                     "status": "disabled"}, admin)
+    assert body["result"]["user"]["status"] == "disabled"
+    _, body = callable_("ec_me", {"study": study}, a07)
+    assert body["error"]["details"]["error"] == "not_in_study"
+
+
+@pytest.mark.skipif(not (AUTH and FUNCTIONS), reason="needs the Auth and Functions emulators")
+def test_the_analyses_and_the_example_set_in_the_functions(study: str, recordings: Path) -> None:
+    """In the functions' own environment: vendored code, matplotlib, no Qt and no MNE-Python."""
+    import base64
+    import io
+    import zipfile
+
+    service = StudyService(FirestoreStore(firestore_client(PROJECT), study))
+    ok(service, "submit", A01, submission(recordings, SUB1, [BLINK, EMG]))
+    ok(service, "submit", A02, submission(recordings, SUB1, [ann("e" * 32, "Eye-blink-artifact", 510, 95,
+                                                                 ["Fp1", "Fp2"])]))
+    v = ok(service, "visit_open", A01, {})
+    ok(service, "visit_events", A01, {"visit_id": v["visit_id"], "events": [{"t": 1.0, "type": "key"}]})
+    admin = sign_in(f"admin-{study}@example.org")
+    status, body = callable_("ec_admin", {"study": study, "op": "agreement"}, admin)
+    assert status == 200, body
+    assert "<img" in body["result"]["report_html"] and "events_summary.tsv" in body["result"]["tables"]
+    _, body = callable_("ec_admin", {"study": study, "op": "activity"}, admin)
+    assert "A01" in body["result"]["tables"]["visits.tsv"]
+    _, body = callable_("ec_admin", {"study": study, "op": "results_zip"}, admin)
+    names = zipfile.ZipFile(io.BytesIO(base64.b64decode(body["result"]["base64"]))).namelist()
+    assert "Annotated_Events/completion_register.tsv" in names
+    # the example set, made without MNE-Python from the kept registrations
+    sid = f"t{uuid.uuid4().hex[:10]}"
+    run_cli("init-study", "--study", sid)
+    run_cli("add-user", "ADMIN", "--study", sid, "--email", f"admin-{sid}@example.org", "--password", PASSWORD,
+            "--admin")
+    admin2 = sign_in(f"admin-{sid}@example.org")
+    status, body = callable_("ec_admin", {"study": sid, "op": "set_example_create"}, admin2)
+    assert status == 200, body
+    z = zipfile.ZipFile(io.BytesIO(base64.b64decode(body["result"]["recordings_zip"]["base64"])))
+    assert f"electroclean-example-set/{GUIDED1}" in z.namelist()
+    _, body = callable_("ec_admin", {"study": sid, "op": "audit", "limit": 1}, admin2)
+    entry = body["result"]["entries"][0]
+    assert entry["op"] == "set_example_create" and entry["details"]["registered_with"] == "template"
 
 
 @pytest.mark.skipif(not AUTH, reason="needs the Auth emulator")

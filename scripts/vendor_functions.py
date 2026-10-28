@@ -3,8 +3,12 @@
     python scripts/vendor_functions.py [functions_folder]
 
 firebase.json runs this as the functions' predeploy step. Firebase uploads only the functions
-folder, so the ``electroclean`` package is copied into it, without the activity analysis, the
-browser application and the functions themselves. The copy is ignored by git.
+folder, so the ``electroclean`` package is copied into it, without the browser application and
+the functions themselves. The copy is ignored by git. It includes the
+analyses of the admin area (``reliability``, ``activity``, ``training``) and the kept registrations
+of the example training set (``config/example_set_manifests.json``), which the functions use
+because they do not include MNE-Python (electroclean/web/example.py). Only the standard library is
+needed to run this script.
 """
 
 from __future__ import annotations
@@ -17,7 +21,6 @@ REPO = Path(__file__).resolve().parents[1]
 DEFAULT = REPO / "electroclean" / "web" / "firebase" / "functions"
 #: Left out of the copy (paths relative to the electroclean package).
 EXCLUDE = (
-    "activity",
     "web/static",
     "web/firebase/functions",
 )
