@@ -2,8 +2,8 @@
 
 These notes are for whoever takes ElectroClean on next, and for the AI assistant they work with.
 They say where the project stands on 28 October 2026, what is still open, and how to carry on
-without having to rediscover anything. The same file is on `main` and on the browser version's
-branch, `claude/electroclean-web`. Instructions written for AI coding assistants are in
+without having to rediscover anything. The same file sits at the top of the repository on each
+working branch. Instructions written for AI coding assistants are in
 [CLAUDE.md](CLAUDE.md); read both before changing anything.
 
 ## What ElectroClean is
@@ -18,7 +18,7 @@ works, as research data in its own right. The [README](README.md) is the best sh
 and the [design decisions](docs/design_decisions.md) record why things are as they are.
 
 There are two ways to use it. The **desktop application** (Python, PySide6 and MNE-Python's Qt
-browser) is released and in use. The **browser version** reads the recordings on the annotator's own
+browser) is released. The **browser version** reads the recordings on the annotator's own
 computer, so the EEG is never uploaded, and keeps the study's records on Firebase or on a small
 ElectroClean server. It is finished and tested on its own branch and waits for a decision on
 merging (see below).
@@ -50,19 +50,22 @@ There are no open pull requests or issues on GitHub.
 | Branch | What it holds | What to do with it |
 | --- | --- | --- |
 | `main` | The desktop application, as released plus the unreleased work above | Work from here for anything desktop-only. Pushes run the tests on all three systems and build the applications. |
-| `claude/electroclean-web` | `main` plus the browser version, its server, the Firebase functions and their tests | Work from here for the browser version until it is merged. Pushes publish the preview and run the browser tests. |
-| `claude/eager-bardeen-33qhkb` | The branch the previous AI sessions worked on; identical to `main` | Nothing; it can be deleted. |
+| `claude/electroclean-web` | `main` plus the browser version, its server, the Firebase functions and their tests | Work from here for the browser version until it is merged. Pushes run the browser tests, and republish the preview when the application's files change. |
+| `claude/eager-bardeen-33qhkb` | The branch the previous AI sessions worked on: `main` plus these handover notes | If `main` does not yet have `HANDOVER.md`, bring it up to this branch (a fast-forward); then the branch can be deleted. |
 | `gh-pages` | The published web pages, written by `.github/workflows/pages.yml` | Never edit it by hand. GitHub Pages serves it (Settings, Pages: deploy from branch `gh-pages`, folder `/ (root)`). |
 
 **Merging the browser version.** When the project lead is happy with the preview, merge
 `claude/electroclean-web` into `main` (a fast-forward is possible while `main` has not moved, or
 open a pull request to see the diff). That publishes the browser application at the site's root,
 <https://faisalmushtaq.github.io/ElectroClean/>, adds the web and Firebase packages to
-`requirements-dev.txt` (so the three-system test runs install them) and adds two workflows. The
-merge has been rehearsed: the full three-system run of `Build applications` was started on the
-branch on 28 October to check the tests and builds on Windows and macOS with the new requirements;
-look at its result in the Actions tab before merging. Nothing about the browser version has been
-merged into `main` so far, at the project lead's request.
+`requirements-dev.txt` (so the three-system test runs install them) and adds two workflows. Before
+merging, run *Build applications* by hand on the branch (Actions tab, Run workflow, branch
+`claude/electroclean-web`): that runs the tests and builds on Windows, macOS and Linux, which pushes
+to the branch do not. A first rehearsal on 28 October found that the stand-alone applications'
+self-test tried to import the browser version's server, which needs packages the desktop
+application does not include; the build now leaves `electroclean.web` out, and a test guards it.
+Nothing about the browser version has been merged into `main` so far, at the project lead's
+request.
 
 ## Setting up
 
