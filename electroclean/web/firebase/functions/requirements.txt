@@ -1,0 +1,10 @@
+# The Cloud Functions' dependencies (installed by Firebase when the functions are deployed).
+# The ElectroClean code they use is copied into this folder before deploying (scripts/vendor_functions.py,
+# run by the predeploy step in firebase.json), so the desktop's dependencies (Qt, MNE-Python) are not needed.
+firebase-functions==0.6.0
+firebase-admin==7.7.0
+google-cloud-firestore==2.34.1
+# ElectroClean's core: saving (numpy); practice scoring and competency reports (pandas, SciPy).
+numpy==2.5.4
+scipy==1.18.1
+pandas==3.1.0

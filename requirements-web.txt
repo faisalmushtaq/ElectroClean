@@ -1,0 +1,77 @@
+# The browser version's Python side, without the desktop windows (Qt): the ElectroClean server
+# (electroclean-web serve and demo) and the administrator's commands for Firebase studies.
+# Exact versions it was tested with (Python 3.12-3.13). Install with:
+#     python -m pip install -r requirements-web.txt
+#     python -m pip install --no-deps .
+# Registering recordings opens them with MNE-Python, as the desktop application does
+mne==1.13.2
+numpy==2.5.4
+scipy==1.18.1
+pandas==3.1.0
+matplotlib==3.11.2
+# Writes the simulated recordings of the demonstration
+pybv==0.8.1
+# The ElectroClean server
+fastapi==0.162.0
+uvicorn==0.54.0
+starlette==1.10.0
+httpx==0.28.1
+# Firebase studies (the administrator's commands: --firebase-project)
+firebase-admin==7.7.0
+google-cloud-firestore==2.34.1
+# Indirect dependencies, pinned for reproducibility
+annotated-doc==0.0.5
+annotated-types==0.8.0
+anyio==4.15.1
+cachecontrol==0.14.4
+certifi==2026.10.23
+cffi==2.1.1
+charset-normalizer==3.5.2
+click==8.5.0
+contourpy==1.4.0
+cryptography==50.0.2
+cycler==0.12.1
+decorator==5.3.1
+fonttools==4.67.0
+google-api-core==2.43.0
+google-auth==2.62.0
+google-cloud-core==2.8.0
+google-cloud-storage==3.17.1
+google-crc32c==1.9.0
+google-resumable-media==2.11.0
+googleapis-common-protos==1.76.0
+grpcio==1.85.0
+grpcio-status==1.85.0
+h11==0.16.0
+h2==4.4.1
+hpack==4.2.0
+httpcore==1.0.9
+hyperframe==6.1.0
+idna==3.20
+jinja2==3.1.6
+kiwisolver==1.5.1
+lazy-loader==0.6
+markupsafe==3.0.4
+msgpack==1.2.4
+opentelemetry-api==1.45.1
+packaging==26.3
+pillow==13.0.0
+platformdirs==4.13.5
+pooch==1.9.0
+proto-plus==1.29.0
+protobuf==7.36.2
+pyasn1==0.6.5
+pyasn1-modules==0.4.2
+pycparser==3.12
+pydantic==2.14.1
+pydantic-core==2.50.1
+pyjwt==2.15.1
+pyparsing==3.3.3
+python-dateutil==3.0.0
+requests==2.34.2
+six==1.17.0
+tqdm==4.70.1
+typing-extensions==4.16.0
+typing-inspection==0.4.4
+tzdata==2026.5
+urllib3==2.8.0

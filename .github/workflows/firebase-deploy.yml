@@ -1,0 +1,91 @@
+# Deploys ElectroClean's Cloud Functions and Firestore rules to a Firebase project, on demand.
+#
+# Run it from the Actions tab ("Firebase deploy", Run workflow). It needs the repository secret
+# FIREBASE_SERVICE_ACCOUNT (the JSON key of a Google Cloud service account allowed to deploy) and
+# the Firebase project ID, given when running it or as the repository variable FIREBASE_PROJECT.
+# Without the secret it only explains what to set up. docs/web/firebase.md describes every step,
+# including the first deployment from your own computer.
+name: Firebase deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: "Firebase project ID (leave empty to use the repository variable FIREBASE_PROJECT)"
+        required: false
+        default: ""
+      only:
+        description: "What to deploy"
+        type: choice
+        options:
+          - "functions,firestore"
+          - "functions"
+          - "firestore"
+        default: "functions,firestore"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firebase-deploy
+  cancel-in-progress: false
+
+env:
+  FIREBASE_TOOLS: firebase-tools@15.34.1
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      PROJECT: ${{ inputs.project || vars.FIREBASE_PROJECT }}
+      ONLY: ${{ inputs.only }}
+    steps:
+      - name: Explain what is needed
+        if: env.FIREBASE_SERVICE_ACCOUNT == '' || env.PROJECT == ''
+        run: |
+          {
+            echo "## Nothing was deployed"
+            echo
+            echo "This workflow deploys ElectroClean's Cloud Functions and Firestore rules. It needs:"
+            echo
+            echo "* the repository secret **FIREBASE_SERVICE_ACCOUNT**: the JSON key of a service account that may"
+            echo "  deploy to your Firebase project (Settings, Secrets and variables, Actions, New repository secret);"
+            echo "* the Firebase project ID, typed when you run the workflow or kept in the repository variable"
+            echo "  **FIREBASE_PROJECT**."
+            echo
+            echo "docs/web/firebase.md explains how to create both, step by step."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=Firebase deploy::Nothing deployed: set the FIREBASE_SERVICE_ACCOUNT secret and the project ID (see docs/web/firebase.md)."
+
+      - uses: actions/checkout@v7
+        if: env.FIREBASE_SERVICE_ACCOUNT != '' && env.PROJECT != ''
+
+      - uses: actions/setup-python@v7
+        if: env.FIREBASE_SERVICE_ACCOUNT != '' && env.PROJECT != ''
+        with:
+          python-version: "3.13"
+
+      - name: Use the service account
+        if: env.FIREBASE_SERVICE_ACCOUNT != '' && env.PROJECT != ''
+        run: |
+          umask 077
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-service-account.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/firebase-service-account.json" >> "$GITHUB_ENV"
+
+      - name: Prepare the functions
+        if: env.FIREBASE_SERVICE_ACCOUNT != '' && env.PROJECT != '' && contains(env.ONLY, 'functions')
+        run: |
+          cd electroclean/web/firebase/functions
+          python -m venv venv
+          venv/bin/python -m pip install --quiet -r requirements.txt
+          cd -
+          python scripts/vendor_functions.py
+
+      - name: Deploy
+        if: env.FIREBASE_SERVICE_ACCOUNT != '' && env.PROJECT != ''
+        run: npx --yes "$FIREBASE_TOOLS" deploy --only "$ONLY" --project "$PROJECT" --non-interactive --force
+
+      - name: Remove the key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/firebase-service-account.json"

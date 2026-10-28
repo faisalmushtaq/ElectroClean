@@ -26,3 +26,9 @@ Thumbs.db
 .idea/
 .vscode/
 demo_gui_data/
+
+# Firebase emulators and tools
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+.firebaserc

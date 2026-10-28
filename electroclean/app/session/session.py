@@ -444,12 +444,7 @@ class AnnotationSession:
                 "elapsed_in_earlier_sessions_seconds": self.elapsed_before_s,
                 "resumed_from_autosave": self.previous_sessions,
             },
-            "application": {
-                "name": APP_NAME,
-                "version": __version__,
-                "platform": platform.platform(),
-                "libraries": library_versions(),
-            },
+            "application": self.application_info(),
             "display": {
                 "scalings": {**self.settings.display.scalings, **lr.display_scalings},
                 "amplitude_check": lr.amplitude_report.to_dict(),
@@ -485,6 +480,21 @@ class AnnotationSession:
             "outputs": {"basename": basename, "files": names},
         }
 
+    def application_info(self) -> dict[str, Any]:
+        """The ``application`` block of the session file (the web server describes itself differently)."""
+        return {
+            "name": APP_NAME,
+            "version": __version__,
+            "platform": platform.platform(),
+            "libraries": library_versions(),
+        }
+
+    def source_changes(self) -> list[str]:
+        """Roles of source files that changed since the recording was opened (none may change while annotating).
+
+        The web server has no source files; it checks the browser's fingerprint instead."""
+        return changed_since(self.loaded.files, self.loaded.fingerprint)
+
     def finish(self, *, fault: FaultHook | None = None) -> FinishResult:
         """Save and Finish: validate, write, verify, then mark complete.
 
@@ -506,7 +516,7 @@ class AnnotationSession:
                         f"{self.recording_id} has been opened by another session in the meantime ({exc}). "
                         "Your annotations were not saved; please tell the study administrator."
                     ) from exc
-            changed = changed_since(self.loaded.files, self.loaded.fingerprint)
+            changed = self.source_changes()
             if changed:
                 raise SessionError(
                     "The source recording files changed while you were annotating ("

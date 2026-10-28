@@ -1,0 +1,10 @@
+.git
+.venv
+**/__pycache__
+**/*.pyc
+electroclean/web/firebase/functions/venv
+electroclean/web/firebase/functions/electroclean
+web_tests
+node_modules
+dist
+build
