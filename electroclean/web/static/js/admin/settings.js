@@ -54,7 +54,7 @@ export class SettingsSection {
     const an = st.annotation || {};
     const ld = st.loading || {};
 
-    const name = textInput({ value: this.data.name || '' });
+    const name = textInput({ value: this.data.name || '', name: 'study_name' });
     // filters
     const hp = checkbox('High-pass filter', f.highpass_enabled !== false);
     const hpHz = numberInput({ value: f.highpass_hz ?? 1, min: 0.01, max: 39, step: 0.1 });

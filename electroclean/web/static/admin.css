@@ -45,6 +45,9 @@
 .admin-msg > div { margin: 10px 0 0; }
 .banner.error-banner { background: #FBEDEC; border-color: #E3B5B2; color: var(--destructive); }
 .admin-result:empty { display: none; }
+.admin-review:empty { display: none; }
+.admin-review { margin-top: 16px; }
+.admin-review h3:first-child { margin-top: 0; }
 .admin-result { margin-top: 12px; }
 .secret { margin: 12px 0 0; }
 .secret-row { flex-wrap: wrap; margin: 6px 0; }

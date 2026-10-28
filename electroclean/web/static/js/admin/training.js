@@ -318,7 +318,7 @@ export class TrainingSection {
         { title: 'Marked by', render: (d) => d.experts_marking || '–' }, { title: 'Not by', render: (d) => d.experts_not_marking || '–' },
         { title: 'Note', render: (d) => d.note },
       ], rows, { empty: 'The experts agreed everywhere.', pageSize: 20 }),
-      rows.length ? h('div.btn-row', {}, h('button.btn', { type: 'button', onclick: () => downloadText(`${rid.split('/').pop().replace(/\.[^.]+$/, '')}_disagreements.tsv`, tsvText(DISAGREEMENT_COLUMNS, rows), 'text/tab-separated-values') }, 'Download the table (TSV)')) : null);
+      rows.length ? h('div.btn-row', {}, h('button.btn', { type: 'button', onclick: () => downloadText(`${rid.split('/').pop().replace(/\.[^.]+$/, '')}_disagreements.tsv`, tsvText(DISAGREEMENT_COLUMNS, rows.map((d) => ({ ...d, onset_s: Number(d.onset_s).toFixed(4), offset_s: Number(d.offset_s).toFixed(4) }))), 'text/tab-separated-values') }, 'Download the table (TSV)')) : null);
     this.body.append(box);
     box.scrollIntoView({ block: 'nearest' });
   }

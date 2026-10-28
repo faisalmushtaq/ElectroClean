@@ -189,6 +189,11 @@ async function main() {
         if (errors.length) throw new Error(`errors in the page:\n  ${errors.join('\n  ')}`);
         console.log(`ok   ${file} › ${t.name} (${Date.now() - t0} ms)`);
       } catch (exc) {
+        if (exc && exc.skip) {
+          // A test that needs something this copy does not have yet (helpers.mjs, SkipTest).
+          console.log(`skip ${file} › ${t.name} (${exc.message})`);
+          continue;
+        }
         failed += 1;
         console.log(`FAIL ${file} › ${t.name}\n     ${String(exc && exc.stack || exc).split('\n').slice(0, 6).join('\n     ')}`);
       } finally {

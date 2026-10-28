@@ -1,5 +1,13 @@
 // Helpers shared by the end-to-end tests.
 
+/** Thrown by a test that cannot run here yet (the runner reports it as skipped, with the reason). */
+export class SkipTest extends Error {
+  constructor(reason) {
+    super(reason);
+    this.skip = true;
+  }
+}
+
 export async function signIn(page, id = 'A01', password = 'demo') {
   await page.waitForSelector('#signin-id');
   await page.fill('#signin-id', id);

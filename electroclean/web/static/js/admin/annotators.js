@@ -139,6 +139,7 @@ export class AnnotatorsSection {
     this.listView.hidden = true;
     this.detailView.hidden = false;
     this._renderDetail();
+    window.scrollTo(0, 0);
   }
 
   closeDetail() {
