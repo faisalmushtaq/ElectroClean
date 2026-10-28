@@ -327,6 +327,10 @@ export function settingsProblems(s, labels = null) {
   if ('min_duration_samples' in a && !(Number.isInteger(Number(a.min_duration_samples)) && Number(a.min_duration_samples) >= 1)) {
     out.push('The shortest annotation is at least one sample.');
   }
+  const minutes = (k, hi) => k in a && !(typeof a[k] === 'number' && a[k] >= 0 && a[k] <= hi);
+  if (minutes('break_reminder_minutes', 240)) out.push('A break reminder comes after between 0 (no reminders) and 240 minutes of work.');
+  if (minutes('idle_pause_minutes', 60)) out.push('The clock pauses itself after between 0 (never) and 60 minutes without input.');
+  if ('coverage_check' in a && !['warn', 'off'].includes(a.coverage_check)) out.push('The check of the parts not yet viewed is either on (warn) or off.');
   const q = a.quick_labels || [];
   if (q.length > 9) out.push('At most nine artifact types fit on the keys 1 to 9.');
   if (new Set(q).size !== q.length) out.push('An artifact type is on two number keys; give each key a different type.');

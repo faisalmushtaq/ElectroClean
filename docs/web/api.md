@@ -59,8 +59,14 @@ Manifest = {                          // what the browser needs to show a regist
 }
 
 Draft = {"annotations": [Annotation], "view": {"start_s": 12.0, "duration_s": 10.0, "first_channel": 0,
-         "n_channels": 32, "scale_factor": 1.0}, "elapsed_s": 312.4, "saved_at": "…"}
+         "n_channels": 32, "scale_factor": 1.0}, "elapsed_s": 312.4,
+         "viewed": [[0.0, 64.5], [120.0, 130.0]], "saved_at": "…"}
 ```
+
+A draft's `elapsed_s` is the time worked so far, without the time paused. `viewed` lists the
+stretches of the recording that have been on the screen, as `[start_s, end_s]` pairs in seconds
+(sorted and merged by the browser; at most 5000 pairs, each with `0 <= start_s <= end_s`, or 422
+`invalid_draft`). A draft without `viewed` counts as nothing viewed.
 
 ## Signing in
 
@@ -83,7 +89,8 @@ token gets 401 `not_signed_in`; one without the header, 403 `missing_header`.
     "filters": {"highpass_enabled": true, "highpass_hz": 1.0, "notch_enabled": true, "notch_hz": 50.0,
                 "notch_harmonics": false, "locked": false},
     "display": {"duration_s": 10.0, "n_channels": 32, "scalings": {"eeg": 5e-05, "…": 0.0}},
-    "annotation": {"min_duration_samples": 1, "quick_labels": ["Eye-blink-artifact", "…"]},
+    "annotation": {"min_duration_samples": 1, "quick_labels": ["Eye-blink-artifact", "…"],
+                   "break_reminder_minutes": 50, "idle_pause_minutes": 3, "coverage_check": "warn" | "off"},
     "logging": {"interactions": true, "pointer_hz": 5, "idle_after_s": 30},
     "logging_notice": "This study records how you use ElectroClean …"   // "" when logging is off
   },
@@ -97,15 +104,18 @@ token gets 401 `not_signed_in`; one without the header, 403 `missing_header`.
 
 `quizzes` lists the short-segment quizzes the annotator may take (see "The
 short-segment quiz" below); `logging_notice` is the study's own notice when the
-administrator has written one.
+administrator has written one. The three settings for long sessions in
+`annotation` are described in the [administrator guide](../administrator_guide.md): minutes of work before a
+break reminder and minutes without input before the clock pauses itself (0 turns
+either off), and whether Save and Finish first lists the parts not yet viewed.
 
 ## Assignments and opening a recording
 
 `GET /assignments` →
 `{"items": [{"recording_id", "file_name", "format", "mode": "standard" | "guided" | "practice" | "assessment",
 "context_id": "" | "<reference set>", "status": "todo" | "in_progress" | "done", "duration_s",
-"n_channels", "size_bytes", "repeat": false}], "next": "<recording_id>" | null,
-"next_item": {"recording_id", "mode", "context_id"} | null}`. `next` is the
+"n_channels", "size_bytes", "repeat": false, "elapsed_s", "n_annotations", "completed_at", "draft"}],
+"next": "<recording_id>" | null, "next_item": {"recording_id", "mode", "context_id"} | null}`. `next` is the
 recording to do next: unfinished work first, then the training programme's
 next step, then the study's selection strategy (`manual`: the assignment order;
 `seeded`: ElectroClean's seeded order; `random`: a random choice that stays the
@@ -113,6 +123,14 @@ same until something more is completed). `next_item` says in which mode and
 context. A trainee's list holds the recordings of the programme's unlocked
 stages. `repeat` is true for a practice recording the programme lets the
 trainee annotate again (its `status` is then `todo`).
+
+For the annotator's progress on the home page, a `done` item carries what the
+completion register says of its latest save: `elapsed_s` (the time worked,
+pauses left out), `n_annotations` and `completed_at`; they are null for other
+items. An `in_progress` item carries `draft`, a summary of the unfinished work
+kept with the study: `{"elapsed_s", "n_annotations", "viewed_s", "saved_at"}`,
+where `viewed_s` is the seconds of the recording in the draft's `viewed`
+(overlaps counted once); `draft` is null for other items.
 
 `POST /match` `{"file_name", "size_bytes", "format", "sha256": "<hex>", "sfreq", "n_samples", "ch_names": [...]}` →
 
@@ -235,8 +253,10 @@ when `can_continue` is true. For `find_unnamed`, a match adds `"found": {"label"
 "description", "note"}`. A check of another step than the current one gets 409
 `wrong_step` (with `current_step`); after the last step, a check only reports
 extras (`"complete": true`). When `can_continue` is true,
-`POST …/continue {"step": 3}` records the step (stars from failed checks and
-Show me) and returns the next `Step` with `"previous": {"step", "stars",
+`POST …/continue {"step": 3, "paused_s": 12.5}` records the step (stars from failed checks and
+Show me, and its time in `seconds`, less `paused_s`, the seconds the trainee was
+paused during the step, which is optional and ignored unless a number of at
+least 0) and returns the next `Step` with `"previous": {"step", "stars",
 "attempts", "failed_attempts", "used_show_me", "seconds"}`, or `{"complete": true,
 "summary": {"steps", "stars", "max_stars", "attempts", "failed_attempts", "shown", "time_s"}, "previous",
 "message"}` (409 `not_matched` if the last check of that step did not allow it).

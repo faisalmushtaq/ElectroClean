@@ -24,6 +24,7 @@ import * as rules from '../training/rules.js';
 import { DEFAULT_PASS, describePassRule, practiceFeedback } from '../training/scoring.js';
 import { escapeHtml, local, newId, nowLocalIso, session } from '../util.js';
 import { sha256Hex } from '../data/sha256.js';
+import { coveredS, fromDraft } from '../viewer/coverage.js';
 
 const STATE_KEY = 'electroclean.demo.v1';
 const TOKEN_KEY = 'electroclean.demo.token';
@@ -139,6 +140,9 @@ export function exampleRecording(recordingId) {
 }
 
 function fileNameOf(spec) { return `${spec.stem}_eeg.edf`; }
+
+/** Seconds of a recording a draft's viewed stretches cover. */
+function viewedSeconds(viewed) { return Math.round(coveredS(fromDraft(viewed, Infinity)) * 100) / 100; }
 
 const LABELS = new Map(CATALOGUE.labels.map((l) => [l.label, l]));
 
@@ -377,10 +381,20 @@ export class DemoBackend {
     const aid = this._aid();
     const items = this._assignmentsFor(aid).map((a) => {
       const info = this._recordingInfo(a.rid);
+      const status = this._status(aid, a);
+      const key = this._key(aid, a.rid, a.mode, a.context_id);
+      // As the completion register says of a finished recording: its time and annotations (the latest save).
+      const sub = status === 'done' ? this.state.submissions.filter((x) => x.key === key).pop() : null;
+      const draft = status === 'in_progress' ? this.state.drafts[key] : null;
       return {
         recording_id: a.rid, file_name: info.file_name, format: info.format, mode: a.mode, context_id: a.context_id,
-        status: this._status(aid, a), duration_s: info.n_samples / info.sfreq, n_channels: info.ch_names.length,
-        size_bytes: info.size_bytes,
+        status, duration_s: info.n_samples / info.sfreq, n_channels: info.ch_names.length,
+        size_bytes: info.size_bytes, repeat: false,
+        elapsed_s: sub ? Number((sub.session || {}).elapsed_s) || 0 : null,
+        n_annotations: sub ? (sub.annotations || []).length : null,
+        completed_at: sub ? sub.saved_at : null,
+        draft: draft ? { elapsed_s: Number(draft.elapsed_s) || 0, n_annotations: (draft.annotations || []).length,
+          viewed_s: viewedSeconds(draft.viewed), saved_at: draft.saved_at || null } : null,
       };
     });
     return { items, next: this._next(aid) };
@@ -722,7 +736,7 @@ export class DemoBackend {
     };
   }
 
-  async guidedContinue(recordingId, { step }) {
+  async guidedContinue(recordingId, { step, paused_s: pausedS = 0 }) {
     const aid = this._aid();
     const setup = this._guidedSetup(recordingId);
     const st = this._guidedState(aid, recordingId);
@@ -733,7 +747,9 @@ export class DemoBackend {
     const i = st.index;
     st.matched[i] = result.candidate_id || '';
     st.stars[i] = rules.starsFor(st.failed[i] || 0, st.shown.includes(i));
-    st.seconds[i] = Math.max(0, (Date.now() - st.step_t0) / 1000);
+    // the time paused during the step (the page's pause) does not count
+    const paused = Number.isFinite(pausedS) && pausedS > 0 ? pausedS : 0;
+    st.seconds[i] = Math.max(0, (Date.now() - st.step_t0) / 1000 - paused);
     st.index += 1;
     st.step_t0 = Date.now();
     st.signature = null;

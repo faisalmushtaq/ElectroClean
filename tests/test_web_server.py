@@ -222,6 +222,32 @@ def test_drafts_are_kept_and_offered_again(client: TestClient, recordings: Path)
     assert api.put(f"/drafts/{GUIDED1}?mode=guided&context=example", draft).status_code == 403  # not A01's
 
 
+def test_assignments_tell_the_home_page_the_time_worked_and_what_a_draft_holds(client: TestClient,
+                                                                              recordings: Path) -> None:
+    api = Api(client, "A01")
+    me = api.ok("get", "/me")["study"]["annotation"]
+    assert (me["break_reminder_minutes"], me["idle_pause_minutes"], me["coverage_check"]) == (50.0, 3.0, "warn")
+    todo = api.ok("get", "/assignments")["items"][0]
+    assert (todo["elapsed_s"], todo["n_annotations"], todo["completed_at"], todo["draft"]) == (None, None, None, None)
+    # a draft keeps the parts of the recording on screen so far; the home page sees a summary
+    draft = {"annotations": [BLINK], "view": {"start_s": 12.0}, "elapsed_s": 31.0,
+             "viewed": [[0, 10], [5, 22.5], [40, 50]]}
+    api.ok("put", f"/drafts/{SUB2}?mode=standard", draft)
+    assert api.ok("post", "/match", match_body(recordings, SUB2))["draft"]["viewed"] == [[0, 10], [5, 22.5], [40, 50]]
+    item = next(i for i in api.ok("get", "/assignments")["items"] if i["recording_id"] == SUB2)
+    assert item["status"] == "in_progress" and item["elapsed_s"] is None
+    assert item["draft"]["elapsed_s"] == 31.0 and item["draft"]["n_annotations"] == 1
+    assert item["draft"]["viewed_s"] == 32.5 and item["draft"]["saved_at"]
+    for bad in ([[10, 5]], [[0, "x"]], [[0, 1, 2]], {"0": 1}, [[-1, 2]]):
+        r = api.put(f"/drafts/{SUB2}?mode=standard", {**draft, "viewed": bad})
+        assert r.status_code == 422 and "draft.viewed" in r.json()["message"], bad
+    # a finished recording: its time and annotations, as the completion register has them
+    api.ok("post", "/submissions", submission(recordings, SUB1, [BLINK, EMG]))
+    done = next(i for i in api.ok("get", "/assignments")["items"] if i["recording_id"] == SUB1)
+    assert done["status"] == "done" and done["draft"] is None
+    assert done["elapsed_s"] == 61.5 and done["n_annotations"] == 2 and done["completed_at"]
+
+
 # --------------------------------------------------------------------- saving
 def test_saving_writes_the_desktop_outputs(client: TestClient, recordings: Path, study: Path) -> None:
     api = Api(client, "A01")
@@ -492,15 +518,16 @@ def test_guided_training_with_the_coach(client: TestClient, recordings: Path, st
     mine = [as_wire(t, "1" * 32)]
     c = api.ok("post", f"/training/guided/{GUIDED1}/check", {"step": 1, "annotations": mine})
     assert c["matched"] and c["can_continue"] and c["stars"] == 2
-    nxt = api.ok("post", f"/training/guided/{GUIDED1}/continue", {"step": 1})
-    assert nxt["previous"]["stars"] == 2 and nxt["step"] == 2
+    # the time the annotator was paused during the step (the browser's Pause) is left out of its time
+    nxt = api.ok("post", f"/training/guided/{GUIDED1}/continue", {"step": 1, "paused_s": 1e6})
+    assert nxt["previous"]["stars"] == 2 and nxt["step"] == 2 and nxt["previous"]["seconds"] == 0.0
     # step 2 with Show me: the experts' annotation to place, one star
     sm = api.ok("post", f"/training/guided/{GUIDED1}/show-me", {"step": 2, "annotations": mine})
     assert sm["annotation"]["label"] == steps[1].label and sm["stars"] == STARS_SHOWN
     mine.append(sm["annotation"])
     c = api.ok("post", f"/training/guided/{GUIDED1}/check", {"step": 2, "annotations": mine})
     assert c["can_continue"] and c["stars"] == STARS_SHOWN
-    api.ok("post", f"/training/guided/{GUIDED1}/continue", {"step": 2})
+    api.ok("post", f"/training/guided/{GUIDED1}/continue", {"step": 2, "paused_s": "a while"})  # not a number: no pause
     # an extra annotation where the experts marked nothing must be removed first
     extra = ann("9" * 32, "EMG-artifact", 14000, 50)
     for i, t in enumerate(steps[2:], start=3):

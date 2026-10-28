@@ -39,6 +39,8 @@ STAMP_RE = re.compile(r"^[0-9T:.+\-Z ]{0,40}$")
 SHA_RE = re.compile(r"^[0-9a-f]{64}$")
 SESSION_RE = re.compile(r"^[0-9a-f]{32}$")
 MAX_ANNOTATIONS = 20000
+#: At most this many [start_s, end_s] stretches of a draft's ``viewed`` (the browser keeps fewer).
+MAX_VIEWED = 5000
 #: What annotators are told when the study records how they use ElectroClean (as on the desktop).
 LOGGING_NOTICE = ("This study records how you use ElectroClean (times, clicks, keys and what is on screen) for "
                   "research. Ask your study administrator if you have questions.")
@@ -114,6 +116,47 @@ def annotation_dict(a: ArtifactAnnotation) -> dict[str, Any]:
             "created_at": a.created_at, "modified_at": a.modified_at}
 
 
+def _float_or_none(value: Any) -> float | None:
+    try:
+        out = float(value)
+    except (TypeError, ValueError):
+        return None
+    return out if math.isfinite(out) else None
+
+
+def _int_or_none(value: Any) -> int | None:
+    out = _float_or_none(value)
+    return int(out) if out is not None else None
+
+
+def parse_viewed(value: Any) -> list[list[float]]:
+    """A draft's ``viewed``: the stretches of the recording on screen so far, as [start_s, end_s] pairs."""
+    if value is None:
+        return []
+    what = "draft.viewed must be a list of [start_s, end_s] pairs of seconds"
+    if not isinstance(value, list) or len(value) > MAX_VIEWED:
+        raise ApiError(422, "invalid_draft", what)
+    out: list[list[float]] = []
+    for pair in value:
+        if (not isinstance(pair, list) or len(pair) != 2
+                or any(isinstance(x, bool) or not isinstance(x, (int, float)) or not math.isfinite(x) for x in pair)
+                or not 0 <= pair[0] <= pair[1]):
+            raise ApiError(422, "invalid_draft", what)
+        out.append([float(pair[0]), float(pair[1])])
+    return out
+
+
+def viewed_seconds(viewed: list[list[float]]) -> float:
+    """Seconds of the recording covered by ``viewed`` (overlaps counted once)."""
+    total, end = 0.0, -math.inf
+    for a, b in sorted(viewed):
+        if b <= end:
+            continue
+        total += b - max(a, end)
+        end = b
+    return total
+
+
 def clean_json(v: Any) -> Any:
     """JSON-safe: NaN and infinity become null, numpy numbers Python numbers."""
     if isinstance(v, float):
@@ -143,6 +186,7 @@ class WorkItem:
     position: int = 0
     repeat: bool = False  # a practice recording that may be annotated again
     source: str = "assignment"  # or "programme"
+    result: dict[str, str] | None = None  # the completion register's row of the latest save, when done
 
     @property
     def key(self) -> str:
@@ -151,11 +195,16 @@ class WorkItem:
     def to_dict(self) -> dict[str, Any]:
         timing = self.manifest["timing"]
         _sha, size = fingerprint_of(self.manifest)
+        done = self.result if self.status == "done" and self.result else None
         return {
             "recording_id": self.recording_id, "file_name": self.manifest["file_name"],
             "format": self.manifest["format"], "mode": self.mode, "context_id": self.context_id,
             "status": self.status, "duration_s": float(timing["n_samples"]) / float(timing["sfreq"]),
             "n_channels": len(self.manifest["ch_names"]), "size_bytes": size, "repeat": self.repeat,
+            # what the completion register says of a finished recording (null otherwise)
+            "elapsed_s": _float_or_none(done.get("elapsed_s")) if done else None,
+            "n_annotations": _int_or_none(done.get("n_annotations")) if done else None,
+            "completed_at": (done.get("completed_at") or None) if done else None,
         }
 
 
@@ -213,7 +262,9 @@ class StudyService:
             "display": {"duration_s": s.display.duration_s, "n_channels": s.display.n_channels,
                         "scalings": dict(s.display.scalings)},
             "annotation": {"min_duration_samples": s.min_duration_samples,
-                           "quick_labels": [q for q in s.quick_labels if cat.is_permitted(q)]},
+                           "quick_labels": [q for q in s.quick_labels if cat.is_permitted(q)],
+                           "break_reminder_minutes": s.break_reminder_minutes,
+                           "idle_pause_minutes": s.idle_pause_minutes, "coverage_check": s.coverage_check},
             "logging": self.logging_info(),
             "logging_notice": (self.store.logging_notice or LOGGING_NOTICE) if s.logging_interactions else "",
         }
@@ -250,9 +301,14 @@ class StudyService:
         drafts = self.store.draft_keys(aid)
         entries = self.store.completion_entries(aid)
         done: dict[tuple[str, str], set[str]] = {}
+        latest: dict[tuple[str, str, str], dict[str, str]] = {}
         for e in entries:
             if e.get("status") == "completed":
-                done.setdefault((e.get("mode", "standard"), e.get("context", "")), set()).add(e["recording_id"])
+                mode_ctx = (e.get("mode", "standard"), e.get("context", ""))
+                done.setdefault(mode_ctx, set()).add(e["recording_id"])
+                k = (e["recording_id"], *mode_ctx)
+                if str(e.get("completed_at", "")) >= str(latest.get(k, {}).get("completed_at", "")):
+                    latest[k] = e
         items: list[WorkItem] = []
         seen: set[tuple[str, str, str]] = set()
 
@@ -272,7 +328,7 @@ class StudyService:
                 status = "in_progress"
             else:
                 status = "todo"
-            items.append(WorkItem(rid, mode, ctx, m, status, position, repeat, source))
+            items.append(WorkItem(rid, mode, ctx, m, status, position, repeat, source, latest.get(key)))
 
         set_id = self.store.programme(aid)
         if set_id:
@@ -309,10 +365,30 @@ class StudyService:
     def assignments(self, user: User, body: dict[str, Any] | None = None) -> dict[str, Any]:
         items = self.work_items(user)
         nxt = self._next(user, items)
-        return {"items": [i.to_dict() for i in items],
+        out = []
+        for i in items:
+            d = i.to_dict()
+            d["draft"] = self._draft_summary(user, i) if i.status == "in_progress" else None
+            out.append(d)
+        return {"items": out,
                 "next": nxt.recording_id if nxt is not None else None,
                 "next_item": ({"recording_id": nxt.recording_id, "mode": nxt.mode, "context_id": nxt.context_id}
                               if nxt is not None else None)}
+
+    def _draft_summary(self, user: User, item: WorkItem) -> dict[str, Any] | None:
+        """What the home page shows of unfinished work: its time, annotations, what was viewed, when saved."""
+        record = self.store.draft(user.annotator_id, item.key) or {}
+        d = record.get("draft") if isinstance(record.get("draft"), dict) else None
+        if d is None:
+            return None
+        try:
+            viewed = viewed_seconds(parse_viewed(d.get("viewed")))
+        except ApiError:
+            viewed = None
+        anns = d.get("annotations")
+        return {"elapsed_s": _float_or_none(d.get("elapsed_s")),
+                "n_annotations": len(anns) if isinstance(anns, list) else None,
+                "viewed_s": viewed, "saved_at": d.get("saved_at") or record.get("saved_at") or None}
 
     def find_item(self, user: User, recording_id: Any, mode: Any, context_id: Any) -> WorkItem:
         if not isinstance(recording_id, str) or not recording_id:
@@ -442,10 +518,11 @@ class StudyService:
         elapsed = draft.get("elapsed_s", 0)
         if isinstance(elapsed, bool) or not isinstance(elapsed, (int, float)) or not math.isfinite(elapsed):
             raise ApiError(422, "invalid_draft", "draft.elapsed_s must be a number of seconds")
+        viewed = parse_viewed(draft.get("viewed"))
         saved_at = now_local_iso()
         record = {"schema": "electroclean.web_draft", "recording_id": item.recording_id, "mode": item.mode,
                   "context_id": item.context_id, "annotator_id": user.annotator_id, "saved_at": saved_at,
-                  "draft": {"annotations": anns, "view": view or {}, "elapsed_s": float(elapsed),
+                  "draft": {"annotations": anns, "view": view or {}, "elapsed_s": float(elapsed), "viewed": viewed,
                             "saved_at": saved_at}}
         if len(json.dumps(record)) > 8 * 1024 * 1024:
             raise ApiError(413, "too_large", "The draft is too large to keep")
