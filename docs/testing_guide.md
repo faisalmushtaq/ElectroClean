@@ -5,7 +5,7 @@
 ```bash
 python -m pip install -r requirements-dev.txt
 python -m pip install --no-deps -e .
-python -m pytest                 # everything (about 250 tests, under two minutes)
+python -m pytest                 # everything (about 370 tests, a few minutes)
 python -m pytest -m "not gui"    # without Qt
 python -m pytest -m gui          # only the GUI tests
 ```

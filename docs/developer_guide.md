@@ -25,6 +25,7 @@ electroclean/
     __init__.py            version
     __main__.py            python -m electroclean
     synthetic.py           synthetic BrainVision, EDF and BDF recordings with ground truth
+    hints.py               "did you mean" suggestions for mistyped names
     config/
         artifact_labels.json            the 29 HED-SCORE artifact terms, codes and hierarchy
         hed_score_2.2.0_validation.json snapshot of the label check against HED SCORE
@@ -40,15 +41,19 @@ electroclean/
                            canonical.py, export.py, naming.py
         validation/        exports.py (read-back verification of outputs)
         session/           session.py, transaction.py, register.py, failures.py, selection.py,
-                           autosave.py
+                           autosave.py, interaction_log.py (the per-visit JSON Lines log)
         gui/               browser.py (MNE integration), annotation_window.py,
                            start_window.py, filter_dialog.py, dialogs.py,
                            app_controller.py, workers.py, help_text.py,
+                           interaction_capture.py (clicks, keys and what was on screen, for the log),
                            style.py (colours, type, spacing, style sheet), icons/
     reliability/           config.py, data.py, intervals.py, statistics.py,
                            timeresolved.py, matching.py, analysis.py, report.py, cli.py, gui.py
     training/              reference.py, consensus.py, assessment.py, quiz.py,
-                           admin.py, cli.py, gui.py
+                           admin.py, cli.py, gui.py,
+                           programme.py (the three stages and their unlocking), guided.py and
+                           guided_gui.py (the guided coach), examples.py (the placeholder example set)
+    activity/              logs.py, summary.py, report.py, cli.py (electroclean-activity)
 ```
 
 ## Data flow of one session
@@ -244,8 +249,8 @@ The chevron icons are drawn by `scripts/make_theme_icons.py`;
 
 ## Packaging
 
-`pyproject.toml` defines the package and three commands (`electroclean`,
-`electroclean-agreement`, `electroclean-admin`). `requirements.txt` pins every
+`pyproject.toml` defines the package and four commands (`electroclean`,
+`electroclean-agreement`, `electroclean-admin`, `electroclean-activity`). `requirements.txt` pins every
 dependency (pybv among them, for the synthetic recordings of the self-test and
 the examples); `requirements-dev.txt` adds pytest. The launchers in
 `launchers/` create `.venv` on first use.
