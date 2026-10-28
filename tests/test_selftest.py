@@ -18,3 +18,15 @@ def test_self_test_passes_and_writes_log(tmp_path, capsys):
     text = log.read_text(encoding="utf-8")
     assert "ElectroClean self-test passed" in text
     assert "ElectroClean self-test passed" in capsys.readouterr().out
+
+
+def test_self_test_needs_nothing_from_the_browser_version(tmp_path, monkeypatch):
+    """The stand-alone applications leave out electroclean.web and the packages it needs (FastAPI,
+    Firebase), so the self-test must pass without them."""
+    import sys
+
+    for name in [m for m in sys.modules if m == "electroclean.web" or m.startswith("electroclean.web.")]:
+        monkeypatch.delitem(sys.modules, name)
+    for name in ("fastapi", "uvicorn", "starlette", "firebase_admin", "firebase_functions", "google.cloud.firestore"):
+        monkeypatch.setitem(sys.modules, name, None)  # importing them now fails, as in the frozen build
+    assert main(["--self-test", str(tmp_path / "selftest.log")]) == 0

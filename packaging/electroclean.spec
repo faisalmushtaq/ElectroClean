@@ -84,8 +84,14 @@ def _licence_files():
     return out
 
 
+def _desktop_module(name):
+    """Everything except electroclean.web: the browser version's server and Firebase functions run
+    elsewhere and need packages (FastAPI, Firebase) that the desktop application does not include."""
+    return name != "electroclean.web" and not name.startswith("electroclean.web.")
+
+
 hiddenimports = (
-    collect_submodules("electroclean")
+    collect_submodules("electroclean", filter=_desktop_module)
     + collect_submodules("mne", filter=_wanted_mne_module, on_error="ignore")
     + ["pybv", "mne_qt_browser._pg_figure"]  # MNE also loads its browser backend by name
 )
@@ -93,7 +99,7 @@ hiddenimports = (
 datas = (
     # ElectroClean's own data: config/*.json (label catalogue, default settings, HED-SCORE snapshot)
     # and any future non-Python files listed under package-data in pyproject.toml.
-    collect_data_files("electroclean")
+    collect_data_files("electroclean", excludes=["web", "web/**", "web/**/*"])
     # MNE: the .pyi stubs that lazy_loader reads at import time, plus icons, HTML templates,
     # montages and other data under mne/.
     + collect_data_files("mne", include_py_files=False, excludes=["**/tests/**", "**/__pycache__/**"])
@@ -117,6 +123,8 @@ excludes = [
     # Optional MNE dependencies that are not needed (3-D plotting, notebooks, testing).
     "pyvista", "pyvistaqt", "vtk", "vtkmodules", "IPython", "ipywidgets", "jupyter_client",
     "pytest", "_pytest", "numba", "sphinx",
+    # The browser version (see _desktop_module).
+    "electroclean.web",
 ]
 
 a = Analysis(  # noqa: F821

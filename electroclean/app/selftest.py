@@ -188,7 +188,10 @@ def _run(work: Path, say) -> None:  # noqa: ANN001
 
     import electroclean
 
-    names = sorted(m.name for m in pkgutil.walk_packages(electroclean.__path__, "electroclean."))
+    # electroclean.web (the browser version's server and Firebase functions) is not part of the
+    # desktop application and needs packages it does not include.
+    names = sorted(m.name for m in pkgutil.walk_packages(electroclean.__path__, "electroclean.")
+                   if m.name != "electroclean.web" and not m.name.startswith("electroclean.web."))
     for name in names:
         importlib.import_module(name)
     _check(len(names) > 50, f"only {len(names)} ElectroClean modules were found")
