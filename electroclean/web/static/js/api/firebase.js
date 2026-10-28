@@ -74,6 +74,7 @@ export class FirebaseBackend {
     this.region = region || DEFAULT_REGION;
     this.onUnauthorized = onUnauthorized;
     this.eventFlushMs = 10000; // interaction events are sent about every 10 s
+    this.retryDelayMs = 1500; // before asking a read-only function a second time
     this.writesVisitStart = true; // the visit_started event is written when the visit opens
     this.sdk = sdk;
     this.app = sdk.app.initializeApp(config, 'electroclean');
@@ -154,23 +155,34 @@ export class FirebaseBackend {
     return {};
   }
 
-  async _call(name, body = {}) {
+  /**
+   * Calls one function. `retry` is for operations that only read: a function that is starting up
+   * or failed once (the network, an instance that stopped mid-request) is asked once more after a
+   * short pause. Operations that save, score or count an attempt are never repeated.
+   */
+  async _call(name, body = {}, { retry = false } = {}) {
     const fn = this.sdk.functions.httpsCallable(this.functions, name);
-    try {
-      const res = await fn({ study: this.study, ...body });
-      return res && res.data !== undefined ? res.data : {};
-    } catch (exc) {
-      const err = toApiError(exc);
-      if (err.status === 401 && this.onUnauthorized) this.onUnauthorized();
-      throw err;
+    for (let attempt = 1; ; attempt++) {
+      try {
+        const res = await fn({ study: this.study, ...body });
+        return res && res.data !== undefined ? res.data : {};
+      } catch (exc) {
+        const err = toApiError(exc);
+        if (retry && attempt === 1 && (err.status === 0 || err.status >= 500)) {
+          await new Promise((r) => setTimeout(r, this.retryDelayMs));
+          continue;
+        }
+        if (err.status === 401 && this.onUnauthorized) this.onUnauthorized();
+        throw err;
+      }
     }
   }
 
-  me() { return this._call('ec_me'); }
+  me() { return this._call('ec_me', {}, { retry: true }); }
 
-  assignments() { return this._call('ec_assignments'); }
+  assignments() { return this._call('ec_assignments', {}, { retry: true }); }
 
-  match(body) { return this._call('ec_match', body); }
+  match(body) { return this._call('ec_match', body, { retry: true }); }
 
   putDraft(recordingId, mode, contextId, draft) {
     return this._call('ec_put_draft', { recording_id: recordingId, mode, context_id: contextId || '', draft });
@@ -182,9 +194,9 @@ export class FirebaseBackend {
 
   submit(body) { return this._call('ec_submit', body); }
 
-  training() { return this._call('ec_training'); }
+  training() { return this._call('ec_training', {}, { retry: true }); }
 
-  guided(recordingId) { return this._call('ec_guided_get', { recording_id: recordingId }); }
+  guided(recordingId) { return this._call('ec_guided_get', { recording_id: recordingId }, { retry: true }); }
 
   guidedCheck(recordingId, body) { return this._call('ec_guided_check', { recording_id: recordingId, ...body }); }
 
@@ -199,7 +211,7 @@ export class FirebaseBackend {
 
   closeVisit(visitId, reason) { return this._call('ec_visit_close', { visit_id: visitId, reason }); }
 
-  adminProgress() { return this._call('ec_admin_progress'); }
+  adminProgress() { return this._call('ec_admin_progress', {}, { retry: true }); }
 
   get canDownloadRecordings() { return false; }
 }

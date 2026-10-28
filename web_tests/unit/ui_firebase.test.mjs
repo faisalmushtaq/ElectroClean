@@ -106,3 +106,21 @@ test('config.json can point the backend at the Firebase emulators, for testing',
   assert.equal(b.health.emulators, true);
   assert.throws(() => new FirebaseBackend({ config: {}, study: 's', sdk, emulators: { functions: 'nowhere' } }), /host:port/);
 });
+
+test('a read-only call is asked once more after a failure; a call that saves is not', async () => {
+  let matches = 0;
+  let submits = 0;
+  const { sdk, calls } = fakeSdk({ handlers: {
+    ec_match: () => { matches += 1; if (matches === 1) throw new FakeHttpsError('internal', 'internal', {}); return { status: 'matched' }; },
+    ec_submit: () => { submits += 1; throw new FakeHttpsError('unavailable', 'unavailable', {}); },
+    ec_assignments: () => { throw new FakeHttpsError('permission-denied', 'Not in this study.', { error: 'not_in_study' }); },
+  } });
+  const b = await FirebaseBackend.create({ config: {}, study: 's', sdk });
+  b.retryDelayMs = 1;
+  assert.equal((await b.match({ sha256: 'x', size_bytes: 1 })).status, 'matched');
+  assert.equal(matches, 2);
+  await assert.rejects(() => b.submit({}), (e) => e.status === 0 && e.code === 'network');
+  assert.equal(submits, 1);
+  await assert.rejects(() => b.assignments(), (e) => e.status === 403);
+  assert.equal(calls.filter((c) => c.name === 'ec_assignments').length, 1); // a refusal is not repeated
+});
