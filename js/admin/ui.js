@@ -1,0 +1,357 @@
+// Pieces shared by the admin area's sections: messages, buttons that show they are working,
+// fields, tables with pages, in-page confirmations, copying, downloads and the report frame.
+// They use the application's own classes (app.css) and a few of their own (admin.css).
+
+import { h, clear } from '../ui/dom.js';
+import { downloadFiles } from '../views/common.js';
+import { base64ToBytes, fileParts, problemText } from './model.js';
+
+let uid = 0;
+export const nextId = (prefix = 'adm') => `${prefix}-${++uid}`;
+
+// ------------------------------------------------------------------ messages
+/** A place for the answer to an action: show(kind, text) with kind error, success, note or banner. */
+export function messageArea() {
+  const el = h('div.admin-msg', { 'aria-live': 'polite' });
+  el.show = (kind, text, ...extra) => {
+    clear(el);
+    if (!text && !extra.length) return el;
+    const cls = kind === 'error' ? 'banner.error-banner' : kind;
+    el.append(h(`div.${cls}`, { role: kind === 'error' ? 'alert' : 'status' }, h('p', {}, text), ...extra));
+    return el;
+  };
+  el.problem = (exc) => {
+    if (exc && exc.code === 'needs_server') return el.show('note', exc.message);
+    return el.show('error', problemText(exc));
+  };
+  el.clear = () => clear(el);
+  return el;
+}
+
+/**
+ * Run fn while the button says what is happening and cannot be pressed again (a second press
+ * while a slow answer is on its way would repeat the action). Resolves with fn's result.
+ */
+export async function busy(button, label, fn) {
+  if (button.dataset.busy === '1') return undefined;
+  const text = button.textContent;
+  button.dataset.busy = '1';
+  button.disabled = true;
+  button.setAttribute('aria-busy', 'true');
+  if (label) button.textContent = label;
+  try {
+    return await fn();
+  } finally {
+    button.dataset.busy = '';
+    button.disabled = false;
+    button.removeAttribute('aria-busy');
+    if (label) button.textContent = text;
+  }
+}
+
+/** A button whose action runs through busy() and reports failures in `msg`. */
+export function actionButton(label, { kind = '', working = '', msg = null, onClick, log = null, title = null } = {}) {
+  const b = h(`button.btn${kind ? `.${kind.split(' ').join('.')}` : ''}`, { type: 'button', 'data-log': log, title });
+  b.textContent = label;
+  b.addEventListener('click', () => busy(b, working, async () => {
+    try { await onClick(b); } catch (exc) { if (msg) msg.problem(exc); else throw exc; }
+  }));
+  return b;
+}
+
+// -------------------------------------------------------------------- layout
+export function sectionHead(title, intro = '') {
+  return h('div.admin-head', {}, h('h1', { tabindex: '-1' }, title), intro ? h('p.subtitle', {}, intro) : null);
+}
+
+export function card(title, ...children) {
+  return h('section.card.admin-card', {}, title ? h('h2', {}, title) : null, ...children);
+}
+
+export function chip(text, kind = '') {
+  return h(`span.chip${kind ? `.${kind}` : ''}`, {}, text);
+}
+
+export function loading(text = 'Loading…') {
+  return h('p.caption.admin-loading', { role: 'status' }, text);
+}
+
+// -------------------------------------------------------------------- fields
+/** A labelled field: the label, the control and a caption under it. */
+export function field(label, control, { hint = '', wide = false } = {}) {
+  if (!control.id) control.id = nextId('f');
+  return h(`div.admin-field${wide ? '.wide' : ''}`, {},
+    h('label.form-label', { for: control.id }, label), control, hint ? h('p.caption', {}, hint) : null);
+}
+
+export function textInput({ value = '', placeholder = '', type = 'text', name = '', autocomplete = 'off', maxlength = null } = {}) {
+  return h('input.field', { type, value: value ?? '', placeholder, name: name || null, autocomplete, spellcheck: 'false', maxlength });
+}
+
+export function numberInput({ value = '', min = null, max = null, step = 'any' } = {}) {
+  return h('input.field.num', { type: 'number', value: value ?? '', min, max, step, inputmode: 'decimal' });
+}
+
+export function textArea({ value = '', rows = 3, placeholder = '' } = {}) {
+  const t = h('textarea.field.area', { rows, placeholder });
+  t.value = value ?? '';
+  return t;
+}
+
+/** A <select> from [[value, text], ...] or {value: text}. */
+export function select(options, value = '') {
+  const s = h('select.field');
+  const list = Array.isArray(options) ? options : Object.entries(options);
+  for (const o of list) {
+    if (o && o.group) {
+      const g = h('optgroup', { label: o.group });
+      for (const [v, t] of o.options) g.append(h('option', { value: v }, t));
+      s.append(g);
+    } else s.append(h('option', { value: o[0] }, o[1]));
+  }
+  // An unknown value would leave the field blank: keep the first choice then.
+  if (value !== null && value !== undefined && [...s.options].some((x) => x.value === String(value))) s.value = String(value);
+  return s;
+}
+
+/** A recording ID shown so that it wraps at its folders: the file name, then the folder in grey. */
+export function recordingName(rid, fileName = null) {
+  const { name, folder } = fileParts(rid);
+  return h('span.rec-name', { title: rid }, h('span.file', {}, fileName || name), folder ? h('span.caption.block.folder', {}, folder) : null);
+}
+
+export function checkbox(label, checked = false, { hint = '' } = {}) {
+  const input = h('input', { type: 'checkbox' });
+  input.checked = Boolean(checked);
+  const el = h('label.check', {}, input, h('span', {}, label));
+  if (hint) el.title = hint;
+  el.input = input;
+  return el;
+}
+
+/**
+ * A list of checkboxes with "All" and "None" buttons: items are {value, text, hint}. values()
+ * gives the ticked values; a filter field appears when the list is long.
+ */
+export function checkList(items, { selected = [], legend = '', empty = 'Nothing to choose from yet.', name = '' } = {}) {
+  const chosen = new Set(selected);
+  const boxes = [];
+  const list = h('div.check-list', { role: 'group', 'aria-label': legend || name || null });
+  for (const it of items) {
+    const input = h('input', { type: 'checkbox', value: it.value, 'data-name': name || null });
+    input.checked = chosen.has(it.value);
+    const row = h('label.check-item', { title: it.hint || null }, input,
+      h('span.check-text', {}, h('span', {}, it.text), it.extra ? h('span.caption.block', {}, it.extra) : null));
+    boxes.push({ input, row, text: `${it.value} ${it.text} ${it.extra || ''}`.toLowerCase() });
+    list.append(row);
+  }
+  const filter = items.length > 12 ? h('input.field.small', { type: 'search', placeholder: 'Filter the list', 'aria-label': `Filter ${legend || 'the list'}` }) : null;
+  if (filter) {
+    filter.addEventListener('input', () => {
+      const q = filter.value.trim().toLowerCase();
+      for (const b of boxes) b.row.hidden = Boolean(q) && !b.text.includes(q);
+    });
+  }
+  const setAll = (on) => { for (const b of boxes) if (!b.row.hidden) b.input.checked = on; el.dispatchEvent(new Event('change')); };
+  const count = h('span.caption');
+  const update = () => { count.textContent = `${boxes.filter((b) => b.input.checked).length} of ${boxes.length} chosen`; };
+  list.addEventListener('change', update);
+  update();
+  const el = h('fieldset.admin-checks', {},
+    legend ? h('legend', {}, legend) : null,
+    items.length ? h('div.row.check-tools', {}, filter,
+      h('button.btn.small', { type: 'button', onclick: () => { setAll(true); update(); } }, 'All'),
+      h('button.btn.small', { type: 'button', onclick: () => { setAll(false); update(); } }, 'None'), count) : null,
+    items.length ? list : h('p.caption', {}, empty));
+  el.values = () => boxes.filter((b) => b.input.checked).map((b) => b.input.value);
+  el.set = (values) => { const v = new Set(values); for (const b of boxes) b.input.checked = v.has(b.input.value); update(); };
+  el.total = boxes.length;
+  return el;
+}
+
+/** Radio buttons from [[value, text, hint], ...]; value() gives the chosen one or ''. */
+export function radios(name, options, value = '') {
+  const el = h('div.radio-col', { role: 'radiogroup' });
+  for (const [v, text, hint] of options) {
+    const input = h('input', { type: 'radio', name, value: v });
+    input.checked = v === value;
+    el.append(h('label.check', {}, input, h('span', {}, text, hint ? h('span.caption.block', {}, hint) : null)));
+  }
+  el.value = () => { const c = el.querySelector('input:checked'); return c ? c.value : ''; };
+  el.set = (v) => { for (const i of el.querySelectorAll('input')) i.checked = i.value === v; };
+  return el;
+}
+
+// ----------------------------------------------------------------- tables
+/**
+ * A table of rows with pages of `pageSize`: columns are {key, title, num, render(row) -> Node|string}.
+ * Rebuild it with update(rows).
+ */
+export function dataTable(columns, rows = [], { empty = 'Nothing here yet.', pageSize = 25, rowKey = null, caption = '' } = {}) {
+  const wrap = h('div.admin-table');
+  let page = 0;
+  let data = rows;
+  const render = () => {
+    clear(wrap);
+    if (!data.length) { wrap.append(h('p.caption.empty', {}, empty)); return; }
+    const pages = Math.max(1, Math.ceil(data.length / pageSize));
+    page = Math.min(page, pages - 1);
+    const shown = data.slice(page * pageSize, (page + 1) * pageSize);
+    const table = h('table.list.admin-list', {},
+      caption ? h('caption.sr-only', {}, caption) : null,
+      h('thead', {}, h('tr', {}, columns.map((c) => h(`th${c.num ? '.num' : ''}`, { scope: 'col' }, c.title)))),
+      h('tbody', {}, shown.map((r) => h('tr', { 'data-key': rowKey ? rowKey(r) : null },
+        columns.map((c) => h(`td${c.num ? '.num' : ''}${c.cls ? `.${c.cls}` : ''}`, { 'data-title': c.title }, c.render ? c.render(r) : String(r[c.key] ?? '')))))));
+    wrap.append(h('div.table-scroll', {}, table));
+    if (pages > 1) {
+      const prev = h('button.btn.small', { type: 'button', disabled: page === 0, onclick: () => { page -= 1; render(); } }, '‹ Previous');
+      const next = h('button.btn.small', { type: 'button', disabled: page >= pages - 1, onclick: () => { page += 1; render(); } }, 'Next ›');
+      wrap.append(h('div.row.pager', {}, prev, h('span.caption', {}, `Page ${page + 1} of ${pages} · ${data.length} in all`), next));
+    }
+  };
+  wrap.update = (next, { keepPage = false } = {}) => { data = next || []; if (!keepPage) page = 0; render(); };
+  render();
+  return wrap;
+}
+
+/** A small key/value table. */
+export function infoTable(pairs) {
+  return h('table.info.admin-info', {}, h('tbody', {}, pairs.filter(Boolean).map(([k, v]) => h('tr', {}, h('th', { scope: 'row' }, k), h('td', {}, v)))));
+}
+
+// ------------------------------------------------------ confirmation in the page
+/**
+ * Replace `host`'s contents with a question and two buttons until it is answered: the safe
+ * choice first and focused, the action after it. Resolves true when the action was chosen.
+ */
+export function confirmInline(host, { text, yes, no = 'Cancel', destructive = true }) {
+  return new Promise((resolve) => {
+    const kept = [...host.childNodes];
+    let answered = false;
+    const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(false); } };
+    const done = (value) => {
+      if (answered) return;
+      answered = true;
+      host.removeEventListener('keydown', onKey);
+      clear(host);
+      host.append(...kept);
+      host.classList.remove('confirming');
+      resolve(value);
+    };
+    const noBtn = h('button.btn', { type: 'button', onclick: () => done(false) }, no);
+    const yesBtn = h(`button.btn${destructive ? '.destructive' : '.primary'}`, { type: 'button', onclick: () => done(true) }, yes);
+    clear(host);
+    host.classList.add('confirming');
+    host.append(h('div.confirm-strip', { role: 'alertdialog', 'aria-label': text },
+      h('p', {}, text), h('div.btn-row', {}, noBtn, yesBtn)));
+    host.addEventListener('keydown', onKey);
+    noBtn.focus();
+  });
+}
+
+// ---------------------------------------------------------------- copying
+export async function copyText(text) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(text); return true; }
+  } catch { /* fall back below */ }
+  try {
+    const t = h('textarea', { style: { position: 'fixed', left: '-1000px', top: '0' } });
+    t.value = text;
+    document.body.append(t);
+    t.select();
+    const ok = document.execCommand('copy');
+    t.remove();
+    return ok;
+  } catch { return false; }
+}
+
+export function copyButton(text, { label = 'Copy' } = {}) {
+  const b = h('button.btn.small', { type: 'button', 'data-copy': '' }, label);
+  b.addEventListener('click', async () => {
+    const ok = await copyText(text);
+    b.textContent = ok ? 'Copied' : 'Select it and copy';
+    setTimeout(() => { b.textContent = label; }, 2500);
+  });
+  return b;
+}
+
+/** Something to pass on once (a temporary password or an invitation link), with a copy button. */
+export function secretBox({ title, value, note }) {
+  const out = h('output.secret-value', {}, value);
+  return h('div.success.secret', { role: 'status' },
+    h('p', {}, h('b', {}, title)),
+    h('div.row.secret-row', {}, out, copyButton(value)),
+    note ? h('p.caption', {}, note) : null);
+}
+
+// -------------------------------------------------------------- downloads
+export function downloadText(name, text, type = 'text/plain;charset=utf-8') {
+  downloadFiles([{ name, blob: new Blob([text], { type }) }]);
+}
+
+export function downloadBase64(name, b64, type = 'application/octet-stream') {
+  downloadFiles([{ name, blob: new Blob([base64ToBytes(b64)], { type }) }]);
+}
+
+// ------------------------------------------------------------------ reports
+/**
+ * A report written by the study (agreement, activity, competency) in a sandboxed frame: its own
+ * scripts may draw its charts, but it has no access to this page, its sign-in or its storage.
+ */
+export function reportFrame(html, title) {
+  const frame = h('iframe.report-frame', { title, sandbox: 'allow-scripts', referrerpolicy: 'no-referrer', loading: 'lazy' });
+  frame.srcdoc = String(html || '');
+  return frame;
+}
+
+/** In-page tabs: items [{key, title}]; onSelect(key). The arrow keys move between them. */
+export function tabBar(items, onSelect, current = null) {
+  const bar = h('div.tabs.admin-tabs', { role: 'tablist' });
+  const buttons = items.map((it) => h('button.tab', { type: 'button', role: 'tab', 'data-tab': it.key, 'aria-selected': 'false', tabindex: '-1',
+    onclick: () => select(it.key, true) }, it.title));
+  const select = (key, focus = false) => {
+    for (const b of buttons) {
+      const on = b.dataset.tab === key;
+      b.setAttribute('aria-selected', String(on));
+      b.tabIndex = on ? 0 : -1;
+      if (on && focus) b.focus();
+    }
+    onSelect(key);
+  };
+  bar.addEventListener('keydown', (e) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+    const i = buttons.findIndex((b) => b.getAttribute('aria-selected') === 'true');
+    const n = buttons.length;
+    const j = e.key === 'Home' ? 0 : e.key === 'End' ? n - 1 : (i + (e.key === 'ArrowRight' ? 1 : -1) + n) % n;
+    e.preventDefault();
+    select(buttons[j].dataset.tab, true);
+  });
+  bar.append(...buttons);
+  bar.select = select;
+  if (current) setTimeout(() => select(current), 0);
+  return bar;
+}
+
+/** A bar that moves while a long operation runs; set(fraction|null, text). */
+export function progressLine() {
+  const bar = h('span.progress-bar');
+  const text = h('span.caption');
+  const el = h('div.admin-progress', { role: 'status', 'aria-live': 'polite', hidden: true }, text, h('span.progress', {}, bar));
+  el.set = (fraction, words) => {
+    el.hidden = false;
+    text.textContent = words || '';
+    el.classList.toggle('indeterminate', fraction === null || fraction === undefined);
+    bar.style.width = fraction === null || fraction === undefined ? '35%' : `${Math.round(fraction * 100)}%`;
+  };
+  el.hide = () => { el.hidden = true; };
+  return el;
+}
+
+/** "Working… 12 s": a timer for operations without progress of their own (the analyses). */
+export function elapsedTimer(el, words) {
+  const t0 = Date.now();
+  const tick = () => el.set(null, `${words} ${Math.round((Date.now() - t0) / 1000)} s`);
+  tick();
+  const timer = setInterval(tick, 1000);
+  return () => clearInterval(timer);
+}
