@@ -193,3 +193,18 @@ def test_only_allowed_annotators_see_a_quiz(admin: Api, client: TestClient) -> N
     # a set without items has no quiz
     admin.admin_ok("set_create", {"set_id": "empty"})
     assert a01.quiz("empty", {"action": "get"}).json()["error"] == "no_quiz"
+
+
+def test_the_demonstration_offers_a_quiz(tmp_path: Path) -> None:
+    """`electroclean-web demo` gives the example set three quiz segments, one per artifact type."""
+    from electroclean.web.demo import build_demo
+    from electroclean.web.store_files import FilesStore
+
+    store = FilesStore(build_demo(tmp_path / "demo", say=lambda _m: None))
+    try:
+        items = store.reference_set("example").quiz_items
+    finally:
+        store.close()
+    assert [i.item_id for i in items] == ["q01", "q02", "q03"]
+    assert len({i.correct_label for i in items}) == 3
+    assert all(i.end_s > i.start_s for i in items)

@@ -34,8 +34,10 @@ DEMO_USERS = (("ADMIN", "Study administrator", "admin"), ("A01", "Annotator one"
               ("A02", "Annotator two", "annotator"), ("T01", "Trainee one", "annotator"))
 
 
-def build_demo(directory: Path | str, *, fresh: bool = False, say: Any = print) -> Path:
-    """Create the demonstration in ``directory`` (once; again with ``fresh``) and return the study folder."""
+def build_demo(directory: Path | str, *, fresh: bool = False, say: Any = print, quiz: bool = True) -> Path:
+    """Create the demonstration in ``directory`` (once; again with ``fresh``) and return the study folder.
+
+    The example set gets a three-segment quiz unless ``quiz`` is false (the tests add their own items)."""
     import mne
 
     from electroclean.synthetic import make_synthetic_dataset, write_edf_recording
@@ -62,7 +64,9 @@ def build_demo(directory: Path | str, *, fresh: bool = False, say: Any = print) 
     write_edf_recording(dataset / "sub-003" / "eeg", "sub-003_task-rest", sfreq=128.0, duration_s=60.0, seed=8)
     shutil.rmtree(dataset / "derivatives", ignore_errors=True)  # the simulation's answers stay out of it
     training_source = directory / "training-source"  # the example set with its references (server side)
-    create_example_training_set(training_source)
+    example_set = create_example_training_set(training_source)
+    if quiz:
+        _add_demo_quiz(example_set)
     WebStudy.init(study_dir, study_id=DEMO_STUDY, name="ElectroClean demonstration",
                   settings={"selection": {"strategy": "manual"}})
     store = FilesStore(study_dir, demo=True)
@@ -88,6 +92,28 @@ def build_demo(directory: Path | str, *, fresh: bool = False, say: Any = print) 
     say(f"The demonstration is ready: {len(study_recordings)} study recordings, the example training set, "
         f"and the accounts {', '.join(u[0] for u in DEMO_USERS)} (password {DEMO_PASSWORD}).")
     return study_dir
+
+
+def _add_demo_quiz(rs: Any) -> None:
+    """A short quiz on the example set's practice recording: one segment for each of its first
+    artifact types, so that the demonstration offers the quiz (the answers are the simulation's)."""
+    from electroclean.app.annotations.labels import default_catalogue
+    from electroclean.training.reference import QuizItem
+
+    labels = tuple(lbl.label for lbl in default_catalogue().labels)
+    rid = rs.practice_recordings[0]
+    doc = rs.reference_document(rid)
+    sfreq = doc.recording.timing.sfreq
+    seen: set[str] = set()
+    for ann in sorted(doc.annotations, key=lambda a: a.onset_sample):
+        if ann.label in seen or len(seen) == 3:
+            continue
+        seen.add(ann.label)
+        start = ann.onset_sample / sfreq
+        rs.add_quiz_item(QuizItem(item_id=f"q{len(seen):02d}", recording_id=rid, start_s=round(start, 3),
+                                  end_s=round(start + ann.duration_samples / sfreq, 3), correct_label=ann.label,
+                                  explanation="The answer is the simulation's: this artifact was simulated here."),
+                         labels)
 
 
 def serve_demo(directory: Path | str, *, host: str = "127.0.0.1", port: int = 8000, fresh: bool = False,

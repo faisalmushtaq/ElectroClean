@@ -176,8 +176,9 @@ one and press Submit answer. Depending on the quiz, you see straight away whethe
 a short explanation, and press Next segment; or you go on to the next segment and see your result at
 the end. Every answer is kept with the study as soon as you send it, together with the time you took
 to give it, and cannot be changed afterwards: if you answer a segment on two pages or computers, the
-first answer is kept and the page says so. ‹ Stop the quiz lets you carry on another time from
-where you stopped. At the end ElectroClean shows how many segments you answered correctly, overall
+first answer is kept and the page says so. ‹ Stop the quiz offers two choices: Stop for now keeps
+your answers so that you can carry on another time from where you stopped, and End the quiz now
+finishes it with the score of the segments you answered, as the desktop application did. At the end ElectroClean shows how many segments you answered correctly, overall
 and for each artifact type, and opening a finished quiz again shows the same result.
 
 ## The demonstration

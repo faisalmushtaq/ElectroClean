@@ -7,7 +7,7 @@
 // correct ones (POST /quiz/{set_id}, docs/web/api.md), so an annotator can stop and carry on later.
 
 import { h, clear } from '../ui/dom.js';
-import { ask } from '../ui/dialog.js';
+import { choose } from '../ui/dialog.js';
 import { appHeader } from '../views/common.js';
 import { filesForRecording } from '../views/open.js';
 import { EegViewer } from '../viewer/viewer.js';
@@ -631,10 +631,18 @@ export class QuizView {
     const done = nextIndex(this.items, this.answered) >= this.items.length;
     const answeredCount = Object.keys(this.answered).length;
     if (this.data && !this.data.finished && answeredCount && !done) {
-      const yes = await ask('Stop the quiz?',
-        `You have answered ${answeredCount} of ${this.items.length} segments.\n\nYour answers so far are kept with the study, and you can carry on from here another time.`,
-        { yes: 'Stop the quiz', no: 'Continue the quiz', defaultYes: false });
-      if (!yes || this.closed) return;
+      const STOP = 'Stop for now';
+      const END = 'End the quiz now';
+      const GO_ON = 'Continue the quiz';
+      const pick = await choose('Stop the quiz?',
+        `You have answered ${answeredCount} of ${this.items.length} segments.\n\n${STOP} keeps your answers with the study, and you can carry on from here another time. ${END} gives your score for the segments you answered, and the quiz is then finished.`,
+        [STOP, END, GO_ON], 2);
+      if (pick === GO_ON || this.closed) return;
+      if (pick === END) {
+        logger.event('quiz_ended_early', { set_id: this.setId, answered: answeredCount, n_items: this.items.length, quiz_mode: this.mode });
+        await this.finish();
+        return;
+      }
       logger.event('quiz_stopped', { set_id: this.setId, answered: answeredCount, n_items: this.items.length, quiz_mode: this.mode });
     }
     this.leave();

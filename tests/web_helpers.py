@@ -20,7 +20,7 @@ PRACTICE1 = "sub-example03/eeg/sub-example03_task-example_eeg.vhdr"
 
 def make_template(base: Path) -> Path:
     """The demonstration, built once per test session (tests copy its study folder)."""
-    build_demo(base, say=lambda _m: None)
+    build_demo(base, say=lambda _m: None, quiz=False)  # the quiz tests add their own items
     return base
 
 

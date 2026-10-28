@@ -108,7 +108,7 @@ export const tests = [
 
       // stop: the answers are kept; carry on later from the third segment
       await page.click('[data-log="quiz-stop"]');
-      await clickDialogButton(page, 'Stop the quiz');
+      await clickDialogButton(page, 'Stop for now');
       await waitForRoute(page, 'home');
       await page.click('[data-log="quiz-example"]');
       await waitForRoute(page, 'quiz');
@@ -185,6 +185,33 @@ export const tests = [
         return [...globalThis.ElectroClean.backend.visits.values()].flatMap((v) => v.events).filter((e) => e.type === 'quiz_answer_refused');
       });
       assert.deepEqual(refused.map((e) => [e.reason, e.kept_answer]), [['already_answered', elsewhere], ['finished', null]]);
+    },
+  },
+  {
+    name: 'ending the quiz early gives the score of the segments answered, as the desktop did',
+    async run(t) {
+      const { assert } = t;
+      const page = await t.newPage();
+      await signIn(page, 'A01');
+      await waitForRoute(page, 'home');
+      await page.click('[data-log="quiz-example"]');
+      await waitForRoute(page, 'quiz');
+      await page.click('[data-log="quiz-use-examples"]');
+      const c = await current(page);
+      await answer(page, TRUTH.get(c.item.item_id).correct_label);
+      await page.waitForSelector('.quiz-feedback.success');
+      await page.click('[data-log="quiz-stop"]');
+      assert.match(await page.textContent('.dialog'), /End the quiz now gives your score for the segments you answered/);
+      await clickDialogButton(page, 'End the quiz now');
+      await page.waitForSelector('.quiz-score');
+      const n = QUIZ.items.length;
+      assert.equal(await page.textContent('.quiz-score'), `You answered 1 of 1 segment correctly (100%). ${n - 1} of the ${n} segments were not answered.`);
+      const ended = await page.evaluate(async () => {
+        await globalThis.ElectroClean.flushLog();
+        return [...globalThis.ElectroClean.backend.visits.values()].flatMap((v) => v.events).filter((e) => e.type === 'quiz_ended_early');
+      });
+      assert.equal(ended.length, 1);
+      assert.equal(ended[0].answered, 1);
     },
   },
   {
