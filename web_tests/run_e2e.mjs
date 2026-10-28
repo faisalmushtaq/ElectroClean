@@ -4,7 +4,8 @@
 //
 // Serves electroclean/web/static with `python -m http.server`, runs a stand-in study server
 // (GET /api/v1/health, POST /login and the few calls the sign-in needs, as docs/web/api.md) and a
-// second static server whose config.json each test can set, then runs web_tests/e2e/*.e2e.mjs.
+// second static server whose config.json each test can set, and (for h_study_server) the real
+// demonstration server, `electroclean-web demo`, then runs web_tests/e2e/*.e2e.mjs.
 
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -12,6 +13,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import net from 'node:net';
+import os from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert/strict';
 
@@ -111,11 +113,34 @@ function configStatic() {
   return { server, state };
 }
 
+// ------------------------------------------- the real study server (electroclean-web demo)
+// Started only when a test needs it (h_study_server) and the project's Python has the server's
+// packages; the test is skipped otherwise.
+async function studyServer(python) {
+  const check = spawn(python, ['-c', 'import fastapi, uvicorn, mne'], { stdio: 'ignore' });
+  const usable = await new Promise((r) => check.on('exit', (code) => r(code === 0)));
+  if (!usable) return null;
+  const port = await freePort();
+  const dir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'ec-study-'));
+  const proc = spawn(python, ['-m', 'electroclean.web.cli', 'demo', '--dir', path.join(dir, 'demo'), '--host', '127.0.0.1', '--port', String(port), '--fresh'],
+    { cwd: dir, env: { ...process.env, PYTHONPATH: REPO }, stdio: ['ignore', 'ignore', 'pipe'] });
+  let stderr = '';
+  proc.stderr.on('data', (d) => { stderr = (stderr + d).slice(-4000); });
+  const base = `http://127.0.0.1:${port}/`;
+  try {
+    await waitForHttp(`${base}api/v1/health`, 300000);
+  } catch (exc) {
+    proc.kill();
+    throw new Error(`the demonstration server did not start:\n${stderr}`);
+  }
+  return { base, dir: path.join(dir, 'demo'), proc, cleanup: () => { proc.kill(); fs.rmSync(dir, { recursive: true, force: true }); } };
+}
+
 // ---------------------------------------------------------------------------- running
 async function main() {
   const [port, apiPort, cfgPort] = await Promise.all([freePort(), freePort(), freePort()]);
   const venv = path.join(REPO, '.venv', 'bin', 'python');
-  const python = fs.existsSync(venv) ? venv : 'python3';
+  const python = process.env.ELECTROCLEAN_PYTHON || (fs.existsSync(venv) ? venv : 'python3');
   const py = spawn(python, ['-m', 'http.server', String(port), '--bind', '127.0.0.1', '--directory', STATIC], { stdio: ['ignore', 'ignore', 'pipe'] });
   const { CATALOGUE } = await import(pathToFileURL(path.join(STATIC, 'js', 'api', 'demo_catalogue.js')).href);
   const stub = stubStudy(CATALOGUE);
@@ -127,6 +152,7 @@ async function main() {
   const browser = await chromium.launch({ headless: !headed });
   if (shotsDir) fs.mkdirSync(shotsDir, { recursive: true });
   const specs = fs.readdirSync(path.join(HERE, 'e2e')).filter((f) => f.endsWith('.e2e.mjs') && f.includes(filter)).sort();
+  const study = specs.some((f) => f.includes('study_server')) ? await studyServer(python) : null;
   let failed = 0;
   for (const file of specs) {
     const mod = await import(pathToFileURL(path.join(HERE, 'e2e', file)).href);
@@ -135,7 +161,7 @@ async function main() {
       const pages = [];
       const errors = [];
       const ctx = {
-        assert, base, api: `http://127.0.0.1:${apiPort}`, cfgBase: `http://127.0.0.1:${cfgPort}/`, stub: stub.state, cfg: cfg.state,
+        assert, base, api: `http://127.0.0.1:${apiPort}`, cfgBase: `http://127.0.0.1:${cfgPort}/`, stub: stub.state, cfg: cfg.state, study,
         shots: shotsDir, errors,
         async newPage({ width = 1600, height = 950, url = base, scale = 1 } = {}) {
           const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: scale, acceptDownloads: true, locale: 'en-GB' });
@@ -154,6 +180,10 @@ async function main() {
         },
       };
       const t0 = Date.now();
+      if (t.needs === 'study' && !study) {
+        console.log(`skip ${file} › ${t.name} (the study server needs the packages of requirements-web.txt)`);
+        continue;
+      }
       try {
         await t.run(ctx);
         if (errors.length) throw new Error(`errors in the page:\n  ${errors.join('\n  ')}`);
@@ -167,6 +197,7 @@ async function main() {
     }
   }
   await browser.close();
+  if (study) study.cleanup();
   py.kill();
   stub.server.close();
   cfg.server.close();

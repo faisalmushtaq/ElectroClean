@@ -71,7 +71,7 @@ test('operations call ec_<operation> in europe-west2 with the study and the same
   await b.sendEvents('v1', [{ t: 1, type: 'key' }]);
   assert.deepEqual(calls.map((c) => c.name), ['ec_me', 'ec_match', 'ec_put_draft', 'ec_guided_check', 'ec_visit_events']);
   assert.ok(calls.every((c) => c.region === 'europe-west2' && c.data.study === 'pilot'));
-  assert.deepEqual(calls[2].data, { study: 'pilot', recording_id: 'sub-01/eeg/x.edf', mode: 'standard', context_id: '', annotations: [], elapsed_s: 2 });
+  assert.deepEqual(calls[2].data, { study: 'pilot', recording_id: 'sub-01/eeg/x.edf', mode: 'standard', context_id: '', draft: { annotations: [], elapsed_s: 2 } });
   assert.equal(calls[3].data.recording_id, 'sub-01/eeg/x.edf');
   assert.deepEqual(calls[4].data, { study: 'pilot', visit_id: 'v1', events: [{ t: 1, type: 'key' }] });
 });

@@ -134,14 +134,18 @@ export class App {
     this.catalogue = new Catalogue(this.me.catalogue);
     try {
       const visit = await this.backend.openVisit({
-        client: { app: 'web', user_agent: navigator.userAgent, screen: { width: screen.width, height: screen.height, pixel_ratio: window.devicePixelRatio || 1 },
+        client: { app: 'web', backend: this.backend.kind, user_agent: navigator.userAgent,
+          screen: { width: screen.width, height: screen.height, pixel_ratio: window.devicePixelRatio || 1 },
           window: { width: window.innerWidth, height: window.innerHeight } },
         programme: Boolean(this.me.programme),
       });
       this.visitId = visit.visit_id;
       logger.begin({ backend: this.backend, visitId: visit.visit_id, logging: visit.logging || this.me.study.logging });
-      logger.event('visit_started', { mode: this.me.programme ? 'training' : 'standard', programme: Boolean(this.me.programme),
-        reference_set: this.me.programme ? this.me.programme.set_id : '', client: 'web', backend: this.backend.kind, annotator_id: this.me.annotator_id });
+      // A study server and Firebase write the visit's first event themselves (docs/web/api.md).
+      if (!this.backend.writesVisitStart) {
+        logger.event('visit_started', { mode: this.me.programme ? 'training' : 'standard', programme: Boolean(this.me.programme),
+          reference_set: this.me.programme ? this.me.programme.set_id : '', client: 'web', backend: this.backend.kind, annotator_id: this.me.annotator_id });
+      }
     } catch {
       this.visitId = null; // annotating still works without the log
     }

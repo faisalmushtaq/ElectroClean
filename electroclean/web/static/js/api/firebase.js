@@ -74,6 +74,7 @@ export class FirebaseBackend {
     this.region = region || DEFAULT_REGION;
     this.onUnauthorized = onUnauthorized;
     this.eventFlushMs = 10000; // interaction events are sent about every 10 s
+    this.writesVisitStart = true; // the visit_started event is written when the visit opens
     this.sdk = sdk;
     this.app = sdk.app.initializeApp(config, 'electroclean');
     this.auth = sdk.auth.getAuth(this.app);
@@ -160,7 +161,7 @@ export class FirebaseBackend {
   match(body) { return this._call('ec_match', body); }
 
   putDraft(recordingId, mode, contextId, draft) {
-    return this._call('ec_put_draft', { recording_id: recordingId, mode, context_id: contextId || '', ...draft });
+    return this._call('ec_put_draft', { recording_id: recordingId, mode, context_id: contextId || '', draft });
   }
 
   deleteDraft(recordingId, mode, contextId) {

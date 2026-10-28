@@ -4,7 +4,7 @@
 //   ?demo=1                      the demonstration (for local testing only)
 //   ?server=https://…            a study server (remembered in this browser)
 //   config.json beside index.html
-//       {"firebase": {...}, "study": "<id>", "region": "europe-west2"}   a study on Firebase
+//       {"firebase": {...}, "study": "<id>", "functions_region": "europe-west2"}   a study on Firebase
 //                                (?study=<id> picks another study of the same project)
 //       {"server": "https://…"}  a study server
 //   the server remembered in this browser
@@ -68,7 +68,7 @@ export async function findBackend() {
   if (cfg && cfg.firebase && typeof cfg.firebase === 'object') {
     return {
       kind: 'firebase', config: cfg.firebase, study: q.get('study') || cfg.study || '',
-      region: cfg.region || 'europe-west2', sdkBase: cfg.sdk_base || undefined, source: 'config',
+      region: cfg.functions_region || cfg.region || 'europe-west2', sdkBase: cfg.sdk_base || undefined, source: 'config',
     };
   }
   if (cfg && typeof cfg.server === 'string' && cfg.server) {

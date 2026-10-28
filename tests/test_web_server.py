@@ -269,7 +269,9 @@ def test_unsafe_recording_ids_are_refused(client: TestClient) -> None:
     api = Api(client, "A01")
     for rid in ("../../etc/passwd", "/etc/passwd", "sub-001/../../x.vhdr"):
         r = api.put(f"/drafts/{rid}", {"annotations": []})
-        assert r.status_code in (403, 404), rid
+        # Refused by the drafts route (403, 404) or, where ".." takes the path out of /api/v1, by the
+        # application's static files, which take no PUT (405).
+        assert r.status_code in (403, 404, 405), rid
 
 
 def test_web_outputs_match_the_desktop(client: TestClient, recordings: Path, study: Path, tmp_path: Path) -> None:
