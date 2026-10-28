@@ -1,5 +1,5 @@
-// The colours of the desktop design system (electroclean/app/gui/style.py), for drawing on canvas.
-// app.css defines the same values as CSS custom properties.
+// The colours of the application's design system, for drawing on canvas (the EEG viewer, the
+// practice review). app.css defines the same values as CSS custom properties.
 
 export const COLOURS = Object.freeze({
   window: '#F5F5F7',

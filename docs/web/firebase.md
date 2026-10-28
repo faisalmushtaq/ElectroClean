@@ -123,7 +123,8 @@ electroclean-web init-study --firebase-project my-eeg-study --study pilot --name
 Settings that differ from ElectroClean's defaults (fixed display filters, the artifact types on the
 number keys, how the next recording is chosen, interaction logging) are changed later in the admin
 area. They can also be given as a JSON file with `--settings settings.json`, in the form of the
-`settings` block of the desktop application's `electroclean_study.json`; `--update` changes them.
+`settings` block of ElectroClean's study file, `electroclean_study.json` (docs/file_formats.md);
+`--update` changes them.
 
 ## 10. Create your own administrator account
 
@@ -153,19 +154,21 @@ account and choose the admin area (docs/web/admin.md explains each part). There 
   someone from the study (their results and logs stay);
 * **assign the work**: recordings to annotate, or a training programme;
 * **build reference sets** for training and assessment: from an expert's saved annotations, an
-  annotation file from the desktop application, a consensus of several experts or an adjudicator's
-  final annotations, with their uses, the guided notes, the practice pass mark, the competency
-  criteria and a short-segment quiz. *Add the example set* adds ElectroClean's simulated example set
-  and gives you its recordings as a zip to pass on to trainees;
+  uploaded annotation file (an `_annotations.json`, including those the desktop application saved
+  up to version 1.1.0), a consensus of several experts or an adjudicator's final annotations, with
+  their uses, the guided notes, the practice pass mark, the competency criteria and a short-segment
+  quiz. *Add the example set* adds ElectroClean's simulated example set and gives you its
+  recordings as a zip to pass on to trainees;
 * **change the settings**, follow the **progress**, run the **agreement**, **activity** and
   **competency** analyses, download the **results** (up to 25 MB; larger studies use step 14) and
   read the **audit log** of every change, with who made it and when.
 
 Each of these can also be done from the command line, and the audit log records those changes too
-(by "command"). Registration from the command line opens every recording with the desktop
-application's loader, on the computer that holds the recordings; training reference sets in the
-dataset (`derivatives/electroclean_reference_sets/`) are stored too, with their experts'
-annotations but without their recordings:
+(by "command"). Registration from the command line opens every recording with ElectroClean's
+loader (`electroclean/app/eeg/loading.py`, which reads the files with MNE-Python), on the computer
+that holds the recordings; training reference sets in the dataset
+(`derivatives/electroclean_reference_sets/`) are stored too, with their experts' annotations but
+without their recordings:
 
 ```
 electroclean-web register /data/Pilot --firebase-project my-eeg-study --study pilot
@@ -225,11 +228,13 @@ electroclean-agreement ~/Pilot-results/Annotated_Events
 electroclean-activity ~/Pilot-results/Annotated_Events
 ```
 
-The export writes `Annotated_Events/` exactly as the desktop application does: per annotator and
+The export writes `Annotated_Events/` in ElectroClean's results layout: per annotator and
 recording the five result files (written by ElectroClean's own code when each recording was saved),
 the completion register, the training progress, the competency reports, the quiz results and
-`interaction_logs/`. The admin area's results zip holds the same files. Run it again whenever you like; it adds what is new and never replaces a file
-with different contents.
+`interaction_logs/`. The admin area's results zip holds the same files. Run it again whenever you
+like; it adds what is new and never replaces a file with different contents. Results saved by the
+desktop application (version 1.1.0 and earlier) have the same layout, so the analyses can read
+them together with the browser's.
 
 ## Deploying updates from GitHub (optional)
 

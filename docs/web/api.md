@@ -164,9 +164,9 @@ are recorded. `session.session_id` (optional, 32 hexadecimal characters, 400
 `bad_request` otherwise) is the browser's ID of the annotation session, the one
 its interaction log events carry: the saved `_session.json`, the
 `_annotations.json`, the completion register and the session log then use it as
-the session's ID, so the logs and the results link up as they do for the
-desktop application. Without it, or when a saved result of the annotator
-already has that ID, the server makes one.
+the session's ID, so the interaction log and the results of a session carry
+the same ID. Without it, or when a saved result of the annotator already has
+that ID, the server makes one.
 
 → `{"saved": true, "files": ["…_annotations.json", "…_events.tsv", "…"], "attempt": 1,
 "feedback": PracticeFeedback | null, "guided": GuidedSaved | null, "assessment": AssessmentSaved | null,
@@ -252,7 +252,7 @@ sent; the step then gives at most one star).
 `POST /visits` `{"client": {...}, "programme": false, "mode": "standard", "context_id": ""}` → `{"visit_id": "…",
 "logging": {"interactions": true, "pointer_hz": 5, "idle_after_s": 30}}` (the
 server opens the visit's log, `interaction_logs/annotator-<ID>/<time>_<mode>.jsonl`,
-with the same header as the desktop application plus `"client": "web"` and
+with the header of docs/activity_logs.md, which has `"client": "web"` and
 `"browser"`, the client object; `mode` and `context_id` are optional, and with
 `"programme": true` the visit is the trainee's programme). When the study does
 not record interactions, `visit_id` is null and nothing is logged. The server
@@ -375,7 +375,7 @@ Authentication where it is not available answers 503 `auth_unavailable`.
 
 ```jsonc
 {"kind": "annotator", "annotator_id": "E1", "mode": "standard", "context_id": ""}   // that person's saved annotations of the recording
-{"kind": "document", "document": {...}}          // an _annotations.json (for example from the desktop application)
+{"kind": "document", "document": {...}}          // an _annotations.json (from a results folder, or saved by the desktop application, 1.1.0 or earlier)
 {"kind": "consensus", "annotator_ids": ["E1", "E2", "E3"], "min_agreement": null, "merge_gap_s": 0.0, "min_duration_s": 0.0}
 {"kind": "adjudicated", "adjudicator_id": "E4", "expert_ids": ["E1", "E2", "E3"]}
 ```
@@ -387,9 +387,9 @@ and returns its disagreement rows (`{"kind": "time" | "channels", "label",
 "onset_s", "offset_s", "experts_marking", "experts_not_marking", "note"}`;
 422 `invalid_consensus` when it cannot be built); it needs at least two
 annotators. An adjudicated reference names at least two experts. The reference
-is stored with the desktop's own code (`ReferenceSet.add_reference`), so its
-provenance is recorded as in the desktop's reference sets: the method, the
-experts, the adjudicator, copies of the source files (the saved
+is stored with ElectroClean's reference-set code (`ReferenceSet.add_reference`
+in `electroclean/training/reference.py`), which records its provenance: the
+method, the experts, the adjudicator, copies of the source files (the saved
 `_annotations.json` of each person, or the uploaded document) with their
 checksums, the time, the consensus rule and the administrator's notes. An
 uploaded document must use a label catalogue compatible with the study's
@@ -468,25 +468,26 @@ fingerprints and show them. In `answered`, `correct`, `correct_label` and
 
 `{"action": "answer", "item_id", "label", "response_time_s"?}` →
 `{"correct": bool | null, "correct_label": str | null, "explanation": str | null, "n_answered", "n_items"}`
-(null until the end when feedback comes at the end). An answer is judged as on
-the desktop (the correct label or one of the item's accepted labels). The same
-answer sent again gives the same answer and is kept once; another label for an
-answered segment is 409 `already_answered` (with the kept `label`); after
-finishing, 409 `finished`. 404 `unknown_item`, 400 `bad_label`.
+(null until the end when feedback comes at the end). An answer is judged by
+`QuizItem.is_correct` (the correct label or one of the item's accepted labels).
+The same answer sent again gives the same answer and is kept once; another
+label for an answered segment is 409 `already_answered` (with the kept
+`label`); after finishing, 409 `finished`. 404 `unknown_item`, 400 `bad_label`.
 `response_time_s` is the time the browser measured from showing the segment
-to the answer, kept as the desktop keeps it.
+to the answer, kept with the answer to the millisecond.
 
-`{"action": "finish"}` → `{"score": {...}}` (as `QuizSession.score()`, with
-null for a proportion that cannot be computed). The result is saved like the
-desktop's, as `training/<set>/quiz/annotator-<ID>_quiz_<mode>_<session>.json` in
-the results folder (`mode` `practice` for immediate feedback, `assessment` for
-feedback at the end, as the desktop's two kinds of quiz), so the export and the
-results zip include it; a quiz finished before every segment is answered is
-saved as incomplete, as on the desktop when an annotator stops early. Finishing
-again gives the same score and saves nothing more. A set's quiz is for annotators
-it allows (403 `not_allowed`); a set without items has none (404 `no_quiz`).
-The browser shows each segment from the annotator's own copy of the recording,
-opened from their computer as for training.
+`{"action": "finish"}` → `{"score": {...}}` (as `QuizSession.score()`, with null
+for a proportion that cannot be computed). The result is saved with
+`QuizSession.save` (`electroclean/training/quiz.py`), as
+`training/<set>/quiz/annotator-<ID>_quiz_<mode>_<session>.json` in the results
+folder (`mode` `practice` for immediate feedback, `assessment` for feedback at
+the end), so the export and the results zip include it; a quiz finished before
+every segment is answered (End the quiz now) is saved with `completed` false and
+the score of the segments answered. Finishing again gives the same score and
+saves nothing more. A set's quiz is for annotators it allows (403
+`not_allowed`); a set without items has none (404 `no_quiz`). The browser shows
+each segment from the annotator's own copy of the recording, opened from their
+computer as for training.
 
 ## The same operations on Firebase
 

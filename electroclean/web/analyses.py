@@ -6,10 +6,10 @@
 * ``competency``: :func:`electroclean.training.assessment.competency_report` and its HTML;
 * ``results_zip``: the results folder as a zip, as ``GET /admin/results.zip`` gives it.
 
-The analyses read a results folder laid out as the desktop's: the files store's own folder, or, for
-Firestore, the saved files written into a temporary folder for the time of the analysis
-(:meth:`~electroclean.web.store.Store.results_tree`). Nothing here needs MNE-Python or Qt; the
-agreement report draws its figures with matplotlib.
+The analyses read a results folder in ElectroClean's results layout: the files store's own folder,
+or, for Firestore, the saved files written into a temporary folder for the time of the analysis
+(:meth:`~electroclean.web.store.Store.results_tree`). Nothing here needs MNE-Python; the agreement
+report draws its figures with matplotlib.
 """
 
 from __future__ import annotations

@@ -15,8 +15,9 @@ python -m pip install -r requirements.txt
 python -m pip install --no-deps -e .
 ```
 
-This installs the server and the administrator's command, `electroclean-web`, without the desktop
-application's windows.
+This installs ElectroClean's Python code with the server and the administrator's command,
+`electroclean-web`, the analyses' commands `electroclean-agreement` and `electroclean-activity`,
+and MNE-Python for registering recordings. The browser application itself needs nothing installed.
 
 ## The demonstration
 
@@ -27,13 +28,16 @@ electroclean-web demo
 makes a demonstration study in `./electroclean-demo` (once; `--fresh` makes it again) and serves the
 browser application and the API at `http://localhost:8000/`. It holds three simulated study
 recordings (two BrainVision, one EDF+), ElectroClean's example training set and four accounts, all
-with the password `electroclean`: ADMIN (the administrator's account, for the admin area), A01 and A02
-(annotators with every study recording) and T01 (a trainee in the example training programme). The
-files to open in the browser are in `electroclean-demo/recordings` (`study/` for A01 and A02,
-`training/` for T01), also downloadable from `http://localhost:8000/demo/recordings.zip`. Results
-appear in `electroclean-demo/study/Annotated_Events`, exactly as the desktop application writes
-them, so `electroclean-agreement electroclean-demo/study/Annotated_Events` and `electroclean-activity`
-work on them straight away.
+with the password `electroclean`: ADMIN (the administrator's account, for the admin area in the
+browser), A01 and A02 (annotators with every study recording) and T01 (a trainee in the example
+training programme). The example training set has a short-segment quiz of three segments from its
+practice recording, one for each of the first three artifact types that occur in it, with feedback
+after each answer. The files to open in the browser are in `electroclean-demo/recordings` (`study/`
+for A01 and A02, `training/` for T01 and for the quiz), also downloadable from
+`http://localhost:8000/demo/recordings.zip`. Results appear in
+`electroclean-demo/study/Annotated_Events`, in ElectroClean's results layout, so
+`electroclean-agreement electroclean-demo/study/Annotated_Events` and `electroclean-activity` work
+on them straight away, as do the analyses of the admin area.
 
 `--port` and `--host` choose where it listens (`--host 0.0.0.0` for other computers on the network);
 `--no-serve` only makes it. The demonstration also accepts the application published on GitHub
@@ -65,9 +69,10 @@ The commands remain an alternative for each of these, and the audit log records 
 (by "command"):
 
 * `electroclean-web register /data/Pilot --study-dir /srv/pilot` registers a dataset's recordings
-  where they are, with the desktop application's loader, and its training reference sets with their
-  experts' annotations and without their recordings. When the recordings are on another computer,
-  run `electroclean-web export-manifests /data/Pilot --out pilot.json` there and
+  where they are, with ElectroClean's loader (`electroclean/app/eeg/loading.py`, which reads the
+  files with MNE-Python), and its training reference sets with their experts' annotations and
+  without their recordings. When the recordings are on another computer, run
+  `electroclean-web export-manifests /data/Pilot --out pilot.json` there and
   `electroclean-web import-manifests pilot.json --study-dir /srv/pilot` on the server.
 * `electroclean-web add-user A01 --name "Annotator one" --study-dir /srv/pilot` makes an account.
 * `electroclean-web assign A01 --all --study-dir /srv/pilot`, or `--recordings ...`, or
@@ -94,13 +99,13 @@ the demonstration; mount the study folder at `/data/study` otherwise).
 ## The study folder
 
 ```
-electroclean_study.json          the study's settings (the desktop application's study file)
+electroclean_study.json          the study's settings (its format is in docs/file_formats.md)
 server.sqlite                    accounts, sign-in tokens, assignments, visits, guided progress,
                                  quiz progress and the audit log
 manifests/                       one file per registered recording
 drafts/                          unfinished work
 derivatives/electroclean_reference_sets/   training sets (their experts' annotations)
-Annotated_Events/                the results, as written by the desktop application
+Annotated_Events/                the results, in ElectroClean's results layout
     interaction_logs/            one log per visit
     training_progress/           stars, scores and times of each trainee
     training/<set>/quiz/         the short-segment quiz results
@@ -111,12 +116,12 @@ The admin area shows who has done what and downloads `Annotated_Events` as a zip
 `--json` gives the full report, the same as `GET /api/v1/admin/progress` for an administrator's
 token) and `/api/v1/admin/results.zip`. Back up the whole folder.
 
-Results are saved with the desktop application's journalled save, so a recording counts as done only
-once its five files are written, read back and verified. When the server opens the study folder it
-finishes or undoes any save that a power cut or a crash interrupted, as the desktop application does
-when it starts: a save whose files were all written and verified is completed, anything else is
-undone and its files kept in `Annotated_Events/.electroclean/interrupted/`. Each of these appears in
-the audit log (by "server").
+Results are saved with ElectroClean's journalled save (`electroclean/app/session/`), so a recording
+counts as done only once its five files are written, read back and verified. When the server opens
+the study folder it finishes or undoes any save that a power cut or a crash interrupted: a save
+whose files were all written and verified is completed, anything else is undone and its files kept
+in `Annotated_Events/.electroclean/interrupted/`. Each of these appears in the audit log (by
+"server").
 
 ## Security
 

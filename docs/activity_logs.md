@@ -171,7 +171,15 @@ before it: `eeg_drag`, `eeg_click` or `eeg_double_click` (on the EEG),
 
 **Quiz.** `quiz_item_shown` (`item_id`, `index`, `n_items`, `quiz_mode`),
 `quiz_answer` (`item_id`, `answer`, `correct`, `response_time_s`) and
-`quiz_finished` (`n_items`, `n_correct`, `proportion_correct`).
+`quiz_finished` (`n_items`, `n_correct`, `proportion_correct`). In the browser
+each also carries `set_id`, and the quiz adds `quiz_opened` (`n_items`,
+`answered`, `quiz_mode`, `finished`), `quiz_recording_checked` (`recording_id`,
+`file_name`, `matched`: whether the file opened is the study's copy),
+`quiz_answer_refused` (`item_id`, `reason`, `kept_answer`: an answer the study
+did not take, because the segment was answered already or the quiz was
+finished elsewhere), `quiz_stopped` (`answered`, `n_items`: Stop for now) and
+`quiz_ended_early` (`answered`, `n_items`: End the quiz now, which is followed
+by `quiz_finished`).
 
 **Training.** The training programme records its own events in the same log,
 with names starting `guided_`, `practice_`, `assessment_`, `training_` or

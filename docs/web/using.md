@@ -1,10 +1,9 @@
 # Using ElectroClean in the browser
 
-This guide is for annotators. ElectroClean in the browser works like the desktop application: you
-open an EEG recording, mark the artifacts you see with their type, and press Save and Finish. The
-difference is where things happen. The recording stays on your own computer and is read by the web
-page itself, so the EEG is never uploaded; only your annotations, and a record of how you used the
-tools if your study asks for one, go to the study.
+This guide is for annotators. ElectroClean runs in your web browser: you open an EEG recording, mark
+the artifacts you see with their type, and press Save and Finish. The recording stays on your own
+computer and is read by the web page itself, so the EEG is never uploaded; only your annotations,
+and a record of how you used the tools if your study asks for one, go to the study.
 
 ## Opening ElectroClean
 
@@ -178,8 +177,9 @@ the end. Every answer is kept with the study as soon as you send it, together wi
 to give it, and cannot be changed afterwards: if you answer a segment on two pages or computers, the
 first answer is kept and the page says so. ‹ Stop the quiz offers two choices: Stop for now keeps
 your answers so that you can carry on another time from where you stopped, and End the quiz now
-finishes it with the score of the segments you answered, as the desktop application did. At the end ElectroClean shows how many segments you answered correctly, overall
-and for each artifact type, and opening a finished quiz again shows the same result.
+finishes it with the score of the segments you answered. At the end ElectroClean shows how many
+segments you answered correctly, overall and for each artifact type, and opening a finished quiz
+again shows the same result.
 
 ## The demonstration
 
@@ -189,9 +189,9 @@ simulated artifacts are built in: use one straight away, or download them as EDF
 them from your computer to try that way too. A demonstration quiz of seven segments from the first
 two examples, with feedback after each answer, is on the first page for both accounts; Use the
 example recordings opens its recordings without any files. Your results stay in your browser;
-Download my results saves them as a file, and Reset the demonstration forgets them. Wherever the demonstration does what
-a study's server would do (checking guided steps, scoring practice, storing results), the page says
-so.
+Download my results saves them as a file, and Reset the demonstration forgets them. Wherever the
+demonstration does what a study's server would do (checking guided steps, scoring practice, storing
+results), the page says so.
 
 ## If something goes wrong
 

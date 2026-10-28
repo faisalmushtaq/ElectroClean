@@ -1,8 +1,8 @@
-// The annotation view: the EEG viewer with the desktop application's tools around it (the type
-// buttons and keys 1 to 9, the type menu and picker, Whole montage / Selected channels, M / [ / ]
-// marks, N / P, undo and redo, the annotations list, the recording panel, the help and the status
-// line), and Save and Finish. Behaviour and messages follow electroclean/app/gui (annotation_window
-// and browser) so that the browser and the desktop application work the same way.
+// The annotation view: the EEG viewer with the annotation tools around it (the type buttons and
+// keys 1 to 9, the type menu and picker, Whole montage / Selected channels, M / [ / ] marks, N / P,
+// undo and redo, the annotations list, the recording panel, the help and the status line), and
+// Save and Finish. Every change goes through the annotation store (store.js); the behaviour and
+// messages follow those of the former desktop application's annotation window.
 
 import { h, clear } from '../ui/dom.js';
 import { showDialog, ask, inform, choose, dialogOpen } from '../ui/dialog.js';
@@ -142,7 +142,7 @@ export class Workspace {
         style: { '--chip-colour': l.colour, '--chip-text': readableTextColour(l.colour) },
       }, h('span.swatch', { style: { background: l.colour } }), h('span.chip-key', {}, String(i + 1)), h('span.chip-code', {}, l.short_code));
       b.tabIndex = -1;
-      b.addEventListener('mousedown', (e) => e.preventDefault()); // keys stay with the EEG, as the desktop's NoFocus
+      b.addEventListener('mousedown', (e) => e.preventDefault()); // a click leaves the keyboard focus with the EEG
       return b;
     });
     this.typeMenuBtn = h('button.btn.type-menu', { type: 'button', 'aria-haspopup': 'menu',
@@ -327,7 +327,7 @@ export class Workspace {
     this._listeners.push(() => document.removeEventListener('visibilitychange', hidden));
   }
 
-  /** The window is on screen: log it as the desktop application does. */
+  /** The view is on screen: log recording_opened with its fields (docs/activity_logs.md). */
   logOpened(extra = {}) {
     const s = this.s;
     logger.event('recording_opened', {
@@ -1000,7 +1000,7 @@ export class Workspace {
         if (i.annotation) { this.select([i.annotation], { via: 'eeg_click' }); this.viewer.setCursor(null); }
         else {
           if (this.selection.length) this.select(null, { via: 'eeg_click' });
-          // A click on a trace chooses its channel, as in the desktop application.
+          // A click on a trace chooses its channel.
           if (i.nearTrace && i.channel) this.onChannelClicked(i.channel);
           this.viewer.setCursor(i.t);
         }
@@ -1147,7 +1147,7 @@ export class Workspace {
       buttons: [{ label: 'Keep annotating', value: false }, { label: 'Save and Finish', value: true, kind: 'primary' }], cancelValue: false }).then(Boolean);
   }
 
-  /** Close (the ‹ Close button, or leaving the page's view): as the desktop's close guard. */
+  /** Close (the ‹ Close button, or leaving the page's view): unfinished work is kept for later or discarded, as the annotator chooses. */
   async close() {
     const s = this.s;
     if (this.kind === 'review') { this.app.leaveRecording(this, 'review_closed'); return true; }

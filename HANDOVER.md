@@ -194,7 +194,9 @@ display are documented in [docs/web/architecture.md](docs/web/architecture.md).
 
 **7. Housekeeping.** The project's `ruff` settings give only the line length, so a recent `ruff`
 applies many style rules the code was never written to; `ruff check --select E,F,W,B` is the useful
-subset. A shared linting configuration and a lint step in CI would help.
+subset. A shared linting configuration and a lint step in CI would help. Many code comments still
+explain behaviour by comparison with the desktop application ("as the desktop does"); they are
+accurate as history, and can be reworded to name the Python code instead as the files are touched.
 
 ## Things worth knowing before changing code
 

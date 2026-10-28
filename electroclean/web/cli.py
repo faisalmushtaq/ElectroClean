@@ -157,7 +157,7 @@ def cmd_register(a: argparse.Namespace) -> int:
     from electroclean.web.registration import register_dataset
 
     store = open_store(a)
-    print(f"Registering the recordings in {a.dataset} (each is opened and checked, as by the desktop application):")
+    print(f"Registering the recordings in {a.dataset} (each is opened and checked with ElectroClean's loader):")
     reg = register_dataset(a.dataset, store, check_filters=not a.no_filter_check, include_sets=not a.no_sets)
     _audit_registration(store, reg, f"from the folder {Path(a.dataset).name}")
     return _report_registration(reg)
@@ -522,7 +522,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--name", help="display name")
     s.add_argument("--email", help="Firebase: the address they sign in with")
     s.add_argument("--password", help="the password (Firebase: leave out to print a link that lets them choose one)")
-    s.add_argument("--admin", action="store_true", help="a study administrator (progress and results)")
+    s.add_argument("--admin", action="store_true", help="a study administrator, who uses the admin area")
     s.add_argument("--replace", action="store_true", help="study folder: set a new password for an existing account")
     s.set_defaults(func=cmd_add_user)
 

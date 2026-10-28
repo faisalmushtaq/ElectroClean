@@ -268,7 +268,7 @@ async function main() {
       }
     }
     if (!failed) {
-      // The administrator's export: the same folders as the desktop application.
+      // The administrator's export: ElectroClean's usual results folders.
       const out = path.join(WORK, 'export');
       py('export', ...store, '--to', out);
       const root = path.join(out, 'Annotated_Events');

@@ -1,5 +1,5 @@
-// The training path: the programme's three stages as cards, with one Continue button
-// (as guided_gui.TrainingPathWindow).
+// The training path: the programme's three stages as cards, each with its progress, and one
+// Continue button for the next step.
 
 import { h } from '../ui/dom.js';
 import { starText } from './rules.js';

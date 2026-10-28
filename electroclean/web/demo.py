@@ -6,7 +6,7 @@ with the recordings registered, and four accounts, then serves the browser appli
 ==========  =============  ==============================================
 ID          password       what they have
 ==========  =============  ==============================================
-ADMIN       electroclean   administrator: progress and results
+ADMIN       electroclean   administrator: the admin area
 A01         electroclean   annotator: every study recording
 A02         electroclean   annotator: every study recording
 T01         electroclean   trainee: the example training programme
@@ -71,7 +71,7 @@ def build_demo(directory: Path | str, *, fresh: bool = False, say: Any = print, 
                   settings={"selection": {"strategy": "manual"}})
     store = FilesStore(study_dir, demo=True)
     try:
-        say("Registering the recordings (each is opened as the desktop application opens it):")
+        say("Registering the recordings (each is read with ElectroClean's loader, as for annotation):")
         reg = register_dataset(dataset, store, say=say)
         register_dataset(training_source, store, say=say)
         study_recordings = sorted(m["recording_id"] for m in reg.manifests)
