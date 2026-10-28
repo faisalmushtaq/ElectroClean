@@ -13,7 +13,9 @@ What counts as a match (:class:`Tolerance`, set per reference set in ``guided.to
 * for channel-specific annotations, enough of the same channels (Jaccard index of at least 0.75
   by default: the channels both chose divided by the channels either chose).
 
-This module has no Qt code; the coach panel is in :mod:`electroclean.training.guided_gui`.
+The browser's coach (``electroclean/web/static/js/training/coach.js``) shows the steps; the server
+checks each attempt with this module (:mod:`electroclean.web.coach`), so the experts' answers stay
+with the study.
 """
 
 from __future__ import annotations

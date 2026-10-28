@@ -30,18 +30,20 @@ INACTIVE_STATES = frozenset({"inactive", "hidden", "suspended"})
 TRAINING_PREFIXES = ("guided_", "practice_", "assessment_", "training_", "stage_")
 
 VISIT_COLUMNS: list[tuple[str, str]] = [
-    ("visit_id", "Identifier of the visit (one log file: from Begin until the start window or quitting)."),
+    ("visit_id", "Identifier of the visit (one log file: in the browser, from signing in until signing out "
+                 "or closing the page)."),
     ("annotator_id", "The annotator's ID."),
     ("mode", "standard, practice, assessment (or a training mode)."),
     ("context_id", "Reference set of a training visit (empty for standard annotation)."),
     ("file", "The log file."),
     ("started_at", "Local date and time the visit started, with its UTC offset."),
-    ("ended", "How the visit ended: back_to_start, quit, exit, new_visit, or 'not closed' after a crash."),
+    ("ended", "How the visit ended: sign_out or page_closed in the browser (back_to_start, quit, exit or "
+              "new_visit in logs of the desktop application), or 'not closed' when the log stopped unexpectedly."),
     ("wall_s", "Seconds from the start of the visit to its last event."),
     ("active_s", "Active seconds in the visit (see 'Active time')."),
-    ("recordings_opened", "Recording windows opened."),
+    ("recordings_opened", "Recordings opened for annotation."),
     ("recordings_finished", "Recordings saved with Save and Finish."),
-    ("recordings_closed_without_saving", "Recording windows closed without saving."),
+    ("recordings_closed_without_saving", "Recordings closed without saving."),
     ("annotations_saved", "Annotations in the recordings saved during the visit."),
     ("clicks", "Mouse button presses anywhere in ElectroClean."),
     ("key_presses", "Key presses (not counting held-down repeats or keys typed into text fields)."),
@@ -61,17 +63,17 @@ RECORDING_COLUMNS: list[tuple[str, str]] = [
              "one visit has recordings of several modes)."),
     ("context_id", "Reference set of training work (empty for standard annotation)."),
     ("recording", "Recording ID (path relative to the dataset); 'quiz' for the short-segment quiz."),
-    ("segment", "recording (an annotation window), review (a practice recording reviewed against the reference), "
-                "quiz, or training (training events outside a window)."),
-    ("window_no", "Number of the annotation window within the visit (1, 2, ...)."),
+    ("segment", "recording (a recording opened for annotation), review (a practice recording reviewed against "
+                "the reference), quiz, or training (training events outside a recording)."),
+    ("window_no", "Number of the recording opened within the visit (1, 2, ...)."),
     ("order", "Position among all of this annotator's rows, in the order they were started (1 = first)."),
     ("order_in_mode", "The same, counting only rows of the same mode."),
-    ("started_at", "Local date and time the window opened, with its UTC offset."),
+    ("started_at", "Local date and time the recording opened, with its UTC offset."),
     ("outcome", "finished (Save and Finish), closed_without_saving, or not_finished (the log ended first)."),
     ("resumed", "True if unfinished work from an earlier visit was restored."),
     ("recording_duration_s", "Length of the recording in seconds."),
     ("n_channels_shown", "Channels shown in the viewer."),
-    ("wall_s", "Seconds from opening the window to finishing or closing it."),
+    ("wall_s", "Seconds from opening the recording to finishing or closing it."),
     ("active_s", "Active seconds (see 'Active time')."),
     ("inactive_s", "Seconds while ElectroClean was not the active application."),
     ("idle_s", "Seconds without input beyond the idle threshold (wall_s minus active_s and inactive_s)."),
@@ -94,7 +96,7 @@ RECORDING_COLUMNS: list[tuple[str, str]] = [
     ("annotations_merged", "Merges (by the Merge button or automatically when same-type annotations overlapped)."),
     ("undos", "Undo steps."),
     ("redos", "Redo steps."),
-    ("final_annotations", "Annotations when the recording was saved (or when the window closed)."),
+    ("final_annotations", "Annotations when the recording was saved (or when it was closed)."),
     ("time_to_first_annotation_s", "Seconds from the viewer being ready to the first annotation."),
     ("seconds_per_annotation", "active_s divided by final_annotations (empty when there are none)."),
     ("annotations_per_active_minute", "annotations_created per active minute."),
@@ -106,7 +108,7 @@ RECORDING_COLUMNS: list[tuple[str, str]] = [
     ("pointer_samples", "Pointer positions sampled over the EEG."),
     ("pointer_distance_px", "Distance the pointer travelled over the EEG, in screen pixels."),
     ("dialogs", "Dialogs shown (questions, channel chooser, type picker and so on)."),
-    ("status_messages", "Messages shown in the status bar."),
+    ("status_messages", "Messages shown in the status line."),
     ("guided_steps", "Guided training: steps completed."),
     ("guided_attempts", "Guided training: attempts at the steps."),
     ("guided_show_me", "Guided training: times the expert's answer was shown."),
@@ -205,7 +207,7 @@ class Segment:
 
 
 def segments(visit: VisitLog) -> list[Segment]:
-    """Split a visit into annotation windows (by ``window_no``), plus quiz and other training events."""
+    """Split a visit into the recordings opened (by ``window_no``), plus quiz and other training events."""
     by_window: dict[int, Segment] = {}
     order: list[Segment] = []
     quiz: Segment | None = None

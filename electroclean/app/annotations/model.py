@@ -1,8 +1,8 @@
 """Annotation data model shared by all three ElectroClean components.
 
 An :class:`AnnotationDocument` is the in-memory form of the canonical
-``*_annotations.json`` file. It is deliberately independent of Qt and of MNE so
-that it can be created, edited and analysed from scripts.
+``*_annotations.json`` file. It is deliberately independent of MNE and of any
+interface so that it can be created, edited and analysed from scripts.
 """
 
 from __future__ import annotations

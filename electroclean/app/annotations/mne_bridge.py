@@ -1,7 +1,7 @@
 """Conversion between ElectroClean annotations and ``mne.Annotations``.
 
-MNE's ``Annotations`` object is the native representation used by the viewer
-and by downstream MNE pipelines. ``ch_names`` carries the channel selection
+MNE's ``Annotations`` object is the native representation used by downstream
+MNE pipelines. ``ch_names`` carries the channel selection
 (an empty tuple meaning all channels, exactly as in MNE) and ``extras`` carries
 the stable ElectroClean annotation identifier and numerical code.
 """

@@ -6,7 +6,7 @@ uses each recording's ground truth, which is known exactly because the artifacts
 as the "expert" reference. Names, descriptions and notes say plainly that these are placeholders;
 the notes describe only what was simulated. Replace the recordings with real expert-annotated
 files when they are available (``import_expert_recording`` in electroclean/training/reference.py,
-or Administrator tools, Reference sets, Add recording with expert annotations).
+or ``electroclean-admin import-recording``).
 """
 
 from __future__ import annotations

@@ -3,8 +3,8 @@
 pytest==9.1.1
 pluggy==1.7.0
 iniconfig==2.3.1
-# The browser version's server and Firebase code, and the Cloud Functions' SDK (their tests)
--r requirements-web.txt
+# The Cloud Functions' SDK, for the functions' tests (the deployed functions install
+# electroclean/web/firebase/functions/requirements.txt instead)
 firebase-functions==0.6.0
 blinker==1.9.0
 cloudevents==1.12.0

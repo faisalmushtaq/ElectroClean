@@ -1,7 +1,7 @@
 """Stage 2 of the training programme: the disagreements of a practice recording with the experts.
 
-No Qt code: used by the desktop review window (electroclean/training/guided_gui.py) and by the
-web server (electroclean/web/), which return the same flags.
+Used by the browser version's server and Firebase functions (electroclean/web/coach.py), which
+return these flags to the browser's review (electroclean/web/static/js/training/review.js).
 """
 
 from __future__ import annotations
@@ -14,7 +14,8 @@ FLAG_MISSED, FLAG_EXTRA, FLAG_TYPE = "MISSED", "EXTRA", "TYPE"
 def review_flags(fb: dict[str, Any], mine: list[Any], reference: list[Any], sfreq: float) -> list[dict[str, Any]]:
     """The disagreements of a practice recording, each tied to an annotation in the review window.
 
-    Region IDs are those of :func:`electroclean.training.gui.review_store` (``you-…`` and ``ref-…``)."""
+    Region IDs name the trainee's annotations ``you-<annotation_id>`` and the reference's
+    ``ref-<annotation_id>``, as the review shows them side by side."""
     def near(a: Any, onset_s: float, offset_s: float) -> bool:
         tol = 1.5 / sfreq
         return abs(a.onset_sample / sfreq - onset_s) <= tol and abs(a.end_sample / sfreq - offset_s) <= tol

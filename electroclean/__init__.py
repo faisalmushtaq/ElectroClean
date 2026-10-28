@@ -1,16 +1,20 @@
 """ElectroClean: manual EEG artifact annotation and reliability assessment.
 
-The package is organised as follows:
+Annotators work in a web browser (``electroclean.web.static``); this package holds everything
+else, in plain Python, so that annotations can be processed without any interface:
 
 ``electroclean.app``
-    Component A, the annotation application. The GUI lives in
-    ``electroclean.app.gui``; everything else (annotation model, EEG loading,
-    file IO, validation and session management) is GUI-independent and can be
-    used from scripts.
+    The annotation core: the annotation model and store, EEG loading with MNE-Python, file IO and
+    export, validation, and the journalled session save that writes and verifies the outputs.
 ``electroclean.reliability``
-    Component B, inter-rater agreement analysis.
+    Inter-rater agreement analysis (``electroclean-agreement``).
 ``electroclean.training``
-    Component C, annotator training and competency assessment.
+    Annotator training and competency assessment (``electroclean-admin``).
+``electroclean.activity``
+    Tables and learning curves from the interaction logs (``electroclean-activity``).
+``electroclean.web``
+    The browser application, the ElectroClean server and the Firebase functions, all built on the
+    packages above (``electroclean-web``).
 ``electroclean.config``
     Version-controlled configuration (artifact label catalogue and defaults).
 """

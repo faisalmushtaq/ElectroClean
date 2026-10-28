@@ -18,8 +18,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PORT=8000
 
 WORKDIR /app
-COPY requirements-web.txt ./
-RUN python -m pip install -r requirements-web.txt
+COPY requirements.txt ./
+RUN python -m pip install -r requirements.txt
 COPY pyproject.toml README.md LICENSE.md THIRD_PARTY_NOTICES.md ./
 COPY electroclean ./electroclean
 RUN python -m pip install --no-deps . && useradd --create-home electroclean && mkdir -p /data \

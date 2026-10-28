@@ -1,4 +1,4 @@
-"""Suggestions for mistyped names in command-line tools and dialogs."""
+"""Suggestions for mistyped names in the command-line tools and the study's messages."""
 
 from __future__ import annotations
 

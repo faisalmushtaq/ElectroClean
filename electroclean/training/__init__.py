@@ -5,5 +5,8 @@
 * :mod:`assessment` – practice feedback, criteria and competency reports
 * :mod:`quiz` – the optional short-segment recognition quiz
 * :mod:`admin` – study configuration and administrator utilities
-* :mod:`gui` – the training, quiz and administrator windows
+* :mod:`guided`, :mod:`programme`, :mod:`review` – the training programme: learning with the
+  experts step by step, practice with a pass mark, and the review of disagreements
+* :mod:`examples` – the example training set of simulated recordings
+* :mod:`cli` – the administrator's command, ``electroclean-admin``
 """

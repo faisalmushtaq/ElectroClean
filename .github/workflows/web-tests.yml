@@ -35,7 +35,6 @@ env:
   PYTHON_VERSION: "3.13"
   NODE_VERSION: "22"
   PLAYWRIGHT_VERSION: "1.63.0"
-  QT_QPA_PLATFORM: offscreen
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
 
 jobs:
@@ -52,7 +51,6 @@ jobs:
           cache-dependency-path: |
             requirements.txt
             requirements-dev.txt
-            requirements-web.txt
       - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -92,7 +90,6 @@ jobs:
           cache-dependency-path: |
             requirements.txt
             requirements-dev.txt
-            requirements-web.txt
             electroclean/web/firebase/functions/requirements.txt
       - uses: actions/setup-node@v7
         with:

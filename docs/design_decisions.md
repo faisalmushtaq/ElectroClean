@@ -3,9 +3,16 @@
 This document records how the specification was interpreted: what MNE-Python
 already provides, what had to be added, the ambiguities and data-integrity
 risks that were found, how each was handled, and the decisions that need the
-research team.
+research team. ElectroClean began as a desktop application and has run in the
+browser since 28 October 2026 (see "Web-only" below); the sections written for
+the desktop application are kept as the record of how the rules came about,
+and the rules themselves apply unchanged in the browser.
 
 ## What MNE-Python provides and what ElectroClean adds
+
+The table describes the Python core, which registers recordings and writes
+the results. The browser application reads, filters and shows the annotator's
+copy itself, reproducing MNE's results ([web/architecture.md](web/architecture.md)).
 
 | Need | Provided by MNE | Added by ElectroClean |
 |---|---|---|
@@ -13,15 +20,16 @@ research team.
 | Reading EDF, EDF+ and BDF | `mne.io.read_raw_edf`, `read_raw_bdf` (EDF+ annotations become `raw.annotations`) | A check of the header against the file size, because MNE silently infers the number of data records from the size when they disagree; refusing EDF+D; hidden headset channels; `BAD_ACQ_SKIP` stretches treated as gaps |
 | BIDS sidecars | (MNE-BIDS is not used, to keep dependencies minimal) | Entity parsing and the inheritance principle for `channels.tsv`, `events.tsv`, `events.json`, `eeg.json` |
 | Display filters | `Raw.filter`, `Raw.notch_filter`, `skip_by_annotation` | Applying them to a display copy only (in memory or memory-mapped), recording MNE's filter design, marking edge zones |
-| Continuous EEG viewer | mne-qt-browser: scrolling, zoom, scaling, channel paging, overview bar, time cursor, events | Annotation interaction (below), toolbar, panels, Save and Finish |
+| Continuous EEG viewer | mne-qt-browser, in the desktop application up to version 1.1.0: scrolling, zoom, scaling, channel paging, overview bar, time cursor, events | Annotation interaction (below), toolbar, panels, Save and Finish; since 28 October 2026 the browser application's own viewer |
 | Annotation container | `mne.Annotations` with `ch_names` (channel-specific) and `extras` | Conversion both ways (`mne_bridge`), sample-exact model, undoable store |
 | Experimental events | `events_from_annotations` (BrainVision marker codes) | Preservation of `events.tsv` rows as text, a separate `artifact_code` column, consistency checks |
 | Export, completion, reliability, training | not provided | Everything in `io`, `session`, `validation`, `reliability`, `training` |
 
-## Limitations of the standard MNE browser
+## Limitations of the standard MNE browser (desktop application)
 
-Reading mne-qt-browser 0.7.5 showed that its annotation mode cannot be used
-unchanged:
+The desktop application, up to version 1.1.0, showed recordings in
+mne-qt-browser. Reading mne-qt-browser 0.7.5 showed that its annotation mode
+cannot be used unchanged:
 
 1. A free-text box lets users add any annotation label.
 2. Drawing or moving an annotation merges it with every overlapping
@@ -35,11 +43,13 @@ unchanged:
 6. Escape closes the window; there is no Save and Finish, no undo and no close
    confirmation.
 
-ElectroClean therefore leaves MNE's annotation mode off and adds its own
-interaction through subclasses of the browser's classes (see the developer
-guide). The display, navigation and event lines are MNE's. A plain drag always
-draws (also over existing annotations, so that overlaps are easy to make);
-edges resize; Shift+drag moves. Channel clicks select channels for annotation.
+The desktop application therefore left MNE's annotation mode off and added its
+own interaction through subclasses of the browser's classes. A plain drag
+always draws (also over existing annotations, so that overlaps are easy to
+make); edges resize; Shift+drag moves. Channel clicks select channels for
+annotation. The browser application's viewer keeps these rules: a fixed list
+of labels, merging only as described below, overlaps allowed, annotations
+identified by their own identifier, undo and redo, and Save and Finish.
 
 ## Ambiguities and data-integrity issues
 
@@ -91,29 +101,34 @@ MNE's defaults the 1 Hz FIR high-pass is 3.3 s long and the FIR notch 6.6 s,
 so the first and last 5 s or so of a recording can be distorted. ElectroClean
 filters the segments between BrainVision "New Segment" markers separately,
 hatches the affected zones in the viewer and records the exact design in
-every session file. The research team chose FIR filters (MNE's defaults) and a
+every session file. The browser's filters reproduce MNE's designs and edge
+behaviour, so annotators see the same filtered signal as before. The research team chose FIR filters (MNE's defaults) and a
 50 Hz notch by default, with 60 Hz available to annotators.
 
 **Completion and concurrency.** Completion is per annotator, mode and
-reference set. Lock files prevent the same annotator from opening one
-recording twice; register updates are locked and atomic. A recording is only
-marked complete after its five files are verified, and interrupted saves are
-rolled forward or back at the next start.
+reference set. Register updates are locked and atomic, and when two saves of
+the same recording by the same annotator meet at its lock, the second is asked
+to try again. A recording
+is only marked complete after its five files are verified, and interrupted
+saves are rolled forward or back.
 
-**Failed recordings.** "Excluded until their problems have been resolved" is
-implemented by remembering the size and modification time of the recording's
-files and the settings involved: a failure stops applying when the files or
-the setting change, or when an administrator marks it resolved.
+**Failed recordings.** In the desktop application, "excluded until their
+problems have been resolved" was implemented by remembering the size and
+modification time of the recording's files and the settings involved: a
+failure stopped applying when the files or the setting changed, or when an
+administrator marked it resolved. In a browser study a recording that cannot
+be read is refused when it is registered, so it is never offered.
 
-**Incomplete sessions and autosave.** Unfinished work is saved automatically
-while a recording is open and offered back at the next start or opening of the
-recording, with the time already spent carried over. An annotator who closes
-without Save and Finish can keep the work for later or discard it (after a
-second confirmation). Autosaves never count as results.
+**Incomplete sessions and drafts.** Unfinished work is saved automatically
+while a recording is open (the desktop application's autosave; in the browser,
+a draft kept in the browser and with the study) and offered back when the
+recording is opened again, with the time already spent carried over. Drafts
+never count as results.
 
 **Time measurement.** The monotonic clock starts when the viewer is on screen
-and stops at Save and Finish. If saving fails the clock continues. Time when
-the annotator is away from the computer is included.
+and stops at Save and Finish; in the browser the page measures it and sends it
+with the annotations. If saving fails the clock continues. Time when the
+annotator is away from the computer is included.
 
 **Identifiers.** Annotator IDs are letters and digits only (so they are safe
 in file names and as a BIDS-style entity) and are upper-cased, so `a01` and
@@ -162,9 +177,12 @@ administrator decision for each such dataset. At the research team's request
 artifact codes now have their own `artifact_code` column, and `value` keeps
 only the dataset's markers, so a clash cannot occur.
 
-**Blinding.** Reference annotations are files on disk; annotators who look for
-them can find them. They can be kept in a separate location
-(`training.reference_sets_dir`).
+**Blinding.** In the desktop application, reference annotations were files on
+disk that annotators who looked for them could find; they could be kept in a
+separate location (`training.reference_sets_dir`). In the browser the experts'
+annotations stay with the study and never reach an annotator's browser: the
+study's server or functions check guided steps, score practice and make the
+competency reports.
 
 ## Decisions taken by the research team (27 October 2026)
 
@@ -185,9 +203,10 @@ housekeeping channels, the handling of `BAD_ACQ_SKIP` padding and of a
 
 ## Visual design (27 October 2026)
 
-The windows follow principles that well-designed desktop software shares;
-Apple's Human Interface Guidelines have long named clarity and deference among
-them. The EEG is the content, so the controls around it are quiet: light grey
+This section describes the desktop application's windows; the browser
+application takes the same colours and principles. The windows follow
+principles that well-designed desktop software shares; Apple's Human Interface
+Guidelines have long named clarity and deference among them. The EEG is the content, so the controls around it are quiet: light grey
 surfaces, white cards with thin outlines, grey secondary text and one accent
 colour, blue. Each window has one primary action in that blue (Begin, Open
 recording, Save and Finish, Submit answer, Run analysis); other buttons are
@@ -200,12 +219,46 @@ current choice is visible at a glance. Every text colour meets the WCAG 2.1 AA
 contrast ratio of 4.5:1 against its background, and colour is never the only
 signal (selected channels are also named in the toolbar).
 
-The same Fusion style and light palette are used on Windows, macOS and Linux,
-so the application looks the same everywhere and screenshots in this guide
-match what annotators see. The overview bar under the EEG is plain by default
+The same Fusion style and light palette were used on Windows, macOS and Linux,
+so the application looked the same everywhere. The overview bar under the EEG is plain by default
 (the `display.overview_mode` setting, `empty`), so the annotations in it stand
 out; mne-qt-browser kept its own saved mode and ignored the setting until this
 change.
+
+## Web-only (28 October 2026)
+
+The project lead decided that ElectroClean runs in the web browser only. The
+browser version had been finished and tested end to end (the browser modules,
+the application in Chromium against the demonstration, the ElectroClean
+server and Firebase on Google's emulators), and it now does everything the
+desktop application did, with an admin area for lead researchers in place of
+the desktop's administrator tools. The desktop application (PySide6 windows on
+MNE-Python's Qt browser), its stand-alone builds, launchers and self-test were
+removed. Version 1.1.0, released on 27 October 2026, is the last desktop
+release and remains on the Releases page of the repository; results folders it
+wrote are read by the analyses unchanged.
+
+EEG recordings stay on the computers of the researchers and annotators. An
+administrator registers each recording where its files are, and the study
+keeps only its manifest: the fingerprint (SHA-256) of the data file, timing,
+the channels shown and hidden and their types, the original events and the
+stretches without data. Annotators open their own copies in the browser, which
+reads them locally and checks them against the register before they open.
+Only annotations, drafts and the interaction log travel to the study.
+
+Real studies run on Firebase: Firebase Authentication for accounts, Firestore
+in Google's London region (europe-west2) for the study's records, and Python
+Cloud Functions in the same region for the private work. The ElectroClean
+server, which runs the same service layer over a study folder, serves the
+local demonstration and the tests, and remains available to a study that
+prefers a computer of its own. The Python core stays (annotations, loading
+with MNE-Python, export, the journalled save, training, reliability, activity
+and the synthetic data), because the server and the functions save results
+with it and the commands `electroclean-agreement`, `electroclean-admin` and
+`electroclean-activity` work on exported results. Nothing in the package
+imports a desktop toolkit any more, and the requirements no longer include Qt.
+The open decision on code signing of the stand-alone applications no longer
+applies.
 
 ## Decisions still open
 
@@ -221,10 +274,7 @@ change.
    interaction?
 5. **Copyright holder** for the licence notice (currently "The ElectroClean
    authors"), which may need to be agreed with the University.
-6. **Code signing** of the stand-alone applications (Apple and Windows
-   certificates), so that annotators are not asked to confirm the first start,
-   and whether an Intel macOS build is needed.
-7. **Contact-quality channels.** Emotiv's `CQ_*` channels are hidden with the
+6. **Contact-quality channels.** Emotiv's `CQ_*` channels are hidden with the
    other housekeeping channels. They could instead be shown (not annotated) as
    a guide to poor electrode contact; this needs a decision on whether they
    would help or bias annotators.

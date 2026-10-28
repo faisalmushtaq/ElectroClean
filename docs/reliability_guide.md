@@ -34,12 +34,11 @@ empty category. The exit status is 0 when the analysis ran, 2 for a mistake in
 the command and 3 when it ran but no recording was annotated by two of the
 annotators being compared.
 
-In the application, *Tools → Inter-rater agreement analysis* opens the same
-analysis with its settings on two tabs. It checks the folders before starting,
-proposes a new dated results folder (in the dataset's `derivatives` folder for
-a BIDS dataset), asks before replacing earlier results, runs in the background
-with a *Cancel analysis* button, and shows any warnings and a link to the
-report when it has finished. From Python:
+The admin area of the browser application ([web/admin.md](web/admin.md)) runs
+the same analysis on the study's saved results, for the annotators, recordings
+and settings chosen there, and offers the report and the tables to download.
+For a study on Firebase, `electroclean-web export` writes the results into an
+`Annotated_Events` folder for the command. From Python:
 
 ```python
 from electroclean.reliability import AnalysisConfig, run_analysis, write_outputs

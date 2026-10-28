@@ -3,7 +3,7 @@
     python scripts/vendor_functions.py [functions_folder]
 
 firebase.json runs this as the functions' predeploy step. Firebase uploads only the functions
-folder, so the ``electroclean`` package is copied into it, without the desktop windows (Qt), the
+folder, so the ``electroclean`` package is copied into it, without the activity analysis, the
 browser application and the functions themselves. The copy is ignored by git.
 """
 
@@ -17,12 +17,6 @@ REPO = Path(__file__).resolve().parents[1]
 DEFAULT = REPO / "electroclean" / "web" / "firebase" / "functions"
 #: Left out of the copy (paths relative to the electroclean package).
 EXCLUDE = (
-    "app/gui",
-    "app/main.py",
-    "app/selftest.py",
-    "reliability/gui.py",
-    "training/gui.py",
-    "training/guided_gui.py",
     "activity",
     "web/static",
     "web/firebase/functions",

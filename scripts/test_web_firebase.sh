@@ -18,6 +18,6 @@ if [ ! -x "$FN/venv/bin/python" ]; then
   "$FN/venv/bin/python" -m pip install -q -r "$FN/requirements.txt"
 fi
 "$PY" scripts/vendor_functions.py
-export PYTHON="$PY" QT_QPA_PLATFORM=offscreen
+export PYTHON="$PY"
 npx --yes "$FIREBASE_TOOLS" emulators:exec --only auth,firestore,functions --project demo-electroclean \
   "node web_tests/firebase_e2e.mjs $*"

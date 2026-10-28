@@ -6,9 +6,11 @@ import json
 import os
 import random
 import time
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
+from electroclean.app.common import IdentifierError, friendly_duration, friendly_time, normalise_annotator_id
 from electroclean.app.eeg.loading import RecordingLoadError, load_recording
 from electroclean.app.io.discovery import discover_recordings
 from electroclean.app.io.locking import FileLock, LockError
@@ -272,3 +274,36 @@ def test_balanced_allocation_controls_overlap():
     assert all(len(v) == 2 for v in per_rec.values()) and len(per_rec) == 30
     assert balanced_allocation(ids, ["A", "B", "C", "D", "E"], 2, seed=3) == alloc
     random.seed(0)
+
+
+def test_plain_messages_and_times():
+    with pytest.raises(IdentifierError, match="Please enter your annotator ID"):
+        normalise_annotator_id("  ")
+    with pytest.raises(IdentifierError) as info:
+        normalise_annotator_id("A-01")
+    assert "Got:" not in str(info.value) and "letters and digits" in str(info.value)
+    now = datetime.now(timezone.utc)
+    assert friendly_time(now.isoformat()).startswith("today at ")
+    assert friendly_time((now - timedelta(days=1)).isoformat()).startswith("yesterday at ")
+    assert friendly_time("not a time") == "not a time"
+    assert friendly_duration(20) == "less than a minute"
+    assert friendly_duration(3900) == "1 hour 5 minutes"
+
+
+def test_no_more_recordings_message_says_why(dataset, recordings):
+    res = select_next(list(recordings.values()), annotator_id="A01", completed={SUB1}, failed={SUB2},
+                      strategy="random")
+    assert res.recording is None
+    assert "1 completed by you" in res.message and "failed_load.txt" in res.message and "the rest" not in res.message
+    empty = select_next([], annotator_id="A01", completed=set(), failed=set(), strategy="random")
+    assert "_eeg.edf" in empty.message
+
+
+def test_session_metadata_has_display_block(layout, settings, catalogue, loaded):
+    s = make_session(layout, settings, catalogue, loaded)
+    s.start()
+    s.start_timer()
+    s.display_state = {"scale_factor": 2.0, "duration_s": 20.0, "n_channels": 22}
+    res = s.finish()
+    meta = json.loads(res.commit.paths["session_json"].read_text(encoding="utf-8"))
+    assert meta["display"]["scale_factor"] == 2.0 and meta["display"]["scalings"]["eeg"] == pytest.approx(5e-05)

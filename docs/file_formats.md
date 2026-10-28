@@ -30,6 +30,11 @@ into place in one step, so a file is either complete or absent.
 
 ## Output folder
 
+The results of a study are kept in this layout: in the study folder of an
+ElectroClean server as each recording is saved, and for a study on Firebase in
+the folder that `electroclean-web export` writes. Results folders of the
+desktop application (version 1.1.0 and earlier) have the same layout.
+
 ```text
 Annotated_Events/
     completion_register.tsv
@@ -48,12 +53,13 @@ Annotated_Events/
     training/<reference set>/assessment/annotator-A01/...
     training/<reference set>/reports/annotator-A01_competency_report.{json,html}
     training/<reference set>/quiz/annotator-A01_quiz_<mode>_<session>.json
+    training_progress/<reference set>/annotator-A01.json   stars, scores and times in the programme
     interaction_logs/annotator-A01/<YYYYMMDDTHHMMSS>_<mode>.jsonl   one log per visit
     activity_reports/<date and time>/   tables and report made from the logs
     .electroclean/
-        locks/          lock files of open sessions and of the register
+        locks/          lock files of sessions and of the register
         staging/        saves in progress (normally empty)
-        autosave/       unfinished work, saved automatically (see below)
+        autosave/       unfinished work saved by the core's autosave (see below)
         interrupted/    files from saves that were interrupted and rolled back, and
                         autosaves that were not restored
 ```
@@ -188,15 +194,15 @@ A single number: seconds spent annotating, to the nearest millisecond, e.g.
 | `session_id`, `mode`, `context` | Session identity, mode and (for training) reference set |
 | `annotator` | ID and display name |
 | `recording` | Recording ID, `format` (`BrainVision`, `EDF` or `BDF`), `file` and the BrainVision file names (`vhdr`, `eeg`, `vmrk`, null for EDF and BDF), BIDS sidecars used, timing, channel names, `hidden_channels`, `trigger_channels` (the hidden channels that are trigger channels), `acquisition_gaps_samples` (stretches marked `BAD_ACQ_SKIP`, as [start, stop) samples), source fingerprints |
-| `timing` | `session_opened`, `start_timestamp` (viewer ready), `finish_timestamp` (Save and Finish), `elapsed_seconds` (all the time spent on the recording, including earlier unfinished sessions), clock used, `elapsed_in_earlier_sessions_seconds` and `resumed_from_autosave` (the earlier sessions continued from an autosave) |
-| `application` | ElectroClean version, platform, versions of Python, MNE, mne-qt-browser, NumPy, SciPy, pandas, PySide6, pyqtgraph, matplotlib |
+| `timing` | `session_opened`, `start_timestamp` (viewer ready), `finish_timestamp` (Save and Finish), `elapsed_seconds` (all the time spent on the recording, including earlier unfinished sessions; for work saved from the browser, the time the page measured while the recording was open), clock used, `elapsed_in_earlier_sessions_seconds` and `resumed_from_autosave` (the earlier sessions continued from an autosave) |
+| `application` | ElectroClean version, platform, versions of Python, MNE, NumPy, SciPy, pandas and matplotlib; for work saved from the browser also `client` (`web`), the study's back end (`server`), the annotator's browser (`browser`: its user agent and screen) and a `note` saying that the recording never left the annotator's computer. Files written by the desktop application (version 1.1.0 and earlier) also list the versions of its display libraries. |
 | `display` | `scalings` used (the study's, or for a type with an implausible amplitude the scale chosen for this recording), `amplitude_check` (the measured amplitude per channel type and any scale set automatically), and the amplitude factor, seconds and channels on screen at Save and Finish |
-| `filters` | Selected settings, whether fixed by the administrator, and `design`: the exact MNE calls and parameters, filter lengths, MNE's own description of each filter, edge-transient duration, discontinuities filtered separately, channels filtered, the number of blocks of channels they were filtered in, and how the display data were stored |
+| `filters` | Selected settings, whether fixed by the administrator, and `design`. For work saved from the browser, `design` names the filters the browser applied for display (`applied_in`, `settings`); in files written by MNE-based loading (the desktop application, and scripts), it holds the exact MNE calls and parameters, filter lengths, MNE's own description of each filter, edge-transient duration, discontinuities filtered separately, channels filtered, the number of blocks of channels they were filtered in, and how the display data were stored |
 | `annotations` | Counts in total, by label, whole-montage and channel-specific |
 | `label_catalogue` | As in the annotations file |
 | `original_events` | Source, the trigger channels read (when the events come from them), count, whether `sample` was computed, comparison of `events.tsv` with the marker file, the code check (original codes equal to artifact codes, artifact names used as `trial_type`, codes with several meanings) |
 | `channel_check` | Comparison of the recording's channels with `channels.tsv` |
-| `warnings`, `notes` | Everything shown in the viewer's *Recording* panel |
+| `warnings`, `notes` | Everything shown with the recording's details (for work saved from the browser, the registration's findings and the browser's own) |
 | `outputs` | Base name and file names |
 
 ## `completion_register.tsv`
@@ -240,7 +246,12 @@ recording IDs completed in standard mode by that annotator, one per line
   per line). The format, every event kind and the tables made from the logs
   are described in [interaction logs](activity_logs.md).
 
-## `electroclean_study.json` (optional, in the dataset folder)
+## `electroclean_study.json` (a study's settings)
+
+A study folder of the ElectroClean server keeps the study's settings in this
+file, and so can a dataset folder, where `electroclean-admin` reads and writes
+it. A study on Firebase keeps the same `settings` block in Firestore, given
+with `electroclean-web init-study --settings` or changed in the admin area.
 
 ```json
 {
@@ -262,8 +273,12 @@ recording IDs completed in standard mode by that annotator, one per line
 }
 ```
 
-`settings` may override any key of `electroclean/config/default_settings.json`.
-The administrator tools edit this file and validate it before saving.
+`settings` may override any key of `electroclean/config/default_settings.json`;
+the [administrator guide](administrator_guide.md) explains each one.
+`electroclean-admin` validates the file before saving it. `annotators`,
+`allow_unlisted_annotators`, `allocation.assignments` and `admin_passphrase`
+were read by the desktop application only: in the browser, accounts and their
+assignments take their place.
 
 ## `electroclean/config/artifact_labels.json`
 
@@ -284,7 +299,9 @@ share has the same code; files made with compatible versions (for example
 
 ## Autosave files (`.electroclean/autosave/<annotator>-<key>.json`)
 
-Unfinished work, written every few seconds while a recording is open (only
+Unfinished work, written by the core's `AnnotationSession` when its autosave is
+on (the desktop application used it; the browser keeps drafts instead, in the
+browser and with the study), every few seconds while a recording is open (only
 when something changed, and at least once a minute while the timer runs):
 `schema` (`electroclean.autosave`), `saved_at`, `session_id`, `elapsed_s` (all
 time spent on the recording so far), `filters`, `previous_sessions`, the
@@ -305,14 +322,17 @@ not to restore, is moved to `.electroclean/interrupted/autosave/`.
 
 `reference_set.json` holds `set_id`, `name`, `description`, `provenance`
 (method `single_expert`, `consensus` or `adjudicated`, experts, notes), the
-`recordings` (use `practice` or `assessment`, reference file, its SHA-256,
+`recordings` (use `guided`, `practice` or `assessment`, reference file, its SHA-256,
 per-recording provenance including the consensus rule), `criteria`
 (competency criteria), optional `analysis` overrides, `quiz` items,
-`practice_review` and `show_full_report_to_annotator` (false by default: at
-the end of an assessment annotators see their result and the criteria, and the
-full report with the missed and extra artifacts is for the administrator; the
-older key `quiz.show_report_to_annotator` is still read). A reference file
-whose checksum no longer matches is refused.
+`practice_review`, the training programme's `guided` settings (tolerance and
+the experts' notes), `practice_pass`, `recordings_dir` for a self-contained set,
+`assigned_annotators`, and `show_full_report_to_annotator` (false by default; it
+let the desktop application offer annotators the full report, while the browser
+application shows them their result and the criteria only, and the full report
+with the missed and extra artifacts is for the administrator; the older key
+`quiz.show_report_to_annotator` is still read). A reference file whose checksum
+no longer matches is refused.
 
 ## Competency report (`…_competency_report.json`)
 

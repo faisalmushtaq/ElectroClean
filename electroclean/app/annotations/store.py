@@ -1,10 +1,13 @@
 """Editable, undoable collection of artifact annotations for one recording.
 
 The store is the single source of truth while a recording is being annotated.
-The GUI only displays what the store contains and routes every user action
+An interface only displays what the store contains and routes every user action
 (create, move, resize, relabel, change channels, delete, merge, undo, redo)
 through the methods below, so that validation and history are identical
-whether annotations are edited interactively or from a script.
+whether annotations are edited interactively or from a script. The browser
+application's store (``electroclean/web/static/js/annotate/store.js``) is a port
+of this one with the same rules, and the session save rebuilds its annotations
+here before they are validated and written.
 
 **Automatic merging** (the research team's choice). When an annotation is
 created or changed so that it overlaps in time another annotation of the same

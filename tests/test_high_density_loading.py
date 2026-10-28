@@ -309,28 +309,3 @@ def test_outputs_record_triggers_and_display_scale(tmp_path):
     assert meta["display"]["amplitude_check"]["display_scalings_set_automatically"] == {}
     canonical = json.loads(paths["annotations_json"].read_text(encoding="utf-8"))
     assert canonical["recording"]["hidden_channels"] == ["Status"]
-
-
-@pytest.mark.gui
-def test_annotation_window_uses_the_display_scale_and_names_the_trigger_channel(tmp_path):
-    pytest.importorskip("PySide6")
-    import pyqtgraph as pg
-
-    from electroclean.app.gui.annotation_window import AnnotationWorkspace
-    from electroclean.app.gui.dialogs import ScriptedPrompts
-
-    pg.mkQApp("ElectroClean-tests")
-    codes, expected = status_codes()
-    rid = write_recording(tmp_path, scale=1000.0, triggers={"Status": codes})
-    lr, settings = load(tmp_path, rid)
-    session = make_session(OutputLayout(tmp_path / "Annotated_Events"), settings, default_catalogue(), lr)
-    session.start()
-    ws = AnnotationWorkspace(session, settings, prompts=ScriptedPrompts())
-    try:
-        assert ws.browser.mne.scalings["eeg"] == lr.display_scalings["eeg"]
-        html = ws._info_html()
-        assert f"{len(expected)} from the Status channel" in html and "1 trigger channel(s) not shown" in html
-    finally:
-        ws._closing_ok = True
-        ws.browser.close()
-        lr.close()

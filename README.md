@@ -1,131 +1,135 @@
 # ElectroClean
 
-ElectroClean is a desktop application for the manual annotation of artifacts
-in continuous EEG recordings, together with tools for measuring how
-consistently different annotators work and for training and assessing new
-annotators. It was written for a PhD project on EEG artifact identification
-and on the development and evaluation of automated EEG cleaning.
+ElectroClean is research software for the manual annotation of artifacts in
+continuous EEG recordings, together with tools for measuring how consistently
+different annotators work and for training and assessing new annotators. It
+was written for a PhD project on EEG artifact identification and on the
+development and evaluation of automated EEG cleaning.
 
-It has three parts that share one annotation file format:
+Annotators use ElectroClean in a web browser. They open the recordings they
+were given from their own computer and the page reads them there, so the EEG
+is never uploaded: a study holds only each recording's fingerprint (its
+SHA-256 checksum), timing, channels and events, which identify the file the
+annotator opened. They mark artifact intervals with any of the 29 HED-SCORE
+artifact terms, on the whole montage or on chosen channels, and their results
+are saved as validated, BIDS-compatible files. Lead researchers run the study
+from the admin area of the same application.
 
-| Component | What it does | How to start it |
+| Part | What it does | Where |
 |---|---|---|
-| **A. Annotation** | View continuous EEG (BrainVision, EDF/EDF+ or BDF) with MNE-Python's browser, mark artifact intervals with any of the 29 HED-SCORE artifact terms on the whole montage or on chosen channels, and save validated, BIDS-compatible outputs. Work is saved automatically until it is finished. | The ElectroClean application, `electroclean`, or a launcher in `launchers/` |
-| **B. Inter-rater agreement** | Compare annotators by category, time and channel: time-resolved and event-based agreement, with an HTML report and tables. | `electroclean-agreement`, or *Tools → Inter-rater agreement analysis* |
-| **C. Training and assessment** | Practice with feedback against expert references, blinded competency assessment with administrator-defined criteria, and an optional short-segment quiz. | Training modes in the start window; `electroclean-admin` and *Tools → Administrator tools* |
+| **Annotation** | View continuous EEG (EDF, EDF+, BDF or BrainVision), mark artifacts by mouse or keyboard, and save with Save and Finish; unfinished work is kept as a draft. | The browser application |
+| **Inter-rater agreement** | Compare annotators by category, time and channel: time-resolved and event-based agreement, with an HTML report and tables. | The admin area, or `electroclean-agreement` |
+| **Training and assessment** | A training programme from guided learning with the experts to practice with a pass mark, a blinded competency assessment with criteria set by the study, and a short-segment quiz. | The browser application; set up in the admin area or with `electroclean-admin` |
+| **Interaction logs** | A time-stamped record of how each annotator works, as research data, with tables and learning curves. | The admin area, or `electroclean-activity` |
 
-Everything runs locally without an internet connection, and the original EEG
-files and metadata are never modified.
+The original EEG files and their metadata are never modified.
 
-![The annotation window](docs/images/annotation_window.png)
+Version 1.1.0, released on 27 October 2026, was the last version of the
+desktop application (Windows, macOS and Linux, built on MNE-Python's Qt
+browser). It remains available on the
+[Releases page](https://github.com/faisalmushtaq/ElectroClean/releases); its
+results folders are read by the analyses below unchanged.
 
-## Installation
+## Trying it
 
-### Stand-alone application (recommended for annotators)
+The browser application is published at
+<https://faisalmushtaq.github.io/ElectroClean/>. Opened without a study, it is
+a demonstration that needs no server and keeps everything in the browser: sign
+in as A01 to annotate or as T01 for the training programme, with the password
+`demo`. Three example recordings with simulated artifacts are built in, and
+can also be downloaded as EDF files and opened from your computer, as
+annotators open real recordings.
 
-Ready-to-run applications for Windows, macOS (Apple silicon, macOS 14 or
-later) and Linux are on the
-[Releases page](https://github.com/faisalmushtaq/ElectroClean/releases):
-download `ElectroClean-windows-x64.zip`, `ElectroClean-macos-arm64.zip` or
-`ElectroClean-linux-x64.zip`, unzip it and start *ElectroClean*. Nothing else
-needs to be installed. Builds of the latest main branch are on the
-repository's **Actions** tab (*Build applications*). The applications are not
-signed with a developer certificate, so Windows and macOS ask for confirmation
-the first time; [docs/building_apps.md](docs/building_apps.md) explains this
-and how to build the applications yourself. Each application can check itself
-with `ElectroClean --self-test`.
+To try the whole system on one computer, with a real study server, install
+the Python package (below) and run:
 
-### From the source code
+```bash
+electroclean-web demo        # the application and a study server on http://localhost:8000/
+```
 
-ElectroClean needs **Python 3.12 or 3.13** (64-bit) and runs on Windows,
-macOS and Linux. The test-suite runs on all three systems for every push to
-main (see `.github/workflows/build-apps.yml`).
+[docs/web/server.md](docs/web/server.md) lists the accounts and where the
+recordings to open and the results are.
 
-**With the launchers (no Python knowledge needed)**
+## Running a study
 
-1. Install Python 3.12 or 3.13 from [python.org](https://www.python.org/downloads/).
-   On Windows, tick *Add python.exe to PATH*.
-2. Download or copy this folder to the computer.
-3. Double-click the launcher for your system in the `launchers` folder:
-   `ElectroClean.bat` (Windows), `ElectroClean.command` (macOS; the first time,
-   right-click it and choose *Open*) or run `launchers/electroclean.sh` (Linux).
+A real study runs on **Firebase**: Firebase Authentication for the accounts,
+Firestore in Google's London region (europe-west2) for the study's records,
+and ElectroClean's Python Cloud Functions for the private work (matching a file
+to the study, validating and saving results with ElectroClean's own code,
+checking guided training steps and scoring practice, so the experts' answers
+never reach a browser). [docs/web/firebase.md](docs/web/firebase.md) sets one
+up step by step. A study can instead run on the **ElectroClean server**
+(`electroclean-web serve`, [docs/web/server.md](docs/web/server.md)), on a
+computer the study controls; both run the same Python service layer.
 
-The first start creates a private environment in the `.venv` folder and
-installs the exact library versions listed in `requirements.txt`. When
-`requirements.txt` changes, or an installation was interrupted, the launcher
-installs them again at the next start. This needs an internet connection;
-afterwards ElectroClean works offline.
+The lead researcher adds recordings, accounts and assignments, changes the
+settings, prepares reference sets and follows progress in the admin area
+([docs/web/admin.md](docs/web/admin.md)); the
+[administrator guide](docs/administrator_guide.md) explains every setting and
+choice. Annotators follow [docs/web/using.md](docs/web/using.md).
 
-**Offline installation.** On a computer with internet access and the same
-operating system and Python version, run
-`python -m pip download -r requirements.txt -d wheels` inside this folder and
-copy the folder, including `wheels`, to the offline computer. The launchers
-install from `wheels` automatically when it is present.
+## The Python package
 
-**For developers**
+ElectroClean's Python package holds the study server, the Firebase functions'
+code and the commands, all built on one core that reads recordings with
+MNE-Python and writes and verifies the result files. It needs **Python 3.12 or
+3.13** (64-bit) and runs on Windows, macOS and Linux. From a copy of this
+repository:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate            # Windows: .venv\Scripts\activate
-python -m pip install -r requirements-dev.txt
+python -m pip install -r requirements.txt
 python -m pip install --no-deps -e .
-python -m pytest                     # about 410 tests, a few minutes
-electroclean                         # start the application
+python -m electroclean               # lists the commands
 ```
+
+| Command | For |
+|---|---|
+| `electroclean-web` | The study server and the demonstration, and the administrator's commands for a study: create it, register recordings, add accounts, assign work, follow progress and export the results |
+| `electroclean-agreement` | Inter-rater agreement of saved annotations |
+| `electroclean-admin` | Reference sets, competency criteria and the training programme, in a dataset folder or a server's study folder |
+| `electroclean-activity` | Tables and learning curves from the interaction logs |
 
 `requirements.txt` pins every package to the versions used for testing
-(MNE 1.13.2, mne-qt-browser 0.7.5, PySide6 6.12.0, NumPy 2.5.4, SciPy 1.18.1,
-pandas 3.1.0). `pyproject.toml` gives the compatible ranges.
+(MNE 1.13.2, NumPy 2.5.4, SciPy 1.18.1, pandas 3.1.0, FastAPI 0.162.0,
+firebase-admin 7.7.0); `pyproject.toml` gives the compatible ranges. The
+browser application itself needs nothing installed: it is static files
+(`electroclean/web/static`) with no build step.
 
-## Try it with synthetic data
+For development, `requirements-dev.txt` adds the test tools:
 
 ```bash
-python examples/launch_demo_gui.py          # opens the app on a new synthetic dataset
-python examples/demo_end_to_end.py          # runs the whole workflow without the GUI
+python -m pip install -r requirements-dev.txt
+python -m pip install --no-deps -e .
+python -m pytest                              # the Python tests, a few minutes
+node --test web_tests/unit/*.test.mjs         # the browser modules (Node.js 22)
 ```
 
-The second command creates three synthetic recordings with known artifacts,
-has three simulated annotators annotate them through the same session code the
-application uses, runs the agreement analysis, and takes an annotator through a
-competency assessment. Its outputs are kept in `examples/example_output/`.
-
-## Annotating, in brief
-
-On the start window enter your annotator ID (letters and digits, for example
-`A01`), choose the folder with the recordings and press **Begin new session**.
-ElectroClean finds every recording (`*_eeg.vhdr`, `*_eeg.edf` or `*_eeg.bdf`)
-in that folder and its sub-folders, picks a recording you have not completed yet, asks which viewing filters to
-use (1 Hz high-pass and 50 Hz notch by default, with 60 Hz available; they
-change only the display), and opens it. Choose the artifact type in the
-toolbar, choose *Whole montage* or *Selected channels*, and drag across the EEG
-to mark an interval. Overlapping annotations of the same type on the same
-channels are merged into one. Channels that only carry information about the
-headset, such as the timestamp, contact-quality and battery channels in Emotiv
-EDF exports, are not shown (the list is a setting). Your work is saved automatically as you go;
-you can close the recording and finish it later. When you have reviewed the
-whole recording, press **Save and Finish**. The
-[user guide](docs/user_guide.md) explains every step with screenshots.
+The [testing guide](docs/testing_guide.md) describes these and the tests of
+the application in Chromium and on Firebase's emulators.
 
 ## What is saved
 
-Results go to an `Annotated_Events` folder in the dataset folder (this can be
-changed). For each recording and annotator ElectroClean writes five files
-whose names start with the recording's name and the annotator, for example
-`sub-001_task-rest_eeg_annotator-A01`:
+For each recording and annotator ElectroClean writes five files whose names
+start with the recording's name and the annotator, for example
+`sub-001_task-rest_eeg_annotator-A01`, into an `Annotated_Events` folder: in
+the study folder of an ElectroClean server as each recording is saved, and for
+a study on Firebase when `electroclean-web export` writes the study's results
+to your computer.
 
 | File | Contents |
 |---|---|
 | `…_events.tsv` | The recording's original events, unchanged, plus one row per artifact with `onset`, `duration`, `trial_type` (HED-SCORE term), `sample`, `channels` (JSON list; `[]` means the whole montage), `artifact_code` (fixed code, 100-136) and columns identifying the source, annotation and annotator. The `value` column keeps only the dataset's own marker codes, so they can never clash with artifact codes. |
 | `…_events.json` | BIDS sidecar describing every column, the artifact codes and their HED tags. |
 | `…_annotations.json` | The canonical, lossless record of the annotations, used by the agreement and training tools. |
-| `…_time_viewed.txt` | One number: seconds spent annotating, measured with a monotonic clock. |
+| `…_time_viewed.txt` | One number: seconds spent annotating, measured on a monotonic clock while the recording was open. |
 | `…_session.json` | Session metadata: times, software versions, filter design, checks and warnings. |
 
 A recording is marked complete for that annotator, in
 `completion_register.tsv` and in the annotator's `completed_datasets.txt`, only
 after all five files have been written, read back and verified. Another
-annotator can still annotate the same recording. Load failures are recorded in
-`failed_load.txt` and `failure_log.jsonl`. The formats are specified in
+annotator can still annotate the same recording. The formats are specified in
 [docs/file_formats.md](docs/file_formats.md); a real example is in
 [`examples/example_output`](examples/example_output/Annotated_Events/annotator-A01/sub-001/eeg).
 
@@ -139,6 +143,12 @@ onset  duration  trial_type          value  sample  channels              artifa
 9.172  1.576     EMG-artifact        n/a    2293    ["F7","T7"]           102            electroclean_artifact  7a7ccd80…      A01           n/a
 ```
 
+`python examples/demo_end_to_end.py` runs the whole workflow without a
+browser: it creates three synthetic recordings with known artifacts, has three
+simulated annotators annotate them through the same session code that saves
+the browser's work, runs the agreement analysis, and takes an annotator through
+a competency assessment. Its outputs are kept in `examples/example_output/`.
+
 ## Agreement analysis
 
 ```bash
@@ -147,108 +157,88 @@ electroclean-agreement path/to/Annotated_Events
 
 This produces `agreement_report.html` and tab-separated tables, in a new
 folder `agreement_<date-time>` (choose another with `--out`). The report opens
-with the key results for each pair of annotators. Agreement is
-reported by artifact category, by annotator pair and over time at several
-resolutions, for time alone and for time and channel together, and with
-event matching (precision, recall, F1, boundary differences). The
+with the key results for each pair of annotators. Agreement is reported by
+artifact category, by annotator pair and over time at several resolutions, for
+time alone and for time and channel together, and with event matching
+(precision, recall, F1, boundary differences). The admin area runs the same
+analysis on the study's results. The
 [reliability guide](docs/reliability_guide.md) explains each measure and its
 assumptions.
 
+![The agreement report](docs/images/agreement_report.png)
+
 ## Training and assessment
 
-An administrator prepares a *reference set* of expert-annotated recordings
+A lead researcher prepares a *reference set* of expert-annotated recordings
 (from one expert, a consensus of several, or an adjudicated consensus), marks
-each as practice or assessment, and can set competency criteria. Annotators
-choose *Training* or *Competency assessment* on the start window. Practice
-gives immediate feedback and a side-by-side review against the reference;
-assessment is blinded and ends with a reproducible competency report. See the
-[administrator guide](docs/administrator_guide.md).
+each recording for guided learning, practice or assessment, and can set
+competency criteria. An annotator enrolled in the training programme first
+learns with the experts, one artifact at a time with specific feedback, then
+annotates practice recordings on their own until one reaches the pass mark,
+and then takes the blinded assessment, which ends with a reproducible
+competency report. The experts' annotations stay with the study and never
+reach the browser. See the [administrator guide](docs/administrator_guide.md).
 
 ## Interaction logs
 
 ElectroClean keeps a time-stamped log of each annotator's visit: clicks, keys
 and shortcuts, what was on screen, every change to the annotations, dialogs and
-idle periods (never the text typed into fields). `electroclean-activity` turns
-the logs into tables (time, clicks and keys per recording, how much of each
-recording was seen) and a report with learning curves, to show for example
-whether annotators got faster. See [interaction logs](docs/activity_logs.md).
-
-## In a web browser
-
-ElectroClean also runs in a web browser, for studies whose annotators work on
-their own computers. The annotator opens the recordings they were given from
-their own disk and the page reads them there, so the EEG is never uploaded;
-the study's records hold only each recording's fingerprint (its SHA-256
-checksum), timing and channels, which identify the file the annotator opened.
-The browser application offers the desktop's annotation tools and keys, the
-training programme and the interaction logs, reads EDF, EDF+, BDF and
-BrainVision files, and saves the results into the same `Annotated_Events`
-folders as the desktop application. It is published on GitHub Pages, with a
-demonstration that needs no server; a study runs on Firebase or on
-ElectroClean's own small server, `electroclean-web`.
-
-```bash
-python -m pip install -r requirements-web.txt
-python -m pip install --no-deps -e .
-electroclean-web demo        # the whole system on http://localhost:8000/
-```
-
-[docs/web/firebase.md](docs/web/firebase.md) sets up a real study step by
-step, [docs/web/using.md](docs/web/using.md) is the guide for annotators, and
-[docs/web/architecture.md](docs/web/architecture.md) explains how it works.
+idle periods (never the text typed into fields or passwords). The admin area
+and `electroclean-activity` turn the logs into tables (time, clicks and keys
+per recording, how much of each recording was seen) and a report with learning
+curves, to show for example whether annotators got faster. See
+[interaction logs](docs/activity_logs.md).
 
 ## Documentation
 
 | Document | For |
 |---|---|
-| [User guide](docs/user_guide.md) | Annotators |
-| [Administrator guide](docs/administrator_guide.md) | Study set-up, allocation, reference sets, competency criteria |
+| [Using ElectroClean](docs/web/using.md) | Annotators |
+| [The admin area](docs/web/admin.md) | Lead researchers running a study in the browser |
+| [Running a study on Firebase](docs/web/firebase.md) | Setting up a real study, step by step |
+| [The ElectroClean server](docs/web/server.md) | The demonstration, and a study on your own server |
+| [Administrator guide](docs/administrator_guide.md) | What every setting and choice of a study means: channels, filters, allocation, reference sets, competency criteria, the training programme |
 | [Reliability analysis guide](docs/reliability_guide.md) | Agreement measures and their interpretation |
 | [Interaction logs](docs/activity_logs.md) | What is recorded about annotators' work, and the activity tables and learning curves |
 | [File formats](docs/file_formats.md) | Every output and configuration file |
-| [Developer guide](docs/developer_guide.md) | Architecture, MNE integration, extension points |
-| [Testing guide](docs/testing_guide.md) | Running the tests, synthetic data, manual checks |
-| [Design decisions](docs/design_decisions.md) | How the specification was interpreted, and questions for the research team |
+| [Architecture](docs/web/architecture.md) and [API](docs/web/api.md) | How the browser application works, and the contract between browser and server |
+| [Developer guide](docs/developer_guide.md) | The Python core, the save transaction, extension points |
+| [Testing guide](docs/testing_guide.md) | Running the tests, synthetic data, checks that need a person |
+| [Design decisions](docs/design_decisions.md) | How the specification was interpreted, the decisions taken, and questions for the research team |
 | [HED-SCORE validation](docs/hed_score_validation.md) | Check of the 29 artifact terms against HED SCORE 2.2.0 |
-| [Building the applications](docs/building_apps.md) | Stand-alone applications for Windows, macOS and Linux |
 | [References](docs/references.md) | Literature cited in the documentation |
+| [Changes](CHANGELOG.md) | What changed in each release, and what is unreleased |
 | [Handover notes](HANDOVER.md) | Where the project stands, what is open, and how to carry on |
-| [In the browser: using it](docs/web/using.md) | Annotators using the browser version |
-| [In the browser: a study on Firebase](docs/web/firebase.md) | Setting up a real study, step by step |
-| [In the browser: the ElectroClean server](docs/web/server.md) | The demonstration, and a study on your own server |
-| [In the browser: architecture](docs/web/architecture.md) and [API](docs/web/api.md) | How the browser version works, and the contract between browser and server |
 
 ## Repository layout
 
 ```text
 electroclean/
-    app/            Component A: annotations, eeg, io, session, validation (no Qt) and gui (PySide6)
-    reliability/    Component B
-    training/       Component C, including the guided training programme
+    app/            the annotation core: annotations, EEG loading, file IO, validation, the session save
+    reliability/    inter-rater agreement
+    training/       reference sets, the training programme, competency assessment, the quiz
     activity/       interaction logs turned into tables and learning curves
-    web/            the browser version: server, Firebase functions and the application (web/static)
-web_tests/          tests of the browser application (node --test and Playwright)
+    web/            the study server, the Firebase functions and the browser application (web/static)
     config/         label catalogue, default settings, HED-SCORE validation snapshot
     synthetic.py    synthetic BrainVision, EDF and BDF data with known artifacts
-tests/              pytest suite (unit, integration and offscreen GUI tests)
-examples/           demo scripts and example outputs
-docs/               documentation and screenshots
-launchers/          double-click launchers (run from the source code)
-packaging/          stand-alone application build (PyInstaller) and its self-test
-scripts/            maintenance scripts (label validation, screenshots, third-party notices)
+tests/              Python tests (pytest)
+web_tests/          tests of the browser application (node --test and Playwright)
+examples/           demonstration scripts and example outputs
+docs/               documentation
+scripts/            maintenance scripts (label validation, test recordings, third-party notices)
 ```
 
 ## Acknowledgements
 
-ElectroClean is built on [MNE-Python](https://mne.tools) and its Qt browser
-(Gramfort et al., 2013), uses the HED-SCORE artifact vocabulary (Hermes et
-al., 2025) and follows the EEG-BIDS conventions (Pernet et al., 2019). Full
-references are in [docs/references.md](docs/references.md).
+ElectroClean is built on [MNE-Python](https://mne.tools) (Gramfort et al.,
+2013), whose reading and filtering of recordings the browser application
+reproduces, uses the HED-SCORE artifact vocabulary (Hermes et al., 2025) and
+follows the EEG-BIDS conventions (Pernet et al., 2019). Full references are in
+[docs/references.md](docs/references.md).
 
 ## Licence
 
 ElectroClean is free for research, teaching and any other non-commercial use
 under the [PolyForm Noncommercial License 1.0.0](LICENSE.md); commercial use
 needs permission from the copyright holders. The libraries it uses keep their
-own licences (see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md); Qt for
-Python is used under the LGPL 3.0).
+own licences (see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)).

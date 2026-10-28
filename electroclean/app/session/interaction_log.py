@@ -1,8 +1,8 @@
 """Interaction logs: a time-stamped record of what an annotator does, kept as research data.
 
-One log file is written per visit (from pressing Begin on the start window until the annotator
-goes back to it or quits), as JSON Lines: the first line is a header describing the visit, and
-every other line is one event::
+One log file is written per visit (in the browser application, from signing in until signing out
+or closing the page), as JSON Lines: the first line is a header describing the visit, and every
+other line is one event::
 
     {"seq": 12, "t": 83.4127, "wall": "2026-10-27T14:03:11.402+00:00", "type": "annotation_created",
      "recording": "sub-001/eeg/sub-001_task-rest_eeg.vhdr", ...}
@@ -11,8 +11,12 @@ every other line is one event::
 computer's clock), ``wall`` the local time with its UTC offset, ``seq`` the event's number. Lines are
 written as they happen, so a log survives a crash up to its last event.
 
-Code that wants to record something calls ``log.event(kind, **fields)``. Where no log is open,
-:data:`NULL_LOG` takes the calls and does nothing, so callers never need to check.
+This module defines the format. The browser sends its events to the study
+(:mod:`electroclean.web.visits`): the ElectroClean server writes them into these files as they
+arrive, and for a study on Firebase ``electroclean-web export`` writes them from Firestore.
+:class:`InteractionLog` writes the same files from Python, for scripts and tests. Code that wants to
+record something calls ``log.event(kind, **fields)``. Where no log is open, :data:`NULL_LOG` takes
+the calls and does nothing, so callers never need to check.
 """
 
 from __future__ import annotations

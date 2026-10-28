@@ -10,8 +10,10 @@ much of each recording they looked at, how often they undo, and how training
 changes this.
 
 This document describes what is recorded, the file format, and the tables and
-report that `electroclean-activity` (or the *Activity and learning curves…*
-button of the administrator tools) makes from the logs.
+report that `electroclean-activity` and the admin area ([web/admin.md](web/admin.md))
+make from the logs. The logs are recorded by the browser application, which
+sends them to the study in batches; the desktop application (version 1.1.0 and
+earlier) wrote logs in the same format, and the analysis reads both.
 
 ## Switching logging on and off
 
@@ -27,24 +29,29 @@ while it moves (0 records no pointer positions; clicks and keys are always
 recorded). `idle_after_s` is how many seconds without any input count as idle
 (see *Active time* below).
 
-When logging is on, the start window tells annotators: "This study records how
-you use ElectroClean (times, clicks, keys and what is on screen) for research."
-Annotators must be told about the logs and agree to them under the study's
-ethics approval; the administrator guide has a paragraph on this.
+When logging is on, annotators are told after they sign in: "This study
+records how you use ElectroClean (times, clicks, keys and what is on screen) for
+research. Ask your study administrator if you have questions." Annotators must
+be told about the logs and agree to them under the study's ethics approval; the
+administrator guide has a paragraph on this.
 
 ## What is never recorded
 
-Characters typed into text fields are never recorded: for a search box or a
-name field the log only says that the field was edited (and, for number boxes
-such as the exact start and end of an annotation, the number chosen). Nothing at
-all is recorded from password fields, including the administrator passphrase.
-The annotator's display name is not in the logs; the annotator ID identifies
-them within the study. The computer's name is not recorded either.
+Characters typed into text fields are never recorded: key presses in a text
+field are left out, and for a search box or a name field the log only says that
+the field was edited (and, for number boxes such as the exact start and end of
+an annotation, the number chosen). Nothing at all is recorded from password
+fields. The annotator's display name is not in the logs; the annotator ID
+identifies them within the study. The computer's name is not recorded either.
 
 ## Where the logs are
 
-One log is written per visit, from pressing **Begin** on the start window until
-the annotator goes back to the start window or quits:
+One log is kept per visit, from signing in until signing out or closing the
+page (in the desktop application, from pressing **Begin** on the start window
+until going back to it or quitting). The ElectroClean server writes each
+visit's log into the study's results as the events arrive; a study on Firebase
+keeps the events in Firestore, and `electroclean-web export` writes the same
+files:
 
 ```
 <results folder>/interaction_logs/annotator-<ID>/<YYYYMMDDTHHMMSS>_<mode>.jsonl
@@ -62,13 +69,17 @@ event; the last line may then be cut short, which the analysis reports and skips
 The **first line** is the header: `type` (`"header"`), `schema`
 (`"electroclean.interaction_log"`), `schema_version` (`"1.0.0"`), `started_at`
 (local time with its UTC offset), `visit_id`, `annotator_id`, `mode`
-(`standard`, `practice` or `assessment`), `context_id` and `reference_set` (for
-training), `assessment_kind`, `dataset_root`, `output_root`, `study_id`,
-`versions` (ElectroClean, MNE-Python, mne-qt-browser, Qt binding and version,
-Python), `os`, `screens` (each screen's name, geometry, available area, device
-pixel ratio and dots per inch), `settings_sha256` (a checksum of the study
-settings in force), `filters` (the default viewing filters) and `logging` (the
-pointer rate and idle threshold).
+(`standard`, `guided`, `practice` or `assessment`), `context_id` and
+`reference_set` (for training), `programme` (true for the training programme),
+`assessment_kind`, `study_id`, `versions` (ElectroClean, Python, the study's
+back end and the browser's user agent), `os`, `screens` (the screen's width,
+height and device pixel ratio), `settings_sha256` (a checksum of the study
+settings in force), `filters` (the default viewing filters), `logging` (the
+pointer rate and idle threshold), `client` (`"web"`) and `browser` (what the
+page reported about itself: the back end, user agent, screen and window size).
+`dataset_root` and `output_root` are empty for visits in the browser. Logs of
+the desktop application have the same header with the desktop's own
+`versions`, `os` and `screens`.
 
 **Every other line** is an event with these fields, followed by the event's own:
 
@@ -78,30 +89,36 @@ pointer rate and idle threshold).
 | `t` | Seconds since the visit started, on a monotonic clock (unaffected by changes to the computer's clock). |
 | `wall` | Local date and time with its UTC offset. |
 | `type` | The kind of event (below). |
-| `recording` | The recording open in the annotation window, while one is open. |
-| `window_no` | Number of the annotation window within the visit (1, 2, ...), while one is open. |
+| `recording` | The recording open for annotation, while one is open. |
+| `window_no` | Number of the recording opened within the visit (1, 2, ...), while one is open. |
 
 ### Event kinds
 
 **The visit.** `visit_started` (mode, whether the annotator chose the
-recording, reference set); `log_closed` (`reason`: `back_to_start`, `quit`,
-`exit`, `new_visit` or `quiz_not_started`); `error` (an unexpected error, with
-its details); `log_problem` (something the logger itself could not record).
+recording, reference set, and `client`: `web` in the browser); `log_closed`
+(`reason`: `sign_out` or `page_closed` in the browser; `back_to_start`, `quit`,
+`exit`, `new_visit` or `quiz_not_started` in logs of the desktop application);
+`error` (an unexpected error, with its details); `log_problem` (something the
+logger itself could not record).
 
 **Recordings.** `recording_loading` (`recording_id`); `recording_opened`
-(`session_id`, which is also in the recording's `_session.json`, `mode`,
+(`session_id`, which in logs of the desktop application is also in the
+recording's `_session.json`, `mode`,
 `duration_s`, `sfreq`, `n_samples`, `n_channels_shown`, `n_channels_hidden`,
 `format`, `filters` and `filter_settings`, `original_events`, `resumed`,
 `annotations_restored`, `window_px`); `viewer_ready` (the viewer is on screen and
-the clock starts); `autosave` (`n_annotations`); `recording_finished`
+the clock starts); `autosave` (`n_annotations`, when a draft is sent to the study); `recording_finished`
 (`session_id`, `n_annotations`, `counts_by_label`, `elapsed_s` as measured by the
 session clock); `closed_without_saving` (`n_annotations`); `load_failed`
 (`recording_id`, `kind`, `reason`); `recording_unavailable` (`recording_id`,
 `reason`).
 
 **Mouse and keys.** `mouse_press`, `mouse_release` and `double_click` (`button`,
-`modifiers`, the `widget` class, its `name` and `text` where it has them, the
-`top_window`, the position `x` and `y` in that window, and for lists and tables
+`modifiers`, the `widget` (in the browser the kind of control, such as
+`button`, `input`, `select`, `canvas` or a menu item; in the desktop
+application the widget class), its `name` and `text` where it has them, the
+`top_window` (in the browser the page: `signin`, `home`, `annotate`, `training`
+and so on), the position `x` and `y` in that window, and for lists and tables
 the `row`, `column` and the `item`'s text). On the EEG they also have `area`
 (`eeg`, `channel_names` or `axes`), `eeg_t` (the time under the pointer, in
 seconds) and `eeg_channel` (the channel under it); a release on the EEG has
@@ -121,8 +138,9 @@ sample).
 settled for a quarter of a second: `t_start` and `duration` (the time shown, in
 seconds), `ch_start` and `n_channels` (the channels shown), `first_channel` and
 `last_channel`, `scale_factor` (the amplitude scale, 1 at the start) and
-`butterfly`. `status_message` (`text` shown in the status bar).
-`window_activated` and `window_deactivated` (`top_window`, `title`).
+`butterfly`. `status_message` (`text` shown in the status line).
+`window_activated` and `window_deactivated` (`top_window`, `title`; in the
+browser, when the page gains or loses the focus).
 `app_state` (`state`: `active`, `inactive`, `hidden` or `suspended`).
 `idle_start` (`last_input_t`, `after_s`) and `idle_end` (`idle_s`).
 
@@ -131,7 +149,7 @@ seconds), `ch_start` and `n_channels` (the channels shown), `first_channel` and
 (`accepted`, the `button` clicked, the `chosen` type in the type picker, the
 `channels` chosen in the channel chooser).
 
-**The annotation window's state.** `state` (only what changed:
+**The annotation view's state.** `state` (only what changed:
 `current_label`, `scope`, `selected_channels`, `drawing_enabled`,
 `mark_start_s`) and `selection` (`annotation_id`, `label`). Both carry `via`
 (below).
@@ -159,7 +177,7 @@ before it: `eeg_drag`, `eeg_click` or `eeg_double_click` (on the EEG),
 with names starting `guided_`, `practice_`, `assessment_`, `training_` or
 `stage_`. On the training path: `training_path_opened` (the state of each
 stage and the next step), `stage_started`, `stage_completed` and
-`training_path_left`. In a guided recording, with the window's `recording` and
+`training_path_left`. In a guided recording, with the `recording` and
 `window_no`: `guided_step_started` (the experts' annotation for the step:
 `target_label`, `target_onset_s`, `target_offset_s`, `target_channels`, and the
 `guidance` level), `guided_check` after every change (`matched`, `problems`
@@ -177,9 +195,9 @@ events table.
 
 ## Making the tables and the report
 
-From the administrator tools: open *Progress and reports* and press
-**Activity and learning curves…** (type an annotator ID first to look at one
-annotator). From a terminal:
+The admin area shows the report and offers the tables for the study's logs.
+From a terminal, on the results of a study on the ElectroClean server or on
+the folder written by `electroclean-web export`:
 
 ```
 electroclean-activity "path/to/Annotated_Events"
@@ -214,18 +232,18 @@ wall-clock time. `idle_s` is the rest of the wall-clock time.
 
 | Column | Meaning |
 |---|---|
-| `visit_id` | Identifier of the visit (one log file: from Begin until the start window or quitting). |
+| `visit_id` | Identifier of the visit (one log file: in the browser, from signing in until signing out or closing the page). |
 | `annotator_id` | The annotator's ID. |
 | `mode` | standard, practice, assessment (or a training mode). |
 | `context_id` | Reference set of a training visit (empty for standard annotation). |
 | `file` | The log file. |
 | `started_at` | Local date and time the visit started, with its UTC offset. |
-| `ended` | How the visit ended: back_to_start, quit, exit, new_visit, or 'not closed' after a crash. |
+| `ended` | How the visit ended: sign_out or page_closed in the browser (back_to_start, quit, exit or new_visit in logs of the desktop application), or 'not closed' when the log stopped unexpectedly. |
 | `wall_s` | Seconds from the start of the visit to its last event. |
 | `active_s` | Active seconds in the visit (see 'Active time'). |
-| `recordings_opened` | Recording windows opened. |
+| `recordings_opened` | Recordings opened for annotation. |
 | `recordings_finished` | Recordings saved with Save and Finish. |
-| `recordings_closed_without_saving` | Recording windows closed without saving. |
+| `recordings_closed_without_saving` | Recordings closed without saving. |
 | `annotations_saved` | Annotations in the recordings saved during the visit. |
 | `clicks` | Mouse button presses anywhere in ElectroClean. |
 | `key_presses` | Key presses (not counting held-down repeats or keys typed into text fields). |
@@ -240,11 +258,11 @@ wall-clock time. `idle_s` is the rest of the wall-clock time.
 ### recordings.tsv
 
 One row per annotator, recording and visit. A recording annotated over two
-visits (continued from an autosave) has two rows, the second with `resumed`
+visits (continued from a draft) has two rows, the second with `resumed`
 true. A practice recording reviewed against the reference has a second row
 with `segment` set to `review` (the time and clicks spent in the review). Quiz
 answers form a row with `recording` set to `quiz`, and training events that
-happened outside an annotation window a row with `segment` set to `training`.
+happened outside a recording a row with `segment` set to `training`.
 In the training programme, `mode` is each recording's own mode (`guided`,
 `practice` or `assessment`), so `order_in_mode` counts guided, practice and
 assessment recordings separately.
@@ -256,16 +274,16 @@ assessment recordings separately.
 | `mode` | standard, guided, practice or assessment: the recording's own mode (in the training programme one visit has recordings of several modes). |
 | `context_id` | Reference set of training work (empty for standard annotation). |
 | `recording` | Recording ID (path relative to the dataset); 'quiz' for the short-segment quiz. |
-| `segment` | recording (an annotation window), review (a practice recording reviewed against the reference), quiz, or training (training events outside a window). |
-| `window_no` | Number of the annotation window within the visit (1, 2, ...). |
+| `segment` | recording (a recording opened for annotation), review (a practice recording reviewed against the reference), quiz, or training (training events outside a recording). |
+| `window_no` | Number of the recording opened within the visit (1, 2, ...). |
 | `order` | Position among all of this annotator's rows, in the order they were started (1 = first). |
 | `order_in_mode` | The same, counting only rows of the same mode. |
-| `started_at` | Local date and time the window opened, with its UTC offset. |
+| `started_at` | Local date and time the recording opened, with its UTC offset. |
 | `outcome` | finished (Save and Finish), closed_without_saving, or not_finished (the log ended first). |
 | `resumed` | True if unfinished work from an earlier visit was restored. |
 | `recording_duration_s` | Length of the recording in seconds. |
 | `n_channels_shown` | Channels shown in the viewer. |
-| `wall_s` | Seconds from opening the window to finishing or closing it. |
+| `wall_s` | Seconds from opening the recording to finishing or closing it. |
 | `active_s` | Active seconds (see 'Active time'). |
 | `inactive_s` | Seconds while ElectroClean was not the active application. |
 | `idle_s` | Seconds without input beyond the idle threshold (wall_s minus active_s and inactive_s). |
@@ -288,7 +306,7 @@ assessment recordings separately.
 | `annotations_merged` | Merges (by the Merge button or automatically when same-type annotations overlapped). |
 | `undos` | Undo steps. |
 | `redos` | Redo steps. |
-| `final_annotations` | Annotations when the recording was saved (or when the window closed). |
+| `final_annotations` | Annotations when the recording was saved (or when it was closed). |
 | `time_to_first_annotation_s` | Seconds from the viewer being ready to the first annotation. |
 | `seconds_per_annotation` | active_s divided by final_annotations (empty when there are none). |
 | `annotations_per_active_minute` | annotations_created per active minute. |
@@ -300,7 +318,7 @@ assessment recordings separately.
 | `pointer_samples` | Pointer positions sampled over the EEG. |
 | `pointer_distance_px` | Distance the pointer travelled over the EEG, in screen pixels. |
 | `dialogs` | Dialogs shown (questions, channel chooser, type picker and so on). |
-| `status_messages` | Messages shown in the status bar. |
+| `status_messages` | Messages shown in the status line. |
 | `guided_steps` | Guided training: steps completed. |
 | `guided_attempts` | Guided training: attempts at the steps. |
 | `guided_show_me` | Guided training: times the expert's answer was shown. |
@@ -346,8 +364,10 @@ With many annotators a mixed model (for example with `lme4`, annotators as a
 random effect) describes the typical curve and how much annotators differ.
 Order counts each annotator's rows across visits and modes; use
 `order_in_mode` to count, say, only standard annotation. To relate the logs to
-the annotations themselves, `session_id` in `recording_opened` (in
-`events.tsv`) matches `session_id` in each recording's `_session.json`.
+the annotations themselves, match the annotator, the recording and the mode
+with the recording's `_session.json`; in logs of the desktop application,
+`session_id` in `recording_opened` (in `events.tsv`) also matches `session_id`
+in the `_session.json`.
 
 The events table has one row per event (with `--events`); its `data` column
 holds the event's own fields as JSON, which `json.loads` in Python and

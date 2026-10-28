@@ -1,31 +1,46 @@
 # Changes
 
-Each section below becomes the notes of the GitHub release with the same
-version. The release workflow refuses a version tag that has no section here.
+Each section below describes the changes in one version of ElectroClean;
+*Unreleased* collects what has changed since the last release.
 
 ## Unreleased
 
-ElectroClean has a new look, built on principles that well-designed desktop
-software shares: the EEG is the content, so the controls around it are quiet,
-with light surfaces, white cards, grey secondary text and one accent colour.
-Each window has one blue button for the step that moves you forward (Begin,
-Open recording, Save and Finish), and options appear when they apply. The
-start window is grouped into three cards (who is annotating, the recordings,
-and what you would like to do), the whole montage or selected channels choice
-is a two-part switch, and the overview bar under the EEG is plain so that the
-annotations in it stand out. Every text colour meets the WCAG 2.1 AA contrast
-ratio, and the application looks the same on Windows, macOS and Linux.
+ElectroClean now runs in the web browser only, and the desktop application
+has been removed. Annotators open the browser application from a link, sign
+in, and open the recordings they were given from their own computer; the page
+reads them there, so the EEG is never uploaded, and the study holds only each
+recording's fingerprint (its SHA-256 checksum), timing, channels and events.
+The browser application does everything the desktop application did, reads
+EDF, EDF+, BDF and BrainVision files, and gains an admin area in which lead
+researchers add recordings, accounts and assignments, change the study's
+settings, prepare reference sets and follow progress and results. Real studies
+run on Firebase (sign-in, Firestore in Google's London region and Cloud
+Functions that save results with ElectroClean's own code, check training and
+score practice, so the experts' answers stay with the study); the ElectroClean
+server, `electroclean-web`, runs the local demonstration and suits a study that
+prefers its own computer. The commands `electroclean-agreement`,
+`electroclean-admin` and `electroclean-activity` work as before on the saved
+results, which keep the same folders and files, and `python -m electroclean`
+lists them. The `electroclean` command, the stand-alone applications, the
+launchers and the self-test are gone, and installing ElectroClean no longer
+installs Qt. Version 1.1.0 remains on the Releases page as the last desktop
+release, and the results folders it wrote are read by the analyses unchanged.
 
-Marking artifacts is quicker by keyboard and by mouse. The nine most common
-types are on the keys 1 to 9 and on numbered, colour-coded buttons in the
-toolbar, and the / key finds any of the 29 types by part of its name or its
-code. With the pointer on the EEG, M marks the start of an artifact and M
-again its end, with scrolling in between, so long artifacts are as easy as
-short ones. You can choose the type first or draw first: the toolbar reads
-*Draw as* for the next annotation and *Change to* while annotations are
-selected, and a click, the N and P keys or a double-click selects them. A
-right-click lists the common types first. The keys are shown at the bottom
-of the window and in Help.
+The browser application follows the visual principles worked out for the
+desktop windows after 1.1.0: the EEG is the content, so the controls around it
+are quiet, with light surfaces, grey secondary text and one accent colour, and
+each page has one blue button for the step that moves you forward (Open next
+recording, Save and Finish).
+
+Marking artifacts is quick by keyboard and by mouse. The nine most common
+types are on the keys 1 to 9 and on numbered, colour-coded buttons, and the /
+key finds any of the 29 types by part of its name or its code. With the
+pointer on the EEG, M marks the start of an artifact and M again its end, with
+scrolling in between, so long artifacts are as easy as short ones. You can
+choose the type first or draw first: the controls read *Draw as* for the next
+annotation and *Change to* while annotations are selected, and a click, the N
+and P keys or a double-click selects them. A right-click lists the common
+types first. The keys are shown at the bottom of the window and in Help.
 
 A training programme takes new annotators from first steps to the competency
 assessment, one stage at a time, on a training path that shows their stars,
@@ -39,48 +54,30 @@ answer. In *On your own* they annotate a recording by themselves and see their
 score, with what they missed, marked extra or typed differently flagged on the
 EEG; 80 % unlocks the assessment. An example training set of three simulated
 recordings stands in until real expert-annotated recordings are imported,
-and training recordings live with their reference set, so they are never
+and training recordings are kept with their reference set, so they are never
 offered for study annotation.
 
 ElectroClean can record how annotators work, as research data: every click
 and key, what was on screen, every change to the annotations, the dialogs, idle
 periods and the training steps, time-stamped in one log per visit (text typed
-into fields and passwords are never recorded, and the start window says when
-recording is on). *Activity and learning curves* in the administrator tools,
-or `electroclean-activity`, turns the logs into tables for R or Python and a
-report showing, for example, whether annotators got faster from one recording
-to the next.
+into fields and passwords are never recorded, and annotators are told when
+recording is on). The admin area, or `electroclean-activity`, turns the logs
+into tables for R or Python and a report showing, for example, whether
+annotators got faster from one recording to the next.
 
 A test with two openly available 128-channel recordings led to further
-changes. Annotation labels sit on small tags above the traces, the channel
-chooser finds channels by name, ticks whole regions or banks with one click
-and lays many channels out in columns, the list of annotations shows how many
-channels each covers, and the time-resolved agreement analysis is about six
-times faster on recordings with many channels, with identical results.
-Trigger channels such as BioSemi's Status channel now provide the original
-events when a recording has no other record of them, and are no longer shown
-or counted as part of the montage; a study can set channel types by name
-pattern (`channels.types`). A recording whose amplitude is far outside what
-the body produces, which almost always means the file states the wrong unit,
-is shown at a scale that makes its traces visible, with a warning, instead of
-appearing blank. The display filters work on blocks of channels and report
-their progress, so a 30-minute, 128-channel recording at 1024 Hz needs about
-half the memory it did (2.2 GB instead of 4 GB) and opens in about 40
-seconds.
-
-ElectroClean also runs in a web browser. Annotators open the recordings they
-were given from their own computer and the page reads them there, so the EEG
-is never uploaded: the study's records hold only each recording's fingerprint
-(its SHA-256 checksum), timing and channels, which identify the file the
-annotator opened. The browser application offers the desktop's annotation
-tools and keys, the training programme and the interaction logs, reads EDF,
-EDF+, BDF and BrainVision files, and saves the results into the same folders
-as the desktop application, so the agreement and activity analyses work
-unchanged. It is published on GitHub Pages, with a demonstration that needs
-no server, and a study runs on Firebase (sign-in, Firestore in Google's
-London region and Cloud Functions that check training and score practice, so
-the experts' answers stay on the server) or on ElectroClean's own small
-server, `electroclean-web`.
+changes. Annotation labels sit on small tags above the traces, and the
+time-resolved agreement analysis is about six times faster on recordings with
+many channels, with identical results. Trigger channels such as BioSemi's
+Status channel now provide the original events when a recording has no other
+record of them, and are no longer shown or counted as part of the montage; a
+study can set channel types by name pattern (`channels.types`). A recording
+whose amplitude is far outside what the body produces, which almost always
+means the file states the wrong unit, is shown at a scale that makes its
+traces visible, with a warning, instead of appearing blank. Registering a
+long, high-density recording needs about half the memory it did, because the
+display filters work on blocks of channels: a 30-minute, 128-channel recording
+at 1024 Hz needs about 2.2 GB instead of 4 GB.
 
 ## 1.1.0
 

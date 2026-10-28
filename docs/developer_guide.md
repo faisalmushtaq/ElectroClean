@@ -1,94 +1,114 @@
 # Developer guide
 
+ElectroClean has two halves. The **browser application**
+(`electroclean/web/static`, plain ES modules with no build step) reads
+recordings on the annotator's computer, shows them and provides the annotation
+and training tools. The **Python package** holds everything else: a core that
+reads recordings with MNE-Python, models and validates annotations and writes
+and verifies the result files; the agreement, training and activity analyses;
+and the study's back ends, the ElectroClean server (FastAPI) and the Firebase
+Cloud Functions, which share one service layer. This guide describes the
+Python core. The browser application, the service layer and how they fit
+together are described in [web/architecture.md](web/architecture.md), and the
+contract between browser and server in [web/api.md](web/api.md).
+
 ## Principles
 
-* **The annotation store is the single source of truth.** The GUI displays the
-  store and sends every user action to it. Validation, undo/redo and history
-  are therefore identical whether annotations are made interactively, in a
-  test or in a script.
-* **Everything except the GUI works without Qt.** `electroclean.app` minus
-  `app/gui`, `electroclean.reliability` and most of `electroclean.training`
-  import no Qt, so annotations and outputs can be processed in plain Python.
+* **The annotation store is the single source of truth.** An interface displays
+  the store and sends every user action to it. The browser's store
+  (`js/annotate/store.js`) is a port of the Python `AnnotationStore` with the
+  same rules, and the session save rebuilds the annotations in the Python store
+  before they are validated and written. Validation, undo/redo and history are
+  therefore identical whether annotations are made interactively, in a test or
+  in a script.
+* **The core needs no interface.** Nothing in the package imports a desktop
+  toolkit, so annotations and outputs can be processed in plain Python, and the
+  server and the functions save annotators' work with the same code that
+  scripts use. `tests/test_commands.py` imports every module and checks this.
 * **Source data are read-only.** No code path opens a source file for writing.
   Filters act on a separate display copy. The test-suite hashes the whole
   dataset before and after complete sessions.
+* **Recordings stay where they are.** A recording is registered where its
+  files are and the study keeps only its manifest (fingerprints, timing,
+  channels, events); the browser reads the annotator's own copy. Nothing in the
+  study's records or in a request holds EEG.
 * **Nothing is marked complete until it is verified.** Saving is a journalled
   transaction (see below).
-* **Reuse MNE.** Loading, filtering, event extraction, the EEG browser and the
-  annotation container (`mne.Annotations` with `ch_names` and `extras`) come
-  from MNE-Python; ElectroClean adds what MNE does not provide.
+* **Reuse MNE.** Loading, filtering, event extraction and the annotation
+  container (`mne.Annotations` with `ch_names` and `extras`) come from
+  MNE-Python; the browser's readers and filters reproduce MNE's results, and
+  their tests compare them with MNE's.
 
 ## Package layout
 
 ```text
 electroclean/
     __init__.py            version
-    __main__.py            python -m electroclean
+    __main__.py            python -m electroclean: the commands and how to start the demonstration
     synthetic.py           synthetic BrainVision, EDF and BDF recordings with ground truth
     hints.py               "did you mean" suggestions for mistyped names
     config/
         artifact_labels.json            the 29 HED-SCORE artifact terms, codes and hierarchy
         hed_score_2.2.0_validation.json snapshot of the label check against HED SCORE
-        default_settings.json           defaults; overridden by electroclean_study.json
+        default_settings.json           defaults; overridden by a study's settings
         settings.py                     Settings, FilterSettings, StudyConfig
-    app/
+    app/                   the annotation core
         common.py          identifiers, timestamps, modes
-        main.py            desktop entry point, crash handler, --self-test
-        selftest.py        end-to-end installation check (used by the stand-alone builds)
         annotations/       labels.py, timing.py, model.py, store.py, mne_bridge.py
-        eeg/               loading.py, filtering.py, events.py, channels.py
-        io/                discovery.py, bids.py, tsv.py, atomic.py, locking.py,
+        eeg/               loading.py, filtering.py, events.py, channels.py, amplitude.py
+        io/                discovery.py, bids.py, edf.py, tsv.py, atomic.py, locking.py,
                            canonical.py, export.py, naming.py
         validation/        exports.py (read-back verification of outputs)
         session/           session.py, transaction.py, register.py, failures.py, selection.py,
-                           autosave.py, interaction_log.py (the per-visit JSON Lines log)
-        gui/               browser.py (MNE integration), annotation_window.py,
-                           start_window.py, filter_dialog.py, dialogs.py,
-                           app_controller.py, workers.py, help_text.py,
-                           interaction_capture.py (clicks, keys and what was on screen, for the log),
-                           style.py (colours, type, spacing, style sheet), icons/
+                           autosave.py, interaction_log.py (the per-visit JSON Lines format)
     reliability/           config.py, data.py, intervals.py, statistics.py,
-                           timeresolved.py, matching.py, analysis.py, report.py, cli.py, gui.py
-    training/              reference.py, consensus.py, assessment.py, quiz.py,
-                           admin.py, cli.py, gui.py,
-                           programme.py (the three stages and their unlocking), guided.py and
-                           guided_gui.py (the guided coach), examples.py (the placeholder example set)
+                           timeresolved.py, matching.py, analysis.py, report.py, cli.py
+    training/              reference.py, consensus.py, assessment.py, quiz.py, admin.py, cli.py,
+                           programme.py (the three stages and their unlocking), guided.py (the
+                           checks of guided steps), review.py (the disagreements flagged in a
+                           practice review), examples.py (the placeholder example set)
     activity/              logs.py, summary.py, report.py, cli.py (electroclean-activity)
-    web/                   the browser version (docs/web/architecture.md): service.py (the operations,
+    web/                   the browser version (web/architecture.md): service.py (the operations,
                            shared by the server and the Firebase functions), coach.py, visits.py,
-                           store_files.py and store_firestore.py, app.py (FastAPI), cli.py
-                           (electroclean-web), firebase/functions/main.py, static/ (the application)
+                           manifest.py and registration.py, saving.py, store_files.py and
+                           store_firestore.py, app.py (FastAPI), cli.py (electroclean-web),
+                           firebase/functions/main.py, static/ (the application)
 ```
 
-## Data flow of one session
+## Data flow of one recording
 
-1. `io.discovery.discover_recordings` walks the dataset, parses each
-   BrainVision `.vhdr` header for `DataFile` and `MarkerFile` or each EDF/BDF
-   header (`io.edf`), and resolves BIDS sidecars with the inheritance
-   principle (`io.bids`). `RecordingFiles.path` is the recording's own file
-   and `RecordingFiles.format` is `brainvision`, `edf` or `bdf`.
-2. `session.selection.select_next` chooses a recording, excluding those the
-   annotator completed (`session.register`) and unresolved failures
-   (`session.failures`).
-3. `eeg.loading.load_recording` (run in a `QThread` by the GUI) fingerprints the
-   files, checks the data-file size (BrainVision) or the header against the
-   file size (EDF/BDF), reads the recording with `mne.io.read_raw_brainvision`,
-   `read_raw_edf` or `read_raw_bdf` while capturing their warnings, loads
-   original events (`eeg.events`), checks event codes, checks channels
-   (`eeg.channels`), leaves out the channels matching `channels.hide` and
-   prepares the display copy of the remaining channels: in memory, or as a
-   temporary memory-mapped file above `preload_memory_limit_mb`
-   (`Raw.load_data(memmap=...)`), filtered with MNE by
-   `eeg.filtering.apply_view_filters`, which records MNE's own filter
-   description.
-4. `session.session.AnnotationSession` holds a lock file, the
-   `annotations.store.AnnotationStore` and the monotonic timer.
-5. `gui.annotation_window.AnnotationWorkspace` creates the MNE browser and an
-   `gui.browser.AnnotationController`, and adds the toolbar and panels.
-6. On Save and Finish, `AnnotationSession.finish` builds the document and the
-   five files (`io.export`, `io.canonical`), and
-   `session.transaction.commit_outputs` stages, validates
-   (`validation.exports`), commits and registers them.
+1. **Registration**, on the computer that holds the dataset
+   (`electroclean-web register`, or the admin area, whose browser code builds
+   the same manifest). `io.discovery.discover_recordings` walks the dataset,
+   parses each BrainVision `.vhdr` header for `DataFile` and `MarkerFile` or
+   each EDF/BDF header (`io.edf`), and resolves BIDS sidecars with the
+   inheritance principle (`io.bids`). `eeg.loading.load_recording` fingerprints
+   the files, checks the data-file size (BrainVision) or the header against the
+   file size (EDF/BDF), reads the recording with
+   `mne.io.read_raw_brainvision`, `read_raw_edf` or `read_raw_bdf` while
+   capturing their warnings, loads the original events (`eeg.events`), checks
+   event codes and channels (`eeg.channels`), leaves out the channels matching
+   `channels.hide`, prepares the filtered display copy and measures the
+   amplitudes (`eeg.amplitude`). `web.manifest.build_manifest` keeps what the
+   browser and the session save need, and the study stores it.
+2. **Annotating**, in the browser. The annotator opens their copy, the browser
+   computes its fingerprint, and the study matches it against the register
+   (`POST /match`). The browser reads, filters and shows the recording itself,
+   and keeps drafts of unfinished work in the browser and with the study.
+3. **Save and Finish.** The browser sends the annotations
+   (`POST /submissions`). `web.service.StudyService.submit` checks them against
+   the manifest, and `web.saving.WebSession`, a subclass of
+   `session.session.AnnotationSession` in which `web.manifest.ManifestRecording`
+   stands in for the loaded recording, builds the document and the five files
+   (`io.export`, `io.canonical`); `session.transaction.commit_outputs` stages,
+   validates (`validation.exports`), commits and registers them. The
+   ElectroClean server writes into the study folder; the Firebase functions
+   write into a scratch folder and keep the files in Firestore, from which
+   `electroclean-web export` writes the same folders.
+
+Scripts can drive the same core directly: `examples/demo_end_to_end.py` loads
+recordings with `load_recording`, adds annotations to an `AnnotationSession`
+and finishes it, which writes exactly the files a study writes.
 
 ## Annotation store
 
@@ -98,8 +118,8 @@ performs the automatic merging chosen by the research team: after an add,
 update or merge, any annotation of the same label and identical channel scope
 that overlaps the changed one in time is absorbed into one annotation (the
 oldest identifier, by insertion order, survives), in the same undo step.
-`last_auto_merged` and `last_survivors` tell the caller what happened. The
-review store (your annotations next to the reference) is created with
+`last_auto_merged` and `last_survivors` tell the caller what happened. A review
+store (your annotations next to the reference) is created with
 `auto_merge=False`.
 
 ## The save transaction
@@ -120,9 +140,12 @@ review store (your annotations next to the reference) is created with
 
 An error before step 3 removes the staging folder. An error during step 3
 moves any committed files out again. An error at step 4 leaves the files in
-place and the journal at `files_committed`. At start-up,
-`recover_interrupted_exports` rolls such journals forward (all files present
-and verified) or back (moving partial files to `.electroclean/interrupted/`).
+place and the journal at `files_committed`. `recover_interrupted_exports` rolls
+such journals forward (all files present and verified) or back (moving partial
+files to `.electroclean/interrupted/`), and when a session starts, output files
+for the same recording and annotator that are not registered as complete are
+handled first: a complete, consistent set is registered (its register row was
+lost), anything else is moved to `.electroclean/interrupted/` with a warning.
 The tests simulate a crash at every stage with a `BaseException` hook.
 
 ## Locks
@@ -134,10 +157,7 @@ has not been refreshed for longer than its limit (`recording_lock_stale_hours`,
 2 h by default, for recording locks; 5 min for the register; 10 min for a save
 in progress). Ages are measured with the clock of the folder holding the lock
 (the modification time of a probe file written next to it), so computers
-whose clocks disagree do not misjudge each other's locks. An open annotation
-window refreshes its recording lock every minute; if the lock is lost anyway
-(for instance after a long sleep), Save and Finish takes it again or, if
-another session holds it, refuses to save.
+whose clocks disagree do not misjudge each other's locks.
 
 Breaking a stale lock is serialised by a short-lived `<lock>.breaking` file.
 Under it the breaker re-reads the lock and removes it only if it is still the
@@ -146,72 +166,14 @@ Releasing a lock removes the file only if it still carries the holder's token.
 This works on local disks and on network drives that honour exclusive creation
 (SMB and NFSv4 do).
 
-Every save holds `staging/<session_id>.lock`, and start-up recovery skips
-saves whose lock is held, so starting a second window (or a second computer)
-never interferes with a save in progress. Files are moved into the results
-folder with a move that refuses to replace an existing file
-(`atomic.move_no_clobber`). The journal stores the final folder relative to
-the results folder, so recovery works when the folder is reached by another
-path. When a session starts, output files for the same recording and
-annotator that are not registered as complete are handled first: a complete,
-consistent set is registered (its register row was lost), anything else is
-moved to `.electroclean/interrupted/` with a warning.
-
-## Integration with MNE's Qt browser
-
-ElectroClean was written against **mne-qt-browser 0.7.5** and MNE 1.13.2.
-`gui.browser` contains every use of the browser's internals and warns at run
-time if a different mne-qt-browser version is installed.
-
-The standard browser lets users type new annotation labels, merges
-overlapping annotations with the same label whenever one is drawn or moved,
-refuses overlaps between channel-specific annotations of the same label,
-locates annotations by their onset (ambiguous when two start together), marks
-channels bad when they are clicked, and has no undo or Save control.
-ElectroClean therefore keeps MNE's annotation mode switched off and supplies:
-
-* `ElectroCleanBrowser(MNEQtBrowser)`: a close guard, Escape to deselect,
-  ElectroClean's help in place of MNE's, and a key filter: MNE's single-key
-  shortcuts ignore modifiers (Ctrl+Z would toggle zen mode, Ctrl+S the scale
-  bars), so key presses with Ctrl, Cmd or Alt are not passed to them. It is
-  substituted for `MNEQtBrowser` while `raw.plot()` constructs the browser
-  (MNE's `figure_class` option only works for the matplotlib backend).
-* `ElectroCleanViewBox(RawViewBox)` and `ElectroCleanDataTrace(DataTrace)`:
-  dragging creates an ElectroClean annotation; clicking a channel selects it.
-  The browser looks these classes up by name in its own module, so the
-  subclasses are installed there. They behave exactly like the originals for
-  browsers that do not belong to ElectroClean.
-* `ArtifactRegion(AnnotRegion)`: one region per annotation, identified by
-  `annotation_id`. Its `_region_changed` reports edits to the controller
-  instead of merging; a plain drag over it passes through to create an
-  overlapping annotation; Shift+drag moves it; edge drags resize it.
-* `AnnotationController`: synchronises regions with the store on the next
-  event-loop turn after every change (never inside a mouse handler), keeps
-  `raw.annotations` of the display copy in step for the overview bar, manages
-  label rows, channel highlighting and filter edge zones. Every editing method
-  checks `editable` (Draw/edit on and not a read-only review), so mouse,
-  keyboard, context menu and panel all obey the same switch. When a region is
-  removed, its channel shading items are also removed from the plot item
-  list, which MNE's own `remove()` leaves behind.
-
-**Application windows.** The start window is hidden while a recording is
-open, and windows replace one another with short gaps, so `main()` turns off
-Qt's quit-on-last-window-closed; the application quits when the user closes
-the start window or chooses Quit. The loading dialog cannot be dismissed
-(the background loader cannot be interrupted safely), the quiz window asks
-before closing and saves partial answers, and a watchdog brings back the start
-window if an unexpected error ever leaves no window visible. In synchronous
-mode (tests) a failed load that continues with the next recording is handled
-by a loop rather than by recursion.
-
-Original events are passed to `raw.plot(events=…)`, which draws them as
-event lines that cannot be edited.
-
-**Upgrading MNE or mne-qt-browser.** Run the GUI tests (`pytest -m gui`) and
-read the browser's changelog for changes to `AnnotRegion`, `RawViewBox`,
-`DataTrace`, `_add_region`/`_remove_region`, `keyboard_shortcuts`,
-`overview_bar.update_annotations` and `closeEvent`. Then update
-`TESTED_MNE_QT_BROWSER` and `requirements.txt`.
+Every save holds `staging/<session_id>.lock`, and recovery skips saves whose
+lock is held, so a second request never interferes with a save in progress.
+Files are moved into the results folder with a move that refuses to replace an
+existing file (`atomic.move_no_clobber`). The journal stores the final folder
+relative to the results folder, so recovery works when the folder is reached
+by another path. On the ElectroClean server two requests to save the same
+recording for the same annotator meet at the recording lock, and the second is
+told to try again.
 
 ## Extension points
 
@@ -220,51 +182,59 @@ read the browser's changelog for changes to `AnnotRegion`, `RawViewBox`,
   `tests/test_labels.py`. Never change or reuse a code: catalogue versions are
   compatible (and their files comparable) only while every shared label keeps
   its code. `LabelCatalogue.ancestors`/`descendants` give the hierarchy used
-  by the group roll-ups.
+  by the group roll-ups. The browser receives the catalogue from the study.
 * **Agreement measures.** `reliability.analysis.register_measure(name, func)`;
   see the reliability guide.
 * **Competency metrics.** Add an entry to `training.assessment.METRICS` and
   compute it in `compare_with_reference`.
-* **Selection strategies.** `session.selection.select_next`.
+* **Selection strategies.** The order in which a study offers an annotator's
+  recordings is chosen in `web.service.StudyService._next` with
+  `session.selection.seeded_order`; `session.selection` also holds
+  `select_next` and the balanced allocation of `electroclean-admin allocate`.
 * **Data formats.** Formats are listed in `io.discovery.FORMATS` and read in
   `eeg.loading._read_raw`; supporting another MNE reader means adding its
   extension there and in `config.settings.RECORDING_EXTENSIONS`, a header or
-  size check, and a source for its markers in `eeg.events`. The rest of the application works on `RecordingInfo` and the
-  display `Raw`.
-* **Autosave.** `session.autosave` writes the canonical document, the
-  elapsed time and the source fingerprint atomically; `AnnotationSession`
-  writes it (throttled) from the annotation window's clock and accepts a
-  `resume` record; `AppController._resumable` and `_resume_for` offer it back.
+  size check, and a source for its markers in `eeg.events`. The browser needs
+  a reader of its own in `js/data/` that gives the same values, with tests
+  against MNE in `web_tests/unit/` (web/architecture.md).
+* **Drafts and autosave.** The browser keeps drafts of unfinished work
+  (`js/annotate/session.js`) and the study stores them (`PUT /drafts/{recording_id}`).
+  `session.autosave` is the core's own form of the same idea, used when an
+  `AnnotationSession` is driven with autosave on: it writes the canonical
+  document, the elapsed time and the source fingerprint atomically and accepts
+  a `resume` record.
 
 ## Conventions
 
 Type hints throughout; `from __future__ import annotations`; errors that can
-reach a user are raised with messages written for annotators. Times in files
+reach a person are raised with messages written for annotators. Times in files
 are local time with UTC offset (ISO 8601). User-facing text uses UK English,
-while label strings keep the HED spelling *artifact*.
+while label strings keep the HED spelling *artifact*. The conventions of the
+browser application (relative paths, no build step, behaviour when a Firebase
+answer arrives late) are in [CLAUDE.md](../CLAUDE.md) and
+[web/architecture.md](web/architecture.md).
 
-Every window takes its look from `electroclean/app/gui/style.py`. Call
-`style.apply_theme()` before building a window, give the one button that moves
-the user forward `style.set_kind(button, "primary")`, and give labels a role
-(`style.label(text, "caption")` and so on) rather than a colour or font of
-their own. A colour that is needed in rich text comes from `style.colour()`.
-The chevron icons are drawn by `scripts/make_theme_icons.py`;
-`tests/test_style.py` checks the contrast of every text colour.
+## Packaging and continuous integration
 
-## Packaging
+`pyproject.toml` defines the package and four commands
+(`electroclean-web`, `electroclean-agreement`, `electroclean-admin` and
+`electroclean-activity`); `python -m electroclean` lists them.
+`requirements.txt` pins every package the server, the commands and
+registration need (MNE-Python and the scientific stack, pybv for the simulated
+recordings, FastAPI and uvicorn for the server, firebase-admin and
+google-cloud-firestore for the administrator's Firebase commands), and
+`requirements-dev.txt` adds pytest and the Cloud Functions' SDK for the
+functions' tests. The Cloud Functions are deployed with their own
+`electroclean/web/firebase/functions/requirements.txt` and a copy of the
+package made by `scripts/vendor_functions.py`. After changing dependencies,
+regenerate `THIRD_PARTY_NOTICES.md` with `scripts/third_party_notices.py` in an
+environment made from `requirements.txt`.
 
-`pyproject.toml` defines the package and five commands (`electroclean`,
-`electroclean-agreement`, `electroclean-admin`, `electroclean-activity` and
-`electroclean-web`). `requirements-web.txt` pins what the browser version's
-server and the administrator's Firebase commands need, without Qt, and the
-Cloud Functions have their own `electroclean/web/firebase/functions/requirements.txt`. `requirements.txt` pins every
-dependency (pybv among them, for the synthetic recordings of the self-test and
-the examples); `requirements-dev.txt` adds pytest. The launchers in
-`launchers/` create `.venv` on first use.
-
-The stand-alone applications are built with PyInstaller from
-`packaging/electroclean.spec` (`python packaging/build.py`); the GitHub
-Actions workflow `.github/workflows/build-apps.yml` runs the test-suite and
-builds and self-tests the applications on Windows, macOS and Linux for every
-push. See [building_apps.md](building_apps.md). After changing dependencies,
-regenerate `THIRD_PARTY_NOTICES.md` with `scripts/third_party_notices.py`.
+Four GitHub Actions workflows run the checks and publish the application.
+*Tests* (`.github/workflows/tests.yml`) runs the Python tests on Linux for every
+push, and on Windows, macOS and Linux for pushes to main, pull requests into
+main and runs started by hand, because the commands run on researchers' own
+computers. *Browser version tests* (`web-tests.yml`) runs the browser modules,
+the application in Chromium and the Firebase emulators. *GitHub Pages*
+(`pages.yml`) publishes the browser application, and *Firebase deploy*
+(`firebase-deploy.yml`) deploys the functions and rules on demand.

@@ -1,7 +1,9 @@
 """One annotator working on one recording.
 
-:class:`AnnotationSession` is GUI-independent. The desktop application creates
-one per recording, but it can equally be driven from a script or a test. It
+:class:`AnnotationSession` needs no interface. The browser version's server and
+Firebase functions create one for each recording an annotator saves (through
+:class:`~electroclean.web.saving.WebSession`), and it can equally be driven from
+a script or a test. It
 
 * holds a lock so that the same annotator cannot open the same recording twice
   at the same time (for example on two computers sharing a network drive);
@@ -53,7 +55,7 @@ class SessionError(RuntimeError):
 
 def library_versions() -> dict[str, str]:
     versions = {"python": sys.version.split()[0], APP_NAME.lower(): __version__}
-    for mod in ("mne", "mne_qt_browser", "numpy", "scipy", "pandas", "PySide6", "pyqtgraph", "matplotlib"):
+    for mod in ("mne", "numpy", "scipy", "pandas", "matplotlib"):
         try:
             module = __import__(mod)
             versions[mod] = str(getattr(module, "__version__", "unknown"))
@@ -125,7 +127,7 @@ class AnnotationSession:
         self.register = CompletionRegister(layout, settings.register_lock_timeout_s)
         self.session_log = SessionLog(layout)
         self.resumed_from = resume
-        # Set by the annotation window: amplitude scale, seconds and channels shown at Save and Finish.
+        # Set by the interface: amplitude scale, seconds and channels shown at Save and Finish.
         self.display_state: dict[str, Any] = {}
         self.previous_sessions: list[dict[str, Any]] = []
         if resume is not None:

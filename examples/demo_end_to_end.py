@@ -6,9 +6,10 @@
    artifacts (ground truth kept under derivatives/ground_truth).
 2. Three annotators (A01, A02, A03) annotate every recording. Their annotations
    are simulated from the ground truth with different amounts of boundary
-   jitter, misses, false alarms and label confusions, and are entered through
-   the same session API that the desktop application uses, so every output
-   file is produced, validated and registered exactly as in real use.
+   jitter, misses, false alarms and label confusions, and are saved through
+   the session code with which the study server and the Firebase functions
+   save the browser's work, so every output file is produced, validated and
+   registered exactly as in real use.
 3. Runs the inter-rater agreement analysis and writes its report.
 4. Builds a training reference set from the ground truth, sets competency
    criteria, lets annotator CAM complete the assessment and produces the

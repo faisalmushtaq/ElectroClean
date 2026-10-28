@@ -5,7 +5,8 @@ administrator can override them for a dataset by placing an
 ``electroclean_study.json`` file in the dataset root (see
 ``docs/file_formats.md``). Settings that the administrator marks as locked
 (for example the viewing filters used in a reliability study) cannot be
-changed by annotators in the GUI.
+changed by annotators. A study run in the browser keeps the same settings with
+its records (``electroclean-web init-study``).
 """
 
 from __future__ import annotations

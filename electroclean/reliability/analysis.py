@@ -205,7 +205,7 @@ def run_analysis(
 ) -> AnalysisResult:
     """Run every registered measure.
 
-    With ``strict`` (used by the command line and the dialog), categories,
+    With ``strict`` (used by the command line), categories,
     annotators or a reference annotator that do not occur in the data are an
     error with a suggestion, rather than an empty result. ``progress`` receives
     a short description of each step; when ``cancel`` returns True the
