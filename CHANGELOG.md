@@ -51,6 +51,20 @@ keeps each correct answer until the segment has been answered; it can be
 stopped and resumed later, or ended early with the score of the segments
 answered.
 
+ElectroClean works on an iPad, upright or on its side, with fingers or an
+Apple Pencil. One finger marks, selects and resizes as the mouse does; two
+fingers move through time and the channels, and a pinch shows more or less
+time; a long press opens an annotation's menu and a double tap the list of
+types. A row of buttons under the EEG does what the keys do on a computer, the
+side panel moves below the EEG when the iPad is upright, and buttons are large
+enough for a finger. The file picker offers every file, since iPadOS greys out
+extensions it does not know such as .edf, and ElectroClean checks what it is
+given. The annotation menu now also offers Edit times… (with the mouse too). On
+a phone the sign-in page and the admin area work, and the rest asks for a
+larger screen. The interaction log records whether each press came from a
+mouse, a finger or a pencil. The application is now tested in WebKit, Safari's
+engine, as well as in Chromium.
+
 The browser application has a design of its own, editorial and precise, so
 that the EEG stands out. Pages are a warm off-white with faint column guides,
 and the EEG is drawn on white. Everything, the EEG's channel names and time

@@ -59,9 +59,9 @@ export function appHeader(app, { title = '', admin = false } = {}) {
 export function smallScreenNotice() {
   return h('div.small-screen', { role: 'note' },
     h('div.card', {}, brandMark(40),
-      h('h1', {}, 'ElectroClean needs a computer screen'),
-      h('p', {}, 'Annotating EEG needs room for the traces, a mouse or trackpad and a keyboard. Please open this page on a laptop or desktop computer, with the browser window at least 900 pixels wide.'),
-      h('p.caption', {}, 'You can still sign in here; your work waits for you on the computer.')));
+      h('h1', {}, 'ElectroClean needs a larger screen'),
+      h('p', {}, 'Annotating EEG needs room for the traces. Please open this page on a tablet such as an iPad, or on a laptop or desktop computer.'),
+      h('p.caption', {}, 'You can still sign in here; your work waits for you on the larger screen.')));
 }
 
 /** Download files (Blob) through the browser; harmless where downloads are not allowed. */

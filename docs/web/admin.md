@@ -23,9 +23,10 @@ admin area itself.
 The admin area has nine sections, listed on the left (at the top on a narrow screen): Overview,
 Annotators, Recordings, Assignments, Training, Analyses, Results, Records and Study settings. Each
 has an address of its own, such as `#admin-recordings`, so the browser's Back and Forward buttons
-move between them and a bookmark opens the section again. Unlike annotating, which needs a computer
-screen, the admin area also works on a tablet or phone, for a quick look at progress or to switch an
-account off. Work in progress carries on while you look at another section: a folder of recordings
+move between them and a bookmark opens the section again. Annotating needs a computer or a tablet;
+the admin area also works on a phone, for a quick look at progress or to switch an account off. On
+an iPad, recordings are added by choosing their files (their names become their IDs), since the
+iPad cannot choose a whole dataset folder with its paths; that needs a computer. Work in progress carries on while you look at another section: a folder of recordings
 being read, or an analysis being computed, is still there when you come back.
 
 When a study records how its annotators use ElectroClean, what you do in the admin area is left out

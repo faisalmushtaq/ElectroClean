@@ -27,6 +27,7 @@ python -m pytest tests/test_web_server.py -q              # one file
 ruff check --select E,F,W,B electroclean tests scripts    # the useful lint subset
 node --test web_tests/unit/*.test.mjs                     # browser modules (Node.js 22; give a glob, not a folder)
 ELECTROCLEAN_PYTHON=python node web_tests/run_e2e.mjs     # the application in Chromium (Playwright), incl. the real server
+ELECTROCLEAN_PYTHON=python node web_tests/run_e2e.mjs --browser webkit   # the same in WebKit (Safari, iPads)
 bash scripts/test_firebase_emulators.sh                   # functions and Firestore store on the emulators (Java 21)
 bash scripts/test_web_firebase.sh                         # the application on the Firebase emulators
 electroclean-web demo                                     # the whole system on http://localhost:8000/
@@ -99,6 +100,16 @@ fine where the content is genuinely tabular or a command. Avoid em dashes, and s
 positively rather than through "it is not X, it is Y" contrasts. Before citing any paper,
 standard or web page, check it against the original source online, and add it to
 `docs/references.md` only once checked.
+
+iPads run Safari's engine, WebKit, which reports pointer positions in whole pixels, refuses some
+ports and leaves out a lazily loaded frame until it is scrolled to; run the end-to-end tests with
+`--browser webkit` after a change to the views. On a touch screen: hover styles go inside
+`@media (hover: hover)` (they would stay on a tapped control), fields are 16 pixels under
+`(pointer: coarse)` (Safari zooms into smaller ones), file inputs take `accept` from `acceptFiles()`
+(iPadOS greys out unknown extensions such as .edf) and folder buttons hide where `CAN_CHOOSE_FOLDER`
+is false. Two fingers, long presses and double taps on the EEG are in `js/viewer/touch.js`; after a
+long press or a double tap the viewer cancels the touch's end, or the browser's click lands on the
+menu that just opened.
 
 ## Branches, CI and publishing
 

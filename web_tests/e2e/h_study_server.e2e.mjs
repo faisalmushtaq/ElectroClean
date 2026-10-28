@@ -98,7 +98,15 @@ export const tests = [
       }
       const tsv = fs.readFileSync(path.join(t.study.dir, 'study', 'Annotated_Events', 'annotator-A01', 'sub-001', 'eeg',
         'sub-001_task-rest_eeg_annotator-A01_events.tsv'), 'utf8');
-      assert.match(tsv, /\n3\.0\t0\.4\tEye-blink-artifact\tn\/a\t750\t\[\]\t103\telectroclean_artifact\t[0-9a-f]+\tA01\t/);
+      if (t.browserName === 'chromium') {
+        assert.match(tsv, /\n3\.0\t0\.4\tEye-blink-artifact\tn\/a\t750\t\[\]\t103\telectroclean_artifact\t[0-9a-f]+\tA01\t/);
+      } else {
+        // WebKit (Safari's engine) reports the pointer in whole pixels, so the drag is within a pixel of 3.0–3.4 s.
+        const row = tsv.split('\n').find((l) => l.includes('\tEye-blink-artifact\t')).split('\t');
+        assert.ok(Math.abs(Number(row[0]) - 3.0) <= 0.01 && Math.abs(Number(row[1]) - 0.4) <= 0.02 && Math.abs(Number(row[4]) - 750) <= 3, row.join(' '));
+        assert.deepEqual([row[3], row[5], row[6], row[7], row[9]], ['n/a', '[]', '103', 'electroclean_artifact', 'A01']);
+        assert.match(row[8], /^[0-9a-f]+$/);
+      }
 
       // The same file again: already done.
       await page.locator('button', { hasText: 'Open a recording from your computer' }).click();
@@ -147,7 +155,11 @@ export const tests = [
       assert.match(await page.textContent('.dialog'), /2 annotation\(s\)/);
       await clickDialogButton(page, 'Restore and continue');
       await waitForRoute(page, 'annotate', 30000);
-      assert.deepEqual((await annotations(page)).map((a) => [a.label, a.onset_sample]), [['Eye-blink-artifact', 256], ['EMG-artifact', 640]]);
+      const restored = (await annotations(page)).map((a) => [a.label, a.onset_sample]);
+      assert.deepEqual(restored.map((r) => r[0]), ['Eye-blink-artifact', 'EMG-artifact']);
+      // where they were drawn (within a pixel in WebKit, which reports the pointer in whole pixels)
+      const slack = t.browserName === 'chromium' ? 0 : 3;
+      assert.ok(Math.abs(restored[0][1] - 256) <= slack && Math.abs(restored[1][1] - 640) <= slack, JSON.stringify(restored));
       await saveAndFinish(page);
       await waitForRoute(page, 'home', 30000);
       await clickDialogButton(page, 'Back to my recordings');
@@ -187,7 +199,7 @@ export const tests = [
       await waitForCoach(page, /Recording 1 of 2 +· +Step 1 of 6/);
       await page.keyboard.press('3');
       await drag(page, await eegPoint(page, 1.0), await eegPoint(page, 1.4));
-      await waitForCoach(page, /Nothing is marked at 1\.00–1\.40 s in the experts' annotations/);
+      await waitForCoach(page, /Nothing is marked at (0\.99|1\.0[01])–1\.(39|4[01]) s in the experts' annotations/); // within a pixel
       await page.keyboard.press('Control+z');
       await showMeToTheEnd();
       await saveAndFinish(page);

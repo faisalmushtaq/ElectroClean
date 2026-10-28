@@ -159,5 +159,20 @@ export function channelsText(channels, maxShown = 3) {
 }
 
 export const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
+/** An iPad or iPhone (iPadOS presents itself as a Mac, so a Mac with a touch screen counts). */
+export const IS_IOS = typeof navigator !== 'undefined' && (/iPad|iPhone|iPod/.test(navigator.userAgent || '') ||
+  (/Mac/.test(navigator.platform || navigator.userAgent || '') && (navigator.maxTouchPoints || 0) > 1));
+/** Whether a person can choose a whole folder (Safari on an iPad or iPhone cannot). */
+export const CAN_CHOOSE_FOLDER = !IS_IOS;
+/**
+ * The `accept` list of a file input. On an iPad or iPhone the file picker greys out files whose
+ * extension the system does not know (.edf, .vhdr and others), so there every file can be chosen and
+ * the application checks what it is given, as it always does.
+ */
+export function acceptFiles(list) { return IS_IOS ? undefined : list; }
+/** Whether the main pointer is a finger (a touch screen without a mouse or trackpad in use). */
+export function touchFirst() {
+  return typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+}
 export const CTRL = IS_MAC ? '⌘' : 'Ctrl';
 export const UNDO_HINT = `${CTRL}+Z to undo`;

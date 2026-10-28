@@ -131,6 +131,11 @@ test('the design is flat and quiet: no shadows, no gradients, no capitals; squar
         assert.ok(ok, `${name}: border-radius ${m[1]}`);
       }
     }
+    // Hover styles only where there is a pointer that hovers: on a touch screen they would stay on a
+    // tapped control.
+    for (const line of code.split('\n').filter((l) => l.includes(':hover'))) {
+      assert.match(line.trim(), /^@media \(hover: hover\) \{/, `${name}: ${line.trim().slice(0, 80)}`);
+    }
     // Generated content is empty or a counter: arrows and ticks are drawn icons.
     for (const m of code.matchAll(/(?<![-\w])content\s*:\s*([^;]+);/g)) {
       assert.match(m[1].trim(), /^(""|none|attr\([a-z-]+\)|counter\([^)]*\))$/, `${name}: content: ${m[1]}`);
@@ -150,6 +155,8 @@ test('icons are drawn: no arrows, ticks or stars from a font, and every icon use
       assert.doesNotMatch(line, /[‹›▾▸▼←→↑↓✓✔✕✗★☆]/, `${file}: ${line.trim().slice(0, 80)}`);
     }
     for (const m of text.matchAll(/icon\('([a-z-]+)'\)/g)) used.add(m[1]);
+    // the viewer's touch buttons name their icons
+    if (file.endsWith('viewer.js')) for (const m of text.matchAll(/btn\('([a-z-]+)', '/g)) used.add(m[1]);
   }
   for (const dir of ['left', 'right', 'up', 'down']) used.add(`arrow-${dir}`); // the help's arrow keys
   for (const name of ['star', 'star-empty']) used.add(name); // starIcons()

@@ -91,7 +91,8 @@ export const tests = [
     async run(t) {
       const { assert } = t;
       const page = await t.newPage({ width: 1280, height: 720 });
-      await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+      // Reading the clipboard back needs Chromium's permissions; WebKit checks the button's answer only.
+      if (t.browserName === 'chromium') await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
       await page.waitForSelector('form.signin-form');
       assert.match(await page.textContent('.demo-hint'), /ADMIN/);
       await signIn(page, 'ADMIN');
@@ -120,7 +121,7 @@ export const tests = [
       assert.match(password, /^[a-z2-9]{4}-[a-z2-9]{4}-[a-z2-9]{4}$/);
       await page.click('.secret [data-copy]');
       await page.waitForFunction(() => /Copied|Select it/.test(document.querySelector('.secret [data-copy]').textContent));
-      assert.equal(await page.evaluate(() => navigator.clipboard.readText()), password);
+      if (t.browserName === 'chromium') assert.equal(await page.evaluate(() => navigator.clipboard.readText()), password);
       await page.waitForSelector('tr[data-key="A05"]');
 
       // Its page: the account, the programme and its (empty) assignments.
@@ -311,7 +312,7 @@ export const tests = [
       await page.waitForFunction(() => /Saved 1 criterion/.test(document.querySelector('.admin-section[data-section="training"]')?.textContent || ''));
       assert.ok(await noSideways(page));
       await t.screenshot(page, 'admin_narrow_criteria');
-      // Narrowing and widening keeps the admin area (the annotating views still ask for a computer screen).
+      // Narrowing and widening keeps the admin area (the annotating views still ask for a larger screen).
       await page.setViewportSize({ width: 1280, height: 720 });
       assert.equal(await page.isVisible('.admin-nav'), true);
     },

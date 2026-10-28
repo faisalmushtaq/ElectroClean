@@ -1,5 +1,5 @@
 // Layout: a laptop screen (1280 × 720) for every view, and a phone-sized window, where sign-in
-// still works and the rest asks for a computer screen without scrolling sideways.
+// still works and the rest asks for a larger screen without scrolling sideways.
 import { signIn, waitForRoute, waitForTraces, eegPoint, drag, clickDialogButton } from './helpers.mjs';
 
 async function noSideways(page) {
@@ -76,7 +76,7 @@ export const tests = [
       await signIn(page, 'A01');
       await waitForRoute(page, 'home');
       await page.waitForSelector('.small-screen', { state: 'visible' });
-      assert.match(await page.textContent('.small-screen'), /ElectroClean needs a computer screen/);
+      assert.match(await page.textContent('.small-screen'), /ElectroClean needs a larger screen/);
       assert.ok(await noSideways(page));
       await t.screenshot(page, 'small_screen');
       // Widening the window brings the view back.

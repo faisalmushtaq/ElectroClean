@@ -21,6 +21,7 @@ The browser application has tests of its own, described in
 ```bash
 node --test web_tests/unit/*.test.mjs                     # the browser modules (Node.js 22)
 ELECTROCLEAN_PYTHON=python node web_tests/run_e2e.mjs     # the application in Chromium (Playwright)
+ELECTROCLEAN_PYTHON=python node web_tests/run_e2e.mjs --browser webkit   # the same in WebKit, Safari's engine
 bash scripts/test_firebase_emulators.sh                   # the functions and the Firestore store (Java 21)
 bash scripts/test_web_firebase.sh                         # the application with a study on Firebase's emulators
 ```
@@ -32,7 +33,11 @@ committed). `run_e2e.mjs` drives the application in Chromium against the
 demonstration, a stand-in server and the real `electroclean-web demo`, with
 recordings opened from disk and the results checked in the study folder; it
 needs Playwright with Chromium (`npm install --no-save playwright@1.63.0` and
-`npx playwright install chromium`). The two Firebase scripts run the functions
+`npx playwright install chromium`). With `--browser webkit` the same tests run in
+WebKit, the engine of Safari on iPads and Macs (`npx playwright install --with-deps
+webkit`); `k_ipad.e2e.mjs` checks the application as an iPad: touch on the EEG
+(in Chromium, which can put several fingers on the screen at once), the layouts
+upright and on its side, a phone's notice and the file pickers. The two Firebase scripts run the functions
 and the application on Google's Firebase Emulator Suite, with a project ID that
 starts with `demo-` and so never reaches a real Firebase project.
 
@@ -125,9 +130,10 @@ the application in Chromium and the Firebase emulators on Linux.
 ## Checks that need a person
 
 Automated tests cannot judge how the application feels or looks on each
-computer. The application has been tested in Chromium (Chrome and Edge); before
-a study, someone should check the following in each browser and on each type of
-computer that annotators will use (Firefox and Safari in particular):
+computer. The application is tested in Chromium (Chrome and Edge) and in WebKit
+(Safari's engine), including emulated iPads; before a study, someone should
+check the following in each browser and on each type of computer or tablet that
+annotators will use (Firefox, Safari and a real iPad in particular):
 
 1. The study's link opens the sign-in page, and signing in, the notice about
    the interaction log and the list of recordings appear as described in
@@ -143,9 +149,13 @@ computer that annotators will use (Firefox and Safari in particular):
    delete, and the browser's own shortcuts do not get in the way.
 5. The window is usable on a 13-inch laptop (1366 × 768 or 1440 × 900) and on
    a large monitor, and the text is readable on high-DPI screens.
-6. Colours are distinguishable on the screens used, and labels remain
+6. On an iPad, upright and on its side: one finger and the Pencil mark
+   artifacts, two fingers move and pinch, a long press opens the menu and a
+   double tap the list of types, the buttons under the EEG respond, and the
+   Files picker offers EDF, BDF and the three BrainVision files.
+7. Colours are distinguishable on the screens used, and labels remain
    readable when several annotations overlap.
-7. A long recording from the study scrolls smoothly; the first 10-second
+8. A long recording from the study scrolls smoothly; the first 10-second
    screen of a 128-channel recording with filters took about 0.3 s to appear on
    the test machine, and the following screens, prepared in advance, much less.
 8. Closing the tab without Save and Finish keeps a draft, which is offered

@@ -319,6 +319,31 @@ imports a desktop toolkit any more, and the requirements no longer include Qt.
 The open decision on code signing of the stand-alone applications no longer
 applies.
 
+## Touch screens and iPads (28 October 2026)
+
+The project lead asked for the browser application to work on iPads as well as on computers. On a
+touch screen, one finger (or the Apple Pencil) does what the mouse does, so that marking an
+artifact is the same movement everywhere and the Pencil can draw precisely; moving the view
+therefore needs two fingers, which also gives the pinch for showing more or less time, centred on
+the moment between the fingers. A second finger that arrives while the first is marking cancels the
+mark, so that a move never leaves an annotation behind. A long press stands in for the right-click
+and a double tap for the double-click; a finger finds an annotation's edge from 16 pixels away (a
+pencil from 10, the mouse from 6). What the keyboard does on a computer (scrolling, how much time
+and how many channels are shown, the size of the traces) is offered as buttons under the EEG
+wherever the screen is touched, and an attached keyboard still works. Moving an annotation, done
+with Shift+drag on a computer, is offered on a touch screen through Edit times… in the annotation's
+menu.
+
+Upright, an iPad is 744 to 1024 pixels wide, too narrow for the side panel beside the EEG, so up to
+1024 pixels the panel and the coach go below the EEG, side by side. A phone is too small for the
+EEG, and the views other than signing in and the admin area ask for a larger screen below 700
+pixels of width or 480 of height. Three Safari habits shaped the details: iPadOS greys out files
+whose extension it does not know in the file picker, so the application offers every file and
+checks it; Safari zooms into a field set below 16 pixels, so fields are 16 pixels on a touch screen;
+and a style shown on hover would stay on a tapped control, so hover styles apply only where the
+pointer can hover. The end-to-end tests run in WebKit, Safari's engine, as well as in Chromium, and
+`k_ipad.e2e.mjs` checks the touch gestures, the layouts and the file pickers.
+
 ## Decisions still open
 
 1. **Agreement settings to pre-register:** bin widths, the bin coverage rule,

@@ -1,9 +1,11 @@
 // End-to-end tests of the browser application, with Playwright.
 //
-//   node web_tests/run_e2e.mjs [name-filter] [--screenshots DIR] [--scale N] [--headed]
+//   node web_tests/run_e2e.mjs [name-filter] [--screenshots DIR] [--scale N] [--browser chromium|webkit] [--headed]
 //
 // --scale draws pages at N device pixels per CSS pixel (2 for a retina screen) for screenshots to
-// review; tests that choose their own scale keep it.
+// review; tests that choose their own scale keep it. --browser webkit runs the tests in Safari's
+// engine (Playwright's WebKit, installed with its system libraries), which is how iPads run the
+// application; a test that needs Chromium's own tools says so and is skipped there.
 //
 // Serves electroclean/web/static with `python -m http.server`, runs a stand-in study server
 // (GET /api/v1/health, POST /login and the few calls the sign-in needs, as docs/web/api.md) and a
@@ -21,7 +23,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert/strict';
 
 const require = createRequire(import.meta.url);
-const { chromium } = require('playwright');
+const playwright = require('playwright');
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..');
@@ -32,7 +34,8 @@ const opt = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1
 const shotsDir = opt('--screenshots') || process.env.ELECTROCLEAN_SCREENSHOTS || null;
 const headed = args.includes('--headed');
 const defaultScale = Number(opt('--scale')) || 1;
-const filter = args.find((a, i) => !a.startsWith('--') && !(i > 0 && ['--screenshots', '--scale'].includes(args[i - 1]))) || '';
+const browserName = opt('--browser') || 'chromium';
+const filter = args.find((a, i) => !a.startsWith('--') && !(i > 0 && ['--screenshots', '--scale', '--browser'].includes(args[i - 1]))) || '';
 
 function freePort() {
   return new Promise((resolve) => {
@@ -157,7 +160,7 @@ async function main() {
   await new Promise((r) => cfg.server.listen(cfgPort, '127.0.0.1', r));
   const base = `http://127.0.0.1:${port}/`;
   await waitForHttp(base).catch((exc) => { throw new Error(`${exc.message}\n${staticLog}`); });
-  const browser = await chromium.launch({ headless: !headed });
+  const browser = await playwright[browserName].launch({ headless: !headed });
   if (shotsDir) fs.mkdirSync(shotsDir, { recursive: true });
   const specs = fs.readdirSync(path.join(HERE, 'e2e')).filter((f) => f.endsWith('.e2e.mjs') && f.includes(filter)).sort();
   const study = specs.some((f) => f.includes('study_server')) ? await studyServer(python) : null;
@@ -170,10 +173,12 @@ async function main() {
       const openPages = [];
       const errors = [];
       const ctx = {
-        assert, base, api: `http://127.0.0.1:${apiPort}`, cfgBase: `http://127.0.0.1:${cfgPort}/`, stub: stub.state, cfg: cfg.state, study,
+        assert, base, browserName, api: `http://127.0.0.1:${apiPort}`, cfgBase: `http://127.0.0.1:${cfgPort}/`, stub: stub.state, cfg: cfg.state, study,
         shots: shotsDir, errors,
-        async newPage({ width = 1600, height = 950, url = base, scale = defaultScale } = {}) {
-          const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: scale, acceptDownloads: true, locale: 'en-GB' });
+        async newPage({ width = 1600, height = 950, url = base, scale = defaultScale, ipad = false } = {}) {
+          // ipad: a touch screen with Safari's iPad user agent (and, in Chromium, a mobile viewport)
+          const device = ipad ? { hasTouch: true, isMobile: browserName === 'chromium', userAgent: playwright.devices['iPad Pro 11'].userAgent } : {};
+          const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: scale, acceptDownloads: true, locale: 'en-GB', ...device });
           const page = await context.newPage();
           page.on('pageerror', (e) => errors.push(`pageerror: ${(e.stack || e.message).split("\n").slice(0, 4).join(" | ")}`));
           page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource|favicon/.test(m.text())) errors.push(`console: ${m.text()}`); });

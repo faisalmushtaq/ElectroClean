@@ -17,7 +17,7 @@ from the admin area of the same application.
 
 | Part | What it does | Where |
 |---|---|---|
-| **Annotation** | View continuous EEG (EDF, EDF+, BDF or BrainVision), mark artifacts by mouse or keyboard, and save with Save and Finish; unfinished work is kept as a draft. | The browser application |
+| **Annotation** | View continuous EEG (EDF, EDF+, BDF or BrainVision), mark artifacts by mouse, keyboard or touch (on a computer or an iPad), and save with Save and Finish; unfinished work is kept as a draft. | The browser application |
 | **Inter-rater agreement** | Compare annotators by category, time and channel: time-resolved and event-based agreement, with an HTML report and tables. | The admin area, or `electroclean-agreement` |
 | **Training and assessment** | A training programme from guided learning with the experts to practice with a pass mark, a blinded competency assessment with criteria set by the study, and a short-segment quiz. | The browser application; set up in the admin area or with `electroclean-admin` |
 | **Interaction logs** | A time-stamped record of how each annotator works, as research data, with tables and learning curves. | The admin area, or `electroclean-activity` |

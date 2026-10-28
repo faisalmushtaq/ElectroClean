@@ -1,6 +1,17 @@
 // Choosing the study: ?server=, config.json and the Study address field, against a stand-in
 // study server; a server that does not answer; and a config.json naming a Firebase project.
+import net from 'node:net';
+
 import { signIn, waitForRoute } from './helpers.mjs';
+
+/** A port on which nothing listens (port 9 would do in Chromium, but WebKit refuses to use it). */
+async function closedPort() {
+  const s = net.createServer();
+  await new Promise((resolve) => s.listen(0, '127.0.0.1', resolve));
+  const { port } = s.address();
+  await new Promise((resolve) => s.close(resolve));
+  return port;
+}
 
 async function signInToStub(t, page) {
   // Connecting replaces the sign-in card once the server has answered.
@@ -75,16 +86,17 @@ export const tests = [
       const page = await t.newPage();
       await page.waitForSelector('details.connect');
       await page.click('details.connect summary');
-      await page.fill('#study-address', 'http://127.0.0.1:9');
+      const deadAddress = `http://127.0.0.1:${await closedPort()}`;
+      await page.fill('#study-address', deadAddress);
       await page.click('.connect-fields button');
       await page.waitForSelector('.connect-fields .error:not([hidden])');
-      t.assert.match(await page.textContent('.connect-fields .error'), /no ElectroClean study at http:\/\/127\.0\.0\.1:9/);
+      t.assert.ok((await page.textContent('.connect-fields .error')).includes(`no ElectroClean study at ${deadAddress}`));
       await page.fill('#study-address', t.api);
       await page.click('.connect-fields button');
       await signInToStub(t, page);
       checkHeaders(t);
       // A link to a server that does not answer.
-      const dead = await t.newPage({ url: `${t.base}?server=${encodeURIComponent('http://127.0.0.1:9')}` });
+      const dead = await t.newPage({ url: `${t.base}?server=${encodeURIComponent(deadAddress)}` });
       await dead.waitForSelector('.signin-card .banner');
       t.assert.match(await dead.textContent('.signin-card .banner'), /does not answer/);
       await t.screenshot(dead, 'signin_server_down');

@@ -100,7 +100,8 @@ electroclean/web/static/          the browser application (plain ES modules, no 
                                   filterworker.js, sha256.js, hashworker.js, amplitude.js, util.js,
                                   synthetic.js; registering them: register.js, bids.js, events.js,
                                   mnewarn.js, pyfmt.js, pyjson.js
-    js/viewer/                    drawing the EEG, axes, overview, navigation
+    js/viewer/                    drawing the EEG, axes, overview, navigation; touch.js for two
+                                  fingers, long presses and double taps on a touch screen
     js/annotate/                  the annotation view (workspace.js), the annotation store, the
                                   dialogs, the help and the session with its drafts
     js/training/                  the training path, the coach, the practice review, the
@@ -382,9 +383,10 @@ the demonstration, a stand-in server, and the real demonstration server
 (`electroclean-web demo`, started by the runner when the Python of
 `ELECTROCLEAN_PYTHON` or the repository's `.venv` has the packages of
 requirements-web.txt), with recordings opened from disk and the results checked
-in the study folder. `scripts/test_web_firebase.sh` does the same for a study on
-Firebase, on the Firebase Emulator Suite. The workflow **Browser version tests**
-runs all three on GitHub.
+in the study folder; `--browser webkit` runs the same tests in WebKit, Safari's
+engine, which iPads use. `scripts/test_web_firebase.sh` does the same for a study
+on Firebase, on the Firebase Emulator Suite. The workflow **Browser version
+tests** runs all of them on GitHub.
 
 ## The Backend interface (browser)
 

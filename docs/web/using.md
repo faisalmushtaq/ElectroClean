@@ -13,8 +13,10 @@ which needs no account and keeps everything in your browser (see the last sectio
 given a study address rather than a link, choose "Taking part in a study? Enter its address" on the
 sign-in page, type the address and choose Connect; the browser remembers it next time.
 
-ElectroClean needs a computer: a window at least 900 pixels wide, a mouse or trackpad and a
-keyboard. On a phone you can sign in, and the page then asks you to continue on a computer.
+ElectroClean needs a screen the size of a tablet or larger: a computer with a mouse or trackpad and
+a keyboard, or a tablet such as an iPad, held upright or on its side (the section "On an iPad"
+below describes the touch controls). On a phone you can sign in, and the page then asks you to
+continue on a larger screen.
 
 ## Signing in
 
@@ -123,6 +125,31 @@ Home, End and Page keys, use fn with the arrow keys.
 The Recording tab holds the viewing options: the 1 Hz high-pass filter and the notch filter for
 mains interference (50 Hz in the UK and Europe, 60 Hz in North America). They change only what you
 see; the file is never changed. Some studies fix these settings, and the tab then says so.
+
+## On an iPad
+
+Everything described here works on an iPad, with your fingers or an Apple Pencil, in Safari or
+another browser. One finger or the Pencil works as the mouse does: drag across the EEG to mark an
+artifact, tap an annotation to select it, drag its edge to make it longer or shorter, and tap a
+channel's name or its trace to choose that channel. Two fingers move the EEG: sideways through
+time and up and down through the channels; pinch sideways to show more or less time. Press and
+hold an annotation for its menu, the one a right-click opens on a computer, which also offers Edit
+times… to move it; double-tap it to choose its type from the list of all types. A second finger
+that touches the screen while you are marking cancels the mark, so a move never leaves an
+annotation behind by accident.
+
+Under the EEG a row of buttons does what the keys do on a computer: back and forward a screen or a
+little, more or less time, earlier and later channels, more or fewer of them, and larger or smaller
+traces. The numbered type buttons, Whole montage and Selected channels, Delete, Undo and Redo are in
+the toolbars as on a computer, and a keyboard attached to the iPad works with every key described
+here. Held upright, the iPad shows the EEG across its width with the side panel (and the coach in
+training) below it; on its side, the panel is beside the EEG as on a computer.
+
+To open a recording, choose Choose a file…, which opens the iPad's file picker (the Files app, with
+iCloud Drive, the iPad itself and any drive plugged in). Tap Select in the picker to choose several
+files, such as the three files of a BrainVision recording; the iPad cannot choose a whole folder.
+Every file can be chosen, and ElectroClean checks that it is a recording of the study. Files you
+download, such as your results in the demonstration, go to the Downloads folder in Files.
 
 ## Saving
 

@@ -10,10 +10,10 @@ import { showMenu, closeMenu } from '../ui/menu.js';
 import { EegViewer } from '../viewer/viewer.js';
 import { pickType, chooseChannels, editTimes } from './dialogs.js';
 import { AnnotationError, endSample } from './store.js';
-import { HELP_HTML, KEY_HINT, REVIEW_HINT } from './help.js';
+import { helpHtml, KEY_HINT, REVIEW_HINT, TOUCH_HINT, TOUCH_REVIEW_HINT, TOUCH_VIEW_HINT } from './help.js';
 import { edgeHalfWidthS } from '../data/synthetic.js';
 import { logger, keyName } from '../log/logger.js';
-import { channelsText, clamp, formatHms, local, readableTextColour, UNDO_HINT, CTRL, debounce } from '../util.js';
+import { channelsText, clamp, formatHms, local, readableTextColour, UNDO_HINT, CTRL, debounce, touchFirst } from '../util.js';
 import { isTyping } from '../ui/dom.js';
 import { displayCode } from '../catalogue.js';
 import { icon } from '../views/common.js';
@@ -175,7 +175,9 @@ export class Workspace {
   _statusBar() {
     const s = this.s;
     const who = s.me ? `${s.me.annotator_id}${s.me.display_name ? ` (${s.me.display_name})` : ''}` : '';
-    this.hintEl = h('span.ws-hint', {}, this.kind === 'review' ? REVIEW_HINT : this.readOnly ? 'N / P  next, previous annotation' : KEY_HINT);
+    const touch = touchFirst();
+    this.hintEl = h('span.ws-hint', {}, this.kind === 'review' ? (touch ? TOUCH_REVIEW_HINT : REVIEW_HINT)
+      : this.readOnly ? (touch ? TOUCH_VIEW_HINT : 'N / P  next, previous annotation') : (touch ? TOUCH_HINT : KEY_HINT));
     this.msgEl = h('span.ws-message', { role: 'status', 'aria-live': 'polite' });
     this.fixedEl = h('span.ws-fixed');
     this.countEl = h('span.ws-fixed');
@@ -200,7 +202,7 @@ export class Workspace {
     }
     this._annotationsPanel();
     this._recordingPanel();
-    this.tabPanels.help.appendChild(h('div.help-text', { html: HELP_HTML }));
+    this.tabPanels.help.appendChild(h('div.help-text', { html: helpHtml(touchFirst()) }));
     this.side.append(this.coachHost, this.reviewHost, h('div.side-tabs', {}, bar, ...Object.values(this.tabPanels)));
     this.showTab('annotations');
   }
@@ -708,7 +710,8 @@ export class Workspace {
         onSelect: () => { logger.noteInput(`menu:${l.label}`); this.relabel(id, l.label); } });
     }
     items.push({ label: this.quick.length ? 'Other type' : 'Change type to', submenu: sub });
-    items.push({ separator: true }, { label: 'Edit channels…', onSelect: () => this.editChannelsOf(id) });
+    items.push({ separator: true }, { label: 'Edit times…', onSelect: () => { this.select([id]); this.editTimesOfSelected(); } },
+      { label: 'Edit channels…', onSelect: () => this.editChannelsOf(id) });
     if (a.channels.length) items.push({ label: 'Apply to whole montage', onSelect: () => { logger.noteInput('menu:Apply to whole montage'); this.setAnnotationChannels(id, []); } });
     items.push({ separator: true }, { label: 'Delete', onSelect: () => { logger.noteInput('menu:Delete'); this.deleteOne(id); } });
     showMenu(items, x, y);
@@ -908,17 +911,36 @@ export class Workspace {
     if (!this.cancelMark()) this.select(null);
   }
 
-  // ====================================================================== mouse
+  // ============================================================ mouse and touch
   _pointer(type, info, e) {
     if (type === 'pointermove' || type === 'pointerleave') this.pointerXY = info && info.area === 'eeg' ? { x: e.clientX, y: e.clientY } : null;
     const g = this.gesture;
+    if (type === 'cancel') {
+      // A second finger on the EEG (it moves the view instead) or the browser took the touch back.
+      this.gesture = null;
+      if (g && g.kind === 'draw') this.viewer.setDragPreview(null);
+      if (g && (g.kind === 'resize' || g.kind === 'move')) this.viewer.setAnnotations(this.store.annotations());
+      return;
+    }
+    if (type === 'longpress') {
+      // On a touch screen, a long press on an annotation is the right-click: its menu.
+      if (!info || !info.annotation || this.readOnly || (g && g.moved)) return;
+      this.gesture = null;
+      logger.noteInput('eeg_long_press');
+      this.select([info.annotation], { via: 'eeg_click' });
+      this.showContextMenu(info.annotation, e.clientX, e.clientY);
+      return;
+    }
     if (type === 'contextmenu') {
       e.preventDefault();
       if (info && info.annotation && !this.readOnly) { this.select([info.annotation], { via: 'eeg_click' }); this.showContextMenu(info.annotation, e.clientX, e.clientY); }
       return;
     }
     if (type === 'dblclick') {
-      if (info && info.annotation) { logger.noteInput('eeg_double_click'); this.changeTypeOf(info.annotation, { x: e.clientX + 4, y: e.clientY + 4 }); }
+      if (info && info.annotation) {
+        logger.noteInput(e.pointerType && e.pointerType !== 'mouse' ? 'eeg_double_tap' : 'eeg_double_click');
+        this.changeTypeOf(info.annotation, { x: e.clientX + 4, y: e.clientY + 4 });
+      }
       return;
     }
     if (type === 'pointerdown') {

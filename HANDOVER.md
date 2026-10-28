@@ -172,9 +172,9 @@ names the administrators. The "Data protection in brief" sections of
 exactly what is stored; check the arrangements with the university's research data and ethics
 processes before the first real study.
 
-**5. Loose ends in the browser version.** These are known, and none of them blocks a pilot. It has
-been tested in Chromium (Chrome and Edge) only, so Firefox and Safari need a run-through, the
-admin area on a tablet included. On the test machine, the first 10-second screen of a 128-channel
+**5. Loose ends in the browser version.** These are known, and none of them blocks a pilot. It is
+tested in Chromium (Chrome and Edge) and in WebKit (Safari's engine), with emulated iPads upright
+and on their side, so Firefox and a real iPad (with fingers and the Pencil) need a run-through. On the test machine, the first 10-second screen of a 128-channel
 recording with filters took about 0.3 s to appear and the following screen, prepared in advance,
 about 0.02 s; check this on the computers annotators will use. A reference set's
 `show_full_report_to_annotator` setting has no effect in the browser, where competency reports are

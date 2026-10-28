@@ -4,13 +4,18 @@
 //
 // Three stacked canvases: the background (grid, zones, annotation fills), the traces, and the
 // foreground (tags, outlines, marks, scale bars). Each is redrawn only when what it shows changes.
-// Mouse input on the EEG is passed, with the time, channel and annotation under the pointer, to
-// `onPointer`; navigation (wheel, overview) is handled here.
+// Pointer input on the EEG (mouse, finger or pencil) is passed, with the time, channel and annotation
+// under the pointer, to `onPointer`; navigation (wheel, overview, two-finger moves and pinches, and
+// the row of buttons shown on touch screens) is handled here. On a touch screen a long press is
+// passed as 'longpress' and a double tap as 'dblclick'; a second finger cancels what the first began
+// ('cancel').
 
 import { h } from '../ui/dom.js';
 import { clamp, hexToRgb, legibleOnWhite, rgba } from '../util.js';
 import { COLOURS, FONT } from '../ui/theme.js';
 import { CHANNEL_COUNTS, DURATIONS, decimateColumns, layoutTags, meanOf, niceStep, stepOption, tickLabel, voltsText } from './geometry.js';
+import { LONG_PRESS_MS, TAP_SLOP_PX, edgePx, isDoubleTap, pinchView, twoFingers } from './touch.js';
+import { icon } from '../views/common.js';
 
 const GUTTER = 92;
 const TAG_ROW_H = 20;
@@ -106,15 +111,29 @@ export class EegViewer {
     this.over = h('canvas.layer.top', { tabindex: '-1', 'aria-label': 'EEG', 'data-log': 'eeg' });
     this.plot = h('div.viewer-plot', {}, this.under, this.traces, this.over);
     this.overviewCanvas = h('canvas.viewer-overview', { 'data-log': 'overview', 'aria-label': 'Overview of the whole recording' });
-    this.el = h('div.viewer', {}, this.plot, this.overviewCanvas);
+    this.touchbar = this._touchbar();
+    this.el = h('div.viewer', {}, this.plot, this.touchbar, this.overviewCanvas);
     host.appendChild(this.el);
     this._ro = new ResizeObserver(() => this._resize());
     this._ro.observe(this.plot);
     this._ro.observe(this.overviewCanvas);
     const pass = (type) => (e) => this._pointer(type, e);
-    for (const t of ['pointerdown', 'pointermove', 'pointerup', 'pointerleave', 'dblclick', 'contextmenu']) {
+    for (const t of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'pointerleave', 'dblclick', 'contextmenu']) {
       this.over.addEventListener(t, pass(t));
     }
+    this._touches = new Map(); // fingers on the EEG: pointerId -> { x, y } (client coordinates)
+    this._pinch = null;
+    this._afterPinch = false; // a finger left over from two: ignored until it lifts
+    this._press = null; // a press that may become a long press or a tap
+    this._lastTap = null;
+    this._pointerType = 'mouse';
+    // After a double tap or a long press, the browser's click for the lifted finger would land on the
+    // list or menu that just opened under it; the touch's end is cancelled so that no click follows.
+    this._swallowTouchEnd = false;
+    this.over.addEventListener('touchend', (e) => {
+      if (this._swallowTouchEnd && e.cancelable) e.preventDefault();
+      if (!e.touches.length) this._swallowTouchEnd = false;
+    }, { passive: false });
     this.over.addEventListener('wheel', (e) => this._wheel(e), { passive: false });
     let dragging = false;
     const ov = (e) => {
@@ -125,7 +144,33 @@ export class EegViewer {
     this.overviewCanvas.addEventListener('pointerdown', (e) => { dragging = true; this.overviewCanvas.setPointerCapture(e.pointerId); ov(e); });
     this.overviewCanvas.addEventListener('pointermove', (e) => { if (dragging) ov(e); });
     this.overviewCanvas.addEventListener('pointerup', () => { dragging = false; });
+    this.overviewCanvas.addEventListener('pointercancel', () => { dragging = false; });
     this._resize();
+  }
+
+  /** The buttons shown under the EEG on a touch screen, for what the keyboard does elsewhere. */
+  _touchbar() {
+    const btn = (name, label, log, fn) => h('button.btn.icon.small', { type: 'button', 'aria-label': label, title: label,
+      'data-log': `touch-${log}`, 'data-log-text': label, onclick: fn }, icon(name));
+    const group = (caption, ...buttons) => h('div.touch-group', { role: 'group', 'aria-label': caption }, h('span.touch-caption', {}, caption), ...buttons);
+    const v = () => this.view;
+    return h('div.viewer-touchbar', { role: 'toolbar', 'aria-label': 'Move through the EEG' },
+      group('Time',
+        btn('arrow-left', 'Back a screen', 'page-back', () => this.scrollPages(-1, 'button')),
+        btn('chevron-left', 'Back a little', 'back', () => this.scrollBy(-0.25 * v().durationS, 'button')),
+        btn('chevron-right', 'Forward a little', 'forward', () => this.scrollBy(0.25 * v().durationS, 'button')),
+        btn('arrow-right', 'Forward a screen', 'page-forward', () => this.scrollPages(1, 'button'))),
+      group('Time shown',
+        btn('minus', 'Show less time', 'less-time', () => this.stepDuration(-1, 'button')),
+        btn('plus', 'Show more time', 'more-time', () => this.stepDuration(1, 'button'))),
+      group('Channels',
+        btn('chevron-up', 'Earlier channels', 'channels-up', () => this.scrollChannels(-v().nChannels, 'button')),
+        btn('chevron-down', 'Later channels', 'channels-down', () => this.scrollChannels(v().nChannels, 'button')),
+        btn('minus', 'Show fewer channels', 'fewer-channels', () => this.stepChannels(-1, 'button')),
+        btn('plus', 'Show more channels', 'more-channels', () => this.stepChannels(1, 'button'))),
+      group('Size',
+        btn('minus', 'Smaller traces', 'smaller', () => this.scaleBy(1 / 1.25, 'button')),
+        btn('plus', 'Larger traces', 'larger', () => this.scaleBy(1.25, 'button'))));
   }
 
   destroy() {
@@ -800,7 +845,7 @@ export class EegViewer {
 
   // ------------------------------------------------------------- hit-testing
   /** What is under a point (client coordinates): time, channel, annotation, edge, tag. */
-  hit(clientX, clientY) {
+  hit(clientX, clientY, { edge = EDGE_PX, trace = 5 } = {}) {
     const r = this.over.getBoundingClientRect();
     const x = clientX - r.left;
     const y = clientY - r.top;
@@ -822,25 +867,25 @@ export class EegViewer {
     if (info.area !== 'eeg') return info;
     // annotations under the pointer: the selected one first, then the shortest
     const at = this._visibleAnnotations().filter((a) => {
-      const xa = this.sampleToX(a.onset_sample) - EDGE_PX;
-      const xb = this.sampleToX(end(a)) + EDGE_PX;
+      const xa = this.sampleToX(a.onset_sample) - edge;
+      const xb = this.sampleToX(end(a)) + edge;
       if (x < xa || x > xb) return false;
       return !a.channels.length || (info.channel && a.channels.includes(info.channel));
     }).sort((p, q) => (this.selected.has(q.annotation_id) - this.selected.has(p.annotation_id)) || p.duration_samples - q.duration_samples);
     for (const a of at) {
       const xa = this.sampleToX(a.onset_sample);
       const xb = this.sampleToX(end(a));
-      if (Math.abs(x - xa) <= EDGE_PX && xa >= this.x0 - 1) { info.annotation = a.annotation_id; info.edge = 'start'; return info; }
-      if (Math.abs(x - xb) <= EDGE_PX && xb <= this.x1 + 1) { info.annotation = a.annotation_id; info.edge = 'end'; return info; }
+      if (Math.abs(x - xa) <= edge && xa >= this.x0 - 1) { info.annotation = a.annotation_id; info.edge = 'start'; return info; }
+      if (Math.abs(x - xb) <= edge && xb <= this.x1 + 1) { info.annotation = a.annotation_id; info.edge = 'end'; return info; }
     }
     const inside = at.find((a) => x >= this.sampleToX(a.onset_sample) && x <= this.sampleToX(end(a)));
     if (inside) info.annotation = inside.annotation_id;
-    info.nearTrace = this._nearTrace(info.row, x, y);
+    info.nearTrace = this._nearTrace(info.row, x, y, trace);
     return info;
   }
 
   /** True when (x, y) is within a few pixels of the trace drawn in that row. */
-  _nearTrace(row, x, y) {
+  _nearTrace(row, x, y, slack = 5) {
     if (row === null) return false;
     const c = this._cols.get(row);
     if (!c) return Math.abs(y - this.rowCentre(row)) < Math.max(6, this.rowH / 3);
@@ -852,7 +897,7 @@ export class EegViewer {
       const yb = c.yc - clamp((c.max[k] - c.offset) * c.k, -c.lim, c.lim); // CSS pixels
       lo = Math.min(lo, ya, yb); hi = Math.max(hi, ya, yb);
     }
-    return y >= lo - 5 && y <= hi + 5;
+    return y >= lo - slack && y <= hi + slack;
   }
 
   /** For the interaction log: the area, time and channel under a point, or null off the EEG. */
@@ -871,7 +916,17 @@ export class EegViewer {
   }
 
   _pointer(type, e) {
-    const info = type === 'pointerleave' ? null : this.hit(e.clientX, e.clientY);
+    if (type === 'dblclick' || type === 'contextmenu') {
+      // A finger's double tap and long press are recognised below; the browser's own versions of
+      // them (which some touch browsers send as well) would act twice.
+      if (this._pointerType !== 'mouse') { if (type === 'contextmenu') e.preventDefault(); return; }
+    } else {
+      this._pointerType = e.pointerType || 'mouse';
+    }
+    if (e.pointerType === 'touch' && this._fingers(type, e)) return;
+    const coarse = e.pointerType === 'touch' || e.pointerType === 'pen';
+    const info = type === 'pointerleave' ? null
+      : this.hit(e.clientX, e.clientY, { edge: edgePx(e.pointerType, EDGE_PX), trace: coarse ? 12 : 5 });
     const prev = this.hover;
     this.hover = info;
     if (type === 'pointermove' || type === 'pointerleave') {
@@ -879,7 +934,88 @@ export class EegViewer {
         (info && prev && info.row !== prev.row);
       if (namesChanged) this.invalidate(['under', 'over']); else this.invalidate(['over']);
     }
+    if (type === 'pointercancel') { this._endPress(); if (this.onPointer) this.onPointer('cancel', null, e); return; }
     if (this.onPointer) this.onPointer(type, info, e);
+    if (coarse) this._pressOrTap(type, e, info);
+  }
+
+  /** Two fingers move the view (and cancel what one finger began); returns true when it took the event. */
+  _fingers(type, e) {
+    const r = this.over.getBoundingClientRect();
+    const local = () => [...this._touches.values()].map((p) => ({ x: p.x - r.left, y: p.y - r.top }));
+    if (type === 'pointerdown') {
+      this._touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (this._touches.size === 2) {
+        const [a, b] = local();
+        const f = twoFingers(a, b);
+        this._pinch = { ...f, view: { ...this.view }, tAtC: this.xToT(f.cx) };
+        this._endPress();
+        this._lastTap = null;
+        if (this.onPointer) this.onPointer('cancel', null, e);
+        try { this.over.setPointerCapture(e.pointerId); } catch { /* the finger has gone */ }
+        return true;
+      }
+      return this._touches.size > 2 || this._afterPinch;
+    }
+    if (type === 'pointermove') {
+      if (this._touches.has(e.pointerId)) this._touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (this._pinch && this._touches.size >= 2) {
+        const [a, b] = local();
+        this.setView(pinchView(this._pinch, twoFingers(a, b), { x0: this.x0, plotW: this.plotW, rowH: this.rowH, durationTotal: this.durationTotal }), 'touch');
+        return true;
+      }
+      return this._afterPinch;
+    }
+    if (type === 'pointerup' || type === 'pointercancel') {
+      this._touches.delete(e.pointerId);
+      if (this._pinch) {
+        this._pinch = null;
+        this._afterPinch = this._touches.size > 0;
+        return true;
+      }
+      if (this._afterPinch) { this._afterPinch = this._touches.size > 0; return true; }
+      return false;
+    }
+    return type === 'pointerleave' && (this._pinch !== null || this._afterPinch);
+  }
+
+  /** A finger or pencil held still is a long press; two quick taps in one place are a double tap. */
+  _pressOrTap(type, e, info) {
+    if (type === 'pointerdown') {
+      this._endPress();
+      const p = { x: e.clientX, y: e.clientY, t: performance.now(), moved: false, fired: false, pointerType: e.pointerType };
+      p.timer = setTimeout(() => {
+        if (this._press !== p || p.moved) return;
+        p.fired = true;
+        this._lastTap = null;
+        this._swallowTouchEnd = true;
+        if (this.onPointer) {
+          const at = this.hit(p.x, p.y, { edge: edgePx(p.pointerType, EDGE_PX), trace: 12 });
+          this.onPointer('longpress', at, { clientX: p.x, clientY: p.y, pointerType: p.pointerType, preventDefault() {} });
+        }
+      }, LONG_PRESS_MS);
+      this._press = p;
+    } else if (type === 'pointermove' && this._press && Math.hypot(e.clientX - this._press.x, e.clientY - this._press.y) > TAP_SLOP_PX) {
+      this._press.moved = true;
+      clearTimeout(this._press.timer);
+    } else if (type === 'pointerup') {
+      const p = this._press;
+      this._endPress();
+      if (!p || p.moved || p.fired) return;
+      const tap = { x: e.clientX, y: e.clientY, t: performance.now() };
+      if (isDoubleTap(this._lastTap, tap)) {
+        this._lastTap = null;
+        this._swallowTouchEnd = true;
+        if (this.onPointer) this.onPointer('dblclick', info, e);
+      } else {
+        this._lastTap = tap;
+      }
+    }
+  }
+
+  _endPress() {
+    if (this._press) clearTimeout(this._press.timer);
+    this._press = null;
   }
 
   _wheel(e) {

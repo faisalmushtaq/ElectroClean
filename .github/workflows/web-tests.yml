@@ -1,5 +1,6 @@
 # Tests of the browser version: the browser modules (node --test), the application in Chromium
-# against the demonstration and the real study server (Playwright), and a study on Firebase on the
+# against the demonstration and the real study server (Playwright), the same in WebKit, the engine
+# of Safari on iPads and Macs (with the iPad's touch, layouts and file pickers), and a study on Firebase on the
 # Firebase Emulator Suite (the functions' tests and the application signing in, annotating,
 # training and exporting). See docs/web/server.md and docs/web/firebase.md.
 #
@@ -74,6 +75,41 @@ jobs:
         with:
           name: e2e-screenshots
           path: e2e-screenshots
+          if-no-files-found: ignore
+          retention-days: 14
+
+  webkit:
+    name: End-to-end in WebKit (Safari's engine, as on an iPad)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Install Python requirements
+        run: python -m pip install -r requirements-dev.txt
+      - name: Install Playwright and WebKit
+        run: |
+          npm install --no-save --no-package-lock "playwright@${PLAYWRIGHT_VERSION}"
+          npx playwright install --with-deps webkit
+      - name: The application in WebKit (demonstration, the real study server, iPads)
+        env:
+          ELECTROCLEAN_PYTHON: python
+        run: node web_tests/run_e2e.mjs --browser webkit --screenshots webkit-screenshots
+      - name: Keep the screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: webkit-screenshots
+          path: webkit-screenshots
           if-no-files-found: ignore
           retention-days: 14
 

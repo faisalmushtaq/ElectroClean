@@ -21,7 +21,7 @@
 }
 /* Sections are numbered, 01 Overview, 02 Annotators … */
 .admin-nav-link::before { content: counter(section, decimal-leading-zero); min-width: 16px; color: var(--text-tertiary); font: var(--t-12); font-variant-numeric: tabular-nums lining-nums; }
-.admin-nav-link:hover { background: var(--hover); color: var(--ink); }
+@media (hover: hover) { .admin-nav-link:hover { background: var(--hover); color: var(--ink); } }
 .admin-nav-link[aria-current="page"] { background: var(--band); color: var(--ink); border-left-color: var(--ink); }
 .admin-nav-link[aria-current="page"]::before { color: var(--ink); }
 .admin-body { padding: 24px 32px 64px 16px; min-width: 0; }
@@ -74,9 +74,11 @@ ul.warnings li { font: var(--t-14); }
 /* The figures of the overview: a bento grid, each figure large in the serif over its label; the
    work done is the one figure in the accent colour. */
 .stat-tiles {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px;
+  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 1px;
   background: var(--hairline); border: 1px solid var(--hairline);
 }
+/* Six figures in rows that always fill: six, three or two to a row. */
+@media (max-width: 1180px) { .stat-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .stat-tile { display: flex; flex-direction: column; gap: 4px; background: var(--page); padding: 24px; }
 .stat-tile:nth-child(4) .stat-value { color: var(--accent); }
 .stat-value { font: var(--t-56); letter-spacing: -0.04em; color: var(--ink); font-variation-settings: var(--display); font-variant-numeric: tabular-nums lining-nums; }
@@ -177,7 +179,7 @@ table.admin-info th { width: 1%; }
   border-left: 2px solid transparent; border-radius: 0; background: transparent; color: var(--text); font: inherit; cursor: pointer;
   transition: background-color var(--fast) var(--ease);
 }
-.set-item:hover { background: var(--hover); }
+@media (hover: hover) { .set-item:hover { background: var(--hover); } }
 .set-item[aria-current="true"] { border-left-color: var(--ink); background: var(--band); }
 .set-name { font-weight: 600; }
 .admin-tabs { padding: 0; margin-bottom: 0; flex-wrap: wrap; }
@@ -227,4 +229,11 @@ table.admin-info th { width: 1%; }
   table.admin-list td > * { min-width: 0; }
   .field.num { max-width: none; }
   .report-frame { height: 60vh; }
+}
+
+/* Fingers: fields at 16 pixels (Safari zooms into smaller ones) and larger section links. */
+@media (pointer: coarse) {
+  .field.area, .field.small { font: var(--t-16); }
+  .field.small { height: 40px; }
+  .admin-nav-link { padding: 12px; }
 }

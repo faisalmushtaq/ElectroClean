@@ -113,8 +113,9 @@ session clock); `closed_without_saving` (`n_annotations`); `load_failed`
 (`recording_id`, `kind`, `reason`); `recording_unavailable` (`recording_id`,
 `reason`).
 
-**Mouse and keys.** `mouse_press`, `mouse_release` and `double_click` (`button`,
-`modifiers`, the `widget` (in the browser the kind of control, such as
+**Mouse, touch and keys.** `mouse_press`, `mouse_release` and `double_click` (`button`,
+in the browser `pointer`, which is `mouse`, `touch` for a finger or `pen` for a
+stylus such as the Apple Pencil, `modifiers`, the `widget` (in the browser the kind of control, such as
 `button`, `input`, `select`, `canvas` or a menu item; in the desktop
 application the widget class), its `name` and `text` where it has them, the
 `top_window` (in the browser the page: `signin`, `home`, `annotate`, `training`
@@ -135,7 +136,8 @@ counted). `shortcut` (`key` and the `action` it triggered, for example
 sample).
 
 **What is on screen.** `view`, logged once scrolling, zooming or scaling has
-settled for a quarter of a second: `t_start` and `duration` (the time shown, in
+settled for a quarter of a second, whether by keys, wheel, overview bar, the
+buttons under the EEG on a touch screen, or two fingers on it: `t_start` and `duration` (the time shown, in
 seconds), `ch_start` and `n_channels` (the channels shown), `first_channel` and
 `last_channel`, `scale_factor` (the amplitude scale, 1 at the start) and
 `butterfly`. `status_message` (`text` shown in the status line).
@@ -165,7 +167,8 @@ type has `auto_merged` and `merged_away`. `undo`, `redo`,
 `changed`.
 
 `via` says which input caused a change, when one happened in the three seconds
-before it: `eeg_drag`, `eeg_click` or `eeg_double_click` (on the EEG),
+before it: `eeg_drag`, `eeg_click` or `eeg_double_click` (on the EEG; on a touch
+screen also `eeg_double_tap` and `eeg_long_press`),
 `shortcut:<action>`, `key:<key>`, `button:<text>`, `menu:<text>`,
 `list:<name>`, `dialog:<title>`, or `unknown`.
 

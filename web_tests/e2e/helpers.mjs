@@ -49,7 +49,10 @@ export async function eegPoint(page, t, name = null) {
       const row = v.channels.findIndex((c) => c.name === name);
       y = v.rowCentre(row);
     }
-    return { x: r.left + v.tToX(t), y: r.top + y };
+    const x = r.left + v.tToX(t);
+    // WebKit (Safari's engine) reports the pointer in whole pixels: aim at the pixel at or just after t.
+    const webkit = /AppleWebKit/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
+    return { x: webkit ? Math.ceil(x) : x, y: r.top + y };
   }, [t, name]);
 }
 
