@@ -11,7 +11,7 @@ export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..")
 export const FIXTURES = join(ROOT, "web_tests", "fixtures");
 export const DATA = join(ROOT, "electroclean", "web", "static", "js", "data");
 /** Must equal FIXTURE_VERSION in scripts/make_web_fixtures.py. */
-export const FIXTURE_VERSION = 3;
+export const FIXTURE_VERSION = 4;
 
 function python() {
   if (process.env.ELECTROCLEAN_PYTHON) return process.env.ELECTROCLEAN_PYTHON;

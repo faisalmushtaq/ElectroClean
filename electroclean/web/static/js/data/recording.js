@@ -92,6 +92,10 @@ class LocalBackend {
         return this.engine.fingerprint((fraction) => onProgress && onProgress({ stage: "fingerprint", fraction }));
       case "readWindow":
         return this.engine.readWindow(args);
+      case "amplitude":
+        return this.engine.amplitudeCheck(args);
+      case "findEvents":
+        return this.engine.findEvents(args);
       case "close":
         if (this.engine) this.engine.close();
         this.engine = null;
@@ -193,6 +197,9 @@ export class Recording {
     this.suggestedHidden = info.channels.filter((c) => c.hidden).map((c) => c.name);
     this.readerKind = backend.kind;
     this.openMs = info.openMs;
+    // for register.js: the annotations as read and the channel types MNE-Python gives
+    this.annotations = info.annotations || [];
+    this.mneTypes = info.mneTypes || info.channels.map((c) => (c.type === "stim" ? "stim" : "eeg"));
     this._fingerprint = info.fingerprint || null;
     this._boundaries = boundariesOf(info);
     this._closed = false;
@@ -232,6 +239,29 @@ export class Recording {
       filterable,
     });
     return { startSample: r.startSample, nSamples: r.nSamples, data: r.data, edgeZones: r.edgeZones, elapsedMs: r.elapsedMs };
+  }
+
+  /**
+   * The desktop's amplitude check with other channel types and hidden channels than the
+   * recording's own (register.js gives those of the manifest it builds).
+   * @param {{filters?: object | null, types?: string[], hidden?: boolean[]}} [p] filters: null for none
+   * @returns {Promise<{amplitudesV: object, suggestedScalings: object, warnings: string[]}>}
+   */
+  async checkAmplitude(p = {}) {
+    this._check();
+    return this._backend.call("amplitude", { filters: p.filters ?? null, types: p.types ?? null, hidden: p.hidden ?? null });
+  }
+
+  /**
+   * Trigger codes read from the given channels as mne.find_events reads them (for channels that
+   * the file does not mark as trigger channels but a channels.tsv or a study's settings do).
+   * @param {number[]} channels indices
+   * @param {{mask?: number}} [options] mask: the bits kept (-1 for all)
+   * @returns {Promise<{sample: number, code: number, channel: string}[]>}
+   */
+  async findTriggerEvents(channels, options = {}) {
+    this._check();
+    return this._backend.call("findEvents", { channels: Array.from(channels), mask: options.mask ?? -1 });
   }
 
   /**
