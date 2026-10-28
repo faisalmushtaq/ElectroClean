@@ -89,7 +89,7 @@ electroclean/web/static/          the browser application (plain ES modules, no 
                                   mnewarn.js, pyfmt.js, pyjson.js
     js/viewer/                    drawing the EEG, axes, overview, navigation
     js/annotate/                  the annotation store, tools, toolbar, panels, picker, keys
-    js/training/                  the coach and practice review
+    js/training/                  the coach, practice review and the short-segment quiz
     js/log/                       the interaction logger
 web_tests/unit/                   node --test unit tests of the browser modules
 web_tests/e2e/                    Playwright end-to-end tests
@@ -367,6 +367,25 @@ operations it can run in the browser (accounts, assignments, recordings,
 settings, reference sets from saved annotations or files, the audit log) and
 answers the analyses (agreement, activity, competency, consensus) with an
 error that says they need a study server or Firebase.
+
+The short-segment quiz (`js/training/quiz.js`, the route `#quiz`) uses
+`quiz(setId, body)` only: `get` once, then `answer` for each segment and
+`finish`. On Firebase only `get` is asked a second time when a call fails,
+since an answer or a finish must never be sent twice; when an answer is
+refused because the study already has one (409, after a reply that was lost),
+the view reloads with `get` and carries on. The segments are cut as the
+desktop cuts them (the item's interval with `context_s` around it, within the
+recording), shown read only in the usual viewer from the annotator's own copy
+of the recording with the item's interval shaded, after the copy has been
+checked against the fingerprint in the `recordings` manifests of `get`. The
+view logs the desktop's quiz events (`quiz_item_shown`, `quiz_answer` with
+`response_time_s`, `quiz_finished`, each with `quiz_mode` "practice" when the
+feedback is immediate and "assessment" when it comes at the end) and also
+`quiz_opened`, `quiz_recording_checked` and `quiz_stopped`. When the feedback
+comes at the end, `quiz_answer` has `correct` null, as the browser does not
+know it, and `quiz_finished` has the counts. The demonstration has a quiz of
+seven segments from its first two examples, in an order of its own for each
+account (the desktop's `item_order` uses Python's random generator).
 
 ## Registering recordings in the browser
 

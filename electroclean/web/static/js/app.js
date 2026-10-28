@@ -14,13 +14,14 @@ import { Workspace, friendlyDuration } from './annotate/workspace.js';
 import { GuidedCoach, minutesText } from './training/coach.js';
 import { PracticeReview, reviewAnnotations } from './training/review.js';
 import { trainingPath } from './training/path.js';
+import { QuizView } from './training/quiz.js';
 import { signinView } from './views/signin.js';
 import { homeView } from './views/home.js';
 import { OpenView } from './views/open.js';
 import { appHeader, downloadFiles, smallScreenNotice } from './views/common.js';
 import { nowLocalIso } from './util.js';
 
-const VIEWS = ['signin', 'home', 'open', 'annotate', 'review', 'training'];
+const VIEWS = ['signin', 'home', 'open', 'annotate', 'review', 'training', 'quiz'];
 
 // The file readers are loaded when the first recording is opened (the demonstration may not need them).
 let recordingModule = null;
@@ -186,6 +187,10 @@ export class App {
 
   // ===================================================================== views
   _render(el, route) {
+    if (this.quizView && this.quizView.el !== el) {
+      this.quizView.destroy(); // the quiz's answers are with the study; its recordings are closed
+      this.quizView = null;
+    }
     clear(this.content);
     this.content.appendChild(el);
     this._setRoute(route);
@@ -201,7 +206,7 @@ export class App {
     }
     document.title = { signin: 'ElectroClean – sign in', home: 'ElectroClean', open: 'ElectroClean – open a recording',
       annotate: `ElectroClean – ${this.ws ? this.ws.s.recording.fileName : 'annotate'}`, review: 'ElectroClean – practice review',
-      training: 'ElectroClean – training programme' }[route] || 'ElectroClean';
+      training: 'ElectroClean – training programme', quiz: 'ElectroClean – quiz' }[route] || 'ElectroClean';
   }
 
   async _onHash() {
@@ -216,6 +221,11 @@ export class App {
       return;
     }
     if (!this.me) { if (want !== 'signin') this.showSignin(); return; }
+    if (want === 'quiz') {
+      if (this.quizSetId) this.showQuiz(this.quizSetId, { fromTraining: this._fromTraining });
+      else this.showHome();
+      return;
+    }
     if (want === 'home') this.showHome();
     else if (want === 'training' && this.me.programme) this.showTraining();
     else if (want === 'open') this.openFromComputer(null);
@@ -242,6 +252,17 @@ export class App {
     this.showHome();
   }
 
+  /** The short-segment quiz of a reference set (one of me.quizzes). */
+  showQuiz(setId, { fromTraining = false } = {}) {
+    this._fromTraining = Boolean(fromTraining);
+    this.quizSetId = setId;
+    const view = new QuizView(this, setId);
+    if (this.quizView) this.quizView.destroy();
+    this.quizView = view;
+    this._render(view.el, 'quiz');
+    view.start();
+  }
+
   async showTraining(message = this.pathMessage) {
     this.pathMessage = '';
     let data;
@@ -264,6 +285,8 @@ export class App {
         this.openAssignment(item);
       },
       onBack: () => { logger.event('training_path_left', {}); this.showHome(); },
+      quizzes: (this.me && this.me.quizzes) || [],
+      onQuiz: (q) => this.showQuiz(q.set_id, { fromTraining: true }),
     });
     this._render(h('div.view', { 'data-view': 'training' }, appHeader(this), page), 'training');
   }

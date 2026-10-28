@@ -157,6 +157,10 @@ export class HttpBackend {
 
   guidedShowMe(recordingId, body) { return this._request('POST', `/training/guided/${idPath(recordingId)}/show-me`, body); }
 
+  // -------------------------------------------------------------------- quiz
+  /** The short-segment quiz of a reference set: body {action: "get" | "answer" | "finish", ...}. */
+  quiz(setId, body) { return this._request('POST', `/quiz/${encodeURIComponent(setId)}`, body); }
+
   // ------------------------------------------------------------- interaction log
   openVisit(body) { return this._request('POST', '/visits', body); }
 

@@ -144,13 +144,37 @@ the experts', with every disagreement labelled on the EEG: MISSED for an artifac
 EXTRA for one the experts did not mark, and TYPE for one you gave another type. The list "What to
 look at" takes you to each of them, and N and P step through it.
 
+## The short-segment quiz
+
+Some studies also offer a quiz, listed on your first page (and on the training path for trainees):
+short pieces of EEG, each with a stretch shaded in blue, and the question "Which artifact type is
+the main one in the shaded segment?". It tests whether you recognise the types; marking where an
+artifact starts and ends is assessed separately, in whole recordings.
+
+The segments come from recordings of the study, so the quiz first asks you to open them from your
+computer, as for annotation: choose the files, drop them onto the page, or choose a folder that
+holds them (one folder may hold all of them). Each file is checked against the study's copy by its
+fingerprint, and a file whose contents differ is refused with an explanation. The page lists the
+recordings the quiz needs and which one it needs now.
+
+Each segment is shown with a few seconds of EEG around it, read only, with the study's filters. The
+answers are listed by family, as in the annotation view, with group terms such as Eye-artifact
+marked "group: exact type unclear"; some quizzes also offer "No artifact / none of these". Choose
+one and press Submit answer. Depending on the quiz, you see straight away whether it was right, with
+a short explanation, and press Next segment; or you go on to the next segment and see your result at
+the end. Every answer is kept with the study as soon as you send it, so ‹ Stop the quiz lets you
+carry on another time from where you stopped. At the end ElectroClean shows how many segments you
+answered correctly, overall and for each artifact type.
+
 ## The demonstration
 
 Without a study, ElectroClean runs as a demonstration in the browser. Sign in as A01 to annotate or
 as T01 to follow the training programme; the password is demo. Three example recordings with
 simulated artifacts are built in: use one straight away, or download them as EDF files and open
-them from your computer to try that way too. Your results stay in your browser; Download my results
-saves them as a file, and Reset the demonstration forgets them. Wherever the demonstration does what
+them from your computer to try that way too. A demonstration quiz of seven segments from the first
+two examples, with feedback after each answer, is on the first page for both accounts; Use the
+example recordings opens its recordings without any files. Your results stay in your browser;
+Download my results saves them as a file, and Reset the demonstration forgets them. Wherever the demonstration does what
 a study's server would do (checking guided steps, scoring practice, storing results), the page says
 so.
 
