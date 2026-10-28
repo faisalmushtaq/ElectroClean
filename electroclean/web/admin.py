@@ -1,0 +1,1112 @@
+"""The admin area's operations (``POST /admin/{op}``, ``ec_admin``; docs/web/api.md, "Administration").
+
+:meth:`Admin.run` checks that the caller is an administrator and runs one operation; every
+operation that changes the study appends an entry to the audit log (:mod:`electroclean.web.audit`).
+Reference sets are changed with the desktop's own code (:class:`electroclean.training.reference.ReferenceSet`):
+the stored set is written into a scratch folder, changed there and stored again, so a set made in
+the browser is the same as one made with ``electroclean-admin``, provenance included. The analyses
+are in :mod:`electroclean.web.analyses` and the example set in :mod:`electroclean.web.example`.
+"""
+
+from __future__ import annotations
+
+import base64
+import copy
+import json
+import math
+import re
+import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import replace
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+from electroclean.app.common import now_local_iso
+from electroclean.training.reference import GUIDANCE_LEVELS, NONE_OPTION, USES, ReferenceSet, ReferenceSetError
+from electroclean.web import audit
+from electroclean.web.errors import ApiError
+from electroclean.web.manifest import SCOPE_STUDY, fingerprint_of, manifest_info, set_scope
+from electroclean.web.store import MODES, ROLES, STATUSES, AccountProblem, StoreError, User
+
+if TYPE_CHECKING:
+    from electroclean.app.annotations.model import AnnotationDocument
+    from electroclean.web.service import StudyService
+
+#: The blocks of electroclean_study.json's settings that the admin area may read and change.
+SETTINGS_BLOCKS = ("filters", "display", "channels", "selection", "logging", "annotation", "loading", "discovery")
+SET_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+ITEM_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+EMAIL_RE = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,190}\.[^@\s]{2,63}$")
+MAX_DOCUMENT_BYTES = 8_000_000
+QUIZ_FEEDBACK = ("immediate", "end")
+
+#: Operations that only read (every other one appends an audit entry).
+READ_ONLY = ("overview", "settings_get", "users_list", "assignments_list", "recordings_list", "sets_list",
+             "set_guided_notes", "quiz_items", "progress", "agreement", "activity", "competency", "results_zip",
+             "audit", "visits")
+OPERATIONS = READ_ONLY + (
+    "settings_update", "user_add", "user_update", "user_reset_password", "user_remove", "assign", "unassign",
+    "programme_set", "recordings_register", "recording_update", "recording_remove", "set_create", "set_update",
+    "set_delete", "set_add_reference", "set_recording_update", "set_remove_recording", "set_guided_note",
+    "set_example_create", "quiz_item_add", "quiz_item_remove")
+
+
+# ------------------------------------------------------------------ checking input
+def _bad(message: str, code: str = "bad_request") -> ApiError:
+    return ApiError(400, code, message)
+
+
+def _text(body: dict[str, Any], key: str, *, required: bool = False, limit: int = 200, default: str = "") -> str:
+    value = body.get(key)
+    if value is None:
+        if required:
+            raise _bad(f"{key} is missing")
+        return default
+    if not isinstance(value, str) or len(value) > limit:
+        raise _bad(f"{key} must be text of at most {limit} characters")
+    value = value.strip()
+    if required and not value:
+        raise _bad(f"{key} is missing")
+    return value
+
+
+def _bool(body: dict[str, Any], key: str) -> bool | None:
+    value = body.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, bool):
+        raise _bad(f"{key} must be true or false")
+    return value
+
+
+def _number(body: dict[str, Any], key: str, *, minimum: float, maximum: float, default: float | None = None) -> float:
+    value = body.get(key, default)
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) \
+            or not minimum <= value <= maximum:
+        raise _bad(f"{key} must be a number from {minimum:g} to {maximum:g}")
+    return float(value)
+
+
+def _aid(value: Any, what: str = "annotator_id") -> str:
+    from electroclean.web.accounts import AccountError, normalise_id
+
+    if not isinstance(value, str):
+        raise _bad(f"{what} is missing")
+    try:
+        return normalise_id(value)
+    except AccountError as exc:
+        raise _bad(f"{what}: {exc}") from exc
+
+
+def _ids(value: Any, what: str, *, minimum: int = 1) -> list[str]:
+    if not isinstance(value, list) or len(value) < minimum or len(value) > 1000:
+        raise _bad(f"{what} must be a list of at least {minimum} ID(s)")
+    out = [_aid(v, what) for v in value]
+    if len(set(out)) != len(out):
+        raise _bad(f"{what} names someone twice")
+    return out
+
+
+def _rid(value: Any, what: str = "recording_id") -> str:
+    if not isinstance(value, str) or not value or len(value) > 512:
+        raise _bad(f"{what} is missing")
+    return value
+
+
+def _mode_ctx(body: dict[str, Any]) -> tuple[str, str]:
+    mode = body.get("mode") or "standard"
+    if mode not in MODES:
+        raise _bad(f"mode must be one of {', '.join(MODES)}")
+    ctx = body.get("context_id") or ""
+    if not isinstance(ctx, str):
+        raise _bad("context_id must be a reference set ID")
+    return mode, (ctx if mode != "standard" else "")
+
+
+def _plain(value: Any, what: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise _bad(f"{what} must be an object")
+    return value
+
+
+# ---------------------------------------------------------------------- the operations
+class Admin:
+    def __init__(self, service: StudyService) -> None:
+        self.service = service
+
+    @property
+    def store(self) -> Any:
+        return self.service.store
+
+    def run(self, op: Any, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        if not user.is_admin:
+            raise ApiError(403, "forbidden", "Only study administrators can use the admin area")
+        if not isinstance(op, str) or op not in OPERATIONS:
+            raise ApiError(404, "unknown_operation", f"There is no administrative operation {op!r}")
+        if not isinstance(body, dict):
+            raise _bad("The request must be a JSON object")
+        self.store.refresh()
+        with self.store.memo():
+            try:
+                return getattr(self, f"op_{op}")(user, body)
+            except AccountProblem as exc:
+                raise ApiError(exc.status, exc.code, exc.message) from exc
+
+    def _audit(self, user: User, op: str, summary: str, **details: Any) -> None:
+        audit.record(self.store, user.annotator_id, op, summary, details)
+
+    # ------------------------------------------------------------- helpers
+    def _set(self, set_id: Any) -> ReferenceSet:
+        if not isinstance(set_id, str) or not set_id:
+            raise _bad("set_id is missing")
+        return self.service.reference_set(set_id)
+
+    def _set_scope(self, rs: ReferenceSet) -> str:
+        return set_scope(rs.set_id) if rs.self_contained else SCOPE_STUDY
+
+    def _scope(self, value: Any, *, default: str | None = SCOPE_STUDY) -> str:
+        if value is None and default is not None:
+            return default
+        if value == SCOPE_STUDY:
+            return SCOPE_STUDY
+        if isinstance(value, str) and value.startswith("set:"):
+            rs = self._set(value[4:])
+            if not rs.self_contained:
+                raise _bad(f"The reference set {rs.set_id} uses the study's own recordings (scope 'study')")
+            return set_scope(rs.set_id)
+        raise _bad("scope must be 'study' or 'set:<reference set ID>'")
+
+    def _user_record(self, aid: str) -> dict[str, Any]:
+        rec = self.store.user_record(aid)
+        if rec is None:
+            raise ApiError(404, "unknown_user", f"{aid} has no account in this study")
+        return rec
+
+    @contextmanager
+    def _editing(self, set_id: str) -> Iterator[ReferenceSet]:
+        """The stored set in a scratch folder; stored again when the block ends without an error."""
+        from electroclean.web.registration import reference_set_payload
+
+        try:
+            definition, files = self.store.reference_set_payload(set_id)
+        except StoreError as exc:
+            raise ApiError(404, "no_reference_set", str(exc)) from exc
+        with tempfile.TemporaryDirectory(prefix="electroclean-set-") as tmp:
+            folder = Path(tmp) / set_id
+            for rel, data in files.items():
+                p = folder / rel
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_bytes(data)
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / "reference_set.json").write_text(json.dumps(definition, indent=2), encoding="utf-8")
+            try:
+                rs = ReferenceSet.load(folder)
+            except ReferenceSetError as exc:
+                raise ApiError(500, "reference_unavailable", "The reference set cannot be read") from exc
+            try:
+                yield rs
+            except (ValueError, KeyError, TypeError) as exc:
+                if isinstance(exc, ApiError):
+                    raise
+                raise ApiError(400, "invalid_set", str(exc)) from exc
+            definition, files = reference_set_payload(folder)
+            self.store.put_reference_set(definition, files)
+
+    def _entries(self) -> list[dict[str, str]]:
+        return [e for e in self.store.completion_entries() if e.get("status") == "completed"]
+
+    def _has_results(self, scope: str, rid: str, entries: list[dict[str, str]] | None = None) -> bool:
+        for e in entries if entries is not None else self._entries():
+            if e.get("recording_id") == rid and self.service.scope_for(e.get("mode", "standard"),
+                                                                        e.get("context", "")) == scope:
+                return True
+        return False
+
+    def _items_of(self, person: User, entries: list[dict[str, str]]) -> list[dict[str, Any]]:
+        out = []
+        for i in self.service.work_items(person):
+            mine = [e for e in entries if e.get("annotator_id") == person.annotator_id
+                    and e.get("recording_id") == i.recording_id and e.get("mode", "standard") == i.mode
+                    and e.get("context", "") == i.context_id]
+            draft = self.store.draft(person.annotator_id, i.key) or {} if i.status == "in_progress" else {}
+            last = max([e.get("completed_at", "") for e in mine] + [draft.get("saved_at", "")])
+            out.append({"annotator_id": person.annotator_id, "recording_id": i.recording_id, "mode": i.mode,
+                        "context_id": i.context_id, "status": i.status, "attempts": len(mine),
+                        "last_activity": last or None})
+        return out
+
+    def _counts(self) -> tuple[dict[tuple[str, str], int], dict[tuple[str, str], int]]:
+        """How many annotators are given, and have saved, each (scope, recording)."""
+        assigned: dict[tuple[str, str], int] = {}
+        for a in self.store.assignments():
+            key = (self.service.scope_for(a.mode, a.context_id), a.recording_id)
+            assigned[key] = assigned.get(key, 0) + 1
+        for u in self.store.user_records():
+            set_id = self.store.programme(u["annotator_id"])
+            if not set_id:
+                continue
+            try:
+                rs = self.store.reference_set(set_id)
+            except ReferenceSetError:
+                continue
+            for rid, entry in rs.recordings.items():
+                key = (self.service.scope_for(str(entry.get("use", "practice")), rs.set_id), rid)
+                assigned[key] = assigned.get(key, 0) + 1
+        done: dict[tuple[str, str], set[tuple[str, str, str]]] = {}
+        for e in self._entries():
+            key = (self.service.scope_for(e.get("mode", "standard"), e.get("context", "")), e["recording_id"])
+            done.setdefault(key, set()).add((e.get("annotator_id", ""), e.get("mode", ""), e.get("context", "")))
+        return assigned, {k: len(v) for k, v in done.items()}
+
+    def recording_record(self, m: dict[str, Any], counts: Any = None) -> dict[str, Any]:
+        assigned, done = counts if counts is not None else self._counts()
+        reg = dict(m.get("registration") or {})
+        sha, size = fingerprint_of(m)
+        t = m["timing"]
+        key = (m["scope"], m["recording_id"])
+        return {"scope": m["scope"], "recording_id": m["recording_id"], "file_name": m["file_name"],
+                "format": m["format"], "sfreq": float(t["sfreq"]), "n_samples": int(t["n_samples"]),
+                "duration_s": float(t["n_samples"]) / float(t["sfreq"]), "n_channels": len(m["ch_names"]),
+                "size_bytes": size, "sha256": sha, "registered_at": reg.get("registered_at") or m.get("created_at", ""),
+                "registered_by": reg.get("registered_by", ""), "registered_via": reg.get("registered_via", "command"),
+                "notes": reg.get("notes", ""), "retired": bool(reg.get("retired", False)),
+                "assigned": assigned.get(key, 0), "done": done.get(key, 0), "warnings": list(m.get("warnings", []))}
+
+    def set_record(self, rs: ReferenceSet) -> dict[str, Any]:
+        from electroclean.training.assessment import CompetencyCriteria
+        from electroclean.training.guided import Tolerance
+        from electroclean.training.programme import PassRule
+        from electroclean.web.quiz import feedback_of
+
+        scope = self._set_scope(rs)
+        recs = []
+        for rid, e in rs.recordings.items():
+            use = str(e.get("use", ""))
+            recs.append({"recording_id": rid, "use": use, "guidance": str(e.get("guidance") or "auto"),
+                         "effective_guidance": rs.guidance_for(rid) if use == "guided" else None,
+                         "provenance": dict(e.get("provenance") or {}),
+                         "n_reference_events": int(e.get("n_annotations", 0) or 0),
+                         "registered": self.store.manifest(scope, rid) is not None})
+        try:
+            criteria = CompetencyCriteria.from_dict(rs.criteria).to_dict()
+        except (ValueError, KeyError, TypeError):
+            criteria = dict(rs.criteria)
+        try:
+            tolerance = Tolerance.from_dict(rs.guided.get("tolerance")).to_dict()
+        except (ValueError, TypeError):
+            tolerance = dict(rs.guided.get("tolerance") or {})
+        try:
+            practice_pass = PassRule.from_dict(rs.practice_pass).to_dict()
+        except (ValueError, TypeError):
+            practice_pass = dict(rs.practice_pass)
+        return {"set_id": rs.set_id, "name": rs.name, "description": rs.description, "created_at": rs.created_at,
+                "created_by": rs.created_by, "practice_review": rs.practice_review,
+                "allowed_annotators": list(rs.assigned_annotators), "practice_pass": practice_pass,
+                "guided_tolerance": tolerance, "criteria": criteria, "recordings": recs,
+                "quiz_items": len(rs.quiz_items), "self_contained": rs.self_contained, "scope": scope,
+                "provenance": dict(rs.provenance),
+                "quiz": {"include_none_option": bool(rs.quiz.get("include_none_option", False)),
+                         "feedback": feedback_of(rs)},
+                "show_full_report_to_annotator": rs.show_full_report_to_annotator}
+
+    def user_out(self, rec: dict[str, Any], entries: list[dict[str, str]] | None = None) -> dict[str, Any]:
+        person = User(rec["annotator_id"], rec.get("display_name", ""), rec.get("role", "annotator"))
+        items = self.service.work_items(person)
+        return {"annotator_id": rec["annotator_id"], "display_name": rec.get("display_name", ""),
+                "email": rec.get("email") or None, "role": rec.get("role", "annotator"),
+                "status": rec.get("status", "active"), "created_at": rec.get("created_at", ""),
+                "last_seen": rec.get("last_seen") or None, "notes": rec.get("notes", ""),
+                "assigned": len(items), "done": sum(1 for i in items if i.status == "done"),
+                "programme": self.store.programme(rec["annotator_id"])}
+
+    # ------------------------------------------------------------ overview
+    def op_overview(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        records = self.store.user_records()
+        active = [u for u in records if u.get("status") == "active"]
+        counts = {"recordings": sum(1 for m in self.store.manifests() if m["scope"] == SCOPE_STUDY),
+                  "annotators": sum(1 for u in active if u.get("role") == "annotator"),
+                  "admins": sum(1 for u in active if u.get("role") == "admin"),
+                  "assignments": 0, "done": 0, "in_progress": 0, "todo": 0}
+        for u in active:
+            for i in self.service.work_items(User(u["annotator_id"], u.get("display_name", ""), u["role"])):
+                counts["assignments"] += 1
+                counts[i.status] += 1
+        recent, _next = self.store.audit_page(None, 10)
+        saved = sorted(self._entries(), key=lambda e: e.get("completed_at", ""), reverse=True)[:10]
+        return {"study": {"study_id": self.store.study_id, "name": self.store.name}, "counts": counts,
+                "recent": recent,
+                "last_saved": [{"annotator_id": e.get("annotator_id"), "recording_id": e.get("recording_id"),
+                                "mode": e.get("mode", "standard"), "context_id": e.get("context", ""),
+                                "at": e.get("completed_at", "")} for e in saved]}
+
+    # ------------------------------------------------------------ settings
+    def op_settings_get(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        from electroclean.web.service import LOGGING_NOTICE
+
+        raw = self.store.settings.raw
+        return {"name": self.store.name, "settings": {b: copy.deepcopy(raw.get(b, {})) for b in SETTINGS_BLOCKS},
+                "logging_notice": self.store.logging_notice or LOGGING_NOTICE,
+                "logging_notice_is_default": not self.store.logging_notice}
+
+    def op_settings_update(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        from electroclean.config.settings import load_default_settings_dict
+
+        name = body.get("name")
+        if name is not None:
+            name = _text(body, "name", required=True, limit=200)
+        notice = body.get("logging_notice")
+        if notice is not None:
+            notice = _text(body, "logging_notice", limit=2000)
+        changes = body.get("settings")
+        overrides = None
+        changed: list[str] = []
+        if changes is not None:
+            if not isinstance(changes, dict):
+                raise ApiError(400, "invalid_settings", "settings must be an object of setting blocks")
+            defaults = load_default_settings_dict()
+            overrides = copy.deepcopy(self.store.settings_overrides)
+            for block, values in changes.items():
+                if block not in SETTINGS_BLOCKS:
+                    raise ApiError(400, "invalid_settings", f"The settings block {block!r} cannot be changed here; "
+                                   f"these can: {', '.join(SETTINGS_BLOCKS)}")
+                if not isinstance(values, dict):
+                    raise ApiError(400, "invalid_settings", f"settings.{block} must be an object")
+                for key, value in values.items():
+                    if key not in defaults.get(block, {}):
+                        raise ApiError(400, "invalid_settings", f"There is no setting {block}.{key}")
+                    overrides.setdefault(block, {})[key] = copy.deepcopy(value)
+                    changed.append(f"{block}.{key}")
+        if name is None and notice is None and overrides is None:
+            raise _bad("Nothing to change: give name, settings or logging_notice")
+        try:
+            self.store.update_study(name=name, overrides=overrides, logging_notice=notice)
+        except ValueError as exc:
+            raise ApiError(400, "invalid_settings", f"These settings cannot be used: {exc}") from exc
+        what = changed + (["name"] if name is not None else []) + (["logging notice"] if notice is not None else [])
+        self._audit(user, "settings_update", "Changed the study's " + ", ".join(what),
+                    changes={k: body["settings"][k.split(".")[0]][k.split(".", 1)[1]] for k in changed},
+                    name=name, logging_notice=notice)
+        return self.op_settings_get(user, {})
+
+    # --------------------------------------------------------------- users
+    def op_users_list(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return {"users": [self.user_out(r) for r in self.store.user_records()]}
+
+    def op_user_add(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        aid = _aid(body.get("annotator_id"))
+        name = _text(body, "display_name")
+        email = _text(body, "email", limit=254)
+        if email and not EMAIL_RE.match(email):
+            raise _bad(f"{email} is not an email address")
+        role = body.get("role") or "annotator"
+        if role not in ROLES:
+            raise _bad(f"role must be one of {', '.join(ROLES)}")
+        password = body.get("password")
+        if password is not None and (not isinstance(password, str) or not 8 <= len(password) <= 200):
+            raise _bad("A password must have 8 to 200 characters")
+        creds = self.store.create_account(aid, display_name=name, role=role, email=email, password=password)
+        kind = "an administrator" if role == "admin" else "an annotator"
+        self._audit(user, "user_add", f"Added {aid}" + (f" ({name})" if name else "") + f" as {kind}",
+                    annotator_id=aid, display_name=name, role=role, email=email or None)
+        return {"user": self.user_out(self._user_record(aid)), "invite_link": creds.get("invite_link"),
+                "temporary_password": creds.get("temporary_password")}
+
+    def op_user_update(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        aid = _aid(body.get("annotator_id"))
+        rec = self._user_record(aid)
+        name = body.get("display_name")
+        if name is not None:
+            name = _text(body, "display_name")
+        notes = body.get("notes")
+        if notes is not None:
+            notes = _text(body, "notes", limit=5000)
+        role, status = body.get("role"), body.get("status")
+        if role is not None and role not in ROLES:
+            raise _bad(f"role must be one of {', '.join(ROLES)}")
+        if status is not None and status not in STATUSES:
+            raise _bad(f"status must be one of {', '.join(STATUSES)}")
+        if aid == user.annotator_id and (role == "annotator" or status == "disabled"):
+            raise ApiError(409, "self", "You cannot take away your own administrator role or disable your own "
+                           "account; ask another administrator.")
+        self.store.update_account(aid, display_name=name, role=role, status=status, notes=notes)
+        said = []
+        if role is not None and role != rec.get("role"):
+            said.append("made them an administrator" if role == "admin" else "made them an annotator")
+        if status is not None and status != rec.get("status"):
+            said.append("disabled the account" if status == "disabled" else "enabled the account")
+        if name is not None and name != rec.get("display_name"):
+            said.append(f"renamed them {name!r}")
+        if notes is not None and notes != rec.get("notes"):
+            said.append("changed the notes")
+        self._audit(user, "user_update", f"{aid}: " + (", ".join(said) if said else "no change"), annotator_id=aid,
+                    display_name=name, role=role, status=status, notes=notes)
+        return {"user": self.user_out(self._user_record(aid))}
+
+    def op_user_reset_password(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        aid = _aid(body.get("annotator_id"))
+        self._user_record(aid)
+        creds = self.store.reset_password(aid)
+        how = "a link to choose a new password" if creds.get("invite_link") else "a new temporary password"
+        self._audit(user, "user_reset_password", f"Gave {aid} {how}", annotator_id=aid)
+        return {"invite_link": creds.get("invite_link"), "temporary_password": creds.get("temporary_password")}
+
+    def op_user_remove(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        aid = _aid(body.get("annotator_id"))
+        if aid == user.annotator_id:
+            raise ApiError(409, "self", "You cannot remove your own account; ask another administrator.")
+        rec = self._user_record(aid)
+        self.store.remove_account(aid)
+        self._audit(user, "user_remove", f"Removed {aid} from the study (their results and logs stay)",
+                    annotator_id=aid, display_name=rec.get("display_name", ""), role=rec.get("role"))
+        return {}
+
+    # --------------------------------------------------------- assignments
+    def op_assignments_list(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        entries = self._entries()
+        if body.get("annotator_id") is not None:
+            rec = self._user_record(_aid(body.get("annotator_id")))
+            records = [rec]
+        else:
+            records = self.store.user_records()
+        items = []
+        for rec in records:
+            items.extend(self._items_of(User(rec["annotator_id"], rec.get("display_name", ""),
+                                             rec.get("role", "annotator")), entries))
+        return {"items": items}
+
+    def _allowed(self, rs: ReferenceSet, aid: str) -> None:
+        names = [a.upper() for a in rs.assigned_annotators]
+        if names and aid not in names:
+            raise ApiError(409, "not_allowed", f"The reference set {rs.set_id} is only for "
+                           f"{', '.join(names)}; add {aid} to its allowed annotators first.")
+
+    def op_assign(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        aids = _ids(body.get("annotator_ids"), "annotator_ids")
+        for aid in aids:
+            self._user_record(aid)
+        mode, ctx = _mode_ctx(body)
+        rs = None
+        if mode != "standard":
+            if not ctx:
+                raise _bad("Training assignments need the reference set (context_id)")
+            rs = self._set(ctx)
+            for aid in aids:
+                self._allowed(rs, aid)
+        scope = self.service.scope_for(mode, ctx)
+        registered = {m["recording_id"]: m for m in self.store.manifests() if m["scope"] == scope}
+        retired = {r for r, m in registered.items() if (m.get("registration") or {}).get("retired")}
+        if body.get("all") is True:
+            wanted = sorted(registered)
+            if rs is not None:
+                wanted = [r for r in wanted if r in rs.recordings]
+        else:
+            wanted = body.get("recording_ids")
+            if not isinstance(wanted, list) or not wanted or not all(isinstance(r, str) for r in wanted):
+                raise _bad("Give recording_ids (a list) or \"all\": true")
+            unknown = [r for r in wanted if r not in registered]
+            if unknown:
+                raise ApiError(404, "unknown_recording", "Not registered here: " + ", ".join(unknown[:10]))
+            if rs is not None:
+                outside = [r for r in wanted if r not in rs.recordings]
+                if outside:
+                    raise _bad(f"Not part of the reference set {rs.set_id}: " + ", ".join(outside[:10]),
+                               "not_in_set")
+        skipped = [r for r in wanted if r in retired]
+        wanted = [r for r in wanted if r not in retired]
+        added = 0
+        for aid in aids:
+            added += self.store.assign(aid, wanted, mode=mode, context_id=ctx) if wanted else 0
+        already = len(wanted) * len(aids) - added
+        where = mode if mode == "standard" else f"{mode}, {ctx}"
+        self._audit(user, "assign", f"Assigned {audit.count(len(wanted), 'recording')} to {', '.join(aids)} "
+                    f"({where}): {added} new", annotator_ids=aids, recording_ids=wanted, mode=mode, context_id=ctx,
+                    added=added, already=already, retired=skipped)
+        return {"added": added, "already": already, "retired": len(skipped)}
+
+    def op_unassign(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        aid = _aid(body.get("annotator_id"))
+        rid = _rid(body.get("recording_id"))
+        mode, ctx = _mode_ctx(body)
+        if rid in self.store.completed(aid, mode, ctx):
+            raise ApiError(409, "done", f"{aid} has already saved {rid}; a completed recording stays assigned.")
+        if not self.store.unassign_item(aid, rid, mode, ctx):
+            raise ApiError(404, "not_assigned", f"{rid} is not assigned to {aid} in that mode")
+        self._audit(user, "unassign", f"Took {rid} away from {aid}", annotator_id=aid, recording_id=rid, mode=mode,
+                    context_id=ctx)
+        return {}
+
+    def op_programme_set(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        aid = _aid(body.get("annotator_id"))
+        self._user_record(aid)
+        set_id = body.get("set_id")
+        if set_id is not None:
+            rs = self._set(set_id)
+            self._allowed(rs, aid)
+            set_id = rs.set_id
+        self.store.enrol(aid, set_id or None)
+        self._audit(user, "programme_set", f"{aid} " + (f"takes the training programme {set_id}" if set_id else
+                                                       "no longer takes a training programme"),
+                    annotator_id=aid, set_id=set_id)
+        return {}
+
+    # ---------------------------------------------------------- recordings
+    def op_recordings_list(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        scope = self._scope(body.get("scope"), default=None) if body.get("scope") is not None else None
+        counts = self._counts()
+        ms = [m for m in self.store.manifests() if scope is None or m["scope"] == scope]
+        ms.sort(key=lambda m: (m["scope"] != SCOPE_STUDY, m["scope"], m["recording_id"]))
+        return {"recordings": [self.recording_record(m, counts) for m in ms]}
+
+    def op_recordings_register(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        from electroclean.web.manifest_check import MAX_MANIFESTS, ManifestProblem, check_manifest
+
+        scope = self._scope(body.get("scope"))
+        manifests = body.get("manifests")
+        if not isinstance(manifests, list) or not manifests:
+            raise _bad("manifests must be a list of the recordings' manifests")
+        if len(manifests) > MAX_MANIFESTS:
+            raise ApiError(413, "too_large", f"At most {MAX_MANIFESTS} recordings can be registered at once; send "
+                           "the rest in another request")
+        replace_ = _bool(body, "replace") or False
+        suffixes = tuple(self.store.settings.discovery_suffixes)
+        entries = self._entries()
+        added: list[str] = []
+        replaced: list[str] = []
+        skipped: list[dict[str, str]] = []
+        seen: set[str] = set()
+        for raw in manifests:
+            rid = raw.get("recording_id") if isinstance(raw, dict) and isinstance(raw.get("recording_id"), str) else ""
+            try:
+                m = check_manifest(raw, scope=scope, suffixes=suffixes)
+            except ManifestProblem as exc:
+                skipped.append({"recording_id": rid, "reason": str(exc)})
+                continue
+            rid = m["recording_id"]
+            if rid in seen:
+                skipped.append({"recording_id": rid, "reason": "This recording appears twice in the request"})
+                continue
+            seen.add(rid)
+            old = self.store.manifest(scope, rid)
+            if old is not None and not replace_:
+                skipped.append({"recording_id": rid, "reason": "Already registered (choose to replace it to "
+                                "register it again)"})
+                continue
+            if old is not None and fingerprint_of(old) != fingerprint_of(m) and self._has_results(scope, rid, entries):
+                skipped.append({"recording_id": rid, "reason": "Annotations of this recording have been saved, so "
+                                "it can only be registered again from the same file (the same checksum)"})
+                continue
+            old_reg = dict((old or {}).get("registration") or {})
+            m["registration"] = {"registered_at": now_local_iso(), "registered_by": user.annotator_id,
+                                 "registered_via": "browser", "notes": old_reg.get("notes", ""),
+                                 "retired": bool(old_reg.get("retired", False))}
+            self.store.add_manifest(m)
+            (replaced if old is not None else added).append(rid)
+        if added or replaced:
+            extra = (f", replaced {audit.count(len(replaced), 'recording')}" if replaced else "") + (
+                f", {len(skipped)} not registered" if skipped else "")
+            self._audit(user, "recordings_register", f"Registered {audit.count(len(added), 'new recording')}"
+                        f"{extra} in {scope}", scope=scope, added=added, replaced=replaced,
+                        skipped=[s["recording_id"] for s in skipped])
+        return {"added": added, "replaced": replaced, "skipped": skipped}
+
+    def _manifest(self, body: dict[str, Any]) -> tuple[str, str, dict[str, Any]]:
+        scope = self._scope(body.get("scope"))
+        rid = _rid(body.get("recording_id"))
+        m = self.store.manifest(scope, rid)
+        if m is None:
+            raise ApiError(404, "unknown_recording", f"{rid} is not registered in {scope}")
+        return scope, rid, m
+
+    def op_recording_update(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        scope, rid, m = self._manifest(body)
+        notes = body.get("notes")
+        if notes is not None:
+            notes = _text(body, "notes", limit=5000)
+        retired = _bool(body, "retired")
+        reg = dict(m.get("registration") or {"registered_at": m.get("created_at", ""), "registered_by": "",
+                                               "registered_via": "command"})
+        said = []
+        if notes is not None and notes != reg.get("notes", ""):
+            reg["notes"] = notes
+            said.append("changed the notes")
+        if retired is not None and retired != bool(reg.get("retired", False)):
+            reg["retired"] = retired
+            said.append("retired it (no new assignments)" if retired else "offered it for assignments again")
+        m = {**m, "registration": reg}
+        self.store.add_manifest(m)
+        self._audit(user, "recording_update", f"{rid}: " + (", ".join(said) if said else "no change"), scope=scope,
+                    recording_id=rid, notes=notes, retired=retired)
+        return {"recording": self.recording_record(m)}
+
+    def op_recording_remove(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        scope, rid, _m = self._manifest(body)
+        if self._has_results(scope, rid):
+            raise ApiError(409, "has_results", f"Annotations of {rid} have been saved, so it stays registered "
+                           "(retire it instead, to offer it for no new assignments).")
+        for rs in self.store.reference_sets():
+            if self._set_scope(rs) == scope and (rid in rs.recordings
+                                                 or any(it.recording_id == rid for it in rs.quiz_items)):
+                raise ApiError(409, "has_results", f"The reference set {rs.set_id} uses {rid}; remove it from the "
+                               "set first.")
+        self.store.remove_manifest(scope, rid)
+        if scope == SCOPE_STUDY:
+            self.store.remove_assignments(recording_id=rid, modes=("standard",))
+        else:
+            self.store.remove_assignments(recording_id=rid, context_id=scope[4:])
+        self._audit(user, "recording_remove", f"Removed {rid} from {scope}", scope=scope, recording_id=rid)
+        return {}
+
+    # ------------------------------------------------------- reference sets
+    def op_sets_list(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return {"sets": [self.set_record(rs) for rs in self.store.reference_sets()]}
+
+    def op_set_create(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        from electroclean.training.reference import METHODS
+        from electroclean.web.registration import reference_set_payload
+
+        set_id = _text(body, "set_id", required=True, limit=64)
+        if not SET_ID_RE.match(set_id):
+            raise _bad("A reference set ID is 1 to 64 letters, digits, dots, hyphens or underscores")
+        if any(rs.set_id == set_id for rs in self.store.reference_sets()):
+            raise ApiError(409, "set_exists", f"There is already a reference set {set_id}")
+        name = _text(body, "name", limit=200)
+        description = _text(body, "description", limit=5000)
+        method = body.get("method") or "single_expert"
+        if method not in METHODS:
+            raise _bad(f"method must be one of {', '.join(METHODS)}")
+        experts = _ids(body["experts"], "experts", minimum=0) if body.get("experts") is not None else []
+        notes = _text(body, "notes", limit=5000)
+        with tempfile.TemporaryDirectory(prefix="electroclean-set-") as tmp:
+            try:
+                rs = ReferenceSet.create(Path(tmp), set_id, name=name, description=description,
+                                         created_by=user.annotator_id, method=method, experts=experts, notes=notes)
+            except ReferenceSetError as exc:
+                raise _bad(str(exc)) from exc
+            rs.recordings_dir = "recordings"  # self-contained: its recordings are never study recordings
+            rs.save()
+            definition, files = reference_set_payload(rs.directory)
+        self.store.put_reference_set(definition, files)
+        self._audit(user, "set_create", f"Created the reference set {set_id}" + (f" ({name})" if name else ""),
+                    set_id=set_id, name=name, method=method, experts=experts)
+        return {"set": self.set_record(self.service.reference_set(set_id))}
+
+    def op_set_update(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        rs0 = self._set(body.get("set_id"))
+        changed: list[str] = []
+        with self._editing(rs0.set_id) as rs:
+            if body.get("name") is not None:
+                rs.name = _text(body, "name", limit=200)
+                changed.append("name")
+            if body.get("description") is not None:
+                rs.description = _text(body, "description", limit=5000)
+                changed.append("description")
+            review = _bool(body, "practice_review")
+            if review is not None:
+                rs.practice_review = review
+                changed.append("practice review")
+            full = _bool(body, "show_full_report_to_annotator")
+            if full is not None:
+                rs.show_full_report_to_annotator = full
+                changed.append("full report for annotators")
+            if body.get("allowed_annotators") is not None:
+                rs.assigned_annotators = sorted(set(_ids(body["allowed_annotators"], "allowed_annotators",
+                                                         minimum=0)))
+                changed.append("allowed annotators")
+            if body.get("practice_pass") is not None:
+                rs.set_practice_pass({**rs.practice_pass, **_plain(body["practice_pass"], "practice_pass")})
+                changed.append("practice pass mark")
+            if body.get("guided_tolerance") is not None:
+                rs.set_guided_tolerance({**dict(rs.guided.get("tolerance") or {}),
+                                         **_plain(body["guided_tolerance"], "guided_tolerance")})
+                changed.append("guided tolerance")
+            if body.get("criteria") is not None:
+                try:
+                    rs.set_criteria(_plain(body["criteria"], "criteria"))
+                except KeyError as exc:
+                    raise ApiError(400, "invalid_set", f"Each criterion needs {exc}") from exc
+                changed.append("competency criteria")
+            if body.get("quiz") is not None:
+                quiz = _plain(body["quiz"], "quiz")
+                unknown = set(quiz) - {"include_none_option", "feedback"}
+                if unknown:
+                    raise ApiError(400, "invalid_set", f"Unknown quiz option {sorted(unknown)[0]!r}")
+                if "include_none_option" in quiz:
+                    if not isinstance(quiz["include_none_option"], bool):
+                        raise ApiError(400, "invalid_set", "quiz.include_none_option must be true or false")
+                    if not quiz["include_none_option"] and any(it.correct_label == NONE_OPTION
+                                                               for it in rs.quiz_items):
+                        raise ApiError(400, "invalid_set", f"Some quiz items have {NONE_OPTION!r} as their answer; "
+                                       "remove them first")
+                    rs.quiz["include_none_option"] = quiz["include_none_option"]
+                if "feedback" in quiz:
+                    if quiz["feedback"] not in QUIZ_FEEDBACK:
+                        raise ApiError(400, "invalid_set", "quiz.feedback must be 'immediate' or 'end'")
+                    rs.quiz["feedback"] = quiz["feedback"]
+                changed.append("quiz options")
+            if not changed:
+                raise _bad("Nothing to change")
+            rs.save()
+        self._audit(user, "set_update", f"Changed the reference set {rs0.set_id}: {', '.join(changed)}",
+                    set_id=rs0.set_id, **{k: body[k] for k in ("name", "description", "practice_review",
+                                                               "allowed_annotators", "practice_pass",
+                                                               "guided_tolerance", "criteria", "quiz",
+                                                               "show_full_report_to_annotator") if k in body})
+        return {"set": self.set_record(self.service.reference_set(rs0.set_id))}
+
+    def op_set_delete(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        rs = self._set(body.get("set_id"))
+        if any(e.get("context") == rs.set_id for e in self._entries()):
+            raise ApiError(409, "in_use", f"Trainees have saved recordings in {rs.set_id}, so it stays.")
+        records = self.store.user_records()
+        enrolled = [u["annotator_id"] for u in records if self.store.programme(u["annotator_id"]) == rs.set_id]
+        if enrolled:
+            raise ApiError(409, "in_use", f"{', '.join(enrolled)} take the training programme {rs.set_id}; take "
+                           "them out of it first.")
+        if any((self.store.quiz_state(u["annotator_id"], rs.set_id) or {}).get("finished") for u in records):
+            raise ApiError(409, "in_use", f"Annotators have finished the quiz of {rs.set_id}, so it stays.")
+        for m in [m for m in self.store.manifests() if m["scope"] == set_scope(rs.set_id)]:
+            self.store.remove_manifest(m["scope"], m["recording_id"])
+        self.store.remove_assignments(context_id=rs.set_id)
+        self.store.delete_reference_set(rs.set_id)
+        self._audit(user, "set_delete", f"Deleted the reference set {rs.set_id}", set_id=rs.set_id, name=rs.name)
+        return {}
+
+    # ----------------------------------------------- references from sources
+    def _saved_doc(self, aid: str, rid: str, mode: str, ctx: str) -> tuple[AnnotationDocument, bytes, str]:
+        from electroclean.app.annotations.model import AnnotationError
+        from electroclean.app.io.canonical import document_from_dict
+
+        files = self.store.saved_files(aid, rid, mode, ctx)
+        name = next((n for n in sorted(files) if n.endswith("_annotations.json")), None)
+        if name is None:
+            raise ApiError(404, "no_saved_annotations", f"{aid} has not saved {rid}"
+                           + ("" if mode == "standard" else f" ({mode}, {ctx})"))
+        try:
+            return document_from_dict(json.loads(files[name])), files[name], name
+        except (AnnotationError, ValueError, KeyError) as exc:
+            raise ApiError(500, "reference_unavailable", f"The saved annotations of {aid} cannot be read") from exc
+
+    def _source(self, source: Any, rid: str, folder: Path) -> dict[str, Any]:
+        """The reference document and how it was made, from a Source of docs/web/api.md."""
+        from electroclean.app.annotations.model import AnnotationError
+        from electroclean.app.io.canonical import document_from_dict
+        from electroclean.training.consensus import build_consensus
+
+        if not isinstance(source, dict) or source.get("kind") not in ("annotator", "document", "consensus",
+                                                                       "adjudicated"):
+            raise _bad("source.kind must be annotator, document, consensus or adjudicated")
+        kind = source["kind"]
+        mode, ctx = _mode_ctx(source)
+
+        def keep(name: str, data: bytes) -> Path:
+            p = folder / name
+            p.write_bytes(data)
+            return p
+
+        if kind == "annotator":
+            aid = _aid(source.get("annotator_id"), "source.annotator_id")
+            doc, data, name = self._saved_doc(aid, rid, mode, ctx)
+            return {"doc": doc, "method": "single_expert", "experts": [aid], "files": [keep(name, data)]}
+        if kind == "document":
+            raw = source.get("document")
+            if not isinstance(raw, dict):
+                raise _bad("source.document must be the contents of an _annotations.json file")
+            data = json.dumps(raw).encode("utf-8")
+            if len(data) > MAX_DOCUMENT_BYTES:
+                raise ApiError(413, "too_large", "The annotation file is too large")
+            try:
+                doc = document_from_dict(raw)
+            except (AnnotationError, ValueError, KeyError, TypeError) as exc:
+                raise ApiError(422, "invalid_document", f"This is not a valid ElectroClean annotation file: {exc}") \
+                    from exc
+            cat = self.store.catalogue
+            if doc.catalogue.sha256 != cat.sha256 and not doc.catalogue.compatible_with(cat):
+                raise ApiError(422, "invalid_document", "The file uses a label catalogue that gives labels or codes "
+                               "other meanings than this study's")
+            expert = doc.annotator_id or "EXPERT"
+            return {"doc": doc, "method": "single_expert", "experts": [expert],
+                    "files": [keep(f"uploaded_{re.sub(r'[^A-Za-z0-9_-]', '-', expert)}_annotations.json", data)]}
+        if kind == "consensus":
+            aids = _ids(source.get("annotator_ids"), "source.annotator_ids", minimum=2)
+            docs, files = [], []
+            for aid in aids:
+                doc, data, name = self._saved_doc(aid, rid, mode, ctx)
+                docs.append(doc)
+                files.append(keep(name, data))
+            k = source.get("min_agreement")
+            if k is not None and (isinstance(k, bool) or not isinstance(k, int)):
+                raise _bad("source.min_agreement must be a whole number of experts (or null for a majority)")
+            try:
+                res = build_consensus(docs, min_agreement=k,
+                                      min_duration_s=_number(source, "min_duration_s", minimum=0, maximum=3600,
+                                                             default=0.0),
+                                      merge_gap_s=_number(source, "merge_gap_s", minimum=0, maximum=3600, default=0.0))
+            except AnnotationError as exc:
+                raise ApiError(422, "invalid_consensus", str(exc)) from exc
+            return {"doc": res.document, "method": "consensus", "experts": list(res.rule["experts"]),
+                    "files": files, "details": {"consensus_rule": res.rule}, "disagreements": res.disagreements}
+        adj = _aid(source.get("adjudicator_id"), "source.adjudicator_id")
+        experts = _ids(source.get("expert_ids"), "source.expert_ids", minimum=2)
+        doc, data, name = self._saved_doc(adj, rid, mode, ctx)
+        files = [keep(name, data)]
+        for aid in experts:  # the experts' own files are kept as sources when they were saved here
+            saved = self.store.saved_files(aid, rid, mode, ctx)
+            ename = next((n for n in sorted(saved) if n.endswith("_annotations.json")), None)
+            if ename is not None and ename != name:
+                files.append(keep(ename, saved[ename]))
+        return {"doc": doc, "method": "adjudicated", "experts": experts, "adjudicator": adj, "files": files}
+
+    def op_set_add_reference(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        from electroclean.app.annotations.model import AnnotationError, validate_annotation
+        from electroclean.web.service import clean_json
+
+        rs0 = self._set(body.get("set_id"))
+        rid = _rid(body.get("recording_id"))
+        use = body.get("use")
+        if use not in USES:
+            raise _bad(f"use must be one of {', '.join(USES)}")
+        from_scope = self._scope(body.get("recording_scope"))
+        m = self.store.manifest(from_scope, rid)
+        if m is None:
+            raise ApiError(404, "unknown_recording", f"{rid} is not registered in {from_scope}")
+        target = self._set_scope(rs0)
+        if not rs0.self_contained and from_scope != SCOPE_STUDY:
+            raise _bad(f"The reference set {rs0.set_id} uses the study's recordings (recording_scope 'study')")
+        if target != from_scope:
+            existing = self.store.manifest(target, rid)
+            if existing is not None and fingerprint_of(existing) != fingerprint_of(m):
+                raise ApiError(409, "conflict", f"The set already holds a different recording called {rid}")
+        prov = body.get("provenance") or {}
+        if not isinstance(prov, dict):
+            raise _bad("provenance must be an object")
+        notes = _text(prov, "notes", limit=5000)
+        info = manifest_info(m)
+        with tempfile.TemporaryDirectory(prefix="electroclean-sources-") as tmp:
+            src = self._source(body.get("source"), rid, Path(tmp))
+            doc = src["doc"]
+            t = doc.recording.timing
+            if abs(float(t.sfreq) - info.timing.sfreq) > 1e-6 or int(t.n_samples) != info.timing.n_samples:
+                raise ApiError(422, "invalid_document", f"The annotations describe a recording of {t.n_samples} "
+                               f"samples at {t.sfreq:g} Hz, but {rid} has {info.timing.n_samples} samples at "
+                               f"{info.timing.sfreq:g} Hz")
+            doc = replace(doc, recording=info)
+            try:
+                for a in doc.annotations:
+                    validate_annotation(a, info, self.store.catalogue, 1)
+            except AnnotationError as exc:
+                raise ApiError(422, "invalid_document", f"An annotation does not fit {rid}: {exc}") from exc
+            details = dict(src.get("details") or {})
+            if notes:
+                details["notes"] = notes
+            if target != from_scope:  # copied into the set, so it is never offered for study annotation
+                copied = copy.deepcopy(m)
+                copied["scope"] = target
+                copied["registration"] = {**dict(m.get("registration") or {}), "registered_at": now_local_iso(),
+                                          "registered_by": user.annotator_id, "copied_from": from_scope,
+                                          "retired": False}
+                self.store.add_manifest(copied)
+            with self._editing(rs0.set_id) as rs:
+                try:
+                    rs.add_reference(doc, use=use, method=src["method"], experts=src["experts"],
+                                     source_files=src["files"], adjudicator=src.get("adjudicator", ""),
+                                     details=details)
+                except (AnnotationError, ReferenceSetError) as exc:
+                    raise ApiError(422, "invalid_document", str(exc)) from exc
+        experts = ", ".join(src["experts"])
+        how = {"single_expert": f"{experts}'s annotations", "consensus": f"consensus of {experts}",
+               "adjudicated": f"{src.get('adjudicator')} adjudicating {experts}"}[src["method"]]
+        self._audit(user, "set_add_reference", f"Added {rid} to {rs0.set_id} for {use} ({how})", set_id=rs0.set_id,
+                    recording_id=rid, use=use, method=src["method"], experts=src["experts"],
+                    adjudicator=src.get("adjudicator"), recording_scope=from_scope, n_annotations=len(doc.annotations))
+        dis = src.get("disagreements")
+        return {"set": self.set_record(self.service.reference_set(rs0.set_id)),
+                "disagreements": clean_json(dis) if dis is not None else None}
+
+    def op_set_recording_update(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        rs0 = self._set(body.get("set_id"))
+        rid = _rid(body.get("recording_id"))
+        if rid not in rs0.recordings:
+            raise ApiError(404, "not_in_set", f"{rid} is not in the reference set {rs0.set_id}")
+        use, guidance = body.get("use"), body.get("guidance")
+        if use is not None and use not in USES:
+            raise _bad(f"use must be one of {', '.join(USES)}")
+        if guidance is not None and guidance not in ("auto", *GUIDANCE_LEVELS):
+            raise _bad(f"guidance must be one of auto, {', '.join(GUIDANCE_LEVELS)}")
+        if use is None and guidance is None:
+            raise _bad("Nothing to change: give use or guidance")
+        warnings: list[str] = []
+        old_use = rs0.recordings[rid].get("use")
+        if use is not None and use != old_use:
+            saved = sorted({(e.get("annotator_id", ""), e.get("mode", "")) for e in self._entries()
+                            if e.get("context") == rs0.set_id and e.get("recording_id") == rid})
+            others = sorted({a for a, mode in saved if mode != use})
+            if others and use == "assessment":
+                warnings.append(f"{', '.join(others)} already annotated this recording with feedback, so their "
+                                "assessment on it would not be blind.")
+            elif others:
+                warnings.append(f"{', '.join(others)} already saved this recording as {old_use}; their results stay.")
+        if guidance is not None and (use or old_use) != "guided":
+            warnings.append("How much help a recording gives matters only for guided recordings.")
+        with self._editing(rs0.set_id) as rs:
+            if use is not None:
+                rs.set_use(rid, use)
+            if guidance is not None:
+                rs.set_guidance(rid, "" if guidance == "auto" else guidance)
+        said = ([f"now used for {use}"] if use is not None and use != old_use else []) + (
+            [f"guidance {guidance}"] if guidance is not None else [])
+        self._audit(user, "set_recording_update", f"{rid} in {rs0.set_id}: " + (", ".join(said) or "no change"),
+                    set_id=rs0.set_id, recording_id=rid, use=use, guidance=guidance, warnings=warnings)
+        return {"set": self.set_record(self.service.reference_set(rs0.set_id)), "warnings": warnings}
+
+    def op_set_remove_recording(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        rs0 = self._set(body.get("set_id"))
+        rid = _rid(body.get("recording_id"))
+        if rid not in rs0.recordings:
+            raise ApiError(404, "not_in_set", f"{rid} is not in the reference set {rs0.set_id}")
+        with self._editing(rs0.set_id) as rs:
+            rs.remove_recording(rid)
+        self._audit(user, "set_remove_recording", f"Took {rid} out of the reference set {rs0.set_id}",
+                    set_id=rs0.set_id, recording_id=rid)
+        return {"set": self.set_record(self.service.reference_set(rs0.set_id))}
+
+    def op_set_guided_notes(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        rs = self._set(body.get("set_id"))
+        rid = _rid(body.get("recording_id"))
+        try:
+            ref = rs.reference_document(rid)
+        except ReferenceSetError as exc:
+            raise ApiError(404, "not_in_set", str(exc)) from exc
+        t = ref.recording.timing
+        return {"notes": [{"annotation_id": a.annotation_id, "label": a.label, "onset_s": a.onset(t),
+                           "offset_s": a.offset(t), "note": rs.guided_note(a.annotation_id)}
+                          for a in ref.sorted_annotations()]}
+
+    def op_set_guided_note(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        rs0 = self._set(body.get("set_id"))
+        ann_id = _text(body, "annotation_id", required=True, limit=64)
+        text = _text(body, "text", limit=2000)
+        with self._editing(rs0.set_id) as rs:
+            try:
+                rs.set_guided_note(ann_id, text)
+            except ReferenceSetError as exc:
+                raise ApiError(404, "unknown_annotation", str(exc)) from exc
+        self._audit(user, "set_guided_note", f"{'Changed' if text else 'Removed'} the experts' note on annotation "
+                    f"{ann_id} in {rs0.set_id}", set_id=rs0.set_id, annotation_id=ann_id, text=text)
+        return {}
+
+    def op_set_example_create(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        from electroclean.training.examples import EXAMPLE_SET_ID
+        from electroclean.web.example import ZIP_NAME, ExampleUnavailable, build_example
+
+        if any(rs.set_id == EXAMPLE_SET_ID for rs in self.store.reference_sets()):
+            raise ApiError(409, "set_exists", f"There is already a reference set {EXAMPLE_SET_ID}")
+        try:
+            ex = build_example(self.store.settings, self.store.catalogue)
+        except ExampleUnavailable as exc:
+            raise ApiError(422, "example_unavailable", str(exc)) from exc
+        for m in ex.manifests:
+            m["registration"] = {"registered_at": now_local_iso(), "registered_by": user.annotator_id,
+                                 "registered_via": "browser", "notes": "ElectroClean's simulated example recording",
+                                 "retired": False}
+            self.store.add_manifest(m)
+        self.store.put_reference_set(ex.definition, ex.files)
+        self._audit(user, "set_example_create", f"Added ElectroClean's example training set ({ex.set_id}) with "
+                    f"{audit.count(len(ex.manifests), 'simulated recording')}", set_id=ex.set_id,
+                    recordings=[m["recording_id"] for m in ex.manifests], registered_with=ex.registered_with)
+        return {"set": self.set_record(self.service.reference_set(ex.set_id)),
+                "recordings_zip": {"file_name": ZIP_NAME, "base64": base64.b64encode(ex.recordings_zip).decode("ascii"),
+                                   "size_bytes": len(ex.recordings_zip)}}
+
+    # ----------------------------------------------------------------- quiz
+    def op_quiz_items(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        rs = self._set(body.get("set_id"))
+        return {"items": [it.to_dict() for it in rs.quiz_items]}
+
+    def op_quiz_item_add(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        from electroclean.training.reference import QuizItem
+
+        rs0 = self._set(body.get("set_id"))
+        rid = _rid(body.get("recording_id"))
+        m = self.store.manifest(self._set_scope(rs0), rid)
+        if m is None:
+            raise ApiError(404, "unknown_recording", f"{rid} is not one of the reference set's registered recordings")
+        duration = float(m["timing"]["n_samples"]) / float(m["timing"]["sfreq"])
+        start = _number(body, "start_s", minimum=0, maximum=duration)
+        end = _number(body, "end_s", minimum=0, maximum=duration)
+        if end <= start:
+            raise _bad("end_s must be after start_s")
+        context = _number(body, "context_s", minimum=0, maximum=60, default=2.0)
+        cat = self.store.catalogue
+        label = body.get("correct_label")
+        if label != NONE_OPTION and (not isinstance(label, str) or not cat.is_permitted(label)):
+            raise _bad("correct_label must be one of the catalogue's artifact types")
+        accepted = body.get("accepted_labels") or []
+        if not isinstance(accepted, list) or not all(isinstance(x, str) and (cat.is_permitted(x) or x == NONE_OPTION)
+                                                     for x in accepted):
+            raise _bad("accepted_labels must be artifact types of the catalogue")
+        explanation = _text(body, "explanation", limit=2000)
+        item_id = body.get("item_id")
+        if item_id is None:
+            have = {it.item_id for it in rs0.quiz_items}
+            n = len(have) + 1
+            while f"q{n:02d}" in have:
+                n += 1
+            item_id = f"q{n:02d}"
+        elif not isinstance(item_id, str) or not ITEM_ID_RE.match(item_id):
+            raise _bad("item_id must be 1 to 64 letters, digits, dots, hyphens or underscores")
+        item = QuizItem(item_id, rid, start, end, label, list(dict.fromkeys(accepted)), explanation, context)
+        replacing = any(it.item_id == item_id for it in rs0.quiz_items)
+        with self._editing(rs0.set_id) as rs:
+            try:
+                rs.add_quiz_item(item, cat.label_names)
+            except ReferenceSetError as exc:
+                raise _bad(str(exc)) from exc
+        self._audit(user, "quiz_item_add", f"{'Changed' if replacing else 'Added'} quiz item {item_id} in "
+                    f"{rs0.set_id} ({label}, {start:g} to {end:g} s of {rid})", set_id=rs0.set_id, item=item.to_dict())
+        return {"item": item.to_dict()}
+
+    def op_quiz_item_remove(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        rs0 = self._set(body.get("set_id"))
+        item_id = _text(body, "item_id", required=True, limit=64)
+        with self._editing(rs0.set_id) as rs:
+            try:
+                rs.remove_quiz_item(item_id)
+            except ReferenceSetError as exc:
+                raise ApiError(404, "unknown_item", str(exc)) from exc
+        self._audit(user, "quiz_item_remove", f"Removed quiz item {item_id} from {rs0.set_id}", set_id=rs0.set_id,
+                    item_id=item_id)
+        return {}
+
+    # ------------------------------------------------------------ analyses
+    def op_progress(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.service.admin_progress(user, {})
+
+    def op_agreement(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.service.analyses.agreement(body)
+
+    def op_activity(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.service.analyses.activity(body)
+
+    def op_competency(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.service.analyses.competency(body)
+
+    def op_results_zip(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.service.analyses.results_zip(body)
+
+    # ------------------------------------------------------------ the record
+    def op_audit(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        limit = int(_number(body, "limit", minimum=1, maximum=500, default=50))
+        before = body.get("before")
+        if before is not None and (not isinstance(before, str) or len(before) > 64):
+            raise _bad("before must be the 'next' value of an earlier page")
+        try:
+            entries, nxt = self.store.audit_page(before or None, limit)
+        except StoreError as exc:
+            raise _bad(str(exc)) from exc
+        return {"entries": entries, "next": nxt}
+
+    def op_visits(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        limit = int(_number(body, "limit", minimum=1, maximum=1000, default=100))
+        aid = _aid(body.get("annotator_id")) if body.get("annotator_id") is not None else None
+        return {"visits": self.store.visit_records(aid, limit)}

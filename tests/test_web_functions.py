@@ -30,7 +30,7 @@ OPERATIONS = {"ec_me": "me", "ec_assignments": "assignments", "ec_match": "match
               "ec_guided_get": "guided_get", "ec_guided_check": "guided_check",
               "ec_guided_continue": "guided_continue", "ec_guided_show_me": "guided_show_me",
               "ec_visit_open": "visit_open", "ec_visit_events": "visit_events", "ec_visit_close": "visit_close",
-              "ec_admin_progress": "admin_progress"}
+              "ec_admin_progress": "admin_progress", "ec_admin": "admin", "ec_quiz": "quiz"}
 
 
 def load_main():

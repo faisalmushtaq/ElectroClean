@@ -47,7 +47,8 @@ __all__ = ["ApiError", "StudyService", "WorkItem", "annotation_dict", "parse_ann
 
 # ------------------------------------------------------------------ annotations
 def _int(value: Any, what: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or int(value) != value:
+    if (isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value)
+            or int(value) != value):
         raise ApiError(422, "invalid_annotation", f"{what} must be a whole number of samples")
     return int(value)
 
@@ -162,11 +163,17 @@ class StudyService:
 
     def __init__(self, store: Store) -> None:
         self.store = store
+        from electroclean.web.admin import Admin
+        from electroclean.web.analyses import Analyses
         from electroclean.web.coach import Coach
+        from electroclean.web.quiz import Quizzes
         from electroclean.web.visits import Visits
 
         self.coach = Coach(self)
         self.visits = Visits(self)
+        self.administration = Admin(self)
+        self.analyses = Analyses(self)
+        self.quizzes = Quizzes(self)
 
     # ----------------------------------------------------------------- basics
     @property
@@ -207,7 +214,7 @@ class StudyService:
             "annotation": {"min_duration_samples": s.min_duration_samples,
                            "quick_labels": [q for q in s.quick_labels if cat.is_permitted(q)]},
             "logging": self.logging_info(),
-            "logging_notice": LOGGING_NOTICE if s.logging_interactions else "",
+            "logging_notice": (self.store.logging_notice or LOGGING_NOTICE) if s.logging_interactions else "",
         }
 
     def logging_info(self) -> dict[str, Any]:
@@ -233,7 +240,8 @@ class StudyService:
             except ReferenceSetError:
                 prog = None
         return {"annotator_id": user.annotator_id, "display_name": user.display_name, "role": user.role,
-                "study": self.study_info(), "catalogue": self.catalogue_info(), "programme": prog}
+                "study": self.study_info(), "catalogue": self.catalogue_info(), "programme": prog,
+                "quizzes": self.quizzes.available(user)}
 
     # ---------------------------------------------------------- what to do
     def work_items(self, user: User) -> list[WorkItem]:
@@ -596,17 +604,32 @@ class StudyService:
             out.append(entry)
         return {"study": self.store.name, "generated_at": now_local_iso(), "annotators": out}
 
-    #: Operation name -> method, for the HTTP routes and the Firebase functions.
+    def admin(self, op: Any, user: User, body: dict[str, Any] | None = None) -> dict[str, Any]:
+        """One operation of the admin area (docs/web/api.md, "Administration"; electroclean/web/admin.py)."""
+        return self.administration.run(op, user, body or {})
+
+    # ------------------------------------------------------------------ quiz
+    def quiz(self, user: User, set_id: Any, body: dict[str, Any] | None = None) -> dict[str, Any]:
+        """The short-segment quiz of a reference set: get, answer, finish (electroclean/web/quiz.py)."""
+        return self.quizzes.run(user, set_id, body or {})
+
+    #: Operation name -> method, for the HTTP routes and the Firebase functions. ``admin`` takes the
+    #: operation in the body's ``op`` and ``quiz`` the set in its ``set_id``.
     OPERATIONS = ("me", "assignments", "match", "put_draft", "delete_draft", "submit", "training", "guided_get",
                   "guided_check", "guided_continue", "guided_show_me", "visit_open", "visit_events", "visit_close",
-                  "admin_progress")
+                  "admin_progress", "admin", "quiz")
 
     def call(self, operation: str, user: User, body: dict[str, Any] | None) -> dict[str, Any]:
         if operation not in self.OPERATIONS:
             raise ApiError(404, "not_found", f"Unknown operation {operation}")
         if body is not None and not isinstance(body, dict):
             raise ApiError(400, "bad_request", "The request must be a JSON object")
-        return getattr(self, operation)(user, body or {})
+        body = body or {}
+        if operation == "admin":
+            return self.admin(body.get("op"), user, {k: v for k, v in body.items() if k != "op"})
+        if operation == "quiz":
+            return self.quiz(user, body.get("set_id"), {k: v for k, v in body.items() if k != "set_id"})
+        return getattr(self, operation)(user, body)
 
 
 def _rid(body: dict[str, Any]) -> str:

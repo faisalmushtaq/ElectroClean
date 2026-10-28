@@ -446,7 +446,7 @@ def test_guided_training_with_the_coach(client: TestClient, recordings: Path, st
     bad = api.post("/submissions", submission(recordings, GUIDED1, mine[1:], "guided", "example"))
     assert bad.status_code == 422 and bad.json()["error"] == "guided_incomplete"
     assert api.ok("get", f"/training/guided/{GUIDED1}")["current"]["step"] == 1  # shown again
-    for i, a in enumerate(mine, start=1):  # match them again, now on the first try each
+    for i, _a in enumerate(mine, start=1):  # match them again, now on the first try each
         api.ok("post", f"/training/guided/{GUIDED1}/check", {"step": i, "annotations": mine})
         api.ok("post", f"/training/guided/{GUIDED1}/continue", {"step": i})
     r = api.ok("post", "/submissions", submission(recordings, GUIDED1, mine, "guided", "example"))

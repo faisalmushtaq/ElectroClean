@@ -19,8 +19,10 @@ from __future__ import annotations
 import copy
 import hashlib
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from electroclean.config.settings import Settings, deep_merge, load_default_settings_dict
@@ -33,6 +35,11 @@ if TYPE_CHECKING:
 
 MODES = ("standard", "guided", "practice", "assessment")
 ROLES = ("annotator", "admin")
+STATUSES = ("active", "disabled")
+#: Who changed something, in the audit log, when it was an ``electroclean-web`` command.
+BY_COMMAND = "command"
+#: The answer of :meth:`Store.create_account` and :meth:`Store.reset_password`.
+Credentials = dict[str, Any]  # {"invite_link": str | None, "temporary_password": str | None}
 
 
 @dataclass(frozen=True)
@@ -79,12 +86,32 @@ class StoreError(RuntimeError):
     """The store cannot be used (for example a study that does not exist)."""
 
 
+class ResultExists(StoreError):
+    """A result file is kept already under that name (result files are never replaced)."""
+
+
+class AccountProblem(ValueError):
+    """An account cannot be created or changed as asked; ``code`` is the API's error code."""
+
+    def __init__(self, code: str, message: str, status: int = 409) -> None:
+        super().__init__(message)
+        self.code, self.message, self.status = code, message, status
+
+
 class Store(ABC):
     """Everything the web service reads and writes. Methods raise :class:`StoreError` on failure."""
 
     demo: bool = False
     #: The store's name in messages and in ``GET /health`` (``files`` or ``firestore``).
     kind: str = ""
+
+    def refresh(self) -> None:  # noqa: B027 - a store without caches has nothing to forget
+        """Forget what is cached (the administrator's operations read everything afresh)."""
+
+    @contextmanager
+    def memo(self) -> Iterator[None]:
+        """Within the block, a store may answer repeated reads (manifests) from memory."""
+        yield
 
     # ------------------------------------------------------------- the study
     @property
@@ -98,6 +125,21 @@ class Store(ABC):
     @property
     @abstractmethod
     def settings(self) -> Settings: ...
+
+    @property
+    @abstractmethod
+    def settings_overrides(self) -> dict[str, Any]:
+        """The study's own settings (the ``settings`` block of electroclean_study.json)."""
+
+    @property
+    @abstractmethod
+    def logging_notice(self) -> str:
+        """The study's own notice about interaction logging ("" for ElectroClean's)."""
+
+    @abstractmethod
+    def update_study(self, *, name: str | None = None, overrides: dict[str, Any] | None = None,
+                     logging_notice: str | None = None) -> None:
+        """Change the study's name, settings overrides (checked first) or logging notice."""
 
     @property
     def catalogue(self) -> LabelCatalogue:
@@ -122,6 +164,9 @@ class Store(ABC):
     @abstractmethod
     def add_manifest(self, m: dict[str, Any]) -> None: ...
 
+    @abstractmethod
+    def remove_manifest(self, scope: str, recording_id: str) -> None: ...
+
     # --------------------------------------------------------- reference sets
     @abstractmethod
     def reference_sets(self) -> list[ReferenceSet]: ...
@@ -139,12 +184,52 @@ class Store(ABC):
         """Store a reference set: its ``reference_set.json`` and its other files (paths relative to its folder),
         never its recordings."""
 
-    # -------------------------------------------------- people and their work
     @abstractmethod
-    def user(self, annotator_id: str) -> User | None: ...
+    def reference_set_payload(self, set_id: str) -> tuple[dict[str, Any], dict[str, bytes]]:
+        """A stored set's ``reference_set.json`` and other files (raises :class:`StoreError` if there is none)."""
 
     @abstractmethod
-    def users(self) -> list[dict[str, Any]]: ...
+    def put_reference_set(self, definition: dict[str, Any], files: dict[str, bytes]) -> None:
+        """Store a reference set in place of the one with its ID: files it no longer has are removed."""
+
+    @abstractmethod
+    def delete_reference_set(self, set_id: str) -> None: ...
+
+    # -------------------------------------------------- people and their work
+    @abstractmethod
+    def user(self, annotator_id: str) -> User | None:
+        """The account, if it takes part in the study and is not disabled."""
+
+    @abstractmethod
+    def users(self) -> list[dict[str, Any]]:
+        """The active accounts (``annotator_id``, ``display_name``, ``role``, ``created_at``, ``last_seen``)."""
+
+    @abstractmethod
+    def user_records(self) -> list[dict[str, Any]]:
+        """Every account, disabled ones too: ``annotator_id``, ``display_name``, ``email``, ``role``,
+        ``status``, ``created_at``, ``last_seen``, ``notes``."""
+
+    def user_record(self, annotator_id: str) -> dict[str, Any] | None:
+        aid = str(annotator_id or "").strip().upper()
+        return next((u for u in self.user_records() if u["annotator_id"] == aid), None)
+
+    @abstractmethod
+    def create_account(self, annotator_id: str, *, display_name: str, role: str, email: str,
+                       password: str | None) -> Credentials:
+        """A new account (:class:`AccountProblem` ``user_exists`` if the ID has one)."""
+
+    @abstractmethod
+    def update_account(self, annotator_id: str, *, display_name: str | None = None, role: str | None = None,
+                       status: str | None = None, notes: str | None = None) -> None:
+        """Change an account; disabling it stops it signing in, at once."""
+
+    @abstractmethod
+    def reset_password(self, annotator_id: str) -> Credentials: ...
+
+    @abstractmethod
+    def remove_account(self, annotator_id: str) -> None:
+        """The account leaves the study with its assignments, programme, drafts and guided progress; its
+        results and logs stay."""
 
     @abstractmethod
     def assignments(self, annotator_id: str | None = None) -> list[Assignment]: ...
@@ -152,6 +237,15 @@ class Store(ABC):
     @abstractmethod
     def assign(self, annotator_id: str, recording_ids: list[str], *, mode: str = "standard",
                context_id: str = "") -> int: ...
+
+    @abstractmethod
+    def unassign_item(self, annotator_id: str, recording_id: str, mode: str, context_id: str) -> bool:
+        """Remove one assignment; False if there was none."""
+
+    @abstractmethod
+    def remove_assignments(self, *, recording_id: str | None = None, context_id: str | None = None,
+                           modes: tuple[str, ...] | None = None) -> int:
+        """Remove every assignment of a recording and/or of a reference set (in the given modes)."""
 
     @abstractmethod
     def programme(self, annotator_id: str) -> str | None: ...
@@ -209,6 +303,46 @@ class Store(ABC):
     def report_text(self, set_id: str, annotator_id: str) -> str:
         """The one-sentence result of the trainee's competency report, if there is one."""
 
+    @abstractmethod
+    def saved_files(self, annotator_id: str, recording_id: str, mode: str, context_id: str) -> dict[str, bytes]:
+        """The files of the latest saved attempt (file name -> contents), or {} if it was never saved."""
+
+    def saved_document(self, annotator_id: str, recording_id: str, mode: str, context_id: str) -> bytes | None:
+        """The ``_annotations.json`` of the latest saved attempt, or None."""
+        files = self.saved_files(annotator_id, recording_id, mode, context_id)
+        return next((b for n, b in sorted(files.items()) if n.endswith("_annotations.json")), None)
+
+    @abstractmethod
+    def results_tree(self, dest: Path, *, logs: bool = False, annotator_ids: set[str] | None = None,
+                     modes: set[str] | None = None) -> Path:
+        """A results folder laid out as the desktop's (``Annotated_Events``) for the analyses to read.
+
+        The files store answers its own folder (``dest`` is not used); the Firestore store writes the
+        saved files (and, with ``logs``, the interaction logs) below ``dest``. Only reading is allowed."""
+
+    @abstractmethod
+    def put_result_file(self, rel_path: str, data: bytes) -> None:
+        """Keep a result file (for example a quiz result) at ``rel_path`` below the results folder."""
+
+    # ------------------------------------------------------------------- quiz
+    @abstractmethod
+    def quiz_state(self, annotator_id: str, set_id: str) -> dict[str, Any] | None: ...
+
+    @abstractmethod
+    def update_quiz_state(self, annotator_id: str, set_id: str,
+                          change: Callable[[dict[str, Any] | None], dict[str, Any] | None]) -> dict[str, Any] | None:
+        """Read, change and write an annotator's quiz state in one step (``change`` returns the new state,
+        or None to leave it as it was); returns the state kept."""
+
+    # ------------------------------------------------------------------ audit
+    @abstractmethod
+    def audit_append(self, entry: dict[str, Any]) -> None:
+        """Add an entry ``{"at", "by", "op", "summary", "details"}`` to the audit log."""
+
+    @abstractmethod
+    def audit_page(self, before: str | None, limit: int) -> tuple[list[dict[str, Any]], str | None]:
+        """Entries newest first, from just after the cursor ``before``; and the cursor of the next page."""
+
     # ----------------------------------------------------------------- visits
     @abstractmethod
     def visit_open(self, visit_id: str, annotator_id: str, mode: str, context_id: str, header: dict[str, Any],
@@ -227,6 +361,19 @@ class Store(ABC):
     def visit_close(self, visit_id: str, event: dict[str, Any]) -> None:
         """Append the closing event (without ``seq``) and mark the visit closed."""
 
+    @abstractmethod
+    def visit_records(self, annotator_id: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+        """Visits, newest first: ``visit_id``, ``annotator_id``, ``mode``, ``context_id``, ``started_at``,
+        ``closed_at`` (or None) and ``n_events``."""
 
-__all__ = ["MODES", "ROLES", "Assignment", "SavedResult", "Store", "StoreError", "User", "item_key",
-           "settings_from_overrides"]
+
+def generated_password() -> str:
+    """A temporary password that is easy to read out and type: three groups of four characters."""
+    import secrets
+
+    alphabet = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no 0/O, 1/l/I
+    return "-".join("".join(secrets.choice(alphabet) for _ in range(4)) for _ in range(3))
+
+
+__all__ = ["BY_COMMAND", "MODES", "ROLES", "STATUSES", "AccountProblem", "Assignment", "Credentials", "ResultExists",
+           "SavedResult", "Store", "StoreError", "User", "generated_password", "item_key", "settings_from_overrides"]

@@ -33,11 +33,20 @@ class ExportError(RuntimeError):
     pass
 
 
-def _safe(root: Path, rel: str) -> Path:
-    parts = PurePosixPath(rel).parts
-    if not parts or ".." in parts or PurePosixPath(rel).is_absolute():
+def safe_path(root: Path, rel: str) -> Path:
+    """``root / rel``, refusing anything that would leave ``root``."""
+    parts = PurePosixPath(str(rel)).parts
+    if not parts or ".." in parts or PurePosixPath(str(rel)).is_absolute() or "\\" in str(rel):
         raise ExportError(f"Refusing to write outside the results folder: {rel!r}")
     return root.joinpath(*parts)
+
+
+_safe = safe_path
+
+
+def visit_log_text(header: dict[str, Any], events: list[dict[str, Any]]) -> str:
+    """A visit's interaction log as the JSON Lines file the desktop application writes."""
+    return _jsonl(header) + "".join(_jsonl(e) for e in events)
 
 
 def _put(path: Path, data: bytes, counts: dict[str, int]) -> None:
@@ -72,7 +81,8 @@ def export_study(store: Any, to: Path | str) -> dict[str, int]:
     layout = OutputLayout(to / settings.output_directory_name)
     layout.root.mkdir(parents=True, exist_ok=True)
     register = CompletionRegister(layout, settings.register_lock_timeout_s)
-    counts = {"recordings": 0, "written": 0, "unchanged": 0, "visits": 0, "progress": 0, "reports": 0}
+    counts = {"recordings": 0, "written": 0, "unchanged": 0, "visits": 0, "progress": 0, "reports": 0,
+              "other": 0}
     known = {e.get("session_id") for e in register.entries()}
     session_log: list[str] = []
     for entry, files, log_lines in sorted(store.submission_files(), key=lambda x: x[0].get("completed_at", "")):
@@ -108,11 +118,49 @@ def export_study(store: Any, to: Path | str) -> dict[str, int]:
         while path.exists() and _visit_id_of(path) != visit["visit_id"]:
             path = folder / f"{stem}-{n}.jsonl"
             n += 1
-        text = _jsonl(header) + "".join(_jsonl(e) for e in events)
+        text = visit_log_text(header, events)
         folder.mkdir(parents=True, exist_ok=True)
         atomic_write_text(path, text)
         counts["visits"] += 1
+    for rel, data in sorted(store.result_files()):  # quiz results and other files kept as they were written
+        _put(safe_path(layout.root, rel), data, counts)
+        counts["other"] += 1
     return counts
+
+
+#: The largest results zip the administrator's area downloads (larger studies: ``electroclean-web export``).
+MAX_RESULTS_ZIP = 25_000_000
+
+
+def results_zip_file(store: Any) -> Path:
+    """A zip of the study's results folder (results, interaction logs, training progress, reports and quiz
+    results), in a temporary file the caller deletes."""
+    import tempfile
+    import zipfile
+
+    from electroclean.app.common import now_local_iso
+    from electroclean.app.io.naming import INTERNAL_DIR
+
+    tmp = tempfile.NamedTemporaryFile(prefix="electroclean-results-", suffix=".zip", delete=False)
+    tmp.close()
+    with tempfile.TemporaryDirectory(prefix="electroclean-export-") as work:
+        if getattr(store, "kind", "") == "firestore":
+            export_study(store, work)
+            root = Path(work) / store.settings.output_directory_name
+        else:
+            root = store.layout.root
+        base = root.name or "Annotated_Events"
+        with zipfile.ZipFile(tmp.name, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            if root.is_dir():
+                for path in sorted(root.rglob("*")):
+                    rel = path.relative_to(root)
+                    if (rel.parts and rel.parts[0] == INTERNAL_DIR) or not path.is_file():
+                        continue
+                    zf.write(path, f"{base}/{rel.as_posix()}")
+            zf.writestr(f"{base}/README.txt", f"Results of the ElectroClean study {store.name}, downloaded "
+                        f"{now_local_iso()}.\nAnalyse them with electroclean-agreement and electroclean-activity, as "
+                        "for the desktop application.\n")
+    return Path(tmp.name)
 
 
 def _visit_id_of(path: Path) -> str:

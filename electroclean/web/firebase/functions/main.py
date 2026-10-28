@@ -8,8 +8,10 @@ error code in ``details["error"]``.
 
 The work is done by :class:`electroclean.web.service.StudyService` with the Firestore store, the same
 code as the ElectroClean server. Only ``firebase_functions`` is imported when an instance starts;
-ElectroClean is imported on the first call, and the heavy libraries (pandas, SciPy) only by
-practice scoring and competency reports, so guided checks answer quickly.
+ElectroClean is imported on the first call, and the heavy libraries (pandas, SciPy, matplotlib) only
+by practice scoring, competency reports and the admin area's analyses, so guided checks answer
+quickly. ``ec_admin`` (every operation of the admin area, by ``op``) is for administrators only: the
+service refuses anyone whose claims and account in the study do not both make them one.
 
 Deploy with ``npx firebase-tools deploy --only functions,firestore`` (docs/web/firebase.md); the
 predeploy step copies the ElectroClean code these functions need into this folder.
@@ -57,7 +59,7 @@ def service_for(study: str) -> Any:
             from electroclean.web.service import StudyService
             from electroclean.web.store_firestore import FirestoreStore
 
-            svc = StudyService(FirestoreStore(firestore_client(_project()), study))
+            svc = StudyService(FirestoreStore(firestore_client(_project()), study, auth_app=firebase_admin.get_app()))
             _services[study] = svc
         return svc
 
@@ -179,3 +181,15 @@ def ec_visit_close(req: https_fn.CallableRequest) -> Any:
 @https_fn.on_call()
 def ec_admin_progress(req: https_fn.CallableRequest) -> Any:
     return handle("admin_progress", req)
+
+
+# The admin area: every operation by "op" (administrators only). The analyses (agreement, activity,
+# competency reports, the results zip) and registering many recordings need more memory and time.
+@https_fn.on_call(memory=options.MemoryOption.GB_2, timeout_sec=540, max_instances=5)
+def ec_admin(req: https_fn.CallableRequest) -> Any:
+    return handle("admin", req)
+
+
+@https_fn.on_call()
+def ec_quiz(req: https_fn.CallableRequest) -> Any:
+    return handle("quiz", req)

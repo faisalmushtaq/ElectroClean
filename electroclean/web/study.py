@@ -128,6 +128,30 @@ class WebStudy:
     def name(self) -> str:
         return str(self.raw_config.get("name") or self.study_id)
 
+    def update(self, *, name: str | None = None, overrides: dict[str, Any] | None = None,
+               logging_notice: str | None = None) -> None:
+        """Change the study's name, its settings (the ``settings`` block) or its logging notice.
+
+        The new study file is read with the desktop application's own machinery before it replaces the
+        old one, so settings it would refuse are never saved (:class:`StudyError` with the reason)."""
+        import tempfile
+
+        data = self.raw_config
+        if name is not None:
+            data["name"] = name
+        if overrides is not None:
+            data["settings"] = overrides
+        if logging_notice is not None:
+            data["logging_notice"] = logging_notice
+        with tempfile.TemporaryDirectory(prefix="electroclean-study-") as tmp:
+            atomic_write_json(Path(tmp) / STUDY_CONFIG_FILENAME, data)
+            try:
+                load_settings(Path(tmp))
+            except (ValueError, TypeError, KeyError, AttributeError) as exc:
+                raise StudyError(str(exc)) from exc
+        atomic_write_json(self.config_path, data)
+        self._settings = None
+
     # --------------------------------------------------------------- paths
     @property
     def db_path(self) -> Path:

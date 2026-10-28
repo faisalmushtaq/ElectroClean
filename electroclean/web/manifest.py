@@ -119,7 +119,7 @@ def build_manifest(loaded: Any, *, scope: str = SCOPE_STUDY) -> dict[str, Any]:
     types: dict[str, str] = {}
     bads: list[str] = []
     if view is not None:
-        types = dict(zip(view.ch_names, view.get_channel_types()))
+        types = dict(zip(view.ch_names, view.get_channel_types(), strict=True))
         bads = [c for c in view.info.get("bads", []) if c in info.ch_names]
     eeg_fp = (loaded.fingerprint or {}).get(FINGERPRINT_ROLE) or {}
     if not eeg_fp.get("sha256"):
@@ -389,6 +389,10 @@ class ManifestStore:
 
     def get(self, scope: str, recording_id: str) -> dict[str, Any] | None:
         return self._load().get(manifest_key(scope, recording_id))
+
+    def remove(self, scope: str, recording_id: str) -> None:
+        (self.dir / f"{manifest_key(scope, recording_id)}.json").unlink(missing_ok=True)
+        self._cache = None
 
     def in_scope(self, scope: str) -> list[dict[str, Any]]:
         return sorted((m for m in self._load().values() if m["scope"] == scope), key=lambda m: m["recording_id"])

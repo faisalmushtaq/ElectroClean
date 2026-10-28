@@ -272,8 +272,8 @@ def test_admin_commands(template: Path, tmp_path: Path, capsys: pytest.CaptureFi
     run_cli("import-manifests", str(bundle), "--study", sid2)
     assert len(FirestoreStore(firestore_client(PROJECT), sid2).manifests()) == 3
     cfg = tmp_path / "config.json"
-    assert cli(["config", "--firebase-project", PROJECT, "--study", sid, "--api-key", "AIza-test", "--app-id", "1:2:web:3",
-                "--out", str(cfg)]) == 0
+    assert cli(["config", "--firebase-project", PROJECT, "--study", sid, "--api-key", "AIza-test",
+                "--app-id", "1:2:web:3", "--out", str(cfg)]) == 0
     c = json.loads(cfg.read_text())
     assert c["study"] == sid and c["firebase"]["projectId"] == PROJECT and c["firebase"]["apiKey"] == "AIza-test"
     assert c["firebase"]["authDomain"] == f"{PROJECT}.firebaseapp.com" and c["functions_region"] == "europe-west2"

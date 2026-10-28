@@ -34,8 +34,10 @@ import shutil
 import tempfile
 import threading
 import time
+import uuid
 import zlib
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -49,7 +51,10 @@ from electroclean.web.manifest import fingerprint_of, manifest_key
 from electroclean.web.store import (
     MODES,
     ROLES,
+    AccountProblem,
     Assignment,
+    Credentials,
+    ResultExists,
     SavedResult,
     Store,
     StoreError,
@@ -65,6 +70,7 @@ if TYPE_CHECKING:
 
 STUDY_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 ID_RE = re.compile(r"^[A-Z0-9][A-Z0-9_-]{0,31}$")
+AUDIT_ID_RE = re.compile(r"^[0-9]{13}-[0-9a-f]{8}$")
 BLOB_LIMIT = 900_000  # bytes kept in one document before splitting
 CACHE_S = 30.0
 
@@ -92,7 +98,7 @@ def _short(text: str) -> str:
 class FirestoreStore(Store):
     kind = "firestore"
 
-    def __init__(self, client: Any, study_id: str, *, cache_dir: Path | None = None) -> None:
+    def __init__(self, client: Any, study_id: str, *, cache_dir: Path | None = None, auth_app: Any = None) -> None:
         if not STUDY_ID_RE.match(study_id or ""):
             raise StoreError(f"Unsuitable study ID {study_id!r}")
         self.client = client
@@ -103,6 +109,45 @@ class FirestoreStore(Store):
         self._settings_cache: tuple[str, Settings] | None = None
         self._sets_cache: tuple[float, list[ReferenceSet]] | None = None
         self._lock = threading.Lock()
+        self._auth_app = auth_app
+        self._local = threading.local()  # the memo of one request (memo())
+
+    def refresh(self) -> None:
+        with self._lock:
+            self._study_cache = None
+            self._sets_cache = None
+
+    @contextmanager
+    def memo(self) -> Iterator[None]:
+        outer = getattr(self._local, "manifests", None)
+        if outer is None:
+            self._local.manifests = {}
+        try:
+            yield
+        finally:
+            if outer is None:
+                self._local.manifests = None
+
+    def _memo(self) -> dict[tuple[str, str], dict[str, Any]] | None:
+        memo = getattr(self._local, "manifests", None)
+        if memo is not None and not memo:
+            for snap in self.doc.collection("manifests").stream():
+                m = self._get_blob(snap)
+                memo[(m["scope"], m["recording_id"])] = m
+            memo[("", "")] = {}  # loaded (even when the study has no recordings)
+        return memo
+
+    @property
+    def auth_app(self) -> Any:
+        """The Firebase app whose Authentication holds the accounts (the functions' default app)."""
+        if self._auth_app is None:
+            import firebase_admin
+
+            try:
+                self._auth_app = firebase_admin.get_app()
+            except ValueError as exc:
+                raise StoreError("Firebase Authentication is not available here") from exc
+        return self._auth_app
 
     # ------------------------------------------------------------- the study
     @classmethod
@@ -154,6 +199,27 @@ class FirestoreStore(Store):
         self.doc.set({"settings_json": json.dumps(overrides), "updated_at": now_local_iso()}, merge=True)
         self._study_cache = None
 
+    @property
+    def logging_notice(self) -> str:
+        return str(self._study().get("logging_notice") or "")
+
+    def update_study(self, *, name: str | None = None, overrides: dict[str, Any] | None = None,
+                     logging_notice: str | None = None) -> None:
+        changes: dict[str, Any] = {"updated_at": now_local_iso()}
+        if overrides is not None:
+            try:
+                settings_from_overrides(overrides)
+            except (ValueError, TypeError, KeyError, AttributeError) as exc:
+                raise ValueError(str(exc)) from exc
+            changes["settings_json"] = json.dumps(overrides)
+        if name is not None:
+            changes["name"] = name
+        if logging_notice is not None:
+            changes["logging_notice"] = logging_notice
+        self._study()  # the study must exist
+        self.doc.set(changes, merge=True)
+        self.refresh()
+
     # --------------------------------------------------------------- blobs
     def _put_blob(self, ref: Any, fields: dict[str, Any], payload: Any, *, create: bool = False,
                   transaction: Any = None) -> None:
@@ -192,11 +258,25 @@ class FirestoreStore(Store):
 
     # -------------------------------------------------------------- manifests
     def manifest(self, scope: str, recording_id: str) -> dict[str, Any] | None:
+        memo = self._memo()
+        if memo is not None:
+            return memo.get((scope, recording_id))
         snap = self.doc.collection("manifests").document(manifest_key(scope, recording_id)).get()
         return self._get_blob(snap) if snap.exists else None
 
     def manifests(self) -> list[dict[str, Any]]:
+        memo = self._memo()
+        if memo is not None:
+            return [m for k, m in memo.items() if k != ("", "")]
         return [self._get_blob(s) for s in self.doc.collection("manifests").stream()]
+
+    def _forget_memo(self) -> None:
+        if getattr(self._local, "manifests", None) is not None:
+            self._local.manifests = {}
+
+    def remove_manifest(self, scope: str, recording_id: str) -> None:
+        self._delete(self.doc.collection("manifests").document(manifest_key(scope, recording_id)))
+        self._forget_memo()
 
     def manifests_by_fingerprint(self, sha256: str, size: int) -> list[dict[str, Any]]:
         from google.cloud.firestore_v1.base_query import FieldFilter
@@ -214,6 +294,7 @@ class FirestoreStore(Store):
         ref = self.doc.collection("manifests").document(manifest_key(m["scope"], m["recording_id"]))
         self._put_blob(ref, {"scope": m["scope"], "recording_id": m["recording_id"], "file_name": m["file_name"],
                              "fp_sha256": sha, "fp_size": size, "registered_at": now_local_iso()}, m)
+        self._forget_memo()
 
     # --------------------------------------------------------- reference sets
     def reference_sets(self) -> list[ReferenceSet]:
@@ -266,6 +347,33 @@ class FirestoreStore(Store):
                              "updated_at": now_local_iso()}, payload)
         self._sets_cache = None
 
+    def reference_set_payload(self, set_id: str) -> tuple[dict[str, Any], dict[str, bytes]]:
+        if not STUDY_ID_RE.match(str(set_id or "")):
+            raise StoreError(f"Unsuitable reference set ID {set_id!r}")
+        snap = self.doc.collection("reference_sets").document(set_id).get()
+        if not snap.exists:
+            raise StoreError(f"Reference set {set_id!r} was not found in this study")
+        payload = self._get_blob(snap) or {}
+        return dict(payload.get("definition") or {}), {rel: base64.b64decode(b64)
+                                                        for rel, b64 in dict(payload.get("files") or {}).items()}
+
+    def put_reference_set(self, definition: dict[str, Any], files: dict[str, bytes]) -> None:
+        """The document holds the whole set, so storing it again replaces every file."""
+        if any(Path(rel).as_posix() == "reference_set.json" for rel in files):
+            raise StoreError("reference_set.json is the set's definition, not one of its files")
+        self.add_reference_set(definition, files)
+
+    def delete_reference_set(self, set_id: str) -> None:
+        from google.cloud.firestore_v1.base_query import FieldFilter
+
+        if not STUDY_ID_RE.match(str(set_id or "")):
+            raise StoreError(f"Unsuitable reference set ID {set_id!r}")
+        self._delete(self.doc.collection("reference_sets").document(set_id))
+        for name in ("guided", "quiz"):
+            for snap in self.doc.collection(name).where(filter=FieldFilter("set_id", "==", set_id)).stream():
+                snap.reference.delete()
+        self._sets_cache = None
+
     # -------------------------------------------------- people and their work
     def user(self, annotator_id: str) -> User | None:
         aid = str(annotator_id or "").upper()
@@ -296,10 +404,104 @@ class FirestoreStore(Store):
             raise StoreError("An ID must be 1 to 32 letters, digits, hyphens or underscores (for example A01)")
         if role not in ROLES:
             raise StoreError(f"The role must be one of {', '.join(ROLES)}")
-        self.doc.collection("users").document(aid).set(
-            {"annotator_id": aid, "display_name": display_name, "role": role, "uid": uid, "email": email,
-             "disabled": False, "created_at": now_local_iso()}, merge=True)
+        ref = self.doc.collection("users").document(aid)
+        data = {"annotator_id": aid, "display_name": display_name, "role": role, "uid": uid, "email": email,
+                "disabled": False}
+        if not ref.get().exists:
+            data.update(created_at=now_local_iso(), notes="")
+        ref.set(data, merge=True)
         return User(aid, display_name, role)
+
+    def user_records(self) -> list[dict[str, Any]]:
+        out = []
+        for s in self.doc.collection("users").stream():
+            d = s.to_dict() or {}
+            out.append({"annotator_id": s.id, "display_name": d.get("display_name", ""),
+                        "email": d.get("email") or None, "role": d.get("role", "annotator"),
+                        "status": "disabled" if d.get("disabled") else "active",
+                        "created_at": d.get("created_at", ""), "last_seen": d.get("last_seen") or None,
+                        "notes": d.get("notes", "")})
+        return sorted(out, key=lambda u: u["annotator_id"])
+
+    def _user_doc(self, annotator_id: str) -> tuple[Any, dict[str, Any]]:
+        aid = str(annotator_id or "").strip().upper()
+        ref = self.doc.collection("users").document(aid) if ID_RE.match(aid) else None
+        snap = ref.get() if ref is not None else None
+        if snap is None or not snap.exists:
+            raise AccountProblem("unknown_user", f"{aid} has no account in this study", 404)
+        return ref, snap.to_dict() or {}
+
+    def create_account(self, annotator_id: str, *, display_name: str, role: str, email: str,
+                       password: str | None) -> Credentials:
+        from electroclean.web.firebase import AuthProblem, ensure_auth_user
+
+        aid = str(annotator_id or "").strip().upper()
+        if not ID_RE.match(aid):
+            raise AccountProblem("invalid_user", "An ID must be 1 to 32 letters, digits, hyphens or underscores, "
+                                 "starting with a letter or digit (for example A01)", 400)
+        if role not in ROLES:
+            raise AccountProblem("invalid_user", f"The role must be one of {', '.join(ROLES)}", 400)
+        if not email:
+            raise AccountProblem("email_required", "On Firebase each person signs in with their email address: "
+                                 "give it", 400)
+        if self.doc.collection("users").document(aid).get().exists:
+            raise AccountProblem("user_exists", f"{aid} already has an account in this study")
+        if any((u.get("email") or "").lower() == email.lower() for u in self.user_records()):
+            raise AccountProblem("email_in_use", f"{email} already signs in to this study under another ID")
+        try:
+            uid, link = ensure_auth_user(self.auth_app, email=email, annotator_id=aid, study=self.study_id,
+                                         role=role, display_name=display_name, password=password,
+                                         update_existing=False)
+        except AuthProblem as exc:
+            raise AccountProblem(exc.code, exc.message, 409 if exc.code == "email_in_use" else 400) from exc
+        self.put_user(aid, display_name=display_name, role=role, uid=uid, email=email)
+        return {"invite_link": link, "temporary_password": None}
+
+    def update_account(self, annotator_id: str, *, display_name: str | None = None, role: str | None = None,
+                       status: str | None = None, notes: str | None = None) -> None:
+        from electroclean.web.firebase import set_disabled, set_role
+
+        ref, d = self._user_doc(annotator_id)
+        changes: dict[str, Any] = {}
+        if display_name is not None:
+            changes["display_name"] = display_name
+        if notes is not None:
+            changes["notes"] = notes
+        if role is not None and role != d.get("role"):
+            if role not in ROLES:
+                raise AccountProblem("invalid_user", f"The role must be one of {', '.join(ROLES)}", 400)
+            if d.get("uid"):
+                set_role(self.auth_app, d["uid"], ref.id, self.study_id, role)
+            changes["role"] = role
+        if status is not None and (status == "disabled") != bool(d.get("disabled")):
+            if d.get("uid"):
+                set_disabled(self.auth_app, d["uid"], status == "disabled")
+            changes["disabled"] = status == "disabled"
+        if changes:
+            ref.set(changes, merge=True)
+
+    def reset_password(self, annotator_id: str) -> Credentials:
+        from electroclean.web.firebase import password_link
+
+        _ref, d = self._user_doc(annotator_id)
+        if not d.get("email"):
+            raise AccountProblem("no_email", f"{annotator_id} has no email address, so no link can be made")
+        return {"invite_link": password_link(self.auth_app, d["email"]), "temporary_password": None}
+
+    def remove_account(self, annotator_id: str) -> None:
+        from google.cloud.firestore_v1.base_query import FieldFilter
+
+        from electroclean.web.firebase import leave_study
+
+        ref, d = self._user_doc(annotator_id)
+        if d.get("uid"):
+            leave_study(self.auth_app, d["uid"], self.study_id)
+        aid = ref.id
+        for name in ("drafts", "guided", "quiz"):
+            for snap in self.doc.collection(name).where(filter=FieldFilter("annotator_id", "==", aid)).stream():
+                self._delete(snap.reference)
+        self.doc.collection("assignments").document(aid).delete()
+        ref.delete()
 
     def _assignment_doc(self, annotator_id: str) -> dict[str, Any]:
         snap = self.doc.collection("assignments").document(str(annotator_id).upper()).get()
@@ -353,6 +555,39 @@ class FirestoreStore(Store):
         keep = [] if recording_ids is None else [a for a in items if a["recording_id"] not in set(recording_ids)]
         ref.set({**d, "items": keep, "updated_at": now_local_iso()})
         return len(items) - len(keep)
+
+    def _drop_items(self, ref: Any, drop: Callable[[dict[str, Any]], bool]) -> int:
+        from google.cloud import firestore
+
+        @firestore.transactional
+        def update(tx: Any) -> int:
+            snap = ref.get(transaction=tx)
+            d = (snap.to_dict() or {}) if snap.exists else {}
+            items = list(d.get("items", []))
+            keep = [a for a in items if not drop(a)]
+            if len(keep) != len(items):
+                tx.set(ref, {**d, "items": keep, "updated_at": now_local_iso()})
+            return len(items) - len(keep)
+
+        return update(self.client.transaction())
+
+    def unassign_item(self, annotator_id: str, recording_id: str, mode: str, context_id: str) -> bool:
+        ctx = context_id if mode != "standard" else ""
+        ref = self.doc.collection("assignments").document(str(annotator_id).upper())
+        return bool(self._drop_items(ref, lambda a: (a["recording_id"], a.get("mode", "standard"),
+                                                     a.get("context_id", "")) == (recording_id, mode, ctx)))
+
+    def remove_assignments(self, *, recording_id: str | None = None, context_id: str | None = None,
+                           modes: tuple[str, ...] | None = None) -> int:
+        if recording_id is None and context_id is None and modes is None:
+            return 0
+
+        def drop(a: dict[str, Any]) -> bool:
+            return ((recording_id is None or a["recording_id"] == recording_id)
+                    and (context_id is None or a.get("context_id", "") == context_id)
+                    and (modes is None or a.get("mode", "standard") in modes))
+
+        return sum(self._drop_items(s.reference, drop) for s in self.doc.collection("assignments").stream())
 
     def programme(self, annotator_id: str) -> str | None:
         return self._assignment_doc(annotator_id).get("programme") or None
@@ -522,6 +757,124 @@ class FirestoreStore(Store):
             out.append((d.get("set_id", ""), d.get("annotator_id", ""), self._get_blob(snap) or {}))
         return out
 
+    def saved_files(self, annotator_id: str, recording_id: str, mode: str, context_id: str) -> dict[str, bytes]:
+        ctx = context_id if mode != "standard" else ""
+        mine = [s for s in self._submissions(annotator_id, ["recording_id", "mode", "context_id", "attempt"])
+                if (s.to_dict() or {}).get("recording_id") == recording_id
+                and (s.to_dict() or {}).get("mode", "standard") == mode
+                and (s.to_dict() or {}).get("context_id", "") == ctx]
+        if not mine:
+            return {}
+        last = max(mine, key=lambda s: int((s.to_dict() or {}).get("attempt", 0)))
+        payload = self._get_blob(last.reference.get()) or {}
+        return {n: base64.b64decode(b) for n, b in payload.get("files", {}).items()}
+
+    def results_tree(self, dest: Path, *, logs: bool = False, annotator_ids: set[str] | None = None,
+                     modes: set[str] | None = None) -> Path:
+        """The saved files (and the interaction logs) written below ``dest`` as ``electroclean-web export``
+        writes them, for an analysis to read."""
+        from electroclean.app.io.naming import OutputLayout
+        from electroclean.app.session.register import CompletionRegister
+        from electroclean.web.export import safe_path, visit_log_text
+
+        layout = OutputLayout(Path(dest) / self.settings.output_directory_name)
+        layout.root.mkdir(parents=True, exist_ok=True)
+        register = CompletionRegister(layout)
+        for snap in self._submissions(None):
+            d = snap.to_dict() or {}
+            if annotator_ids is not None and d.get("annotator_id") not in annotator_ids:
+                continue
+            if modes is not None and d.get("mode", "standard") not in modes:
+                continue
+            entry = dict(d.get("entry", {}))
+            payload = self._get_blob(snap) or {}
+            folder = safe_path(layout.root, entry["output_dir"])
+            folder.mkdir(parents=True, exist_ok=True)
+            for name, b64 in payload.get("files", {}).items():
+                if "/" not in name and "\\" not in name:
+                    (folder / name).write_bytes(base64.b64decode(b64))
+            register.add(entry)
+        if logs:
+            for visit, header, events in self.visit_logs():
+                if annotator_ids is not None and visit.get("annotator_id") not in annotator_ids:
+                    continue
+                folder = layout.interaction_logs / f"annotator-{visit['annotator_id']}"
+                folder.mkdir(parents=True, exist_ok=True)
+                (folder / f"{visit.get('stem') or visit['visit_id']}-{visit['visit_id'][:8]}.jsonl").write_text(
+                    visit_log_text(header, events), encoding="utf-8")
+        return layout.root
+
+    def put_result_file(self, rel_path: str, data: bytes) -> None:
+        from electroclean.web.export import safe_path
+
+        safe_path(Path("/"), rel_path)  # refuses paths that would leave the results folder
+        ref = self.doc.collection("result_files").document(hashlib.sha1(rel_path.encode()).hexdigest()[:24])
+        try:
+            self._put_blob(ref, {"path": rel_path, "saved_at": now_local_iso()},
+                           base64.b64encode(data).decode("ascii"), create=True)
+        except Exception as exc:  # AlreadyExists: result files are never replaced
+            if type(exc).__name__ in ("AlreadyExists", "Conflict"):
+                raise ResultExists(f"{rel_path} has already been saved") from exc
+            raise
+
+    def result_files(self) -> list[tuple[str, bytes]]:
+        """(path below the results folder, contents) of every result file kept (for the export)."""
+        return [((s.to_dict() or {}).get("path", ""), base64.b64decode(self._get_blob(s) or ""))
+                for s in self.doc.collection("result_files").stream()]
+
+    # ------------------------------------------------------------------- quiz
+    def _quiz_ref(self, annotator_id: str, set_id: str) -> Any:
+        return self.doc.collection("quiz").document(f"{annotator_id}_{_short(set_id)}")
+
+    def quiz_state(self, annotator_id: str, set_id: str) -> dict[str, Any] | None:
+        snap = self._quiz_ref(annotator_id, set_id).get()
+        return json.loads((snap.to_dict() or {})["state_json"]) if snap.exists else None
+
+    def update_quiz_state(self, annotator_id: str, set_id: str,
+                          change: Callable[[dict[str, Any] | None], dict[str, Any] | None]) -> dict[str, Any] | None:
+        from google.cloud import firestore
+
+        ref = self._quiz_ref(annotator_id, set_id)
+
+        @firestore.transactional
+        def update(tx: Any) -> dict[str, Any] | None:
+            snap = ref.get(transaction=tx)
+            old = json.loads((snap.to_dict() or {})["state_json"]) if snap.exists else None
+            new = change(old)
+            if new is None:
+                return old
+            tx.set(ref, {"annotator_id": annotator_id, "set_id": set_id, "state_json": json.dumps(new),
+                         "updated_at": now_local_iso()})
+            return new
+
+        return update(self.client.transaction())
+
+    # ------------------------------------------------------------------ audit
+    def audit_append(self, entry: dict[str, Any]) -> None:
+        # Document IDs sort newest first: the time counted down from the year 2286, then a random part.
+        doc_id = f"{10**13 - int(time.time() * 1000):013d}-{uuid.uuid4().hex[:8]}"
+        self.doc.collection("audit").document(doc_id).set({
+            "at": str(entry.get("at", "")), "by": str(entry.get("by", "")), "op": str(entry.get("op", "")),
+            "summary": str(entry.get("summary", "")),
+            "details_json": json.dumps(entry.get("details") or {}, default=str)})
+
+    def audit_page(self, before: str | None, limit: int) -> tuple[list[dict[str, Any]], str | None]:
+        coll = self.doc.collection("audit")
+        q = coll.order_by("__name__").limit(int(limit) + 1)
+        if before:
+            if not AUDIT_ID_RE.match(before):
+                raise StoreError("The audit cursor is not valid")
+            q = q.start_after({"__name__": coll.document(before)})
+        snaps = list(q.stream())
+        more = len(snaps) > limit
+        snaps = snaps[:limit]
+        entries = []
+        for s in snaps:
+            d = s.to_dict() or {}
+            entries.append({"at": d.get("at", ""), "by": d.get("by", ""), "op": d.get("op", ""),
+                            "summary": d.get("summary", ""), "details": json.loads(d.get("details_json") or "{}")})
+        return entries, (snaps[-1].id if more and snaps else None)
+
     # ----------------------------------------------------------------- visits
     def visit_open(self, visit_id: str, annotator_id: str, mode: str, context_id: str, header: dict[str, Any],
                    started: datetime) -> None:
@@ -568,6 +921,27 @@ class FirestoreStore(Store):
 
     def visit_close(self, visit_id: str, event: dict[str, Any]) -> None:
         self.visit_append(visit_id, [event], close=True)
+
+    def visit_records(self, annotator_id: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+        from google.cloud import firestore
+        from google.cloud.firestore_v1.base_query import FieldFilter
+
+        fields = ["annotator_id", "mode", "context_id", "opened_at", "closed_at", "seq"]
+        coll = self.doc.collection("visits")
+        if annotator_id is None:
+            snaps = list(coll.order_by("opened_at", direction=firestore.Query.DESCENDING).limit(int(limit))
+                         .select(fields).stream())
+        else:  # filtered here rather than sorted by Firestore, which would need a composite index
+            q = coll.where(filter=FieldFilter("annotator_id", "==", str(annotator_id).upper())).select(fields)
+            snaps = sorted(q.stream(), key=lambda s: (s.to_dict() or {}).get("opened_at", ""), reverse=True)
+            snaps = snaps[: int(limit)]
+        out = []
+        for s in snaps:
+            d = s.to_dict() or {}
+            out.append({"visit_id": s.id, "annotator_id": d.get("annotator_id", ""), "mode": d.get("mode", ""),
+                        "context_id": d.get("context_id", ""), "started_at": d.get("opened_at", ""),
+                        "closed_at": d.get("closed_at") or None, "n_events": int(d.get("seq", 0))})
+        return out
 
     def visit_logs(self) -> list[tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]]]]:
         """(visit record, header, events in order) of every visit (for the export)."""

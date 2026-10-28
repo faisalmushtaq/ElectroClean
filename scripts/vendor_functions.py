@@ -4,7 +4,11 @@
 
 firebase.json runs this as the functions' predeploy step. Firebase uploads only the functions
 folder, so the ``electroclean`` package is copied into it, without the desktop windows (Qt), the
-browser application and the functions themselves. The copy is ignored by git.
+browser application and the functions themselves. The copy is ignored by git. It includes the
+analyses of the admin area (``reliability``, ``activity``, ``training``) and the kept registrations
+of the example training set (``config/example_set_manifests.json``), which the functions use
+because they do not include MNE-Python (electroclean/web/example.py). Only the standard library is
+needed to run this script.
 """
 
 from __future__ import annotations
@@ -23,7 +27,6 @@ EXCLUDE = (
     "reliability/gui.py",
     "training/gui.py",
     "training/guided_gui.py",
-    "activity",
     "web/static",
     "web/firebase/functions",
 )

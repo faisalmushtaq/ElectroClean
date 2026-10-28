@@ -19,7 +19,7 @@ import secrets
 import sqlite3
 import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -83,11 +83,32 @@ CREATE TABLE IF NOT EXISTS guided_state (
     updated_at TEXT NOT NULL,
     PRIMARY KEY (annotator_id, set_id, recording_id)
 );
+CREATE TABLE IF NOT EXISTS quiz_state (
+    annotator_id TEXT NOT NULL,
+    set_id TEXT NOT NULL,
+    state TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (annotator_id, set_id)
+);
+CREATE TABLE IF NOT EXISTS audit (
+    entry_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at TEXT NOT NULL,
+    by TEXT NOT NULL,
+    op TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    details TEXT NOT NULL DEFAULT '{}'
+);
 """
+#: Columns added to the users table after the first version of the server (added to older databases).
+USER_COLUMNS = {"email": "TEXT NOT NULL DEFAULT ''", "notes": "TEXT NOT NULL DEFAULT ''"}
 
 
 class AccountError(ValueError):
     """A mistake in an account command (shown to the administrator)."""
+
+
+class AccountExists(AccountError):
+    """The ID already has an account."""
 
 
 # ------------------------------------------------------------------ passwords
@@ -138,6 +159,10 @@ class Accounts:
             self._db.execute("PRAGMA journal_mode=WAL")
             self._db.execute("PRAGMA busy_timeout=5000")
             self._db.executescript(SCHEMA)
+            have = {r[1] for r in self._db.execute("PRAGMA table_info(users)").fetchall()}
+            for name, decl in USER_COLUMNS.items():
+                if name not in have:
+                    self._db.execute(f"ALTER TABLE users ADD COLUMN {name} {decl}")
 
     def close(self) -> None:
         with self._lock:
@@ -174,7 +199,7 @@ class Accounts:
         with self._tx() as db:
             exists = db.execute("SELECT 1 FROM users WHERE annotator_id=?", (aid,)).fetchone()
             if exists and not replace:
-                raise AccountError(f"{aid} already has an account (use --replace to set a new password)")
+                raise AccountExists(f"{aid} already has an account (use --replace to set a new password)")
             if exists:
                 db.execute("UPDATE users SET display_name=?, role=?, password_hash=?, disabled=0 WHERE annotator_id=?",
                            (display_name, role, h, aid))
@@ -198,6 +223,48 @@ class Accounts:
         return [dict(annotator_id=r["annotator_id"], display_name=r["display_name"], role=r["role"],
                      created_at=r["created_at"], last_seen=r["last_seen"])
                 for r in self._all("SELECT * FROM users WHERE disabled=0 ORDER BY annotator_id")]
+
+    def user_records(self) -> list[dict[str, Any]]:
+        """Every account, disabled ones too (without the password hash)."""
+        return [{"annotator_id": r["annotator_id"], "display_name": r["display_name"], "email": r["email"] or None,
+                 "role": r["role"], "status": "disabled" if r["disabled"] else "active", "created_at": r["created_at"],
+                 "last_seen": r["last_seen"] or None, "notes": r["notes"]}
+                for r in self._all("SELECT * FROM users ORDER BY annotator_id")]
+
+    def update_user(self, annotator_id: str, *, display_name: str | None = None, role: str | None = None,
+                    disabled: bool | None = None, notes: str | None = None, email: str | None = None) -> None:
+        aid = normalise_id(annotator_id)
+        if role is not None and role not in ROLES:
+            raise AccountError(f"The role must be one of {', '.join(ROLES)}")
+        changes: dict[str, Any] = {k: v for k, v in (("display_name", display_name), ("role", role),
+                                                      ("notes", notes), ("email", email)) if v is not None}
+        if disabled is not None:
+            changes["disabled"] = 1 if disabled else 0
+        with self._tx() as db:
+            if not db.execute("SELECT 1 FROM users WHERE annotator_id=?", (aid,)).fetchone():
+                raise AccountError(f"{aid} has no account")
+            for key, value in changes.items():  # the keys are the fixed column names above
+                db.execute(f"UPDATE users SET {key}=? WHERE annotator_id=?", (value, aid))
+            if disabled:
+                db.execute("DELETE FROM tokens WHERE annotator_id=?", (aid,))
+
+    def set_password(self, annotator_id: str, password: str) -> None:
+        """A new password; every sign-in of the account ends."""
+        aid = normalise_id(annotator_id)
+        if len(password) < MIN_PASSWORD:
+            raise AccountError(f"The password must have at least {MIN_PASSWORD} characters")
+        h = hash_password(password)
+        with self._tx() as db:
+            if not db.execute("UPDATE users SET password_hash=? WHERE annotator_id=?", (h, aid)).rowcount:
+                raise AccountError(f"{aid} has no account")
+            db.execute("DELETE FROM tokens WHERE annotator_id=?", (aid,))
+
+    def delete_user(self, annotator_id: str) -> None:
+        """The account, its sign-ins, assignments, programme, guided progress and quiz state."""
+        aid = normalise_id(annotator_id)
+        with self._tx() as db:
+            for table in ("users", "tokens", "assignments", "programmes", "guided_state", "quiz_state"):
+                db.execute(f"DELETE FROM {table} WHERE annotator_id=?", (aid,))
 
     def authenticate(self, annotator_id: str, password: str) -> User | None:
         aid = str(annotator_id or "").strip().upper()
@@ -270,6 +337,31 @@ class Accounts:
             return sum(db.execute("DELETE FROM assignments WHERE annotator_id=? AND recording_id=?",
                                   (aid, rid)).rowcount for rid in recording_ids)
 
+    def unassign_item(self, annotator_id: str, recording_id: str, mode: str, context_id: str) -> bool:
+        with self._tx() as db:
+            return bool(db.execute("DELETE FROM assignments WHERE annotator_id=? AND recording_id=? AND mode=? AND "
+                                   "context_id=?", (str(annotator_id).upper(), recording_id, mode,
+                                                    context_id if mode != "standard" else "")).rowcount)
+
+    def remove_assignments(self, *, recording_id: str | None = None, context_id: str | None = None,
+                           modes: tuple[str, ...] | None = None) -> int:
+        """Remove the assignments of a recording or of a reference set (in the given modes)."""
+        where: list[str] = []
+        args: list[Any] = []
+        if recording_id is not None:
+            where.append("recording_id=?")
+            args.append(recording_id)
+        if context_id is not None:
+            where.append("context_id=?")
+            args.append(context_id)
+        if modes is not None:
+            where.append("mode IN (" + ",".join("?" * len(modes)) + ")")
+            args.extend(modes)
+        if not where:
+            return 0
+        with self._tx() as db:
+            return db.execute("DELETE FROM assignments WHERE " + " AND ".join(where), tuple(args)).rowcount
+
     def assignments(self, annotator_id: str | None = None) -> list[Assignment]:
         if annotator_id is None:
             rows = self._all("SELECT * FROM assignments ORDER BY annotator_id, position")
@@ -318,6 +410,14 @@ class Accounts:
         with self._tx() as db:
             db.execute("UPDATE visits SET closed_at=? WHERE visit_id=?", (now_local_iso(), visit_id))
 
+    def visit_rows(self, annotator_id: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+        if annotator_id is None:
+            rows = self._all("SELECT * FROM visits ORDER BY opened_at DESC, visit_id LIMIT ?", (int(limit),))
+        else:
+            rows = self._all("SELECT * FROM visits WHERE annotator_id=? ORDER BY opened_at DESC, visit_id LIMIT ?",
+                             (str(annotator_id).upper(), int(limit)))
+        return [dict(r) for r in rows]
+
     def open_visits(self, annotator_id: str) -> list[dict[str, Any]]:
         return [dict(r) for r in self._all("SELECT * FROM visits WHERE annotator_id=? AND closed_at='' "
                                            "ORDER BY opened_at", (annotator_id,))]
@@ -342,3 +442,51 @@ class Accounts:
         with self._tx() as db:
             db.execute("DELETE FROM guided_state WHERE annotator_id=? AND set_id=? AND recording_id=?",
                        (annotator_id, set_id, recording_id))
+
+    # ----------------------------------------------------------- quiz state
+    def quiz_state(self, annotator_id: str, set_id: str) -> dict[str, Any] | None:
+        row = self._one("SELECT state FROM quiz_state WHERE annotator_id=? AND set_id=?", (annotator_id, set_id))
+        return json.loads(row["state"]) if row else None
+
+    def update_quiz_state(self, annotator_id: str, set_id: str,
+                          change: Callable[[dict[str, Any] | None], dict[str, Any] | None]) -> dict[str, Any] | None:
+        with self._tx() as db:
+            row = db.execute("SELECT state FROM quiz_state WHERE annotator_id=? AND set_id=?",
+                             (annotator_id, set_id)).fetchone()
+            old = json.loads(row["state"]) if row else None
+            new = change(old)
+            if new is None:
+                return old
+            db.execute("INSERT OR REPLACE INTO quiz_state (annotator_id, set_id, state, updated_at) "
+                       "VALUES (?, ?, ?, ?)", (annotator_id, set_id, json.dumps(new), now_local_iso()))
+            return new
+
+    def delete_quiz_states(self, set_id: str) -> None:
+        with self._tx() as db:
+            db.execute("DELETE FROM quiz_state WHERE set_id=?", (set_id,))
+
+    def delete_guided_states(self, set_id: str) -> None:
+        with self._tx() as db:
+            db.execute("DELETE FROM guided_state WHERE set_id=?", (set_id,))
+
+    # ----------------------------------------------------------------- audit
+    def audit_append(self, entry: dict[str, Any]) -> None:
+        with self._tx() as db:
+            db.execute("INSERT INTO audit (at, by, op, summary, details) VALUES (?, ?, ?, ?, ?)",
+                       (str(entry.get("at", "")), str(entry.get("by", "")), str(entry.get("op", "")),
+                        str(entry.get("summary", "")), json.dumps(entry.get("details") or {}, default=str)))
+
+    def audit_page(self, before: str | None, limit: int) -> tuple[list[dict[str, Any]], str | None]:
+        """Entries newest first; the cursor is the number of the last entry of the page."""
+        if before:
+            if not before.isdigit():
+                raise AccountError("The audit cursor is not valid")
+            rows = self._all("SELECT * FROM audit WHERE entry_id < ? ORDER BY entry_id DESC LIMIT ?",
+                             (int(before), int(limit) + 1))
+        else:
+            rows = self._all("SELECT * FROM audit ORDER BY entry_id DESC LIMIT ?", (int(limit) + 1,))
+        more = len(rows) > limit
+        rows = rows[:limit]
+        entries = [{"at": r["at"], "by": r["by"], "op": r["op"], "summary": r["summary"],
+                    "details": json.loads(r["details"] or "{}")} for r in rows]
+        return entries, (str(rows[-1]["entry_id"]) if more and rows else None)
