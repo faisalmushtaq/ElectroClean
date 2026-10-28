@@ -173,6 +173,19 @@ kept per annotator in the browser. The interaction log records pauses,
 resumes, break reminders, the check before saving and the proportion of the
 recording viewed (docs/activity_logs.md).
 
+The annotator's home page shows their own progress: recordings done of those
+assigned with a thin bar, the time worked in all and the median per recording,
+what they have done today, and, after two recordings, an estimate of the time
+left at their own pace. An unfinished recording comes first as Continue where
+you left off, with how much of it has been viewed and its annotations so far.
+`GET /assignments` gives the time worked and the number of annotations of
+finished recordings, from the completion register, and a summary of each
+draft. Study administrators set the minutes before a break reminder
+(`annotation.break_reminder_minutes`, 50), the minutes without input before
+the clock pauses itself (`annotation.idle_pause_minutes`, 3) and whether Save
+and Finish lists the parts not yet viewed (`annotation.coverage_check`,
+`"warn"` or `"off"`) in the admin area's Study settings.
+
 ## 1.1.0
 
 The first public release, with stand-alone applications for Windows (64-bit),

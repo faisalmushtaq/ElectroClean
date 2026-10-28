@@ -90,7 +90,8 @@ electroclean/web/static/          the browser application (plain ES modules, no 
     js/main.js, js/app.js         start-up; the backend, signing in and the moves between views
     js/catalogue.js, js/util.js   the label catalogue; small helpers
     js/views/                     sign in (with its illustration, eegart.js and montage.js), the
-                                  annotator's recordings, opening a recording
+                                  annotator's recordings and progress (progress.js), opening a
+                                  recording
     js/api/                       the Backend interface: http.js (a study server), firebase.js (a
                                   study on Firebase), demo.js and demo_admin.js (the demonstration,
                                   in the browser), choose.js (which of them), demo_catalogue.js,

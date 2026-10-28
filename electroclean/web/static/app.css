@@ -406,6 +406,14 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); width
 .home-grid .col > .card:last-child { flex: 1; }
 .next-card > h2:first-child { font: var(--t-14); letter-spacing: 0; color: var(--text-secondary); margin: 0 0 8px; font-variation-settings: normal; }
 .next-card .next-file { font: var(--t-28); letter-spacing: -0.03em; margin: 8px 0 8px; word-break: break-all; color: var(--ink); font-variation-settings: var(--display); }
+/* the annotator's progress (js/views/progress.js): done of assigned, time worked, time left */
+.progress-card .progress { margin: 4px 0 24px; }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+.stat p { margin: 0; }
+.stat-value { font: var(--t-28); letter-spacing: -0.03em; color: var(--ink); margin-bottom: 4px; font-variation-settings: var(--display); font-variant-numeric: tabular-nums lining-nums; }
+.stat .caption { margin-top: 4px; }
+.progress-card .today { margin: 24px 0 0; padding-top: 12px; border-top: 1px solid var(--hairline); }
+@media (max-width: 760px) { .stats { grid-template-columns: minmax(0, 1fr); gap: 16px; } }
 table.list { width: 100%; border-collapse: collapse; margin: 8px 0; }
 table.list th, table.list td { text-align: left; padding: 12px 8px; border-bottom: 1px solid var(--hairline); }
 table.list th:first-child, table.list td:first-child { padding-left: 0; }

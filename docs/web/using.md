@@ -33,8 +33,17 @@ The record contains clicks, key presses and what is on the screen, never anythin
 ## Your recordings
 
 The first page lists the recordings assigned to you, with their status (to do, in progress or done),
-and one black button, Open next recording, for the one to do next. Annotators in a training
-programme go straight to their training path instead (see below).
+and one black button, Open next recording, for the one to do next. When you have a recording you
+started and did not finish, the button reads Continue where you left off instead, with how much of
+that recording you have viewed, your annotations so far, the time worked and when the draft was last
+kept. Annotators in a training programme go straight to their training path instead (see below).
+
+Under it, Your progress shows how many of your recordings are done, with a thin bar, the time you
+have worked in all and the median time per recording, and what you have done today. After your first
+two recordings it also estimates the time left at your own pace so far: the time you took per minute
+of recording, applied to the recordings still to do, less the time already spent on unfinished ones.
+Recordings differ, so treat it as a guide. All these times leave out the time you were paused. The
+time worked today is counted in the browser you work in, so it covers that browser only.
 
 ## Opening a recording
 
