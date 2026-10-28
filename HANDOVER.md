@@ -51,7 +51,7 @@ There are no open pull requests or issues on GitHub.
 | --- | --- | --- |
 | `main` | The desktop application, as released plus the unreleased work above | Work from here for anything desktop-only. Pushes run the tests on all three systems and build the applications. |
 | `claude/electroclean-web` | `main` plus the browser version, its server, the Firebase functions and their tests | Work from here for the browser version until it is merged. Pushes run the browser tests, and republish the preview when the application's files change. |
-| `claude/eager-bardeen-33qhkb` | The branch the previous AI sessions worked on: `main` plus these handover notes | If `main` does not yet have `HANDOVER.md`, bring it up to this branch (a fast-forward); then the branch can be deleted. |
+| `claude/eager-bardeen-33qhkb` | The branch the previous AI sessions worked on; identical to `main` | Nothing; it can be deleted. |
 | `gh-pages` | The published web pages, written by `.github/workflows/pages.yml` | Never edit it by hand. GitHub Pages serves it (Settings, Pages: deploy from branch `gh-pages`, folder `/ (root)`). |
 
 **Merging the browser version.** When the project lead is happy with the preview, merge
