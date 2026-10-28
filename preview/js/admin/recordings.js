@@ -5,6 +5,7 @@
 // never leaves this computer.
 
 import { h, clear } from '../ui/dom.js';
+import { CAN_CHOOSE_FOLDER, acceptFiles } from '../util.js';
 import {
   bytesText, chunkManifests, durationText, manifestSummary, mergeRegisterResults, plural, progressText, scopeText, whenText,
 } from './model.js';
@@ -168,15 +169,16 @@ export class RecordingsSection {
     const folderInput = h('input', { type: 'file', multiple: true, webkitdirectory: true, hidden: true, 'data-log': 'register-folder',
       onchange: () => { const f = [...folderInput.files]; folderInput.value = ''; if (f.length) this.read(f); } });
     const filesInput = h('input', { type: 'file', multiple: true, hidden: true, 'data-log': 'register-files',
-      accept: '.edf,.bdf,.rec,.vhdr,.vmrk,.eeg,.tsv,.json',
+      accept: acceptFiles('.edf,.bdf,.rec,.vhdr,.vmrk,.eeg,.tsv,.json'),
       onchange: () => { const f = [...filesInput.files]; filesInput.value = ''; if (f.length) this.read(f); } });
-    this.folderBtn = h('button.btn.primary', { type: 'button', onclick: () => folderInput.click() }, 'Choose a folder…');
-    this.filesBtn = h('button.btn', { type: 'button', onclick: () => filesInput.click() }, 'Choose files…');
+    this.folderBtn = h('button.btn.primary', { type: 'button', hidden: !CAN_CHOOSE_FOLDER, onclick: () => folderInput.click() }, 'Choose a folder…');
+    this.filesBtn = h(`button.btn${CAN_CHOOSE_FOLDER ? '' : '.primary'}`, { type: 'button', onclick: () => filesInput.click() }, 'Choose files…');
     this.progress = progressLine();
     this.review = h('div.admin-review');
     this.addCard = card('Add recordings from this computer',
       h('p', {}, 'Choose the dataset folder (or the files of some recordings). This browser reads each recording, works out its fingerprint and describes its channels, events and timing; only these descriptions are sent to the study, never the EEG.'),
       h('p.caption', {}, 'The folder you choose is the dataset folder: recording IDs are the paths inside it, for example sub-001/eeg/sub-001_task-rest_eeg.vhdr. BIDS sidecar files (channels.tsv, events.tsv) beside a recording are read too.'),
+      CAN_CHOOSE_FOLDER ? null : h('p.note', {}, 'On an iPad, choose the files of the recordings: their names become their IDs. Choosing a whole dataset folder, with its paths, needs a computer.'),
       field('Add them to', this.addScope, { hint: 'Recordings for a reference set are only offered for training, never for study annotation.' }),
       this.replace,
       h('div.btn-row', {}, this.folderBtn, this.filesBtn), folderInput, filesInput,

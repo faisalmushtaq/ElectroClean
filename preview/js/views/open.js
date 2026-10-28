@@ -3,6 +3,7 @@
 
 import { h, clear } from '../ui/dom.js';
 import { appHeader, icon } from './common.js';
+import { CAN_CHOOSE_FOLDER, acceptFiles } from '../util.js';
 
 const FORMAT_HINT = {
   edf: 'Choose the .edf file.',
@@ -32,7 +33,7 @@ export class OpenView {
     this.app = app;
     this.expected = expected;
     const b = app.backend;
-    const fileInput = h('input', { type: 'file', multiple: true, accept: '.edf,.bdf,.rec,.vhdr,.vmrk,.eeg', hidden: true, 'data-log': 'file-input',
+    const fileInput = h('input', { type: 'file', multiple: true, accept: acceptFiles('.edf,.bdf,.rec,.vhdr,.vmrk,.eeg'), hidden: true, 'data-log': 'file-input',
       onchange: () => { if (fileInput.files.length) this.handle([...fileInput.files]); fileInput.value = ''; } });
     const folderInput = h('input', { type: 'file', multiple: true, webkitdirectory: true, hidden: true, 'data-log': 'folder-input',
       onchange: () => { if (folderInput.files.length) this.handle([...folderInput.files], true); folderInput.value = ''; } });
@@ -43,7 +44,7 @@ export class OpenView {
     this.drop = h('div.dropzone', { 'aria-label': 'Drop the recording here' },
       h('p.drop-title', {}, 'Drop the recording here'),
       h('p.caption', {}, 'or'),
-      h('div.btn-row.center', {}, chooseBtn, folderBtn),
+      h('div.btn-row.center', {}, chooseBtn, CAN_CHOOSE_FOLDER ? folderBtn : null),
       fileInput, folderInput);
     for (const ev of ['dragenter', 'dragover']) this.drop.addEventListener(ev, (e) => { e.preventDefault(); this.drop.classList.add('over'); });
     for (const ev of ['dragleave', 'drop']) this.drop.addEventListener(ev, () => this.drop.classList.remove('over'));

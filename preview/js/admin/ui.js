@@ -330,7 +330,7 @@ export function withReportFont(html, css) {
  * application's typeface; a downloaded report keeps to the fonts of the computer it is opened on.
  */
 export function reportFrame(html, title) {
-  const frame = h('iframe.report-frame', { title, sandbox: 'allow-scripts', referrerpolicy: 'no-referrer', loading: 'lazy' });
+  const frame = h('iframe.report-frame', { title, sandbox: 'allow-scripts', referrerpolicy: 'no-referrer' });
   // The font is read once; the report waits for it at most briefly, then shows without it.
   const wait = new Promise((resolve) => setTimeout(() => resolve(''), 1500));
   Promise.race([reportFont(), wait]).then((css) => { frame.srcdoc = withReportFont(html, css); });

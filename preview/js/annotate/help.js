@@ -10,6 +10,26 @@ const PAGE = IS_MAC ? `<kbd>fn</kbd>+${arrow('up')} / <kbd>fn</kbd>+${arrow('dow
 
 export const KEY_HINT = 'Drag to mark  ·  1–9 type  ·  M start, M end  ·  / find a type  ·  N / P next, previous  ·  ? help';
 export const REVIEW_HINT = 'N / P  next, previous item to look at  ·  arrow keys scroll  ·  ? help';
+/** The same hints for a touch screen (an iPad without a keyboard). */
+export const TOUCH_HINT = 'Drag to mark  ·  tap a numbered type  ·  two fingers move, pinch for more or less time  ·  press and hold an annotation for its menu';
+export const TOUCH_REVIEW_HINT = 'Tap an item in What to look at  ·  two fingers move, pinch for more or less time';
+export const TOUCH_VIEW_HINT = 'Two fingers move, pinch for more or less time';
+
+/** The help's section for a touch screen. */
+export const TOUCH_HELP_HTML = `
+<h3>On a touch screen (an iPad)</h3>
+<ul>
+<li><b>One finger</b> (or the Pencil) works as the mouse does: drag across the EEG to mark an
+artifact, tap an annotation to select it, drag its edge to resize it, and tap a channel's name or
+trace to choose that channel.</li>
+<li><b>Two fingers</b> move the EEG: sideways through time and up and down through the channels.
+<b>Pinch</b> sideways to show more or less time.</li>
+<li><b>Press and hold</b> an annotation for its menu (the common types, Edit times…, Edit
+channels…, Delete), and <b>double-tap</b> it to choose its type from the list.</li>
+<li>The buttons under the EEG move through time and the channels and change how much is shown,
+as the keys do on a computer. A keyboard attached to the iPad works as on a computer.</li>
+</ul>
+`;
 
 export const HELP_HTML = `
 <h3>Moving around the recording</h3>
@@ -83,3 +103,8 @@ automatically. To merge others of one type, select them in the list and press
 as a draft while you annotate (in this browser and with the study), so if you close the page
 you can continue later; the recording is complete only once it is saved with Save and Finish.</p>
 `;
+
+/** The Help tab: on a touch screen the touch section comes first, elsewhere just before Finishing. */
+export function helpHtml(touch) {
+  return touch ? TOUCH_HELP_HTML + HELP_HTML : HELP_HTML.replace('<h3>Finishing</h3>', `${TOUCH_HELP_HTML}<h3>Finishing</h3>`);
+}

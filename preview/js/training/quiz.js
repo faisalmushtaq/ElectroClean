@@ -14,6 +14,7 @@ import { EegViewer } from '../viewer/viewer.js';
 import { displayChannels } from '../annotate/session.js';
 import { logger } from '../log/logger.js';
 import { DEFAULT_SCALINGS } from '../api/demo_catalogue.js';
+import { CAN_CHOOSE_FOLDER, acceptFiles } from '../util.js';
 
 /** The answer for a segment without an artifact (electroclean.training.reference.NONE_OPTION). */
 export const NONE_OPTION = 'No artifact / none of these';
@@ -276,7 +277,7 @@ export class QuizView {
   _showOpen(item, problems = []) {
     this.progress.textContent = `Segment ${nextIndex(this.items, this.answered) + 1} of ${this.items.length}`;
     const needed = this._needed();
-    const fileInput = h('input', { type: 'file', multiple: true, accept: '.edf,.bdf,.rec,.vhdr,.vmrk,.eeg', hidden: true, 'data-log': 'quiz-file-input',
+    const fileInput = h('input', { type: 'file', multiple: true, accept: acceptFiles('.edf,.bdf,.rec,.vhdr,.vmrk,.eeg'), hidden: true, 'data-log': 'quiz-file-input',
       onchange: () => { if (fileInput.files.length) this._openFiles([...fileInput.files], item); fileInput.value = ''; } });
     const folderInput = h('input', { type: 'file', multiple: true, webkitdirectory: true, hidden: true, 'data-log': 'quiz-folder-input',
       onchange: () => { if (folderInput.files.length) this._openFiles([...folderInput.files], item); folderInput.value = ''; } });
@@ -293,7 +294,7 @@ export class QuizView {
       h('p.caption', {}, 'or'),
       h('div.btn-row.center', {},
         h('button.btn.primary', { type: 'button', 'data-log': 'quiz-choose-files', onclick: () => fileInput.click() }, 'Choose files…'),
-        h('button.btn', { type: 'button', 'data-log': 'quiz-choose-folder', onclick: () => folderInput.click() }, 'Choose a folder…')),
+        CAN_CHOOSE_FOLDER ? h('button.btn', { type: 'button', 'data-log': 'quiz-choose-folder', onclick: () => folderInput.click() }, 'Choose a folder…') : null),
       fileInput, folderInput);
     for (const ev of ['dragenter', 'dragover']) drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('over'); });
     for (const ev of ['dragleave', 'drop']) drop.addEventListener(ev, () => drop.classList.remove('over'));
