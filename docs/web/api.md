@@ -189,3 +189,20 @@ mode, attempts, last activity. `GET /admin/results.zip` → the study's
 assignments are managed with the `electroclean-web` command (see the
 administrator guide); registering recordings needs the real files and runs
 where they are, producing manifests that are imported into the server.
+
+## The same operations on Firebase
+
+On Firebase every operation above is a callable Cloud Function (Python, 2nd
+generation, region europe-west2) taking and returning the same JSON:
+`ec_me`, `ec_assignments`, `ec_match`, `ec_put_draft`, `ec_delete_draft`,
+`ec_submit`, `ec_training`, `ec_guided_get`, `ec_guided_check`,
+`ec_guided_continue`, `ec_guided_show_me`, `ec_visit_open`, `ec_visit_events`,
+`ec_visit_close` and, for administrators, `ec_admin_progress`. Each takes
+`{"study": "<study id>", ...the request body...}` (path parameters such as the
+recording ID become fields). Signing in uses Firebase Authentication (email and
+password) in the browser; the annotator ID and role are custom claims set by the
+administrator's command, and the functions read them from the caller's ID
+token. Errors are raised as `HttpsError` with the same `error` code in
+`details` and the `message` for the annotator. Clients never read or write
+Firestore directly, except as the security rules allow (nothing, by default):
+every read and write goes through the functions.

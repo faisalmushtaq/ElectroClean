@@ -16,11 +16,30 @@ application in one of two ways:
 * **Demonstration**, with no server at all: built-in example recordings, demo
   accounts and the training rules run in the browser, and results stay in the
   browser. This is the default when no study server is configured.
-* **Study**, connected to the study's own server (Python, `electroclean-web`,
-  hosted for example on Railway or a university server). The server address
-  comes from the link the administrator sends (`?server=https://…`), from an
-  optional `config.json` beside the application, or from the sign-in screen, and
-  is remembered in the browser.
+* **Study on Firebase** (the chosen way to run real studies): sign-in with
+  Firebase Authentication, the study's records in Firestore (in Google's London
+  region, europe-west2), and the private work done by Python Cloud Functions
+  that reuse ElectroClean's own code: matching a file against the register,
+  validating and storing results, checking guided training attempts and scoring
+  practice recordings, so the experts' answers never reach the browser. The
+  Firebase project's public web configuration is given in `config.json` beside
+  the application (`{"firebase": {...}, "study": "<study id>"}`); a link may
+  pick another study of the same project with `?study=<id>`. A command exports
+  the results from Firestore into ElectroClean's usual folders for the
+  agreement and activity analyses.
+* **Study on an ElectroClean server** (`electroclean-web`, Python): the same
+  operations over HTTP, used for local testing and the demonstration server,
+  and available to a study that prefers its own server (for example a
+  university machine). Its address comes from `?server=https://…`,
+  `config.json` (`{"server": "…"}`) or the sign-in screen.
+
+Both study back ends perform the same operations with the same JSON (docs/web/api.md):
+over HTTP for the server, and as Firebase callable functions named `ec_<operation>`
+for Firebase. In the browser, `js/api/http.js` and `js/api/firebase.js` implement the
+same Backend interface, so the rest of the application does not know which is in use.
+On the server side one Python service layer implements the operations against a
+storage interface with two implementations: files and SQLite (the server) and
+Firestore (Firebase).
 
 The server can also serve the application itself (same origin), which is how
 it runs locally and how a study can avoid GitHub Pages altogether. Because the
