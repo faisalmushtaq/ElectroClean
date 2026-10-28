@@ -41,9 +41,13 @@ export class GuidedCoach {
     this.continueWanted = false; // Continue was pressed while a check was on its way
     this.flashed = false;
     this.stepT0 = performance.now();
+    this.stepPausedS = 0; // time paused during the step (the annotation view's Pause), not counted
     this._timer = null;
     this._build();
   }
+
+  /** The annotation view was paused for `seconds`: they do not count towards the step's time. */
+  addPaused(seconds) { this.stepPausedS += Math.max(0, seconds || 0); }
 
   _build() {
     this.header = h('p.caption.coach-header');
@@ -101,6 +105,7 @@ export class GuidedCoach {
     this.shownNow = false;
     this.flashed = false;
     this.stepT0 = performance.now();
+    this.stepPausedS = 0;
     const [rec, recs] = this.position;
     this.header.textContent = `Recording ${rec} of ${recs}  ·  Step ${step.step} of ${this.nSteps}`;
     this._progress(this.stars.length);
@@ -246,7 +251,7 @@ export class GuidedCoach {
     let next;
     this._acting(true);
     try {
-      next = await this.backend.guidedContinue(this.rid, { step: step.step });
+      next = await this.backend.guidedContinue(this.rid, { step: step.step, paused_s: Math.round(this.stepPausedS * 1000) / 1000 });
     } catch (exc) {
       this._acting(false);
       this.pending = false;
@@ -259,7 +264,7 @@ export class GuidedCoach {
     if (candidate) this.matchedIds.add(candidate);
     this.stars.push(stars);
     logger.event('guided_step_completed', { recording: this.rid, step: step.step, stars, used_show_me: this.shownNow,
-      seconds: Math.round(performance.now() - this.stepT0) / 1000, annotation_id: candidate, label: step.label, guidance: this.guidance });
+      seconds: Math.max(0, Math.round(performance.now() - this.stepT0 - this.stepPausedS * 1000) / 1000), annotation_id: candidate, label: step.label, guidance: this.guidance });
     this.ws.select(null, { via: 'coach' });
     if (next.complete) {
       this.complete = true;

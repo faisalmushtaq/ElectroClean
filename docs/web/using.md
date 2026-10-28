@@ -55,7 +55,10 @@ have already finished, is not opened, and the page says which of the two it is.
 
 If you worked on the recording before without finishing it, ElectroClean offers to restore your
 unfinished work, with the number of annotations and the time spent. Choose Restore and continue, or
-Start afresh to begin again.
+Start afresh to begin again. A restored draft opens exactly where you left off: the same moment of
+the recording, the same channels, amount of time and trace size, and the parts you had already
+viewed. A short line at the top of the Annotations tab welcomes you back
+with where you were, the annotations kept and the time worked so far.
 
 ## The annotation view
 
@@ -67,12 +70,14 @@ the start and end of the recording and around interruptions) and where the recor
 Below the EEG, the overview bar shows the whole recording with your annotations and the part on
 screen; click it to go anywhere.
 
-Two rows of controls sit above the EEG. The first has Draw/edit, Delete, Undo, Redo, Help and Save
-and Finish. The second chooses what you mark next: the numbered type buttons and the menu of all
+Two rows of controls sit above the EEG. The first has Draw/edit, Delete, Undo, Redo, the time your
+draft was last kept (for example "Draft saved 14:02"), Pause, Help and Save and Finish. The second chooses what you mark next: the numbered type buttons and the menu of all
 types after "Draw as", then Whole montage or Selected channels. On the right, the Annotations tab
-lists everything you have marked, the Recording tab shows the time you have spent, the viewing
-options and details of the recording, and the Help tab lists every key. The line at the bottom
-reminds you of the main keys and shows what each action did.
+lists everything you have marked, the Recording tab shows the time you have worked, how much of the
+recording you have viewed, the viewing options, your comfort choices and details of the recording,
+and the Help tab lists every key. The line at the bottom reminds you of the main keys, shows what
+each action did, and on the right says how much of the recording you have viewed and how many
+annotations you have made.
 
 ## Marking an artifact
 
@@ -126,6 +131,54 @@ The Recording tab holds the viewing options: the 1 Hz high-pass filter and the n
 mains interference (50 Hz in the UK and Europe, 60 Hz in North America). They change only what you
 see; the file is never changed. Some studies fix these settings, and the tab then says so.
 
+## Seeing the whole recording
+
+ElectroClean keeps track of the parts of the recording that have been on the screen, so that none
+is missed in a long recording. A part counts as viewed once it has stayed on the screen for a moment
+while you are working. On the overview bar under the EEG, the parts not yet viewed are white with a
+thin amber line above them, and the parts viewed keep the bar's usual warm grey. The Recording tab
+and the line at the bottom say how much you have viewed, for example "Viewed 64 %"; stretches where
+the recording has no data count as viewed, since there is nothing to see there.
+
+Next part not yet viewed, in the Recording tab, or the key U, takes you to the next part you have
+not seen after the screen, coming round from the start when there are none further on, with a
+second of what you saw before it. On an iPad it is the last of the buttons under the EEG. What you
+have viewed is kept with your draft, so it is still there when you continue later.
+
+## Pausing and breaks
+
+Annotating a recording takes a long time, and the time you work on each recording is part of the
+study's results. Press Pause, at the top, or the key B when you step away: the clock that measures
+your time stops, your draft is kept, and a calm panel covers the EEG with the time worked so far and
+a large Resume button. Press Resume, or B again, to carry on. While you are paused nothing can be
+changed by accident.
+
+ElectroClean also pauses by itself in two cases. After a few minutes without any input (three
+unless your study chose otherwise), it pauses and says so; the minutes before that pause still count,
+since you may have been reading the EEG. When the page is out of sight for more than ten seconds,
+because you switched to another tab or app or the iPad locked, it pauses from the moment the page
+was hidden. When you come back, the panel says how long you were away and that the time was not
+counted.
+
+After a long stretch of work without a break (50 minutes unless your study chose otherwise), a small
+note in the corner of the EEG suggests a break. Take a break pauses straight away; Remind me in 15
+minutes puts the note away for another quarter of an hour of work. The note never stops you working,
+and any pause of five minutes or more counts as a break. The time since your last break carries over
+from one recording to the next.
+
+Pausing works the same way in guided training, where the coach waits behind the panel and the time
+paused is left out of the time a step took. The short-segment quiz has no Pause, since it measures
+how long you take to answer each segment.
+
+## Comfort for long sessions
+
+The Recording tab has a Comfort panel with choices of your own, kept in the browser you use and
+applied to every recording you open there. Traces can be thin, normal or thick; thick traces are
+easier to follow on a bright screen or from a little further away. Channel names can be normal or
+large, and the text of the side panel normal or larger. These choices change only how the EEG and
+the panel look, never what is saved. ElectroClean also follows your computer's or iPad's setting
+to reduce motion, and announces its messages to screen readers.
+
 ## On an iPad
 
 Everything described here works on an iPad, with your fingers or an Apple Pencil, in Safari or
@@ -140,7 +193,8 @@ annotation behind by accident.
 
 Under the EEG a row of buttons does what the keys do on a computer: back and forward a screen or a
 little, more or less time, earlier and later channels, more or fewer of them, and larger or smaller
-traces. The numbered type buttons, Whole montage and Selected channels, Delete, Undo and Redo are in
+traces, and the last of them shows the next part not yet viewed. Pause is at the top, as on a
+computer. The numbered type buttons, Whole montage and Selected channels, Delete, Undo and Redo are in
 the toolbars as on a computer, and a keyboard attached to the iPad works with every key described
 here. Held upright, the iPad shows the EEG across its width with the side panel (and the coach in
 training) below it; on its side, the panel is beside the EEG as on a computer.
@@ -153,13 +207,17 @@ download, such as your results in the demonstration, go to the Downloads folder 
 
 ## Saving
 
-Press Save and Finish when you have looked through the whole recording. ElectroClean shows how many
-annotations of each type you are saving and asks you to confirm; once saved, the recording is
+Press Save and Finish when you have looked through the whole recording. If some parts of at least a
+second have not been on the screen, ElectroClean first lists them with their times; Go to the first
+takes you to the first of them, and Save anyway goes on, for example when you reviewed them another
+way. Your study may turn this check off. ElectroClean then shows how many annotations of each type you
+are saving and asks you to confirm; once saved, the recording is
 complete and cannot be changed. If you marked nothing, it asks whether to save the recording as
 reviewed with no artifacts found. After saving, it offers the next recording.
 
 Your work is saved as a draft while you annotate, in the browser and with the study, so closing the
-page by accident loses nothing. ‹ Close asks whether to close and finish later, which keeps your
+page by accident loses nothing; the time at the top of the view says when the draft was last kept.
+The saved time worked on the recording leaves out every pause. ‹ Close asks whether to close and finish later, which keeps your
 annotations and time, or to discard them.
 
 ## The training programme

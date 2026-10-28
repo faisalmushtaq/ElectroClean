@@ -1,6 +1,6 @@
 // The training programme in the demonstration: guided steps (a wrong attempt, then the match),
 // Show me, saving, and a practice recording with its review.
-import { signIn, waitForRoute, waitForTraces, state, eegPoint, drag, annotations, clickDialogButton } from './helpers.mjs';
+import { pressSave, signIn, waitForRoute, waitForTraces, state, eegPoint, drag, annotations, clickDialogButton } from './helpers.mjs';
 
 async function coachText(page) { return page.textContent('.coach'); }
 
@@ -27,8 +27,7 @@ async function showMeToTheEnd(page) {
 }
 
 async function saveAndFinish(page) {
-  await page.click('.ws-actions button.primary');
-  await page.waitForSelector('.dialog');
+  await pressSave(page);
   await clickDialogButton(page, 'Save and Finish');
 }
 
