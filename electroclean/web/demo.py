@@ -1,0 +1,107 @@
+"""``electroclean-web demo``: a complete study on this computer, to try the whole system.
+
+It makes simulated recordings (BrainVision and EDF+), the example training set, a study folder
+with the recordings registered, and four accounts, then serves the browser application and the API:
+
+==========  =============  ==============================================
+ID          password       what they have
+==========  =============  ==============================================
+ADMIN       electroclean   administrator: progress and results
+A01         electroclean   annotator: every study recording
+A02         electroclean   annotator: every study recording
+T01         electroclean   trainee: the example training programme
+==========  =============  ==============================================
+
+The recordings to open in the browser are in ``<dir>/recordings`` (``study/`` for A01 and A02,
+``training/`` for T01) and can be downloaded from the server as ``/demo/recordings.zip``. The study
+folder is ``<dir>/study``; results appear in ``<dir>/study/Annotated_Events``. The example set with
+its experts' annotations is in ``<dir>/training-source`` (the server keeps its own copy in the study
+folder). Nothing here is real data.
+"""
+
+from __future__ import annotations
+
+import shutil
+import zipfile
+from pathlib import Path
+from typing import Any
+
+from electroclean.web.study import WebStudy
+
+DEMO_STUDY = "demo"
+DEMO_PASSWORD = "electroclean"
+DEMO_USERS = (("ADMIN", "Study administrator", "admin"), ("A01", "Annotator one", "annotator"),
+              ("A02", "Annotator two", "annotator"), ("T01", "Trainee one", "annotator"))
+
+
+def build_demo(directory: Path | str, *, fresh: bool = False, say: Any = print) -> Path:
+    """Create the demonstration in ``directory`` (once; again with ``fresh``) and return the study folder."""
+    import mne
+
+    from electroclean.synthetic import make_synthetic_dataset, write_edf_recording
+    from electroclean.training.examples import EXAMPLE_SET_ID, create_example_training_set
+    from electroclean.web.registration import register_dataset
+    from electroclean.web.store_files import FilesStore
+
+    mne.set_log_level("error")
+    directory = Path(directory).resolve()
+    study_dir = directory / "study"
+    if (study_dir / "electroclean_study.json").is_file() and (directory / "recordings.zip").is_file() and not fresh:
+        say(f"Using the demonstration in {directory} (add --fresh to make it again).")
+        return study_dir
+    for sub in ("study", "recordings", "training-source", "recordings.zip"):
+        p = directory / sub
+        if p.is_dir():
+            shutil.rmtree(p)
+        elif p.exists():
+            p.unlink()
+    say(f"Making the demonstration in {directory} ...")
+    recordings = directory / "recordings"  # what an annotator is given: the files to open in the browser
+    dataset = recordings / "study"
+    make_synthetic_dataset(dataset, n_subjects=2, duration_s=60.0, seed=7)
+    write_edf_recording(dataset / "sub-003" / "eeg", "sub-003_task-rest", sfreq=128.0, duration_s=60.0, seed=8)
+    shutil.rmtree(dataset / "derivatives", ignore_errors=True)  # the simulation's answers stay out of it
+    training_source = directory / "training-source"  # the example set with its references (server side)
+    create_example_training_set(training_source)
+    WebStudy.init(study_dir, study_id=DEMO_STUDY, name="ElectroClean demonstration",
+                  settings={"selection": {"strategy": "manual"}})
+    store = FilesStore(study_dir, demo=True)
+    try:
+        say("Registering the recordings (each is opened as the desktop application opens it):")
+        reg = register_dataset(dataset, store, say=say)
+        register_dataset(training_source, store, say=say)
+        study_recordings = sorted(m["recording_id"] for m in reg.manifests)
+        for aid, name, role in DEMO_USERS:
+            store.db.add_user(aid, DEMO_PASSWORD, display_name=name, role=role, replace=True)
+        for aid in ("A01", "A02"):
+            store.assign(aid, study_recordings)
+        store.enrol("T01", EXAMPLE_SET_ID)
+        rs = store.reference_set(EXAMPLE_SET_ID)
+    finally:
+        store.close()
+    src = training_source / "derivatives" / "electroclean_reference_sets" / EXAMPLE_SET_ID / rs.recordings_dir
+    shutil.copytree(src, recordings / "training", dirs_exist_ok=True)
+    with zipfile.ZipFile(directory / "recordings.zip", "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for p in sorted(recordings.rglob("*")):
+            if p.is_file():
+                zf.write(p, f"electroclean-demo-recordings/{p.relative_to(recordings).as_posix()}")
+    say(f"The demonstration is ready: {len(study_recordings)} study recordings, the example training set, "
+        f"and the accounts {', '.join(u[0] for u in DEMO_USERS)} (password {DEMO_PASSWORD}).")
+    return study_dir
+
+
+def serve_demo(directory: Path | str, *, host: str = "127.0.0.1", port: int = 8000, fresh: bool = False,
+               allowed_origins: list[str] | None = None) -> None:
+    import uvicorn
+
+    from electroclean.web.app import allowed_origins_from_env, create_app
+
+    study_dir = build_demo(directory, fresh=fresh)
+    origins = allowed_origins if allowed_origins is not None else allowed_origins_from_env()
+    zip_path = Path(directory).resolve() / "recordings.zip"
+    app = create_app(study_dir, demo=True, allowed_origins=origins, demo_zip=zip_path)
+    shown = "localhost" if host in ("127.0.0.1", "0.0.0.0") else host
+    print(f"\nOpen http://{shown}:{port}/ and sign in as A01, A02, T01 or ADMIN with the password {DEMO_PASSWORD}.")
+    print(f"The recordings to open are in {Path(directory).resolve() / 'recordings'} "
+          f"(also at http://{shown}:{port}/demo/recordings.zip). Press Ctrl+C to stop.\n")
+    uvicorn.run(app, host=host, port=port, log_level="warning")

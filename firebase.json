@@ -1,0 +1,23 @@
+{
+  "functions": [
+    {
+      "source": "electroclean/web/firebase/functions",
+      "codebase": "electroclean",
+      "runtime": "python313",
+      "ignore": ["venv", ".git", "__pycache__", "*.pyc"],
+      "predeploy": ["python3 \"$RESOURCE_DIR/../../../../scripts/vendor_functions.py\" \"$RESOURCE_DIR\""]
+    }
+  ],
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json",
+    "location": "europe-west2"
+  },
+  "emulators": {
+    "auth": {"port": 9099},
+    "firestore": {"port": 8080},
+    "functions": {"port": 5001},
+    "ui": {"enabled": false},
+    "singleProjectMode": true
+  }
+}

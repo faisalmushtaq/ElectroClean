@@ -1,0 +1,616 @@
+"""The operations of docs/web/api.md, independent of how they are called and where records are kept.
+
+:class:`StudyService` is called by the ElectroClean server (app.py, over HTTP) and by the Firebase
+functions (firebase/functions/main.py, as callables) with the same JSON, and keeps its records in a
+:class:`~electroclean.web.store.Store` (a study folder, or Firestore). The training programme is in
+:mod:`electroclean.web.coach` and the interaction logs in :mod:`electroclean.web.visits`.
+
+Importing this module is light (no numpy, pandas, SciPy or MNE-Python), so a Firebase function
+answering a guided check starts quickly; saving and practice scoring import what they need.
+"""
+
+from __future__ import annotations
+
+import json
+import math
+import random
+import re
+from dataclasses import dataclass
+from typing import Any
+
+from electroclean import __version__
+from electroclean.app.annotations.model import (
+    AnnotationError,
+    ArtifactAnnotation,
+    RecordingInfo,
+    normalise_channels,
+    validate_annotation,
+)
+from electroclean.app.common import now_local_iso
+from electroclean.app.session.selection import seeded_order
+from electroclean.config.settings import FilterSettings, SettingsError
+from electroclean.training.reference import ReferenceSet, ReferenceSetError
+from electroclean.web.errors import ApiError
+from electroclean.web.manifest import SCOPE_STUDY, fingerprint_of, public_manifest, set_scope
+from electroclean.web.store import MODES, Store, User, item_key
+
+ANN_ID_RE = re.compile(r"^[0-9A-Za-z_-]{1,64}$")
+STAMP_RE = re.compile(r"^[0-9T:.+\-Z ]{0,40}$")
+SHA_RE = re.compile(r"^[0-9a-f]{64}$")
+MAX_ANNOTATIONS = 20000
+#: What annotators are told when the study records how they use ElectroClean (as on the desktop).
+LOGGING_NOTICE = ("This study records how you use ElectroClean (times, clicks, keys and what is on screen) for "
+                  "research. Ask your study administrator if you have questions.")
+
+__all__ = ["ApiError", "StudyService", "WorkItem", "annotation_dict", "parse_annotations"]
+
+
+# ------------------------------------------------------------------ annotations
+def _int(value: Any, what: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or int(value) != value:
+        raise ApiError(422, "invalid_annotation", f"{what} must be a whole number of samples")
+    return int(value)
+
+
+def _stamp(value: Any) -> str:
+    text = str(value or "")
+    return text if STAMP_RE.match(text) else ""
+
+
+def _number(value: Any, what: str, *, minimum: float | None = None) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        raise ApiError(422, "invalid_session", f"{what} must be a number")
+    if minimum is not None and value < minimum:
+        raise ApiError(422, "invalid_session", f"{what} must be at least {minimum:g}")
+    return float(value)
+
+
+def parse_annotations(items: Any, info: RecordingInfo, catalogue: Any, min_samples: int) -> list[ArtifactAnnotation]:
+    """The browser's annotations as ElectroClean annotations, each checked as the desktop checks them."""
+    if not isinstance(items, list):
+        raise ApiError(422, "invalid_annotation", "annotations must be a list")
+    if len(items) > MAX_ANNOTATIONS:
+        raise ApiError(422, "invalid_annotation", f"At most {MAX_ANNOTATIONS} annotations can be saved")
+    out: list[ArtifactAnnotation] = []
+    seen: set[str] = set()
+    now = now_local_iso()
+    for i, a in enumerate(items, start=1):
+        if not isinstance(a, dict):
+            raise ApiError(422, "invalid_annotation", f"Annotation {i} is not an object")
+        aid = a.get("annotation_id")
+        if not isinstance(aid, str) or not ANN_ID_RE.match(aid):
+            raise ApiError(422, "invalid_annotation", f"Annotation {i} has no valid annotation_id")
+        if aid in seen:
+            raise ApiError(422, "invalid_annotation", f"Annotation {aid} appears twice")
+        seen.add(aid)
+        label = a.get("label")
+        if not isinstance(label, str):
+            raise ApiError(422, "invalid_annotation", f"Annotation {i} has no label")
+        onset = _int(a.get("onset_sample"), f"Annotation {i}: onset_sample")
+        dur = _int(a.get("duration_samples"), f"Annotation {i}: duration_samples")
+        channels = a.get("channels", [])
+        if not isinstance(channels, list) or not all(isinstance(c, str) for c in channels):
+            raise ApiError(422, "invalid_annotation", f"Annotation {i}: channels must be a list of channel names")
+        if len(set(channels)) != len(channels):
+            raise ApiError(422, "invalid_annotation", f"Annotation {i} ({label}) lists a channel more than once")
+        try:
+            ann = ArtifactAnnotation(
+                annotation_id=aid, label=label, onset_sample=onset, duration_samples=dur,
+                channels=normalise_channels(channels, info.ch_names),
+                created_at=_stamp(a.get("created_at")) or now, modified_at=_stamp(a.get("modified_at")) or now,
+            )
+            validate_annotation(ann, info, catalogue, min_samples)
+        except AnnotationError as exc:
+            raise ApiError(422, "invalid_annotation", f"Annotation {i} ({label} at sample {onset}): {exc}") from exc
+        out.append(ann)
+    return out
+
+
+def annotation_dict(a: ArtifactAnnotation) -> dict[str, Any]:
+    return {"annotation_id": a.annotation_id, "label": a.label, "onset_sample": a.onset_sample,
+            "duration_samples": a.duration_samples, "channels": list(a.channels),
+            "created_at": a.created_at, "modified_at": a.modified_at}
+
+
+def clean_json(v: Any) -> Any:
+    """JSON-safe: NaN and infinity become null, numpy numbers Python numbers."""
+    if isinstance(v, float):
+        return v if math.isfinite(v) else None
+    if isinstance(v, dict):
+        return {str(k): clean_json(x) for k, x in v.items()}
+    if isinstance(v, (list, tuple)):
+        return [clean_json(x) for x in v]
+    if isinstance(v, (str, int, bool)) or v is None:
+        return v
+    try:
+        return clean_json(v.item())
+    except AttributeError:
+        return str(v)
+
+
+# ------------------------------------------------------------------- work items
+@dataclass
+class WorkItem:
+    """A recording an annotator may open now, in one mode and context."""
+
+    recording_id: str
+    mode: str
+    context_id: str
+    manifest: dict[str, Any]
+    status: str  # todo, in_progress, done
+    position: int = 0
+    repeat: bool = False  # a practice recording that may be annotated again
+    source: str = "assignment"  # or "programme"
+
+    @property
+    def key(self) -> str:
+        return item_key(self.recording_id, self.mode, self.context_id)
+
+    def to_dict(self) -> dict[str, Any]:
+        timing = self.manifest["timing"]
+        _sha, size = fingerprint_of(self.manifest)
+        return {
+            "recording_id": self.recording_id, "file_name": self.manifest["file_name"],
+            "format": self.manifest["format"], "mode": self.mode, "context_id": self.context_id,
+            "status": self.status, "duration_s": float(timing["n_samples"]) / float(timing["sfreq"]),
+            "n_channels": len(self.manifest["ch_names"]), "size_bytes": size, "repeat": self.repeat,
+        }
+
+
+class StudyService:
+    """The web service of one study (see the module docstring)."""
+
+    def __init__(self, store: Store) -> None:
+        self.store = store
+        from electroclean.web.coach import Coach
+        from electroclean.web.visits import Visits
+
+        self.coach = Coach(self)
+        self.visits = Visits(self)
+
+    # ----------------------------------------------------------------- basics
+    @property
+    def settings(self) -> Any:
+        return self.store.settings
+
+    def reference_set(self, set_id: str) -> ReferenceSet:
+        try:
+            return self.store.reference_set(set_id)
+        except ReferenceSetError as exc:
+            raise ApiError(404, "no_reference_set", str(exc)) from exc
+
+    def scope_for(self, mode: str, context_id: str) -> str:
+        """Where a recording's manifest is: the study's register, or a self-contained training set."""
+        if mode == "standard" or not context_id:
+            return SCOPE_STUDY
+        try:
+            rs = self.store.reference_set(context_id)
+        except ReferenceSetError:
+            return SCOPE_STUDY
+        return set_scope(rs.set_id) if rs.self_contained else SCOPE_STUDY
+
+    def health(self) -> dict[str, Any]:
+        return {"ok": True, "version": __version__, "study": self.store.name, "demo": bool(self.store.demo)}
+
+    def study_info(self) -> dict[str, Any]:
+        s = self.settings
+        f = s.filters
+        cat = self.store.catalogue
+        return {
+            "study_id": self.store.study_id,
+            "name": self.store.name,
+            "filters": {"highpass_enabled": f.highpass_enabled, "highpass_hz": f.highpass_hz,
+                        "notch_enabled": f.notch_enabled, "notch_hz": f.notch_hz,
+                        "notch_harmonics": f.notch_harmonics, "locked": f.locked},
+            "display": {"duration_s": s.display.duration_s, "n_channels": s.display.n_channels,
+                        "scalings": dict(s.display.scalings)},
+            "annotation": {"min_duration_samples": s.min_duration_samples,
+                           "quick_labels": [q for q in s.quick_labels if cat.is_permitted(q)]},
+            "logging": self.logging_info(),
+            "logging_notice": LOGGING_NOTICE if s.logging_interactions else "",
+        }
+
+    def logging_info(self) -> dict[str, Any]:
+        s = self.settings
+        return {"interactions": s.logging_interactions, "pointer_hz": s.logging_pointer_hz,
+                "idle_after_s": s.logging_idle_after_s}
+
+    def catalogue_info(self) -> dict[str, Any]:
+        return {"labels": [
+            {"label": lab.label, "value": lab.value, "short_code": lab.short_code, "colour": lab.colour,
+             "section": lab.section, "is_group": lab.is_group, "parent": lab.parent, "description": lab.description}
+            for lab in self.store.catalogue.labels
+        ]}
+
+    # --------------------------------------------------------------------- me
+    def me(self, user: User, body: dict[str, Any] | None = None) -> dict[str, Any]:
+        prog = None
+        set_id = self.store.programme(user.annotator_id)
+        if set_id:
+            try:
+                rs = self.store.reference_set(set_id)
+                prog = {"set_id": rs.set_id, "name": rs.name or rs.set_id}
+            except ReferenceSetError:
+                prog = None
+        return {"annotator_id": user.annotator_id, "display_name": user.display_name, "role": user.role,
+                "study": self.study_info(), "catalogue": self.catalogue_info(), "programme": prog}
+
+    # ---------------------------------------------------------- what to do
+    def work_items(self, user: User) -> list[WorkItem]:
+        aid = user.annotator_id
+        drafts = self.store.draft_keys(aid)
+        entries = self.store.completion_entries(aid)
+        done: dict[tuple[str, str], set[str]] = {}
+        for e in entries:
+            if e.get("status") == "completed":
+                done.setdefault((e.get("mode", "standard"), e.get("context", "")), set()).add(e["recording_id"])
+        items: list[WorkItem] = []
+        seen: set[tuple[str, str, str]] = set()
+
+        def add(rid: str, mode: str, ctx: str, position: int, source: str, repeat: bool = False) -> None:
+            ctx = ctx if mode != "standard" else ""
+            key = (rid, mode, ctx)
+            if key in seen:
+                return
+            m = self.store.manifest(self.scope_for(mode, ctx), rid)
+            if m is None:
+                return  # not registered (yet): nothing the browser could match
+            seen.add(key)
+            if rid in done.get((mode, ctx), set()) and not repeat:
+                status = "done"
+            elif item_key(rid, mode, ctx) in drafts or (
+                    mode == "guided" and self.store.guided_state(aid, ctx, rid) is not None):
+                status = "in_progress"
+            else:
+                status = "todo"
+            items.append(WorkItem(rid, mode, ctx, m, status, position, repeat, source))
+
+        set_id = self.store.programme(aid)
+        if set_id:
+            for rid, mode, repeat in self.coach.programme_recordings(user, set_id):
+                add(rid, mode, set_id, 0, "programme", repeat)
+        for a in self.store.assignments(aid):
+            add(a.recording_id, a.mode, a.context_id, a.position, "assignment")
+        return items
+
+    def _next(self, user: User, items: list[WorkItem]) -> WorkItem | None:
+        set_id = self.store.programme(user.annotator_id)
+        if set_id:
+            nxt = self.coach.next_item(user, set_id, items)
+            if nxt is not None:
+                return nxt
+        open_items = [i for i in items if i.status != "done" and i.source == "assignment"]
+        if not open_items:
+            return None
+        started = [i for i in open_items if i.status == "in_progress"]
+        if started:
+            return started[0]
+        s = self.settings
+        if s.selection_strategy == "manual":
+            return min(open_items, key=lambda i: i.position)
+        if s.selection_strategy == "seeded":
+            first = seeded_order([i.recording_id for i in open_items], int(s.selection_seed or 0),
+                                 user.annotator_id)[0]
+            return next(i for i in open_items if i.recording_id == first)
+        # random: a random choice that stays the same until something more is completed
+        n_done = sum(1 for i in items if i.status == "done")
+        rng = random.Random(f"{self.store.study_id}:{user.annotator_id}:{n_done}")
+        return rng.choice(sorted(open_items, key=lambda i: (i.recording_id, i.mode, i.context_id)))
+
+    def assignments(self, user: User, body: dict[str, Any] | None = None) -> dict[str, Any]:
+        items = self.work_items(user)
+        nxt = self._next(user, items)
+        return {"items": [i.to_dict() for i in items],
+                "next": nxt.recording_id if nxt is not None else None,
+                "next_item": ({"recording_id": nxt.recording_id, "mode": nxt.mode, "context_id": nxt.context_id}
+                              if nxt is not None else None)}
+
+    def find_item(self, user: User, recording_id: Any, mode: Any, context_id: Any) -> WorkItem:
+        if not isinstance(recording_id, str) or not recording_id:
+            raise ApiError(400, "bad_request", "recording_id is missing")
+        mode = mode or "standard"
+        if mode not in MODES:
+            raise ApiError(400, "bad_request", f"mode must be one of {', '.join(MODES)}")
+        ctx = str(context_id or "") if mode != "standard" else ""
+        for i in self.work_items(user):
+            if (i.recording_id, i.mode, i.context_id) == (recording_id, mode, ctx):
+                return i
+        if self.store.manifest(self.scope_for(mode, ctx), recording_id) is None:
+            raise ApiError(404, "unknown_recording", f"{recording_id} is not a registered recording of this study")
+        raise ApiError(403, "not_assigned", f"{recording_id} is not one of your recordings at the moment")
+
+    # ------------------------------------------------------------- matching
+    def match(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        sha = str(body.get("sha256") or "").lower()
+        if not SHA_RE.match(sha):
+            raise ApiError(400, "bad_request", "sha256 must be the 64-character hexadecimal checksum of the file")
+        size = body.get("size_bytes")
+        if isinstance(size, bool) or not isinstance(size, int) or size < 0:
+            raise ApiError(400, "bad_request", "size_bytes must be the size of the file in bytes")
+        items = self.work_items(user)
+        nxt = self._next(user, items)
+        exact = self.store.manifests_by_fingerprint(sha, size)
+        if exact:
+            return self._match_answer(user, items, exact, "matched", [], nxt)
+        candidates = self._metadata_matches(body)
+        if len(candidates) == 1:
+            m, differences = candidates[0]
+            return self._match_answer(user, items, [m], "matched_metadata", differences, nxt)
+        if len(candidates) > 1:
+            return self._answer("unknown", "This file looks like several recordings of the study and cannot be told "
+                                "apart from them. Open the exact file you were given, or ask your study administrator.")
+        return self._answer("unknown", "This file is not one of the recordings of this study. Check that you opened "
+                            "the file you were given (the name is shown in your list of recordings).")
+
+    @staticmethod
+    def _answer(status: str, message: str, **fields: Any) -> dict[str, Any]:
+        out = {"status": status, "message": message, "recording_id": None, "mode": None, "context_id": None,
+               "manifest": None, "draft": None, "differences": [], "repeat": False}
+        out.update(fields)
+        return out
+
+    def _metadata_matches(self, body: dict[str, Any]) -> list[tuple[dict[str, Any], list[str]]]:
+        name = str(body.get("file_name") or "").strip().lower()
+        try:
+            sfreq = float(body.get("sfreq"))
+            n_samples = int(body.get("n_samples"))
+        except (TypeError, ValueError):
+            return []
+        chans = body.get("ch_names")
+        if not name or not isinstance(chans, list):
+            return []
+        chans = [str(c) for c in chans]
+        out = []
+        for m in self.store.manifests():
+            t = m["timing"]
+            if (m["file_name"].lower() != name or abs(float(t["sfreq"]) - sfreq) > 1e-6
+                    or int(t["n_samples"]) != n_samples):
+                continue
+            shown = set(m["ch_names"])
+            if not shown.issubset(chans):
+                continue
+            differences = ["The file's checksum differs from that of the study's copy, so its contents are not "
+                           "exactly the same (it may have been copied with changes, exported again or edited)."]
+            _sha, size = fingerprint_of(m)
+            if size and body.get("size_bytes") != size:
+                differences.append(f"The file is {body.get('size_bytes')} bytes; the study's copy is {size} bytes.")
+            extra = [c for c in chans if c not in shown and c not in m.get("hidden_channels", [])]
+            if extra:
+                differences.append("The file has channels the study's copy does not: " + ", ".join(extra[:10])
+                                   + (" …" if len(extra) > 10 else ""))
+            if [c for c in chans if c in shown] != list(m["ch_names"]):
+                differences.append("The channels are in a different order from the study's copy.")
+            out.append((m, differences))
+        return out
+
+    def _match_answer(self, user: User, items: list[WorkItem], manifests: list[dict[str, Any]], status: str,
+                      differences: list[str], nxt: WorkItem | None) -> dict[str, Any]:
+        keys = {(m["scope"], m["recording_id"]) for m in manifests}
+        mine = [i for i in items if (self.scope_for(i.mode, i.context_id), i.recording_id) in keys]
+        rid = manifests[0]["recording_id"]
+        if not mine:
+            return self._answer("not_assigned", f"{rid} is a recording of this study, but it is not one of yours "
+                                "at the moment. Open one of the recordings in your list, or ask your study "
+                                "administrator.", recording_id=rid)
+        open_items = [i for i in mine if i.status != "done"]
+        if not open_items:
+            i = mine[0]
+            return self._answer("done", f"You have already completed {rid}. Choose another recording from your list.",
+                                recording_id=rid, mode=i.mode, context_id=i.context_id)
+        chosen = next((i for i in open_items if nxt is not None and (i.recording_id, i.mode, i.context_id)
+                       == (nxt.recording_id, nxt.mode, nxt.context_id)), None)
+        if chosen is None:
+            chosen = next((i for i in open_items if i.status == "in_progress"), open_items[0])
+        self.coach.require_unlocked(user, chosen)
+        draft = self.store.draft(user.annotator_id, chosen.key)
+        message = ("Recording found: " + chosen.recording_id if status == "matched" else
+                   "This file has the name, sampling rate, length and channels of " + chosen.recording_id
+                   + " but is not byte for byte the study's copy. Continue only if you are sure it is the same "
+                   "recording.")
+        return self._answer(status, message, recording_id=chosen.recording_id, mode=chosen.mode,
+                            context_id=chosen.context_id, manifest=self.public_manifest(chosen.manifest),
+                            draft=(draft or {}).get("draft"), differences=differences, repeat=chosen.repeat)
+
+    def public_manifest(self, m: dict[str, Any]) -> dict[str, Any]:
+        return public_manifest(m, self.settings.display.scalings)
+
+    # ---------------------------------------------------------------- drafts
+    def put_draft(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        """``PUT /drafts/{recording_id}?mode=&context=`` with the Draft as body (``ec_put_draft``:
+        ``{"recording_id", "mode", "context_id", "draft": Draft}``)."""
+        item = self.find_item(user, body.get("recording_id"), body.get("mode"), body.get("context_id"))
+        if item.status == "done" and not item.repeat:
+            raise ApiError(409, "already_done", f"{item.recording_id} has already been completed")
+        draft = body.get("draft")
+        if not isinstance(draft, dict):
+            raise ApiError(400, "bad_request", "A draft must be an object")
+        anns = draft.get("annotations", [])
+        if not isinstance(anns, list) or len(anns) > MAX_ANNOTATIONS or not all(isinstance(a, dict) for a in anns):
+            raise ApiError(422, "invalid_draft", "draft.annotations must be a list of annotations")
+        view = draft.get("view")
+        if view is not None and not isinstance(view, dict):
+            raise ApiError(422, "invalid_draft", "draft.view must be an object")
+        elapsed = draft.get("elapsed_s", 0)
+        if isinstance(elapsed, bool) or not isinstance(elapsed, (int, float)) or not math.isfinite(elapsed):
+            raise ApiError(422, "invalid_draft", "draft.elapsed_s must be a number of seconds")
+        saved_at = now_local_iso()
+        record = {"schema": "electroclean.web_draft", "recording_id": item.recording_id, "mode": item.mode,
+                  "context_id": item.context_id, "annotator_id": user.annotator_id, "saved_at": saved_at,
+                  "draft": {"annotations": anns, "view": view or {}, "elapsed_s": float(elapsed),
+                            "saved_at": saved_at}}
+        if len(json.dumps(record)) > 8 * 1024 * 1024:
+            raise ApiError(413, "too_large", "The draft is too large to keep")
+        self.store.put_draft(user.annotator_id, item.key, record)
+        return {"saved_at": saved_at}
+
+    def delete_draft(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        rid, mode = body.get("recording_id"), body.get("mode") or "standard"
+        if not isinstance(rid, str) or mode not in MODES:
+            raise ApiError(400, "bad_request", "recording_id and mode are needed")
+        ctx = str(body.get("context_id") or "") if mode != "standard" else ""
+        self.store.delete_draft(user.annotator_id, item_key(rid, mode, ctx))
+        return {}
+
+    # ---------------------------------------------------------------- saving
+    def _filters(self, chosen: Any, warnings: list[str]) -> tuple[FilterSettings, dict[str, Any]]:
+        study_filters = self.settings.filters
+        if not isinstance(chosen, dict):
+            return study_filters, {}
+        shown = clean_json({k: chosen.get(k) for k in ("highpass_hz", "notch_hz", "notch_harmonics", "method")
+                            if k in chosen})
+        if study_filters.locked:
+            return study_filters, shown
+        hp, notch = chosen.get("highpass_hz"), chosen.get("notch_hz")
+        try:
+            f = FilterSettings(
+                highpass_enabled=hp is not None,
+                highpass_hz=float(hp) if hp is not None else study_filters.highpass_hz,
+                notch_enabled=notch is not None,
+                notch_hz=float(notch) if notch is not None else study_filters.notch_hz,
+                notch_harmonics=bool(chosen.get("notch_harmonics", False)),
+                method="fir",
+            )
+            f.validate()
+        except (TypeError, ValueError, SettingsError):
+            warnings.append(f"The browser reported display filters ElectroClean does not offer ({shown}); the "
+                            "study's filters are recorded instead.")
+            return study_filters, shown
+        return f, shown
+
+    def submit(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        from electroclean.web.manifest import ManifestRecording
+        from electroclean.web.saving import WebSession
+
+        item = self.find_item(user, body.get("recording_id"), body.get("mode"), body.get("context_id"))
+        rid = item.recording_id
+        if item.status == "done" and not item.repeat:
+            raise ApiError(409, "already_done", f"You have already completed {rid}; it is not saved twice.")
+        self.coach.require_unlocked(user, item)
+        info = body.get("session") if isinstance(body.get("session"), dict) else {}
+        sha = str(body.get("sha256") or "").lower()
+        if not SHA_RE.match(sha):
+            raise ApiError(400, "bad_request", "sha256 (the checksum of the annotated file) is missing")
+        elapsed = _number(info.get("elapsed_s", 0.0), "session.elapsed_s", minimum=0.0)
+        warnings: list[str] = []
+        filters, shown_filters = self._filters(info.get("filters"), warnings)
+        loaded = ManifestRecording(item.manifest, display_filters=shown_filters)
+        reg_sha, _size = fingerprint_of(item.manifest)
+        if sha == reg_sha:
+            loaded.notes.append("Annotated in the browser; the data file's SHA-256 matched the registered recording.")
+        else:
+            loaded.warnings.append(f"The file annotated in the browser (SHA-256 {sha}) is not byte for byte the "
+                                   f"registered recording (SHA-256 {reg_sha}); its name, sampling rate, length and "
+                                   "channels matched and the annotator confirmed it is the same recording.")
+        loaded.warnings.extend(warnings)
+        anns = parse_annotations(body.get("annotations"), loaded.info, self.store.catalogue,
+                                 self.settings.min_duration_samples)
+        context: dict[str, Any] = {}
+        rs: ReferenceSet | None = None
+        guided_summary = None
+        if item.mode != "standard":
+            rs = self.reference_set(item.context_id)
+            context = {"reference_set_id": rs.set_id, "reference_set_name": rs.name}
+            if item.mode == "guided":
+                guided_summary = self.coach.verify_for_saving(user, rs, rid, anns, loaded.info.timing.sfreq)
+                context["guided"] = dict(guided_summary)
+        client = clean_json(info.get("client")) if isinstance(info.get("client"), dict) else {}
+        view = info.get("view") if isinstance(info.get("view"), dict) else {}
+        display_state = {k: float(view[k]) for k in ("start_s", "duration_s", "first_channel", "n_channels",
+                                                     "scale_factor")
+                         if isinstance(view.get(k), (int, float)) and not isinstance(view.get(k), bool)
+                         and math.isfinite(view[k])}
+
+        def make_session(layout: Any) -> WebSession:
+            s = WebSession(layout=layout, settings=self.settings, filters=filters, catalogue=self.store.catalogue,
+                           loaded=loaded, annotator_id=user.annotator_id, display_name=user.display_name,
+                           mode=item.mode, context=context, initial_annotations=anns, allow_repeat=item.repeat,
+                           autosave_enabled=False, client=client, server=self.store.kind)
+            s.display_state = display_state
+            return s
+
+        saved = self.store.save_results(make_session, elapsed_s=elapsed, started_at=_stamp(info.get("started_at")))
+        self.store.delete_draft(user.annotator_id, item.key)
+        out: dict[str, Any] = {"saved": True, "files": sorted(saved.files), "attempt": saved.attempt,
+                               "feedback": None, "guided": None, "assessment": None}
+        if item.mode == "practice" and rs is not None:
+            out["feedback"] = self.coach.practice_result(user, rs, rid, saved.session.build_document(), elapsed,
+                                                         loaded.info.timing.sfreq)
+        elif item.mode == "guided" and rs is not None and guided_summary is not None:
+            out["guided"] = self.coach.record_guided(user, rs, rid, guided_summary)
+        elif item.mode == "assessment" and rs is not None:
+            out["assessment"] = self.coach.assessment_result(user, rs)
+        out["next"] = self.assignments(user)["next"]
+        return out
+
+    # -------------------------------------------------------------- training
+    def training(self, user: User, body: dict[str, Any] | None = None) -> dict[str, Any]:
+        return self.coach.programme_view(user)
+
+    def guided_get(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.coach.guided_view(user, _rid(body))
+
+    def guided_check(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.coach.guided_check(user, _rid(body), body)
+
+    def guided_continue(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.coach.guided_continue(user, _rid(body), body)
+
+    def guided_show_me(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.coach.guided_show_me(user, _rid(body), body)
+
+    # ---------------------------------------------------------------- visits
+    def visit_open(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.visits.open(user, body)
+
+    def visit_events(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.visits.events(user, body)
+
+    def visit_close(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.visits.close(user, body)
+
+    # ---------------------------------------------------------- administration
+    def admin_progress(self, user: User, body: dict[str, Any] | None = None) -> dict[str, Any]:
+        if not user.is_admin:
+            raise ApiError(403, "forbidden", "Only study administrators can see the progress of the study")
+        entries = self.store.completion_entries()
+        out = []
+        for u in self.store.users():
+            person = User(u["annotator_id"], u.get("display_name", ""), u.get("role", "annotator"))
+            items = []
+            for i in self.work_items(person):
+                mine = [e for e in entries if e.get("annotator_id") == person.annotator_id
+                        and e.get("recording_id") == i.recording_id and e.get("mode", "standard") == i.mode
+                        and e.get("context", "") == i.context_id and e.get("status") == "completed"]
+                draft = self.store.draft(person.annotator_id, i.key) or {}
+                last = max([e.get("completed_at", "") for e in mine] + [draft.get("saved_at", "")])
+                items.append({"recording_id": i.recording_id, "mode": i.mode, "context_id": i.context_id,
+                              "status": i.status, "attempts": len(mine), "last_activity": last or None})
+            entry: dict[str, Any] = {"annotator_id": person.annotator_id, "display_name": person.display_name,
+                                     "role": person.role, "last_seen": u.get("last_seen") or None, "items": items,
+                                     "programme": None}
+            if self.store.programme(person.annotator_id):
+                try:
+                    entry["programme"] = self.coach.programme_view(person)
+                except ApiError as exc:
+                    entry["programme"] = {"error": exc.code, "message": exc.message}
+            out.append(entry)
+        return {"study": self.store.name, "generated_at": now_local_iso(), "annotators": out}
+
+    #: Operation name -> method, for the HTTP routes and the Firebase functions.
+    OPERATIONS = ("me", "assignments", "match", "put_draft", "delete_draft", "submit", "training", "guided_get",
+                  "guided_check", "guided_continue", "guided_show_me", "visit_open", "visit_events", "visit_close",
+                  "admin_progress")
+
+    def call(self, operation: str, user: User, body: dict[str, Any] | None) -> dict[str, Any]:
+        if operation not in self.OPERATIONS:
+            raise ApiError(404, "not_found", f"Unknown operation {operation}")
+        if body is not None and not isinstance(body, dict):
+            raise ApiError(400, "bad_request", "The request must be a JSON object")
+        return getattr(self, operation)(user, body or {})
+
+
+def _rid(body: dict[str, Any]) -> str:
+    rid = body.get("recording_id")
+    if not isinstance(rid, str) or not rid:
+        raise ApiError(400, "bad_request", "recording_id is missing")
+    return rid

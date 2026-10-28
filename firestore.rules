@@ -1,0 +1,12 @@
+rules_version = '2';
+
+// ElectroClean keeps every study record in Firestore, and browsers never read or write them directly:
+// every read and write goes through ElectroClean's Cloud Functions, which use the Admin SDK (not
+// subject to these rules) and check who is calling. So nothing is open to clients here.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
