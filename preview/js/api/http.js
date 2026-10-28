@@ -63,6 +63,7 @@ export class HttpBackend {
     this.kind = 'server';
     this.signInWith = 'id';
     this.eventFlushMs = 4000;
+    this.writesVisitStart = true; // the visit_started event is written when the visit opens
     this.server = normaliseServer(server);
     this.base = `${this.server}/api/v1`;
     this.health = health;

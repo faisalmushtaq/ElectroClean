@@ -1053,7 +1053,7 @@ export class Workspace {
       if (action) logger.shortcut(keyName(e), action);
       fn();
     };
-    if (this.coach && !mod && (k === 'Enter' || k === ' ') && this.coach.canContinue()) {
+    if (this.coach && !mod && (k === 'Enter' || k === ' ') && this.coach.takesContinueKey()) {
       return handled('Continue', () => this.coach.continue());
     }
     if (mod && !e.altKey) {
