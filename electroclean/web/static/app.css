@@ -411,8 +411,9 @@ ul.warnings { font-size: 12.5px; }
 .small-screen .card { max-width: 420px; text-align: center; }
 .small-screen h1 { font-size: 20px; margin: 12px 0 8px; }
 @media (max-width: 899px) {
-  body:not([data-route="signin"]) .app-content { display: none; }
-  body:not([data-route="signin"]) .small-screen { display: flex; }
+  /* The admin area (admin.css) works at any width; annotating needs a computer screen. */
+  body:not([data-route="signin"]):not([data-route^="admin"]) .app-content { display: none; }
+  body:not([data-route="signin"]):not([data-route^="admin"]) .small-screen { display: flex; }
   .page { padding: 20px 16px 32px; }
 }
 @media (max-width: 1440px) {

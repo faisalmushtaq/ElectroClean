@@ -1,7 +1,8 @@
 // The application: which backend, signing in, the views and the moves between them.
 //
-// Views are addressed by a plain hash (#signin, #home, #open, #annotate, #review, #training), so
-// the page also works where only such a hash survives (an embedded preview).
+// Views are addressed by a plain hash (#signin, #home, #open, #annotate, #review, #training, and
+// for administrators #admin and #admin-<section>), so the page also works where only such a hash
+// survives (an embedded preview).
 
 import { h, clear } from './ui/dom.js';
 import { ask, inform, showDialog, setDialogLogger, dialogOpen } from './ui/dialog.js';
@@ -21,6 +22,8 @@ import { appHeader, downloadFiles, smallScreenNotice } from './views/common.js';
 import { nowLocalIso } from './util.js';
 
 const VIEWS = ['signin', 'home', 'open', 'annotate', 'review', 'training'];
+/** The admin area's plain hashes (js/admin/model.js lists its sections). */
+const ADMIN_ROUTE = /^admin(-[a-z]+)?$/;
 
 // The file readers are loaded when the first recording is opened (the demonstration may not need them).
 let recordingModule = null;
@@ -46,6 +49,7 @@ export class App {
     this.me = null;
     this.catalogue = null;
     this.assignments = null;
+    this.adminArea = null;
     this.visitId = null;
     this.ws = null;
     this.route = null;
@@ -59,6 +63,9 @@ export class App {
 
   // ===================================================================== start
   async boot() {
+    // A bookmarked section of the admin area opens again once its administrator has signed in.
+    const asked = (location.hash || '').replace(/^#/, '');
+    if (ADMIN_ROUTE.test(asked)) this._adminReturn = asked;
     this._render(h('main.page.loading', {}, h('p.subtitle', {}, 'Starting ElectroClean…')), 'signin');
     let where;
     try { where = await findBackend(); } catch { where = { kind: 'demo', source: 'none' }; }
@@ -150,7 +157,11 @@ export class App {
     }
     await this.loadAssignments();
     const want = (location.hash || '').replace(/^#/, '');
-    if (this.me.programme && (!want || want === 'signin' || want === 'training' || quiet)) await this.showTraining();
+    // Administrators start in the admin area (or where a reload left them); they can still annotate.
+    const back = this._adminReturn;
+    this._adminReturn = null;
+    if (this.isAdmin && (ADMIN_ROUTE.test(want) || !want || want === 'signin')) await this.showAdmin(ADMIN_ROUTE.test(want) ? want : back || 'admin');
+    else if (this.me.programme && (!want || want === 'signin' || want === 'training' || quiet)) await this.showTraining();
     else this.showHome();
   }
 
@@ -161,8 +172,20 @@ export class App {
     }
   }
 
+  /** True for an account with the role admin (GET /me), who may use the admin area. */
+  get isAdmin() { return Boolean(this.me && this.me.role === 'admin'); }
+
+  /** Read GET /me again, after the admin area changed the study's settings. */
+  async refreshMe() {
+    if (!this.me) return;
+    this.me = await this.backend.me();
+    this.catalogue = new Catalogue(this.me.catalogue);
+  }
+
   async signOut() {
     if (this.ws && !(await this.ws.close())) return;
+    this._resumeLog();
+    this.adminArea = null;
     await logger.end('sign_out');
     await this.backend.logout();
     this.me = null;
@@ -173,12 +196,15 @@ export class App {
   sessionExpired() {
     if (this._expiring) return;
     this._expiring = true;
+    if (ADMIN_ROUTE.test(this.route || '')) this._adminReturn = this.route;
     if (this.ws) {
       this.ws.s.saveLocal();
       this.ws.destroy();
       this.ws = null;
     }
     this.me = null;
+    this.adminArea = null;
+    this._adminLogPaused = false;
     logger.enabled = false;
     this.showSignin({ error: 'Your sign-in has ended. Sign in again to continue; your unsaved work is kept in this browser.' });
     setTimeout(() => { this._expiring = false; }, 500);
@@ -195,19 +221,38 @@ export class App {
     this.route = route;
     document.body.dataset.route = route;
     logger.topWindow = route;
+    if (ADMIN_ROUTE.test(route)) this._pauseLog(); else this._resumeLog();
     if (location.hash !== `#${route}`) {
       this._settingHash = true;
       location.hash = route;
     }
     document.title = { signin: 'ElectroClean – sign in', home: 'ElectroClean', open: 'ElectroClean – open a recording',
       annotate: `ElectroClean – ${this.ws ? this.ws.s.recording.fileName : 'annotate'}`, review: 'ElectroClean – practice review',
-      training: 'ElectroClean – training programme' }[route] || 'ElectroClean';
+      training: 'ElectroClean – training programme' }[route] || (ADMIN_ROUTE.test(route) ? 'ElectroClean – admin' : 'ElectroClean');
+  }
+
+  // The interaction log records annotating; what an administrator does in the admin area is not
+  // part of it (only that the area was opened and left).
+  _pauseLog() {
+    if (this._adminLogPaused || !logger.enabled) return;
+    logger.event('admin_area_opened', {});
+    logger.enabled = false;
+    this._adminLogPaused = true;
+  }
+
+  _resumeLog() {
+    if (!this._adminLogPaused) return;
+    this._adminLogPaused = false;
+    if (this.me && this.visitId) {
+      logger.enabled = true;
+      logger.event('admin_area_closed', {});
+    }
   }
 
   async _onHash() {
     if (this._settingHash) { this._settingHash = false; return; }
     const want = (location.hash || '').replace(/^#/, '');
-    if (want === this.route || !VIEWS.includes(want)) return;
+    if (want === this.route || (!VIEWS.includes(want) && !ADMIN_ROUTE.test(want))) return;
     if (this.ws) {
       // Back or forward while a recording is open: the same as its Close button.
       this._settingHash = true;
@@ -216,6 +261,7 @@ export class App {
       return;
     }
     if (!this.me) { if (want !== 'signin') this.showSignin(); return; }
+    if (ADMIN_ROUTE.test(want)) { if (this.isAdmin) this.showAdmin(want); else this.showHome(); return; }
     if (want === 'home') this.showHome();
     else if (want === 'training' && this.me.programme) this.showTraining();
     else if (want === 'open') this.openFromComputer(null);
@@ -235,6 +281,25 @@ export class App {
   showHome() {
     this._fromTraining = false;
     this._render(homeView(this), 'home');
+  }
+
+  /**
+   * The admin area (js/admin/area.js, loaded the first time it is needed): `route` is #admin or
+   * #admin-<section>; `params` passes something to the section, such as the annotator to assign to.
+   */
+  async showAdmin(route = 'admin', params = null) {
+    if (!this.isAdmin) { this.showHome(); return; }
+    const { AdminArea } = await import('./admin/area.js');
+    const { sectionForRoute } = await import('./admin/model.js');
+    const section = sectionForRoute(route);
+    if (!section) route = 'admin';
+    if (!this.adminArea || this.adminArea.backend !== this.backend || this.adminArea.annotatorId !== this.me.annotator_id) {
+      this.adminArea = new AdminArea(this);
+      await this.adminArea.ready();
+    }
+    if (ADMIN_ROUTE.test(this.route || '') && this.content.contains(this.adminArea.el)) this._setRoute(route);
+    else this._render(this.adminArea.el, route);
+    await this.adminArea.show(section || 'overview', params);
   }
 
   async reloadHome() {
@@ -476,6 +541,7 @@ export class App {
       annotations: ws ? ws.store.toJSON() : null, selection: ws ? [...ws.selection] : null, view: ws ? { ...ws.viewer.view } : null,
       viewerStats: ws ? { ...ws.viewer.stats } : null, currentLabel: ws ? ws.currentLabel : null, scope: ws ? ws.scope : null,
       loggedEvents: logger.sent + logger.queue.length, at: nowLocalIso(),
+      admin: this.adminArea && ADMIN_ROUTE.test(this.route || '') ? this.adminArea.debugState() : null,
     };
   }
 }
