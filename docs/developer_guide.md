@@ -54,6 +54,10 @@ electroclean/
                            programme.py (the three stages and their unlocking), guided.py and
                            guided_gui.py (the guided coach), examples.py (the placeholder example set)
     activity/              logs.py, summary.py, report.py, cli.py (electroclean-activity)
+    web/                   the browser version (docs/web/architecture.md): service.py (the operations,
+                           shared by the server and the Firebase functions), coach.py, visits.py,
+                           store_files.py and store_firestore.py, app.py (FastAPI), cli.py
+                           (electroclean-web), firebase/functions/main.py, static/ (the application)
 ```
 
 ## Data flow of one session
@@ -249,8 +253,11 @@ The chevron icons are drawn by `scripts/make_theme_icons.py`;
 
 ## Packaging
 
-`pyproject.toml` defines the package and four commands (`electroclean`,
-`electroclean-agreement`, `electroclean-admin`, `electroclean-activity`). `requirements.txt` pins every
+`pyproject.toml` defines the package and five commands (`electroclean`,
+`electroclean-agreement`, `electroclean-admin`, `electroclean-activity` and
+`electroclean-web`). `requirements-web.txt` pins what the browser version's
+server and the administrator's Firebase commands need, without Qt, and the
+Cloud Functions have their own `electroclean/web/firebase/functions/requirements.txt`. `requirements.txt` pins every
 dependency (pybv among them, for the synthetic recordings of the self-test and
 the examples); `requirements-dev.txt` adds pytest. The launchers in
 `launchers/` create `.venv` on first use.

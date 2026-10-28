@@ -5,7 +5,7 @@
 ```bash
 python -m pip install -r requirements-dev.txt
 python -m pip install --no-deps -e .
-python -m pytest                 # everything (about 370 tests, a few minutes)
+python -m pytest                 # everything (about 410 tests, a few minutes)
 python -m pytest -m "not gui"    # without Qt
 python -m pytest -m gui          # only the GUI tests
 ```
@@ -16,6 +16,14 @@ Linux machine the Qt system libraries `libEGL`, `libGL`, `libxkbcommon` and
 `libfontconfig` must be installed). Mouse input is simulated with the
 browser's own testing helper, the same mechanism MNE uses in its test-suite,
 and dialogs are answered by `ScriptedPrompts`.
+
+The browser version has its own tests, described in
+[docs/web/architecture.md](web/architecture.md) ("Tests"):
+`node --test web_tests/unit/*.test.mjs` for the browser modules,
+`node web_tests/run_e2e.mjs` for the application in Chromium (including the
+real `electroclean-web demo` server), and `scripts/test_firebase_emulators.sh`
+and `scripts/test_web_firebase.sh` for Firebase on Google's emulators. The
+workflow *Browser version tests* runs them all on GitHub.
 
 ## Synthetic data
 

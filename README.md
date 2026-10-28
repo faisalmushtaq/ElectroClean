@@ -69,7 +69,7 @@ python -m venv .venv
 source .venv/bin/activate            # Windows: .venv\Scripts\activate
 python -m pip install -r requirements-dev.txt
 python -m pip install --no-deps -e .
-python -m pytest                     # about 370 tests, a few minutes
+python -m pytest                     # about 410 tests, a few minutes
 electroclean                         # start the application
 ```
 
@@ -173,6 +173,30 @@ the logs into tables (time, clicks and keys per recording, how much of each
 recording was seen) and a report with learning curves, to show for example
 whether annotators got faster. See [interaction logs](docs/activity_logs.md).
 
+## In a web browser
+
+ElectroClean also runs in a web browser, for studies whose annotators work on
+their own computers. The annotator opens the recordings they were given from
+their own disk and the page reads them there, so the EEG is never uploaded;
+the study's records hold only each recording's fingerprint (its SHA-256
+checksum), timing and channels, which identify the file the annotator opened.
+The browser application offers the desktop's annotation tools and keys, the
+training programme and the interaction logs, reads EDF, EDF+, BDF and
+BrainVision files, and saves the results into the same `Annotated_Events`
+folders as the desktop application. It is published on GitHub Pages, with a
+demonstration that needs no server; a study runs on Firebase or on
+ElectroClean's own small server, `electroclean-web`.
+
+```bash
+python -m pip install -r requirements-web.txt
+python -m pip install --no-deps -e .
+electroclean-web demo        # the whole system on http://localhost:8000/
+```
+
+[docs/web/firebase.md](docs/web/firebase.md) sets up a real study step by
+step, [docs/web/using.md](docs/web/using.md) is the guide for annotators, and
+[docs/web/architecture.md](docs/web/architecture.md) explains how it works.
+
 ## Documentation
 
 | Document | For |
@@ -189,6 +213,10 @@ whether annotators got faster. See [interaction logs](docs/activity_logs.md).
 | [Building the applications](docs/building_apps.md) | Stand-alone applications for Windows, macOS and Linux |
 | [References](docs/references.md) | Literature cited in the documentation |
 | [Handover notes](HANDOVER.md) | Where the project stands, what is open, and how to carry on |
+| [In the browser: using it](docs/web/using.md) | Annotators using the browser version |
+| [In the browser: a study on Firebase](docs/web/firebase.md) | Setting up a real study, step by step |
+| [In the browser: the ElectroClean server](docs/web/server.md) | The demonstration, and a study on your own server |
+| [In the browser: architecture](docs/web/architecture.md) and [API](docs/web/api.md) | How the browser version works, and the contract between browser and server |
 
 ## Repository layout
 
@@ -198,6 +226,8 @@ electroclean/
     reliability/    Component B
     training/       Component C, including the guided training programme
     activity/       interaction logs turned into tables and learning curves
+    web/            the browser version: server, Firebase functions and the application (web/static)
+web_tests/          tests of the browser application (node --test and Playwright)
     config/         label catalogue, default settings, HED-SCORE validation snapshot
     synthetic.py    synthetic BrainVision, EDF and BDF data with known artifacts
 tests/              pytest suite (unit, integration and offscreen GUI tests)
