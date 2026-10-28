@@ -338,6 +338,9 @@ export class TrainingSection {
     const secs = numberInput({ value: tol.seconds ?? 0.2, min: 0, max: 5, step: 0.05 });
     const frac = numberInput({ value: Math.round((tol.fraction ?? 0.2) * 100), min: 0, max: 100, step: 1 });
     const chans = numberInput({ value: Math.round((tol.channel_jaccard ?? 0.75) * 100), min: 1, max: 100, step: 1 });
+    for (const [input, label] of [[f1, 'Pass mark: share of the experts\' artifacts found (%)'], [acc, 'Pass mark: share given the right type (%)'],
+      [secs, 'Guided steps: start and end within (seconds)'], [frac, 'Guided steps: or share of the artifact\'s length (%)'],
+      [chans, 'Guided steps: channels the same (%)']]) input.setAttribute('aria-label', label);
     const save = actionButton('Save the settings', { kind: 'primary', working: 'Saving…', msg, log: 'set-update', onClick: async () => {
       const body = {
         set_id: s.set_id, name: name.value.trim(), description: description.value.trim(), practice_review: review.input.checked,

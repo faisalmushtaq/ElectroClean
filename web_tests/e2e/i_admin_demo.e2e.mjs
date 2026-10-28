@@ -100,6 +100,13 @@ export const tests = [
       assert.match(await sectionText(page), /3 Recordings registered for the study 2 Annotators and 1 administrator/);
       assert.ok(await noSideways(page));
       await t.screenshot(page, 'admin_overview');
+      // From the keyboard: a section's link, then the focus is on that section's heading; Back returns.
+      await page.focus('.admin-nav a[data-section="records"]');
+      await page.keyboard.press('Enter');
+      await waitForRoute(page, 'admin-records');
+      await page.waitForFunction(() => document.activeElement && document.activeElement.matches('.admin-section[data-section="records"] h1'));
+      await page.goBack(); // the browser's Back button moves between sections
+      await waitForRoute(page, 'admin');
 
       // An annotator, with a temporary password shown once and copied.
       await goSection(page, 'Annotators', 'admin-annotators');
