@@ -22,11 +22,12 @@ from typing import TYPE_CHECKING, Any
 from electroclean.app.io.atomic import atomic_write_bytes, atomic_write_json
 from electroclean.app.session.register import CompletionRegister, RegisterError
 from electroclean.config.settings import Settings
-from electroclean.web.accounts import AccountError, AccountExists, Accounts
+from electroclean.web.accounts import AccountError, AccountExists, Accounts, InvitationProblem
 from electroclean.web.store import (
     AccountProblem,
     Assignment,
     Credentials,
+    Invitation,
     ResultExists,
     SavedResult,
     Store,
@@ -269,6 +270,31 @@ class FilesStore(Store):
         aid = str(annotator_id).upper()
         self.db.delete_user(aid)
         shutil.rmtree(self.study.drafts_dir / f"annotator-{aid}", ignore_errors=True)
+
+    def create_invitation(self, annotator_id: str, *, days: float, by: str) -> Invitation:
+        try:
+            token, expires = self.db.create_invitation(annotator_id, days=days, by=by)
+        except AccountError as exc:
+            raise AccountProblem("disabled" if "switched off" in str(exc) else "invalid_user", str(exc),
+                                 409 if "switched off" in str(exc) else 400) from exc
+        return {"invite_token": token, "invite_link": None, "expires_at": expires}
+
+    def revoke_invitation(self, annotator_id: str) -> bool:
+        return self.db.revoke_invitation(annotator_id)
+
+    def invitations(self) -> dict[str, dict[str, Any]]:
+        return self.db.invitations()
+
+    def invitation_for_token(self, token: str) -> dict[str, Any] | None:
+        return self.db.invitation_for_token(token)
+
+    def accept_invitation(self, token: str, password: str) -> User:
+        try:
+            return self.db.accept_invitation(token, password)
+        except InvitationProblem as exc:
+            raise AccountProblem(f"invite_{exc.reason}", "", 404 if exc.reason == "unknown" else 409) from exc
+        except AccountError as exc:
+            raise AccountProblem("bad_password", str(exc), 400) from exc
 
     def assignments(self, annotator_id: str | None = None) -> list[Assignment]:
         return self.db.assignments(annotator_id)
