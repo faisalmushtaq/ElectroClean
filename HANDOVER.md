@@ -219,9 +219,11 @@ document, `js/api/http.js`, `js/api/firebase.js` and the in-browser demonstratio
 mismatch; two were found that way.
 
 **Slow answers are normal on Firebase.** Functions can take a few seconds to start after a quiet
-period, so the browser must stay correct when an answer arrives late (the guided coach takes one
-action at a time for this reason). Test with the emulators, which are slower than the local
-server.
+period, and an instance can occasionally stop mid-request, so the browser must stay correct when
+an answer arrives late or not at all. The guided coach takes one action at a time for this reason,
+and calls that only read are asked a second time after a failure, while calls that save, score or
+count an attempt never are (`js/api/firebase.js`). Test with the emulators, which behave more like
+Firebase than the local server does.
 
 **The desktop GUI tests run real Qt windows off screen** on all three systems, and each system has
 its quirks: Windows' off-screen fonts are much wider (toolbars must fit by rule, and tests should
