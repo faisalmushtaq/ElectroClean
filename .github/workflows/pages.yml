@@ -1,7 +1,7 @@
 # Publishes the browser application (electroclean/web/static) on GitHub Pages.
 #
 # The site is kept on the gh-pages branch: main publishes the released application at the site's
-# root, and the browser-version branch publishes its work in progress under preview/, so a preview
+# root, and claude/electroclean-web publishes work in progress under preview/, so a preview
 # never replaces what annotators use. GitHub Pages must be set to "Deploy from a branch", branch
 # gh-pages, folder "/ (root)" (Settings, Pages); see docs/web/server.md.
 name: GitHub Pages

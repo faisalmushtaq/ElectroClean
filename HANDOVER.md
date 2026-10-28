@@ -27,9 +27,10 @@ used for the local demonstration and for a study that prefers its own computer).
 ## Where things stand
 
 On 28 October 2026 the project lead decided to retire the desktop application and to make the
-browser version complete, with an admin area for the lead researchers. That work is finished and
-tested on the branch `claude/electroclean-web`, and waits for the project lead's agreement to merge
-it into `main`.
+browser version complete, with an admin area for the lead researchers. That work was finished and
+tested on the branch `claude/electroclean-web` and merged into `main` the same day, with the project
+lead's agreement, so `main` now holds the browser application and GitHub Pages publishes it at
+<https://faisalmushtaq.github.io/ElectroClean/>.
 
 The browser version now does everything the desktop application did. Annotators annotate with the
 same keys, toolbar and dialogs (including a channel chooser that works on 128-channel montages),
@@ -53,8 +54,8 @@ server and the Firebase functions call it. The commands `electroclean-agreement`
 on the [Releases page](https://github.com/faisalmushtaq/ElectroClean/releases) was the last desktop
 release; the results folders it wrote are read unchanged.
 
-**Trying it.** The preview is live at <https://faisalmushtaq.github.io/ElectroClean/preview/> as a
-demonstration that needs no server and keeps everything in the browser: sign in as A01 to annotate,
+**Trying it.** The application at <https://faisalmushtaq.github.io/ElectroClean/>, opened without a
+study, is a demonstration that needs no server and keeps everything in the browser: sign in as A01 to annotate,
 T01 for the training programme or ADMIN for the admin area, with the password `demo`. The home page
 offers the example recordings as EDF files to open "from your computer", which is what annotators
 do with real recordings. The demonstration cannot run what needs Python (the analyses, consensus
@@ -69,24 +70,19 @@ There are no open pull requests or issues on GitHub.
 
 | Branch | What it holds | What to do with it |
 | --- | --- | --- |
-| `main` | The desktop application (1.1.0 plus unreleased work) and these notes as they stood before the browser-only decision | Leave it until the browser version is merged into it. |
-| `claude/electroclean-web` | `main` plus the browser version, its admin area, the server and the Firebase functions, with the desktop application removed | Work from here until it is merged. Pushes run *Tests* and *Browser version tests*, and republish the preview when the application's files change. |
+| `main` | The browser application, its admin area, the server, the Firebase functions and the Python core | Work on a branch from here. Pushes run *Tests* on Windows, macOS and Linux and *Browser version tests*, and publish the application at the site's root. |
+| `claude/electroclean-web` | The branch the browser version was built on; merged into `main` and identical to it | Keep it for previews or delete it: pushes to it publish the application under `preview/` without touching the site's root, a way to show work in progress before it reaches `main` (bring it up to date with `main` first). |
 | `claude/eager-bardeen-33qhkb` | The branch earlier AI sessions worked on; identical to `main` | Nothing; it can be deleted. |
 | `gh-pages` | The published web pages, written by `.github/workflows/pages.yml` | Never edit it by hand. GitHub Pages serves it (Settings, Pages: deploy from branch `gh-pages`, folder `/ (root)`). |
 
-**Merging the browser version.** `claude/electroclean-web` contains every commit of `main`, so it
-can be merged as a fast-forward while `main` has not moved (or through a pull request, to see the
-whole change). Before merging, run *Tests* and *Browser version tests* by hand on the branch
-(Actions tab, Run workflow): a run started by hand runs the Python suite on Windows, macOS and
-Linux, which pushes to the branch do not. Merging publishes the application at the site's root,
-<https://faisalmushtaq.github.io/ElectroClean/>, which today sends visitors on to the preview, and removes the
-*Build applications* workflow from `main`. Nothing has been merged so far, at the project lead's
-request.
+Before merging a branch into `main`, run *Tests* by hand on it (Actions tab, Run workflow): a run
+started by hand tests the Python code on Windows, macOS and Linux, which pushes to other branches
+do not. The desktop application's last state is in `main`'s history (before the merge of 28 October
+2026) and in the 1.1.0 release, should anyone need it.
 
 ## Setting up
 
-ElectroClean needs Python 3.12 or 3.13 (64-bit). From a clone of the repository, on the browser
-branch:
+ElectroClean needs Python 3.12 or 3.13 (64-bit). From a clone of the repository:
 
 ```bash
 python -m venv .venv
@@ -126,9 +122,9 @@ Firebase tests need Java 21 for Google's emulators; `npx` fetches the Firebase t
 | Firebase on the emulators | `bash scripts/test_firebase_emulators.sh` (the functions and the Firestore store) and `bash scripts/test_web_firebase.sh` (the application signing in, annotating, training, exporting and running the admin area) | *Browser version tests* |
 
 The [testing guide](docs/testing_guide.md) lists the checks that need a person before a study
-starts. *GitHub Pages* publishes the application (from `main` at the site's root, from the browser
-branch under `preview/`), and *Firebase deploy*, run by hand, deploys the functions and rules to a
-real project once it exists (see below).
+starts. *GitHub Pages* publishes the application (from `main` at the site's root, from
+`claude/electroclean-web` under `preview/`), and *Firebase deploy*, run by hand, deploys the
+functions and rules to a real project once it exists (see below).
 
 ## Setting up a real study on Firebase
 
@@ -155,31 +151,28 @@ annotations into references, or a consensus of them (the Training section of
 ("Real expert files") describes the same with `electroclean-admin` in a folder. Once the real set
 works, remove the example set.
 
-**2. Merging the browser version** into `main`, as described under *Branches*, when the project
-lead agrees.
-
-**3. Versions and releases.** `__version__` is still `1.1.0`, and the *Unreleased* section of
+**2. Versions and releases.** `__version__` is still `1.1.0`, and the *Unreleased* section of
 [CHANGELOG.md](CHANGELOG.md) describes everything since. With the desktop applications gone there is
-no release workflow: a browser release is a merge into `main`, which publishes the application, and
-a deploy of the functions with *Firebase deploy*. Decide how versions are numbered from now on (the
+no release workflow: a browser release is a push to `main`, which publishes the application, and a
+deploy of the functions with *Firebase deploy*. Decide how versions are numbered from now on (the
 natural next one is 2.0.0, since the desktop application is gone), then set `__version__`, give the
 version its own section in the changelog and, if wanted, publish a GitHub release by hand from that
 section. [docs/developer_guide.md](docs/developer_guide.md) describes packaging and CI.
 
-**4. Decisions for the research team**, listed under "Decisions still open" in
+**3. Decisions for the research team**, listed under "Decisions still open" in
 [docs/design_decisions.md](docs/design_decisions.md): the agreement settings to pre-register, the
 competency criteria, scheduling repeat annotations for test-retest reliability, whether idle time
 counts, the copyright holder named in the licence notice, and whether Emotiv's contact-quality
 channels should be shown.
 
-**5. Data protection for real studies.** The interaction logs are participant data about the
+**4. Data protection for real studies.** The interaction logs are participant data about the
 annotators, a Firebase study keeps the study's records with Google in London, and the audit log
 names the administrators. The "Data protection in brief" sections of
 [docs/web/firebase.md](docs/web/firebase.md) and [docs/web/server.md](docs/web/server.md) describe
 exactly what is stored; check the arrangements with the university's research data and ethics
 processes before the first real study.
 
-**6. Loose ends in the browser version.** These are known, and none of them blocks a pilot. It has
+**5. Loose ends in the browser version.** These are known, and none of them blocks a pilot. It has
 been tested in Chromium (Chrome and Edge) only, so Firefox and Safari need a run-through, the
 admin area on a tablet included. On the test machine, the first 10-second screen of a 128-channel
 recording with filters took about 0.3 s to appear and the following screen, prepared in advance,
@@ -192,7 +185,7 @@ administrator guide says so, and they can be removed. The README has no
 picture of the browser application yet. Three small differences from the desktop application's
 display are documented in [docs/web/architecture.md](docs/web/architecture.md).
 
-**7. Housekeeping.** The project's `ruff` settings give only the line length, so a recent `ruff`
+**6. Housekeeping.** The project's `ruff` settings give only the line length, so a recent `ruff`
 applies many style rules the code was never written to; `ruff check --select E,F,W,B` is the useful
 subset. A shared linting configuration and a lint step in CI would help. Many code comments still
 explain behaviour by comparison with the desktop application ("as the desktop does"); they are

@@ -93,12 +93,13 @@ standard or web page, check it against the original source online, and add it to
 
 ## Branches, CI and publishing
 
-The browser version is developed on `claude/electroclean-web` until the project lead agrees to
-merge it into `main`; do not merge it, push to `main`, or deploy to a real Firebase project unless
-the person you are working for asks for it. *Tests* runs the Python suite (Linux on every push;
-Windows, macOS and Linux for `main` and pull requests), *Browser version tests* runs the browser
-modules, the application in Chromium and the Firebase emulator tests, and *GitHub Pages* publishes
-the application to the `gh-pages` branch: from `main` at the site's root, from the browser branch
-under `preview/` (never edit `gh-pages` by hand). *Firebase deploy*, run by hand, deploys the
-functions and rules once the repository's `FIREBASE_SERVICE_ACCOUNT` secret and `FIREBASE_PROJECT`
-variable are set (docs/web/firebase.md).
+`main` holds the application (the browser version was merged into it on 28 October 2026). Work on
+a branch from `main`, and do not push to `main`, publish a release or deploy to a real Firebase
+project unless the person you are working for asks for it. *Tests* runs the Python suite (Linux on
+every push; Windows, macOS and Linux for `main`, pull requests and runs started by hand), *Browser
+version tests* runs the browser modules, the application in Chromium and the Firebase emulator
+tests, and *GitHub Pages* publishes the application to the `gh-pages` branch: from `main` at the
+site's root, and from `claude/electroclean-web`, kept for previews, under `preview/` (never edit
+`gh-pages` by hand). *Firebase deploy*, run by hand, deploys the functions and rules once the
+repository's `FIREBASE_SERVICE_ACCOUNT` secret and `FIREBASE_PROJECT` variable are set
+(docs/web/firebase.md).

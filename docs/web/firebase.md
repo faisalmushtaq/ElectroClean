@@ -203,8 +203,8 @@ electroclean-web config --firebase-project my-eeg-study --study pilot --web-conf
 Commit `electroclean/web/static/config.json` and push it. The GitHub Pages workflow
 (`.github/workflows/pages.yml`) publishes the application with it on the repository's `gh-pages`
 branch; the first time, in the repository's **Settings**, **Pages**, choose **Deploy from a
-branch**, branch `gh-pages`, folder `/ (root)`. It is published from `main` at `https://faisalmushtaq.github.io/ElectroClean/`, and from the
-browser version's branch at `https://faisalmushtaq.github.io/ElectroClean/preview/`. The study in
+branch**, branch `gh-pages`, folder `/ (root)`. It is published from `main` at `https://faisalmushtaq.github.io/ElectroClean/`, and previews of work
+in progress at `https://faisalmushtaq.github.io/ElectroClean/preview/`. The study in
 `config.json` is the default; a link can name another study of the same project with
 `?study=<id>`.
 

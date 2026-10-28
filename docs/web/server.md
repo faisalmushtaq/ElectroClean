@@ -41,7 +41,7 @@ on them straight away, as do the analyses of the admin area.
 
 `--port` and `--host` choose where it listens (`--host 0.0.0.0` for other computers on the network);
 `--no-serve` only makes it. The demonstration also accepts the application published on GitHub
-Pages: open `https://faisalmushtaq.github.io/ElectroClean/preview/?server=http://localhost:8000`.
+Pages: open `https://faisalmushtaq.github.io/ElectroClean/?server=http://localhost:8000`.
 
 ## A study on your own server
 
@@ -86,7 +86,7 @@ application on GitHub Pages instead, list its origin in `ELECTROCLEAN_ALLOWED_OR
 annotators `https://faisalmushtaq.github.io/ElectroClean/?server=https://eeg.example.ac.uk`.
 
 The application on GitHub Pages is published by `.github/workflows/pages.yml` on the `gh-pages`
-branch (`main` at the site's root, the browser version's branch under `preview/`); in the
+branch (`main` at the site's root, previews of work in progress under `preview/`); in the
 repository's Settings, Pages, choose Deploy from a branch, branch `gh-pages`, folder `/ (root)`.
 Served by the ElectroClean server itself, the application always talks to that server: the server
 answers `/config.json` with its own address, whatever `config.json` the application was published
