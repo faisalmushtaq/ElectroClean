@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import math
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -114,18 +115,25 @@ class Progress:
             d = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return out
-        if d.get("schema") != SCHEMA:
-            return out
-        out.guided = dict(d.get("guided", {}))
-        out.practice = {k: list(v) for k, v in dict(d.get("practice", {})).items()}
-        out.events = list(d.get("events", []))
+        out.update_from(d)
         return out
 
-    def save(self) -> None:
-        atomic_write_json(self.path, {
+    def to_dict(self) -> dict[str, Any]:
+        return {
             "schema": SCHEMA, "annotator_id": self.annotator_id, "reference_set_id": self.set_id,
             "updated_at": now_local_iso(), "guided": self.guided, "practice": self.practice, "events": self.events,
-        })
+        }
+
+    def update_from(self, d: dict[str, Any]) -> None:
+        """Take the stars, scores and events of a saved progress record (``to_dict``)."""
+        if d.get("schema") != SCHEMA:
+            return
+        self.guided = dict(d.get("guided", {}))
+        self.practice = {k: list(v) for k, v in dict(d.get("practice", {})).items()}
+        self.events = list(d.get("events", []))
+
+    def save(self) -> None:
+        atomic_write_json(self.path, self.to_dict())
 
     def record_guided(self, recording_id: str, summary: dict[str, Any]) -> None:
         self.guided[recording_id] = {**summary, "completed_at": now_local_iso()}
@@ -156,7 +164,6 @@ class Progress:
 def rebuild_progress(layout: OutputLayout, rs: ReferenceSet, annotator_id: str) -> Progress:
     """Rebuild a lost progress file from the register and the saved session files."""
     from electroclean.app.io.canonical import read_annotations_json
-    from electroclean.training.assessment import practice_feedback
 
     prog = Progress(progress_path(layout, rs.set_id, annotator_id), annotator_id, rs.set_id)
     try:
@@ -178,7 +185,9 @@ def rebuild_progress(layout: OutputLayout, rs: ReferenceSet, annotator_id: str) 
                 summary = {}
             prog.guided[rid] = {**summary, "completed_at": e.get("completed_at", "")}
         elif mode == "practice" and rid in rs.recordings:
-            try:
+            try:  # scoring needs pandas: imported only when there is a practice recording to score
+                from electroclean.training.assessment import practice_feedback
+
                 mine = read_annotations_json(folder / f"{base}_annotations.json")
                 result = rule.evaluate(practice_feedback(mine, rs.reference_document(rid), rs))
             except Exception:  # noqa: BLE001 - a missing file only loses that score
@@ -240,9 +249,23 @@ def completed_in(layout: OutputLayout, annotator_id: str, mode: str, set_id: str
         return set()
 
 
-def programme_state(layout: OutputLayout, rs: ReferenceSet, annotator_id: str,
-                    progress: Progress | None = None) -> list[StageState]:
-    prog = progress or load_progress(layout, rs, annotator_id)
+_completed_in = completed_in
+
+
+#: What was completed: ``completed(annotator_id, mode, set_id) -> recording IDs`` (by default the register).
+Completed = Callable[[str, str, str], set[str]]
+
+
+def programme_state(layout: OutputLayout | None, rs: ReferenceSet, annotator_id: str,
+                    progress: Progress | None = None, *, completed: Completed | None = None,
+                    report_text: Callable[[], str] | None = None) -> list[StageState]:
+    """The three stages for one trainee. The web server's Firestore store passes ``progress``,
+    ``completed`` and ``report_text`` (the competency result's sentence) instead of a results folder."""
+    prog = progress if progress is not None else load_progress(layout, rs, annotator_id)
+
+    def completed_in(layout: OutputLayout | None, annotator_id: str, mode: str, set_id: str) -> set[str]:
+        return completed(annotator_id, mode, set_id) if completed is not None else _completed_in(
+            layout, annotator_id, mode, set_id)
     rule = PassRule.from_dict(rs.practice_pass)
     out: list[StageState] = []
     # Stage 1
@@ -291,8 +314,10 @@ def programme_state(layout: OutputLayout, rs: ReferenceSet, annotator_id: str,
     else:
         status = "in_progress" if a_done else "available"
     a_detail = ""
-    report = layout.root / "training" / rs.set_id / "reports" / f"annotator-{annotator_id}_competency_report.json"
-    if status == "completed" and report.is_file():
+    if status == "completed" and report_text is not None:
+        a_detail = report_text()
+    elif status == "completed" and layout is not None:
+        report = layout.root / "training" / rs.set_id / "reports" / f"annotator-{annotator_id}_competency_report.json"
         try:
             a_detail = str(json.loads(report.read_text(encoding="utf-8")).get("status_text", ""))
         except (OSError, ValueError):
@@ -302,10 +327,14 @@ def programme_state(layout: OutputLayout, rs: ReferenceSet, annotator_id: str,
     return out
 
 
-def next_step(layout: OutputLayout, rs: ReferenceSet, annotator_id: str, states: list[StageState],
-              progress: Progress | None = None) -> NextStep:
-    """What the Continue button of the training path does next."""
+def next_step(layout: OutputLayout | None, rs: ReferenceSet, annotator_id: str, states: list[StageState],
+              progress: Progress | None = None, *, completed: Completed | None = None) -> NextStep:
+    """What the Continue button of the training path does next (``completed`` as for programme_state)."""
     by_key = {s.key: s for s in states}
+
+    def completed_in(layout: OutputLayout | None, annotator_id: str, mode: str, set_id: str) -> set[str]:
+        return completed(annotator_id, mode, set_id) if completed is not None else _completed_in(
+            layout, annotator_id, mode, set_id)
     g = by_key["guided"]
     if g.unlocked and not g.finished:
         done = completed_in(layout, annotator_id, "guided", rs.set_id)
@@ -322,7 +351,7 @@ def next_step(layout: OutputLayout, rs: ReferenceSet, annotator_id: str, states:
             return NextStep("practice", left[0], label="Start a practice recording",
                             text=f"Next: {STAGE_TITLES['practice']}, practice recording {n} of {len(rs.practice_recordings)}.")
         # Every practice recording was done without passing: try the best-scoring one again.
-        prog = progress or load_progress(layout, rs, annotator_id)
+        prog = progress if progress is not None else load_progress(layout, rs, annotator_id)
         tried = sorted(rs.practice_recordings,
                        key=lambda r: max((a.get("event_f1", 0.0) for a in prog.practice.get(r, [])), default=0.0))
         rid = tried[0] if tried else rs.practice_recordings[0]
