@@ -66,7 +66,6 @@ export class InteractionLogger {
     this._wheel = null;
     this._timers = [];
     this._installed = false;
-    this._sending = false;
     this.sent = 0;
   }
 
@@ -105,7 +104,7 @@ export class InteractionLogger {
 
   event(type, fields = {}) {
     if (!this.enabled) return;
-    this.queue.push({ t: this.now(), wall: nowLocalIso(), type, ...this.context, ...fields });
+    this.queue.push({ t: this.now(), wall: nowLocalIso(), ...this.context, ...fields, type });
     if (this.queue.length >= 200) this.flush();
   }
 
@@ -123,19 +122,24 @@ export class InteractionLogger {
 
   status(text) { this.event('status_message', { text }); }
 
-  async flush({ final = false } = {}) {
-    if (!this.visitId || !this.backend || !this.queue.length || (this._sending && !final)) return;
-    const batch = this.queue.splice(0, 500);
-    this._sending = true;
-    try {
-      await this.backend.sendEvents(this.visitId, batch, { keepalive: final });
-      this.sent += batch.length;
-    } catch {
-      if (!final) this.queue.unshift(...batch.slice(-(5000 - this.queue.length)));
-    } finally {
-      this._sending = false;
+  /** Send the waiting events, in order (one batch after another). */
+  flush({ final = false } = {}) {
+    this._chain = (this._chain || Promise.resolve()).then(() => this._send(final));
+    return this._chain;
+  }
+
+  async _send(final) {
+    while (this.visitId && this.backend && this.queue.length) {
+      // fetch(keepalive), used while the page closes, carries at most 64 kB: smaller batches then.
+      const batch = this.queue.splice(0, final ? 100 : 500);
+      try {
+        await this.backend.sendEvents(this.visitId, batch, { keepalive: final });
+        this.sent += batch.length;
+      } catch {
+        if (!final) this.queue.unshift(...batch.slice(-(5000 - this.queue.length)));
+        return;
+      }
     }
-    if (this.queue.length && !final) setTimeout(() => this.flush(), 50);
   }
 
   // ------------------------------------------------------------ listeners

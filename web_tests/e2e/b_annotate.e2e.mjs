@@ -125,6 +125,7 @@ export const tests = [
       await waitForRoute(page, 'home');
       assert.match(await page.textContent('table.list'), /Done/);
       // The saved results can be downloaded.
+      await page.evaluate(() => globalThis.ElectroClean.flushLog());
       const doc = await page.evaluate(() => globalThis.ElectroClean.backend.resultsDocument());
       assert.equal(doc.annotation_documents.length, 1);
       assert.equal(doc.annotation_documents[0].n_annotations, before);
@@ -155,6 +156,27 @@ export const tests = [
       await clickDialogButton(page, 'Restore and continue');
       await waitForRoute(page, 'annotate');
       assert.equal((await annotations(page)).length, 1);
+    },
+  },
+  {
+    name: 'an artifact longer than the screen: M, scroll with the arrow keys, M',
+    async run(t) {
+      const { assert } = t;
+      const page = await t.newPage();
+      await signIn(page, 'A01');
+      await waitForRoute(page, 'home');
+      await openExample(page, 2);
+      await page.keyboard.press('4');
+      const p = await eegPoint(page, 8.0, 'Cz');
+      await page.mouse.move(p.x, p.y);
+      await page.keyboard.press('m');
+      await page.keyboard.press('ArrowRight'); // a quarter of a screen later: the pointer now points at 10.5 s
+      await page.keyboard.press('ArrowRight');
+      await page.keyboard.press('m');
+      const [a] = await annotations(page);
+      assert.equal(a.label, 'Movement-artifact');
+      assert.ok(Math.abs(a.onset_sample / 250 - 8.0) < 0.02, `start ${a.onset_sample / 250}`);
+      assert.ok(Math.abs((a.onset_sample + a.duration_samples) / 250 - 13.0) < 0.02, `end ${(a.onset_sample + a.duration_samples) / 250}`);
     },
   },
 ];

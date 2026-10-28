@@ -137,10 +137,10 @@ async function main() {
       const ctx = {
         assert, base, api: `http://127.0.0.1:${apiPort}`, cfgBase: `http://127.0.0.1:${cfgPort}/`, stub: stub.state, cfg: cfg.state,
         shots: shotsDir, errors,
-        async newPage({ width = 1600, height = 950, url = base } = {}) {
-          const context = await browser.newContext({ viewport: { width, height }, acceptDownloads: true, locale: 'en-GB' });
+        async newPage({ width = 1600, height = 950, url = base, scale = 1 } = {}) {
+          const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: scale, acceptDownloads: true, locale: 'en-GB' });
           const page = await context.newPage();
-          page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+          page.on('pageerror', (e) => errors.push(`pageerror: ${(e.stack || e.message).split("\n").slice(0, 4).join(" | ")}`));
           page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource|favicon/.test(m.text())) errors.push(`console: ${m.text()}`); });
           pages.push(context);
           if (url) await page.goto(url);

@@ -682,7 +682,7 @@ function summaryHtml(fb) {
   const extra = fb.flags.filter((f) => f.kind === 'EXTRA').length;
   const type = fb.flags.filter((f) => f.kind === 'TYPE').length;
   return `<p>You found <b>${m.found}</b> of the experts' <b>${m.reference_events}</b> artifacts ` +
-    `(${escapeHtml(pc(m.event_recall))} of them) and marked <b>${m.your_events}</b>.</p>` +
+    `(${escapeHtml(pc(m.reference_events ? m.found / m.reference_events : NaN))} of them) and marked <b>${m.your_events}</b>.</p>` +
     '<table><tr><th>Finding the artifacts (F1)</th><td>' + escapeHtml(pc(m.event_f1)) + '</td></tr>' +
     '<tr><th>Right type, of those found</th><td>' + escapeHtml(pc(m.label_accuracy)) + '</td></tr>' +
     `<tr><th>Missed</th><td>${missed}</td></tr><tr><th>Extra</th><td>${extra}</td></tr>` +

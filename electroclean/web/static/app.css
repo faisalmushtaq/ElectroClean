@@ -266,8 +266,10 @@ ul.examples li { display: flex; align-items: center; justify-content: space-betw
 .ws-main { display: flex; min-height: 0; min-width: 0; }
 .ws-eeg { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 8px 0 6px 8px; }
 .ws-side {
-  width: 400px; flex: none; display: flex; flex-direction: column; gap: 10px; padding: 8px 10px; overflow-y: auto; min-height: 0;
+  width: 400px; flex: none; display: flex; flex-direction: column; gap: 10px; padding: 8px 10px; overflow: hidden; min-height: 0;
 }
+.coach-host, .review-host { display: flex; flex-direction: column; min-height: 0; flex: 0 1 auto; max-height: 60%; }
+.coach-host:empty, .review-host:empty { display: none; }
 .ws-status {
   display: flex; justify-content: space-between; gap: 12px; padding: 4px 12px; background: var(--surface); border-top: 1px solid var(--separator);
   font-size: 12px; color: var(--text-secondary); white-space: nowrap; min-width: 0; height: 28px; align-items: center;
@@ -285,7 +287,7 @@ ul.examples li { display: flex; align-items: center; justify-content: space-betw
 .viewer-overview { display: block; width: calc(100% - 16px); height: 34px; margin: 4px 8px 8px; cursor: pointer; border-radius: 4px; }
 
 /* side panel */
-.side-tabs { background: var(--surface); border: 1px solid var(--separator); border-radius: var(--radius-card); display: flex; flex-direction: column; min-height: 320px; flex: 1; }
+.side-tabs { background: var(--surface); border: 1px solid var(--separator); border-radius: var(--radius-card); display: flex; flex-direction: column; min-height: 200px; flex: 1 1 0; }
 .tabs { display: flex; border-bottom: 1px solid var(--separator); padding: 0 8px; flex: none; }
 .tab {
   border: none; background: none; padding: 10px 10px 8px; font: 500 13px var(--font); color: var(--text-secondary); cursor: pointer;
@@ -295,6 +297,8 @@ ul.examples li { display: flex; align-items: center; justify-content: space-betw
 .tab-panel { padding: 10px 12px; overflow: auto; flex: 1; min-height: 0; }
 .count { margin-bottom: 6px; }
 .table-wrap { max-height: 320px; overflow: auto; border: 1px solid var(--separator); border-radius: 6px; }
+.tab-panel[data-panel="annotations"] { display: flex; flex-direction: column; }
+.tab-panel[data-panel="annotations"] .table-wrap { max-height: none; flex: 0 1 auto; min-height: 60px; }
 .ann-table { width: 100%; border-collapse: collapse; font-size: 12.5px; table-layout: fixed; }
 .ann-table th { position: sticky; top: 0; background: var(--surface-alt); text-align: left; font-weight: 600; color: var(--text-secondary); padding: 5px 6px; border-bottom: 1px solid var(--separator); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ann-table th:nth-child(1) { width: 34%; }
@@ -324,7 +328,7 @@ ul.warnings { font-size: 12.5px; }
 .help-text table.keys td:first-child { white-space: nowrap; }
 
 /* the coach and the practice review */
-.coach { display: flex; flex-direction: column; padding: 0; flex: none; max-height: 58%; min-height: 0; }
+.coach { display: flex; flex-direction: column; padding: 0; min-height: 0; max-height: 100%; }
 .coach-scroll { padding: 14px 16px 6px; overflow-y: auto; min-height: 0; }
 .coach-header { margin: 0 0 4px; }
 .coach-title { font-size: 17px; margin: 4px 0 10px; }
@@ -335,7 +339,7 @@ ul.warnings { font-size: 12.5px; }
 .coach-body { color: var(--text-secondary); }
 .coach-note { font-size: 13px; }
 .coach-buttons { display: flex; justify-content: space-between; padding: 8px 16px 14px; border-top: 1px solid var(--separator); }
-.review { flex: none; }
+.review { overflow-y: auto; min-height: 0; padding: 16px; }
 .review .verdict.passed { color: var(--success); }
 .review .verdict.not-yet { color: var(--warning-text); }
 .review .summary table { border-collapse: collapse; font-size: 13px; margin: 6px 0 10px; }
@@ -413,6 +417,9 @@ ul.warnings { font-size: 12.5px; }
 }
 @media (max-width: 1440px) {
   .ws-side { width: 360px; }
+  .ann-table .code { display: none; }
+  .ann-table th:nth-child(1) { width: 40%; }
+  .ann-table th:nth-child(3), .ann-table th:nth-child(4) { width: 18%; }
 }
 @media (max-width: 1100px) {
   .home-grid { grid-template-columns: minmax(0, 1fr); }

@@ -57,7 +57,7 @@ export function homeView(app) {
         h('button.btn.small', { type: 'button', 'data-log': `example-${ex.id}`, onclick: () => app.useExample(ex.recording_id) }, 'Use this example')))),
       h('div.btn-row', {},
         h('button.btn.quiet', { type: 'button', onclick: async () => app.download(await b.downloadRecordings()) }, 'Download the example recordings (EDF)'),
-        h('button.btn.quiet', { type: 'button', onclick: async () => app.download(await b.downloadResults()) }, 'Download my results'),
+        h('button.btn.quiet', { type: 'button', onclick: () => app.downloadResults() }, 'Download my results'),
         h('button.btn.quiet.destructive-text', { type: 'button', onclick: async () => {
           if (await ask('Reset the demonstration?', 'Forget every annotation, draft and training result saved by the demonstration in this browser?', { yes: 'Reset', no: 'Cancel', defaultYes: false, destructive: true })) {
             b.reset();

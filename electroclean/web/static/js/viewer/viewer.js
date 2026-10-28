@@ -8,9 +8,9 @@
 // `onPointer`; navigation (wheel, overview) is handled here.
 
 import { h } from '../ui/dom.js';
-import { clamp, legibleOnWhite, rgba } from '../util.js';
+import { clamp, hexToRgb, legibleOnWhite, rgba } from '../util.js';
 import { COLOURS, FONT } from '../ui/theme.js';
-import { CHANNEL_COUNTS, DURATIONS, columnMinMax, layoutTags, meanOf, niceStep, stepOption, tickLabel, voltsText } from './geometry.js';
+import { CHANNEL_COUNTS, DURATIONS, decimateColumns, layoutTags, meanOf, niceStep, stepOption, tickLabel, voltsText } from './geometry.js';
 
 const GUTTER = 92;
 const TAG_ROW_H = 20;
@@ -288,7 +288,7 @@ export class EegViewer {
       if (token !== this._token) return;
       this.stats.readMs = performance.now() - t;
       const rows = new Map(want.map((ci, k) => [ci, res.data[k]]));
-      this._cache = { startSample: res.startSample, nSamples: res.nSamples, rows, filtersKey: this._filtersKey() };
+      this._cache = { id: (this._cacheId = (this._cacheId || 0) + 1), startSample: res.startSample, nSamples: res.nSamples, rows, filtersKey: this._filtersKey() };
       this.edgeZones = res.edgeZones || [];
       this._loading = false;
       this.invalidate(['under', 'traces']);
@@ -306,10 +306,13 @@ export class EegViewer {
     const d = this._dirty;
     this._dirty = { under: false, traces: false, over: false, overview: false };
     if (d.traces && !this._covers()) this._load();
-    if (d.under) this._renderUnder();
-    if (d.traces) this._renderTraces();
-    if (d.over) this._renderOver();
-    if (d.overview) this._renderOverview();
+    const ms = {};
+    const timed = (name, fn) => { const t0 = performance.now(); fn(); ms[name] = Math.round((performance.now() - t0) * 10) / 10; };
+    if (d.under) timed('under', () => this._renderUnder());
+    if (d.traces) timed('traces', () => this._renderTraces());
+    if (d.over) timed('over', () => this._renderOver());
+    if (d.overview) timed('overview', () => this._renderOverview());
+    this.stats.layers = ms;
     this.stats.renders += 1;
   }
 
@@ -483,32 +486,49 @@ export class EegViewer {
     }
     const sf = this.sfreq;
     const dpr = this.dpr;
-    const cols = Math.max(1, Math.round(this.plotW * dpr));
+    const cols = Math.max(1, Math.round(this.plotW)); // one column per CSS pixel
     const sStart = this.view.startS * sf;
     const span = this.view.durationS * sf;
-    const spp = span / cols;
+    const dense = span / cols > 1.5;
     const rowH = this.rowH;
     const half = rowH / 2;
+    const lim = rowH * CLIP;
+    // Dense views (several samples per pixel column) are drawn straight into the pixels: for each
+    // column a vertical stroke from the minimum to the maximum, joined to the previous column.
+    // Sparse views are drawn as lines through every sample.
+    let buf = null;
+    let W = 0;
+    if (dense) {
+      W = this.traces.width;
+      const H = this.traces.height;
+      if (!this._img || this._img.width !== W || this._img.height !== H) this._img = new ImageData(W, H);
+      buf = new Uint32Array(this._img.data.buffer);
+      buf.fill(0);
+    }
+    const top = Math.ceil(y0 * dpr);
+    const bottom = Math.floor(y1 * dpr) - 1;
+    const thick = Math.max(1, Math.round(dpr));
+    const colX = new Int32Array(cols + 1);
+    for (let col = 0; col <= cols; col++) colX[col] = Math.round((x0 + col) * dpr);
     const groups = new Map();
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(x0, y0 - 1, x1 - x0, y1 - y0 + 2);
-    ctx.clip();
+    let decimate = 0;
+    const grid = span / cols; // samples per column
+    const g0 = Math.round(sStart / grid);
+    const decimated = new Map();
     for (const { row, ch } of this.visibleRows()) {
       const data = c.rows.get(ch.index);
       if (!data) continue;
       const scaling = this.scalings[ch.type] || this.scalings.misc || 1e-3;
       const k = (half / scaling) * this.view.scaleFactor;
       const yc = this.rowCentre(row);
-      const lim = rowH * CLIP;
-      const a = Math.floor(sStart) - c.startSample;
-      const offset = meanOf(data, a, a + Math.ceil(span));
       const colour = this.channelsActive && this.selectedChannels.has(ch.name) ? COLOURS.selection_channel
         : ch.bad ? COLOURS.trace_bad : ch.type === 'ecg' ? COLOURS.trace_ecg : COLOURS.trace;
-      let path = groups.get(colour);
-      if (!path) { path = new Path2D(); groups.set(colour, path); }
-      const yOf = (v) => { const y = (v - offset) * k; return yc - (y > lim ? lim : y < -lim ? -lim : y); };
-      if (spp <= 1.5) {
+      if (!dense) {
+        const a = Math.floor(sStart) - c.startSample;
+        const offset = meanOf(data, a, a + Math.ceil(span));
+        const yOf = (v) => { const y = (v - offset) * k; return yc - (y > lim ? lim : y < -lim ? -lim : y); };
+        let path = groups.get(colour);
+        if (!path) { path = new Path2D(); groups.set(colour, path); }
         const sA = Math.max(c.startSample, Math.floor(sStart) - 1);
         const sB = Math.min(c.startSample + c.nSamples, Math.ceil(sStart + span) + 2);
         let first = true;
@@ -518,29 +538,66 @@ export class EegViewer {
           if (first) { path.moveTo(x, y); first = false; } else path.lineTo(x, y);
         }
         this._cols.set(row, null);
-      } else {
-        const { min, max } = columnMinMax(data, c.startSample, sStart, span, cols);
-        this._cols.set(row, { min, max, offset, k, yc, lim });
-        let started = false;
-        for (let col = 0; col < cols; col++) {
-          const lo = min[col];
-          if (Number.isNaN(lo)) { started = false; continue; }
-          const x = x0 + (col + 0.5) / dpr;
-          const ya = yOf(lo);
-          const yb = yOf(max[col]);
-          const [p, q] = col & 1 ? [yb, ya] : [ya, yb];
-          if (!started) { path.moveTo(x, p); started = true; } else path.lineTo(x, p);
-          path.lineTo(x, q + (Math.abs(q - p) < 0.5 ? 0.5 : 0));
+        continue;
+      }
+      const td = performance.now();
+      const prev = this._decimated && this._decimated.dataId === c.id ? this._decimated.rows.get(ch.index) : null;
+      const d = decimateColumns(data, c.startSample, grid, g0, cols, prev);
+      decimated.set(ch.index, d);
+      let total = 0;
+      let count = 0;
+      for (let col = 0; col < cols; col++) { total += d.sum[col]; count += d.cnt[col]; }
+      const offset = count ? total / count : 0;
+      decimate += performance.now() - td;
+      const { min, max } = d;
+      const yOf = (v) => { const y = (v - offset) * k; return yc - (y > lim ? lim : y < -lim ? -lim : y); };
+      this._cols.set(row, { min, max, offset, k, yc, lim });
+      const [r, g, b] = hexToRgb(colour);
+      const px = ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
+      let prevLo = -1;
+      let prevHi = -1;
+      for (let col = 0; col < cols; col++) {
+        const lo0 = min[col];
+        if (lo0 !== lo0) { prevLo = -1; continue; } // NaN: no data
+        let lo = Math.round(yOf(max[col]) * dpr);
+        let hi = Math.round(yOf(lo0) * dpr) + thick - 1;
+        const ownLo = lo;
+        const ownHi = hi;
+        if (prevLo >= 0) {
+          if (lo > prevHi) lo = prevHi;
+          if (hi < prevLo) hi = prevLo;
+        }
+        prevLo = ownLo;
+        prevHi = ownHi;
+        if (lo < top) lo = top;
+        if (hi > bottom) hi = bottom;
+        const xa = colX[col];
+        const xb = Math.max(colX[col + 1], xa + 1);
+        for (let y = lo; y <= hi; y++) {
+          const base = y * W;
+          for (let x = xa; x < xb; x++) buf[base + x] = px;
         }
       }
     }
-    ctx.lineWidth = rowH < 6 ? 0.6 : 1;
-    ctx.lineJoin = 'round';
-    for (const [colour, path] of groups) {
-      ctx.strokeStyle = colour;
-      ctx.stroke(path);
+    if (dense) this._decimated = { dataId: c.id, rows: decimated };
+    this.stats.decimateMs = decimate;
+    if (dense) {
+      const tp = performance.now();
+      ctx.putImageData(this._img, 0, 0);
+      this.stats.putMs = performance.now() - tp;
+    } else {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(x0, y0 - 1, x1 - x0, y1 - y0 + 2);
+      ctx.clip();
+      ctx.lineWidth = rowH < 6 ? 0.6 : 1;
+      ctx.lineJoin = 'round';
+      for (const [colour, path] of groups) {
+        ctx.strokeStyle = colour;
+        ctx.stroke(path);
+      }
+      ctx.restore();
     }
-    ctx.restore();
     this.stats.traceMs = performance.now() - t;
   }
 
@@ -775,12 +832,12 @@ export class EegViewer {
     if (row === null) return false;
     const c = this._cols.get(row);
     if (!c) return Math.abs(y - this.rowCentre(row)) < Math.max(6, this.rowH / 3);
-    const col = Math.floor((x - this.x0) * this.dpr);
+    const col = Math.floor(x - this.x0);
     let lo = Infinity; let hi = -Infinity;
     for (let k = Math.max(0, col - 3); k <= Math.min(c.min.length - 1, col + 3); k++) {
       if (Number.isNaN(c.min[k])) continue;
       const ya = c.yc - clamp((c.min[k] - c.offset) * c.k, -c.lim, c.lim);
-      const yb = c.yc - clamp((c.max[k] - c.offset) * c.k, -c.lim, c.lim);
+      const yb = c.yc - clamp((c.max[k] - c.offset) * c.k, -c.lim, c.lim); // CSS pixels
       lo = Math.min(lo, ya, yb); hi = Math.max(hi, ya, yb);
     }
     return y >= lo - 5 && y <= hi + 5;

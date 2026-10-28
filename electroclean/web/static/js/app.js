@@ -272,6 +272,14 @@ export class App {
 
   download(files) { downloadFiles(files); }
 
+  /** Send the interaction events still waiting (the demonstration's results include them). */
+  async flushLog() { await logger.flush(); }
+
+  async downloadResults() {
+    await this.flushLog();
+    this.download(await this.backend.downloadResults());
+  }
+
   // ============================================================ opening recordings
   openAssignment(item) {
     this.openFromComputer(item);
@@ -412,7 +420,7 @@ export class App {
     if (s.mode === 'practice' && result.feedback) {
       logger.event('practice_scored', { recording: s.recordingId, event_f1: result.feedback.metrics.event_f1, label_accuracy: result.feedback.metrics.label_accuracy,
         passed: result.feedback.passed, missed: result.feedback.flags.filter((f) => f.kind === 'MISSED').length,
-        extra: result.feedback.flags.filter((f) => f.kind === 'EXTRA').length, type: result.feedback.flags.filter((f) => f.kind === 'TYPE').length });
+        extra: result.feedback.flags.filter((f) => f.kind === 'EXTRA').length, other_type: result.feedback.flags.filter((f) => f.kind === 'TYPE').length });
       this.openReview(s, result.feedback);
       return;
     }

@@ -53,7 +53,8 @@ export class GuidedCoach {
     this.starsEl = h('p.caption.coach-stars');
     this.showMeBtn = h('button.btn.quiet', { type: 'button', title: "Place the experts' annotation for you (this step then earns one star)", onclick: () => this.showMe() }, 'Show me');
     this.continueBtn = h('button.btn.primary', { type: 'button', title: 'Go on to the next artifact (Enter or Space)', disabled: true, onclick: () => this.continue() }, 'Continue');
-    for (const b of [this.showMeBtn, this.continueBtn]) b.tabIndex = -1;
+    // Like the desktop's NoFocus buttons: Space and Enter stay the window's own keys.
+    for (const b of [this.showMeBtn, this.continueBtn]) { b.tabIndex = -1; b.addEventListener('mousedown', (e) => e.preventDefault()); }
     this.el = h('section.coach.card', { 'aria-label': 'Learn with the experts' },
       h('div.coach-scroll', {}, this.header, this.progress, this.title, this.feedback, this.body, this.description, this.note, this.starsEl,
         this.backend.isDemo ? h('p.caption.demo-note', {}, DEMO_NOTICE) : null),

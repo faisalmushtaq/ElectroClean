@@ -54,7 +54,7 @@ export class Workspace {
     this.selection = [];
     this.drawing = !this.readOnly;
     this.markStart = null;
-    this.pointerT = null;
+    this.pointerXY = null;
     this.gesture = null;
     this.listAnchor = null;
     this.coach = null;
@@ -142,6 +142,7 @@ export class Workspace {
         style: { '--chip-colour': l.colour, '--chip-text': readableTextColour(l.colour) },
       }, h('span.swatch', { style: { background: l.colour } }), h('span.chip-key', {}, String(i + 1)), h('span.chip-code', {}, l.short_code));
       b.tabIndex = -1;
+      b.addEventListener('mousedown', (e) => e.preventDefault()); // keys stay with the EEG, as the desktop's NoFocus
       return b;
     });
     this.typeMenuBtn = h('button.btn.type-menu', { type: 'button', 'aria-haspopup': 'menu',
@@ -150,7 +151,7 @@ export class Workspace {
     this.typeMenuBtn.tabIndex = -1;
     this.scopeWhole = h('button.seg', { type: 'button', title: 'The next drag marks every channel', onclick: () => this.setScope('whole') }, 'Whole montage');
     this.scopeSome = h('button.seg', { type: 'button', title: 'The next drag marks only the selected channels (click channel names to select them)', onclick: () => this.setScope('channels') }, 'Selected channels');
-    for (const b of [this.scopeWhole, this.scopeSome]) b.tabIndex = -1;
+    for (const b of [this.scopeWhole, this.scopeSome]) { b.tabIndex = -1; b.addEventListener('mousedown', (e) => e.preventDefault()); }
     this.chooseBtn = h('button.btn.quiet', { type: 'button', title: 'Choose the channels from a list', onclick: () => this.chooseChannelsForNew() }, 'Channels…');
     this.chanSummary = h('span.ws-chansummary');
     this.toolbar = h('div.ws-toolbar', { role: 'toolbar', 'aria-label': 'Artifact annotation' },
@@ -164,6 +165,7 @@ export class Workspace {
   _fitToolbar() {
     // The type buttons show their code when there is room, otherwise only their number.
     const tb = this.toolbar;
+    if (!tb) return;
     tb.classList.remove('compact');
     if (tb.scrollWidth > tb.clientWidth + 1) tb.classList.add('compact');
   }
@@ -175,10 +177,9 @@ export class Workspace {
     this.msgEl = h('span.ws-message', { role: 'status', 'aria-live': 'polite' });
     this.fixedEl = h('span.ws-fixed');
     this.countEl = h('span.ws-fixed');
-    this.clockEl = h('span.ws-fixed');
     this._fixedText = `Annotator: ${who}   |   Mode: ${MODE_TEXT[this.kind === 'annotate' ? s.mode : this.kind] || s.mode}`;
     return h('footer.ws-status', {}, h('div.ws-status-left', {}, this.hintEl, this.msgEl),
-      h('div.ws-status-right', {}, this.fixedEl, this.countEl, this.clockEl));
+      h('div.ws-status-right', {}, this.fixedEl, this.countEl));
   }
 
   _sidePanel() {
@@ -216,7 +217,7 @@ export class Workspace {
     this.countLabel = h('p.caption.count');
     this.tbody = h('tbody');
     this.table = h('table.ann-table', { 'aria-label': 'Annotations' },
-      h('thead', {}, h('tr', {}, h('th', {}, 'Label'), h('th', {}, 'Code'), h('th.num', {}, 'Start (s)'), h('th.num', {}, 'End (s)'), h('th', {}, 'Channels'))),
+      h('thead', {}, h('tr', {}, h('th', {}, 'Label'), h('th.code', {}, 'Code'), h('th.num', {}, 'Start (s)'), h('th.num', {}, 'End (s)'), h('th', {}, 'Channels'))),
       this.tbody);
     this.tableWrap = h('div.table-wrap', {}, this.table);
     const btn = (label, fn, cls = '') => h(`button.btn${cls}`, { type: 'button', onclick: fn }, label);
@@ -354,7 +355,6 @@ export class Workspace {
   _tick() {
     const t = formatHms(this.s.elapsedS);
     if (this.clockLabel) this.clockLabel.textContent = `Time on this recording: ${t}`;
-    this.clockEl.textContent = `   |   ${t}`;
     if (this.s.canSave && !this.s.finished) {
       this.s.saveRemote().then((sent) => { if (sent) logger.event('autosave', { n_annotations: this.store.size }); });
     }
@@ -514,7 +514,7 @@ export class Workspace {
         ondblclick: () => this.jumpTo(a.annotation_id),
       },
       h('td.label', {}, h('span.swatch', { style: { background: l.colour } }), h('span', { style: { color: this.labelColours?.[a.annotation_id] || null } }, prefix + a.label)),
-      h('td', {}, String(l.value)),
+      h('td.code', {}, String(l.value)),
       h('td.num', { title: `${(a.onset_sample / this.sf).toFixed(3)} to ${(endSample(a) / this.sf).toFixed(3)} s, duration ${(a.duration_samples / this.sf).toFixed(3)} s` }, (a.onset_sample / this.sf).toFixed(3)),
       h('td.num', {}, (endSample(a) / this.sf).toFixed(3)),
       h('td.chans', { title: a.channels.length ? a.channels.join(', ') : 'Whole montage' }, channelsText(a.channels)));
@@ -855,7 +855,9 @@ export class Workspace {
 
   // ====================================================================== marks
   markKey(kind) {
-    const t = this.pointerT;
+    // The time under the pointer now (the EEG may have scrolled since the pointer last moved).
+    const p = this.pointerXY ? this.viewer.hit(this.pointerXY.x, this.pointerXY.y) : null;
+    const t = p && p.area === 'eeg' ? p.t : null;
     if (t === null) {
       const where = kind === 'end' || (kind === 'toggle' && this.markStart !== null) ? 'ends' : 'starts';
       const key = { start: '[', end: ']' }[kind] || 'M';
@@ -906,7 +908,7 @@ export class Workspace {
 
   // ====================================================================== mouse
   _pointer(type, info, e) {
-    if (type === 'pointermove' || type === 'pointerleave') this.pointerT = info && info.area === 'eeg' ? info.t : null;
+    if (type === 'pointermove' || type === 'pointerleave') this.pointerXY = info && info.area === 'eeg' ? { x: e.clientX, y: e.clientY } : null;
     const g = this.gesture;
     if (type === 'contextmenu') {
       e.preventDefault();
@@ -1044,6 +1046,8 @@ export class Workspace {
     if (dialogOpen() || isTyping(e.target) || !this.el.isConnected) return;
     const mod = e.ctrlKey || e.metaKey;
     const k = e.key;
+    // Arrow keys on an option button or tab belong to that control.
+    if (/^Arrow/.test(k) && e.target instanceof HTMLElement && e.target.matches('input, [role="tab"]')) return;
     const handled = (action, fn) => {
       e.preventDefault();
       if (action) logger.shortcut(keyName(e), action);

@@ -1,0 +1,162 @@
+# Using ElectroClean in the browser
+
+This guide is for annotators. ElectroClean in the browser works like the desktop application: you
+open an EEG recording, mark the artifacts you see with their type, and press Save and Finish. The
+difference is where things happen. The recording stays on your own computer and is read by the web
+page itself, so the EEG is never uploaded; only your annotations, and a record of how you used the
+tools if your study asks for one, go to the study.
+
+## Opening ElectroClean
+
+Your study team sends you a link. Opening it shows the sign-in page of your study, with the study's
+name under the heading. If the page says "Demonstration" instead, you are in the demonstration,
+which needs no account and keeps everything in your browser (see the last section). If you were
+given a study address rather than a link, choose "Taking part in a study? Enter its address" on the
+sign-in page, type the address and choose Connect; the browser remembers it next time.
+
+ElectroClean needs a computer: a window at least 900 pixels wide, a mouse or trackpad and a
+keyboard. On a phone you can sign in, and the page then asks you to continue on a computer.
+
+## Signing in
+
+Depending on how your study is run, you sign in with your annotator ID or with your email address,
+and the password your study team gave you. Studies that use email addresses offer "Forgot
+password?", which sends you a link to choose a new password. You stay signed in until you sign out
+or close the browser tab. If your sign-in ends while you are working (after a long break, for
+example), the page asks you to sign in again; your unsaved annotations are kept in the browser and
+are offered to you when you open the recording again.
+
+When a study records how its annotators use ElectroClean, a short notice says so after you sign in.
+The record contains clicks, key presses and what is on the screen, never anything you type.
+
+## Your recordings
+
+The first page lists the recordings assigned to you, with their status (to do, in progress or done),
+and one blue button, Open next recording, for the one to do next. Annotators in a training
+programme go straight to their training path instead (see below).
+
+## Opening a recording
+
+ElectroClean asks you to choose the recording on your computer. Choose the file (an EDF or BDF
+file), drop it onto the page, or choose the folder that holds it. For a BrainVision recording
+choose its three files together (the .vhdr, .vmrk and .eeg), or their folder.
+
+The page then reads the file and works out its fingerprint, a checksum of its contents, which takes
+a few seconds for a large file and shows its progress. The fingerprint is what is sent to the study
+to recognise the recording; the EEG itself is not. The study's answer appears in plain words. When
+the file is the study's copy of one of your recordings, the recording opens. When the file has the
+right name, sampling rate, length and channels but its contents differ from the study's copy (it
+may have been converted or re-saved), ElectroClean explains the difference and lets you choose
+between opening it anyway and choosing the study's copy; ask your study team if you are not sure.
+A file that is not part of the study can still be looked at in try-out mode, which is clearly
+labelled and saves nothing. A recording of the study that is not yours at the moment, or one you
+have already finished, is not opened, and the page says which of the two it is.
+
+If you worked on the recording before without finishing it, ElectroClean offers to restore your
+unfinished work, with the number of annotations and the time spent. Choose Restore and continue, or
+Start afresh to begin again.
+
+## The annotation view
+
+The EEG fills most of the window, one channel per row with its name on the left, the time along the
+bottom and a scale bar for each type of channel on the right. Above the traces is a band for the
+labels of your annotations. Dashed teal lines are the original events of the experiment, which
+cannot be changed. Hatched grey stretches mark where the display filters may distort the signal (at
+the start and end of the recording and around interruptions) and where the recording has no data.
+Below the EEG, the overview bar shows the whole recording with your annotations and the part on
+screen; click it to go anywhere.
+
+Two rows of controls sit above the EEG. The first has Draw/edit, Delete, Undo, Redo, Help and Save
+and Finish. The second chooses what you mark next: the numbered type buttons and the menu of all
+types after "Draw as", then Whole montage or Selected channels. On the right, the Annotations tab
+lists everything you have marked, the Recording tab shows the time you have spent, the viewing
+options and details of the recording, and the Help tab lists every key. The line at the bottom
+reminds you of the main keys and shows what each action did.
+
+## Marking an artifact
+
+First choose the type: press a number key from 1 to 9, click one of the numbered buttons, or choose
+from the menu next to them. Press / to search all 29 types by part of their name or by their code
+(for example "blink" or "103") and press Enter. Then choose whether the artifact affects the whole
+montage or only some channels, with the switch in the second row or the key C. For selected
+channels, click their names (or their traces); they turn magenta. Channels… opens a list to choose
+from instead.
+
+Then drag across the EEG from the start of the artifact to its end. With the keyboard, point at the
+start and press M, then point at the end and press M again. You can scroll in between, which is the
+easy way to mark an artifact longer than the screen. The keys [ and ] mark the start and the end
+separately, and Esc cancels a started mark. You can also draw first and choose the type afterwards:
+click the new annotation and press a number, or double-click it to choose any type.
+
+## Changing annotations
+
+Click an annotation to select it, or pick it in the Annotations list. While annotations are
+selected the second row reads "Change to", and a number key, a type button or the menu changes their
+type. Esc, a click on empty EEG or a new drag ends the selection, and the row reads "Draw as" again.
+N and P select the next and previous annotation and bring it into view.
+
+Drag an edge of an annotation to make it longer or shorter, and hold Shift while dragging its middle
+to move it. Shift+click a channel inside an annotation to add that channel to it or take it out.
+Right-click an annotation for the common types, Edit channels…, Apply to whole montage and Delete.
+Delete or Backspace removes the selected annotation, Ctrl+Z undoes and Ctrl+Y redoes (⌘ instead of
+Ctrl on a Mac). When two annotations of the same type on the same channels overlap, they become one
+automatically. In the Annotations list you can also edit the start and end times exactly, change the
+label of several annotations at once, and merge annotations of one type.
+
+## Moving around the recording
+
+The arrow keys ← and → scroll back and forward through time (with Shift, a whole screen), and ↑
+and ↓ scroll through the channels. Home and End show less or more time, Page Up and Page Down show
+fewer or more channels, and − and + make the traces smaller or larger. The mouse wheel or a
+trackpad scrolls through time, and with Shift through the channels. On a Mac keyboard without
+Home, End and Page keys, use fn with the arrow keys.
+
+The Recording tab holds the viewing options: the 1 Hz high-pass filter and the notch filter for
+mains interference (50 Hz in the UK and Europe, 60 Hz in North America). They change only what you
+see; the file is never changed. Some studies fix these settings, and the tab then says so.
+
+## Saving
+
+Press Save and Finish when you have looked through the whole recording. ElectroClean shows how many
+annotations of each type you are saving and asks you to confirm; once saved, the recording is
+complete and cannot be changed. If you marked nothing, it asks whether to save the recording as
+reviewed with no artifacts found. After saving, it offers the next recording.
+
+Your work is saved as a draft while you annotate, in the browser and with the study, so closing the
+page by accident loses nothing. ‹ Close asks whether to close and finish later, which keeps your
+annotations and time, or to discard them.
+
+## The training programme
+
+Trainees see their training path: three stages, each with its progress, and one button to continue.
+In the first stage, Learn with the experts, a coach on the right takes you through the experts'
+annotations of a recording one at a time. In the first recording the experts' annotation is outlined
+with a dashed line for you to copy; in the next you find each artifact on the screen yourself. The
+coach checks your work after every change and says what to put right (the type, the start, the end
+or the channels). When your annotation matches, press Continue (or Enter). Show me places the
+experts' annotation for you. Each artifact you match yourself earns up to three stars, fewer after
+several tries, and one when you used Show me. Save and Finish becomes available once every artifact
+matches.
+
+In the second stage, On your own, you annotate a practice recording without help. After you save
+it, ElectroClean shows your score, whether you reached the pass mark, and your annotations next to
+the experts', with every disagreement labelled on the EEG: MISSED for an artifact you did not mark,
+EXTRA for one the experts did not mark, and TYPE for one you gave another type. The list "What to
+look at" takes you to each of them, and N and P step through it.
+
+## The demonstration
+
+Without a study, ElectroClean runs as a demonstration in the browser. Sign in as A01 to annotate or
+as T01 to follow the training programme; the password is demo. Three example recordings with
+simulated artifacts are built in: use one straight away, or download them as EDF files and open
+them from your computer to try that way too. Your results stay in your browser; Download my results
+saves them as a file, and Reset the demonstration forgets them. Wherever the demonstration does what
+a study's server would do (checking guided steps, scoring practice, storing results), the page says
+so.
+
+## If something goes wrong
+
+If the page says the study does not answer, check your internet connection and try again; if it
+keeps happening, tell your study team. If a file is not recognised although it should be, make sure
+you chose the study's copy of the recording and, for BrainVision, all three of its files. If your
+sign-in has ended, sign in again: your unsaved work is still in the browser.

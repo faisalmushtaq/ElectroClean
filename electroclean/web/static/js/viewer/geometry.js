@@ -48,6 +48,47 @@ export function columnMinMax(data, dataStart, s0, span, columns) {
   return { min, max };
 }
 
+/**
+ * Min, max and sum of `data` (from absolute sample `dataStart`) for `cols` columns of a fixed grid:
+ * column g covers samples [floor(g * grid), floor((g + 1) * grid)). Columns already worked out in
+ * `prev` (the same grid, the same data) are copied, so scrolling only works out the new ones.
+ */
+export function decimateColumns(data, dataStart, grid, g0, cols, prev = null) {
+  const min = new Float32Array(cols);
+  const max = new Float32Array(cols);
+  const sum = new Float64Array(cols);
+  const cnt = new Int32Array(cols);
+  const n = data.length;
+  const usable = prev && prev.grid === grid ? prev : null;
+  for (let col = 0; col < cols; col++) {
+    const g = g0 + col;
+    if (usable) {
+      const j = g - usable.g0;
+      if (j >= 0 && j < usable.n && usable.cnt[j] > 0) {
+        min[col] = usable.min[j]; max[col] = usable.max[j]; sum[col] = usable.sum[j]; cnt[col] = usable.cnt[j];
+        continue;
+      }
+    }
+    let a = Math.floor(g * grid) - dataStart;
+    let b = Math.floor((g + 1) * grid) - dataStart;
+    if (b <= a) b = a + 1;
+    if (a < 0) a = 0;
+    if (b > n) b = n;
+    if (a >= b) { min[col] = NaN; max[col] = NaN; continue; }
+    let lo = data[a];
+    let hi = lo;
+    let s = lo;
+    for (let k = a + 1; k < b; k++) {
+      const v = data[k];
+      s += v;
+      lo = v < lo ? v : lo;
+      hi = v > hi ? v : hi;
+    }
+    min[col] = lo; max[col] = hi; sum[col] = s; cnt[col] = b - a;
+  }
+  return { grid, g0, n: cols, min, max, sum, cnt };
+}
+
 /** Mean of data over [a, b) (indices), for removing the offset of each trace. */
 export function meanOf(data, a, b) {
   a = Math.max(0, a); b = Math.min(data.length, b);
@@ -79,9 +120,9 @@ export const DURATIONS = [1, 2, 3, 5, 10, 15, 20, 30, 60, 120];
 export const CHANNEL_COUNTS = [1, 2, 4, 8, 12, 16, 20, 24, 32, 48, 64, 96, 128, 192, 256];
 
 export function stepOption(options, current, dir, max = Infinity) {
-  const list = options.filter((v) => v <= max);
-  if (!list.length) return current;
-  if (dir > 0) return list.find((v) => v > current + 1e-9) ?? Math.min(max, list[list.length - 1]);
+  // The largest choice is everything there is (all the channels, the whole recording).
+  const list = Number.isFinite(max) ? [...options.filter((v) => v < max), max] : [...options];
+  if (dir > 0) return list.find((v) => v > current + 1e-9) ?? list[list.length - 1];
   const smaller = list.filter((v) => v < current - 1e-9);
   return smaller.length ? smaller[smaller.length - 1] : list[0];
 }
