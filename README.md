@@ -69,7 +69,7 @@ python -m venv .venv
 source .venv/bin/activate            # Windows: .venv\Scripts\activate
 python -m pip install -r requirements-dev.txt
 python -m pip install --no-deps -e .
-python -m pytest                     # about 250 tests, under two minutes
+python -m pytest                     # about 370 tests, a few minutes
 electroclean                         # start the application
 ```
 
@@ -188,6 +188,7 @@ whether annotators got faster. See [interaction logs](docs/activity_logs.md).
 | [HED-SCORE validation](docs/hed_score_validation.md) | Check of the 29 artifact terms against HED SCORE 2.2.0 |
 | [Building the applications](docs/building_apps.md) | Stand-alone applications for Windows, macOS and Linux |
 | [References](docs/references.md) | Literature cited in the documentation |
+| [Handover notes](HANDOVER.md) | Where the project stands, what is open, and how to carry on |
 
 ## Repository layout
 
@@ -195,7 +196,8 @@ whether annotators got faster. See [interaction logs](docs/activity_logs.md).
 electroclean/
     app/            Component A: annotations, eeg, io, session, validation (no Qt) and gui (PySide6)
     reliability/    Component B
-    training/       Component C
+    training/       Component C, including the guided training programme
+    activity/       interaction logs turned into tables and learning curves
     config/         label catalogue, default settings, HED-SCORE validation snapshot
     synthetic.py    synthetic BrainVision, EDF and BDF data with known artifacts
 tests/              pytest suite (unit, integration and offscreen GUI tests)
