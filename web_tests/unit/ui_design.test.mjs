@@ -65,15 +65,17 @@ test('text meets WCAG 2.1 AA on the backgrounds it is shown on', () => {
     assert.ok(c >= 4.5, `--${fg} on --${bg}: ${c.toFixed(2)}:1, below 4.5:1`);
   }
   assert.ok(contrast('#FFFFFF', t.ink) >= 4.5, 'white text on the black buttons');
-  assert.ok(contrast('#FFFFFF', t.accent) >= 4.5, 'white on the green (done badges, steps)');
+  assert.ok(contrast('#FFFFFF', t.accent) >= 4.5, 'white on the accent blue (done badges, steps)');
   // The edges of fields: 3:1 for the parts of a control (WCAG 1.4.11).
   for (const bg of ['page', 'surface', 'band']) assert.ok(contrast(t.border, t[bg]) >= 3, `--border on --${bg}`);
 });
 
-test('the design is flat: no shadows; square panels; pills and circles for buttons, badges and dots', () => {
+test('the design is flat and quiet: no shadows, no capitals; square panels; pills and circles for buttons and badges', () => {
   for (const [name, css] of [['app.css', APP_CSS], ['admin.css', ADMIN_CSS]]) {
     const code = css.replace(/\/\*[\s\S]*?\*\//g, '');
     assert.doesNotMatch(code, /box-shadow\s*:/, `${name} has a shadow`);
+    // Nothing is set in capitals: labels and headings keep the case they are written in.
+    assert.doesNotMatch(code, /text-transform\s*:\s*uppercase|font-variant(-caps)?\s*:[^;]*(all-)?small-caps/, `${name} sets text in capitals`);
     // Gradients are used only to draw lines: the corner markers (ink) and the column guides.
     assert.doesNotMatch(code, /(radial|conic)-gradient|linear-gradient\((?!var\(--(ink|guide)\), var\(--\2\)\))/, `${name} has a gradient`);
     for (const m of code.matchAll(/border-radius\s*:\s*([^;]+);/g)) {

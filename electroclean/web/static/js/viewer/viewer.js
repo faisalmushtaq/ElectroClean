@@ -405,7 +405,7 @@ export class EegViewer {
       ctx.fillStyle = rgba(colour, sel ? 0.30 : a.channels.length ? 0.24 : 0.16);
       for (const [ya, yb] of this._rowSpans(a.channels)) ctx.fillRect(xa, ya, Math.max(1, xb - xa), yb - ya);
     }
-    // the experts' annotation (guided training) and the green flash of a match
+    // the experts' annotation (guided training) and the flash of a match
     if (this.ghost) {
       const g = this.ghost;
       const colour = this.catalogue.colourFor(g.label);

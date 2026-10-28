@@ -158,7 +158,7 @@ look at" takes you to each of them, and N and P step through it.
 Some studies also offer a quiz, listed on your first page (and on the training path for trainees)
 with its number of segments and when you learn your results: whether each answer is right,
 straight away, or your result at the end. A quiz shows short pieces of EEG, each with a stretch
-shaded in green, and the question "Which artifact type is the main one in the shaded segment?". It
+shaded in blue, and the question "Which artifact type is the main one in the shaded segment?". It
 tests whether you recognise the types; marking where an artifact starts and ends is assessed
 separately, in whole recordings.
 

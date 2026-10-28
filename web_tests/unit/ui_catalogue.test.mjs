@@ -7,7 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { CATALOGUE, DEFAULT_QUICK_LABELS, DEFAULT_SCALINGS, DEFAULT_FILTERS } from '../../electroclean/web/static/js/api/demo_catalogue.js';
-import { Catalogue } from '../../electroclean/web/static/js/catalogue.js';
+import { Catalogue, displayCode } from '../../electroclean/web/static/js/catalogue.js';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (p) => JSON.parse(fs.readFileSync(path.join(REPO, p), 'utf8'));
@@ -42,4 +42,13 @@ test('the catalogue helpers', () => {
   assert.ok(Catalogue.matches(c.get('Electrode-pops-artifact'), 'electrode pop'));
   assert.ok(!Catalogue.matches(c.get('Electrode-pops-artifact'), 'blink'));
   assert.deepEqual(c.sections().map((s) => s.section), ['Eye', 'Other biological', 'Non-biological', 'Type unknown']);
+});
+
+test('short codes are shown in ordinary case, acronyms in capitals', () => {
+  assert.equal(displayCode('BLINK'), 'Blink');
+  assert.equal(displayCode('ARTIFACT'), 'Artifact');
+  assert.equal(displayCode('ELMOVE'), 'Elmove');
+  for (const acronym of ['EMG', 'ECG', 'HEM', 'VEM', 'SEM']) assert.equal(displayCode(acronym), acronym);
+  assert.equal(displayCode('Mixed'), 'Mixed'); // a code a study wrote in its own case is left alone
+  assert.equal(displayCode(''), '');
 });

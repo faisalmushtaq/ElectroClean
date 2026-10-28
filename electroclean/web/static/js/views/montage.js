@@ -62,7 +62,7 @@ export function montageFigure() {
   const ORBIT = 176;
   const orbit = el('g', { class: 'orbit' },
     el('circle', { cx: C, cy: C, r: ORBIT, fill: 'none', stroke: ink, 'stroke-opacity': 0.3, 'stroke-dasharray': '1 6' }));
-  [['#FF8B1A', -90], ['#3FB58A', 30], ['#4FA3E8', 150]].forEach(([fill, deg]) => {
+  [['#FF9A3C', -90], ['#F4D35E', 30], ['#5E8FE0', 150]].forEach(([fill, deg]) => {
     const a = (deg * Math.PI) / 180;
     const x = C + ORBIT * Math.cos(a);
     const y = C + ORBIT * Math.sin(a);

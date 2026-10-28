@@ -61,10 +61,10 @@ researchers, in plain words.
 
 The application's look is one design system, described at the top of `app.css` and in
 `docs/design_decisions.md` ("Visual design of the browser application"): warm off-white pages,
-hairlines, square panels and pill-shaped buttons, black for the step forward and one green accent,
-flat (no shadows), Newsreader for headings and text and JetBrains Mono for figures and small labels,
-served from `static/fonts`. Use its tokens rather than new colours, and run
-`web_tests/unit/ui_design.test.mjs`, which checks contrast and these rules.
+hairlines, square panels and pill-shaped buttons, black for the step forward and one ink-blue
+accent, flat (no shadows), Newsreader for headings, text and labels and JetBrains Mono for figures
+and codes, served from `static/fonts`, and nothing set in capitals. Use its tokens rather than new
+colours, and run `web_tests/unit/ui_design.test.mjs`, which checks contrast and these rules.
 
 The browser application has no build step: plain ES modules under `electroclean/web/static`, with
 every path relative so that it works under `/preview/` on GitHub Pages (workers are created with

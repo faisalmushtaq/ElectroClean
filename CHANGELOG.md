@@ -55,10 +55,11 @@ The browser application has a design of its own, editorial and precise, so
 that the EEG stands out. Pages are a warm off-white with faint column guides,
 and the EEG is drawn on white; headings and text are set in Newsreader, a serif
 with optical sizes, at regular weight with tight tracking, and figures, codes,
-keys and the EEG's channel names and time axis in JetBrains Mono. Lines are
-1-pixel hairlines, panels are square, and buttons and badges are pills: black
-for the one action that moves you forward (Open next recording, Save and
-Finish), with a single green for links, selection and highlights. The fonts are
+keys and the EEG's channel names and time axis in JetBrains Mono; nothing is
+set in capitals. Lines are 1-pixel hairlines, panels are square, and buttons
+and badges are pills: black for the one action that moves you forward (Open
+next recording, Save and Finish), with a single ink blue for links, selection
+and highlights. The fonts are
 served with the application, so annotators' browsers ask no other site for
 them. The sign-in page sets the name in large type over an illustration of
 many EEG traces with the 10-20 montage, the admin area counts its sections in

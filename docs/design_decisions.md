@@ -235,28 +235,32 @@ set a technical, minimal system: hairlines, square panels, flat colour,
 monospaced labels and an abstract wireframe figure beside the main text. A
 second brief kept that structure and moved its voice towards an editorial
 register: warm off-white pages, a serif for headings and text, generous space,
-pill-shaped buttons and one green accent. The result is what the application
-uses now.
+pill-shaped buttons and one accent colour. On review, the accent became ink
+blue and every label written in spaced capitals went back to ordinary case.
+The result is what the application uses now.
 
 Pages are #FDFCFB with a warmer band (#FAF6F0) for side panels, and faint
 column guides (three columns of the page's width) sit behind the pages around
 the EEG and stop where the EEG begins, so that nothing competes with the
 traces, which are drawn on white. Headings and text are set in Newsreader, a
 serif with optical sizes, at regular weight with tight tracking (page titles at
-44 pixels, the sign-in page's name at up to 88); figures, codes, file names,
-keys, channel names, column headings and small labels are set in JetBrains
-Mono, in spaced capitals where the label is short. Every divider is a 1-pixel
+44 pixels, the sign-in page's name at up to 88), and small labels and column
+headings in the same serif, small and grey; figures, codes, file names, keys
+and channel names are set in JetBrains Mono. Nothing is set in capitals: the
+artifact types' short codes are shown in ordinary case (Blink, Move) unless
+they are acronyms (EMG, ECG, HEM), while the catalogue, the saved files and
+the logs keep the codes as they are. Every divider is a 1-pixel
 hairline (#E4E0DA); panels and tables are square, and buttons, badges and the
 type buttons of the toolbar are pills. Black (#1E1E1E) marks the one action
-that moves a person forward, with an arrow, and what is pressed; a single
-green (#067843) marks links, selection, focus and the one figure worth
+that moves a person forward, with an arrow, and what is pressed; a single ink
+blue (#2B4392) marks links, selection, focus and the one figure worth
 noticing, such as the work done on the admin overview. Messages are tinted
 blocks with a 3-pixel bar in their colour. The colours of the 29 artifact types
 are unchanged, because they belong to the label catalogue and were chosen to
 stay distinguishable.
 
 The sign-in page shows an illustration drawn for ElectroClean: many EEG-like
-traces across a dark field in warm and cool light, like a long exposure of a
+traces across a dark field, warm at the top and cool below, like a long exposure of a
 recording, drawn from a fixed seed, with the 10-20 montage as a small
 wireframe whose three outer nodes turn slowly (and stand still when a person
 asks for reduced motion). Pages come in with a short rise and fade, which
@@ -266,8 +270,8 @@ application: Newsreader and JetBrains Mono are under the SIL Open Font License.
 
 The rules are checked by `web_tests/unit/ui_design.test.mjs`: the canvas colours
 match the style sheet, every text colour meets WCAG 2.1 AA on the backgrounds
-it is shown on, there are no shadows, gradients draw only lines, and every font
-is served with its licence.
+it is shown on, there are no shadows and no capitals, gradients draw only
+lines, and every font is served with its licence.
 
 ## Web-only (28 October 2026)
 

@@ -1,5 +1,17 @@
 // The artifact label catalogue, as the server (GET /me) or the demonstration provides it.
 
+// Short codes that are acronyms keep their capitals on screen; the others are abbreviated words and
+// are shown in ordinary case (BLINK as Blink). The catalogue, the saved files and the logs keep the
+// codes as they are.
+const ACRONYMS = new Set(['EEG', 'EOG', 'ECG', 'EMG', 'HEM', 'VEM', 'SEM']);
+
+/** A label's short code as it is shown in the toolbar and the type picker. */
+export function displayCode(code) {
+  const c = String(code || '');
+  if (ACRONYMS.has(c.toUpperCase()) || c !== c.toUpperCase()) return c;
+  return c.charAt(0) + c.slice(1).toLowerCase();
+}
+
 export class Catalogue {
   constructor(data) {
     this.labels = (data && data.labels ? data.labels : []).map((l) => ({

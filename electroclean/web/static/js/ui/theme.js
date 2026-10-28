@@ -14,14 +14,14 @@ export const COLOURS = Object.freeze({
   text_secondary: '#64625E',
   text_tertiary: '#6B6863',
   text_disabled: '#A8A5A0',
-  accent: '#067843', // the one green
-  accent_soft: '#E6F1EA',
+  accent: '#2B4392', // the one accent: ink blue
+  accent_soft: '#E9EDF7',
   destructive: '#A8321C',
   warning_bg: '#FAEFD7',
   warning_border: '#D9A441',
   warning_text: '#6B4700',
-  success: '#067843', // matched annotations in the practice review
-  success_bg: '#E6F1EA',
+  success: '#2B4392', // matched annotations in the practice review
+  success_bg: '#E9EDF7',
   flag_type: '#6A1B9A',
   selection_channel: '#C2185B',
   event: '#00796B', // original experimental events (teal)
