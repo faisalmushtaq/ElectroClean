@@ -109,7 +109,8 @@ export const tests = [
       assert.match(review, /Not yet:/);
       assert.match(review, /What to look at \(\d+\)/);
       assert.match(review, /Missed: Horizontal-eye-movement-artifact, 20\.50–21\.50 s/);
-      assert.match(review, /Type: you chose Horizontal-eye-movement-artifact; the experts chose Eye-blink-artifact, 4\.10–4\.50 s/);
+      // (within a pixel of 4.10 s: WebKit reports the pointer in whole pixels)
+      assert.match(review, /Type: you chose Horizontal-eye-movement-artifact; the experts chose Eye-blink-artifact, 4\.1[01]–4\.50 s/);
       await t.screenshot(page, 'practice_review');
       await page.keyboard.press('n');
       await page.keyboard.press('n');
