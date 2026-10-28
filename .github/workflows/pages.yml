@@ -1,0 +1,81 @@
+# Publishes the browser application (electroclean/web/static) on GitHub Pages.
+#
+# The site is kept on the gh-pages branch: main publishes the released application at the site's
+# root, and the browser-version branch publishes its work in progress under preview/, so a preview
+# never replaces what annotators use. GitHub Pages must be set to "Deploy from a branch", branch
+# gh-pages, folder "/ (root)" (Settings, Pages); see docs/web/server.md.
+name: GitHub Pages
+
+on:
+  push:
+    branches: [main, claude/electroclean-web]
+    paths:
+      - "electroclean/web/static/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: github-pages-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: src
+
+      - name: Publish to the gh-pages branch
+        env:
+          BRANCH: ${{ github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ ! -f src/electroclean/web/static/index.html ]; then
+            echo "::notice::This branch has no browser application yet; nothing to publish."
+            exit 0
+          fi
+          git init -q site
+          cd site
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          git config http.https://github.com/.extraheader "AUTHORIZATION: basic ${auth}"
+          if git ls-remote --exit-code --heads origin gh-pages > /dev/null; then
+            git fetch -q --depth 1 origin gh-pages
+            git checkout -q -b gh-pages FETCH_HEAD
+          else
+            git checkout -q --orphan gh-pages
+          fi
+          if [ "$BRANCH" = "main" ]; then
+            # The released application at the root; the preview stays.
+            find . -mindepth 1 -maxdepth 1 ! -name .git ! -name preview -exec rm -rf {} +
+            cp -R ../src/electroclean/web/static/. .
+          else
+            rm -rf preview
+            mkdir preview
+            cp -R ../src/electroclean/web/static/. preview/
+          fi
+          # Serve every file as it is (Jekyll would hide files whose names start with "_").
+          touch .nojekyll
+          if [ ! -f index.html ]; then
+            # Until main publishes a released version, the root points to the preview.
+            printf '%s\n' '<!doctype html><meta charset="utf-8"><title>ElectroClean</title>' \
+              '<meta http-equiv="refresh" content="0; url=preview/">' \
+              '<p>ElectroClean in the browser is in preview: <a href="preview/">open the preview</a>.</p>' > index.html
+          fi
+          git add -A
+          if git diff --cached --quiet; then
+            echo "The site is already up to date."
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "Publish ${BRANCH} at ${GITHUB_SHA::7}"
+          git push -q origin gh-pages
+          where=$([ "$BRANCH" = "main" ] && echo "" || echo "preview/")
+          owner=${GITHUB_REPOSITORY%%/*}
+          repo=${GITHUB_REPOSITORY#*/}
+          echo "::notice::Published to https://${owner,,}.github.io/${repo}/${where}"
