@@ -55,7 +55,11 @@ paragraph in the *Unreleased* section of `CHANGELOG.md` for anything a user woul
 uses type hints and `from __future__ import annotations`. Qt is imported only by the windows
 (`electroclean/app/gui/`, `reliability/gui.py`, `training/gui.py`, `training/guided_gui.py`) and by
 the entry points `app/main.py` and `app/selftest.py`; everything else must work without it, so that
-annotations can be processed in plain Python and the browser version's server can reuse the code. Errors that can reach a person are written for annotators, in
+annotations can be processed in plain Python and the browser version's server can reuse the code.
+In the other direction, desktop code never imports `electroclean.web` (the browser version's
+package): on its branch the stand-alone applications leave it out (`packaging/electroclean.spec`),
+together with FastAPI and Firebase, and `tests/test_selftest.py` checks that the self-test passes
+without them. Errors that can reach a person are written for annotators, in
 plain words.
 
 Desktop windows take their look from `electroclean/app/gui/style.py` (call `style.apply_theme()`,
