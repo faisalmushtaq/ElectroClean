@@ -428,3 +428,66 @@ ul.warnings { font-size: 12.5px; }
   .ws-actions .btn { padding: 0 9px; }
   .stages { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ------------------------------------------------------------ the short-segment quiz
+   (js/training/quiz.js): the segment on the left, the question and answers on the right, as the
+   desktop's quiz window. */
+.quiz-card { margin-top: 16px; }
+ul.quiz-list, ul.quiz-files { list-style: none; padding: 0; margin: 8px 0; }
+ul.quiz-list li, ul.quiz-files li {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--separator);
+}
+ul.quiz-files .file { word-break: break-all; }
+.view.quiz { display: grid; grid-template-rows: auto auto minmax(0, 1fr); height: 100vh; overflow: hidden; background: var(--window); }
+.quiz-bar {
+  display: flex; align-items: center; gap: 12px; padding: 6px 12px; background: var(--surface); border-bottom: 1px solid var(--separator); min-width: 0;
+}
+.quiz-heading { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+.quiz-heading h1 { font-size: 15px; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.quiz-progress { margin: 0; white-space: nowrap; }
+.quiz-body { min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+.quiz-page { width: 100%; }
+.quiz-main { display: flex; flex: 1; min-height: 0; }
+.quiz-eeg { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 8px 0 8px 8px; }
+.quiz-side {
+  width: 360px; flex: none; display: flex; flex-direction: column; gap: 10px; padding: 10px 12px; min-height: 0;
+  background: var(--surface); border-left: 1px solid var(--separator);
+}
+.quiz-question { margin: 0; }
+.quiz-scroll { flex: 1; min-height: 0; overflow: auto; border: 1px solid var(--separator); border-radius: 8px; padding: 4px 8px; }
+.quiz-group { border: none; margin: 0; padding: 0 0 4px; }
+.quiz-group legend {
+  font-size: 11.5px; font-weight: 700; color: var(--text-secondary); padding: 8px 0 2px; text-transform: uppercase; letter-spacing: 0.03em;
+}
+.quiz-option { display: flex; align-items: center; gap: 8px; padding: 3px 4px; border-radius: 4px; cursor: pointer; }
+.quiz-option:hover { background: var(--hover); }
+.quiz-option.group span:last-child { font-style: italic; }
+.quiz-option input:disabled ~ span { opacity: 0.6; }
+.swatch.none { border: 1px solid var(--border); background: var(--surface); }
+.quiz-feedback:empty { display: none; }
+.quiz-feedback { margin: 0; }
+.quiz-categories td .swatch { vertical-align: middle; }
+@media (max-width: 1100px) {
+  .quiz-side { width: 300px; }
+}
+/* ---------------------------------------------------------- end of the quiz's styles */
+
+/* ------------------------------------------------- the channel chooser for large montages
+   (chooseChannels in js/annotate/dialogs.js, more than 16 channels): group buttons, and columns
+   as wide as the longest name, filled row by row. Small montages keep the styles above. */
+.dialog.wide:has(.channel-chooser.many) { max-width: 760px; }
+.channel-help { margin: -2px 0 8px; }
+.channel-groups { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 10px; align-items: center; margin-bottom: 10px; }
+.channel-groups-caption { white-space: nowrap; }
+.channel-groups-row { display: flex; flex-wrap: wrap; gap: 4px; }
+.channel-groups-row .btn.small { min-height: 26px; padding: 0 8px; font-size: 12.5px; }
+.channel-chooser.many .channel-grid {
+  font-size: 12.5px; gap: 3px; max-height: min(46vh, 420px);
+  grid-template-columns: repeat(auto-fill, minmax(calc(var(--chip-ch, 6) * 1.15ch + 36px), 1fr));
+}
+.channel-chooser.many .channel-chip { padding: 2px 6px; gap: 5px; white-space: nowrap; overflow: hidden; }
+.channel-chip .chip-type { color: var(--text-secondary); font-weight: 400; }
+.channel-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 6px; }
+.channel-foot .caption { margin: 0; }
+.channel-only { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12.5px; }
+/* ------------------------------------------------ end of the channel chooser's styles */

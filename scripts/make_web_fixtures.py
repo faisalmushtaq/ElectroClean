@@ -12,7 +12,9 @@ Usage, from the repository root (the files are not committed; web_tests/fixtures
     python scripts/make_web_fixtures.py --perf     # also a 128-channel, 30-minute, 1024 Hz BDF
 
 The tests run this script themselves when the fixtures are missing or out of date. It needs the
-development dependencies (mne, numpy, scipy, pybv).
+development dependencies (mne, numpy, scipy, pybv). It also writes the small datasets of
+``datasets/`` for the browser's registration of recordings, whose expected manifests
+``web_tests/register_parity.py`` computes with the desktop's loader.
 """
 
 from __future__ import annotations
@@ -20,7 +22,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import math
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -31,7 +32,7 @@ sys.path.insert(0, str(ROOT))
 import numpy as np  # noqa: E402
 
 #: Bump when fixtures or expected values change; the tests regenerate older fixtures.
-FIXTURE_VERSION = 3
+FIXTURE_VERSION = 4
 
 DEFAULT_OUT = ROOT / "web_tests" / "fixtures"
 HIDE = [
@@ -66,20 +67,24 @@ def write_custom_edf(
     recording_field: str = "Startdate 01-FEB-2024 X X X",
     date: str = "01.02.24",
     time: str = "13.14.15",
+    patient: str = "X X X X",
+    record_s_text: str | None = None,
 ) -> Path:
     """An EDF/BDF file from signals given as dicts of label, unit (bytes or str), physical and
-    digital ranges, samples per record and the digital samples (n_records * spr integers)."""
+    digital ranges, samples per record, the digital samples (n_records * spr integers) and,
+    optionally, the prefiltering text. ``record_s_text`` writes another record duration in the
+    header than the one the samples are laid out with (for example "0")."""
     ns = len(signals)
-    head = (b"\xffBIOSEMI" if bdf else _field("0", 8)) + _field("X X X X", 80) + _field(recording_field, 80)
+    head = (b"\xffBIOSEMI" if bdf else _field("0", 8)) + _field(patient, 80) + _field(recording_field, 80)
     head += _field(date, 8) + _field(time, 8) + _num(256 * (ns + 1)) + _field(reserved, 44)
     head += _num(n_records if n_records_in_header is None else n_records_in_header)
-    head += _num(float(record_s)) + _num(ns, 4)
+    head += (_num(float(record_s)) if record_s_text is None else _field(record_s_text, 8)) + _num(ns, 4)
     head += b"".join(_field(s["label"], 16) for s in signals)
     head += b"".join(_field("", 80) for _ in signals)
     head += b"".join(_field(s.get("unit", "uV"), 8) for s in signals)
     for key in ("pmin", "pmax", "dmin", "dmax"):
         head += b"".join(_num(s[key]) for s in signals)
-    head += b"".join(_field("", 80) for _ in signals)
+    head += b"".join(_field(s.get("prefilter", ""), 80) for s in signals)
     head += b"".join(_num(int(s["spr"])) for s in signals)
     head += b"".join(_field("", 32) for _ in signals)
     assert len(head) == 256 * (ns + 1)
@@ -162,7 +167,7 @@ def describe(raw, fmt: str, data_file: Path, files: list[Path], *, filters: list
         "n_samples": int(raw.n_times),
         "ch_names": names,
         "mne_types": types,
-        "browser_types": [browser_type(n, t) for n, t in zip(names, types)],
+        "browser_types": [browser_type(n, t) for n, t in zip(names, types, strict=False)],
         "meas_date": raw.info["meas_date"].isoformat() if raw.info["meas_date"] else None,
     }
     anns = []
@@ -176,7 +181,7 @@ def describe(raw, fmt: str, data_file: Path, files: list[Path], *, filters: list
     out["gaps"] = [list(g) for g in gaps]
     out["discontinuities"] = disc
     triggers = []
-    for i, (name, t) in enumerate(zip(names, types)):
+    for _i, (name, t) in enumerate(zip(names, types, strict=False)):
         if t != "stim":
             continue
         ev = mne.find_events(raw, stim_channel=name, shortest_event=1, consecutive=True,
@@ -190,7 +195,7 @@ def describe(raw, fmt: str, data_file: Path, files: list[Path], *, filters: list
     out["windows"] = [{"start": a, "n": b - a, "values": data[:, a:b].tolist()} for a, b in windows]
 
     filtered = []
-    shown = [n for n, t in zip(names, out["browser_types"]) if t not in ("stim",) and not any(
+    shown = [n for n, t in zip(names, out["browser_types"], strict=False) if t not in ("stim",) and not any(
         __import__("fnmatch").fnmatchcase(n, p) for p in HIDE)]
     for spec in filters:
         fs = FilterSettings(
@@ -218,7 +223,7 @@ def describe(raw, fmt: str, data_file: Path, files: list[Path], *, filters: list
 
     if amplitude_filters is not None:
         view = raw.copy().pick(shown)
-        btypes = {n: browser_type(n, t) for n, t in zip(names, types)}
+        btypes = {n: browser_type(n, t) for n, t in zip(names, types, strict=False)}
         mapping = {n: btypes[n] for n in view.ch_names if btypes[n] in ("eeg", "eog", "ecg", "emg", "misc")}
         with __import__("warnings").catch_warnings():
             __import__("warnings").simplefilter("ignore")
@@ -264,8 +269,8 @@ def filter_designs() -> list[dict]:
                     continue
                 freqs = np.asarray(freqs, float)
                 widths = freqs / 200.0
-                lows = [f - w / 2.0 - 0.5 for f, w in zip(freqs, widths)]
-                highs = [f + w / 2.0 + 0.5 for f, w in zip(freqs, widths)]
+                lows = [f - w / 2.0 - 0.5 for f, w in zip(freqs, widths, strict=False)]
+                highs = [f + w / 2.0 + 0.5 for f, w in zip(freqs, widths, strict=False)]
                 try:
                     h = create_filter(None, sfreq, highs, lows, l_trans_bandwidth=0.5, h_trans_bandwidth=0.5,
                                       method="fir", phase="zero", fir_window="hamming", fir_design="firwin",
@@ -573,6 +578,343 @@ def make_all(out: Path) -> dict:
     return index
 
 
+# ------------------------------------------------------------------- registration datasets
+def _tsv(path: Path, columns: list[str], rows: list[list[str]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(["\t".join(columns)] + ["\t".join(r) for r in rows]) + "\n", encoding="utf-8")
+
+
+def _read_tsv_rows(path: Path) -> tuple[list[str], list[list[str]]]:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    return lines[0].split("\t"), [ln.split("\t") for ln in lines[1:] if ln]
+
+
+def make_datasets(out: Path) -> dict:
+    """Small datasets for the browser's registration (js/data/register.js), whose manifests
+    web_tests/register_parity.py computes with the desktop's loader for the comparison.
+
+    * bids_bv: a BIDS dataset of BrainVision recordings with channels.tsv (types, a bad channel,
+      channels missing on either side), events.tsv with its JSON, JSON sidecars inherited from the
+      dataset root and a subject folder (one with NaN in it), an ambiguous pair of channels.tsv
+      files, a discontinuity, and files that discovery leaves out (derivatives, hidden files, a
+      name without the _eeg suffix).
+    * edf_mix: EDF+, EDF and BDF files in one folder: annotations naming channels, gaps, an
+      annotation reaching past the end, an Emotiv-like export with housekeeping channels and
+      events.tsv, BDF Status triggers, a BDF+ file whose only annotation is the padding, a plain
+      EDF with duplicate names, prefiltering, an empty digital range and a channel that
+      channels.tsv calls a trigger, a header without the number of records, microvolts stored as
+      volts, a truncated file, and files in folders discovery leaves out.
+    * bv_hand: a BrainVision recording written by hand (vectorised float32 without DataPoints,
+      coordinates with a channel at the origin, the amplifier's filter table in the comment,
+      markers of several kinds and an unusual header line).
+    """
+    import shutil
+
+    from electroclean.synthetic import (
+        ALL_CHANNELS,
+        default_artifact_plan,
+        synthesise_signal,
+        write_edf,
+        write_edf_recording,
+        write_recording,
+    )
+
+    if out.exists():
+        shutil.rmtree(out)
+    index: dict[str, dict] = {}
+
+    # ---------------------------------------------------------------- bids_bv
+    root = out / "bids_bv"
+    root.mkdir(parents=True)
+    (root / "dataset_description.json").write_text(json.dumps({"Name": "Registration test", "BIDSVersion": "1.9.0"}),
+                                                   encoding="utf-8")
+    _tsv(root / "participants.tsv", ["participant_id"], [["sub-01"], ["sub-02"], ["sub-03"]])
+    (root / "task-rest_events.json").write_text(json.dumps(
+        {"trial_type": {"Description": "Inherited from the dataset root"},
+         "StimulusPresentation": {"OperatingSystem": "Linux"}}),
+        encoding="utf-8")
+    (root / "task-rest_eeg.json").write_text(
+        '{"PowerLineFrequency": 60, "EEGReference": "average", "SoftwareFilters": NaN, '
+        '"RecordingType": "continuous"}\n',
+        encoding="utf-8")
+
+    eeg1 = root / "sub-01" / "eeg"
+    write_recording(eeg1, "sub-01_task-rest", sfreq=500.0, duration_s=24.0, seed=101)
+    cols, rows = _read_tsv_rows(eeg1 / "sub-01_task-rest_channels.tsv")
+    rows = [[r[0], r[1], r[2], "bad" if r[0] == "T7" else r[3]] for r in rows]
+    _tsv(eeg1 / "sub-01_task-rest_channels.tsv", cols, rows)
+    (eeg1 / "._sub-01_task-rest_eeg.vhdr").write_bytes(b"\x00\x05\x16\x07 resource fork")  # macOS copies leave these
+
+    eeg2 = root / "sub-02" / "eeg"
+    write_recording(eeg2, "sub-02_task-rest", sfreq=250.0, duration_s=20.0, seed=102, discontinuity_s=10.0,
+                    collision=True)
+    (eeg2 / "sub-02_task-rest_eeg.json").unlink()  # inherits from sub-02/ and the root instead
+    (root / "sub-02" / "sub-02_eeg.json").write_text(json.dumps({"EEGReference": "Cz", "SamplingFrequency": 256}),
+                                                      encoding="utf-8")
+    _tsv(eeg2 / "sub-02_task-rest_channels.tsv", ["name", "type", "units", "status"],
+         [[c, "EEG", "µV", "bad" if c == "T7" else "good"] for c in ALL_CHANNELS[:19]]
+         + [["HEOG", "HEOG", "µV", "good"], ["VEOG", "VEOG", "µV", "good"], ["EMG1", "EMG", "µV", "good"]])
+    cols, rows = _read_tsv_rows(eeg2 / "sub-02_task-rest_events.tsv")
+    rows += [["3.0", "0.0", "Eye-blink-artifact", "103", "750"], ["7.0", "n/a", "oddball", "1", "1750"],
+             ["999.0", "0.0", "late", "5", "249750"], ["12.0", "0.0", "check", "6", "2990"]]
+    _tsv(eeg2 / "sub-02_task-rest_events.tsv", cols, rows)
+
+    eeg3 = root / "sub-03" / "eeg"
+    write_recording(eeg3, "sub-03_task-rest", sfreq=200.0, duration_s=12.0, seed=103, write_bids_sidecars=False)
+    _tsv(eeg3 / "sub-03_channels.tsv", ["name", "type", "units", "status"],
+         [[c, "ECG" if c == "ECG" else "EEG", "µV", "good"] for c in ALL_CHANNELS])
+    _tsv(eeg3 / "task-rest_channels.tsv", ["name", "type"], [[c, "EEG"] for c in ALL_CHANNELS])
+
+    deriv = root / "derivatives" / "sub-01" / "eeg"
+    deriv.mkdir(parents=True)
+    (deriv / "sub-01_task-rest_eeg.vhdr").write_text("not a recording: derivatives are never registered\n",
+                                                     encoding="utf-8")
+    (root / "extra").mkdir()
+    shutil.copy(eeg3 / "sub-03_task-rest_eeg.vmrk", root / "extra" / "pilot.vmrk")
+    (root / "extra" / "pilot.vhdr").write_text("a name without the _eeg suffix\n", encoding="utf-8")
+    index["bids_bv"] = {"root": "datasets/bids_bv"}
+
+    # ---------------------------------------------------------------- edf_mix
+    root = out / "edf_mix"
+    root.mkdir(parents=True)
+    rng = np.random.default_rng(201)
+    sig = synthesise_signal(default_artifact_plan(40.25, rng), 256.0, 40.25, 50.0, rng)
+    anns = [(2.0, 0.0, "stim/1"), (6.0, 0.0, "stim/2"), (10.0, 5.0, "Eyes closed"), (20.0, 0.0, "spike@@Fp1"),
+            (20.0, 0.0, "spike@@Fp2"), (25.0, 2.5, "BAD_ACQ_SKIP"), (30.0, 0.5, "Eye-blink-artifact"),
+            (30.0, 0.0, "Eye-blink-artifact"), (33.0, 0.0, "café"), (39.5, 5.0, "long one")]
+    write_edf(root / "sub-01_task-rest_eeg.edf", sig, 256.0, list(ALL_CHANNELS), annotations=anns)
+
+    write_edf_recording(root, "sub-02_task-rest", sfreq=128.0, duration_s=30.5, seed=202)
+
+    rng = np.random.default_rng(203)
+    sig = synthesise_signal(default_artifact_plan(12.0, rng), 512.0, 12.0, 60.0, rng)[:8]
+    n = sig.shape[1]
+    codes = np.zeros(n, dtype=np.int64)
+    codes[:10] = 7
+    codes[1000] = 5
+    codes[2000:2100] = 3
+    codes[2100:2150] = 4
+    codes[3000:3020] = (1 << 16) | 9
+    codes[4000:4030] = 1 << 16
+    codes[5000:5040] = -(1 << 23) + 12
+    codes[n - 1] = 6
+    write_edf(root / "sub-03_task-rest_eeg.bdf", sig, 512.0, list(ALL_CHANNELS[:8]), bdf=True,
+              triggers={"Status": codes})
+
+    n_rec, spr = 20, 256
+    t = np.arange(n_rec * spr) / 512.0
+    t_low = np.arange(n_rec * 128) / 256.0
+    a = 60e-6 * np.sin(2 * np.pi * 7 * t) + 15e-6 * np.cos(2 * np.pi * 31 * t)
+    b = 0.08 * np.sin(2 * np.pi * 3 * t)
+    c = 30e-6 * np.sin(2 * np.pi * 11 * t) + 5e-6 * np.sin(2 * np.pi * 23 * t)
+    trig = np.zeros(n_rec * spr, dtype=np.int64)
+    trig[100:110] = 3
+    trig[3000:3050] = 2
+    din = np.zeros(n_rec * spr, dtype=np.int64)
+    din[500:520] = 4
+    din[520:540] = 8
+    din[4000:4001] = 1
+    sigs = [
+        {"label": "Fp1", "unit": b"\xb5V", "pmin": -400.0, "pmax": 400.0, "dmin": -32768, "dmax": 32767, "spr": spr,
+         "digital": to_digital(a * 1e6, -400.0, 400.0, -32768, 32767), "prefilter": "HP:0.1Hz LP:70Hz"},
+        {"label": "Fp2", "unit": "mV", "pmin": -0.5, "pmax": 0.5, "dmin": -32768, "dmax": 32767, "spr": spr,
+         "digital": to_digital(b, -0.5, 0.5, -32768, 32767), "prefilter": "HP:0.1Hz LP:70Hz"},
+        {"label": "EEG", "unit": "uV", "pmin": -250.0, "pmax": 250.0, "dmin": -2048, "dmax": 2047, "spr": spr,
+         "digital": to_digital(c * 1e6, -250.0, 250.0, -2048, 2047), "prefilter": "HP:1Hz LP:70Hz"},
+        {"label": "EEG", "unit": "uV", "pmin": -250.0, "pmax": 250.0, "dmin": -2048, "dmax": 2047, "spr": spr,
+         "digital": to_digital(-c * 1e6, -250.0, 250.0, -2048, 2047), "prefilter": "HP:0.1Hz LP:70Hz"},
+        {"label": "Resp", "unit": "V", "pmin": -0.01, "pmax": 0.01, "dmin": -32768, "dmax": 32767, "spr": 128,
+         "digital": to_digital(0.002 * np.sin(2 * np.pi * 0.5 * t_low), -0.01, 0.01, -32768, 32767)},
+        {"label": "Trigger", "unit": "", "pmin": -32768.0, "pmax": 32767.0, "dmin": -32768, "dmax": 32767, "spr": spr,
+         "digital": trig},
+        {"label": "Flat", "unit": "uV", "pmin": -100.0, "pmax": 100.0, "dmin": 0, "dmax": 0, "spr": spr,
+         "digital": np.zeros(n_rec * spr, dtype=np.int64), "prefilter": "HP:0.1Hz LP:70Hz"},
+        {"label": "DIN", "unit": "", "pmin": -32768.0, "pmax": 32767.0, "dmin": -32768, "dmax": 32767, "spr": spr,
+         "digital": din},
+    ]
+    write_custom_edf(root / "sub-04_task-rest_eeg.edf", sigs, n_records=n_rec, record_s=0.5,
+                     recording_field="Startdate 07-MAR-2023 X X X", date="07.03.23", time="09.30.00")
+    _tsv(root / "sub-04_task-rest_channels.tsv", ["name", "type", "units", "status"],
+         [["Fp1", "EEG", "µV", "good"], ["Fp2", "EEG", "mV", "good"], ["EEG-0", "EEG", "µV", "good"],
+          ["EEG-1", "EOG", "µV", "good"], ["Resp", "RESP", "V", "good"], ["Trigger", "TRIG", "n/a", "good"],
+          ["Flat", "EEG", "µV", "bad"], ["DIN", "TRIG", "n/a", "good"]])
+
+    rng = np.random.default_rng(205)
+    sig = synthesise_signal(default_artifact_plan(10.5, rng), 256.0, 10.5, 50.0, rng)[:6]
+    codes = np.zeros(sig.shape[1], dtype=np.int64)
+    codes[300:320] = 11
+    codes[1800:1810] = 12
+    write_edf(root / "sub-05_task-rest_eeg.bdf", sig, 256.0, list(ALL_CHANNELS[:6]), bdf=True, annotations=[],
+              triggers={"Status": codes})
+
+    rng = np.random.default_rng(206)
+    small = rng.normal(0, 10e-6, size=(3, 1280))
+    p = write_edf(root / "sub-06_task-rest_eeg.edf", small, 128.0, ["Cz", "Pz", "Oz"])
+    p.write_bytes(p.read_bytes()[:-100])
+    p = write_edf(root / "sub-07_task-rest_eeg.edf", small, 128.0, ["Cz", "Pz", "Oz"], n_records_in_header=-1)
+    shutil.copy(p, root / "notes.edf")
+    (root / "Annotated_Events").mkdir()
+    shutil.copy(p, root / "Annotated_Events" / "sub-07_task-rest_eeg.edf")
+    (root / ".cache").mkdir()
+    shutil.copy(p, root / ".cache" / "sub-09_task-rest_eeg.edf")
+
+    rng = np.random.default_rng(208)
+    sig = synthesise_signal(default_artifact_plan(20.0, rng), 128.0, 20.0, 50.0, rng)
+    p = write_edf(root / "sub-08_task-rest_eeg.edf", sig, 128.0, list(ALL_CHANNELS))
+    blob = bytearray(p.read_bytes())
+    base = 256 + len(ALL_CHANNELS) * (16 + 80)
+    for i in range(len(ALL_CHANNELS)):
+        blob[base + 8 * i : base + 8 * i + 8] = b"V       "
+    p.write_bytes(bytes(blob))
+    index["edf_mix"] = {"root": "datasets/edf_mix"}
+
+    # ---------------------------------------------------------------- bv_hand
+    root = out / "bv_hand"
+    folder = root / "rec"
+    folder.mkdir(parents=True)
+    n = 3000
+    rng = np.random.default_rng(301)
+    names = ["Fp1", "Fp2", "Cz", "Ref", "HEOGL"]
+    alpha = 15 * np.sin(2 * np.pi * 10 * np.arange(n) / 500.0)
+    fl = (rng.normal(0, 20, size=(len(names), n)) + alpha).astype(np.float32)
+    (folder / "hand_eeg.eeg").write_bytes(fl.astype("<f4").tobytes())
+    vhdr_text = (
+        "BrainVision Data Exchange Header File Version 1.0\n"
+        "; written by hand for the registration tests\n\n"
+        "[Common Infos]\nCodepage=UTF-8\nDataFile=hand_eeg.eeg\nMarkerFile=hand_eeg.vmrk\nDataFormat=BINARY\n"
+        "DataOrientation=VECTORIZED\nNumberOfChannels=5\nSamplingInterval=2000\n\n"
+        "[Binary Infos]\nBinaryFormat=IEEE_FLOAT_32\n\n"
+        "[Channel Infos]\n" + "".join(f"Ch{i + 1}={nm},,0.1,µV\n" for i, nm in enumerate(names))
+        + "\n[Coordinates]\nCh1=1,-90,-72\nCh2=1,90,72\nCh3=1,0,0\nCh4=0,0,0\nCh5=1,-120,-30\n"
+        "\n[Comment]\n\nA m p l i f i e r  S e t u p\n============================\nNumber of channels: 5\n"
+        "Sampling Rate [Hz]: 500\nSampling Interval [µS]: 2000\n\nChannels\n--------\n"
+        "#     Name      Phys. Chn.    Resolution / Unit   Low Cutoff [s]   High Cutoff [Hz]   Notch [Hz]\n"
+        "1     Fp1         1                0.1 µV             10              200              Off\n"
+        "2     Fp2         2                0.1 µV             10              200              Off\n"
+        "3     Cz          3                0.1 µV             0.3             200              Off\n"
+        "4     Ref         4                0.1 µV             10              200              Off\n"
+        "5     HEOGL       5                0.1 µV             10              200              Off\n"
+    )
+    write_vhdr(folder / "hand_eeg.vhdr", vhdr_text, "utf-8")
+    vmrk_text = (
+        "Brain Vision Data Exchange Marker File, Version 1.0\n\n"
+        "[Common Infos]\nCodepage=UTF-8\nDataFile=hand_eeg.eeg\n\n"
+        "[Marker Infos]\n"
+        "Mk1=New Segment,,1,1,0,20230405060708090000\n"
+        "Mk2=Stimulus,S  1,101,1,0\n"
+        "Mk3=Response,R  2,301,1,0\n"
+        "Mk4=Comment,hello,401,0,0\n"
+        "Mk5=SyncStatus,Sync On,501,1,0\n"
+        "Mk6=New Segment,,1201,1,0\n"
+        "Mk7=Bad Interval,Bad Min-Max,1500,40,0\n"
+        "Mk8=Stimulus,S 12,2001,1,0\n"
+        "Mk9=Optic,O  3,2501,1,0\n"
+        "Mk10=Stimulus,S  1,2701,1,0\n"
+    )
+    write_vhdr(folder / "hand_eeg.vmrk", vmrk_text, "utf-8")
+    index["bv_hand"] = {"root": "datasets/bv_hand"}
+
+    # ---------------------------------------------------------------- edge
+    # Odd and broken metadata: JSON sidecars that cannot be read or hold no object, a channels.tsv
+    # with a short row or repeated names, an events.tsv with many bad rows or a malformed one, an
+    # unusual BrainVision header with a STI 014 trigger channel and software filters, EDF headers
+    # with odd patient and date fields, a record length of 0 and contradictory prefiltering, an
+    # annotation after the end of the data, and a 100 Hz recording whose notch is above Nyquist.
+    root = out / "edge"
+    root.mkdir(parents=True)
+    rng = np.random.default_rng(401)
+
+    def plain_signals(names: list[str], n: int, *, prefilter: str = "", extra: dict | None = None) -> list[dict]:
+        sigs = []
+        for k, nm in enumerate(names):
+            x = 40e-6 * np.sin(2 * np.pi * (5 + k) * np.arange(n) / 128.0) + rng.normal(0, 5e-6, n)
+            sigs.append({"label": nm, "unit": "uV", "pmin": -500.0, "pmax": 500.0, "dmin": -32768, "dmax": 32767,
+                         "spr": 128, "digital": to_digital(x * 1e6, -500.0, 500.0, -32768, 32767),
+                         "prefilter": prefilter})
+        for nm, codes in (extra or {}).items():
+            sigs.append({"label": nm, "unit": "", "pmin": -32768.0, "pmax": 32767.0, "dmin": -32768, "dmax": 32767,
+                         "spr": 128, "digital": codes})
+        return sigs
+
+    a = root / "bad-json"
+    a.mkdir()
+    din = np.zeros(128 * 10, dtype=np.int64)
+    din[200:210] = 5
+    write_custom_edf(a / "sub-01_task-x_eeg.edf", plain_signals(["Fp1", "Fp2", "Cz"], 1280, extra={"DIN": din}),
+                     n_records=10, record_s=1.0)
+    (a / "sub-01_task-x_eeg.json").write_text('{"SamplingFrequency": 128.0, "PowerLineFrequency": 60,}\n',
+                                              encoding="utf-8")
+    (a / "sub-01_task-x_events.json").write_text("[1, 2]\n", encoding="utf-8")
+    (a / "sub-01_task-x_channels.tsv").write_text("name\ttype\tunits\nFp1\tEEG\tµV\nFp2\tEEG\nCz\tEEG\tµV\n",
+                                                  encoding="utf-8")
+
+    b = root / "odd-bv"
+    b.mkdir()
+    n = 2500
+    names = ["Fp1", "Fp2", "Cz", "STI 014"]
+    data = rng.normal(0, 15, size=(4, n)).astype(np.float32)
+    sti = np.zeros(n, dtype=np.float32)
+    sti[300:320] = 3
+    sti[320:330] = 9
+    sti[1800] = 1
+    data[3] = sti
+    (b / "odd_eeg.eeg").write_bytes(data.astype("<f4").tobytes())
+    units = ["µV", "µV", "µV", "V"]
+    res = ["0.5", "0.5", "0.5", "1"]
+    vhdr_text = (
+        "Brain Vision Data Exchange Header File Version 3.0\n\n"
+        "[Common Infos]\nCodepage=UTF-8\nDataFile=odd_eeg.eeg\nMarkerFile=odd_eeg.vmrk\nDataFormat=BINARY\n"
+        "DataOrientation=VECTORIZED\nNumberOfChannels=4\nDataPoints=2500\nSamplingInterval=4000\n\n"
+        "[Binary Infos]\nBinaryFormat=IEEE_FLOAT_32\n\n"
+        "[Channel Infos]\n" + "".join(f"Ch{i + 1}={nm},,{res[i]},{units[i]}\n" for i, nm in enumerate(names))
+        + "\n[Comment]\n\nChannels\n--------\n"
+        "#     Name      Phys. Chn.    Resolution / Unit   Low Cutoff [s]   High Cutoff [Hz]   Notch [Hz]\n"
+        "1     Fp1         1                0.5 µV             10              250              Off\n"
+        "2     Fp2         2                0.5 µV             10              250              Off\n"
+        "3     Cz          3                0.5 µV             10              250              Off\n"
+        "4     STI 014     4                1 V                10              250              Off\n"
+        "\nS o f t w a r e  F i l t e r s\n==============================\n"
+        "#     Low Cutoff [s]   High Cutoff [Hz]   Notch [Hz]\n"
+        "1      0.1              70                 50\n"
+        "2      0.1              40                 50\n"
+        "3      0.1              70                 50\n"
+        "4      0.1              70                 50\n"
+    )
+    write_vhdr(b / "odd_eeg.vhdr", vhdr_text, "utf-8")
+    write_vhdr(b / "odd_eeg.vmrk", "Brain Vision Data Exchange Marker File Version 3.0\n\n[Marker Infos]\n"
+               "Mk1=New Segment,,1,1,0,20220101000000000000\n", "utf-8")
+
+    c = root / "edf-odd"
+    c.mkdir()
+    sigs = plain_signals(["Fp1", "Fp2", "Pz"], 1280, prefilter="HP:10Hz LP:5Hz")
+    write_custom_edf(c / "sub-02_task-y_eeg.edf", sigs, n_records=10, record_s=1.0, record_s_text="0",
+                     patient="P01 M 01-JAN-2000 Name weight=x hand=1 shoe=42", recording_field="Startdate X X X",
+                     date="32.13.99", time="12.00.00")
+    small = rng.normal(0, 10e-6, size=(3, 1280))
+    write_edf(c / "sub-03_task-y_eeg.edf", small, 128.0, ["Cz", "Pz", "Oz"],
+              annotations=[(2.0, 0.0, "ok"), (500.0, 0.0, "late")])
+    sig = synthesise_signal(default_artifact_plan(20.0, rng), 128.0, 20.0, 50.0, rng)
+    anns = [(4.0, 1.0, "b"), (4.0, 0.0, "a"), (4.0, 0.5, "c"), (6.0, 0.0, "x@@Nope"), (8.0, 0.0, "y@@Cz"),
+            (12.0, 2.0, "Movement-artifact")]
+    write_edf(c / "sub-04_task-y_eeg.edf", sig, 128.0, list(ALL_CHANNELS), annotations=anns)
+    (c / "sub-04_task-y_eeg.json").write_text('{"SamplingFrequency": 256.0, "PowerLineFrequency": true}',
+                                              encoding="utf-8")
+    (c / "sub-04_task-y_events.json").write_bytes(
+        b'\xef\xbb\xbf{\r\n  "trial_type": {"Description": "with a BOM and CRLF"}\r\n}\r\n')
+    rows = [["4.0", "0.0", "a", "1", "512"], ["n/a", "0.0", "a", "1", "n/a"], ["6.0", "0.0", "b", "2", "abc"]]
+    rows += [[f"{7 + k}.0", "0.0", "c", "3", str((7 + k) * 128 + 9)] for k in range(11)]
+    _tsv(c / "sub-04_task-y_events.tsv", ["onset", "duration", "trial_type", "value", "sample"], rows)
+    _tsv(c / "sub-04_task-y_channels.tsv", ["name", "type"],
+         [["Fp1", "EEG"], ["Fp1", "EEG"], ["Cz", "MISC"], ["Ghost", "EEG"]])
+    write_edf(c / "sub-05_task-y_eeg.edf", small, 128.0, ["Cz", "Pz", "Oz"])
+    _tsv(c / "sub-05_task-y_events.tsv", ["onset", "duration"], [["1.0", "0.0"], ["2.0"]])
+
+    vhdr, _, _ = write_recording(root / "slow", "sub-06_task-z", sfreq=100.0, duration_s=12.0, seed=406,
+                                 write_bids_sidecars=False)
+    index["edge"] = {"root": "datasets/edge"}
+    return index
+
+
 def make_perf(out: Path) -> dict:
     """A 128-channel, 30-minute, 1024 Hz BDF with Status triggers, written record by record."""
     n_ch, sfreq, minutes = 128, 1024, 30
@@ -624,7 +966,7 @@ def main() -> None:
     args = ap.parse_args()
     out: Path = args.out
     index = make_all(out)
-    manifest = {"version": FIXTURE_VERSION, "fixtures": index}
+    manifest = {"version": FIXTURE_VERSION, "fixtures": index, "datasets": make_datasets(out / "datasets")}
     if args.perf:
         manifest["perf"] = make_perf(out)
     elif (out / "manifest.json").exists():

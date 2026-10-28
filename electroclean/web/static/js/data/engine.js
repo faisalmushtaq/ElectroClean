@@ -6,7 +6,7 @@
 import { amplitudeReport, amplitudeWindows, PLAUSIBLE_AMPLITUDE_V } from "./amplitude.js";
 import { BrainVisionSource } from "./brainvision.js";
 import { isHousekeeping } from "./channels.js";
-import { EdfSource } from "./edf.js";
+import { EdfSource, finishStimSteps, stimEvents, stimSteps } from "./edf.js";
 import { selectRecording } from "./files.js";
 import { edgeZonesFor, planFilters } from "./filters.js";
 import { FilterPool, filterJobsHere } from "./pool.js";
@@ -135,7 +135,7 @@ export class Engine {
       const used = desc.markerSource === "triggers" ? "; the original events were read from them" : "";
       notes.push(`Trigger channel(s) not shown and not part of the montage${used}: ${triggerChs.join(", ")}`);
     }
-    if (!channels.some((c) => !c.hidden)) {
+    if (!channels.some((c) => !c.hidden) && options.requireShown !== false) {
       throw new RecordingError(
         "Every channel of the recording is a trigger channel or a device housekeeping channel, so nothing could be shown.",
         "no_channels",
@@ -146,15 +146,24 @@ export class Engine {
       this._startPool();
       if (this.pool && options.filters) this.pool.warm(this.sfreq, options.filters);
     }
-    onProgress({ stage: "amplitude", fraction: 0 });
     let amp = { amplitudesV: {}, suggestedScalings: {}, warnings: [] };
-    try {
-      amp = await this._amplitude(options.amplitudeFilters || options.filters || DEFAULT_AMPLITUDE_FILTERS);
-    } catch (e) {
-      warnings.push(`The signal amplitude could not be checked: ${e.message}`);
+    if (options.amplitude !== false) {
+      onProgress({ stage: "amplitude", fraction: 0 });
+      try {
+        amp = await this._amplitude(options.amplitudeFilters || options.filters || DEFAULT_AMPLITUDE_FILTERS);
+      } catch (e) {
+        warnings.push(`The signal amplitude could not be checked: ${e.message}`);
+      }
+      warnings.push(...amp.warnings);
+      onProgress({ stage: "amplitude", fraction: 1 });
     }
-    warnings.push(...amp.warnings);
-    onProgress({ stage: "amplitude", fraction: 1 });
+    // what MNE-Python holds before its own checks: the annotations as read (seconds for EDF+ and
+    // BDF+, samples for BrainVision markers) and the channel types it gives (register.js)
+    const annotations =
+      src.format === "brainvision"
+        ? src.mrk.markers.map((m) => ({ onsetSample: m.onset, durationSamples: m.duration, description: `${m.type}/${m.desc}` }))
+        : scanned.annotations.map((a) => ({ onset: a.onset, duration: a.duration, description: a.description, channels: a.channels || [] }));
+    const mneTypes = src.format === "brainvision" ? src.h.mneTypes.slice() : src.isStim.map((s) => (s ? "stim" : "eeg"));
     return {
       format: src.format,
       fileName: sel.fileName,
@@ -178,7 +187,52 @@ export class Engine {
       fingerprint: this.fp,
       blockSamples: src.blockSamples,
       openMs: now() - t0,
+      annotations,
+      mneTypes,
     };
+  }
+
+  /**
+   * The desktop's amplitude check with the channel types and hidden channels given (for example
+   * those of a manifest), on the display copy filtered as given (null: unfiltered).
+   * @param {{filters?: object | null, types?: string[] | null, hidden?: boolean[] | null}} [p]
+   */
+  async amplitudeCheck({ filters = null, types = null, hidden = null } = {}) {
+    return this._amplitude(filters, types, hidden);
+  }
+
+  /**
+   * Trigger codes read from any channels, as mne.find_events reads them (consecutive=True,
+   * shortest_event=1, the channel padded with zero after its end): every change to a non-zero code
+   * of the samples' integer parts, with the mask applied (-1 for none).
+   * @param {{channels: number[], mask?: number}} p
+   * @returns {Promise<{sample: number, code: number, channel: string}[]>}
+   */
+  async findEvents({ channels, mask = -1 }) {
+    const B = this.source.blockSamples;
+    const n = this.nSamples;
+    const states = channels.map(() => ({ prev: null, steps: [] }));
+    let lastYield = now();
+    for (let s0 = 0; s0 < n; s0 += B) {
+      const s1 = Math.min(n, s0 + B);
+      const data = await this.readRaw(s0, s1, channels, Float64Array);
+      channels.forEach((_, k) => {
+        const v = data[k];
+        const codes = new Float64Array(v.length);
+        for (let q = 0; q < v.length; q++) codes[q] = Math.abs(Math.trunc(v[q]));
+        stimSteps(states[k], codes, s0, mask);
+      });
+      if (this.cooperative && now() - lastYield > 25) {
+        await new Promise((r) => setTimeout(r, 0));
+        lastYield = now();
+      }
+    }
+    const out = [];
+    channels.forEach((ch, k) => {
+      finishStimSteps(states[k], n, mask);
+      for (const [sample, code] of stimEvents(states[k].steps)) out.push({ sample, code, channel: this.channels[ch].name });
+    });
+    return out;
   }
 
   /** One pass over the file: annotations and triggers, and the SHA-256 when asked. */
@@ -576,15 +630,22 @@ export class Engine {
     return out;
   }
 
-  /** The amplitude check of the desktop on the display copy (shown channels, filtered). */
-  async _amplitude(filters) {
+  /**
+   * The amplitude check of the desktop on the display copy (shown channels, filtered).
+   * @param {object | null} filters
+   * @param {string[] | null} [types] each channel's type (default: the channels' own)
+   * @param {boolean[] | null} [hidden] which channels are not shown (default: the channels' own)
+   */
+  async _amplitude(filters, types = null, hidden = null) {
     const plan = planFilters(this.sfreq, filters);
     const edge = Math.round(plan.steps.length ? plan.halfWidth : 0);
     const windows = amplitudeWindows(this.nSamples, this.sfreq, this.gaps, edge);
     const byType = {};
     const picks = [];
+    const typeOf = (i) => (types ? types[i] : this.channels[i].type);
     this.channels.forEach((c, i) => {
-      if (!c.hidden && PLAUSIBLE_AMPLITUDE_V[c.type]) picks.push(i);
+      const t = typeOf(i);
+      if (!(hidden ? hidden[i] : c.hidden) && Object.hasOwn(PLAUSIBLE_AMPLITUDE_V, t)) picks.push(i);
     });
     if (!picks.length) return amplitudeReport({});
     const total = windows.reduce((a, [s, e]) => a + (e - s), 0);
@@ -596,7 +657,7 @@ export class Engine {
       off += e - s;
     });
     picks.forEach((ch, k) => {
-      const t = this.channels[ch].type;
+      const t = typeOf(ch);
       (byType[t] = byType[t] || []).push(concat[k]);
     });
     return amplitudeReport(byType);

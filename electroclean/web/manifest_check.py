@@ -184,9 +184,9 @@ def _events(value: Any, n_samples: int) -> dict[str, Any]:
     for x in samples:
         if x is None:
             continue
-        s = _int(x, "original_events.sample", minimum=-MAX_SAMPLES)
-        if not 0 <= s <= n_samples:
-            raise ManifestProblem(f"an original event at sample {s} lies outside the recording (0 to {n_samples})")
+        # An events.tsv row may lie outside the recording: the loader keeps it with a warning, so that
+        # the exported events file still holds every original row (it is not shown on the EEG).
+        _int(x, "original_events.sample", minimum=-MAX_SAMPLES, maximum=MAX_SAMPLES)
     path = value.get("path")
     out = {
         "source": source,

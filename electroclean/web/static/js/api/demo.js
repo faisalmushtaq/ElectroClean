@@ -23,6 +23,7 @@ export { DEMO_NOTICE };
 import * as rules from '../training/rules.js';
 import { DEFAULT_PASS, describePassRule, practiceFeedback } from '../training/scoring.js';
 import { escapeHtml, local, newId, nowLocalIso, session } from '../util.js';
+import { sha256Hex } from '../data/sha256.js';
 
 const STATE_KEY = 'electroclean.demo.v1';
 const TOKEN_KEY = 'electroclean.demo.token';
@@ -62,6 +63,71 @@ export const TRAINING_SET = Object.freeze({
 
 const STAGE_TITLES = { guided: 'Learn with the experts', practice: 'On your own', assessment: 'Competency assessment' };
 
+/** The answer for a segment without an artifact (electroclean.training.reference.NONE_OPTION). */
+export const QUIZ_NONE_OPTION = 'No artifact / none of these';
+
+/** The demonstration's short-segment quiz: segments of the first two examples, with feedback after each answer. */
+export const QUIZ = Object.freeze({
+  set_id: TRAINING_SET.set_id,
+  name: 'Demonstration quiz',
+  feedback: 'immediate',
+  items: [
+    ['q01', 'demo-01', 9.2, 10.8, 'EMG-artifact', [],
+      'Fast, irregular activity on F7, F8, T7 and T8 that starts and stops abruptly: muscle activity.'],
+    ['q02', 'demo-01', 3.0, 3.4, 'Eye-blink-artifact', ['Eye-artifact'],
+      'A large, smooth deflection of about 0.4 s on Fp1, Fp2 and VEOG, weaker on F3, Fz and F4: the eyes closing and opening.'],
+    ['q03', 'demo-02', 5.0, 8.0, 'Chewing-artifact', [],
+      'Bursts of fast activity on T7 and T8 that repeat about one and a half times a second: chewing.'],
+    ['q04', 'demo-02', 20.0, 25.0, 'ECG-artifact', ['Pulse-artifact'],
+      'Sharp spikes on T7, P7 and O1 about every 0.8 s, in time with the heartbeat.'],
+    ['q05', 'demo-01', 14.0, 14.5, 'Electrode-pops-artifact', [],
+      'A sudden jump on C3 alone that dies away within a fraction of a second: an electrode pop.'],
+    ['q06', 'demo-02', 40.0, 44.0, 'Slow-eye-movement-artifact', ['Eye-movement-artifact', 'Eye-artifact'],
+      'Slow waves of opposite sign on F7 and F8, largest on HEOG, over four seconds: a slow eye movement.'],
+    ['q07', 'demo-01', 50.0, 52.0, QUIZ_NONE_OPTION, [],
+      'Only the background EEG: there is no artifact in this segment.'],
+  ].map(([item_id, spec, start_s, end_s, correct_label, accepted_labels, explanation]) => Object.freeze({
+    item_id, recording_id: recordingIdOf(SPEC_BY_ID.get(spec)), start_s, end_s, correct_label, accepted_labels, explanation, context_s: 2.0,
+  })),
+});
+
+/** The items in the annotator's own order, the same at every visit (the desktop's item_order, shuffled the demonstration's way). */
+export function quizOrder(items, annotatorId, setId) {
+  const order = [...items].sort((a, b) => (a.item_id < b.item_id ? -1 : a.item_id > b.item_id ? 1 : 0));
+  const hex = sha256Hex(new TextEncoder().encode(`${setId}:${annotatorId}`));
+  let a = parseInt(hex.slice(0, 8), 16) >>> 0;
+  const rand = () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  return order;
+}
+
+/** QuizSession.score(): the counts, by correct answer, and what was answered instead. */
+export function quizScore(items, answers) {
+  const byItem = new Map(items.map((it) => [it.item_id, it]));
+  const list = Object.entries(answers).map(([id, a]) => ({ ...a, correct_label: byItem.get(id) ? byItem.get(id).correct_label : a.correct_label }));
+  const n = list.length;
+  const correct = list.filter((a) => a.correct).length;
+  const byCategory = {};
+  const confusion = {};
+  for (const a of list) {
+    const c = byCategory[a.correct_label] || (byCategory[a.correct_label] = { items: 0, correct: 0 });
+    c.items += 1;
+    c.correct += a.correct ? 1 : 0;
+    const row = confusion[a.correct_label] || (confusion[a.correct_label] = {});
+    row[a.label] = (row[a.label] || 0) + 1;
+  }
+  return { n_items: items.length, n_answered: n, n_correct: correct, proportion_correct: n ? correct / n : null, by_category: byCategory, confusion };
+}
+
 // The built-in recordings are made once per page and shared with the viewer, so their
 // fingerprints are computed only once.
 const recordings = new Map();
@@ -77,7 +143,7 @@ function fileNameOf(spec) { return `${spec.stem}_eeg.edf`; }
 const LABELS = new Map(CATALOGUE.labels.map((l) => [l.label, l]));
 
 function emptyState() {
-  return { version: 1, drafts: {}, done: {}, submissions: [], guided: {}, practice: {} };
+  return { version: 1, drafts: {}, done: {}, submissions: [], guided: {}, practice: {}, quiz: {} };
 }
 
 export class DemoBackend {
@@ -146,7 +212,89 @@ export class DemoBackend {
       study: this._admin.studyBlock(),
       catalogue: CATALOGUE,
       programme: this._inProgramme(aid) ? { set_id: TRAINING_SET.set_id, name: this._exampleSet().name } : null,
+      quizzes: [{ set_id: QUIZ.set_id, name: QUIZ.name, n_items: QUIZ.items.length, finished: Boolean(this._quizState(aid).finished), feedback: QUIZ.feedback }],
     };
+  }
+
+  // -------------------------------------------------------------------- quiz
+  _quizState(aid) {
+    const key = `${aid}|${QUIZ.set_id}`;
+    if (!this.state.quiz) this.state.quiz = {};
+    if (!this.state.quiz[key]) this.state.quiz[key] = { answers: {}, finished: false, score: null, started_at: nowLocalIso() };
+    return this.state.quiz[key];
+  }
+
+  _quizOptions() { return [...CATALOGUE.labels.map((l) => l.label), QUIZ_NONE_OPTION]; }
+
+  // The study server's rules (electroclean/web/quiz.py): the same answer sent again is kept once,
+  // another label for an answered segment is 409 already_answered (with the kept label), and the
+  // correct answers are given only when the annotator may know them.
+  async quiz(setId, body = {}) {
+    const aid = this._aid();
+    const action = body && body.action;
+    if (!['get', 'answer', 'finish'].includes(action)) throw new ApiError(400, 'bad_request', 'action must be one of get, answer, finish');
+    if (setId !== QUIZ.set_id) throw new ApiError(404, 'no_reference_set', `There is no reference set ${setId} in this study`);
+    const st = this._quizState(aid);
+    const immediate = QUIZ.feedback === 'immediate';
+    const reveal = immediate || st.finished;
+    const byId = new Map(QUIZ.items.map((it) => [it.item_id, it]));
+    if (action === 'get') {
+      const recordings = {};
+      for (const it of QUIZ.items) {
+        if (recordings[it.recording_id]) continue;
+        const spec = RID.get(it.recording_id);
+        recordings[it.recording_id] = { ...this._manifest(spec), fingerprint: await this._fingerprint(spec) };
+      }
+      const options = this._quizOptions();
+      return {
+        set_id: QUIZ.set_id, name: QUIZ.name, feedback: QUIZ.feedback, finished: Boolean(st.finished),
+        items: quizOrder(QUIZ.items, aid, QUIZ.set_id).map((it) => ({
+          item_id: it.item_id, recording_id: it.recording_id, file_name: fileNameOf(RID.get(it.recording_id)), start_s: it.start_s,
+          end_s: it.end_s, context_s: it.context_s, options: [...options],
+        })),
+        answered: Object.fromEntries(Object.entries(st.answers).map(([id, a]) => [id, reveal && byId.has(id)
+          ? { label: a.label, correct: a.correct, correct_label: byId.get(id).correct_label, explanation: byId.get(id).explanation || null }
+          : { label: a.label, correct: null }])),
+        feedback: QUIZ.feedback, finished: Boolean(st.finished), score: st.finished ? st.score : null, n_items: QUIZ.items.length,
+        recordings,
+        demo_notice: DEMO_NOTICE,
+      };
+    }
+    if (action === 'answer') {
+      const item = byId.get(body.item_id);
+      if (!item) throw new ApiError(404, 'unknown_item', 'This quiz has no such segment');
+      if (typeof body.label !== 'string' || !this._quizOptions().includes(body.label)) {
+        throw new ApiError(400, 'bad_label', "The answer must be one of the quiz's artifact types");
+      }
+      const rt = body.response_time_s;
+      if (rt !== undefined && rt !== null && (typeof rt !== 'number' || !Number.isFinite(rt) || rt < 0 || rt > 86400)) {
+        throw new ApiError(400, 'bad_request', 'response_time_s must be a number of seconds');
+      }
+      if (st.finished) throw new ApiError(409, 'finished', 'You have already finished this quiz');
+      const prev = st.answers[item.item_id];
+      if (prev && prev.label !== body.label) {
+        throw new ApiError(409, 'already_answered', 'You have already answered this segment', { error: 'already_answered', label: prev.label });
+      }
+      if (!prev) {
+        const correct = body.label === item.correct_label || item.accepted_labels.includes(body.label);
+        st.answers[item.item_id] = { label: body.label, correct, response_time_s: rt === undefined || rt === null ? null : Math.round(rt * 1000) / 1000,
+          answered_at: nowLocalIso(), index: Object.keys(st.answers).length + 1 };
+        this._save();
+      }
+      const kept = st.answers[item.item_id];
+      const counts = { n_answered: Object.keys(st.answers).length, n_items: QUIZ.items.length };
+      return immediate ? { correct: kept.correct, correct_label: item.correct_label, explanation: item.explanation || null, ...counts }
+        : { correct: null, correct_label: null, explanation: null, ...counts };
+    }
+    // finish: also before every segment is answered (an incomplete result, as on the desktop
+    // when an annotator stops early); finishing again gives the same score
+    if (!st.finished) {
+      st.finished = true;
+      st.finished_at = nowLocalIso();
+      st.score = quizScore(QUIZ.items, st.answers);
+      this._save();
+    }
+    return { score: st.score };
   }
 
   // ------------------------------------------------------------ assignments
@@ -732,6 +880,16 @@ export class DemoBackend {
       schema: 'electroclean.web_demo_results', created_at: nowLocalIso(), note: DEMO_NOTICE,
       annotation_documents: docs,
       interaction_logs: [...this.visits.values()].map((v) => ({ header: v.header, closed: v.closed, events: v.events })),
+      quiz_results: Object.entries(this.state.quiz || {}).filter(([, s]) => Object.keys(s.answers).length).map(([key, s]) => ({
+        schema: 'electroclean.quiz_result', annotator_id: key.split('|')[0], reference_set_id: QUIZ.set_id,
+        // completed as on the desktop: every segment answered (a quiz finished early is incomplete)
+        mode: QUIZ.feedback === 'immediate' ? 'practice' : 'assessment', finished: Boolean(s.finished),
+        completed: Object.keys(s.answers).length === QUIZ.items.length, started_at: s.started_at, finished_at: s.finished_at || null,
+        answers: Object.entries(s.answers).sort((x, y) => (x[1].index || 0) - (y[1].index || 0)).map(([item_id, a]) => ({
+          item_id, answer: a.label, correct: a.correct, response_time_s: a.response_time_s ?? null, answered_at: a.answered_at,
+          correct_label: (QUIZ.items.find((it) => it.item_id === item_id) || {}).correct_label || null })),
+        score: s.score || quizScore(QUIZ.items, s.answers),
+      })),
     };
   }
 

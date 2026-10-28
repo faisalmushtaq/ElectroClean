@@ -420,7 +420,8 @@ of `electroclean.config.settings.CHANNEL_TYPES` for exactly the channels shown;
 order inside the recording; `discontinuity_samples` lie inside it;
 `original_events` has a known `source` (`events_tsv`, `brainvision_vmrk`,
 `edf_annotations`, `bdf_annotations`, `stim_channel` or `none`), one text value
-per column in each row and every event's sample from 0 to `n_samples`;
+per column in each row and every event's sample a whole number (an events.tsv
+row outside the recording is kept, as the loader keeps it with a warning);
 `amplitude.suggested_scalings` are positive; reports and sidecars are plain
 JSON objects of limited size; and the result can be used to show the recording
 and to write result files. The server records `registration`

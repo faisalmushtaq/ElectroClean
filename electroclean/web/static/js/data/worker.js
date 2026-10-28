@@ -36,6 +36,12 @@ self.onmessage = async (event) => {
         reply({ ok: true, result: r }, r.data.map((d) => d.buffer));
         break;
       }
+      case "amplitude":
+        reply({ ok: true, result: await engine.amplitudeCheck(args) });
+        break;
+      case "findEvents":
+        reply({ ok: true, result: await engine.findEvents(args) });
+        break;
       case "close":
         if (engine) engine.close();
         engine = null;

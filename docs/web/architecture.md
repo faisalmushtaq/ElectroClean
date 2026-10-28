@@ -85,10 +85,11 @@ electroclean/web/static/          the browser application (plain ES modules, no 
     js/data/                      reading recordings: recording.js, worker.js, engine.js, files.js,
                                   edf.js, brainvision.js, channels.js, filters.js, fft.js, pool.js,
                                   filterworker.js, sha256.js, hashworker.js, amplitude.js, util.js,
-                                  synthetic.js
+                                  synthetic.js; registering them: register.js, bids.js, events.js,
+                                  mnewarn.js, pyfmt.js, pyjson.js
     js/viewer/                    drawing the EEG, axes, overview, navigation
     js/annotate/                  the annotation store, tools, toolbar, panels, picker, keys
-    js/training/                  the coach and practice review
+    js/training/                  the coach, practice review and the short-segment quiz
     js/log/                       the interaction logger
 web_tests/unit/                   node --test unit tests of the browser modules
 web_tests/e2e/                    Playwright end-to-end tests
@@ -135,7 +136,9 @@ need not know about them:
 
 ```js
 openRecording(files, options?)  // options: { onProgress({stage, fraction}), fileName, fingerprint,
-                                //   filters, worker, blockCacheBytes, filterCacheBytes }
+                                //   filters, worker, blockCacheBytes, filterCacheBytes,
+                                //   amplitude /* false: no amplitude check on opening */,
+                                //   requireShown /* false: open even when every channel is hidden */ }
 Recording += {
   dataFileName: string,          // the file that is fingerprinted (the .eeg for BrainVision)
   channels: [{ ..., origUnit, hidden }],  // the file's unit; hidden: suggested as not shown
@@ -151,6 +154,12 @@ Recording += {
   readerKind: "worker" | "page",
   edgeZones(filters) -> [[startSample, endSample]],  // the hatched zones of the whole recording
   setChannelTypes(types),        // { name: type } or [type, ...], e.g. the manifest's channel_types
+  // for registration (register.js):
+  annotations: [{ onset, duration, description, channels }   // EDF+/BDF+ annotations as read (seconds)
+               | { onsetSample, durationSamples, description }],  // or BrainVision markers (samples)
+  mneTypes: [string],            // each channel's type as MNE-Python reads the file ("eeg", "stim", ...)
+  async checkAmplitude({ filters, types, hidden }) -> { amplitudesV, suggestedScalings, warnings },
+  async findTriggerEvents(channels, { mask }) -> [{ sample, code, channel }],  // as mne.find_events
 }
 readWindow({ ..., prefetch? })   // prefetch: false stops the next window being filtered ahead
   -> { ..., elapsedMs }
@@ -359,6 +368,44 @@ settings, reference sets from saved annotations or files, the audit log) and
 answers the analyses (agreement, activity, competency, consensus) with an
 error that says they need a study server or Firebase.
 
+The short-segment quiz (`js/training/quiz.js`, the route `#quiz`) uses
+`quiz(setId, body)` only: `get` once, then `answer` for each segment and
+`finish`. On Firebase only `get` is asked a second time when a call fails,
+since an answer or a finish must never be sent twice. Each answer carries the
+`response_time_s` the browser measured. The study keeps an answer sent twice
+once; when it refuses an answer with 409 (`already_answered`, with the label it
+kept, after a reply that was lost or an answer from another page, or
+`finished`), the view reloads with `get`, says which answer was kept, and
+carries on, as it also does when an answer's `n_answered` shows answers given
+elsewhere. A finished quiz is shown with the `score` that `get` returns. The
+segments are cut as the desktop cuts them (the item's interval with
+`context_s` around it, within the recording), shown read only in the usual
+viewer from the annotator's own copy of the recording with the item's interval
+shaded, after the copy has been checked against the fingerprint in the
+`recordings` manifests of `get`. The
+view logs the desktop's quiz events (`quiz_item_shown`, `quiz_answer` with
+`response_time_s`, `quiz_finished`, each with `quiz_mode` "practice" when the
+feedback is immediate and "assessment" when it comes at the end) and also
+`quiz_opened`, `quiz_recording_checked` and `quiz_stopped`. When the feedback
+comes at the end, `quiz_answer` has `correct` null, as the browser does not
+know it, and `quiz_finished` has the counts; a refused answer is logged as
+`quiz_answer_refused` with the reason and the answer kept. The demonstration
+has a quiz of seven segments from its first two examples, in an order of its
+own for each account (the desktop's `item_order` uses Python's random
+generator), and answers with the study server's fields and errors
+(`electroclean/web/quiz.py`).
+
+The channel chooser (`chooseChannels` in `js/annotate/dialogs.js`, behind
+Channels… and Edit channels…) follows the desktop's channel dialog. Its rules
+are exported and tested in Node (`web_tests/unit/ui_channels.test.mjs`):
+`findChannels` (names or their beginnings, also after a leading "EEG " in EDF
+names, the names containing a term that begins none, quotes and wildcards),
+`tenTwentyPosition` and `channelGroups` (Regions and Sides for montages named
+by the 10-20 or 10-10 system, Banks of numbered channels for others, in blocks
+of 32 for a bank larger than that, and Types), which give the same groups as
+the desktop's `ChannelDialog._channel_groups` for banks of up to 32 channels.
+Up to 16 channels the chooser is the plain list it always was.
+
 ## Registering recordings in the browser
 
 The admin area adds recordings without uploading them: `js/data/register.js`
@@ -367,19 +414,132 @@ builds, in the browser, the same internal manifest that
 the files, and only the manifests go to the study (`recordings_register`).
 
 ```js
-findDatasetRecordings(files: File[], { settings }) -> { recordings: [{ recordingId, files: File[] }], ignored: [{ path, reason }] }
-    // files from a folder picker (webkitRelativePath) or chosen one by one; the folder chosen is the
-    // dataset root, recording IDs are paths relative to it, as the desktop's discovery makes them
-buildManifest(recording, { settings, scope, onProgress }) -> Promise<{ manifest, problems: [string] }>
-buildManifests(files, { settings, scope, onProgress }) -> Promise<{ manifests, failures: [{ path, reason }] }>
+findDatasetRecordings(files: File[], { settings })
+    -> { recordings: [{ recordingId, format, fileName, files: File[], sizeBytes, root, sidecars }],
+         ignored: [{ path, reason }] }
+buildManifest(recording, { settings, scope, onProgress, catalogue, worker, version })
+    -> Promise<{ manifest, problems: [string] }>
+buildManifests(files, { settings, scope, onProgress, catalogue, worker, version, signal })
+    -> Promise<{ manifests, failures: [{ path, reason, kind }], ignored, problems: { recordingId: [string] } }>
+// onProgress of buildManifest: ({ stage, fraction }); of buildManifests: ({ index, total, recordingId,
+// stage, fraction, overall }), with stage "start" and "done" around each recording
 ```
 
-`settings` is the study's settings (`settings_get`): the channels to hide and
-the channel types by name pattern, the display scalings, the discovery suffixes
-and the BIDS options. The manifest uses the BIDS sidecars beside the recording
-(`channels.tsv` for types and bad channels, `events.tsv` and its JSON for the
-original events, `eeg.json`) exactly as the desktop's loader does, and the
-tests compare it with the Python manifest of the same files, field by field.
+`files` come from a folder picker (each with its `webkitRelativePath`) or are
+chosen one by one. The folder chosen is the dataset root, and recording IDs are
+the paths below it, as the desktop's discovery makes them: a file is a
+recording when its name ends in one of the discovery suffixes (in any case),
+outside hidden folders, the folders the settings exclude (`derivatives`,
+`Annotated_Events` and so on) and the results folder. Files picked one by one
+are all in the root, so their IDs are their names. `ignored` lists the files
+with a recording's extension that were left out, with the reason in plain
+words. Each recording's `files` holds what it needs (the data file, the usual
+BrainVision companions and its sidecars), so that the admin area can show its
+size; `buildManifest` reads the companions the header names from all the
+picked files. `buildManifests` registers the recordings one after another and
+reports a recording that cannot be registered in `failures`, with the
+desktop's message, without stopping; `signal` (an `AbortSignal`) stops it
+between recordings. `problems` are each manifest's warnings, the findings the
+administrator should look at before assigning the recording.
+
+`settings` is the study's settings, the answer of `settings_get` or its
+`settings` blocks, merged over the defaults of `default_settings.json`
+(`DEFAULT_SETTINGS`, which a test compares with that file): `channels.hide`,
+`channels.types`, `filters`, `loading` (BIDS channel types and bad channels)
+and, when given, `discovery`. `catalogue` is the study's label catalogue (from
+`GET /me`), used to note original events named like artifacts; the default is
+ElectroClean's own. `version` fills `electroclean_version` (the study's version
+from `GET /health`, say), which is otherwise `browser`; `created_at` is the
+moment of registration on the administrator's clock, in the desktop's format.
+
+Everything else is computed as `register_recording` computes it, with the
+desktop's wording for every message. The companions a BrainVision header names
+must be among the picked files. The BIDS sidecars come from the dataset root
+down to the recording's folder with the inheritance principle
+(`js/data/bids.js`, a port of `electroclean/app/io/bids.py`), TSV files are read
+exactly as strings, and JSON sidecars are read as Python reads them
+(`js/data/pyjson.js`): NaN and Infinity become null and are reported, and a file
+that cannot be read is reported with Python's own error message. The original
+events (`js/data/events.js`) come from `events.tsv` when there is one
+(compared with the file's markers), otherwise from the EDF+ and BDF+
+annotations or the BrainVision markers with the codes MNE gives them, otherwise
+from the trigger channels, including channels that only channels.tsv or the
+settings call triggers. The annotations are held as MNE holds them once it has
+set them on the recording: sorted by onset and duration, clipped to the
+recording and timed to the microsecond. The channel types are the file's as
+MNE reads it, then channels.tsv's, then the settings' patterns; channels shown,
+hidden and marked bad, the notes, the gaps, the discontinuities, the filters
+skipped and the amplitude check (on the display copy with the study's filters,
+through `Recording.checkAmplitude` with the manifest's types) follow. The
+warnings MNE gives while reading, which the desktop keeps as "MNE: ...", are
+worked out from the headers (`js/data/mnewarn.js`): duplicate channel names,
+empty ranges, differing or contradictory filter settings, unreadable patient
+fields and dates, a record length of 0, unrecognised BrainVision header lines
+(twice, as MNE reads the line twice), missing `DataPoints`, channels at the
+origin of the coordinates, the amplifier's filter table and the montage, and
+annotations clipped at the end. `js/data/pyfmt.js` writes numbers and text as
+Python does (`repr` of floats, formats rounded half to even, `repr` of strings
+and lists).
+
+The data file's fingerprint is computed in the reading worker while the file is
+streamed, and the other files (header, markers, sidecars) are small enough to
+hash on the page; the amplitude check and any trigger channel the file does not
+mark are read in the worker too, so registering many recordings keeps the page
+responsive. A recording is closed, and its worker ended, before the next one
+starts. On the development machine, reading on the page without a worker,
+registering the ten Emotiv recordings described below took 3 s and the 771 MB
+BDF file 12 s.
+
+### How the browser's manifests compare with the desktop's
+
+`web_tests/unit/data_register.test.mjs` registers the datasets that
+`scripts/make_web_fixtures.py` writes into `web_tests/fixtures/datasets/` (BIDS
+BrainVision recordings with inherited sidecars, EDF+, EDF and BDF files of many
+kinds, a BrainVision header written by hand and a collection of odd and broken
+metadata) with default and with a study's own settings, and compares every
+field with the manifests that `web_tests/register_parity.py` builds with the
+desktop's loader. The amplitudes may differ by 1 part in 100,000, as elsewhere
+in the data layer, because the display copy is filtered in single precision;
+everything else must be equal. `web_tests/unit/data_register_py.test.mjs` checks
+the imitations of Python against Python on a few hundred values. Ten Emotiv
+EDF+ recordings of a BIDS dataset (14 channels shown, 44 or 46 hidden, events in
+events.tsv, padding marked BAD_ACQ_SKIP, four with amplitudes stored in the
+wrong unit), three 128-channel BrainVision recordings with channels.tsv and bad
+channels, and a 137-channel BioSemi BDF file of 771 MB with 1112 trigger codes
+gave manifests equal to the desktop's in every field, with amplitudes within 3
+parts in 100 million.
+
+The same test passes every manifest built from the datasets through the study
+server's own checks (`electroclean/web/manifest_check.py`, which
+`recordings_register` runs before storing a manifest, called through
+`register_parity.py --check`) and requires each to be accepted and kept
+unchanged; in a tree without the server's checks the test says so and is
+skipped. One of the fixtures has an events.tsv row past the end of its
+recording on purpose: the loader keeps it with a warning and the server accepts
+it too. The fourteen manifests of the recordings above pass the checks
+unchanged.
+
+A few things differ by nature. A browser knows a file's modification time to
+the millisecond, so `mtime_ns` is a whole number of milliseconds. Python names
+some folders and files in full in its messages (an ambiguous sidecar's folder,
+a TSV file that cannot be read); the browser names them from the folder the
+administrator chose, which is all it knows of where they are. When a file
+repeats several channel names, MNE lists them in an order that changes from
+run to run, and the browser lists them sorted. Companion files named with
+other capitals than the header gives are found as Windows and macOS find them.
+
+Some cases are rare enough that the browser reads them a little differently,
+and none of them appeared in the files above. A study whose filters use the
+IIR method has its amplitude check filtered with the FIR filters the browser
+has, so the amplitudes can differ slightly from the desktop's. A channel stored
+with fewer samples per data record than the others is interpolated linearly
+for the amplitude check (MNE resamples it). Event codes and samples written
+with decimal digits other than 0 to 9 are read by Python and not by the
+browser, and whole numbers above 2^53 in a JSON sidecar are rounded. Headers
+that MNE refuses to read for reasons of its own (a patient field with two
+equals signs in one entry, an option repeated in a BrainVision header) are read
+by the browser, and warnings that Python's own libraries give while reading
+are not reproduced.
 
 ## Interaction logs
 
