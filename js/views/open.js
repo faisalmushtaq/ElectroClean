@@ -2,7 +2,7 @@
 // them), then follow its fingerprint and the study's answer.
 
 import { h, clear } from '../ui/dom.js';
-import { appHeader } from './common.js';
+import { appHeader, icon } from './common.js';
 
 const FORMAT_HINT = {
   edf: 'Choose the .edf file.',
@@ -67,7 +67,7 @@ export class OpenView {
     }
     this.el = h('div.view.open', { 'data-view': 'open' }, appHeader(app),
       h('main.page.narrow', {},
-        h('button.btn.quiet.back', { type: 'button', onclick: () => app.goBack() }, '‹ Back'),
+        h('button.btn.quiet.back', { type: 'button', onclick: () => app.goBack() }, icon('arrow-left'), 'Back'),
         h('h1', {}, name ? `Open ${name}` : 'Open a recording from your computer'),
         h('p.subtitle', {}, 'The recording is read here, in your browser, and is never uploaded. Only its fingerprint (a checksum of the file) is sent to the study, to recognise it.'),
         h('p', {}, FORMAT_HINT[format] || 'Choose an EDF or BDF file, or the .vhdr, .vmrk and .eeg files of a BrainVision recording (or their folder).'),
@@ -106,7 +106,7 @@ export class OpenView {
     }
     li.className = `step ${state}`;
     clear(li);
-    li.append(h('span.step-icon', { 'aria-hidden': 'true' }, state === 'done' ? '✓' : state === 'failed' ? '!' : '…'), h('span', {}, text));
+    li.append(h('span.step-icon', { 'aria-hidden': 'true' }, state === 'done' ? icon('check') : state === 'failed' ? icon('close') : '…'), h('span', {}, text));
     if (fraction !== null) li.append(h('span.progress.inline', {}, h('span.progress-bar', { style: { width: `${Math.round(fraction * 100)}%` } })));
   }
 

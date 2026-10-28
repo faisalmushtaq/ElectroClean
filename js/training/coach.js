@@ -6,7 +6,8 @@
 import { h, clear, richText } from '../ui/dom.js';
 import { inform } from '../ui/dialog.js';
 import { logger } from '../log/logger.js';
-import { overlaps, starText, stepBody, STARS_FIRST } from './rules.js';
+import { overlaps, stepBody, STARS_FIRST } from './rules.js';
+import { starIcons } from '../views/common.js';
 import { DEMO_NOTICE } from '../api/notice.js';
 
 export function minutesText(seconds) {
@@ -186,7 +187,7 @@ export class GuidedCoach {
         this._feedback("This is how the experts marked it. Look at where it starts and ends and which channels it covers, then press **Continue** (Enter).", 'success');
       } else {
         const done = (r.messages[0] || 'Right type and timing.').replace(/\.$/, '');
-        this._feedback(`✓ ${done}. Press **Continue** (Enter) for the next one.`, 'success');
+        this._feedback(`${done}. Press **Continue** (Enter) for the next one.`, 'success');
       }
       if (!this.flashed) {
         this.flashed = true;
@@ -218,9 +219,8 @@ export class GuidedCoach {
     const earned = this.stars.reduce((a, b) => a + b, 0);
     const possible = STARS_FIRST * this.stars.length;
     const total = STARS_FIRST * this.nSteps;
-    this.starsEl.textContent = this.stars.length
-      ? `${starText(earned, possible)}  ${earned} of ${possible} stars so far (${total} possible)`
-      : `Up to ${STARS_FIRST} stars for each artifact you match yourself.`;
+    if (this.stars.length) this.starsEl.replaceChildren(starIcons(earned, possible), `${earned} of ${possible} stars so far (${total} possible)`);
+    else this.starsEl.textContent = `Up to ${STARS_FIRST} stars for each artifact you match yourself.`;
   }
 
   canContinue() { return !this.complete && !this.busy && !this.acting && Boolean(this.last && this.last.can_continue); }
@@ -316,7 +316,7 @@ export class GuidedCoach {
       const shown = s.shown ? `, ${s.shown} with Show me` : '';
       this.body.appendChild(richText(`You matched all ${n} of the experts' annotations in ${minutesText(s.time_s || 0)}${shown}. ` +
         'Press **Save and Finish** to save your work and return to your training path.'));
-      this.starsEl.textContent = `${starText(s.stars, s.max_stars)}  ${s.stars} of ${s.max_stars} stars`;
+      this.starsEl.replaceChildren(starIcons(s.stars, s.max_stars), `${s.stars} of ${s.max_stars} stars`);
     } else {
       this.body.appendChild(richText('The experts found no artifacts in this recording. Look through it, then press **Save and Finish**.'));
       this.starsEl.textContent = '';
@@ -332,7 +332,7 @@ export class GuidedCoach {
 
   _showCompleteCheck(r) {
     if (r.problems.includes('extra')) this._feedback(r.messages[0], 'banner');
-    else this._feedback('✓ Everything matches the experts.', 'success');
+    else this._feedback('Everything matches the experts.', 'success');
   }
 
   syncSaveButton(btn) {

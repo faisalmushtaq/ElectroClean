@@ -3,6 +3,8 @@
 
 import { h } from '../ui/dom.js';
 import { brandMark } from './common.js';
+import { montageFigure } from './montage.js';
+import { eegArt } from './eegart.js';
 import { inform } from '../ui/dialog.js';
 
 export function signinView(app, { message = '', error = '' } = {}) {
@@ -100,12 +102,26 @@ export function signinView(app, { message = '', error = '' } = {}) {
       h('button.btn.small', { type: 'button', onclick: () => app.useDemo() }, 'Try the demonstration instead'))) : null;
 
   const card = h('div.card.signin-card', {},
-    h('div.brand.big', {}, brandMark(36), h('span.brand-name', {}, 'ElectroClean')),
     h('h1', {}, 'Sign in'), studyLine,
     message ? h('p.success', { role: 'status' }, message) : null,
     problem, b ? form : null, demoHint, connect);
-  const view = h('main.page.signin', { 'data-view': 'signin' }, card,
-    h('p.caption.footnote', {}, 'Your EEG recordings stay on your computer: ElectroClean reads them in this browser and sends only your annotations to the study.'));
+  // The page: on the left, an illustration of EEG with the name and what ElectroClean is for; on
+  // the right, the form.
+  const status = !b ? h('span.chip', {}, 'Connecting')
+    : b.isDemo ? h('span.chip', {}, 'Demonstration')
+      : h('span.chip', {}, b.kind === 'firebase' ? 'Study on Firebase' : 'Study server');
+  const art = h('section.signin-art', {}, eegArt(),
+    h('div.signin-art-inner', {},
+      h('div.signin-status', {}, brandMark(28, '#FFFFFF'), status),
+      h('div', {},
+        h('p.signin-display', {}, 'ElectroClean'),
+        h('p.signin-lede', {}, 'Artifact annotation for continuous EEG. ',
+          h('span.tone-soft', {}, 'Your recordings stay on this computer, and only your annotations go to the study.'))),
+      h('div.signin-foot', { 'aria-hidden': 'true' },
+        h('p.figure-caption', {}, 'Fig. 01 · the 10-20 montage, 19 electrodes'), montageFigure())));
+  const panel = h('section.signin-panel', {}, card,
+    h('p.caption.footnote', {}, 'ElectroClean reads each recording in this browser, and the EEG stays on this computer: the study receives the recording\'s fingerprint and your annotations.'));
+  const view = h('main.page.signin', { 'data-view': 'signin' }, h('div.signin-split', {}, art, panel));
   setTimeout(() => (b ? idField : null)?.focus(), 0);
   return view;
 }

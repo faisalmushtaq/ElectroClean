@@ -1,34 +1,36 @@
 // The colours of the application's design system, for drawing on canvas (the EEG viewer, the
-// practice review). app.css defines the same values as CSS custom properties.
+// practice review). app.css defines the same values as CSS custom properties; the canvas keeps a
+// white plot for the traces, inside the warm off-white page.
 
 export const COLOURS = Object.freeze({
-  window: '#F5F5F7',
+  window: '#FDFCFB', // the page
   surface: '#FFFFFF',
-  surface_alt: '#FAFAFB',
-  hover: '#EDEDF0',
-  pressed: '#E2E2E7',
-  border: '#C7C7CC',
-  separator: '#E3E3E8',
-  text: '#1D1D1F',
-  text_secondary: '#6E6E73',
-  text_tertiary: '#76767B',
-  text_disabled: '#A1A1A6',
-  accent: '#0066CC',
-  accent_soft: '#E8F1FC',
-  destructive: '#B3261E',
-  warning_bg: '#FFF6E0',
-  warning_border: '#F0D48A',
-  warning_text: '#6B4A00',
-  success: '#1B7A3A',
-  success_bg: '#EAF6EE',
+  surface_alt: '#F3EFE8',
+  hover: '#F4F1EC',
+  pressed: '#EAE6DF',
+  border: '#8C8A86',
+  separator: '#E6E3DF', // the hairline
+  text: '#242422',
+  text_secondary: '#63615D',
+  text_tertiary: '#6B6965',
+  text_disabled: '#A8A6A2',
+  accent: '#2B4392', // the one accent: ink blue
+  accent_soft: '#E9EDF7',
+  destructive: '#A8321C',
+  warning_bg: '#FAEFD7',
+  warning_border: '#D9A441',
+  warning_text: '#6B4700',
+  success: '#2B4392', // matched annotations in the practice review
+  success_bg: '#E9EDF7',
   flag_type: '#6A1B9A',
   selection_channel: '#C2185B',
   event: '#00796B', // original experimental events (teal)
-  trace: '#1D1D1F',
+  trace: '#1E1E1E',
   trace_ecg: '#5D4037',
-  trace_bad: '#A1A1A6',
-  grid: '#EEEEF1',
-  hatch: '#B9B9C0',
+  trace_bad: '#A8A6A2',
+  grid: '#EFECE7',
+  hatch: '#BDB8B0',
 });
 
-export const FONT = '"Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+// Labels, channel names and figures on the canvas are set in the application's one typeface.
+export const FONT = '"Newsreader", "Iowan Old Style", "Palatino Linotype", Georgia, serif';

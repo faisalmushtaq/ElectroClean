@@ -4,6 +4,7 @@
 // remove it, see their assignments and choose their training programme.
 
 import { h, clear } from '../ui/dom.js';
+import { icon } from '../views/common.js';
 import { MODES, ROLES, STATUS, checkAnnotatorId, checkEmail, whenText } from './model.js';
 import {
   actionButton, card, chip, confirmInline, dataTable, field, infoTable, loading, messageArea, recordingName, secretBox, sectionHead, select,
@@ -153,7 +154,7 @@ export class AnnotatorsSection {
   _renderDetail(note = null) {
     const u = this.users.find((x) => x.annotator_id === this.detailId);
     clear(this.detailView);
-    const back = h('button.btn.quiet.back', { type: 'button', onclick: () => this.closeDetail() }, '‹ All accounts');
+    const back = h('button.btn.quiet.back', { type: 'button', onclick: () => this.closeDetail() }, icon('arrow-left'), 'All accounts');
     if (!u) {
       this.detailView.append(back, h('p.note', {}, `There is no account ${this.detailId} in this study (any more).`));
       return;

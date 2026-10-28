@@ -1,23 +1,40 @@
-// Pieces shared by the views: the header bar, the brand mark and the small-screen notice.
+// Pieces shared by the views: the header bar, the brand mark, the icons and the small-screen notice.
 
 import { h } from '../ui/dom.js';
 
 const SVG = 'http://www.w3.org/2000/svg';
 
-export function brandMark(size = 28) {
+export function brandMark(size = 28, colour = '#1E1E1E') {
   const svg = document.createElementNS(SVG, 'svg');
   svg.setAttribute('viewBox', '0 0 32 32');
   svg.setAttribute('width', String(size));
   svg.setAttribute('height', String(size));
   svg.setAttribute('aria-hidden', 'true');
   svg.classList.add('brand-mark');
-  const rect = document.createElementNS(SVG, 'rect');
-  Object.entries({ x: 1, y: 1, width: 30, height: 30, rx: 8, fill: '#0066CC' }).forEach(([k, v]) => rect.setAttribute(k, String(v)));
+  // A head seen from above (a thin circle) with an EEG trace running through it, drawn in one line weight.
+  const circle = document.createElementNS(SVG, 'circle');
+  Object.entries({ cx: 16, cy: 16, r: 14.25, fill: 'none', stroke: colour, 'stroke-width': 1.5 }).forEach(([k, v]) => circle.setAttribute(k, String(v)));
   const path = document.createElementNS(SVG, 'path');
-  path.setAttribute('d', 'M5 17h4l2.5-6 3.5 12 3-9 2 3h7');
-  Object.entries({ fill: 'none', stroke: '#FFFFFF', 'stroke-width': 2.2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }).forEach(([k, v]) => path.setAttribute(k, String(v)));
-  svg.append(rect, path);
+  path.setAttribute('d', 'M3.5 16.5h5l2.4-5.5 3.6 11.5 3.1-9 2 3.5h8.9');
+  Object.entries({ fill: 'none', stroke: colour, 'stroke-width': 1.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }).forEach(([k, v]) => path.setAttribute(k, String(v)));
+  svg.append(circle, path);
   return svg;
+}
+
+/** A drawn icon in the colour of the text around it (the --i-* masks of app.css): arrow-right,
+ * arrow-left, arrow-up, arrow-down, arrow-up-right, chevron-down, chevron-right, check, close, star
+ * and star-empty. Icons stand beside words, so they are hidden from screen readers. */
+export function icon(name) {
+  return h(`span.ico.ico-${name}`, { 'aria-hidden': 'true' });
+}
+
+/** Stars earned out of those possible, drawn (★★☆ for 2 of 3); one star for long counts, whose
+ * number the text beside it gives. */
+export function starIcons(stars, maxStars) {
+  const n = maxStars <= 9 ? maxStars : 1;
+  const out = h('span.stars', { 'aria-hidden': 'true' });
+  for (let i = 0; i < n; i++) out.append(icon(i < stars ? 'star' : 'star-empty'));
+  return out;
 }
 
 /** The header bar. Administrators also get the way into the admin area (or, inside it, back to their recordings). */

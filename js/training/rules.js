@@ -151,10 +151,6 @@ export function starsFor(failedAttempts, shown) {
   return STARS_SHOWN;
 }
 
-export function starText(stars, maxStars) {
-  return maxStars <= 9 ? '★'.repeat(stars) + '☆'.repeat(Math.max(maxStars - stars, 0)) : `★ ${stars}`;
-}
-
 /** 'Eye-blink-artifact, 3.00–3.40 s, on Fp1, Fp2 and VEOG'. */
 export function describeTarget(target, sfreq) {
   const where = isGlobal(target) ? 'whole montage' : 'on ' + listWords(target.channels);

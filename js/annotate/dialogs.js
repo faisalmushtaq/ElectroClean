@@ -3,7 +3,7 @@
 
 import { h, clear } from '../ui/dom.js';
 import { showDialog } from '../ui/dialog.js';
-import { Catalogue } from '../catalogue.js';
+import { Catalogue, displayCode } from '../catalogue.js';
 import { legibleOnWhite } from '../util.js';
 
 /**
@@ -31,7 +31,7 @@ export function pickType({ title, catalogue, current = null, quick = [], at = nu
       },
       h('span.swatch', { style: { background: l.colour } }),
       h('span.picker-name', {}, l.label),
-      h('span.picker-code', {}, `${l.short_code} · ${l.value}`),
+      h('span.picker-code', {}, `${displayCode(l.short_code)} · ${l.value}`),
       inQuick && key ? h('kbd', {}, String(key)) : null);
       items.push(el);
       list.appendChild(el);

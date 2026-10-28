@@ -8,7 +8,7 @@
 
 import { h, clear } from '../ui/dom.js';
 import { choose } from '../ui/dialog.js';
-import { appHeader } from '../views/common.js';
+import { appHeader, icon } from '../views/common.js';
 import { filesForRecording } from '../views/open.js';
 import { EegViewer } from '../viewer/viewer.js';
 import { displayChannels } from '../annotate/session.js';
@@ -20,7 +20,7 @@ export const NONE_OPTION = 'No artifact / none of these';
 export const QUESTION = 'Which artifact type is the main one in the shaded segment?';
 /** The label of the shaded segment in the viewer (drawn in the accent colour). */
 const SEGMENT_LABEL = '\u0000quiz-segment';
-const SEGMENT_COLOUR = '#0066CC';
+const SEGMENT_COLOUR = '#2B4392'; // the design's accent (ink blue), its colour for what is chosen
 
 // ------------------------------------------------------------------ pure helpers
 /** Python's round(): halves to the even neighbour (the desktop application cut segments with it). */
@@ -188,7 +188,7 @@ export class QuizView {
     this.awaitingNext = false;
     this.progress = h('p.subtitle.quiz-progress', { 'aria-live': 'polite' });
     this.title = h('h1', {}, 'Quiz');
-    this.stopBtn = h('button.btn.quiet', { type: 'button', 'data-log': 'quiz-stop', onclick: () => this.stop() }, '‹ Stop the quiz');
+    this.stopBtn = h('button.btn.quiet', { type: 'button', 'data-log': 'quiz-stop', onclick: () => this.stop() }, icon('arrow-left'), 'Stop the quiz');
     this.body = h('div.quiz-body');
     this.el = h('div.view.quiz', { 'data-view': 'quiz' }, appHeader(app),
       h('div.quiz-bar', {}, this.stopBtn, h('div.quiz-heading', {}, this.title, this.progress)),
@@ -329,7 +329,7 @@ export class QuizView {
     }
     li.className = `step ${state}`;
     clear(li);
-    li.append(h('span.step-icon', { 'aria-hidden': 'true' }, state === 'done' ? '✓' : state === 'failed' ? '!' : '…'), h('span', {}, text));
+    li.append(h('span.step-icon', { 'aria-hidden': 'true' }, state === 'done' ? icon('check') : state === 'failed' ? icon('close') : '…'), h('span', {}, text));
   }
 
   /** Open the needed recordings found among the picked files and check them. */
@@ -591,7 +591,7 @@ export class QuizView {
   }
 
   _showScore(score, { heading = 'Quiz complete' } = {}) {
-    this.stopBtn.textContent = '‹ Back';
+    this.stopBtn.replaceChildren(icon('arrow-left'), 'Back');
     const rows = Object.entries(score.by_category || {}).map(([label, c]) => h('tr', {},
       h('td', {}, this.catalogue && this.catalogue.has(label) ? h('span.swatch', { style: { background: this.catalogue.colourFor(label) } }) : null, ` ${label}`),
       h('td.num', {}, String(c.items)), h('td.num', {}, String(c.correct))));
@@ -619,7 +619,7 @@ export class QuizView {
       ? scoreText({ n_items: this.items.length || answers.length, n_correct: known.filter((a) => a.correct).length })
       : 'Your answers are saved with the study.';
     this.progress.textContent = '';
-    this.stopBtn.textContent = '‹ Back';
+    this.stopBtn.replaceChildren(icon('arrow-left'), 'Back');
     this._set(this._page(
       h('h2', {}, 'You have finished this quiz'),
       h('p.note', {}, text),
