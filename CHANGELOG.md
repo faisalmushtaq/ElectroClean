@@ -118,6 +118,23 @@ long, high-density recording needs about half the memory it did, because the
 display filters work on blocks of channels: a 30-minute, 128-channel recording
 at 1024 Hz needs about 2.2 GB instead of 4 GB.
 
+The agreement, activity and competency reports take the look of the browser
+application: a warm off-white page, serif headings and text, hairline rules,
+white square-cornered tables and figures, column headings and labels in a
+small grey serif, monospaced numbers and one ink-blue accent. The activity
+report shows its key numbers as large figures in a ruled grid and draws a
+single annotator's learning curve in ink blue; the agreement report's figures
+use ink blue, vermillion and reddish purple for the three measures, still each
+with its own marker, and a blue scale for heat maps, boxes and timelines.
+Warnings and the competency result are framed blocks with a bar in their
+colour. The reports remain single files
+that fetch nothing from other sites: they name the design's fonts and use the
+computer's own serif and monospaced fonts where those are not installed. Wide
+tables in the agreement report scroll sideways on their own in a narrow window,
+such as the admin area's frame, so the page itself fits, and the activity
+report keeps its light colours when the computer uses a dark appearance, like
+the application.
+
 ## 1.1.0
 
 The first public release, with stand-alone applications for Windows (64-bit),

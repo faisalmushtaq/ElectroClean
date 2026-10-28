@@ -28,6 +28,7 @@ from electroclean.app.io.naming import OutputLayout
 from electroclean.reliability.analysis import run_analysis
 from electroclean.reliability.config import ANY_ARTIFACT, AnalysisConfig
 from electroclean.reliability.data import build_dataset
+from electroclean.report_style import BASE_CSS, COLOURS
 from electroclean.training.reference import METHOD_NAMES, REFERENCE_ANNOTATOR, ReferenceSet
 
 MICRO = "ALL categories (micro-average)"
@@ -531,17 +532,25 @@ def _clean(obj: Any) -> Any:
     return obj
 
 
-_CSS = (
-    "body{font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;max-width:1100px;margin:2em auto;"
-    "padding:0 1em;color:#0b0b0b;background:#fcfcfb;line-height:1.45} "
-    "table{border-collapse:collapse;font-size:13px;margin:0.4em 0 1em} "
-    "td,th{border-top:1px solid #e4e3df;padding:4px 8px;text-align:left;vertical-align:top} "
-    "th{background:#f1f0ec;font-weight:600} td.num{text-align:right;font-variant-numeric:tabular-nums} "
-    "td.cat{white-space:nowrap} .wide{overflow-x:auto} .muted{color:#52514e} "
-    "dt{font-weight:600;margin-top:0.4em} dd{margin-left:1.2em} "
-    ".status{padding:0.5em 0.8em;border-radius:6px;display:inline-block}"
+_CSS = BASE_CSS + (
+    "body{max-width:1100px;margin:0 auto;padding:40px 24px 64px} "
+    "h3{margin:44px 0 12px;padding-top:16px;border-top:1px solid var(--hairline)} "
+    "table{font-size:14px;line-height:1.45;margin:0.5em 0 1.2em;border:1px solid var(--hairline)} "
+    "td,th{padding:6px 10px;text-align:left;vertical-align:top} th{vertical-align:bottom} "
+    "tr:last-child td{border-bottom:0} td.num{text-align:right} "
+    "td.cat{white-space:nowrap} .wide{overflow-x:auto} .muted{color:var(--secondary)} "
+    "dl{margin:0} dt{color:var(--ink);font-weight:600;margin-top:0.8em} dd{margin:2px 0 0 1.2em} "
+    ".status{display:inline-block;margin:24px 0 16px;padding:12px 18px;border:1px solid var(--hairline);"
+    "border-left-width:3px}"
 )
-_STATUS_COLOUR = {"met": "#1B5E20", "not_met": "#B71C1C", "incomplete": "#E65100"}
+#: Text, background and the 3-pixel bar of the status block for each result (success, error, warning).
+_STATUS_STYLE = {
+    "met": (COLOURS["success_text"], COLOURS["success_bg"], COLOURS["success_bar"]),
+    "not_met": (COLOURS["error_text"], COLOURS["error_bg"], COLOURS["error_text"]),
+    "incomplete": (COLOURS["warning_text"], COLOURS["warning_bg"], COLOURS["warning_text"]),
+}
+_STATUS_NEUTRAL = (COLOURS["ink"], COLOURS["panel"], COLOURS["edge"])
+_STATUS_COLOUR = {status: text for status, (text, _bg, _bar) in _STATUS_STYLE.items()}
 
 
 def _fmt(v: Any, digits: int = 3) -> str:
@@ -570,7 +579,7 @@ def competency_summary_html(report: dict[str, Any]) -> str:
     recordings are shared between annotators.
     """
     rs = report["reference_set"]
-    colour = _STATUS_COLOUR.get(report["status"], "#37474F")
+    colour = _STATUS_COLOUR.get(report["status"], COLOURS["body"])
     p = [f"<h2>Assessment: {html.escape(rs.get('name') or rs['set_id'])}</h2>",
          f"<p style='color:{colour};font-size:15px'><b>{html.escape(report['status_text'])}</b></p>",
          f"<p>{html.escape(NEXT_STEPS.get(report['status'], ''))}</p>"]
@@ -584,7 +593,7 @@ def competency_summary_html(report: dict[str, Any]) -> str:
 
 def competency_html(report: dict[str, Any]) -> str:
     """The full competency report (for the administrator)."""
-    colour = _STATUS_COLOUR.get(report["status"], "#37474F")
+    text, background, bar = _STATUS_STYLE.get(report["status"], _STATUS_NEUTRAL)
     p = ["<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'><title>Competency report</title>",
          f"<style>{_CSS}</style></head><body>"]
     rs = report["reference_set"]
@@ -593,7 +602,7 @@ def competency_html(report: dict[str, Any]) -> str:
              + (f" ({html.escape(rs['name'])})" if rs.get("name") else "")
              + f" · generated {html.escape(report.get('generated_at', ''))} · ElectroClean "
              f"{html.escape(report['software']['electroclean'])}</p>")
-    p.append(f"<h2 class='status' style='color:{colour};border:2px solid {colour}'>"
+    p.append(f"<h2 class='status' style='color:{text};background:{background};border-left-color:{bar}'>"
              f"{html.escape(report['status_text'])}</h2>")
     if report["status"] in NEXT_STEPS:
         p.append(f"<p>Next step for the annotator: {html.escape(NEXT_STEPS[report['status']])}</p>")
