@@ -61,7 +61,9 @@ async function saveAndFinish(page) {
 async function coachText(page) { return (await page.textContent('.coach')).replace(/\s+/g, ' '); }
 
 async function waitForCoach(page, re) {
-  await page.waitForFunction((src) => new RegExp(src).test(document.querySelector('.coach')?.textContent || ''), re.source, { timeout: 15000 });
+  // As long as the other waits of this test: each step is a request to the study server, which a
+  // busy computer (such as a CI runner) can answer slowly.
+  await page.waitForFunction((src) => new RegExp(src).test(document.querySelector('.coach')?.textContent || ''), re.source, { timeout: 30000 });
 }
 
 export const tests = [

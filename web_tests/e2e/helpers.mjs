@@ -13,9 +13,14 @@ export async function signIn(page, id = 'A01', password = 'demo') {
   await page.fill('#signin-id', id);
   await page.fill('#signin-password', password);
   await page.click('form.signin-form button[type="submit"]');
-  // The logging notice (shown once after signing in when the study logs).
+  // Signing in ends in the logging notice (when the study logs, before the first view), in another
+  // view, or in an error on the sign-in view. A busy computer or a cold Firebase function can take a
+  // while, so wait for whichever comes first, then answer the notice: the application waits for it.
+  await page.waitForFunction(() => Boolean(document.querySelector('.dialog.logging-notice'))
+    || (globalThis.ElectroClean && globalThis.ElectroClean.route !== 'signin')
+    || document.querySelector('form.signin-form .error:not([hidden])') !== null, null, { timeout: 60000 });
   const notice = page.locator('.dialog.logging-notice button', { hasText: 'Continue' });
-  await notice.waitFor({ timeout: 8000 }).then(() => notice.click()).catch(() => {});
+  if (await notice.count()) await notice.click();
 }
 
 export async function state(page) {

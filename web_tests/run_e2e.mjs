@@ -163,6 +163,7 @@ async function main() {
     const tests = mod.tests || [];
     for (const t of tests) {
       const pages = [];
+      const openPages = [];
       const errors = [];
       const ctx = {
         assert, base, api: `http://127.0.0.1:${apiPort}`, cfgBase: `http://127.0.0.1:${cfgPort}/`, stub: stub.state, cfg: cfg.state, study,
@@ -173,6 +174,7 @@ async function main() {
           page.on('pageerror', (e) => errors.push(`pageerror: ${(e.stack || e.message).split("\n").slice(0, 4).join(" | ")}`));
           page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource|favicon/.test(m.text())) errors.push(`console: ${m.text()}`); });
           pages.push(context);
+          openPages.push(page);
           if (url) await page.goto(url);
           return page;
         },
@@ -200,6 +202,17 @@ async function main() {
         }
         failed += 1;
         console.log(`FAIL ${file} › ${t.name}\n     ${String(exc && exc.stack || exc).split('\n').slice(0, 6).join('\n     ')}`);
+        // What each page showed when the test failed, so that a failure on CI can be understood.
+        for (const [i, p] of openPages.entries()) {
+          const seen = await p.evaluate(() => {
+            const shown = (sel) => [...document.querySelectorAll(sel)].filter((e) => !e.hidden && e.offsetParent !== null)
+              .map((e) => e.textContent.replace(/\s+/g, ' ').trim().slice(0, 300)).filter(Boolean);
+            return { route: globalThis.ElectroClean ? globalThis.ElectroClean.route : null, coach: shown('.coach-header, .coach-feedback'),
+              dialogs: shown('.dialog'), problems: shown('.banner, .error, .error-banner') };
+          }).catch(() => null);
+          if (seen) console.log(`     page ${i + 1}: ${JSON.stringify(seen)}`);
+          if (shotsDir) await p.screenshot({ path: path.join(shotsDir, `FAIL_${file.replace('.e2e.mjs', '')}_${failed}_${i + 1}.png`) }).catch(() => {});
+        }
       } finally {
         for (const c of pages) await c.close().catch(() => {});
       }
