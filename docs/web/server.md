@@ -27,7 +27,7 @@ electroclean-web demo
 makes a demonstration study in `./electroclean-demo` (once; `--fresh` makes it again) and serves the
 browser application and the API at `http://localhost:8000/`. It holds three simulated study
 recordings (two BrainVision, one EDF+), ElectroClean's example training set and four accounts, all
-with the password `electroclean`: ADMIN (the administrator: progress and results), A01 and A02
+with the password `electroclean`: ADMIN (the administrator's account, for the progress and results requests of the API), A01 and A02
 (annotators with every study recording) and T01 (a trainee in the example training programme). The
 files to open in the browser are in `electroclean-demo/recordings` (`study/` for A01 and A02,
 `training/` for T01), also downloadable from `http://localhost:8000/demo/recordings.zip`. Results
@@ -89,8 +89,10 @@ Annotated_Events/                the results, as written by the desktop applicat
     training_progress/           stars, scores and times of each trainee
 ```
 
-An administrator signed in to the application sees the progress, and
-`/api/v1/admin/results.zip` downloads `Annotated_Events`. Back up the whole folder.
+`electroclean-web progress --study-dir <folder>` shows who has done what (each annotator's
+recordings and training stages; `--json` gives the full report, the same as
+`GET /api/v1/admin/progress` for an administrator's token), and `/api/v1/admin/results.zip`
+downloads `Annotated_Events`. Back up the whole folder.
 
 ## Security
 

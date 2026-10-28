@@ -191,7 +191,9 @@ arrangements require (for example on an encrypted drive). In the application the
 list, and open each recording from their own disk; ElectroClean checks that the file is the
 registered one before they start, and keeps a draft of unfinished work.
 
-You can follow progress by signing in to the application as ADMIN, or with `electroclean-web list`.
+Follow progress with `electroclean-web progress --firebase-project my-eeg-study --study pilot`,
+which lists each annotator's recordings (to do, in progress or done, with the time of their last
+activity) and their training stages.
 
 ## 14. Export the results for the analyses
 

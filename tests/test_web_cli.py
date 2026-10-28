@@ -54,6 +54,15 @@ def test_a_study_folder_from_scratch(template: Path, tmp_path: Path, capsys: pyt
     assert [a.recording_id for a in store.assignments("A01")][0] == SUB1
     assert store.db.authenticate("A01", "a-long-password") is not None
     store.close()
+    # Who has done what, as a table and as JSON.
+    assert cli(["progress", "--study-dir", str(study)]) == 0
+    out = capsys.readouterr().out
+    assert "A01 (Ann): 0 of 5 done; last seen never" in out  # 3 recordings, 2 guided
+    assert f"to do        {SUB1}" in out
+    assert "training: Learn with the experts: available, 0 of 2" in out
+    assert cli(["progress", "--study-dir", str(study), "--json"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["annotators"][0]["annotator_id"] == "A01"
 
 
 def test_registration_bundles(template: Path, tmp_path: Path) -> None:

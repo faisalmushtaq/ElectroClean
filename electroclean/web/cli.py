@@ -30,6 +30,7 @@ examples:
   electroclean-web register /data/Pilot --firebase-project my-eeg --study pilot
   electroclean-web add-user A01 --email a01@example.org --firebase-project my-eeg --study pilot
   electroclean-web assign A01 --all --firebase-project my-eeg --study pilot
+  electroclean-web progress --firebase-project my-eeg --study pilot      who has done what so far
   electroclean-web export --firebase-project my-eeg --study pilot --to ~/Pilot-results
   electroclean-web serve --study-dir ~/pilot-server          the ElectroClean server instead of Firebase
 
@@ -293,6 +294,49 @@ def cmd_list(a: argparse.Namespace) -> int:
     return 0
 
 
+STATUS_TEXT = {"todo": "to do", "in_progress": "in progress", "done": "done"}
+
+
+def cmd_progress(a: argparse.Namespace) -> int:
+    """Who has done what: each annotator's recordings and training stages (GET /admin/progress)."""
+    from electroclean.web.service import StudyService
+    from electroclean.web.store import User
+
+    store = open_store(a)
+    report = StudyService(store).admin_progress(User("ADMIN", "", "admin"), {})
+    if a.json:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+        return 0
+    print(f"Progress of {report['study']}, {report['generated_at']}")
+    for person in report["annotators"]:
+        items = person["items"]
+        done = sum(1 for i in items if i["status"] == "done")
+        name = f" ({person['display_name']})" if person.get("display_name") else ""
+        role = ", administrator" if person.get("role") == "admin" else ""
+        print(f"\n{person['annotator_id']}{name}{role}: {done} of {len(items)} done; "
+              f"last seen {person.get('last_seen') or 'never'}")
+        for i in items:
+            where = "" if i["mode"] == "standard" else f"  [{i['mode']}, {i['context_id']}]"
+            tries = f", {i['attempts']} attempts" if i["attempts"] > 1 else ""
+            last = f", last {i['last_activity']}" if i.get("last_activity") else ""
+            print(f"  {STATUS_TEXT.get(i['status'], i['status']):12} {i['recording_id']}{where}{tries}{last}")
+        prog = person.get("programme")
+        if isinstance(prog, dict) and prog.get("stages"):
+            for st in prog["stages"]:
+                if st.get("status") == "not_used":
+                    continue
+                extra = []
+                if st.get("max_stars"):
+                    extra.append(f"{st.get('stars', 0)} of {st['max_stars']} stars")
+                if st.get("best_score") is not None:
+                    extra.append(f"best {round(100 * st['best_score'])}% found")
+                print(f"  training: {st['title']}: {st['status'].replace('_', ' ')}, {st['done']} of {st['total']}"
+                      + (f" ({'; '.join(extra)})" if extra else ""))
+        elif isinstance(prog, dict) and prog.get("error"):
+            print(f"  training: {prog.get('message', prog['error'])}")
+    return 0
+
+
 def cmd_example_set(a: argparse.Namespace) -> int:
     from electroclean.training.examples import EXAMPLE_SET_ID, create_example_training_set
     from electroclean.training.reference import ReferenceSetError
@@ -458,6 +502,11 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("list", help="the study's recordings, reference sets and accounts")
     _store_args(s)
     s.set_defaults(func=cmd_list)
+
+    s = sub.add_parser("progress", help="who has done what: each annotator's recordings and training")
+    _store_args(s)
+    s.add_argument("--json", action="store_true", help="the full report as JSON (as GET /api/v1/admin/progress)")
+    s.set_defaults(func=cmd_progress)
 
     s = sub.add_parser("create-example-set", help="make the example training set and add it to the study")
     _store_args(s)
