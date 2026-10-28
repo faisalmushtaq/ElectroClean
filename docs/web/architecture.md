@@ -371,21 +371,40 @@ error that says they need a study server or Firebase.
 The short-segment quiz (`js/training/quiz.js`, the route `#quiz`) uses
 `quiz(setId, body)` only: `get` once, then `answer` for each segment and
 `finish`. On Firebase only `get` is asked a second time when a call fails,
-since an answer or a finish must never be sent twice; when an answer is
-refused because the study already has one (409, after a reply that was lost),
-the view reloads with `get` and carries on. The segments are cut as the
-desktop cuts them (the item's interval with `context_s` around it, within the
-recording), shown read only in the usual viewer from the annotator's own copy
-of the recording with the item's interval shaded, after the copy has been
-checked against the fingerprint in the `recordings` manifests of `get`. The
+since an answer or a finish must never be sent twice. Each answer carries the
+`response_time_s` the browser measured. The study keeps an answer sent twice
+once; when it refuses an answer with 409 (`already_answered`, with the label it
+kept, after a reply that was lost or an answer from another page, or
+`finished`), the view reloads with `get`, says which answer was kept, and
+carries on, as it also does when an answer's `n_answered` shows answers given
+elsewhere. A finished quiz is shown with the `score` that `get` returns. The
+segments are cut as the desktop cuts them (the item's interval with
+`context_s` around it, within the recording), shown read only in the usual
+viewer from the annotator's own copy of the recording with the item's interval
+shaded, after the copy has been checked against the fingerprint in the
+`recordings` manifests of `get`. The
 view logs the desktop's quiz events (`quiz_item_shown`, `quiz_answer` with
 `response_time_s`, `quiz_finished`, each with `quiz_mode` "practice" when the
 feedback is immediate and "assessment" when it comes at the end) and also
 `quiz_opened`, `quiz_recording_checked` and `quiz_stopped`. When the feedback
 comes at the end, `quiz_answer` has `correct` null, as the browser does not
-know it, and `quiz_finished` has the counts. The demonstration has a quiz of
-seven segments from its first two examples, in an order of its own for each
-account (the desktop's `item_order` uses Python's random generator).
+know it, and `quiz_finished` has the counts; a refused answer is logged as
+`quiz_answer_refused` with the reason and the answer kept. The demonstration
+has a quiz of seven segments from its first two examples, in an order of its
+own for each account (the desktop's `item_order` uses Python's random
+generator), and answers with the study server's fields and errors
+(`electroclean/web/quiz.py`).
+
+The channel chooser (`chooseChannels` in `js/annotate/dialogs.js`, behind
+Channels… and Edit channels…) follows the desktop's channel dialog. Its rules
+are exported and tested in Node (`web_tests/unit/ui_channels.test.mjs`):
+`findChannels` (names or their beginnings, also after a leading "EEG " in EDF
+names, the names containing a term that begins none, quotes and wildcards),
+`tenTwentyPosition` and `channelGroups` (Regions and Sides for montages named
+by the 10-20 or 10-10 system, Banks of numbered channels for others, in blocks
+of 32 for a bank larger than that, and Types), which give the same groups as
+the desktop's `ChannelDialog._channel_groups` for banks of up to 32 channels.
+Up to 16 channels the chooser is the plain list it always was.
 
 ## Registering recordings in the browser
 
@@ -489,6 +508,18 @@ wrong unit), three 128-channel BrainVision recordings with channels.tsv and bad
 channels, and a 137-channel BioSemi BDF file of 771 MB with 1112 trigger codes
 gave manifests equal to the desktop's in every field, with amplitudes within 3
 parts in 100 million.
+
+The same test passes every manifest built from the datasets through the study
+server's own checks (`electroclean/web/manifest_check.py`, which
+`recordings_register` runs before storing a manifest, called through
+`register_parity.py --check`) and requires each to be accepted and kept
+unchanged; in a tree without the server's checks the test says so and is
+skipped. One refusal is expected: the server requires every original event to
+lie inside the recording, while the desktop's loader keeps an events.tsv row
+past the end with a warning, so the manifest of a recording with such a row
+(one of the fixtures has one on purpose) is refused whether the browser or the
+desktop built it. The fourteen manifests of the recordings above pass the
+checks unchanged.
 
 A few things differ by nature. A browser knows a file's modification time to
 the millisecond, so `mtime_ns` is a whole number of milliseconds. Python names

@@ -153,6 +153,41 @@ export const tests = [
     },
   },
   {
+    name: 'an answer given on another page is the one kept, and a quiz finished elsewhere shows its score',
+    async run(t) {
+      const { assert } = t;
+      const page = await t.newPage();
+      await signIn(page, 'A01');
+      await waitForRoute(page, 'home');
+      assert.match(await page.textContent('.quiz-card'), /7 segments; whether each answer is right, straight away/);
+      await page.click('[data-log="quiz-example"]');
+      await waitForRoute(page, 'quiz');
+      await page.click('[data-log="quiz-use-examples"]');
+      const c = await current(page);
+      const truth = TRUTH.get(c.item.item_id);
+      const elsewhere = truth.correct_label === 'EMG-artifact' ? 'Chewing-artifact' : 'EMG-artifact';
+      // the same segment answered on another page (the demonstration's study is in this browser)
+      await page.evaluate(([id, label]) => globalThis.ElectroClean.backend.quiz('example', { action: 'answer', item_id: id, label }), [c.item.item_id, elsewhere]);
+      await answer(page, truth.correct_label);
+      await page.waitForSelector('.quiz-feedback.note');
+      assert.equal(await page.textContent('.quiz-feedback.note'), `Your earlier answer to that segment, ${elsewhere}, is the one kept.`);
+      const c2 = await current(page);
+      assert.equal(c2.progress, `Segment 2 of ${QUIZ.items.length}`);
+      assert.notEqual(c2.item.item_id, c.item.item_id);
+      // the quiz finished on another page: the next answer finds it finished, and its score is shown
+      await page.evaluate(() => globalThis.ElectroClean.backend.quiz('example', { action: 'finish' }));
+      await answer(page, TRUTH.get(c2.item.item_id).correct_label);
+      await page.waitForSelector('.quiz-score');
+      assert.equal(await page.textContent('.quiz-score'), `You answered 0 of 1 segment correctly (0%). ${QUIZ.items.length - 1} of the ${QUIZ.items.length} segments were not answered.`);
+      assert.match(await page.textContent('.quiz-body'), /You have finished this quiz[\s\S]*This quiz was finished on another page or computer\./);
+      const refused = await page.evaluate(async () => {
+        await globalThis.ElectroClean.flushLog();
+        return [...globalThis.ElectroClean.backend.visits.values()].flatMap((v) => v.events).filter((e) => e.type === 'quiz_answer_refused');
+      });
+      assert.deepEqual(refused.map((e) => [e.reason, e.kept_answer]), [['already_answered', elsewhere], ['finished', null]]);
+    },
+  },
+  {
     name: 'a trainee finds the quiz on the training path',
     async run(t) {
       const page = await t.newPage();

@@ -106,11 +106,25 @@ export function verdictText(result) {
   return result.correct_label ? `Not quite: the expected answer is ${result.correct_label}.` : 'Not quite.';
 }
 
-/** "You answered 4 of 6 segments correctly (67%)." */
+/**
+ * "You answered 4 of 6 segments correctly (67%)." For a quiz finished before every segment was
+ * answered (an incomplete result), the proportion is of the segments answered, as the desktop's.
+ */
 export function scoreText(score) {
-  const n = score.n_items ?? score.n_answered ?? 0;
+  const items = score.n_items ?? score.n_answered ?? 0;
+  const answered = score.n_answered ?? items;
+  const n = Math.min(items, answered);
   const p = Number.isFinite(score.proportion_correct) ? score.proportion_correct : (n ? (score.n_correct || 0) / n : NaN);
-  return `You answered ${score.n_correct || 0} of ${n} segments correctly${Number.isFinite(p) ? ` (${Math.round(100 * p)}%)` : ''}.`;
+  const text = `You answered ${score.n_correct || 0} of ${n} segment${n === 1 ? '' : 's'} correctly${Number.isFinite(p) ? ` (${Math.round(100 * p)}%)` : ''}.`;
+  const missing = items - answered;
+  return missing > 0 ? `${text} ${missing} of the ${items} segments ${missing === 1 ? 'was' : 'were'} not answered.` : text;
+}
+
+/** How a quiz gives its feedback, for the list of quizzes. */
+export function feedbackText(feedback) {
+  if (feedback === 'immediate') return 'whether each answer is right, straight away';
+  if (feedback === 'end') return 'your result at the end';
+  return '';
 }
 
 /** The quiz mode as the desktop's logs name it: feedback after each answer is practice. */
@@ -129,7 +143,7 @@ export function quizCard(app, { onOpen = null } = {}) {
     h('p.caption', {}, 'Short pieces of EEG: choose the main artifact type in each. It tests recognising the types only, not marking them.'),
     h('ul.quiz-list', {}, quizzes.map((q) => h('li', { 'data-set': q.set_id },
       h('div', {}, h('b', {}, q.name || q.set_id), h('br'),
-        h('span.caption', {}, `${q.n_items} segment${q.n_items === 1 ? '' : 's'}`)),
+        h('span.caption', {}, `${q.n_items} segment${q.n_items === 1 ? '' : 's'}` + (feedbackText(q.feedback) ? `; ${feedbackText(q.feedback)}` : ''))),
       q.finished
         ? h('span.chip.done', {}, 'Finished')
         : h('button.btn.small', { type: 'button', 'data-log': `quiz-${q.set_id}`, onclick: () => open(q) }, 'Take the quiz')))));
@@ -204,9 +218,11 @@ export class QuizView {
       data = await this.backend.quiz(this.setId, { action: 'get' });
     } catch (exc) {
       if (this.closed || exc.status === 401) return;
+      // a quiz that is not the annotator's (403) or no longer exists (404) will not load on a second try
+      const final = exc.status === 403 || exc.status === 404;
       this._set(this._page(h('div.banner', { role: 'alert' }, h('p', {}, `The quiz could not be loaded: ${exc.message}`),
-        h('div.btn-row', {}, h('button.btn.primary', { type: 'button', onclick: () => this.start() }, 'Try again'),
-          h('button.btn', { type: 'button', onclick: () => this.leave() }, 'Back')))));
+        h('div.btn-row', {}, final ? null : h('button.btn.primary', { type: 'button', onclick: () => this.start() }, 'Try again'),
+          h(`button.btn${final ? '.primary' : ''}`, { type: 'button', onclick: () => this.leave() }, 'Back')))));
       return;
     }
     if (this.closed) return;
@@ -240,6 +256,11 @@ export class QuizView {
   next() {
     if (this.closed) return;
     this.awaitingNext = false;
+    if (this.stale) {
+      this.stale = false;
+      this._reload();
+      return;
+    }
     const i = nextIndex(this.items, this.answered);
     if (i >= this.items.length) {
       this.finish();
@@ -464,16 +485,20 @@ export class QuizView {
     this.submitBtn.textContent = 'Sending…';
     let res;
     try {
-      res = await this.backend.quiz(this.setId, { action: 'answer', item_id: item.item_id, label });
+      // the time from showing the segment to the answer, kept with the answer as the desktop keeps it
+      res = await this.backend.quiz(this.setId, { action: 'answer', item_id: item.item_id, label, response_time_s: rt });
     } catch (exc) {
       this.busy = false;
       if (this.closed) return;
       this.submitBtn.disabled = false;
       this.submitBtn.textContent = 'Submit answer';
       if (exc.status === 409) {
-        // the study already has an answer for this segment (sent from another tab, or a reply that
-        // was lost): carry on from what the study has
-        await this._reload();
+        // The study already has an answer for this segment (sent from another tab, or before a
+        // reply was lost), or the quiz was finished elsewhere: carry on from what the study has.
+        const kept = exc.code === 'already_answered' && exc.body && typeof exc.body.label === 'string' ? exc.body.label : null;
+        logger.event('quiz_answer_refused', { item_id: item.item_id, reason: exc.code || 'conflict', kept_answer: kept, quiz_mode: this.mode, set_id: this.setId });
+        await this._reload(kept ? `Your earlier answer to that segment, ${kept}, is the one kept.`
+          : exc.code === 'finished' ? 'This quiz was finished on another page or computer.' : '');
         return;
       }
       if (exc.status !== 401) {
@@ -486,6 +511,9 @@ export class QuizView {
     if (this.closed) return;
     const correct = res && typeof res.correct === 'boolean' ? res.correct : null;
     this.answered[item.item_id] = { label, correct };
+    // The study counts more answers than this page knows of (some were given on another page):
+    // the next step loads the quiz again rather than offer those segments a second time.
+    this.stale = Number.isInteger(res && res.n_answered) && res.n_answered > Object.keys(this.answered).length;
     logger.event('quiz_answer', { item_id: item.item_id, answer: label, correct, response_time_s: rt, quiz_mode: this.mode, set_id: this.setId });
     if (this.immediate && correct !== null) {
       this.feedback.className = `quiz-feedback ${correct ? 'success' : 'banner'}`;
@@ -502,7 +530,10 @@ export class QuizView {
     this.next();
   }
 
-  async _reload() {
+  /** Load the quiz again and carry on from what the study has; `note` says why, on the next screen. */
+  async _reload(note = '') {
+    if (this.reloading) return;
+    this.reloading = true;
     try {
       const data = await this.backend.quiz(this.setId, { action: 'get' });
       if (this.closed) return;
@@ -511,10 +542,23 @@ export class QuizView {
       this.answered = { ...(data.answered || {}) };
       if (data.finished) this._showFinished();
       else this.next();
+      if (note) {
+        const where = this.body.querySelector('.quiz-feedback') || this.body.querySelector('.quiz-page, .quiz-side');
+        if (where && where.classList.contains('quiz-feedback')) {
+          where.className = 'quiz-feedback note';
+          where.textContent = note;
+        } else if (where) {
+          const p = h('p.note.quiz-note', {}, note);
+          const heading = where.querySelector('h2');
+          if (heading) heading.after(p); else where.prepend(p);
+        }
+      }
     } catch (exc) {
       if (this.closed) return;
       this.feedback.className = 'quiz-feedback banner';
       this.feedback.textContent = `The quiz could not be loaded again: ${exc.message}`;
+    } finally {
+      this.reloading = false;
     }
   }
 
@@ -545,13 +589,13 @@ export class QuizView {
     this._showScore(score);
   }
 
-  _showScore(score) {
+  _showScore(score, { heading = 'Quiz complete' } = {}) {
     this.stopBtn.textContent = '‹ Back';
     const rows = Object.entries(score.by_category || {}).map(([label, c]) => h('tr', {},
       h('td', {}, this.catalogue && this.catalogue.has(label) ? h('span.swatch', { style: { background: this.catalogue.colourFor(label) } }) : null, ` ${label}`),
       h('td.num', {}, String(c.items)), h('td.num', {}, String(c.correct))));
     this._set(this._page(
-      h('h2', {}, 'Quiz complete'),
+      h('h2', {}, heading),
       h('p.success.quiz-score', { role: 'status' }, scoreText(score)),
       rows.length ? h('table.list.quiz-categories', {}, h('thead', {}, h('tr', {}, h('th', {}, 'Main artifact type'), h('th.num', {}, 'Segments'), h('th.num', {}, 'Correct'))),
         h('tbody', {}, rows)) : null,
@@ -560,6 +604,14 @@ export class QuizView {
   }
 
   _showFinished() {
+    this._closeRecordings();
+    for (const q of (this.app.me && this.app.me.quizzes) || []) if (q.set_id === this.setId) q.finished = true;
+    if (this.data && this.data.score && typeof this.data.score === 'object') {
+      // the study gives the score of a finished quiz
+      this.progress.textContent = '';
+      this._showScore(this.data.score, { heading: 'You have finished this quiz' });
+      return;
+    }
     const answers = Object.values(this.answered);
     const known = answers.filter((a) => typeof a.correct === 'boolean');
     const text = known.length === answers.length && answers.length

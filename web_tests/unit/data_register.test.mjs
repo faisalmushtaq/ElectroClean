@@ -156,6 +156,52 @@ JOBS.forEach((job, k) => {
   });
 });
 
+// The study server checks every manifest a browser sends before storing it (recordings_register,
+// electroclean/web/manifest_check.py), and keeps only the fields it knows: every manifest built
+// here must pass, and come back unchanged. Until the server side is in this tree, the test says so.
+//
+// One refusal is known: the server requires every original event to lie inside the recording,
+// while the desktop's loader keeps an events.tsv row past the end with a warning ("1 original
+// event(s) lie outside the recording"), so the desktop's own manifest of bids_bv's sub-02 (whose
+// events.tsv has such a row on purpose) is refused as well. It is allowed here only with that reason.
+const KNOWN_REFUSALS = new Map([
+  ["sub-02/eeg/sub-02_task-rest_eeg.vhdr", /an original event at sample 249750 lies outside the recording \(0 to 5000\)$/],
+]);
+test("the study server accepts every manifest the browser builds, and keeps it as it is", { skip: skipPython, timeout: 300000 }, async (t) => {
+  const built = [];
+  for (const job of JOBS) {
+    const out = await buildManifests(await datasetFiles(job.dataset), { settings: job.settings, scope: job.scope, worker: false });
+    built.push({ job, manifests: out.manifests });
+  }
+  const input = built.map(({ job, manifests }) => ({ manifests, scope: job.scope || "study", suffixes: registrationSettings(job.settings).suffixes }));
+  const r = spawnSync(PYTHON, ["-I", join(ROOT, "web_tests", "register_parity.py"), "--check"], {
+    cwd: ROOT,
+    input: JSON.stringify(input),
+    encoding: "utf8",
+    maxBuffer: 256 * 1024 * 1024,
+  });
+  if (r.status !== 0) throw new Error(`register_parity.py --check failed:\n${(r.stderr || "").slice(-3000)}`);
+  const answer = JSON.parse(r.stdout);
+  if (answer.unavailable) {
+    t.skip(`the study server's checks of a manifest are not in this tree yet: ${answer.unavailable}. This test runs once the server side is merged`);
+    return;
+  }
+  const problems = [];
+  let n = 0;
+  answer.results.forEach((results, i) => results.forEach((res, j) => {
+    const m = built[i].manifests[j];
+    n += 1;
+    const known = KNOWN_REFUSALS.get(m.recording_id);
+    if (!res.ok && !(known && built[i].job.dataset === "bids_bv" && known.test(res.reason))) {
+      problems.push(`${built[i].job.name}, ${m.recording_id}: refused: ${res.reason}`);
+    } else if (res.ok) {
+      for (const d of differences(m, res.checked, m.recording_id, { rootParent: "//none//" })) problems.push(`${built[i].job.name}: ${d}`);
+    }
+  }));
+  assert.ok(n >= 15, `${n} manifests checked`);
+  assert.deepEqual(problems, [], `the server's checks:\n${problems.join("\n")}`);
+});
+
 test("discovery: recording IDs below the folder picked, the folders and files left out", { skip: false }, async () => {
   const files = await datasetFiles("bids_bv");
   const { recordings, ignored } = findDatasetRecordings(files);

@@ -212,7 +212,7 @@ export class DemoBackend {
       },
       catalogue: CATALOGUE,
       programme: acc.programme ? { set_id: TRAINING_SET.set_id, name: TRAINING_SET.name } : null,
-      quizzes: [{ set_id: QUIZ.set_id, name: QUIZ.name, n_items: QUIZ.items.length, finished: Boolean(this._quizState(aid).finished) }],
+      quizzes: [{ set_id: QUIZ.set_id, name: QUIZ.name, n_items: QUIZ.items.length, finished: Boolean(this._quizState(aid).finished), feedback: QUIZ.feedback }],
     };
   }
 
@@ -226,12 +226,18 @@ export class DemoBackend {
 
   _quizOptions() { return [...CATALOGUE.labels.map((l) => l.label), QUIZ_NONE_OPTION]; }
 
+  // The study server's rules (electroclean/web/quiz.py): the same answer sent again is kept once,
+  // another label for an answered segment is 409 already_answered (with the kept label), and the
+  // correct answers are given only when the annotator may know them.
   async quiz(setId, body = {}) {
     const aid = this._aid();
-    if (setId !== QUIZ.set_id) throw new ApiError(404, 'no_quiz', 'There is no quiz for this reference set.');
+    const action = body && body.action;
+    if (!['get', 'answer', 'finish'].includes(action)) throw new ApiError(400, 'bad_request', 'action must be one of get, answer, finish');
+    if (setId !== QUIZ.set_id) throw new ApiError(404, 'no_reference_set', `There is no reference set ${setId} in this study`);
     const st = this._quizState(aid);
     const immediate = QUIZ.feedback === 'immediate';
-    const action = body && body.action;
+    const reveal = immediate || st.finished;
+    const byId = new Map(QUIZ.items.map((it) => [it.item_id, it]));
     if (action === 'get') {
       const recordings = {};
       for (const it of QUIZ.items) {
@@ -246,33 +252,49 @@ export class DemoBackend {
           item_id: it.item_id, recording_id: it.recording_id, file_name: fileNameOf(RID.get(it.recording_id)), start_s: it.start_s,
           end_s: it.end_s, context_s: it.context_s, options: [...options],
         })),
-        answered: Object.fromEntries(Object.entries(st.answers).map(([id, a]) => [id, { label: a.label, correct: immediate || st.finished ? a.correct : null }])),
+        answered: Object.fromEntries(Object.entries(st.answers).map(([id, a]) => [id, reveal && byId.has(id)
+          ? { label: a.label, correct: a.correct, correct_label: byId.get(id).correct_label, explanation: byId.get(id).explanation || null }
+          : { label: a.label, correct: null }])),
+        feedback: QUIZ.feedback, finished: Boolean(st.finished), score: st.finished ? st.score : null, n_items: QUIZ.items.length,
         recordings,
         demo_notice: DEMO_NOTICE,
       };
     }
     if (action === 'answer') {
-      if (st.finished) throw new ApiError(409, 'quiz_finished', 'You have already finished this quiz.');
-      const item = QUIZ.items.find((it) => it.item_id === body.item_id);
-      if (!item) throw new ApiError(404, 'not_found', 'This segment is not part of the quiz.');
-      if (st.answers[item.item_id]) throw new ApiError(409, 'already_answered', 'This segment has already been answered.');
-      if (!this._quizOptions().includes(body.label)) throw new ApiError(400, 'bad_request', 'That is not one of the answers offered.');
-      const correct = body.label === item.correct_label || item.accepted_labels.includes(body.label);
-      st.answers[item.item_id] = { label: body.label, correct, answered_at: nowLocalIso() };
-      this._save();
-      return immediate ? { correct, correct_label: item.correct_label, explanation: item.explanation || null }
-        : { correct: null, correct_label: null, explanation: null };
-    }
-    if (action === 'finish') {
-      if (!st.finished) {
-        st.finished = true;
-        st.finished_at = nowLocalIso();
-        st.score = quizScore(QUIZ.items, st.answers);
+      const item = byId.get(body.item_id);
+      if (!item) throw new ApiError(404, 'unknown_item', 'This quiz has no such segment');
+      if (typeof body.label !== 'string' || !this._quizOptions().includes(body.label)) {
+        throw new ApiError(400, 'bad_label', "The answer must be one of the quiz's artifact types");
+      }
+      const rt = body.response_time_s;
+      if (rt !== undefined && rt !== null && (typeof rt !== 'number' || !Number.isFinite(rt) || rt < 0 || rt > 86400)) {
+        throw new ApiError(400, 'bad_request', 'response_time_s must be a number of seconds');
+      }
+      if (st.finished) throw new ApiError(409, 'finished', 'You have already finished this quiz');
+      const prev = st.answers[item.item_id];
+      if (prev && prev.label !== body.label) {
+        throw new ApiError(409, 'already_answered', 'You have already answered this segment', { error: 'already_answered', label: prev.label });
+      }
+      if (!prev) {
+        const correct = body.label === item.correct_label || item.accepted_labels.includes(body.label);
+        st.answers[item.item_id] = { label: body.label, correct, response_time_s: rt === undefined || rt === null ? null : Math.round(rt * 1000) / 1000,
+          answered_at: nowLocalIso(), index: Object.keys(st.answers).length + 1 };
         this._save();
       }
-      return { score: st.score };
+      const kept = st.answers[item.item_id];
+      const counts = { n_answered: Object.keys(st.answers).length, n_items: QUIZ.items.length };
+      return immediate ? { correct: kept.correct, correct_label: item.correct_label, explanation: item.explanation || null, ...counts }
+        : { correct: null, correct_label: null, explanation: null, ...counts };
     }
-    throw new ApiError(400, 'bad_request', 'The quiz was asked for something it does not do.');
+    // finish: also before every segment is answered (an incomplete result, as on the desktop
+    // when an annotator stops early); finishing again gives the same score
+    if (!st.finished) {
+      st.finished = true;
+      st.finished_at = nowLocalIso();
+      st.score = quizScore(QUIZ.items, st.answers);
+      this._save();
+    }
+    return { score: st.score };
   }
 
   // ------------------------------------------------------------ assignments
@@ -785,9 +807,11 @@ export class DemoBackend {
       interaction_logs: [...this.visits.values()].map((v) => ({ header: v.header, closed: v.closed, events: v.events })),
       quiz_results: Object.entries(this.state.quiz || {}).filter(([, s]) => Object.keys(s.answers).length).map(([key, s]) => ({
         schema: 'electroclean.quiz_result', annotator_id: key.split('|')[0], reference_set_id: QUIZ.set_id,
-        mode: QUIZ.feedback === 'immediate' ? 'practice' : 'assessment', completed: Boolean(s.finished), started_at: s.started_at,
-        finished_at: s.finished_at || null,
-        answers: Object.entries(s.answers).map(([item_id, a]) => ({ item_id, answer: a.label, correct: a.correct, answered_at: a.answered_at,
+        // completed as on the desktop: every segment answered (a quiz finished early is incomplete)
+        mode: QUIZ.feedback === 'immediate' ? 'practice' : 'assessment', finished: Boolean(s.finished),
+        completed: Object.keys(s.answers).length === QUIZ.items.length, started_at: s.started_at, finished_at: s.finished_at || null,
+        answers: Object.entries(s.answers).sort((x, y) => (x[1].index || 0) - (y[1].index || 0)).map(([item_id, a]) => ({
+          item_id, answer: a.label, correct: a.correct, response_time_s: a.response_time_s ?? null, answered_at: a.answered_at,
           correct_label: (QUIZ.items.find((it) => it.item_id === item_id) || {}).correct_label || null })),
         score: s.score || quizScore(QUIZ.items, s.answers),
       })),
