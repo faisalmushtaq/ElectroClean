@@ -235,6 +235,7 @@ export class EegViewer {
   setFilters(f) {
     this.filters = { ...f };
     this._cache = null;
+    this._pendingRead = null;
     this.invalidate();
   }
 
@@ -272,6 +273,13 @@ export class EegViewer {
 
   async _load() {
     if (this._covers()) return;
+    // A read already on its way that will cover the view: wait for it rather than start another
+    // (scrolling steadily would otherwise keep cancelling the reads of a slow file).
+    const p = this._pendingRead;
+    if (p && p.filtersKey === this._filtersKey()) {
+      const [n0, n1] = this._neededRange();
+      if (n0 >= p.s0 && n1 <= p.s1 && this.visibleRows().every(({ ch }) => p.channels.has(ch.index))) return;
+    }
     const token = ++this._token;
     const sf = this.sfreq;
     const margin = Math.max(this.view.durationS * 0.5, 2);
@@ -282,10 +290,13 @@ export class EegViewer {
     const last = Math.min(this.channels.length, this.view.firstChannel + this.view.nChannels + extra);
     const want = this.channels.slice(first, last).map((c) => c.index);
     const t = performance.now();
+    this._pendingRead = { s0, s1, channels: new Set(want), filtersKey: this._filtersKey() };
     this._loading = true;
     try {
       const res = await this.recording.readWindow({ startSample: s0, nSamples: s1 - s0, channels: want, filters: { ...this.filters } });
       if (token !== this._token) return;
+      this._pendingRead = null;
+      this.loadError = null;
       this.stats.readMs = performance.now() - t;
       const rows = new Map(want.map((ci, k) => [ci, res.data[k]]));
       this._cache = { id: (this._cacheId = (this._cacheId || 0) + 1), startSample: res.startSample, nSamples: res.nSamples, rows, filtersKey: this._filtersKey() };
@@ -294,6 +305,7 @@ export class EegViewer {
       this.invalidate(['under', 'traces']);
     } catch (exc) {
       if (token === this._token) {
+        this._pendingRead = null;
         this._loading = false;
         this.loadError = exc;
         this.invalidate(['traces']);
