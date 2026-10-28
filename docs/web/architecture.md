@@ -350,6 +350,37 @@ without a server: built-in example recordings, demo accounts, results kept in
 the browser and downloadable, and the same training rules. Every method
 returns a Promise of the JSON described in docs/web/api.md.
 
+Two methods carry the administrator's and the quiz's operations, so that every
+backend implements them the same way: `admin(op, body)` (`POST /admin/{op}`,
+or `ec_admin` with `{op, ...body}` on Firebase) and `quiz(setId, body)`
+(`POST /quiz/{set_id}`, or `ec_quiz`). The demonstration implements the admin
+operations it can run in the browser (accounts, assignments, recordings,
+settings, reference sets from saved annotations or files, the audit log) and
+answers the analyses (agreement, activity, competency, consensus) with an
+error that says they need a study server or Firebase.
+
+## Registering recordings in the browser
+
+The admin area adds recordings without uploading them: `js/data/register.js`
+builds, in the browser, the same internal manifest that
+`electroclean.web.manifest.build_manifest` builds from MNE-Python's reading of
+the files, and only the manifests go to the study (`recordings_register`).
+
+```js
+findDatasetRecordings(files: File[], { settings }) -> { recordings: [{ recordingId, files: File[] }], ignored: [{ path, reason }] }
+    // files from a folder picker (webkitRelativePath) or chosen one by one; the folder chosen is the
+    // dataset root, recording IDs are paths relative to it, as the desktop's discovery makes them
+buildManifest(recording, { settings, scope, onProgress }) -> Promise<{ manifest, problems: [string] }>
+buildManifests(files, { settings, scope, onProgress }) -> Promise<{ manifests, failures: [{ path, reason }] }>
+```
+
+`settings` is the study's settings (`settings_get`): the channels to hide and
+the channel types by name pattern, the display scalings, the discovery suffixes
+and the BIDS options. The manifest uses the BIDS sidecars beside the recording
+(`channels.tsv` for types and bad channels, `events.tsv` and its JSON for the
+original events, `eeg.json`) exactly as the desktop's loader does, and the
+tests compare it with the Python manifest of the same files, field by field.
+
 ## Interaction logs
 
 The browser records the same kinds of events as the desktop application
