@@ -9,6 +9,7 @@ Results go straight into ElectroClean's usual folders below the study (``Annotat
 from __future__ import annotations
 
 import json
+import logging
 import re
 import shutil
 import tempfile
@@ -39,6 +40,7 @@ if TYPE_CHECKING:
     from electroclean.training.programme import Progress
     from electroclean.training.reference import ReferenceSet
 
+log = logging.getLogger("electroclean.web")
 ATTEMPT_RE = re.compile(r"_attempt-(\d+)$")
 SET_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 
@@ -61,6 +63,35 @@ class FilesStore(Store):
         self.demo = demo
         self._log_locks: dict[str, threading.Lock] = {}
         self._log_locks_guard = threading.Lock()
+        #: What the journalled saves of an earlier run left behind and what was done about it.
+        self.recovered = self.recover_interrupted()
+
+    def recover_interrupted(self) -> list[dict[str, Any]]:
+        """The desktop's recovery of interrupted saves (``recover_interrupted_exports``), run when the study
+        folder is opened and after a save whose register update was interrupted: a save whose files were
+        all written and verified is rolled forward (the register is updated), anything else rolled back
+        (its files kept in ``.electroclean/interrupted/``). Saves still in progress are left alone."""
+        from electroclean.app.session.failures import SessionLog
+        from electroclean.app.session.transaction import recover_interrupted_exports
+        from electroclean.web import audit
+
+        layout = self.layout
+        if not layout.staging.exists():
+            return []
+        register = CompletionRegister(layout, self.settings.register_lock_timeout_s)
+        try:
+            actions = recover_interrupted_exports(layout, register, SessionLog(layout))
+        except Exception:  # noqa: BLE001 - the study must still open; the next opening tries again
+            log.exception("Interrupted saves in %s could not be checked", layout.root)
+            return []
+        out = []
+        for a in actions:
+            out.append({"session_id": a.session_id, "action": a.action, "message": a.message})
+            if a.action in ("rolled_forward", "rolled_back", "rollback_incomplete"):
+                log.warning("Interrupted save %s: %s", a.session_id, a.message)
+                audit.record(self, "server", "save_recovered", a.message,
+                             {"session_id": a.session_id, "action": a.action})
+        return out
 
     def close(self) -> None:
         self.db.close()
@@ -313,6 +344,18 @@ class FilesStore(Store):
             files = {p.name: p.read_bytes() for p in result.commit.paths.values()}
             m = ATTEMPT_RE.search(result.output_basename)
             attempt = int(m.group(1)) if m else 1
+        else:  # the files were written and verified but the register could not be updated: roll it forward now
+            self.recover_interrupted()
+            entry = next((e for e in self.completion_entries(session.annotator_id)
+                          if e.get("session_id") == session.session_id), None)
+            if entry is not None:
+                from electroclean.app.io.naming import OUTPUT_SUFFIXES
+
+                folder = _inside(self.layout.root, entry["output_dir"])
+                paths = [folder / f"{entry['output_basename']}{s}" for s in OUTPUT_SUFFIXES.values()]
+                files = {p.name: p.read_bytes() for p in paths if p.is_file()}
+                m = ATTEMPT_RE.search(entry["output_basename"])
+                attempt = int(m.group(1)) if m else 1
         return SavedResult(session=session, result=result, files=files, attempt=attempt)
 
     def progress(self, rs: ReferenceSet, annotator_id: str) -> Progress:

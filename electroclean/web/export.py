@@ -6,6 +6,7 @@
         electroclean_study.json      the study's settings (so DIR can be used as a study folder)
         Annotated_Events/            as written by the desktop application
             completion_register.tsv, session_log.jsonl, annotator-<ID>/..., training/...
+            training/<set>/quiz/annotator-<ID>_quiz_<mode>_<session>.json
             training_progress/<set>/annotator-<ID>.json
             interaction_logs/annotator-<ID>/<time>_<mode>.jsonl
 
@@ -74,6 +75,7 @@ def export_study(store: Any, to: Path | str) -> dict[str, int]:
         settings = store.settings
     except StoreError as exc:
         raise ExportError(str(exc)) from exc
+    recovered = store.recover_interrupted()  # pieces of interrupted writes, which hold no result
     cfg = to / STUDY_CONFIG_FILENAME
     if not cfg.exists():
         atomic_write_json(cfg, {"study_id": store.study_id, "name": store.name, "settings": overrides,
@@ -82,7 +84,7 @@ def export_study(store: Any, to: Path | str) -> dict[str, int]:
     layout.root.mkdir(parents=True, exist_ok=True)
     register = CompletionRegister(layout, settings.register_lock_timeout_s)
     counts = {"recordings": 0, "written": 0, "unchanged": 0, "visits": 0, "progress": 0, "reports": 0,
-              "other": 0}
+              "other": 0, "cleaned_up": len(recovered)}
     known = {e.get("session_id") for e in register.entries()}
     session_log: list[str] = []
     for entry, files, log_lines in sorted(store.submission_files(), key=lambda x: x[0].get("completed_at", "")):

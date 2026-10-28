@@ -2,23 +2,32 @@
 
 Everything lives under ``studies/{study_id}``::
 
-    studies/{study}                         name, settings (the overrides of electroclean_study.json)
+    studies/{study}                         name, settings (the overrides of electroclean_study.json),
+                                            logging notice
         manifests/{key}                     one per registered recording (packed), with its fingerprint
+                                            and how it was registered
         reference_sets/{set_id}             a training reference set and its reference files (packed)
-        users/{annotator_id}                display name, role, the Firebase Authentication user
+        users/{annotator_id}                display name, email, role, status, notes, the Firebase
+                                            Authentication user
         assignments/{annotator_id}          the annotator's recordings and training programme
         drafts/{annotator_id}_{key}         unfinished work (packed)
         guided/{annotator_id}_{set}_{key}   where a trainee is in a guided recording
+        quiz/{annotator_id}_{set}           a quiz's answers so far, and its score once finished
         submissions/{annotator_id}_{key}_{attempt}   a saved recording: its register row and its files
+        result_files/{key}                  other result files, as written (the quiz results)
         progress/{set}_{annotator_id}       stars, scores and times (training_progress)
         reports/{set}_{annotator_id}        the competency report
         visits/{visit_id}                   a visit's log header; its events in visits/{id}/batches/{seq}
+        audit/{newest first}                the audit log of the administrators' changes
 
 Saving runs the desktop application's own code (:class:`~electroclean.web.saving.WebSession`) into a
 scratch folder and keeps the files it wrote in the submission document, so ``electroclean-web
 export`` (:func:`export_study`) can put exactly those files into ElectroClean's usual folders.
 Large values are kept compressed (zlib JSON), split over several documents when they would not fit
-in one (Firestore allows about 1 MiB per document).
+in one (Firestore allows about 1 MiB per document): the pieces (``chunks``) are written first, under
+a name of their own, and the document last, so a reader never meets half a value and two writers
+never mix their pieces; pieces left by an interrupted write are removed by
+:meth:`FirestoreStore.recover_interrupted`.
 
 Clients never read or write these documents (firestore.rules denies everything); only the
 functions and the administrator's command do, with the Admin SDK.
@@ -73,6 +82,8 @@ ID_RE = re.compile(r"^[A-Z0-9][A-Z0-9_-]{0,31}$")
 AUDIT_ID_RE = re.compile(r"^[0-9]{13}-[0-9a-f]{8}$")
 BLOB_LIMIT = 900_000  # bytes kept in one document before splitting
 CACHE_S = 30.0
+#: Chunks not used by their document for this long are left over from an interrupted write.
+STALE_CHUNK_S = 600.0
 
 
 def pack(obj: Any) -> bytes:
@@ -146,7 +157,8 @@ class FirestoreStore(Store):
             try:
                 self._auth_app = firebase_admin.get_app()
             except ValueError as exc:
-                raise StoreError("Firebase Authentication is not available here") from exc
+                raise ApiError(503, "auth_unavailable", "Accounts cannot be changed here: Firebase Authentication "
+                               "is not available.") from exc
         return self._auth_app
 
     # ------------------------------------------------------------- the study
@@ -225,13 +237,30 @@ class FirestoreStore(Store):
                   transaction: Any = None) -> None:
         data = pack(payload)
         if len(data) <= BLOB_LIMIT:
-            doc = {**fields, "blob": data, "chunks": 0}
+            doc = {**fields, "blob": data, "chunks": 0, "chunk_prefix": None}
             self._write(ref, doc, create=create, transaction=transaction)
+            self._drop_stale_chunks(ref, None)
             return
         parts = [data[i:i + BLOB_LIMIT] for i in range(0, len(data), BLOB_LIMIT)]
-        for i, part in enumerate(parts):  # the chunks first, so the document never points to missing ones
-            ref.collection("chunks").document(f"{i:04d}").set({"data": part})
-        self._write(ref, {**fields, "blob": None, "chunks": len(parts)}, create=create, transaction=transaction)
+        # The chunks first, so the document never points to missing ones, under a name of their own, so two
+        # requests writing the same document at once never mix their chunks.
+        prefix = uuid.uuid4().hex[:12]
+        for i, part in enumerate(parts):
+            ref.collection("chunks").document(f"{prefix}-{i:04d}").set(
+                {"data": part, "prefix": prefix, "written_at": time.time()})
+        self._write(ref, {**fields, "blob": None, "chunks": len(parts), "chunk_prefix": prefix}, create=create,
+                    transaction=transaction)
+        self._drop_stale_chunks(ref, prefix)
+
+    @staticmethod
+    def _drop_stale_chunks(ref: Any, current: str | None) -> None:
+        """Remove the chunks of earlier versions of a document (those of a write still in progress elsewhere,
+        younger than STALE_CHUNK_S, are left for later)."""
+        cutoff = time.time() - STALE_CHUNK_S
+        for c in ref.collection("chunks").select(["prefix", "written_at"]).stream():
+            d = c.to_dict() or {}
+            if d.get("prefix") != current and (not d.get("prefix") or float(d.get("written_at", 0)) < cutoff):
+                c.reference.delete()
 
     @staticmethod
     def _write(ref: Any, doc: dict[str, Any], *, create: bool, transaction: Any) -> None:
@@ -242,13 +271,48 @@ class FirestoreStore(Store):
         else:
             ref.set(doc)
 
-    @staticmethod
-    def _get_blob(snap: Any) -> Any:
+    def _get_blob(self, snap: Any) -> Any:
         d = snap.to_dict() or {}
         if d.get("chunks"):
-            parts = [c.to_dict()["data"] for c in snap.reference.collection("chunks").order_by("__name__").stream()]
-            return unpack(b"".join(parts[: int(d["chunks"])]))
+            n, prefix = int(d["chunks"]), d.get("chunk_prefix")
+            chunks = snap.reference.collection("chunks")
+            if prefix:
+                got = {s.id: s for s in self.client.get_all([chunks.document(f"{prefix}-{i:04d}") for i in range(n)])}
+                parts = [got[f"{prefix}-{i:04d}"].to_dict()["data"] for i in range(n)]
+            else:  # written before chunks had names of their own
+                parts = [c.to_dict()["data"] for c in chunks.order_by("__name__").stream()][:n]
+            return unpack(b"".join(parts))
         return unpack(d["blob"]) if d.get("blob") is not None else None
+
+    def recover_interrupted(self) -> list[dict[str, Any]]:
+        """Remove the chunks an interrupted write left behind: those whose document was never written, or
+        that belong to an earlier version of it (older than STALE_CHUNK_S, so a write in progress is left
+        alone). A save that stopped before its document was written is not a result: the annotator saves
+        again. Run by ``electroclean-web export`` and the admin area's results zip."""
+        cutoff = time.time() - STALE_CHUNK_S
+        base = self.doc.path + "/"
+        by_parent: dict[str, list[Any]] = {}
+        for snap in self.client.collection_group("chunks").select(["prefix", "written_at"]).stream():
+            if snap.reference.path.startswith(base):
+                by_parent.setdefault(snap.reference.parent.parent.path, []).append(snap)
+        out = []
+        for path, chunks in sorted(by_parent.items()):
+            parent = self.client.document(path).get()
+            d = (parent.to_dict() or {}) if parent.exists else {}
+            current = d.get("chunk_prefix") if parent.exists else "(missing)"
+            stale = []
+            for c in chunks:
+                cd = c.to_dict() or {}
+                if not cd.get("prefix") and parent.exists and d.get("chunks") and not current:
+                    continue  # the chunks of a document written before chunks had names of their own
+                if cd.get("prefix") != current and float(cd.get("written_at", 0)) < cutoff:
+                    stale.append(c)
+            for c in stale:
+                c.reference.delete()
+            if stale:
+                out.append({"document": path[len(base):], "action": "cleaned_up",
+                            "message": f"Removed {len(stale)} piece(s) of an interrupted write"})
+        return out
 
     @staticmethod
     def _delete(ref: Any) -> None:
@@ -311,6 +375,7 @@ class FirestoreStore(Store):
                 if not (folder / "reference_set.json").is_file():
                     payload = self._get_blob(snap)
                     tmp = folder.with_name(folder.name + f".tmp{time.monotonic_ns()}")
+                    tmp.mkdir(parents=True, exist_ok=True)  # a new set has no files besides its definition
                     for rel, b64 in payload["files"].items():
                         dest = tmp / rel
                         dest.parent.mkdir(parents=True, exist_ok=True)

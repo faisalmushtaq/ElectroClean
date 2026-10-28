@@ -24,10 +24,14 @@ from electroclean.web.errors import ApiError
 class WebSession(AnnotationSession):
     """The desktop's annotation session for a recording annotated in a browser (see the module docstring)."""
 
-    def __init__(self, *, client: dict[str, Any] | None = None, server: str = "", **kwargs: Any) -> None:
+    def __init__(self, *, client: dict[str, Any] | None = None, server: str = "", session_id: str | None = None,
+                 **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.client = dict(client or {})
         self.server = server
+        if session_id:  # the browser's own session ID, so its interaction log and these results link up
+            self.session_id = session_id
+            self.lock.info["session_id"] = session_id
 
     def source_changes(self) -> list[str]:
         return []

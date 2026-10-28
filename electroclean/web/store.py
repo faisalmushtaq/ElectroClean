@@ -113,6 +113,10 @@ class Store(ABC):
         """Within the block, a store may answer repeated reads (manifests) from memory."""
         yield
 
+    def recover_interrupted(self) -> list[dict[str, Any]]:
+        """Finish or undo what an interrupted save left behind (``{"action", "message", ...}`` for each)."""
+        return []
+
     # ------------------------------------------------------------- the study
     @property
     @abstractmethod

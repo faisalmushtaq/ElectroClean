@@ -37,6 +37,7 @@ from electroclean.web.store import MODES, Store, User, item_key
 ANN_ID_RE = re.compile(r"^[0-9A-Za-z_-]{1,64}$")
 STAMP_RE = re.compile(r"^[0-9T:.+\-Z ]{0,40}$")
 SHA_RE = re.compile(r"^[0-9a-f]{64}$")
+SESSION_RE = re.compile(r"^[0-9a-f]{32}$")
 MAX_ANNOTATIONS = 20000
 #: What annotators are told when the study records how they use ElectroClean (as on the desktop).
 LOGGING_NOTICE = ("This study records how you use ElectroClean (times, clicks, keys and what is on screen) for "
@@ -522,6 +523,13 @@ class StudyService:
                 guided_summary = self.coach.verify_for_saving(user, rs, rid, anns, loaded.info.timing.sfreq)
                 context["guided"] = dict(guided_summary)
         client = clean_json(info.get("client")) if isinstance(info.get("client"), dict) else {}
+        session_id = info.get("session_id")
+        if session_id is not None:
+            if not isinstance(session_id, str) or not SESSION_RE.match(session_id.lower()):
+                raise ApiError(400, "bad_request", "session.session_id must be 32 hexadecimal characters")
+            session_id = session_id.lower()
+            if any(e.get("session_id") == session_id for e in self.store.completion_entries(user.annotator_id)):
+                session_id = None  # already the ID of a saved result: this save gets its own
         view = info.get("view") if isinstance(info.get("view"), dict) else {}
         display_state = {k: float(view[k]) for k in ("start_s", "duration_s", "first_channel", "n_channels",
                                                      "scale_factor")
@@ -532,7 +540,7 @@ class StudyService:
             s = WebSession(layout=layout, settings=self.settings, filters=filters, catalogue=self.store.catalogue,
                            loaded=loaded, annotator_id=user.annotator_id, display_name=user.display_name,
                            mode=item.mode, context=context, initial_annotations=anns, allow_repeat=item.repeat,
-                           autosave_enabled=False, client=client, server=self.store.kind)
+                           autosave_enabled=False, client=client, server=self.store.kind, session_id=session_id)
             s.display_state = display_state
             return s
 

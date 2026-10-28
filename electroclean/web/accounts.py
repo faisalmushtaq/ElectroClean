@@ -1,4 +1,5 @@
-"""The files store's database: accounts, sign-in tokens, assignments, visits and guided progress.
+"""The files store's database: accounts, sign-in tokens, assignments, visits, guided and quiz progress,
+and the study's audit log.
 
 One SQLite file in the study folder (``server.sqlite``), used by the ElectroClean server
 (:mod:`electroclean.web.store_files`); on Firebase, accounts are Firebase Authentication users and

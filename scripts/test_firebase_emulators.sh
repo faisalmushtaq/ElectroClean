@@ -24,5 +24,9 @@ fi
 "$PY" scripts/vendor_functions.py
 export ELECTROCLEAN_FUNCTIONS_URL=http://127.0.0.1:5001/demo-electroclean/europe-west2
 export QT_QPA_PLATFORM=offscreen
+ARGS=""
+if [ $# -gt 0 ]; then
+  ARGS=$(printf ' %q' "$@")  # quoted again, so options such as -k "a or b" reach pytest whole
+fi
 npx --yes "$FIREBASE_TOOLS" emulators:exec --only auth,firestore,functions --project demo-electroclean \
-  "$PY -m pytest -q tests/test_web_firestore.py $*"
+  "$PY -m pytest -q tests/test_web_firestore.py$ARGS"

@@ -90,9 +90,14 @@ token gets 401 `not_signed_in`; one without the header, 403 `missing_header`.
   "catalogue": {"labels": [{"label": "Eye-blink-artifact", "value": 103, "short_code": "BLINK",
                              "colour": "#0067A5", "section": "Eye", "is_group": false,
                              "parent": "Eye-artifact" | null, "description": "…"}]},
-  "programme": null | {"set_id": "example", "name": "…"}            // when the annotator is in a training programme
+  "programme": null | {"set_id": "example", "name": "…"},           // when the annotator is in a training programme
+  "quizzes": [{"set_id": "example", "name": "…", "n_items": 4, "finished": false, "feedback": "immediate"}]
 }
 ```
+
+`quizzes` lists the short-segment quizzes the annotator may take (see "The
+short-segment quiz" below); `logging_notice` is the study's own notice when the
+administrator has written one.
 
 ## Assignments and opening a recording
 
@@ -145,7 +150,7 @@ the page is hidden. `DELETE` the same path discards it. Drafts of more than
 {
   "recording_id": "…", "mode": "standard", "context_id": "",
   "annotations": [Annotation],
-  "session": {"started_at": "…", "elapsed_s": 912.3, "visit_id": "…",
+  "session": {"started_at": "…", "elapsed_s": 912.3, "visit_id": "…", "session_id": "<32 hex>",
               "filters": {"highpass_hz": 1.0, "notch_hz": 50.0, "notch_harmonics": false, "method": "fir"},
               "view": Draft.view,
               "client": {"user_agent": "…", "screen": {"width": 1920, "height": 1080, "pixel_ratio": 2}}},
@@ -155,7 +160,13 @@ the page is hidden. `DELETE` the same path discards it. Drafts of more than
 
 `session.filters` gives the display filters used (`highpass_hz` or `notch_hz`
 null when that filter was off); when the study fixes the filters, the study's
-are recorded.
+are recorded. `session.session_id` (optional, 32 hexadecimal characters, 400
+`bad_request` otherwise) is the browser's ID of the annotation session, the one
+its interaction log events carry: the saved `_session.json`, the
+`_annotations.json`, the completion register and the session log then use it as
+the session's ID, so the logs and the results link up as they do for the
+desktop application. Without it, or when a saved result of the annotator
+already has that ID, the server makes one.
 
 → `{"saved": true, "files": ["…_annotations.json", "…_events.tsv", "…"], "attempt": 1,
 "feedback": PracticeFeedback | null, "guided": GuidedSaved | null, "assessment": AssessmentSaved | null,
@@ -263,13 +274,17 @@ events (409 `visit_closed`); another annotator's visit is 404 `unknown_visit`.
 
 Lead researchers (accounts with the role `admin`) run the study from the
 **admin area** of the browser application. Every administrative operation is
-`POST /admin/{op}` with a JSON body (403 `forbidden` for anyone else) and, on
-Firebase, the one callable function `ec_admin` with `{"study", "op", ...the
-body}`; in the service layer it is `StudyService.admin(op, user, body)`, so the
-ElectroClean server and Firebase behave the same. Every operation that changes
-something appends an entry to the study's **audit log** (below), as do the
-`electroclean-web` commands (`"by": "command"`). `GET /admin/progress` and
-`GET /admin/results.zip` remain as before.
+`POST /admin/{op}` with a JSON body (403 `forbidden` for anyone else, 404
+`unknown_operation` for an `op` that does not exist) and, on Firebase, the one
+callable function `ec_admin` with `{"study", "op", ...the body}`; in the
+service layer it is `StudyService.admin(op, user, body)`
+(`electroclean/web/admin.py`), so the ElectroClean server and Firebase behave
+the same. Every operation that changes something appends an entry to the
+study's **audit log** (below), as do the `electroclean-web` commands that
+change the study (`"by": "command"`). `GET /admin/progress` and
+`GET /admin/results.zip` remain as before. Each administrative call reads the
+study afresh, so a change made through one Firebase instance is seen by the
+next call whichever instance answers it.
 
 The EEG never reaches the study: an administrator adds recordings by choosing
 them on their own computer, the browser reads them and builds each
@@ -281,7 +296,7 @@ registering from the command line.
 
 ```jsonc
 AuditEntry = {"at": "2026-10-28T10:15:02.120+00:00", "by": "ADMIN", "op": "user_add",
-              "summary": "Added A03 (Annotator three)", "details": {...}}
+              "summary": "Added A03 (Annotator three) as an annotator", "details": {...}}
 UserRecord = {"annotator_id": "A03", "display_name": "Annotator three", "email": "a03@example.org" | null,
               "role": "annotator" | "admin", "status": "active" | "disabled", "created_at": "…",
               "last_seen": "…" | null, "notes": "", "assigned": 12, "done": 4, "programme": "<set_id>" | null}
@@ -292,54 +307,68 @@ RecordingRecord = {"scope": "study" | "set:<set_id>", "recording_id": "sub-001/e
 SetRecord = {"set_id", "name", "description", "created_at", "created_by",
               "practice_review": true, "allowed_annotators": [] /* empty: everyone */,
               "practice_pass": {"event_f1": 0.8, "label_accuracy": 0.8},
-              "guided_tolerance": {"seconds": 0.2, "fraction": 0.2, "channel_jaccard": 0.75},
+              "guided_tolerance": {"seconds": 0.2, "fraction": 0.2, "channel_jaccard": 0.75, "accepted_labels": {}},
               "criteria": CompetencyCriteria /* electroclean.training.assessment, to_dict() */,
               "recordings": [{"recording_id", "use": "guided" | "practice" | "assessment",
-                              "guidance": "auto" | "show" | "find" | "find_unnamed", "effective_guidance": "show",
+                              "guidance": "auto" | "show" | "find" | "find_unnamed",
+                              "effective_guidance": "show" | null /* guided recordings only */,
                               "provenance": {...}, "n_reference_events": 7, "registered": true}],
-              "quiz_items": 0}
+              "quiz_items": 0, "quiz": {"include_none_option": false, "feedback": "immediate" | "end"},
+              "self_contained": true, "scope": "set:<set_id>" | "study",
+              "provenance": {"method", "experts", "notes"} /* as declared when the set was created */,
+              "show_full_report_to_annotator": false}
 ```
+
+`registered_by` is the administrator's ID, or `command` for recordings registered
+with `electroclean-web`. A set made in the admin area is self-contained: its
+recordings are registered in its own scope `set:<set_id>`, so they are never
+offered for study annotation. Sets registered from a dataset that refer to the
+study's own recordings have `"self_contained": false` and `"scope": "study"`.
 
 ### Operations
 
 | op | body | answer |
 | --- | --- | --- |
-| `overview` | `{}` | `{"study": {"study_id", "name"}, "counts": {"recordings", "annotators", "admins", "assignments", "done", "in_progress", "todo"}, "recent": [AuditEntry], "last_saved": [{"annotator_id", "recording_id", "mode", "context_id", "at"}]}` (ten of each) |
-| `settings_get` | `{}` | `{"name", "settings": {"filters", "display", "channels", "selection", "logging", "annotation", "loading"}, "logging_notice"}` (the blocks of `electroclean_study.json` that a study may change) |
-| `settings_update` | `{"name"?, "settings"?: {block: {key: value}}, "logging_notice"?}` | as `settings_get`; 400 `invalid_settings` with the reason |
-| `users_list` | `{}` | `{"users": [UserRecord]}` |
-| `user_add` | `{"annotator_id", "display_name", "email", "role", "password"?}` | `{"user": UserRecord, "invite_link": str \| null, "temporary_password": str \| null}`; on Firebase `email` is required and `invite_link` lets the person choose a password; on the server a temporary password is made when none is given; 409 `user_exists` |
-| `user_update` | `{"annotator_id", "display_name"?, "role"?, "status"?, "notes"?}` | `{"user": UserRecord}`; an administrator cannot demote or disable themselves (409 `self`) |
-| `user_reset_password` | `{"annotator_id"}` | `{"invite_link" \| null, "temporary_password" \| null}` |
-| `user_remove` | `{"annotator_id"}` | `{}`: the account leaves the study with its assignments and programme; its results and logs stay; not oneself (409 `self`) |
-| `assignments_list` | `{"annotator_id"?}` | `{"items": [{"annotator_id", "recording_id", "mode", "context_id", "status", "attempts", "last_activity"}]}` |
-| `assign` | `{"annotator_ids": [..], "recording_ids": [..] \| "all": true, "mode", "context_id"}` | `{"added", "already"}` (retired recordings are skipped) |
-| `unassign` | `{"annotator_id", "recording_id", "mode", "context_id"}` | `{}`; 409 `done` for a completed item |
-| `programme_set` | `{"annotator_id", "set_id": str \| null}` | `{}` |
-| `recordings_list` | `{"scope"?}` | `{"recordings": [RecordingRecord]}` |
-| `recordings_register` | `{"scope": "study" \| "set:<id>", "manifests": [Manifest], "replace": false}` | `{"added": [recording_id], "replaced": [..], "skipped": [{"recording_id", "reason"}]}`. `Manifest` is the internal manifest of `electroclean/web/manifest.py` (`schema` `electroclean.web_manifest`) as the browser builds it; the server checks its shape, sizes and consistency, stores it with `registered_via` `browser`, and never replaces a recording that has results unless the fingerprint is the same |
-| `recording_update` | `{"scope", "recording_id", "notes"?, "retired"?}` | `{"recording": RecordingRecord}`; a retired recording is offered for no new assignments |
-| `recording_remove` | `{"scope", "recording_id"}` | `{}`; 409 `has_results` when anyone saved it or a reference set uses it |
+| `overview` | `{}` | `{"study": {"study_id", "name"}, "counts": {"recordings", "annotators", "admins", "assignments", "done", "in_progress", "todo"}, "recent": [AuditEntry], "last_saved": [{"annotator_id", "recording_id", "mode", "context_id", "at"}]}` (ten of each; `recordings` counts the study's own, the others the active accounts and their work) |
+| `settings_get` | `{}` | `{"name", "settings": {"filters", "display", "channels", "selection", "logging", "annotation", "loading", "discovery"}, "logging_notice", "logging_notice_is_default"}`: the effective values of the blocks of `electroclean_study.json` that a study may change |
+| `settings_update` | `{"name"?, "settings"?: {block: {key: value}}, "logging_notice"?}` | as `settings_get`. Each key given replaces that setting; the result is checked with ElectroClean's own settings code and refused with 400 `invalid_settings` and the reason (also for a block or key that cannot be changed). `"logging_notice": ""` goes back to ElectroClean's own notice |
+| `users_list` | `{}` | `{"users": [UserRecord]}` (disabled accounts too) |
+| `user_add` | `{"annotator_id", "display_name"?, "email"?, "role"?: "annotator", "password"?}` | `{"user": UserRecord, "invite_link": str \| null, "temporary_password": str \| null}`. On Firebase `email` is required (400 `email_required`), the Firebase Authentication user is created (or, for a person already in another study of the project, given this study) with the custom claims below, and `invite_link` lets the person choose a password when none is given. On the server a temporary password (three groups of four characters) is made when none is given. A password has 8 to 200 characters. 409 `user_exists`, 409 `email_in_use` |
+| `user_update` | `{"annotator_id", "display_name"?, "role"?, "status"?, "notes"?}` | `{"user": UserRecord}`; 404 `unknown_user`. Disabling ends the person's sessions at once and stops them signing in; on Firebase the role is also written into their claims. An administrator cannot demote or disable themselves (409 `self`) |
+| `user_reset_password` | `{"annotator_id"}` | `{"invite_link" \| null, "temporary_password" \| null}`: a new password link (Firebase) or a new temporary password (the server, which also ends every session of the account) |
+| `user_remove` | `{"annotator_id"}` | `{}`: the account leaves the study with its assignments, programme, drafts and guided progress; its results and logs stay; not oneself (409 `self`). On Firebase the study is taken out of the person's claims, and a Firebase user who takes part in no other study is deleted |
+| `assignments_list` | `{"annotator_id"?}` | `{"items": [{"annotator_id", "recording_id", "mode", "context_id", "status", "attempts", "last_activity"}]}` (what each person is given, the training programme's recordings included) |
+| `assign` | `{"annotator_ids": [..], "recording_ids": [..] \| "all": true, "mode"?: "standard", "context_id"?}` | `{"added", "already", "retired"}`: retired recordings are skipped and counted in `retired`. 404 `unknown_user`, 404 `unknown_recording` (not registered in the scope of that mode and set), 400 `not_in_set` (a training recording outside the set), 409 `not_allowed` (the set names its allowed annotators and this person is not one) |
+| `unassign` | `{"annotator_id", "recording_id", "mode"?, "context_id"?}` | `{}`; 409 `done` for a completed item, 404 `not_assigned` |
+| `programme_set` | `{"annotator_id", "set_id": str \| null}` | `{}`; 404 `no_reference_set`, 409 `not_allowed` |
+| `recordings_list` | `{"scope"?}` | `{"recordings": [RecordingRecord]}` (every scope when none is given) |
+| `recordings_register` | `{"scope": "study" \| "set:<id>", "manifests": [Manifest], "replace"?: false}` | `{"added": [recording_id], "replaced": [..], "skipped": [{"recording_id", "reason"}]}`. `Manifest` is the internal manifest of `electroclean/web/manifest.py` (`schema` `electroclean.web_manifest`) as the browser builds it; the server checks it (below), stores it with `registered_via` `browser`, keeps the notes and retirement of a recording registered again, and never replaces a recording that has results unless the fingerprint is the same. At most 500 manifests per call (413 `too_large`); a set scope must be a self-contained set's |
+| `recording_update` | `{"scope", "recording_id", "notes"?, "retired"?}` | `{"recording": RecordingRecord}`; a retired recording is offered for no new assignments; 404 `unknown_recording` |
+| `recording_remove` | `{"scope", "recording_id"}` | `{}`; 409 `has_results` when anyone saved it or a reference set uses it (as a reference or in a quiz item). Its unfinished assignments go with it |
 | `sets_list` | `{}` | `{"sets": [SetRecord]}` |
-| `set_create` | `{"set_id", "name", "description"}` | `{"set": SetRecord}`; 409 `set_exists` |
-| `set_update` | `{"set_id", "name"?, "description"?, "practice_review"?, "allowed_annotators"?, "practice_pass"?, "guided_tolerance"?, "criteria"?}` | `{"set": SetRecord}` |
-| `set_delete` | `{"set_id"}` | `{}`; 409 `in_use` when trainees have results in it or are enrolled in it |
-| `set_add_reference` | `{"set_id", "recording_id", "recording_scope": "study" \| "set:<id>", "use", "source": Source, "provenance"?: {"notes"}}` | `{"set": SetRecord, "disagreements": [row] \| null}`; a study recording is copied into the set's scope, so training recordings are never offered for study annotation |
-| `set_recording_update` | `{"set_id", "recording_id", "use"?, "guidance"?}` | `{"set": SetRecord, "warnings": [".."]}` (for example when trainees have already done a recording now used for assessment) |
-| `set_remove_recording` | `{"set_id", "recording_id"}` | `{"set": SetRecord}` |
-| `set_guided_notes` | `{"set_id", "recording_id"}` | `{"notes": [{"annotation_id", "label", "onset_s", "offset_s", "note"}]}` |
-| `set_guided_note` | `{"set_id", "annotation_id", "text"}` | `{}` |
-| `set_example_create` | `{}` | `{"set": SetRecord, "recordings_zip": {"file_name", "base64"}}` (the simulated recordings to give trainees) |
+| `set_create` | `{"set_id", "name"?, "description"?, "method"?: "single_expert", "experts"?: [..], "notes"?}` | `{"set": SetRecord}`; a self-contained set; `method`, `experts` and `notes` are the provenance declared for the set, as `electroclean-admin create-reference-set` records it; 409 `set_exists` |
+| `set_update` | `{"set_id", "name"?, "description"?, "practice_review"?, "allowed_annotators"?, "practice_pass"?, "guided_tolerance"?, "criteria"?, "quiz"?: {"include_none_option"?, "feedback"?}, "show_full_report_to_annotator"?}` | `{"set": SetRecord}`. `practice_pass` and `guided_tolerance` change only the keys given; `criteria` is the whole `CompetencyCriteria`. Values ElectroClean refuses give 400 `invalid_set` with the reason |
+| `set_delete` | `{"set_id"}` | `{}`; 409 `in_use` when trainees have results in it, are enrolled in it or have finished its quiz. Its recordings (scope `set:<id>`) and assignments go with it |
+| `set_add_reference` | `{"set_id", "recording_id", "recording_scope"?: "study" \| "set:<id>", "use", "source": Source, "provenance"?: {"notes"}}` | `{"set": SetRecord, "disagreements": [row] \| null}`; a study recording is copied into the set's scope, so training recordings are never offered for study annotation. The reference must fit the recording (sampling rate, length, channels, labels: 422 `invalid_document`); 404 `no_saved_annotations` when a source's annotations were never saved; 409 `conflict` when the set holds another recording of that name |
+| `set_recording_update` | `{"set_id", "recording_id", "use"?, "guidance"?: "auto" \| "show" \| "find" \| "find_unnamed"}` | `{"set": SetRecord, "warnings": [".."]}` (for example when trainees have already done a recording now used for assessment); 404 `not_in_set` |
+| `set_remove_recording` | `{"set_id", "recording_id"}` | `{"set": SetRecord}` (the recording stays registered in the set's scope); 404 `not_in_set` |
+| `set_guided_notes` | `{"set_id", "recording_id"}` | `{"notes": [{"annotation_id", "label", "onset_s", "offset_s", "note"}]}` (every reference annotation of the recording, with its note or "") |
+| `set_guided_note` | `{"set_id", "annotation_id", "text"}` | `{}` ("" removes the note); 404 `unknown_annotation` |
+| `set_example_create` | `{}` | `{"set": SetRecord, "recordings_zip": {"file_name", "base64", "size_bytes"}}` (the simulated recordings to give trainees, about 4.6 MB); 409 `set_exists`; 422 `example_unavailable` (see below) |
 | `quiz_items` | `{"set_id"}` | `{"items": [QuizItem]}` (`electroclean.training.reference.QuizItem.to_dict()`) |
-| `quiz_item_add` | `{"set_id", "recording_id", "start_s", "end_s", "correct_label", "accepted_labels"?, "explanation"?, "context_s"?}` | `{"item": QuizItem}` |
-| `quiz_item_remove` | `{"set_id", "item_id"}` | `{}` |
+| `quiz_item_add` | `{"set_id", "recording_id", "start_s", "end_s", "correct_label", "accepted_labels"?, "explanation"?, "context_s"?: 2.0, "item_id"?}` | `{"item": QuizItem}`. The recording must be registered in the set's scope (404 `unknown_recording`); the segment lies within it; the labels are the catalogue's, or "No artifact / none of these" when the set offers it (`quiz.include_none_option`). Without `item_id` the next free `q01`, `q02` … is used; an existing `item_id` is replaced |
+| `quiz_item_remove` | `{"set_id", "item_id"}` | `{}`; 404 `unknown_item` |
 | `progress` | `{}` | as `GET /admin/progress` |
-| `agreement` | `{"annotator_ids"?, "recording_ids"?, "modes"?: ["standard"], "config"?: {..AnalysisConfig fields..}}` | `{"summary": {..}, "report_html": str, "tables": {"<name>.tsv": str}, "warnings": [..]}`, computed on demand with `electroclean.reliability`; 422 `not_enough` when no recording has two annotators |
-| `activity` | `{"annotator_ids"?}` | `{"report_html": str, "tables": {"<name>.tsv": str}}`, with `electroclean.activity` |
-| `competency` | `{"set_id", "annotator_id"}` | `{"report": {..}, "html": str}`; 404 `not_complete` until every assessment recording is saved |
-| `results_zip` | `{}` | `{"file_name", "base64", "size_bytes"}`; 413 `too_large` above 25 MB (use `electroclean-web export`) |
-| `audit` | `{"before"?: str, "limit"?: 50}` | `{"entries": [AuditEntry], "next": str \| null}`, newest first |
-| `visits` | `{"annotator_id"?, "limit"?: 100}` | `{"visits": [{"visit_id", "annotator_id", "mode", "context_id", "started_at", "closed_at", "n_events"}]}` |
+| `agreement` | `{"annotator_ids"?, "recording_ids"?, "modes"?: ["standard"], "config"?: {..AnalysisConfig fields..}}` | `{"summary": {"n_recordings", "n_comparable_recordings", "annotators", "config", "key_results": [..]}, "report_html": str, "tables": {"<name>.tsv": str}, "warnings": [..]}`, computed on demand with `electroclean.reliability` (the files of `electroclean-agreement`). Annotators and modes are chosen with `annotator_ids` and `modes`, not in `config`; settings it refuses give 400 `invalid_config`; 422 `not_enough` when no recording has two annotators. When the tables would exceed 12 MB, `events_matched.tsv` and `events_unmatched.tsv` are left out with a warning |
+| `activity` | `{"annotator_ids"?}` | `{"report_html": str, "tables": {"visits.tsv": str, "recordings.tsv": str}}`, with `electroclean.activity`; 422 `no_logs` when there are no interaction logs |
+| `competency` | `{"set_id", "annotator_id"}` | `{"report": {..}, "html": str}` (`competency_report`, made again and kept, and `competency_html`); 404 `not_complete` until every assessment recording is saved (also for a set without assessment recordings) |
+| `results_zip` | `{}` | `{"file_name", "base64", "size_bytes"}`: the results folder as `GET /admin/results.zip` gives it, quiz results included; 413 `too_large` (with `size_bytes`) above 25,000,000 bytes (use `electroclean-web export`) |
+| `audit` | `{"before"?: str, "limit"?: 50}` | `{"entries": [AuditEntry], "next": str \| null}`, newest first; `before` is the `next` of the page before (400 `bad_request` otherwise); `limit` 1 to 500 |
+| `visits` | `{"annotator_id"?, "limit"?: 100}` | `{"visits": [{"visit_id", "annotator_id", "mode", "context_id", "started_at", "closed_at", "n_events"}]}`, newest first; `limit` 1 to 1000 |
+
+Mistakes in a body (a missing or malformed field) are 400 `bad_request` with a
+message that names the field. On Firebase, an operation that needs Firebase
+Authentication where it is not available answers 503 `auth_unavailable`.
 
 `Source`, where a reference comes from:
 
@@ -350,26 +379,112 @@ SetRecord = {"set_id", "name", "description", "created_at", "created_by",
 {"kind": "adjudicated", "adjudicator_id": "E4", "expert_ids": ["E1", "E2", "E3"]}
 ```
 
-Consensus uses `electroclean.training.consensus.build_consensus` and returns its
-disagreement rows; provenance is stored with the reference as in the desktop's
-reference sets.
+`mode` and `context_id` (standard and "" when left out) say which saved
+annotations are meant, for every kind except `document`; the latest saved
+attempt is used. Consensus uses `electroclean.training.consensus.build_consensus`
+and returns its disagreement rows (`{"kind": "time" | "channels", "label",
+"onset_s", "offset_s", "experts_marking", "experts_not_marking", "note"}`;
+422 `invalid_consensus` when it cannot be built); it needs at least two
+annotators. An adjudicated reference names at least two experts. The reference
+is stored with the desktop's own code (`ReferenceSet.add_reference`), so its
+provenance is recorded as in the desktop's reference sets: the method, the
+experts, the adjudicator, copies of the source files (the saved
+`_annotations.json` of each person, or the uploaded document) with their
+checksums, the time, the consensus rule and the administrator's notes. An
+uploaded document must use a label catalogue compatible with the study's
+(422 `invalid_document`); its recording ID is replaced by the set's.
+
+**The checks of a manifest.** `recordings_register` stores only manifests that
+pass `electroclean/web/manifest_check.py`, and keeps only the fields ElectroClean
+knows. A manifest is refused, with a reason in `skipped`, unless: `schema` is
+`electroclean.web_manifest` and `schema_version` has major version 1; it is
+at most 2 MB of JSON with finite numbers; `recording_id` is a relative path
+with forward slashes and no empty, `.` or `..` parts, ending with one of the
+study's `discovery.suffixes` and with the extension of its `format`
+(`brainvision` .vhdr, `edf` .edf, `bdf` .bdf); `file_name` is its last part,
+`files.path` the recording ID itself, and every other path (`files.*`,
+`fingerprint.*.path`, `original_events.path`) relative in the same way;
+`scope` (when given) is the call's; `fingerprint` names only the roles of
+`RecordingFiles.source_files` (`vhdr`, `eeg`, `vmrk`, `channels_tsv`,
+`events_tsv`, `events_json`, `eeg_json`, and `events_json_inherited_<n>`,
+`eeg_json_inherited_<n>`), each with a 64-character hexadecimal `sha256` and a
+`size` in bytes, and `eeg` (the data file: the .edf or .bdf, or the
+BrainVision .eeg) is present with a size of at least one byte; `timing.sfreq`
+is above 0 and at most 1 MHz, `n_samples` a whole number of at least 1 and
+`duration_s`, when given, their quotient; `ch_names` holds at least one
+channel and no name twice; `hidden_channels` share no channel with it;
+`trigger_channels` are among the hidden channels; `channel_types` gives a type
+of `electroclean.config.settings.CHANNEL_TYPES` for exactly the channels shown;
+`bad_channels` are among them; `acquisition_gaps` are `[start, end]` pairs in
+order inside the recording; `discontinuity_samples` lie inside it;
+`original_events` has a known `source` (`events_tsv`, `brainvision_vmrk`,
+`edf_annotations`, `bdf_annotations`, `stim_channel` or `none`), one text value
+per column in each row and every event's sample from 0 to `n_samples`;
+`amplitude.suggested_scalings` are positive; reports and sidecars are plain
+JSON objects of limited size; and the result can be used to show the recording
+and to write result files. The server records `registration`
+(`{"registered_at", "registered_by", "registered_via", "notes", "retired"}`) in
+the stored manifest itself; a browser's `registration` is ignored.
+
+**The example training set.** `set_example_create` makes ElectroClean's example
+set (`electroclean/training/examples.py`: three simulated recordings, two for
+learning with the experts and one for practice, with the simulation's ground
+truth as the reference) and answers with its recordings as a zip. The
+recordings and the reference need only numpy and pybv. The manifests are made
+with MNE-Python where it is installed (the ElectroClean server, with the
+study's settings); the Cloud Functions do not include MNE-Python and use the
+manifests kept in `electroclean/config/example_set_manifests.json` (made with
+MNE-Python and the default settings by `python -m electroclean.web.example`),
+after checking that every file made has exactly the size and SHA-256 they
+record. If the files differ, the answer is 422 `example_unavailable`, and
+`electroclean-web create-example-set` makes the set from a computer with
+ElectroClean installed.
 
 ### The short-segment quiz (annotators)
 
 A reference set with quiz items offers its quiz to the annotators allowed to
-use the set; `GET /me` lists them as `"quizzes": [{"set_id", "name", "n_items",
-"finished": false}]` (empty when there are none). `POST /quiz/{set_id}` (`ec_quiz` with `{"set_id", "action"}` on
-Firebase, `StudyService.quiz`) with `{"action": "get"}` →
-`{"set_id", "name", "items": [{"item_id", "recording_id", "file_name", "start_s", "end_s", "context_s", "options": [label]}], "answered": {"<item_id>": {"label", "correct"}}, "feedback": "immediate" | "end", "finished": false}`
-(items in the annotator's own order, `electroclean.training.quiz.item_order`,
-without the answers), with `"recordings": {"<recording_id>": Manifest}` for the
-recordings the items come from, so that the browser can check the files the
-annotator opens against their fingerprints and show them; `{"action": "answer", "item_id", "label"}` →
-`{"correct": bool | null, "correct_label": str | null, "explanation": str | null}`
-(null until the end when feedback comes at the end); `{"action": "finish"}` →
-`{"score": {...}}` (as `QuizSession.score()`; the result is saved like the
-desktop's). The browser shows each segment from the annotator's own copy of the
-recording, opened from their computer as for training.
+use the set (everyone when `allowed_annotators` is empty); `GET /me` lists them
+as `"quizzes": [{"set_id", "name", "n_items", "finished": false, "feedback":
+"immediate" | "end"}]` (empty when there are none). `POST /quiz/{set_id}`
+(`ec_quiz` with `{"set_id", "action", …}` on Firebase,
+`StudyService.quiz(user, set_id, body)`, `electroclean/web/quiz.py`) takes an
+`action`:
+
+`{"action": "get"}` →
+`{"set_id", "name", "items": [{"item_id", "recording_id", "file_name", "start_s", "end_s", "context_s", "options": [label]}],
+"answered": {"<item_id>": {"label", "correct", "correct_label"?, "explanation"?}}, "feedback": "immediate" | "end",
+"finished": false, "score": {...} | null, "n_items": 4, "recordings": {"<recording_id>": Manifest}}`.
+The items come in the annotator's own order
+(`electroclean.training.quiz.item_order`) without their answers; `options` are
+the catalogue's labels, with "No artifact / none of these" when the set offers
+it. `recordings` holds the manifests of the recordings the items come from, so
+that the browser can check the files the annotator opens against their
+fingerprints and show them. In `answered`, `correct`, `correct_label` and
+`explanation` are given only when the annotator may know them: at once with
+`immediate` feedback, after finishing with `end` (`correct` is null before).
+`score` is set once the quiz is finished. The first `get` starts the quiz.
+
+`{"action": "answer", "item_id", "label", "response_time_s"?}` →
+`{"correct": bool | null, "correct_label": str | null, "explanation": str | null, "n_answered", "n_items"}`
+(null until the end when feedback comes at the end). An answer is judged as on
+the desktop (the correct label or one of the item's accepted labels). The same
+answer sent again gives the same answer and is kept once; another label for an
+answered segment is 409 `already_answered` (with the kept `label`); after
+finishing, 409 `finished`. 404 `unknown_item`, 400 `bad_label`.
+`response_time_s` is the time the browser measured from showing the segment
+to the answer, kept as the desktop keeps it.
+
+`{"action": "finish"}` → `{"score": {...}}` (as `QuizSession.score()`, with
+null for a proportion that cannot be computed). The result is saved like the
+desktop's, as `training/<set>/quiz/annotator-<ID>_quiz_<mode>_<session>.json` in
+the results folder (`mode` `practice` for immediate feedback, `assessment` for
+feedback at the end, as the desktop's two kinds of quiz), so the export and the
+results zip include it; a quiz finished before every segment is answered is
+saved as incomplete, as on the desktop when an annotator stops early. Finishing
+again gives the same score and saves nothing more. A set's quiz is for annotators
+it allows (403 `not_allowed`); a set without items has none (404 `no_quiz`).
+The browser shows each segment from the annotator's own copy of the recording,
+opened from their computer as for training.
 
 ## The same operations on Firebase
 
@@ -378,12 +493,18 @@ generation, region europe-west2) taking and returning the same JSON:
 `ec_me`, `ec_assignments`, `ec_match`, `ec_put_draft`, `ec_delete_draft`,
 `ec_submit`, `ec_training`, `ec_guided_get`, `ec_guided_check`,
 `ec_guided_continue`, `ec_guided_show_me`, `ec_visit_open`, `ec_visit_events`,
-`ec_visit_close`, `ec_quiz` and, for administrators, `ec_admin_progress` and `ec_admin` (every operation of the admin area, by `op`). Each takes
+`ec_visit_close`, `ec_quiz` and, for administrators, `ec_admin_progress` and
+`ec_admin` (every operation of the admin area, by `op`; it has 2 GB of memory
+and up to 540 s for the analyses and the results zip). Each takes
 `{"study": "<study id>", ...the request body...}` (path parameters such as the
 recording ID become fields). Signing in uses Firebase Authentication (email and
-password) in the browser; the annotator ID and role are custom claims set by the
-administrator's command, and the functions read them from the caller's ID
-token. Errors are raised as `HttpsError` with the same `error` code in
+password) in the browser; the annotator ID and role are custom claims set when
+the account is made (`user_add`, or the administrator's command `add-user`), and
+the functions read them from the caller's ID token. A changed role reaches the
+claims of a token only when the browser refreshes it (Firebase does every hour,
+or at once with `getIdToken(true)`); taking a role away, disabling and
+removing count at once, because the functions also read the account in the
+study. Errors are raised as `HttpsError` with the same `error` code in
 `details` and the `message` for the annotator. Clients never read or write
 Firestore directly, except as the security rules allow (nothing, by default):
 every read and write goes through the functions.
@@ -406,9 +527,9 @@ The fields of each call:
 
 There is no `token` and no beacon on Firebase: the Firebase SDK adds the ID
 token; to send the last events when the page is hidden, call `ec_visit_events`
-with `fetch(…, {keepalive: true})` or simply on the next visit. The results are
-not downloaded through a function: the administrator exports them with
-`electroclean-web export` (docs/web/firebase.md).
+with `fetch(…, {keepalive: true})` or simply on the next visit. The admin
+area downloads the results with `ec_admin` `results_zip` (up to 25 MB); larger
+studies export them with `electroclean-web export` (docs/web/firebase.md).
 
 The HTTP status of an error becomes the `HttpsError` code: 400 and 413
 `invalid-argument`, 401 `unauthenticated`, 403 `permission-denied`, 404

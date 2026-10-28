@@ -27,7 +27,7 @@ electroclean-web demo
 makes a demonstration study in `./electroclean-demo` (once; `--fresh` makes it again) and serves the
 browser application and the API at `http://localhost:8000/`. It holds three simulated study
 recordings (two BrainVision, one EDF+), ElectroClean's example training set and four accounts, all
-with the password `electroclean`: ADMIN (the administrator's account, for the progress and results requests of the API), A01 and A02
+with the password `electroclean`: ADMIN (the administrator's account, for the admin area), A01 and A02
 (annotators with every study recording) and T01 (a trainee in the example training programme). The
 files to open in the browser are in `electroclean-demo/recordings` (`study/` for A01 and A02,
 `training/` for T01), also downloadable from `http://localhost:8000/demo/recordings.zip`. Results
@@ -41,23 +41,38 @@ Pages: open `https://faisalmushtaq.github.io/ElectroClean/preview/?server=http:/
 
 ## A study on your own server
 
+Three commands set the study up; everything after that is done in the browser.
+
 1. Create the study folder: `electroclean-web init-study --study-dir /srv/pilot --study pilot --name "Pilot study"`
    (with `--settings settings.json` for settings that differ from ElectroClean's defaults, in the form
-   of the `settings` block of `electroclean_study.json`; the folder's `electroclean_study.json` can
-   also be edited directly).
-2. Register the recordings where they are: `electroclean-web register /data/Pilot --study-dir /srv/pilot`.
-   Each recording is opened with the desktop application's loader and checked; the study folder keeps
-   what the browser needs to recognise and show it, never the EEG. The dataset's training reference
-   sets are stored with their experts' annotations and without their recordings. When the recordings
-   are on another computer, run `electroclean-web export-manifests /data/Pilot --out pilot.json`
-   there and `electroclean-web import-manifests pilot.json --study-dir /srv/pilot` on the server.
-3. Create the accounts: `electroclean-web add-user A01 --name "Annotator one" --study-dir /srv/pilot`
-   asks for a password (at least 8 characters); `--admin` makes an administrator.
-4. Assign the work: `electroclean-web assign A01 --all --study-dir /srv/pilot`, or `--recordings ...`,
-   or `--programme <set>` for a trainee. `electroclean-web list --study-dir /srv/pilot` shows the study.
-5. Serve it: `electroclean-web serve --study-dir /srv/pilot --host 0.0.0.0 --port 8000`. Put it behind
+   of the `settings` block of `electroclean_study.json`).
+2. Create your own administrator account: `electroclean-web add-user ADMIN --admin --name "Your name"
+   --study-dir /srv/pilot` asks for a password (at least 8 characters).
+3. Serve it: `electroclean-web serve --study-dir /srv/pilot --host 0.0.0.0 --port 8000`. Put it behind
    your institution's HTTPS (a reverse proxy such as nginx); browsers must reach it over HTTPS
    unless it is on the same computer.
+
+Then sign in with that account and open the **admin area** (docs/web/admin.md). There you add the
+recordings (choose the dataset folder on your computer: the browser reads each recording, runs
+ElectroClean's checks and sends only what the study needs to recognise and show it, never the EEG),
+make the annotators' accounts (each gets a temporary password to pass on, which they can keep or you
+can reset; disabling an account ends its sessions at once), assign recordings and training
+programmes, build reference sets from annotators' saved work, uploaded annotation files, consensus or
+adjudication, change the study's settings, and run the agreement, activity and competency analyses.
+Every change is kept in the study's audit log, with who made it and when.
+
+The commands remain an alternative for each of these, and the audit log records their changes too
+(by "command"):
+
+* `electroclean-web register /data/Pilot --study-dir /srv/pilot` registers a dataset's recordings
+  where they are, with the desktop application's loader, and its training reference sets with their
+  experts' annotations and without their recordings. When the recordings are on another computer,
+  run `electroclean-web export-manifests /data/Pilot --out pilot.json` there and
+  `electroclean-web import-manifests pilot.json --study-dir /srv/pilot` on the server.
+* `electroclean-web add-user A01 --name "Annotator one" --study-dir /srv/pilot` makes an account.
+* `electroclean-web assign A01 --all --study-dir /srv/pilot`, or `--recordings ...`, or
+  `--programme <set>` for a trainee, assigns the work; `electroclean-web list --study-dir /srv/pilot`
+  shows the study.
 
 The server serves the browser application from `/` when the application is included
 (`electroclean/web/static/`), so annotators can simply open the server's address. To use the
@@ -80,19 +95,28 @@ the demonstration; mount the study folder at `/data/study` otherwise).
 
 ```
 electroclean_study.json          the study's settings (the desktop application's study file)
-server.sqlite                    accounts, sign-in tokens, assignments, visits, guided progress
+server.sqlite                    accounts, sign-in tokens, assignments, visits, guided progress,
+                                 quiz progress and the audit log
 manifests/                       one file per registered recording
 drafts/                          unfinished work
 derivatives/electroclean_reference_sets/   training sets (their experts' annotations)
 Annotated_Events/                the results, as written by the desktop application
     interaction_logs/            one log per visit
     training_progress/           stars, scores and times of each trainee
+    training/<set>/quiz/         the short-segment quiz results
 ```
 
-`electroclean-web progress --study-dir <folder>` shows who has done what (each annotator's
-recordings and training stages; `--json` gives the full report, the same as
-`GET /api/v1/admin/progress` for an administrator's token), and `/api/v1/admin/results.zip`
-downloads `Annotated_Events`. Back up the whole folder.
+The admin area shows who has done what and downloads `Annotated_Events` as a zip; so do
+`electroclean-web progress --study-dir <folder>` (each annotator's recordings and training stages;
+`--json` gives the full report, the same as `GET /api/v1/admin/progress` for an administrator's
+token) and `/api/v1/admin/results.zip`. Back up the whole folder.
+
+Results are saved with the desktop application's journalled save, so a recording counts as done only
+once its five files are written, read back and verified. When the server opens the study folder it
+finishes or undoes any save that a power cut or a crash interrupted, as the desktop application does
+when it starts: a save whose files were all written and verified is completed, anything else is
+undone and its files kept in `Annotated_Events/.electroclean/interrupted/`. Each of these appears in
+the audit log (by "server").
 
 ## Security
 
@@ -107,6 +131,8 @@ practice recording's reference only after that recording is saved.
 ## Data protection in brief
 
 The study folder holds no EEG: the recordings stay on the annotators' computers. It holds the
-annotators' IDs, names and password hashes, their results and drafts, and the interaction logs
-(times, clicks, keys and what was on screen; never typed text or passwords). Keep it on a computer
-and in backups that your data protection arrangements allow for research data.
+annotators' IDs, names, email addresses (when given), notes and password hashes, their results,
+drafts and quiz answers, the interaction logs (times, clicks, keys and what was on screen; never
+typed text or passwords) and the audit log of the administrators' changes (which never holds a
+password). Keep it on a computer and in backups that your data protection arrangements allow for
+research data.

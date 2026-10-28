@@ -14,7 +14,10 @@ browser). The application itself is published on GitHub Pages. You run ElectroCl
 command, `electroclean-web`, on your own computer, where the recordings are.
 
 Allow an afternoon for the first set-up. Steps 1 to 8 are done once per Firebase project; steps 9
-to 14 once per study.
+to 14 once per study. After step 11, when your own administrator account exists, the study is run
+from the **admin area** of the browser application (docs/web/admin.md): adding recordings, accounts,
+assignments, reference sets, settings, the analyses and the results. The commands below remain an
+alternative for each of these.
 
 ## What you need
 
@@ -101,10 +104,12 @@ npx firebase-tools deploy --only functions,firestore
 
 On Windows the environment's Python is `electroclean\web\firebase\functions\venv\Scripts\python`.
 Before uploading, the deployment copies the ElectroClean code the functions need into their folder
-(`scripts/vendor_functions.py`). The first deployment takes several minutes, because Google
-switches on the services the functions use; later ones are quicker. When it ends, the console's
-**Functions** page lists fifteen functions whose names start with `ec_`, all in europe-west2.
-Deploy again after updating ElectroClean (or use the GitHub workflow at the end of this guide).
+(`scripts/vendor_functions.py`, which needs only Python itself). The first deployment takes several
+minutes, because Google switches on the services the functions use; later ones are quicker. When it
+ends, the console's **Functions** page lists seventeen functions whose names start with `ec_`, all in
+europe-west2; `ec_admin`, which answers the admin area, has more memory and time than the others
+for the analyses. Deploy again after updating ElectroClean (or use the GitHub workflow at the end of
+this guide).
 
 ## 9. Create the study
 
@@ -116,55 +121,72 @@ electroclean-web init-study --firebase-project my-eeg-study --study pilot --name
 ```
 
 Settings that differ from ElectroClean's defaults (fixed display filters, the artifact types on the
-number keys, how the next recording is chosen, interaction logging) can be given as a JSON file with
-`--settings settings.json`, in the form of the `settings` block of the desktop application's
-`electroclean_study.json`; `--update` changes them later.
+number keys, how the next recording is chosen, interaction logging) are changed later in the admin
+area. They can also be given as a JSON file with `--settings settings.json`, in the form of the
+`settings` block of the desktop application's `electroclean_study.json`; `--update` changes them.
 
-## 10. Register the recordings
-
-Registration opens every recording with the desktop application's loader, runs all its checks and
-stores what the browser needs to show the recording and recognise the annotator's file (its
-checksum, timing, channels and events). It runs on the computer that holds the recordings; no EEG
-is uploaded.
-
-```
-electroclean-web register /data/Pilot --firebase-project my-eeg-study --study pilot
-```
-
-Training reference sets in the dataset (`derivatives/electroclean_reference_sets/`) are stored
-too, with their experts' annotations but without their recordings. To try the training programme
-with ElectroClean's simulated example set:
-
-```
-electroclean-web create-example-set --firebase-project my-eeg-study --study pilot --recordings-to ./example-set
-```
-
-`electroclean-web list --firebase-project my-eeg-study --study pilot` shows what the study now
-holds. When the computer with the recordings cannot reach the Internet, `export-manifests` writes
-the registrations to a file and `import-manifests` stores them from another computer.
-
-## 11. Create the accounts and say who annotates what
+## 10. Create your own administrator account
 
 Each person has an ID within the study (for example A01) and signs in with their email address.
 Start with yourself as administrator:
 
 ```
 electroclean-web add-user ADMIN --email you@example.ac.uk --admin --firebase-project my-eeg-study --study pilot
+```
+
+Without `--password` the command prints a link with which you choose your password (it works once;
+run the command again for a new one). This is the one account that has to be made with the command:
+once you can sign in to the admin area, it makes the others.
+
+## 11. Set the study up in the admin area
+
+Publish `config.json` first (step 12), then open the application, sign in with your administrator
+account and choose the admin area (docs/web/admin.md explains each part). There you:
+
+* **add the recordings**: choose the dataset folder on your computer. The browser reads each
+  recording there, runs ElectroClean's checks and sends only what the study needs to show the
+  recording and recognise the annotator's file (its checksum, timing, channels and events); no EEG
+  is uploaded, and the study checks again everything it receives;
+* **make the accounts**: give each person an ID, a name and the email address they sign in with.
+  The admin area shows a link with which they choose their own password; send it to them. You can
+  disable an account (it can no longer sign in, at once), give a new link, change a role, or remove
+  someone from the study (their results and logs stay);
+* **assign the work**: recordings to annotate, or a training programme;
+* **build reference sets** for training and assessment: from an expert's saved annotations, an
+  annotation file from the desktop application, a consensus of several experts or an adjudicator's
+  final annotations, with their uses, the guided notes, the practice pass mark, the competency
+  criteria and a short-segment quiz. *Add the example set* adds ElectroClean's simulated example set
+  and gives you its recordings as a zip to pass on to trainees;
+* **change the settings**, follow the **progress**, run the **agreement**, **activity** and
+  **competency** analyses, download the **results** (up to 25 MB; larger studies use step 14) and
+  read the **audit log** of every change, with who made it and when.
+
+Each of these can also be done from the command line, and the audit log records those changes too
+(by "command"). Registration from the command line opens every recording with the desktop
+application's loader, on the computer that holds the recordings; training reference sets in the
+dataset (`derivatives/electroclean_reference_sets/`) are stored too, with their experts'
+annotations but without their recordings:
+
+```
+electroclean-web register /data/Pilot --firebase-project my-eeg-study --study pilot
+electroclean-web create-example-set --firebase-project my-eeg-study --study pilot --recordings-to ./example-set
 electroclean-web add-user A01 --email a01@example.ac.uk --name "Annotator one" --firebase-project my-eeg-study --study pilot
-```
-
-Without `--password` the command prints a link with which the person chooses their own password;
-send it to them (it works once; run the command again for a new one). Then assign recordings, or a
-training programme:
-
-```
 electroclean-web assign A01 --all --firebase-project my-eeg-study --study pilot
 electroclean-web assign A02 --recordings sub-001/eeg/sub-001_task-rest_eeg.vhdr --firebase-project my-eeg-study --study pilot
 electroclean-web assign T01 --programme example --firebase-project my-eeg-study --study pilot
 ```
 
-To save typing, set `ELECTROCLEAN_FIREBASE_PROJECT=my-eeg-study` and `ELECTROCLEAN_STUDY=pilot`
-in the terminal; the options can then be left out.
+`electroclean-web list --firebase-project my-eeg-study --study pilot` shows what the study holds.
+When the computer with the recordings cannot reach the Internet, `export-manifests` writes the
+registrations to a file and `import-manifests` stores them from another computer. To save typing,
+set `ELECTROCLEAN_FIREBASE_PROJECT=my-eeg-study` and `ELECTROCLEAN_STUDY=pilot` in the terminal;
+the options can then be left out.
+
+The example set's recordings are simulated by ElectroClean itself. The Cloud Functions do not
+include MNE-Python, so for them ElectroClean keeps the registrations of those recordings
+(`electroclean/config/example_set_manifests.json`) and checks every file it makes against them
+before adding the set; should they ever differ, the admin area says so and
+`electroclean-web create-example-set` adds the set instead.
 
 ## 12. Tell the application about the project
 
@@ -191,9 +213,9 @@ arrangements require (for example on an encrypted drive). In the application the
 list, and open each recording from their own disk; ElectroClean checks that the file is the
 registered one before they start, and keeps a draft of unfinished work.
 
-Follow progress with `electroclean-web progress --firebase-project my-eeg-study --study pilot`,
-which lists each annotator's recordings (to do, in progress or done, with the time of their last
-activity) and their training stages.
+Follow progress in the admin area, or with `electroclean-web progress --firebase-project my-eeg-study
+--study pilot`, which lists each annotator's recordings (to do, in progress or done, with the time of
+their last activity) and their training stages.
 
 ## 14. Export the results for the analyses
 
@@ -205,8 +227,8 @@ electroclean-activity ~/Pilot-results/Annotated_Events
 
 The export writes `Annotated_Events/` exactly as the desktop application does: per annotator and
 recording the five result files (written by ElectroClean's own code when each recording was saved),
-the completion register, the training progress, the competency reports and
-`interaction_logs/`. Run it again whenever you like; it adds what is new and never replaces a file
+the completion register, the training progress, the competency reports, the quiz results and
+`interaction_logs/`. The admin area's results zip holds the same files. Run it again whenever you like; it adds what is new and never replaces a file
 with different contents.
 
 ## Deploying updates from GitHub (optional)
@@ -238,9 +260,11 @@ published `config.json`).
 ## Data protection in brief
 
 Firestore holds, for each study: the registrations of the recordings (checksums, timing, channel
-names, events; no EEG), the training sets' expert annotations, the annotators' IDs, names and roles,
-their drafts, their saved results and training progress, and the interaction logs (times, clicks,
-keys and what was on screen; never typed text or passwords). Firebase Authentication holds each
+names, events; no EEG), the training sets' expert annotations, the annotators' IDs, names, email
+addresses, roles and the administrators' notes about them, their drafts, their saved results,
+training progress and quiz answers, the interaction logs (times, clicks, keys and what was on
+screen; never typed text or passwords) and the audit log of the administrators' changes (which
+never holds a password or a password link). Firebase Authentication holds each
 person's email address and a hash of their password. Everything is in Google's London region, in a
 project only you administer; browsers can read or write none of it directly. To end a study, export
 the results, then delete its data in the console (Firestore, `studies/<id>`) and its users

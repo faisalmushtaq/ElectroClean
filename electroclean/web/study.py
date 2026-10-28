@@ -4,8 +4,8 @@
 
     STUDY_DIR/
         electroclean_study.json          the study's settings (the desktop application's study file)
-        server.sqlite                    accounts, sign-in tokens, assignments, visits, guided progress
-                                         (see accounts.py)
+        server.sqlite                    accounts, sign-in tokens, assignments, visits, guided and quiz
+                                         progress, the audit log (see accounts.py)
         manifests/<key>.json             one per registered recording (see manifest.py)
         drafts/annotator-<ID>/<key>.json unfinished work sent by the browser
         derivatives/electroclean_reference_sets/<set>/   training reference sets (never sent out)

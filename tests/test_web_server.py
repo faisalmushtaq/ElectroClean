@@ -248,6 +248,81 @@ def test_saving_writes_the_desktop_outputs(client: TestClient, recordings: Path,
     assert again.status_code == 409 and again.json()["error"] == "already_done"
 
 
+def test_the_browsers_session_id_links_logs_and_results(client: TestClient, recordings: Path, study: Path) -> None:
+    api = Api(client, "A01")
+    sid = "a1" * 16
+    body = submission(recordings, SUB1, [BLINK])
+    body["session"]["session_id"] = sid.upper()
+    api.ok("post", "/submissions", body)
+    folder = study / "Annotated_Events" / "annotator-A01" / "sub-001" / "eeg"
+    sess = json.loads((folder / "sub-001_task-rest_eeg_annotator-A01_session.json").read_text())
+    doc = json.loads((folder / "sub-001_task-rest_eeg_annotator-A01_annotations.json").read_text())
+    assert sess["session_id"] == sid and doc["session"]["session_id"] == sid
+    entry = CompletionRegister(OutputLayout(study / "Annotated_Events")).entries()[0]
+    assert entry["session_id"] == sid
+    bad = submission(recordings, SUB2, [BLINK])
+    for value in ("not-hex", "a1" * 15, 12):
+        bad["session"]["session_id"] = value
+        r = api.post("/submissions", bad)
+        assert r.status_code == 400 and "session_id" in r.json()["message"]
+    # an ID already used by a saved result is not used twice
+    again = submission(recordings, SUB2, [BLINK])
+    again["session"]["session_id"] = sid
+    api.ok("post", "/submissions", again)
+    ids = [e["session_id"] for e in CompletionRegister(OutputLayout(study / "Annotated_Events")).entries()]
+    assert len(set(ids)) == 2 and sid in ids
+
+
+def _interrupt_register(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Saving writes and verifies every file, then cannot update the completion register."""
+    import electroclean.web.saving as saving
+
+    real = saving.WebSession.finish
+
+    def finish(self, *, fault=None):
+        def register_unavailable(stage: str) -> None:
+            if stage == "register":
+                raise OSError("the register is busy")
+
+        return real(self, fault=register_unavailable)
+
+    monkeypatch.setattr(saving.WebSession, "finish", finish)
+
+
+def test_an_interrupted_save_is_rolled_forward_at_once(client: TestClient, recordings: Path, study: Path,
+                                                       monkeypatch: pytest.MonkeyPatch) -> None:
+    _interrupt_register(monkeypatch)
+    api = Api(client, "A01")
+    r = api.ok("post", "/submissions", submission(recordings, SUB1, [BLINK]))
+    assert r["saved"] and len(r["files"]) == 5 and r["attempt"] == 1
+    assert CompletionRegister(OutputLayout(study / "Annotated_Events")).is_completed(SUB1, "A01")
+    assert api.ok("post", "/match", match_body(recordings, SUB1))["status"] == "done"
+    staging = study / "Annotated_Events" / ".electroclean" / "staging"
+    assert not [p for p in staging.iterdir() if p.is_dir()]
+
+
+def test_interrupted_saves_are_recovered_when_the_study_opens(client: TestClient, recordings: Path, study: Path,
+                                                              monkeypatch: pytest.MonkeyPatch) -> None:
+    from electroclean.web.store_files import FilesStore
+
+    _interrupt_register(monkeypatch)
+    monkeypatch.setattr(FilesStore, "recover_interrupted", lambda self: [])  # the server stopped at that moment
+    api = Api(client, "A01")
+    api.post("/submissions", submission(recordings, SUB1, [BLINK]))
+    layout = OutputLayout(study / "Annotated_Events")
+    assert not CompletionRegister(layout).is_completed(SUB1, "A01")
+    monkeypatch.undo()
+    store = FilesStore(study)  # the server starts again
+    try:
+        assert [a["action"] for a in store.recovered] == ["rolled_forward"]
+        assert CompletionRegister(layout).is_completed(SUB1, "A01")
+        entries, _next = store.audit_page(None, 5)
+        assert entries[0]["op"] == "save_recovered" and entries[0]["by"] == "server"
+        assert FilesStore(study).recovered == []  # nothing left to do
+    finally:
+        store.close()
+
+
 @pytest.mark.parametrize("bad, words", [
     (ann("d" * 32, "Not-a-label", 10, 10), "label"),
     (ann("d" * 32, "EMG-artifact", 14990, 100), "sample"),
