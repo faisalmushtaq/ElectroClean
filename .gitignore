@@ -26,3 +26,6 @@ Thumbs.db
 .idea/
 .vscode/
 demo_gui_data/
+
+# Browser data-layer test recordings (made by scripts/make_web_fixtures.py)
+/web_tests/fixtures/
