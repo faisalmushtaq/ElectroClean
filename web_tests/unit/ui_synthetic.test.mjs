@@ -1,10 +1,10 @@
 // The demonstration's recordings (js/data/synthetic.js): the EDF writer, and reading the file
-// back (with the simple reader the application uses until js/data/recording.js is present).
+// back with the application's readers (js/data/recording.js).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { demoSpecs, makeSyntheticRecording, syntheticEdfBytes, truthAnnotations, sha256Hex, edgeHalfWidthS } from '../../electroclean/web/static/js/data/synthetic.js';
-import { openRecording } from '../../electroclean/web/static/js/data/_stub_recording.js';
+import { openRecording } from '../../electroclean/web/static/js/data/recording.js';
 
 const [spec1, , spec3] = demoSpecs();
 

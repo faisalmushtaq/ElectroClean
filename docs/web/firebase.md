@@ -225,6 +225,13 @@ is missing.
 `electroclean-web demo` runs the whole system on your computer with the ElectroClean server instead
 of Firebase (docs/web/server.md). `scripts/test_firebase_emulators.sh` runs ElectroClean's tests of
 the Firebase side on Google's Firebase Emulator Suite, which needs Java but no Firebase project.
+`scripts/test_web_firebase.sh` goes further: on the same emulators it sets up a study with the
+commands above, then drives the browser application in Chromium (signing in with an email address,
+opening a recording from disk, saving it, guided training, a practice recording and its review) and
+exports the results. To try the application by hand on the emulators, give `config.json` an
+`"emulators"` entry beside the usual ones:
+`"emulators": {"auth": "http://127.0.0.1:9099", "functions": "127.0.0.1:5001"}` (never in a
+published `config.json`).
 
 ## Data protection in brief
 

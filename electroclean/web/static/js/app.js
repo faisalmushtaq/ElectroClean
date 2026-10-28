@@ -22,16 +22,10 @@ import { nowLocalIso } from './util.js';
 
 const VIEWS = ['signin', 'home', 'open', 'annotate', 'review', 'training'];
 
+// The file readers are loaded when the first recording is opened (the demonstration may not need them).
 let recordingModule = null;
 async function openRecordingFiles(files) {
-  if (!recordingModule) {
-    try {
-      recordingModule = await import('./data/recording.js');
-    } catch (exc) {
-      console.warn('ElectroClean: js/data/recording.js could not be loaded, using the simple reader instead.', exc);
-      recordingModule = await import('./data/_stub_recording.js');
-    }
-  }
+  if (!recordingModule) recordingModule = await import('./data/recording.js');
   return recordingModule.openRecording(files);
 }
 

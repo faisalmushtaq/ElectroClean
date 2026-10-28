@@ -32,3 +32,9 @@ firebase-debug.log
 firestore-debug.log
 ui-debug.log
 .firebaserc
+
+# Browser data-layer test recordings (made by scripts/make_web_fixtures.py)
+/web_tests/fixtures/
+
+# Playwright for the browser tests (installed by CI with npm install --no-save)
+node_modules/

@@ -68,6 +68,20 @@ their progress, so a 30-minute, 128-channel recording at 1024 Hz needs about
 half the memory it did (2.2 GB instead of 4 GB) and opens in about 40
 seconds.
 
+ElectroClean also runs in a web browser. Annotators open the recordings they
+were given from their own computer and the page reads them there, so the EEG
+is never uploaded: the study's records hold only each recording's fingerprint
+(its SHA-256 checksum), timing and channels, which identify the file the
+annotator opened. The browser application offers the desktop's annotation
+tools and keys, the training programme and the interaction logs, reads EDF,
+EDF+, BDF and BrainVision files, and saves the results into the same folders
+as the desktop application, so the agreement and activity analyses work
+unchanged. It is published on GitHub Pages, with a demonstration that needs
+no server, and a study runs on Firebase (sign-in, Firestore in Google's
+London region and Cloud Functions that check training and score practice, so
+the experts' answers stay on the server) or on ElectroClean's own small
+server, `electroclean-web`.
+
 ## 1.1.0
 
 The first public release, with stand-alone applications for Windows (64-bit),
