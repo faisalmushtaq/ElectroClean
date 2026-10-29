@@ -583,10 +583,11 @@ ul.examples b { font-weight: 400; color: var(--ink); }
 /* Pressed, it reads Resume in the grey of a pressed control: the panel's own Resume is the forward action. */
 .btn.pause-btn[aria-pressed="true"] { background: var(--fill-pressed); color: var(--ink); }
 .pause-panel {
-  position: absolute; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center;
+  position: absolute; inset: 0; z-index: 30; display: flex; align-items: flex-start; justify-content: flex-start;
   padding: 24px; background: var(--page); overflow: auto;
 }
-.pause-card { width: 100%; max-width: 560px; padding: 40px; background: var(--page); border: 1px solid var(--hairline); border-top: 2px solid var(--ink); }
+/* Centred by its margins, so that on a short screen the panel scrolls from the card's top instead of cutting it off. */
+.pause-card { width: 100%; max-width: 560px; margin: auto; padding: 40px; background: var(--page); border: 1px solid var(--hairline); border-top: 2px solid var(--ink); }
 .pause-title { font: var(--t-56); letter-spacing: -0.04em; margin: 0 0 16px; color: var(--ink); font-variation-settings: var(--display); }
 .pause-reason { color: var(--text-secondary); margin-bottom: 16px; }
 .pause-worked { font: var(--t-20); color: var(--ink); margin-bottom: 8px; font-variant-numeric: tabular-nums lining-nums; }
@@ -595,6 +596,12 @@ ul.examples b { font-weight: 400; color: var(--ink); }
 .pause-card .btn-row { margin-top: 24px; }
 .btn.resume { height: 56px; padding: 0 40px; font: var(--t-20); }
 .pause-key { margin: 12px 0 0; }
+@media (max-height: 760px) {
+  .pause-panel { padding: 16px; }
+  .pause-card { padding: 24px 32px; }
+  .pause-title { font: var(--t-40); letter-spacing: -0.04em; margin-bottom: 8px; font-variation-settings: var(--display); }
+  .pause-card .btn-row { margin-top: 16px; }
+}
 .view.annotate.paused .ws-toolbar { opacity: 0.4; }
 .break-reminder {
   position: absolute; top: 16px; right: 16px; z-index: 10; width: min(400px, calc(100% - 48px)); margin: 0; font: var(--t-14);

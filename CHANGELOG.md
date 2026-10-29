@@ -318,7 +318,8 @@ paused panel as the one forward action. The History tab gives the time worked
 on each recording in minutes ("5 min"), as the progress card does, the
 leaderboard's own highlighted row has room at both ends, and the annotation
 list keeps Start and End whole ("23.000") in the narrower side panel of a
-1280-pixel window or an iPad.
+1280-pixel window or an iPad. On a short screen the paused panel is
+more compact and scrolls from its top instead of cutting off its title.
 
 ## 1.1.0
 
