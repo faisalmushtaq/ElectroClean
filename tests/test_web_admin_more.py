@@ -150,6 +150,46 @@ def test_a_new_link_withdrawing_and_switching_off_end_the_old_one(client: TestCl
         admin.admin_error("user_invite", {"annotator_id": "A01", "expires_days": days}, 400, "bad_request")
 
 
+def test_administrators_are_never_invited(client: TestClient, admin: Api, study: Path) -> None:
+    # Neither a new administrator nor an existing one gets a link.
+    admin.admin_error("user_add", {"annotator_id": "B01", "role": "admin", "invite": True}, 409, "admin_account")
+    assert "B01" not in {u["annotator_id"] for u in admin.admin_ok("users_list")["users"]}
+    admin.admin_error("user_invite", {"annotator_id": "ADMIN"}, 409, "admin_account")
+    # An annotator's open link stops working when the account is made an administrator, even if the
+    # role was changed behind the admin area's back.
+    token = admin.admin_ok("user_invite", {"annotator_id": "A01"})["invite_token"]
+    admin.admin_ok("user_update", {"annotator_id": "A01", "role": "admin"})
+    assert state_of(admin, "A01")["state"] == "revoked"
+    assert accept(client, token, "a long password").status_code == 404
+    admin.admin_ok("user_update", {"annotator_id": "A01", "role": "annotator"})
+    token = admin.admin_ok("user_invite", {"annotator_id": "A01"})["invite_token"]
+    con = sqlite3.connect(str(study / "server.sqlite"))
+    with con:
+        con.execute("UPDATE users SET role='admin' WHERE annotator_id='A01'")
+    con.close()
+    for r in (check(client, token), accept(client, token, "a long password")):
+        assert (r.status_code, r.json()["error"]) == (404, "invite_unknown")
+
+
+def test_a_new_password_ends_an_open_invitation(client: TestClient, admin: Api) -> None:
+    token = admin.admin_ok("user_invite", {"annotator_id": "A02"})["invite_token"]
+    temporary = admin.admin_ok("user_reset_password", {"annotator_id": "A02"})["temporary_password"]
+    assert state_of(admin, "A02")["state"] == "revoked"
+    assert accept(client, token, "a long password").status_code == 404
+    Api(client, "A02", temporary)  # the temporary password given to the person keeps working
+
+
+def test_two_accepts_at_once_set_one_password(client: TestClient, admin: Api) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+
+    token = admin.admin_ok("user_invite", {"annotator_id": "A01"})["invite_token"]
+    with ThreadPoolExecutor(4) as pool:
+        answers = list(pool.map(lambda i: accept(client, token, f"password number {i}"), range(4)))
+    ok = [i for i, r in enumerate(answers) if r.status_code == 200]
+    assert len(ok) == 1 and all(r.json()["error"] == "invite_used" for r in answers if r.status_code != 200)
+    Api(client, "A01", f"password number {ok[0]}")
+
+
 def test_an_invitation_expires(client: TestClient, admin: Api, study: Path) -> None:
     token = admin.admin_ok("user_invite", {"annotator_id": "A01", "expires_days": 1})["invite_token"]
     assert check(client, token).status_code == 200

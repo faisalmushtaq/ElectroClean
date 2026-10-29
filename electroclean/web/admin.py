@@ -45,6 +45,9 @@ MAX_DOCUMENT_BYTES = 8_000_000
 QUIZ_FEEDBACK = ("immediate", "end")
 #: How long an invitation link lasts unless the administrator chooses otherwise, and the longest allowed.
 INVITE_DAYS, INVITE_MAX_DAYS = 14, 90
+#: Why an administrator's account is not given an invitation link.
+ADMIN_NOT_INVITED = ("Invitation links are for annotators: a link sent by email must not open the admin area. Give "
+                     "an administrator a password instead (a temporary one, or one you choose).")
 #: ``stats``: the days of the daily completions, the days whose pace projects the finish, and the
 #: fewest completions in them for a projection.
 STATS_DAYS, PACE_DAYS, PACE_MIN = 30, 14, 3
@@ -516,6 +519,8 @@ class Admin:
         invite = _bool(body, "invite") or False
         if invite and password is not None:
             raise _bad("Give a password or ask for an invitation link, not both")
+        if invite and role == "admin":
+            raise ApiError(409, "admin_account", ADMIN_NOT_INVITED)
         days = self._invite_days(body)
         if invite:
             # Nobody knows this password: the person chooses their own with the invitation.
@@ -546,7 +551,8 @@ class Admin:
 
     def op_user_invite(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
         aid = _aid(body.get("annotator_id"))
-        self._user_record(aid)
+        if self._user_record(aid).get("role") == "admin":
+            raise ApiError(409, "admin_account", ADMIN_NOT_INVITED)
         days = self._invite_days(body)
         inv = self.store.create_invitation(aid, days=days, by=user.annotator_id)
         until = f" (until {inv['expires_at'][:10]})" if inv.get("expires_at") else ""

@@ -112,7 +112,9 @@ A private invitation link lets one person choose their own password and sign in.
 it, a welcome card names the study and their annotator ID and asks for the new password twice;
 then they are signed in and see their recordings. The link works once. It stops working when it
 has been used, when it expires (after 14 days unless you choose 7, 30 or 90), when you make a newer
-link for the same person, when you withdraw it, and when the account is switched off or removed. On
+link for the same person, when you withdraw it, when you reset the person's password or make them an
+administrator, and when the account is switched off or removed. Administrators are given a password
+rather than a link, because a link travels by email and must not open the admin area. On
 a study server the study keeps only a fingerprint of each link (a SHA-256 hash of its random token),
 so a link is shown only when it is made; if one was not copied, make a new one, and the old one
 stops working. The study's records note every link made and withdrawn, never the link itself.

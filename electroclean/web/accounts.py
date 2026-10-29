@@ -12,7 +12,8 @@ expires after 12 hours without use and when its owner signs out.
 An invitation is a private link that lets a new annotator choose their own password. Its token is
 random (32 bytes) and kept only as a SHA-256 hash, with its expiry; each account has at most one
 invitation, which ends when it is used, when a newer one is made for the account, when it is
-withdrawn, and when the account is switched off or removed.
+withdrawn, when the account is given a new password, made an administrator, switched off or removed.
+Administrators are never invited: a link that travels by email must not open the admin area.
 """
 
 from __future__ import annotations
@@ -285,9 +286,12 @@ class Accounts:
             if disabled:
                 db.execute("DELETE FROM tokens WHERE annotator_id=?", (aid,))
                 self._end_invitation(db, aid, "revoked")
+            if role == "admin":  # an invitation is for annotators: a link sent by email must not open an admin
+                self._end_invitation(db, aid, "revoked")
 
     def set_password(self, annotator_id: str, password: str) -> None:
-        """A new password; every sign-in of the account ends."""
+        """A new password; every sign-in of the account ends, and so does an open invitation (which would
+        otherwise replace the new password when it is used)."""
         aid = normalise_id(annotator_id)
         if len(password) < MIN_PASSWORD:
             raise AccountError(f"The password must have at least {MIN_PASSWORD} characters")
@@ -296,6 +300,7 @@ class Accounts:
             if not db.execute("UPDATE users SET password_hash=? WHERE annotator_id=?", (h, aid)).rowcount:
                 raise AccountError(f"{aid} has no account")
             db.execute("DELETE FROM tokens WHERE annotator_id=?", (aid,))
+            self._end_invitation(db, aid, "revoked")
 
     def delete_user(self, annotator_id: str) -> None:
         """The account, its sign-ins, assignments, programme, guided progress and quiz state."""
@@ -367,11 +372,13 @@ class Accounts:
         expires = time.time() + days * 86400
         expires_iso = datetime.now().astimezone().replace(microsecond=0) + timedelta(days=days)
         with self._tx() as db:
-            row = db.execute("SELECT disabled FROM users WHERE annotator_id=?", (aid,)).fetchone()
+            row = db.execute("SELECT disabled, role FROM users WHERE annotator_id=?", (aid,)).fetchone()
             if row is None:
                 raise AccountError(f"{aid} has no account")
             if row["disabled"]:
                 raise AccountError(f"{aid} is switched off; switch the account on before inviting them")
+            if row["role"] == "admin":
+                raise AccountError(f"{aid} is an administrator; invitation links are for annotators")
             db.execute("INSERT OR REPLACE INTO invitations (annotator_id, token_hash, state, created_at, created_by, "
                        "expires_at, expires_epoch, ended_at) VALUES (?, ?, 'invited', ?, ?, ?, ?, '')",
                        (aid, token_hash(token), now_local_iso(), by, expires_iso.isoformat(timespec="milliseconds"),
@@ -400,9 +407,9 @@ class Accounts:
         ``expires_at``), or None when the token is not known (never made, replaced or withdrawn)."""
         if not isinstance(token, str) or not 20 <= len(token) <= 200:
             return None
-        row = self._one("SELECT i.*, u.display_name, u.disabled FROM invitations i JOIN users u ON "
+        row = self._one("SELECT i.*, u.display_name, u.disabled, u.role FROM invitations i JOIN users u ON "
                         "u.annotator_id = i.annotator_id WHERE i.token_hash=?", (token_hash(token),))
-        if row is None or row["disabled"]:
+        if row is None or row["disabled"] or row["role"] == "admin":
             return None
         state = row["state"]
         if state == "invited" and float(row["expires_epoch"]) < time.time():
@@ -423,7 +430,7 @@ class Accounts:
         with self._tx() as db:
             row = db.execute("SELECT i.*, u.display_name, u.role, u.disabled FROM invitations i JOIN users u ON "
                              "u.annotator_id = i.annotator_id WHERE i.token_hash=?", (token_hash(token),)).fetchone()
-            if row is None or row["disabled"]:
+            if row is None or row["disabled"] or row["role"] == "admin":
                 raise InvitationProblem("unknown")
             if row["state"] == "accepted":
                 raise InvitationProblem("used")

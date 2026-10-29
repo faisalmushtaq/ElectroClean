@@ -230,8 +230,9 @@ Find in the header to go straight to a person or a recording and tabs inside
 the crowded sections. Annotators can be invited with a private link: on a study
 server the link carries a random token that the study keeps only as a SHA-256
 hash, works once, expires after 14 days unless the administrator chooses
-otherwise, and stops working when a newer link is made, when it is withdrawn
-and when the account is switched off; the person opening it sees a welcome card
+otherwise, and stops working when a newer link is made, when it is withdrawn,
+when the account is given a new password or made an administrator, and when it
+is switched off (administrators are given a password, never a link); the person opening it sees a welcome card
 with the study and their ID, chooses a password twice and lands on their
 recordings (new calls `POST /invite/check` and `POST /invite/accept`, and the
 operations `user_invite`, `user_invite_revoke` and `user_add` with `invite`).

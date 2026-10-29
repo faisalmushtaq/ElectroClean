@@ -57,6 +57,8 @@ const INVITE_PROBLEMS = {
   used: [409, 'This invitation link has been used already. Sign in with your annotator ID and the password you chose, or ask the study team for a new link.'],
   expired: [409, 'This invitation link has expired. Ask the study team for a new one.'],
 };
+/** Why an administrator's account is not given an invitation link (electroclean/web/admin.py, ADMIN_NOT_INVITED). */
+const ADMIN_NOT_INVITED = 'Invitation links are for annotators: a link sent by email must not open the admin area. Give an administrator a password instead (a temporary one, or one you choose).';
 const inviteProblem = (reason) => new ApiError(INVITE_PROBLEMS[reason][0], `invite_${reason}`, INVITE_PROBLEMS[reason][1]);
 
 /** A random invitation token (32 bytes, URL-safe base64), as the study server makes them. */
@@ -448,7 +450,7 @@ export class DemoAdmin {
       // A used invitation keeps the hash of its token, so that the link can say it was used.
       if ((inv.hash && inv.hash === hash) || (inv.state === 'accepted' && inv.used_hash === hash)) {
         const u = this.user(aid);
-        return u && u.status === 'active' ? { aid, inv, u } : null;
+        return u && u.status === 'active' && u.role !== 'admin' ? { aid, inv, u } : null;
       }
     }
     return null;
@@ -610,6 +612,7 @@ export class DemoAdmin {
     let password = body.password ? String(body.password) : '';
     const invite = body.invite === true;
     if (invite && password) throw bad('Give a password or ask for an invitation link, not both');
+    if (invite && role === 'admin') throw conflict('admin_account', ADMIN_NOT_INVITED);
     const days = invite ? this._inviteDays(body) : INVITE_DAYS;
     if (password && password.length < 8) throw bad('A password has at least 8 characters.');
     // With an invitation nobody knows the first password: the person chooses their own.
@@ -630,6 +633,7 @@ export class DemoAdmin {
 
   op_user_invite(body) {
     const u = this._userOr404(body.annotator_id);
+    if (u.role === 'admin') throw conflict('admin_account', ADMIN_NOT_INVITED);
     const inv = this._makeInvitation(u.annotator_id, this._inviteDays(body));
     this._audit('user_invite', `Made an invitation link for ${u.annotator_id} (until ${inv.expires_at.slice(0, 10)}); any earlier link stops working`,
       { annotator_id: u.annotator_id, expires_at: inv.expires_at });
@@ -651,6 +655,8 @@ export class DemoAdmin {
       if (!['annotator', 'admin'].includes(body.role)) throw bad('The role is annotator or admin.');
       if (self) throw conflict('self', 'You cannot take away your own administrator role; ask another administrator.');
       u.role = body.role;
+      // An invitation is for annotators: a link sent by email must not open the admin area.
+      if (body.role === 'admin') this._endInvitation(u.annotator_id, 'revoked');
       changes.push(`role ${body.role}`);
     }
     if (body.status !== undefined && body.status !== u.status) {
@@ -671,6 +677,7 @@ export class DemoAdmin {
     const temporary = makePassword();
     const salt = newId().slice(0, 16);
     this.s.passwords[u.annotator_id] = { salt, hash: passwordHash(temporary, salt) };
+    this._endInvitation(u.annotator_id, 'revoked'); // the link would otherwise replace the new password
     this._audit('user_reset_password', `Reset the password of ${u.annotator_id}`, { annotator_id: u.annotator_id });
     return { invite_link: null, temporary_password: temporary };
   }

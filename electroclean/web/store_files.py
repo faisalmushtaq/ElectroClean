@@ -276,8 +276,9 @@ class FilesStore(Store):
         try:
             token, expires = self.db.create_invitation(annotator_id, days=days, by=by)
         except AccountError as exc:
-            raise AccountProblem("disabled" if "switched off" in str(exc) else "invalid_user", str(exc),
-                                 409 if "switched off" in str(exc) else 400) from exc
+            code = ("disabled" if "switched off" in str(exc) else "admin_account" if "administrator" in str(exc)
+                    else "invalid_user")
+            raise AccountProblem(code, str(exc), 400 if code == "invalid_user" else 409) from exc
         return {"invite_token": token, "invite_link": None, "expires_at": expires}
 
     def revoke_invitation(self, annotator_id: str) -> bool:
