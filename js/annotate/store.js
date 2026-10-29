@@ -22,6 +22,8 @@ export class AnnotationError extends Error {}
 
 export const endSample = (a) => a.onset_sample + a.duration_samples;
 export const isGlobal = (a) => a.channels.length === 0;
+/** Why the last channel of an annotation cannot be taken out (toggleChannel). */
+export const LAST_CHANNEL = 'An annotation needs at least one channel: delete it, or apply it to the whole montage.';
 
 function freeze(a) {
   const out = { ...a, channels: Object.freeze([...a.channels]) };
@@ -231,6 +233,25 @@ export class AnnotationStore {
     this._notify({ action: 'reset', description: 'restore', ids: [] });
   }
 
+  /**
+   * Replace every annotation as one undoable step (work set aside earlier, brought back). Unlike
+   * reset, the history is kept, so Undo takes it back again.
+   */
+  replaceAll(annotations, description = 'bring back earlier work') {
+    const items = new Map();
+    for (const a of annotations) {
+      const ann = this._check(freeze({ ...a, channels: this.normaliseChannels(a.channels || []) }));
+      items.set(ann.annotation_id, ann);
+    }
+    this.lastAutoMerged = 0;
+    this.lastSurvivors = new Map();
+    this._undo.push([description, this.snapshot()]);
+    if (this._undo.length > this.maxHistory) this._undo.shift();
+    this._redo = [];
+    this._items = items;
+    this._notify({ action: 'replace', description, ids: [...items.keys()] });
+  }
+
   // ----------------------------------------------------------------- editing
   /** Add an annotation (without a rating unless `confidence` is given: no mark starts with one). */
   add(label, onsetSample, durationSamples, channels = [], annotationId = null, { confidence = null, note = '' } = {}) {
@@ -353,12 +374,21 @@ export class AnnotationStore {
     return this.update(id, { channels: [...channels], description: 'change channels' });
   }
 
+  /**
+   * Add a channel to an annotation or take it out. Taking one out of a whole-montage annotation
+   * leaves every other channel, and putting it back makes it whole montage again; the last channel
+   * cannot be taken out (an annotation needs at least one channel: delete it, or apply it to the
+   * whole montage).
+   */
   toggleChannel(id, ch) {
     const current = this.get(id);
     if (!this._chIndex.has(ch)) throw new AnnotationError(`Unknown channel ${ch}`);
-    const chans = new Set(current.channels);
+    const chans = new Set(isGlobal(current) ? this.chNames : current.channels);
     if (chans.has(ch)) chans.delete(ch); else chans.add(ch);
-    return this.update(id, { channels: [...chans], description: `toggle channel ${ch}` });
+    if (!chans.size) throw new AnnotationError(LAST_CHANNEL);
+    // Every channel again (the one taken out put back): the whole montage, as it was.
+    const channels = chans.size === this.chNames.length ? [] : [...chans];
+    return this.update(id, { channels, description: `toggle channel ${ch}` });
   }
 
   delete(id) { this.deleteMany([id]); }

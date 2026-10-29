@@ -13,6 +13,7 @@ export class RecordsSection {
     this.area = area;
     this.entries = [];
     this.next = null;
+    this.admins = new Set();
     this.msg = messageArea();
     this.by = select([['', 'Everyone']]);
     this.by.setAttribute('aria-label', 'Changed by');
@@ -35,7 +36,8 @@ export class RecordsSection {
     this.visits = dataTable([
       { title: 'Started', render: (v) => whenText(v.started_at) },
       { title: 'Annotator', render: (v) => h('b', {}, v.annotator_id) },
-      { title: 'Mode', render: (v) => (MODES[v.mode] || v.mode || '–') + (v.context_id ? ` (${v.context_id})` : '') },
+      { title: 'Mode', render: (v) => h('span', {}, (MODES[v.mode] || v.mode || '–') + (v.context_id ? ` (${v.context_id})` : ''),
+        this.admins.has(v.annotator_id) ? h('span.caption.block', {}, 'An administrator: time in the admin area is not logged') : null) },
       { title: 'Closed', render: (v) => whenText(v.closed_at, { never: 'still open, or the page was closed' }) },
       { title: 'Events', num: true, render: (v) => String(v.n_events ?? 0) },
     ], [], { empty: 'No visits recorded.', pageSize: 25, caption: 'Visits' });
@@ -54,6 +56,7 @@ export class RecordsSection {
     this.msg.clear();
     try {
       const u = await this.area.read('users_list');
+      this.admins = new Set((u.users || []).filter((x) => x.role === 'admin').map((x) => x.annotator_id));
       const keep = this.visitWho.value;
       clear(this.visitWho);
       this.visitWho.append(h('option', { value: '' }, 'Everyone'), ...(u.users || []).map((x) => h('option', { value: x.annotator_id }, x.annotator_id)));

@@ -5,11 +5,18 @@
 // while it runs.
 
 import { h, clear } from '../ui/dom.js';
-import { MATCH_CRITERIA, analysisProblems, defaultAnalysisConfig, fileParts, parseList, parseNumber, parseNumbers } from './model.js';
 import {
-  card, checkbox, checkList, downloadText, elapsedTimer, field, messageArea, numberInput, progressLine, reportFrame, sectionHead, select,
+  MATCH_CRITERIA, agreementSettingsFile, agreementSummaryRows, analysisProblems, defaultAnalysisConfig, fileParts, parseList, parseNumber, parseNumbers, setLabel,
+} from './model.js';
+import {
+  card, checkbox, checkList, docsLink, downloadText, elapsedTimer, field, infoTable, messageArea, numberInput, progressLine, reportFrame, sectionHead, select,
   textInput,
 } from './ui.js';
+
+/** A link to a part of the reliability guide (docs/reliability_guide.md), for the settings of the analysis. */
+const guide = (anchor, text = 'In the reliability guide') => docsLink(text, 'reliability_guide.md', anchor);
+/** A field's hint with a link to the part of the reliability guide that explains it. */
+const hintWith = (text, anchor) => [text, ' ', guide(anchor)];
 
 const SESSION_MODES = [['standard', 'Research annotation'], ['practice', 'Practice'], ['assessment', 'Assessment']];
 
@@ -23,11 +30,10 @@ function downloads(base, html, tables, extra = []) {
   return h('div.btn-row.downloads', {}, ...buttons, ...extra);
 }
 
+/** The analysis in a few plain figures; the key results are in the report below. */
 function summaryTable(summary) {
-  const rows = Object.entries(summary || {}).filter(([, v]) => v === null || ['string', 'number', 'boolean'].includes(typeof v) || Array.isArray(v));
-  if (!rows.length) return null;
-  const text = (v) => (Array.isArray(v) ? v.join(', ') : typeof v === 'number' && !Number.isInteger(v) ? v.toFixed(3) : v === null ? '–' : String(v));
-  return h('table.info.admin-info', {}, h('tbody', {}, rows.map(([k, v]) => h('tr', {}, h('th', { scope: 'row' }, k.replace(/_/g, ' ')), h('td', {}, text(v))))));
+  const rows = agreementSummaryRows(summary);
+  return rows.length ? infoTable(rows) : null;
 }
 
 export class AnalysesSection {
@@ -166,15 +172,20 @@ export class AnalysesSection {
       if (annotators.values().length) body.annotator_ids = annotators.values();
       if (recordings.values().length) body.recording_ids = recordings.values();
       const r = await this.area.backend.admin('agreement', body);
-      const settingsJson = JSON.stringify({ ...body, config: cfg }, null, 2);
+      // The settings in the form electrotag-agreement --config reads, with the recordings left out.
+      const file = agreementSettingsFile(r, body);
+      const settingsJson = JSON.stringify(file, null, 2);
       result.append(card('Agreement report',
         (r.warnings || []).length ? h('div.banner', {}, h('p', {}, h('b', {}, 'Warnings')), h('ul', {}, r.warnings.map((w) => h('li', {}, w)))) : null,
         summaryTable(r.summary),
-        downloads('agreement', r.report_html, r.tables, [h('button.btn.small', { type: 'button', onclick: () => downloadText('agreement_settings.json', settingsJson, 'application/json') }, 'The settings used (JSON)')]),
+        downloads('agreement', r.report_html, r.tables, [h('button.btn.small', { type: 'button', 'data-log': 'agreement-settings', onclick: () => downloadText('agreement_settings.json', settingsJson, 'application/json') }, 'The settings used (JSON)')]),
+        h('p.caption', {}, 'To repeat this analysis on the results zip (Results), save The settings used (JSON) beside its Annotated_Events folder and run:'),
+        h('pre.command.agreement-command', {}, file.command),
         r.report_html ? reportFrame(r.report_html, 'Agreement report') : h('p.caption', {}, 'The study sent no report.')));
     }));
     this.agreementHost.append(card('Agreement between annotators',
-      h('p.caption', {}, 'Compares annotators by category, time and channel. The defaults are starting points: choose and report the settings for each study (the reliability guide explains each measure).'),
+      h('p.caption', {}, 'Compares annotators by category, time and channel. The defaults are starting points: choose and report the settings for each study. ',
+        guide('choosing-settings', 'The reliability guide'), ' explains each measure and how to choose the settings.'),
       h('div.admin-grid', {}, annotators, recordings),
       h('fieldset.admin-fieldset', {}, h('legend', {}, 'Sessions'), h('div.row.wrap', {}, modes.map((m) => m.box))),
       field('Reference annotator', reference, { hint: 'When chosen, everyone is compared with this person only, for example an expert.' }),
@@ -182,18 +193,19 @@ export class AnalysesSection {
       h('details.admin-details', {}, h('summary', {}, 'Settings of the analysis'),
         h('fieldset.admin-fieldset', {}, h('legend', {}, 'Compare'), h('div.row.wrap', {}, time, channel)),
         h('div.form-grid', {},
-          field('Time bins (s)', resolutions, { hint: 'Bin widths for the binned comparisons; the exact comparison is always made.' }),
-          field('Bin coverage needed', coverage, { hint: 'Share of a bin an annotation must cover; 0 means any overlap.' }),
-          field('Event matching', criterion),
-          field('Overlap thresholds (IoU)', thresholds, { hint: 'Each is reported; 0 means any overlap.' }),
-          field('Main threshold (IoU)', primary, { hint: 'For the boundary differences and the figures.' }),
+          field('Time bins (s)', resolutions, { hint: hintWith('Bin widths for the binned comparisons; the exact comparison is always made.', '1-time-resolved-agreement') }),
+          field('Bin coverage needed', coverage, { hint: hintWith('Share of a bin an annotation must cover; 0 means any overlap.', '1-time-resolved-agreement') }),
+          field('Event matching', criterion, { hint: hintWith('By overlap, by the closeness of start and end, or both.', '2-event-based-agreement') }),
+          field('Overlap thresholds (IoU)', thresholds, { hint: hintWith('Intersection over union; each is reported, and 0 means any overlap.', '2-event-based-agreement') }),
+          field('Main threshold (IoU)', primary, { hint: hintWith('For the boundary differences and the figures.', '2-event-based-agreement') }),
           field('Onset tolerance (s)', onTol), field('Offset tolerance (s)', offTol),
-          field('Channel overlap needed', jaccard, { hint: 'Time-and-channel matching; 0 means one shared channel.' }),
+          field('Channel overlap needed', jaccard, { hint: hintWith('Time-and-channel matching; 0 means one shared channel.', '3-channels') }),
           field('Fewest annotations for figures', minEvents),
           field('Recordings drawn as timelines', timelines),
           field('Someone saved a recording twice', duplicates),
           field('Channels to leave out', exclude)),
-        many, anyArtifact, rollups),
+        many, h('p.caption', {}, 'Without many-to-one, each event is matched with at most one of the other annotator\'s. ', guide('2-event-based-agreement')),
+        anyArtifact, rollups, h('p.caption', {}, 'ANY-artifact and the group roll-ups: ', guide('1-time-resolved-agreement'))),
       h('div.btn-row', {}, run), progress, msg), result);
   }
 
@@ -219,8 +231,22 @@ export class AnalysesSection {
 
   // ------------------------------------------------------------ competency
   _competencyForm() {
-    const set = select(this.sets.map((s) => [s.set_id, `${s.name || s.set_id} (${s.set_id})`]));
-    const who = select(this.users.map((u) => [u.annotator_id, `${u.annotator_id}${u.display_name ? ` · ${u.display_name}` : ''}`]));
+    const set = select(this.sets.map((s) => [s.set_id, setLabel(s)]));
+    // The trainees of the set chosen (those whose training programme it is) first, then everyone else.
+    const who = select([]);
+    const fillWho = () => {
+      const keep = who.value;
+      const people = this.users.filter((u) => u.role !== 'admin');
+      const theirs = people.filter((u) => u.programme === set.value);
+      const others = people.filter((u) => u.programme !== set.value);
+      const option = (u) => h('option', { value: u.annotator_id }, `${u.annotator_id}${u.display_name ? ` · ${u.display_name}` : ''}`);
+      clear(who);
+      if (theirs.length) who.append(h('optgroup', { label: 'Trainees of this set' }, theirs.map(option)));
+      if (others.length) who.append(h('optgroup', { label: theirs.length ? 'Other people' : 'People' }, others.map(option)));
+      if ([...who.options].some((o) => o.value === keep)) who.value = keep;
+    };
+    set.addEventListener('change', fillWho);
+    fillWho();
     const msg = messageArea();
     const progress = progressLine();
     const result = this.results.competency;

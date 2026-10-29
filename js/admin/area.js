@@ -77,7 +77,14 @@ export class AdminArea {
     const demo = this.backend.isDemo
       ? h('aside.note.admin-demo-note', { 'aria-label': 'Demonstration' }, 'Demonstration: everything here is kept in this browser. The analyses, consensus references and the results zip need a study server or Firebase.')
       : null;
-    this.el = h('div.view.admin', { 'data-view': 'admin' }, appHeader(app, { admin: true, tools: this.find }),
+    // The first Tab stop: straight to the section shown, past the header and the menu.
+    const skip = h('button.skip-link', { type: 'button', 'data-log': 'admin-skip', onclick: () => {
+      const heading = this.main.querySelector('h1');
+      if (heading) heading.focus();
+    } }, 'Skip to the section');
+    const header = appHeader(app, { admin: true, tools: this.find });
+    header.prepend(skip); // inside the header's landmark, before everything else in it
+    this.el = h('div.view.admin', { 'data-view': 'admin' }, header,
       h('div.admin-layout', {}, this.nav, h('div.admin-body', {}, demo, this.main)));
   }
 
@@ -204,6 +211,14 @@ export class AdminArea {
   /** Show a section (its key) with optional parameters, such as the annotator to assign to. */
   async show(key, params = null) {
     const k = KINDS[key] ? key : 'overview';
+    // A section with unsaved changes (Study settings) asks before it is left; the address stays on it meanwhile.
+    const leaving = this.current && this.current !== k ? this.sections.get(this.current) : null;
+    if (leaving && typeof leaving.unsaved === 'function' && leaving.unsaved()) {
+      const here = routeForSection(this.current);
+      if (this.app._setRoute) this.app._setRoute(here);
+      leaving.askLeave(() => this.go(k, params));
+      return;
+    }
     this._reads.clear();
     let section = this.sections.get(k);
     if (!section) {

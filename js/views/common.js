@@ -1,6 +1,7 @@
 // Pieces shared by the views: the header bar, the brand mark, the icons and the small-screen notice.
 
 import { h } from '../ui/dom.js';
+import { CTRL, session } from '../util.js';
 
 const SVG = 'http://www.w3.org/2000/svg';
 
@@ -87,19 +88,35 @@ export function emailLinkHref(app) {
     `&body=${encodeURIComponent(`Open this link on a tablet or a computer to annotate:\n${link}`)}`;
 }
 
+/** Where the choice to carry on in a small window is kept, for this tab only (sessionStorage). */
+const SMALL_OK_KEY = 'electrotag.small-screen-ok';
+
+/** Carry on in a small window: the views come back (app.css lets body.small-screen-ok through the gate). */
+export function allowSmallScreen() {
+  session.set(SMALL_OK_KEY, true);
+  document.body.classList.add('small-screen-ok');
+}
+
 /**
  * Shown instead of the views on a phone-sized screen (the gate in app.css), once someone has signed
  * in: annotating needs a tablet or a computer. It offers to email the page's address and to sign
- * out; administrators can go on to the admin area, which works on a phone.
+ * out; administrators can go on to the admin area, which works on a phone. On a computer the window
+ * may only look small because the page is zoomed in: the notice says how to make room, and Continue
+ * in this window (shown where the pointer is a mouse or a trackpad) brings the views back for this
+ * tab, which then scroll where they need more height.
  */
 export function smallScreenNotice(app = null) {
   const me = app && app.me;
+  if (session.get(SMALL_OK_KEY, false) && typeof document !== 'undefined') document.body.classList.add('small-screen-ok');
   return h('div.small-screen', { role: 'note' },
     h('div.card', {}, brandMark(40),
       h('h1', {}, 'ElectroTag needs a larger screen'),
       h('p', {}, 'Annotating EEG needs room for the traces, so it works on a tablet such as an iPad, or on a laptop or desktop computer. Your work waits for you there.'),
+      me ? h('p.caption.small-screen-id', {}, `You are signed in as ${me.annotator_id}; sign in there with the same account.`) : null,
+      h('p.caption.continue-small', {}, `If the page has been made larger with the browser's zoom, ${CTRL} and minus makes room again.`),
       me ? h('div.btn-row.center', {},
         h('a.btn.primary', { href: emailLinkHref(app), 'data-log': 'email-link' }, 'Email me this link'),
+        h('button.btn.continue-small', { type: 'button', 'data-log': 'continue-small-screen', onclick: () => allowSmallScreen() }, 'Continue in this window'),
         app.isAdmin ? h('button.btn', { type: 'button', 'data-log': 'admin', onclick: () => app.showAdmin('admin') }, 'Open the admin area') : null,
         h('button.btn', { type: 'button', 'data-log': 'sign-out', onclick: () => app.signOut() }, 'Sign out')) : null,
       me && app.isAdmin ? h('p.caption', {}, 'The admin area works on a phone, to check the study\'s progress.') : null));

@@ -43,7 +43,20 @@ export function traceWidths(trace, dpr = 1, thinRows = false) {
   return { device, css };
 }
 
-/** The size in pixels of the channel names for a row height (whole pixels, never taller than the row allows). */
+/** The smallest channel names drawn, in pixels: 11 (normal) and 13 (large). Rows too short for them name every second or third channel instead. */
+export const MIN_NAME_PX = Object.freeze({ normal: 11, large: 13 });
+
+/**
+ * The size in pixels of the channel names for a row height: whole pixels, from 11 to 12 (normal)
+ * or 13 to 15 (large). Names are never drawn smaller; where the rows are shorter than the names,
+ * the viewer names only some of the channels (nameEvery).
+ */
 export function namePx(names, rowH) {
-  return names === 'large' ? Math.round(Math.min(15, Math.max(8, rowH * 0.9))) : Math.round(Math.min(12, Math.max(7, rowH * 0.8)));
+  return names === 'large' ? Math.round(Math.min(15, Math.max(MIN_NAME_PX.large, rowH * 0.9)))
+    : Math.round(Math.min(12, Math.max(MIN_NAME_PX.normal, rowH * 0.8)));
+}
+
+/** Name every how many channels, for names of `fontPx` on rows `rowH` high: 1 (every channel) when they fit. */
+export function nameEvery(fontPx, rowH) {
+  return rowH < fontPx - 1 ? Math.ceil((fontPx - 1) / Math.max(0.1, rowH)) : 1;
 }

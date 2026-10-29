@@ -6,6 +6,7 @@ import { brandMark } from './common.js';
 import { montageFigure } from './montage.js';
 import { eegArt } from './eegart.js';
 import { inform } from '../ui/dialog.js';
+import { docsUrl } from '../ui/docs.js';
 
 export function signinView(app, { message = '', error = '' } = {}) {
   const b = app.backend;
@@ -54,7 +55,7 @@ export function signinView(app, { message = '', error = '' } = {}) {
   } }, 'Forgot password?') : null);
 
   let studyLine;
-  if (!b) studyLine = h('p.subtitle', {}, 'Connecting…');
+  if (!b) studyLine = h('p.subtitle', {}, where.error ? 'Not connected' : 'Connecting…');
   else if (b.isDemo) studyLine = h('p.subtitle', {}, 'Demonstration: everything stays in this browser.');
   else if (b.kind === 'firebase') studyLine = h('p.subtitle', {}, `Study: ${b.study || 'not named'}`);
   else studyLine = h('p.subtitle', {}, `Study: ${(b.health && b.health.study) || 'ElectroTag study'}`, h('br'), h('span.caption', {}, b.server || 'this site'));
@@ -108,7 +109,10 @@ export function signinView(app, { message = '', error = '' } = {}) {
   const card = h('div.card.signin-card', {},
     h('h1', {}, 'Sign in'), studyLine, phone,
     message ? h('p.success', { role: 'status' }, message) : null,
-    problem, b ? form : null, demoHint, connect);
+    problem, b ? form : null, demoHint, connect,
+    h('p.caption.guide-link', {}, 'New to ElectroTag? The ',
+      h('a', { href: docsUrl('web/using.md'), target: '_blank', rel: 'noopener', 'data-log': 'guide' }, 'annotators\' guide'),
+      ' explains signing in, opening recordings and annotating (it opens in a new tab).'));
   setTimeout(() => (b ? idField : null)?.focus(), 0);
   return signinFrame(app, card);
 }
@@ -119,7 +123,8 @@ export function signinView(app, { message = '', error = '' } = {}) {
  */
 export function signinFrame(app, card) {
   const b = app.backend;
-  const status = !b ? h('span.chip', {}, 'Connecting')
+  const where = app.where || {};
+  const status = !b ? h('span.chip', {}, where.error ? 'Not connected' : 'Connecting')
     : b.isDemo ? h('span.chip', {}, 'Demonstration')
       : h('span.chip', {}, b.kind === 'firebase' ? 'Study on Firebase' : 'Study server');
   const art = h('section.signin-art', {}, eegArt(),
@@ -128,10 +133,10 @@ export function signinFrame(app, card) {
       h('div', {},
         h('p.signin-display', {}, 'ElectroTag'),
         h('p.signin-lede', {}, 'Artifact annotation for continuous EEG. ',
-          h('span.tone-soft', {}, 'Your recordings stay on this computer, and only your annotations go to the study.'))),
+          h('span.tone-soft', {}, 'Your recordings stay on your own computer, and only your annotations go to the study.'))),
       h('div.signin-foot', { 'aria-hidden': 'true' },
         h('p.figure-caption', {}, 'Fig. 01 · the 10-20 montage, 19 electrodes'), montageFigure())));
   const panel = h('section.signin-panel', {}, card,
-    h('p.caption.footnote', {}, 'ElectroTag reads each recording in this browser, and the EEG stays on this computer: the study receives the recording\'s fingerprint and your annotations.'));
+    h('p.caption.footnote', {}, 'ElectroTag reads each recording in this browser, and the EEG stays on your own computer: the study receives the recording\'s fingerprint and your annotations.'));
   return h('main.page.signin', { 'data-view': 'signin' }, h('div.signin-split', {}, art, panel));
 }

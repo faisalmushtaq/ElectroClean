@@ -35,7 +35,7 @@ import * as cov from '../viewer/coverage.js';
 import { NAME_SIZES, PANEL_TEXT, TRACE_WIDTHS, loadComfort, saveComfort } from '../ui/comfort.js';
 import { microvoltText } from '../viewer/geometry.js';
 import { mapLayout, projectPositions } from '../viewer/head_map.js';
-import { readElectrodes } from '../data/electrodes.js';
+import { readElectrodes, sidecarsOf } from '../data/electrodes.js';
 import { centredStart, clampTime, parseTimeText } from './goto.js';
 
 const MODE_TEXT = { standard: 'Annotation', guided: 'Guided training', practice: 'Practice', assessment: 'Assessment', tryout: 'Try-out', review: 'Practice review',
@@ -43,6 +43,27 @@ const MODE_TEXT = { standard: 'Annotation', guided: 'Guided training', practice:
 /** Views that only show annotations (no toolbar): a practice review, an administrator's review pass, the feedback on saved work. */
 const VIEW_ONLY_KINDS = ['review', 'reviewing', 'feedback'];
 const DRAG_PX = 3;
+const DRAW_ON_TITLE = 'Draw/edit is on: drag across the EEG to mark artifacts and change annotations. Press it to switch to view only, where nothing can change.';
+const DRAWING_OFF = 'View only: annotations cannot be drawn or changed. Press Draw/edit to mark artifacts.';
+const DRAW_OFF_TITLE = 'View only: annotations cannot be drawn or changed. Press Draw/edit to mark artifacts again.';
+
+/** "1 annotation", "3 annotations". */
+export function plural(n, word, many = `${word}s`) { return `${n} ${n === 1 ? word : many}`; }
+
+/** Channel names for a message: "O1, O2 and P3", or the first few and how many more. */
+function namesText(names, shown = 4) {
+  if (names.length <= shown) return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names.join('');
+  return `${names.slice(0, shown).join(', ')} and ${names.length - shown} more`;
+}
+
+/** A mouse click on `b` leaves the keyboard focus where it was (the EEG); the keyboard still reaches it with Tab. */
+function keepFocusOnClick(b) {
+  b.addEventListener('mousedown', (e) => e.preventDefault());
+  return b;
+}
+
+/** The undo hint for a message: the keys with a keyboard, the Undo button on a touch screen. */
+const undoHint = () => (touchFirst() ? 'Undo at the top takes it back' : UNDO_HINT);
 
 export function friendlyDuration(s) {
   s = Math.round(s);
@@ -162,17 +183,21 @@ export class Workspace {
     this.viewer.onView = (v, cause) => {
       this._viewToolsOnView(cause);
       this._syncViewState(); this._logView();
+      this._placeConfidenceBar();
       if (this.timed && !this._overviewView) this._noteViewDwell();
       if (cause !== 'restore') this._afterViewChange();
     };
     this.viewer.onPointer = (type, info, e) => this._pointer(type, info, e);
+    // The EEG takes the keyboard in the Tab order too (with a focus ring), for those who annotate without a mouse.
+    this.viewer.over.tabIndex = 0;
+    this.viewer.over.setAttribute('aria-label', this.readOnly ? 'EEG. The arrow keys move through the recording.'
+      : 'EEG. The arrow keys move through the recording; M, [ and ] mark at the pointer or the time cursor, which G and the , and . keys move.');
     this.viewer.setComfort(this.comfort);
     if (this.timed) {
       this.viewer.setCoverage(s.viewed);
       this.viewer.onNextUnviewed = (via) => { logger.noteInput(`button:Next part not yet viewed`); this.nextUnviewed(via); };
-    } else {
-      this.viewer.nextUnviewedGroup.hidden = true;
     }
+    this.viewer.nextUnviewedGroup.hidden = !this.timed; // only where what has been viewed is kept track of
     this.viewer.setAnnotations(this.store.annotations());
     this._storeListener = (change) => this._onStore(change);
     this.store.addListener(this._storeListener);
@@ -190,10 +215,12 @@ export class Workspace {
     const actions = h('div.ws-actions');
     this.actionsEl = actions; // a review pass and the feedback view add their own forward action (review_pass.js)
     if (!this.readOnly) {
-      this.drawBtn = h('button.btn.toggle', { type: 'button', 'aria-pressed': 'true', title: 'When off, the recording can be inspected without changing annotations · Delete removes the selected annotation', onclick: () => this.setDrawing(!this.drawing) }, 'Draw/edit');
-      this.deleteBtn = h('button.btn', { type: 'button', title: 'Delete the selected annotation (Delete or Backspace)', onclick: () => this.deleteSelection() }, 'Delete');
-      this.undoBtn = h('button.btn', { type: 'button', onclick: () => this.undo() }, 'Undo');
-      this.redoBtn = h('button.btn', { type: 'button', onclick: () => this.redo() }, 'Redo');
+      this.drawBtn = h('button.btn.toggle', { type: 'button', 'aria-pressed': 'true', 'data-log': 'draw-edit', title: DRAW_ON_TITLE, onclick: () => this.setDrawing(!this.drawing) }, 'Draw/edit');
+      this.deleteBtn = h('button.btn', { type: 'button', 'data-log': 'delete', onclick: () => this.deleteSelection() }, 'Delete');
+      this.undoBtn = h('button.btn', { type: 'button', 'data-log': 'undo', onclick: () => this.undo() }, 'Undo');
+      this.redoBtn = h('button.btn', { type: 'button', 'data-log': 'redo', onclick: () => this.redo() }, 'Redo');
+      // A click leaves the keyboard focus with the EEG, so that Space or Enter afterwards does not press the button again.
+      for (const b of [this.drawBtn, this.deleteBtn, this.undoBtn, this.redoBtn]) keepFocusOnClick(b);
       actions.append(this.drawBtn, this.deleteBtn, this.undoBtn, this.redoBtn, h('span.sep'));
     }
     if (this.timed) {
@@ -203,7 +230,8 @@ export class Workspace {
       icon('pause'), h('span.pause-label', {}, 'Pause'));
       actions.append(this.savedEl, this.pauseBtn);
     }
-    actions.append(...[this._moreButton(), h('button.btn.quiet', { type: 'button', title: 'Keys and mouse actions (?)', onclick: () => this.showHelp() }, 'Help')].filter(Boolean));
+    const helpBtn = keepFocusOnClick(h('button.btn.quiet', { type: 'button', title: 'Keys and mouse actions (?)', onclick: () => this.showHelp() }, 'Help'));
+    actions.append(...[this._moreButton(), helpBtn].filter(Boolean));
     if (this.kind === 'annotate' && s.revision) {
       // A revision: its two actions are on the banner below (_revisionBar).
     } else if (this.kind === 'annotate') {
@@ -223,7 +251,7 @@ export class Workspace {
     const b = h('button.btn.quiet.icon.ws-more', { type: 'button', 'aria-label': 'More', title: 'More: report a problem with this recording', 'aria-haspopup': 'menu', 'data-log': 'ws-more' }, icon('more'));
     b.addEventListener('click', () => {
       const r = b.getBoundingClientRect();
-      showMenu([{ label: 'Report a problem with this recording…', onSelect: () => this.reportProblem() }], Math.max(8, r.right - 300), r.bottom + 4, { className: 'ws-more-menu', minWidth: 300 });
+      showMenu([{ label: 'Report a problem with this recording…', onSelect: () => this.reportProblem() }], Math.max(8, r.right - 300), r.bottom + 4, { className: 'ws-more-menu', minWidth: 300, opener: b });
     });
     return b;
   }
@@ -289,7 +317,8 @@ export class Workspace {
         title: `${l.label} (${l.value}) · key ${i + 1}\n${l.description}\n\nClick (or press the key) to draw this type next; with annotations selected, to change them to it.`,
         onclick: () => { logger.noteInput(`button:${i + 1} ${l.short_code}`); this.applyType(name); },
         style: { '--chip-colour': l.colour, '--chip-text': readableTextColour(l.colour) },
-      }, h('span.swatch', { style: { background: l.colour } }), h('span.chip-key', {}, String(i + 1)), h('span.chip-code', {}, displayCode(l.short_code)));
+      }, h('span.swatch', { style: { background: l.colour } }), h('span.chip-key', {}, String(i + 1)), ' ', h('span.chip-code', {}, displayCode(l.short_code)),
+      h('span.sr-only', {}, `, ${l.label}`)); // the full name for screen readers: "1 Blink, Eye-blink-artifact"
       b.tabIndex = -1;
       b.addEventListener('mousedown', (e) => e.preventDefault()); // a click leaves the keyboard focus with the EEG
       return b;
@@ -307,34 +336,24 @@ export class Workspace {
       this.typeCaption, h('div.chips', {}, this.chips), this.typeMenuBtn, h('span.sep'),
       h('div.segmented', { role: 'group', 'aria-label': 'Applies to' }, this.scopeWhole, this.scopeSome), this.chooseBtn, this.chanSummary,
       h('span.ws-overlay-tool', {}, h('span.sep'), this._overlayButton()));
-    this._ro = new ResizeObserver(() => this._fitToolbar());
-    this._ro.observe(this.toolbar);
+    // Every type button shows its number and code; the toolbar wraps onto a second line when it needs one (app.css).
     return this.toolbar;
   }
 
-  _fitToolbar() {
-    // The type buttons show their code when there is room, otherwise only their number.
-    const tb = this.toolbar;
-    if (!tb) return;
-    tb.classList.remove('compact');
-    if (tb.scrollWidth > tb.clientWidth + 1) tb.classList.add('compact');
-  }
-
   _statusBar() {
-    const s = this.s;
-    const who = s.me ? `${s.me.annotator_id}${s.me.display_name ? ` (${s.me.display_name})` : ''}` : '';
     const touch = touchFirst();
     this.hintEl = h('span.ws-hint', {}, this.kind === 'review' ? (touch ? TOUCH_REVIEW_HINT : REVIEW_HINT)
       : this.readOnly ? (touch ? TOUCH_VIEW_HINT : 'N / P  next, previous annotation')
         : touch ? TOUCH_HINT : this.timed ? KEY_HINT : KEY_HINT.replace('  ·  B pause', '')); // a try-out has no Pause
     this.msgEl = h('span.ws-message', { role: 'status', 'aria-live': 'polite' });
+    // On the right, one above the other: how much has been viewed and how many annotations there are,
+    // then the filters. Who is annotating and in which mode are in the Recording tab and the header.
     this.fixedEl = h('span.ws-fixed');
-    this.countEl = h('span.ws-fixed');
-    this.viewedEl = h('span.ws-fixed.ws-viewed', { title: 'How much of the recording has been on the screen' });
-    this._fixedText = `Annotator: ${who}   |   Mode: ${MODE_TEXT[this.kind === 'annotate' ? s.mode : this.kind] || s.mode}`;
+    this.countEl = h('span.ws-count');
+    this.viewedEl = h('span.ws-viewed', { title: 'How much of the recording has been on the screen' });
     this.readoutEl = h('span.ws-readout', { 'aria-hidden': 'true', hidden: true });
     return h('footer.ws-status', {}, h('div.ws-status-left', {}, this.hintEl, this.msgEl), this.readoutEl,
-      h('div.ws-status-right', {}, this.timed ? this.viewedEl : null, this.countEl, this.fixedEl));
+      h('div.ws-status-right', {}, h('span.ws-status-counts', {}, this.timed ? this.viewedEl : null, this.countEl), this.fixedEl));
   }
 
   _sidePanel() {
@@ -353,7 +372,7 @@ export class Workspace {
     }
     this._annotationsPanel();
     this._recordingPanel();
-    this.tabPanels.help.appendChild(h('div.help-text', { html: helpHtml(touchFirst()) }));
+    this.tabPanels.help.appendChild(h('div.help-text', { html: helpHtml(touchFirst(), { training: ['guided', 'practice'].includes(this.s.mode) && this.kind === 'annotate' }) }));
     this.side.append(this.coachHost, this.reviewHost, h('div.side-tabs', {}, bar, ...Object.values(this.tabPanels)));
     this.showTab('annotations');
   }
@@ -372,21 +391,25 @@ export class Workspace {
     this.countLabel = h('p.caption.count');
     this.tbody = h('tbody');
     this.table = h('table.ann-table', { 'aria-label': 'Annotations' },
-      h('thead', {}, h('tr', {}, h('th', {}, 'Label'), h('th.code', {}, 'Code'), h('th.num', { title: 'Start, in seconds' }, 'Start'), h('th.num', { title: 'End, in seconds' }, 'End'), h('th', {}, 'Channels'))),
+      h('thead', {}, h('tr', {}, h('th', {}, 'Type', h('span.th-time', { title: 'Start and end, in seconds' }, 'Time (s)')))),
       this.tbody);
     this.tableWrap = h('div.table-wrap', {}, this.table);
     const btn = (label, fn, cls = '') => h(`button.btn${cls}`, { type: 'button', onclick: fn }, label);
     this.btnGoto = btn('Go to', () => this.selection[0] && this.jumpTo(this.selection[0]));
     this.btnTimes = btn('Edit times…', () => this.editTimesOfSelected());
-    this.btnLabel = btn('Change label…', () => this.relabelSelected());
+    this.btnLabel = btn('Change type…', () => this.relabelSelected());
     this.btnChans = btn('Edit channels…', () => this.selection[0] && this.editChannelsOf(this.selection[0]));
     this.btnMerge = btn('Merge', () => this.mergeSelected());
-    this.btnMerge.title = 'Merge the selected annotations (same label only) into one interval';
+    this.btnMerge.title = 'Merge the selected annotations (of one type only) into one interval';
     this.btnDel = btn('Delete', () => this.deleteSelectedRows(), '.destructive');
-    p.append(this.countLabel, this.tableWrap,
-      this.readOnly ? h('div.btn-row', {}, this.btnGoto)
-        : h('div.btn-grid', {}, this.btnGoto, this.btnTimes, this.btnLabel, this.btnChans, this.btnMerge, this.btnDel,
-          ...this._confidenceButtons(btn)));
+    // The buttons that change annotations appear with a selection; until then one line says how to make one.
+    this.selectHint = h('p.caption.select-hint', { hidden: true }, touchFirst()
+      ? 'Tap an annotation, on the EEG or in the list, to change its times, type, channels, confidence or note.'
+      : 'Select an annotation (click it on the EEG or in the list, or press N) to change its times, type, channels, confidence or note.');
+    this.btnGrid = this.readOnly ? null : h('div.btn-grid', {}, this.btnGoto, this.btnTimes, this.btnLabel, this.btnChans, this.btnMerge, this.btnDel,
+      ...this._confidenceButtons(btn));
+    p.append(h('div.ann-body', {}, this.countLabel, this.tableWrap,
+      this.readOnly ? h('div.btn-row', {}, this.btnGoto) : this.btnGrid, this.readOnly ? null : this.selectHint));
   }
 
   _recordingPanel() {
@@ -442,11 +465,13 @@ export class Workspace {
     for (const el of [n50, n60, harm]) el.disabled = locked || !notch.checked;
     return h('fieldset.viewing', {},
       h('legend', {}, 'Viewing options'),
-      locked ? h('p.banner', {}, 'These settings are fixed by the study administrator.') : null,
+      locked ? h('p.banner', {}, 'These settings are fixed by the study team.') : null,
       h('div.opt', {}, h('label', {}, hpOn, ` Apply ${hpHz} Hz high-pass filter (recommended)`)),
       h('div.opt', {}, h('label', {}, hpOff, ' No high-pass filter')),
-      h('div.opt', {}, h('label', {}, notch, ' Apply notch filter'), ' ', h('label', {}, n50, ' 50 Hz (UK, Europe)'), ' ', h('label', {}, n60, ' 60 Hz (North America)')),
-      h('div.opt', {}, h('label', {}, harm, ' Also remove harmonics (100, 150 Hz … or 120, 180 Hz …)')),
+      h('div.opt', {}, h('label', {}, notch, ' Apply notch filter')),
+      // The notch filter's own choices, set in under it.
+      h('div.opt.sub', { role: 'group', 'aria-label': 'Notch filter' }, h('label', {}, n50, ' 50 Hz (UK, Europe)'), h('label', {}, n60, ' 60 Hz (North America)')),
+      h('div.opt.sub', {}, h('label', {}, harm, ' Also remove harmonics (100, 150 Hz … or 120, 180 Hz …)')),
       this._channelColourOption());
   }
 
@@ -537,7 +562,7 @@ export class Workspace {
     const parts = [];
     parts.push(f.highpassHz ? `${f.highpassHz} Hz high-pass` : 'no high-pass');
     parts.push(f.notchHz ? `${f.notchHz} Hz notch${f.notchHarmonics ? ' and harmonics' : ''}` : 'no notch');
-    return parts.join(', ') + (this.filtersLocked ? ' (fixed by administrator)' : '');
+    return parts.join(', ') + (this.filtersLocked ? ' (fixed by the study team)' : '');
   }
 
   // =================================================================== mounting
@@ -556,6 +581,11 @@ export class Workspace {
     this._applyPanelComfort();
     if (this.timed) {
       this.s.onSaved = (where, at) => this._showSaved(where, at);
+      const online = () => this._online();
+      const offline = () => { if (this.s.canSave && !this.s.tryOut) this._showSaved('study_failed', new Date()); };
+      window.addEventListener('online', online);
+      window.addEventListener('offline', offline);
+      this._listeners.push(() => { window.removeEventListener('online', online); window.removeEventListener('offline', offline); });
       const input = () => { this._lastInput = performance.now(); };
       for (const type of ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart']) {
         document.addEventListener(type, input, { capture: true, passive: true });
@@ -566,11 +596,41 @@ export class Workspace {
     }
     this._clock = setInterval(() => this._tick(), 1000);
     this._tick();
-    requestAnimationFrame(() => this._fitToolbar());
     const visibility = () => this._visibility();
     document.addEventListener('visibilitychange', visibility);
     this._listeners.push(() => document.removeEventListener('visibilitychange', visibility));
     if (this.s.resumed && this.timed) this._welcomeBack();
+    if (this.kind === 'annotate') this._offerDiscarded();
+  }
+
+  /** Work on this recording discarded earlier in this tab (session.js discardDrafts): a note that offers to bring it back. */
+  _offerDiscarded() {
+    const d = this.s.discarded;
+    if (!d || !d.annotations.length) return;
+    const n = d.annotations.length;
+    const when = d.discarded_at ? ` at ${timeOfDay(new Date(d.discarded_at))}` : '';
+    const back = h('button.btn.small', { type: 'button', 'data-log': 'bring-back', onclick: () => this.bringBackDiscarded() }, 'Bring it back');
+    const leave = h('button.btn.small.quiet', { type: 'button', 'data-log': 'bring-back-no', onclick: () => { this._hideDiscarded(); } }, 'Leave it');
+    this.discardedEl = h('div.note.discarded-work', { 'data-log': 'discarded-work' },
+      h('p', {}, `Work you discarded${when} is kept until you close this tab: ${plural(n, 'annotation')} and ${friendlyDuration(Number(d.elapsed_s) || 0)} of work on this recording.`),
+      h('div.btn-row', {}, back, leave));
+    this.tabPanels.annotations.prepend(this.discardedEl);
+  }
+
+  _hideDiscarded() { if (this.discardedEl) { this.discardedEl.remove(); this.discardedEl = null; } }
+
+  async bringBackDiscarded() {
+    const d = this.s.discarded;
+    if (!d || !this._checkEditable()) { this._hideDiscarded(); return; }
+    const n = this.store.size;
+    if (n && !(await ask('Bring back the earlier work?', `Your ${plural(n, 'annotation')} open now ${n === 1 ? 'is' : 'are'} replaced by the ${plural(d.annotations.length, 'annotation')} you discarded. Undo takes this back.`,
+      { yes: 'Bring it back', no: 'Keep what is open', defaultYes: false }))) return;
+    const r = this.s.bringBackDiscarded();
+    this._hideDiscarded();
+    if (!r) return;
+    if (this.timed) { this.viewer.setCoverage(this.s.viewed); this._refreshCoverage(); }
+    logger.event('discarded_work_restored', { n_annotations: r.n, elapsed_s: Math.round(r.elapsedS * 10) / 10, replaced: n });
+    this.say(`Brought back ${plural(r.n, 'annotation')} and ${friendlyDuration(r.elapsedS)} of work (${undoHint()}).`);
   }
 
   _visibility() {
@@ -637,7 +697,6 @@ export class Workspace {
     this.s.onSaved = null;
     this._listeners.forEach((f) => f());
     this.store.removeListener(this._storeListener);
-    if (this._ro) this._ro.disconnect();
     if (this.coach) this.coach.destroy();
     this.viewer.destroy();
     closeMenu();
@@ -706,8 +765,10 @@ export class Workspace {
     this._hideBreakReminder(null);
     for (const el of [this.toolbar, this.eegHost, this.side]) if (el) el.inert = true;
     this.el.classList.add('paused');
+    this._refreshState(); // Draw/edit, Delete, Undo and Redo wait for Resume
     this.pauseBtn.setAttribute('aria-pressed', 'true');
     this.pauseBtn.querySelector('.pause-label').textContent = 'Resume';
+    this.pauseBtn.querySelector('.ico')?.replaceWith(icon('play'));
     this.pauseBtn.title = 'Start the clock again (B)';
     this.panel.hidden = false;
     this.pauseReasonEl.textContent = {
@@ -746,8 +807,10 @@ export class Workspace {
     this.panel.hidden = true;
     for (const el of [this.toolbar, this.eegHost, this.side]) if (el) el.inert = false;
     this.el.classList.remove('paused');
+    this._refreshState();
     this.pauseBtn.setAttribute('aria-pressed', 'false');
     this.pauseBtn.querySelector('.pause-label').textContent = 'Pause';
+    this.pauseBtn.querySelector('.ico')?.replaceWith(icon('pause'));
     this.pauseBtn.title = 'Stop the clock while you are away (B). Your draft is kept.';
     this._lastInput = performance.now();
     if (r.isBreak) this._breakShown = false;
@@ -767,7 +830,15 @@ export class Workspace {
     if (returned) this._returned = true;
     this.pauseWorked.textContent = `Time worked on this recording: ${friendlyDuration(this.s.elapsedS)}.`;
     const away = c.pausedForS;
-    const was = this._returned || c.pauseReason === 'hidden' || c.pauseReason === 'idle' ? 'You were away for' : 'Paused for';
+    if (c.pauseReason === 'idle') {
+      // The pause began when the minutes without input ran out; those minutes still count (the annotator may have been reading).
+      const idle = minutesWords(this.settings.idlePauseMinutes * 60);
+      const before = `the ${idle} before the pause still ${/^1 /.test(idle) ? 'counts' : 'count'}`;
+      this.pauseAway.textContent = away >= 1 ? `The ${friendlyDuration(away)} since then ${Math.round(away) === 1 ? 'is' : 'are'} not counted; ${before}.`
+        : `The time from now on is not counted; ${before}.`;
+      return;
+    }
+    const was = this._returned || c.pauseReason === 'hidden' ? 'You were away for' : 'Paused for';
     this.pauseAway.textContent = away >= 1 ? `${was} ${friendlyDuration(away)}; that time is not counted.` : 'The time you are paused is not counted.';
   }
 
@@ -780,7 +851,7 @@ export class Workspace {
     this.breakEl = h('div.break-reminder.note', { role: 'status', 'aria-live': 'polite', 'data-log': 'break-reminder' },
       h('p', {}, `You have worked for ${minutesWords(worked)} since your last break. A few minutes away from the screen help you stay sharp.`),
       h('div.btn-row', {}, take, later));
-    this.eegHost.append(this.breakEl);
+    this.main.append(this.breakEl); // over the foot of the side panel (app.css), never over the EEG
     logger.event('break_reminder', { worked_s: Math.round(worked), interval_s: this.settings.breakReminderMinutes * 60 });
   }
 
@@ -832,7 +903,7 @@ export class Workspace {
     if (!this.timed) return;
     const f = cov.viewedFraction(this.s.viewed, this.s.recording.durationS, this._noData());
     const text = `Viewed ${cov.percentText(f)}`;
-    this.viewedEl.textContent = `${text}   |   `;
+    this.viewedEl.textContent = text;
     this.coverageText.textContent = `${text} of the recording`;
     this.coverageBar.style.width = `${Math.floor(f * 100)}%`;
   }
@@ -855,16 +926,50 @@ export class Workspace {
   }
 
   // ================================================================ drafts kept
+  /**
+   * The time the draft was last kept, at the top. When the study has stopped receiving drafts (no
+   * connection), it says plainly that the draft is in this browser only, and the status line says so
+   * once; when a draft reaches the study again, the label is as before and the line says so.
+   */
   _showSaved(where, at) {
-    this._saved[where] = at;
+    if (where === 'study_failed') {
+      const first = !this._studyFailing;
+      this._studyFailing = true;
+      if (first && !this._destroyed) {
+        this.say('The study cannot be reached just now. Your draft is kept in this browser and goes to the study when the connection returns.', 15000);
+        logger.event('draft_not_sent', { online: navigator.onLine !== false });
+      }
+    } else {
+      this._saved[where] = at;
+      if (where === 'study' && this._studyFailing) {
+        this._studyFailing = false;
+        if (!this._destroyed) this.say('The study can be reached again, and has your latest draft.');
+        logger.event('draft_sent_again', {});
+      }
+    }
     if (!this.savedEl) return;
-    const latest = [this._saved.browser, this._saved.study].filter(Boolean).sort((a, b) => b - a)[0];
-    this.savedEl.textContent = `Draft saved ${timeOfDay(latest)}`;
-    this.savedEl.dataset.saved = where;
     const t = (d) => d.toLocaleTimeString('en-GB');
+    if (this._studyFailing) {
+      this.savedEl.textContent = this._saved.browser ? `Draft kept in this browser only, ${timeOfDay(this._saved.browser)}` : 'Draft kept in this browser only';
+      this.savedEl.dataset.saved = 'local-only';
+      this.savedEl.title = 'The study cannot be reached just now (the connection may have dropped). Your draft is kept in this browser, and ' +
+        `goes to the study when the connection returns.${this._saved.study ? ` The study last received it at ${t(this._saved.study)}.` : ''}`;
+      return;
+    }
+    const latest = [this._saved.browser, this._saved.study].filter(Boolean).sort((a, b) => b - a)[0];
+    if (!latest) return;
+    this.savedEl.textContent = `Draft saved ${timeOfDay(latest)}`;
+    this.savedEl.dataset.saved = where === 'study_failed' ? 'browser' : where;
     this.savedEl.title = 'Your work is kept as a draft while you annotate, so nothing is lost if the page closes. ' +
       `Last kept ${this._saved.browser ? `in this browser at ${t(this._saved.browser)}` : ''}` +
       `${this._saved.browser && this._saved.study ? ' and ' : ''}${this._saved.study ? `with the study at ${t(this._saved.study)}` : ''}.`;
+  }
+
+  /** The connection comes back: the draft goes to the study at once (a draft replaces the one before, so this is safe; Save and Finish is never sent again by itself). */
+  _online() {
+    const s = this.s;
+    if (!s.canSave || s.submitting) return;
+    s.saveRemote({ force: true });
   }
 
   /** A restored draft: where the annotator was, what was kept and the time so far. */
@@ -883,6 +988,12 @@ export class Workspace {
   }
 
   // ================================================================== messages
+  _clearMessage() {
+    clearTimeout(this._msgTimer);
+    this.msgEl.textContent = '';
+    this.hintEl.hidden = false;
+  }
+
   say(msg, ms = 10000) {
     this.msgEl.textContent = msg;
     this.hintEl.hidden = Boolean(msg);
@@ -895,8 +1006,9 @@ export class Workspace {
   get editable() { return this.drawing && !this.readOnly; }
 
   _checkEditable() {
+    if (this.clock && this.clock.paused) return false; // nothing changes behind the pause panel
     if (this.editable) return true;
-    this.say(this.readOnly ? 'This view is read-only' : 'Drawing and editing is off: tick Draw/edit to change annotations');
+    this.say(this.readOnly ? 'This view is read-only' : DRAWING_OFF);
     return false;
   }
 
@@ -906,13 +1018,14 @@ export class Workspace {
     if (this.readOnly) on = false;
     this.drawing = Boolean(on);
     this._logState({ drawing_enabled: this.drawing });
-    this.say(on ? 'Drawing and editing on' : 'Drawing and editing off (view only)');
+    this.say(on ? 'Draw/edit is on: drag across the EEG to mark an artifact.' : 'View only: annotations cannot be drawn or changed. Press Draw/edit to mark artifacts again.');
     this._refreshState();
   }
 
   setCurrentLabel(label) {
     this.cat.get(label);
     if (label !== this.currentLabel) { this.currentLabel = label; this._logState({ current_label: label }); }
+    if (this.markStart !== null) { this.viewer.setMarkStart(this.markStart, this.cat.colourFor(label)); this._showPendingMark(); }
     this._refreshState();
   }
 
@@ -937,16 +1050,28 @@ export class Workspace {
     this.say(this.scope === 'whole' ? 'Next annotation: whole montage' : 'Next annotation: selected channels (click channel names to choose them)');
   }
 
+  /**
+   * A click on a channel's name. In the overlay it shows that channel alone. With one channel-specific
+   * annotation selected it adds the channel to that annotation or takes it out (as Shift+click does on
+   * the EEG); otherwise, with Selected channels, it chooses the channels of the next annotation.
+   */
   onChannelClicked(name) {
     if (this.viewer.overlay) { this.isolate(name, logger.via()); return; }
+    const ids = this.targetIds();
+    if (ids.length === 1 && this.editable) {
+      if (this.store.get(ids[0]).channels.length) this.toggleAnnotationChannel(ids[0], name);
+      else this.say(`The selected annotation applies to the whole montage: Shift+click ${name} inside it to take that channel out, or use Edit channels…. Esc ends the selection.`);
+      return;
+    }
     if (this.scope !== 'channels') {
-      this.say(`${name}: switch to 'Selected channels' to choose channels by clicking. Channels are not marked bad in ElectroTag.`);
+      this.say('To mark only some channels, choose Selected channels (C), then click their names.');
       return;
     }
     const sel = new Set(this.selectedChannels);
     if (sel.has(name)) sel.delete(name); else sel.add(name);
     this.setSelectedChannels([...sel]);
-    this.say(`${this.selectedChannels.length} channel(s) selected for new annotations`);
+    const n = this.selectedChannels.length;
+    this.say(`${plural(n, 'channel')} chosen for the next annotation${n ? `: ${namesText(this.selectedChannels)}` : ''}`);
   }
 
   select(ids, { via = null } = {}) {
@@ -978,7 +1103,13 @@ export class Workspace {
         this.typeCaption.textContent = 'Draw as';
         this.typeCaption.title = 'The type of the next annotation';
       }
+      if (!this.drawing && !this.readOnly) {
+        // Draw/edit is off: the caption says so, and how to mark again.
+        this.typeCaption.textContent = 'View only';
+        this.typeCaption.title = DRAW_OFF_TITLE;
+      }
       this.toolbar.classList.toggle('changing', ids.length > 0);
+      this.toolbar.classList.toggle('view-only', !this.drawing);
       this.chips.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.label === shown)));
       clear(this.typeMenuBtn);
       if (shown) {
@@ -1003,10 +1134,21 @@ export class Workspace {
     }
     this.viewer.setSelectedChannels(this.selectedChannels, this.scope === 'channels');
     if (this.drawBtn) {
+      // Each acts only when it can: Undo and Redo as the history allows, Delete with something selected;
+      // none of them, nor Draw/edit, while paused (nothing changes behind the pause panel).
+      const paused = Boolean(this.clock && this.clock.paused);
+      const keys = touchFirst() ? '' : ` (${CTRL}+Z)`;
       this.drawBtn.setAttribute('aria-pressed', String(this.drawing));
-      this.undoBtn.title = this.store.canUndo ? `Undo ${this.store.undoDescription}` : 'Nothing to undo';
-      this.redoBtn.title = this.store.canRedo ? `Redo ${this.store.redoDescription}` : 'Nothing to redo';
-      this.deleteBtn.disabled = !this.editable;
+      this.drawBtn.disabled = paused;
+      this.drawBtn.title = this.drawing ? DRAW_ON_TITLE : DRAW_OFF_TITLE;
+      this.undoBtn.disabled = paused || !this.editable || !this.store.canUndo;
+      this.redoBtn.disabled = paused || !this.editable || !this.store.canRedo;
+      this.undoBtn.title = this.store.canUndo ? `Undo ${this.store.undoDescription}${keys}` : 'Nothing to undo';
+      this.redoBtn.title = this.store.canRedo ? `Redo ${this.store.redoDescription}${touchFirst() ? '' : ` (${CTRL}+Y)`}` : 'Nothing to redo';
+      const n = this.targetIds().length;
+      this.deleteBtn.disabled = paused || !this.editable || !n;
+      this.deleteBtn.title = n ? `Delete the selected ${n === 1 ? 'annotation' : `${n} annotations`}${touchFirst() ? '' : ' (Delete or Backspace)'}`
+        : 'Select an annotation to delete it: click it, or press N';
     }
     const anns = this.targetIds().map((i) => this.store.get(i));
     const ed = this.editable;
@@ -1017,12 +1159,16 @@ export class Workspace {
     this.btnDel.disabled = !(ed && anns.length);
     this.btnMerge.disabled = !(ed && anns.length >= 2 && new Set(anns.map((a) => a.label)).size === 1);
     this._refreshConfidenceButtons(anns, ed);
+    if (this.btnGrid) {
+      this.btnGrid.hidden = !anns.length;
+      this.selectHint.hidden = Boolean(anns.length) || !this.store.size;
+    }
     if (this.saveBtn && this.coach) this.coach.syncSaveButton(this.saveBtn);
     this._refreshOverlayState();
   }
 
   _refreshFixed() {
-    this.fixedEl.textContent = `${this._fixedText}   |   Filters: ${this.filtersText()}`;
+    this.fixedEl.textContent = `Filters: ${this.filtersText()}`;
   }
 
   _refreshList() {
@@ -1033,26 +1179,31 @@ export class Workspace {
     anns.forEach((a, i) => {
       const l = this.cat.get(a.label);
       const prefix = (this.prefix && this.prefix[a.annotation_id]) || '';
+      const start = (a.onset_sample / this.sf).toFixed(3);
+      const end = (endSample(a) / this.sf).toFixed(3);
       const tr = h(`tr${sel.has(a.annotation_id) ? '.selected' : ''}`, {
         'data-id': a.annotation_id, 'data-log-text': a.label, 'aria-selected': String(sel.has(a.annotation_id)),
-        title: `${a.label}\n${l.description}`.trim(),
+        title: `${a.label} (${l.value})\n${l.description}`.trim(),
         onclick: (e) => this._rowClick(e, i, anns),
         ondblclick: () => this.jumpTo(a.annotation_id),
       },
-      h('td.label', {}, h('span.swatch', { style: { background: l.colour } }), h('span.label-text', { style: { color: this.labelColours?.[a.annotation_id] || null } }, prefix + a.label),
-        ...this._confidenceMarks(a)),
-      h('td.code', {}, String(l.value)),
-      h('td.num', { title: `${(a.onset_sample / this.sf).toFixed(3)} to ${(endSample(a) / this.sf).toFixed(3)} s, duration ${(a.duration_samples / this.sf).toFixed(3)} s` }, (a.onset_sample / this.sf).toFixed(3)),
-      h('td.num', {}, (endSample(a) / this.sf).toFixed(3)),
-      h('td.chans', { title: a.channels.length ? a.channels.join(', ') : 'Whole montage' }, channelsText(a.channels)));
+      // Two lines, so that the label has the panel's whole width: the label (wrapping at its hyphens
+      // only when even that is too narrow), then the channels, the rating, the note sign and the times.
+      h('td.label', {},
+        h('div.ann-name', {}, h('span.swatch', { style: { background: l.colour } }),
+          h('span.label-text', { style: { color: this.labelColours?.[a.annotation_id] || null } }, prefix + a.label)),
+        h('div.ann-details', {}, h('span.chans', { title: a.channels.length ? a.channels.join(', ') : 'Whole montage' }, channelsText(a.channels)),
+          ...this._confidenceMarks(a),
+          h('span.ann-time', { title: `${start} to ${end} s, duration ${(a.duration_samples / this.sf).toFixed(3)} s` },
+            `${start}–${end}`))));
       this.tbody.appendChild(tr);
     });
-    if (!anns.length) this.tbody.appendChild(h('tr.empty', {}, h('td', { colspan: '5' }, this.readOnly ? 'No annotations.' : 'No annotations yet. Choose a type and drag across the EEG.')));
+    if (!anns.length) this.tbody.appendChild(h('tr.empty', {}, h('td', {}, this.readOnly ? 'No annotations.' : 'No annotations yet. Choose a type and drag across the EEG.')));
     this.tableWrap.scrollTop = scroll;
     const n = anns.length;
     const nCh = anns.filter((a) => a.channels.length).length;
-    this.countLabel.textContent = `${n} annotation(s): ${n - nCh} whole montage, ${nCh} channel-specific`;
-    this.countEl.textContent = `Annotations: ${n}   |   `;
+    this.countLabel.textContent = `${plural(n, 'annotation')}: ${n - nCh} whole montage, ${nCh} channel-specific`;
+    this.countEl.textContent = `Annotations: ${n}`;
   }
 
   _rowClick(e, index, anns) {
@@ -1140,6 +1291,7 @@ export class Workspace {
     this._refreshList();
     this._refreshState();
     if (this.welcomeEl && act !== 'reset') { this.welcomeEl.remove(); this.welcomeEl = null; }
+    this._refreshPrompt();
     if (this.coach) this.coach.scheduleCheck();
   }
 
@@ -1160,10 +1312,10 @@ export class Workspace {
     }
     this._revealRow(ann.annotation_id);
     this.lastMadeId = ann.annotation_id;
-    const where = ann.channels.length ? `${ann.channels.length} channel(s)` : 'whole montage';
+    const where = ann.channels.length ? plural(ann.channels.length, 'channel') : 'whole montage';
     const span = `${(ann.onset_sample / this.sf).toFixed(3)}–${(endSample(ann) / this.sf).toFixed(3)} s`;
     if (this.store.lastAutoMerged) {
-      this.say(`Merged with ${this.store.lastAutoMerged} overlapping ${ann.label} annotation(s) on the same channels: now ${span} (${where}). ${UNDO_HINT}.`);
+      this.say(`Merged with ${plural(this.store.lastAutoMerged, `overlapping ${ann.label} annotation`)} on the same channels: now ${span} (${where}). ${undoHint()}.`);
     } else {
       this.say(`Added ${ann.label} ${span} (${where})`);
     }
@@ -1181,7 +1333,7 @@ export class Workspace {
       } else {
         this.store.setLabelMany(ids, name);
         const what = ids.length === 1 ? 'the selected annotation' : `${ids.length} annotations`;
-        this.say(`Changed ${what} to ${name} (${UNDO_HINT}). Esc or a click on empty EEG ends the selection.`);
+        this.say(`Changed ${what} to ${name} (${undoHint()}). Esc or a click on empty EEG ends the selection.`);
       }
     } else {
       this.setCurrentLabel(name);
@@ -1221,7 +1373,7 @@ export class Workspace {
       }
     }
     items.push({ separator: true }, { label: 'Find a type…', shortcut: '/', onSelect: () => this.findType() });
-    showMenu(items, r.left, r.bottom + 2, { className: 'type-menu-list', minWidth: Math.max(300, r.width) });
+    showMenu(items, r.left, r.bottom + 2, { className: 'type-menu-list', minWidth: Math.max(300, r.width), opener: anchor });
   }
 
   showContextMenu(id, x, y) {
@@ -1230,7 +1382,7 @@ export class Workspace {
     const items = [{ section: a.label }];
     this.quick.forEach((name, i) => {
       const l = this.cat.get(name);
-      items.push({ label: `${l.label}  (${l.value})`, swatch: l.colour, shortcut: String(i + 1), disabled: name === a.label, title: l.description,
+      items.push({ label: `${l.label}  (${l.value})`, swatch: l.colour, shortcut: touchFirst() ? null : String(i + 1), disabled: name === a.label, title: l.description,
         onSelect: () => { logger.noteInput(`menu:${l.label}`); this.relabel(id, name); } });
     });
     const sub = [];
@@ -1261,11 +1413,17 @@ export class Workspace {
     }
   }
 
+  /** Shift+click (or a click on a name, with a channel-specific annotation selected): that channel in or out. */
   toggleAnnotationChannel(id, ch) {
     if (!this._checkEditable()) return;
     try {
+      const before = this.store.get(id);
       const a = this.store.toggleChannel(id, ch);
-      this.say(a.channels.length ? `${a.label}: channels ${a.channels.join(', ')}` : `${a.label}: now applies to the whole montage`);
+      const where = !a.channels.length ? 'now applies to the whole montage'
+        : !before.channels.length ? `every channel but ${ch} (${plural(a.channels.length, 'channel')})`
+          : `${a.channels.includes(ch) ? `${ch} added` : `${ch} taken out`}; ${a.channels.length === 1 ? 'channel' : 'channels'} ${namesText(a.channels)}`;
+      this.select([a.annotation_id], { via: logger.via() });
+      this.say(`${a.label}: ${where} (${undoHint()}).`);
     } catch (exc) {
       this.say(exc.message);
     }
@@ -1276,14 +1434,14 @@ export class Workspace {
     const a = this.store.get(id);
     this.store.delete(id);
     this.select(null);
-    this.say(`Deleted ${a.label} (${UNDO_HINT})`);
+    this.say(`Deleted ${a.label} (${undoHint()})`);
   }
 
   deleteSelection() {
     if (!this._checkEditable()) return;
     const ids = this.targetIds();
     if (ids.length > 1) { this.deleteSelectedRows(); return; }
-    if (!ids.length) { this.say(`Nothing is selected: click an annotation (or press N) to select it, or ${UNDO_HINT} the last change`); return; }
+    if (!ids.length) { this.say(`Nothing is selected: click an annotation (or press N) to select it${touchFirst() ? '' : `, or press ${CTRL}+Z to undo the last change`}.`); return; }
     this.deleteOne(ids[0]);
   }
 
@@ -1292,7 +1450,7 @@ export class Workspace {
     if (!ids.length || !this._checkEditable()) return;
     this.store.deleteMany(ids);
     this.select(null);
-    this.say(`Deleted ${ids.length} annotation(s) (${UNDO_HINT})`);
+    this.say(`Deleted ${plural(ids.length, 'annotation')} (${undoHint()})`);
   }
 
   undo() {
@@ -1313,7 +1471,7 @@ export class Workspace {
     try {
       const merged = this.store.merge(ids);
       this.select([merged.annotation_id]);
-      this.say(`Merged ${ids.length} annotations into one ${merged.label} (${UNDO_HINT})`);
+      this.say(`Merged ${ids.length} annotations into one ${merged.label} (${undoHint()})`);
     } catch (exc) {
       inform('Cannot merge', exc.message);
     }
@@ -1323,9 +1481,9 @@ export class Workspace {
     const ids = this.targetIds();
     if (!ids.length || !this._checkEditable()) return;
     const current = this.store.get(ids[0]).label;
-    const label = await pickType({ title: 'Change label', catalogue: this.cat, current, quick: this.quick });
+    const label = await pickType({ title: ids.length === 1 ? 'Change type' : `Change the type of ${ids.length} annotations`, catalogue: this.cat, current, quick: this.quick });
     if (!label || (label === current && ids.length === 1)) return;
-    logger.noteInput('dialog:Change label');
+    logger.noteInput('dialog:Change type');
     this.store.setLabelMany(ids, label);
   }
 
@@ -1384,25 +1542,34 @@ export class Workspace {
     let i;
     if (cur >= 0) i = cur + step;
     else {
+      // Nothing selected: the first annotation that reaches into the screen (N), or the last that starts before its end (P).
       const v = this.viewer.view;
-      if (step > 0) { const k = anns.findIndex((a) => a.onset_sample / this.sf >= v.startS - 1e-9); i = k >= 0 ? k : anns.length; }
+      if (step > 0) { const k = anns.findIndex((a) => endSample(a) / this.sf > v.startS + 1e-9); i = k >= 0 ? k : anns.length; }
       else { let k = -1; anns.forEach((a, j) => { if (a.onset_sample / this.sf < v.startS + v.durationS) k = j; }); i = k; }
     }
-    if (i < 0 || i >= anns.length) { this.say(step > 0 ? 'That was the last annotation' : 'That was the first annotation'); return; }
+    // Past the last (or before the first), N and P come round to the other end.
+    let round = '';
+    if (i >= anns.length) { i = 0; round = 'Back to the first annotation. '; }
+    else if (i < 0) { i = anns.length - 1; round = 'Back to the last annotation. '; }
     const a = anns[i];
     this.jumpTo(a.annotation_id);
-    this.say(`${i + 1} of ${anns.length}: ${a.label} ${(a.onset_sample / this.sf).toFixed(3)}–${(endSample(a) / this.sf).toFixed(3)} s. Press 1 to 9 to change its type, Delete to remove it, N or P to move on.`);
+    const what = touchFirst() ? '' : ' Press 1 to 9 to change its type, Delete to remove it, N or P to move on.';
+    this.say(`${round}${i + 1} of ${anns.length}: ${a.label} ${this._spanText(a)}.${what}`);
   }
 
   // ====================================================================== marks
   markKey(kind) {
-    // The time under the pointer now (the EEG may have scrolled since the pointer last moved).
+    // The time under the pointer now (the EEG may have scrolled since the pointer last moved), or,
+    // with the pointer elsewhere, the time cursor (a click, G, or the , and . keys), so that the
+    // keyboard alone can mark an artifact.
     const p = this.pointerXY ? this.viewer.hit(this.pointerXY.x, this.pointerXY.y) : null;
-    const t = p && p.area === 'eeg' ? p.t : null;
-    if (t === null) {
+    const cursor = this.viewer.cursorT ?? null;
+    const keyed = cursor !== null && (this._cursorKeyedAt || 0) > (this._pointerMovedAt || 0); // moved by key since the pointer last moved
+    const t = p && p.area === 'eeg' && !keyed ? p.t : cursor;
+    if (t === null || t === undefined) {
       const where = kind === 'end' || (kind === 'toggle' && this.markStart !== null) ? 'ends' : 'starts';
       const key = { start: '[', end: ']' }[kind] || 'M';
-      this.say(`Point at the EEG where the artifact ${where}, then press ${key}.`);
+      this.say(`Point at the EEG where the artifact ${where}, or place the time cursor there (click, G, or the , and . keys), then press ${key}.`);
       return;
     }
     if (kind === 'start') this.startMark(t);
@@ -1415,11 +1582,41 @@ export class Workspace {
     if (!this._checkEditable()) return;
     this.cancelMark(true);
     if (this.selection.length) this.select(null);
-    t = clamp(t, 0, this.s.recording.durationS);
+    t = this._snapTime(t); // the time it will be saved at, to the sample
     this.markStart = t;
     this.viewer.setMarkStart(t, this.cat.colourFor(this.currentLabel));
     this._logState({ mark_start_s: Math.round(t * 1000) / 1000 });
+    this._showPendingMark();
     this.say(`Start of ${this.currentLabel} marked at ${t.toFixed(3)} s. Point at the end (scroll if you need to) and press M again. Esc cancels.`);
+  }
+
+  /** A time in seconds at its nearest sample, as the annotation store keeps it. */
+  _snapTime(t) {
+    const n = this.s.recording.nSamples;
+    return clamp(Math.floor(clamp(t, 0, this.s.recording.durationS) * this.sf + 0.5), 0, n) / this.sf;
+  }
+
+  /** While a mark started with M or [ waits for its end: a note over the EEG that stays when the start scrolls out of sight. */
+  _showPendingMark() {
+    if (!this.pendingEl) {
+      this.pendingEl = h('p.mark-pending', { 'data-log': 'mark-pending', hidden: true });
+      this.eegHost.append(this.pendingEl);
+    }
+    const on = this.markStart !== null;
+    this.pendingEl.hidden = !on;
+    if (on) this.pendingEl.textContent = `Marking ${this.currentLabel} from ${this.markStart.toFixed(3)} s (${clockText(this.markStart)}) · M or ] at the end · Esc cancels`;
+  }
+
+  /** , and . (Shift: ten times as far): move the time cursor, which M, [ and ] use when the pointer is not on the EEG. */
+  nudgeCursor(dir, big = false) {
+    const v = this.viewer;
+    const step = v.view.durationS * (big ? 0.1 : 0.01);
+    const from = v.cursorT === null || v.cursorT === undefined ? v.view.startS + v.view.durationS / 2 : v.cursorT + dir * step;
+    const t = this._snapTime(from);
+    v.setCursor(t);
+    this._cursorKeyedAt = performance.now();
+    if (t < v.view.startS || t > v.view.startS + v.view.durationS) v.setView({ startS: centredStart(t, v.view.durationS) }, 'key');
+    this.say(`Time cursor at ${t.toFixed(3)} s. M, [ and ] mark at the time cursor while the pointer is away from the EEG.`, 4000);
   }
 
   endMark(t) {
@@ -1439,6 +1636,7 @@ export class Workspace {
     const had = this.markStart !== null;
     this.markStart = null;
     this.viewer.setMarkStart(null);
+    if (this.pendingEl) this.pendingEl.hidden = true;
     if (had) { this._logState({ mark_start_s: null }); if (!quiet) this.say('Mark cancelled'); }
     return had;
   }
@@ -1454,6 +1652,7 @@ export class Workspace {
   _pointer(type, info, e) {
     if (type === 'pointermove' || type === 'pointerleave' || type === 'pointerdown') this._noteReadout(type, e);
     if (type === 'pointermove' || type === 'pointerleave') this.pointerXY = info && info.area === 'eeg' ? { x: e.clientX, y: e.clientY } : null;
+    if (type === 'pointermove') this._pointerMovedAt = performance.now();
     const g = this.gesture;
     if (type === 'cancel') {
       // A second finger on the EEG (it moves the view instead) or the browser took the touch back.
@@ -1496,11 +1695,13 @@ export class Workspace {
         this.gesture = { kind: 'resize', id: a.annotation_id, edge: info.edge, a, x: info.x, moved: false };
         return;
       }
-      if (e.shiftKey && info.annotation) {
-        this.gesture = { kind: 'shift', id: info.annotation, x: info.x, t: info.t, channel: info.channel, moved: false };
-        return;
+      if (e.shiftKey) {
+        // Shift+click a channel inside an annotation: the selected one wherever its time span is (so that
+        // a channel can be added on any row), otherwise the one under the pointer. Shift+drag moves it.
+        const id = this._shiftTarget(info);
+        if (id) { this.gesture = { kind: 'shift', id, x: info.x, t: info.t, channel: info.channel, moved: false }; return; }
       }
-      this.gesture = { kind: 'press', x: info.x, t: info.t, info, moved: false };
+      this.gesture = { kind: 'press', x: info.x, t: info.t, info, moved: false, shift: e.shiftKey };
       return;
     }
     if (type === 'pointermove') {
@@ -1508,6 +1709,7 @@ export class Workspace {
       if (!g || !info) return;
       const dx = Math.abs(info.x - g.x);
       if (g.kind === 'press') {
+        if (!g.moved && dx > DRAG_PX && !this.editable && !this.readOnly && !g.warned) { g.warned = true; this.say(DRAWING_OFF); }
         if (!g.moved && dx > DRAG_PX && (this.editable || this._marksRanges())) {
           g.moved = true;
           g.kind = 'draw';
@@ -1562,15 +1764,26 @@ export class Workspace {
       } else if (g.kind === 'press') {
         logger.noteInput('eeg_click');
         const i = g.info;
-        if (i.annotation) { this.select([i.annotation], { via: 'eeg_click' }); this.viewer.setCursor(null); }
+        if (i.annotation && !g.shift) { this.select([i.annotation], { via: 'eeg_click' }); this.viewer.setCursor(null); }
         else {
           if (this.selection.length) this.select(null, { via: 'eeg_click' });
-          // A click on a trace chooses its channel.
-          if (i.nearTrace && i.channel) this.onChannelClicked(i.channel);
+          // With Selected channels, a click on a trace chooses its channel; otherwise the click only places the time cursor.
+          if (g.shift && this.editable) this.say('Shift+click a channel inside an annotation to add that channel to it or take it out.');
+          else if (i.nearTrace && i.channel && this.scope === 'channels' && !this.viewer.overlay) this.onChannelClicked(i.channel);
           this.viewer.setCursor(i.t);
         }
       }
     }
+  }
+
+  /** The annotation a Shift+click acts on: the one selected, when the click is within its time span, or else the one under the pointer. */
+  _shiftTarget(info) {
+    const ids = this.targetIds();
+    if (ids.length === 1 && info.channel) {
+      const a = this.store.get(ids[0]);
+      if (info.sample >= a.onset_sample && info.sample <= endSample(a)) return a.annotation_id;
+    }
+    return info.annotation || null;
   }
 
   _preview(a, onset, dur) {
@@ -1584,13 +1797,18 @@ export class Workspace {
       const ann = fn();
       if (this.store.lastAutoMerged && ann) {
         this.select([ann.annotation_id]);
-        this.say(`Merged with ${this.store.lastAutoMerged} overlapping ${ann.label} annotation(s) (${UNDO_HINT})`);
+        this.say(`Merged with ${plural(this.store.lastAutoMerged, `overlapping ${ann.label} annotation`)}: now ${this._spanText(ann)} (${undoHint()}).`);
+      } else if (ann) {
+        this.say(`${ann.label} now ${this._spanText(ann)} (${undoHint()}).`);
       }
     } catch (exc) {
       this.say(`Change not applied: ${exc.message}`);
     }
     this.viewer.setAnnotations(this.store.annotations());
   }
+
+  /** "3.008–3.604 s", as the Annotations list shows an annotation's times. */
+  _spanText(a) { return `${(a.onset_sample / this.sf).toFixed(3)}–${(endSample(a) / this.sf).toFixed(3)} s`; }
 
   _hoverCursor(info, e) {
     const c = this.viewer.over;
@@ -1599,8 +1817,8 @@ export class Workspace {
       if (this.gesture && (this.gesture.kind === 'resize')) cursor = 'ew-resize';
       else if (this.gesture && this.gesture.kind === 'move') cursor = 'grabbing';
       else if (info.edge && this.editable) cursor = 'ew-resize';
-      else if (info.annotation && e.shiftKey && this.editable) cursor = 'move';
-      else if (info.annotation) cursor = 'pointer';
+      else if ((info.annotation || this._shiftTarget(info)) && e.shiftKey && this.editable) cursor = 'move';
+      else if (info.annotation && !this.editable) cursor = 'pointer';
       else cursor = this.editable ? 'crosshair' : 'default';
     } else if (info && (info.area === 'channel_names' || info.area === 'tags')) cursor = 'pointer';
     if (c.style.cursor !== cursor) c.style.cursor = cursor;
@@ -1623,7 +1841,8 @@ export class Workspace {
   /** D: the prompt for the selected or newest annotation, answered with a digit from 1 to 5 (0 clears). */
   askConfidence() {
     if (!this._checkEditable()) return;
-    const ids = this._confidenceTargets();
+    // The annotation an every-mark study asks about (its bar is open), else the selected ones or the one made last.
+    const ids = this._prompt && !this._prompt.captures ? this._prompt.ids : this._confidenceTargets();
     if (!ids.length) { this.say('Select an annotation (click it, or press N), then press D and a number from 1 to 5.'); return; }
     this.startConfidencePrompt(ids, 'key');
   }
@@ -1634,9 +1853,11 @@ export class Workspace {
   }
 
   /**
-   * The confidence prompt: a short mode in which the keys 1 to 5 rate the annotations (and not choose a type),
-   * 0 clears and Esc cancels. It ends after the answer, Esc, any other key, or a few seconds (on a touch screen
-   * a little longer, for its bar); while rating the unrated marks before Save and Finish it waits.
+   * The confidence prompt, with its bar beside the annotations it asks about, which are outlined on the
+   * EEG. After D (and in Rate them) it is a short mode in which the keys 1 to 5 rate (and do not choose a
+   * type), 0 clears and Esc cancels; any other key ends it and does what it does. After a new mark in an
+   * every-mark study it only offers the bar: the number keys keep choosing the type, D then a number or
+   * a tap on the bar rates, and Later or Esc leaves the mark unrated. It never ends by itself.
    */
   startConfidencePrompt(ids, trigger) {
     this._endConfidencePrompt('replaced');
@@ -1644,23 +1865,28 @@ export class Workspace {
     if (!live.length) return;
     const first = this.store.get(live[0]);
     const what = live.length === 1 ? first.label : `${live.length} annotations`;
-    const ms = trigger === 'rate_them' ? 0 : touchFirst() ? 8000 : 3000;
-    this._prompt = { ids: live, trigger, timer: ms ? setTimeout(() => this._endConfidencePrompt('timeout'), ms) : null };
-    this.say(`Confidence for ${what}: press 1–5, 0 to clear, Esc to cancel`, ms || 60000);
+    const captures = trigger !== 'new_mark';
+    this._prompt = { ids: live, trigger, captures, markers: this.viewer.markers || [] };
+    const touch = touchFirst();
+    this.say(touch ? `Confidence for ${what}: tap a number from 1 to 5 on the bar, or Later.`
+      : captures ? `Confidence for ${what}: press 1–5, 0 to clear, Esc to cancel.`
+        : `Confidence for ${what}: press D and then 1–5, or click a number on the bar. Later or Esc leaves it unrated.`, 600000);
+    this.viewer.setMarkers([...this._prompt.markers, ...live.map((i) => { const a = this.store.get(i); return { onset_sample: a.onset_sample, duration_samples: a.duration_samples, outline: true, current: true }; })]);
     this._showConfidenceBar(what, live.length === 1 ? first.confidence : null);
   }
 
   _endConfidencePrompt(outcome, level = null) {
     const p = this._prompt;
     if (!p) return;
-    clearTimeout(p.timer);
     this._prompt = null;
     if (this.confBar) this.confBar.hidden = true;
+    this.viewer.setMarkers(p.markers);
+    if (outcome !== 'rated' && outcome !== 'cleared' && outcome !== 'replaced' && this.msgEl.textContent.startsWith('Confidence for')) this._clearMessage();
     logger.event('confidence_prompt', { trigger: p.trigger, outcome, n_annotations: p.ids.length, ...(level ? { confidence: level } : {}) });
     if (p.trigger === 'rate_them' && outcome === 'rated') this._rateNextUnrated();
     else if (p.trigger === 'rate_them' && outcome === 'cancelled') {
       const left = this.store.annotations().filter((a) => !isConfidence(a.confidence)).length;
-      this.say(`Rating stopped: ${left} mark${left === 1 ? '' : 's'} still without a confidence.`);
+      this.say(`Rating stopped: ${plural(left, 'annotation')} still without a confidence.`);
     }
   }
 
@@ -1677,6 +1903,12 @@ export class Workspace {
     if (!this._prompt) return false;
     const k = e.key;
     if (['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(k)) return false;
+    if (!this._prompt.captures) {
+      // The bar after a new mark: only Esc is its own; every other key keeps its meaning (D rates).
+      if (k !== 'Escape') return false;
+      handled('Later', () => { this._endConfidencePrompt('later'); this.say('Left without a confidence. D and a number rate it later.'); });
+      return true;
+    }
     if (/^[0-5]$/.test(k) && !e.ctrlKey && !e.metaKey && !e.altKey) {
       handled(k === '0' ? 'Clear confidence' : `Confidence ${k}`, () => this._answerPrompt(Number(k) || null));
       return true;
@@ -1695,7 +1927,7 @@ export class Workspace {
       this.confBarLabel = h('span.conf-prompt-label');
       this.confBarSegs = CONFIDENCE_LEVELS.map((lv) => h('button.seg', { type: 'button', 'data-level': String(lv), 'data-log': `confidence-prompt-${lv}`,
         title: `${lv}: ${CONFIDENCE_ANCHORS[lv]}`, 'aria-pressed': 'false', onclick: () => this._answerPrompt(lv) }, String(lv)));
-      this.confBar = h('div.conf-prompt', { hidden: true, role: 'group', 'aria-label': 'Confidence of the new mark, 1 (not at all) to 5 (completely confident)', 'data-log': 'confidence-prompt' },
+      this.confBar = h('div.conf-prompt', { hidden: true, role: 'group', 'aria-label': 'Confidence, from 1 (not at all confident) to 5 (completely confident)', 'data-log': 'confidence-prompt' },
         this.confBarLabel, h('div.segmented', {}, ...this.confBarSegs),
         h('button.btn.small.quiet', { type: 'button', 'data-log': 'confidence-prompt-clear', onclick: () => this._answerPrompt(null) }, 'Clear'),
         h('button.btn.small.quiet', { type: 'button', 'data-log': 'confidence-prompt-later', onclick: () => this._endConfidencePrompt('later') }, 'Later'));
@@ -1704,6 +1936,47 @@ export class Workspace {
     this.confBarLabel.textContent = `Confidence for ${what}`;
     for (const b of this.confBarSegs) b.setAttribute('aria-pressed', String(Number(b.dataset.level) === current));
     this.confBar.hidden = false;
+    this._placeConfidenceBar();
+  }
+
+  /**
+   * The bar goes beside the annotations it asks about, just under the band of labels, so that it hides
+   * neither their tags nor their stretch of EEG: after their end, or before their start when there is
+   * no room after it; centred at the foot of the EEG when there is room on neither side.
+   */
+  _placeConfidenceBar() {
+    const p = this._prompt;
+    const bar = this.confBar;
+    if (!p || !bar || bar.hidden) return;
+    const v = this.viewer;
+    const anns = p.ids.filter((i) => this.store.has(i)).map((i) => this.store.get(i));
+    if (!anns.length) return;
+    const host = this.main.getBoundingClientRect();
+    const over = v.over.getBoundingClientRect();
+    const left0 = over.left - host.left;
+    const top0 = over.top - host.top;
+    const w = bar.offsetWidth;
+    const hgt = bar.offsetHeight;
+    const xa = left0 + v.sampleToX(Math.min(...anns.map((a) => a.onset_sample)));
+    const xb = left0 + v.sampleToX(Math.max(...anns.map(endSample)));
+    const lo = left0 + v.x0 + 4;
+    const hi = left0 + v.x1 - 4;
+    const gap = 12;
+    let x;
+    let y = top0 + v.y0 + 4;
+    if (xb + gap + w <= hi) x = Math.max(lo, xb + gap);
+    else if (xa - gap - w >= lo) x = Math.min(hi - w, xa - gap - w);
+    else { x = Math.max(lo, Math.min(hi - w, (xa + xb) / 2 - w / 2)); y = top0 + v.y1 - hgt - 4; }
+    Object.assign(bar.style, { left: `${Math.round(x)}px`, top: `${Math.round(y)}px`, transform: 'none' });
+  }
+
+  /** After a change: a prompt about annotations that are gone ends; otherwise its outline follows them. */
+  _refreshPrompt() {
+    const p = this._prompt;
+    if (!p) return;
+    if (!p.ids.every((i) => this.store.has(i))) { this._endConfidencePrompt('deleted'); return; }
+    this.viewer.setMarkers([...p.markers, ...p.ids.map((i) => { const a = this.store.get(i); return { onset_sample: a.onset_sample, duration_samples: a.duration_samples, outline: true, current: true }; })]);
+    this._placeConfidenceBar();
   }
 
   /** A rating from the menu or the table: it answers the prompt when the prompt is about the same annotations. */
@@ -1720,7 +1993,7 @@ export class Workspace {
     if (!live.length) return;
     this.store.setConfidenceMany(live, level);
     const what = live.length === 1 ? this.store.get(live[0]).label : `${live.length} annotations`;
-    this.say(level ? `Confidence of ${what}: ${level}/5, ${CONFIDENCE_ANCHORS[level].toLowerCase()} (${UNDO_HINT})` : `Confidence of ${what} cleared (${UNDO_HINT})`);
+    this.say(level ? `Confidence of ${what}: ${level}/5, ${CONFIDENCE_ANCHORS[level].toLowerCase()} (${undoHint()})` : `Confidence of ${what} cleared (${undoHint()})`);
   }
 
   /** Before Save and Finish in an every-mark study: the marks without a rating, with Rate them and Save anyway. */
@@ -1729,9 +2002,9 @@ export class Workspace {
     const n = this.store.annotations().filter((a) => !isConfidence(a.confidence)).length;
     if (!n) return true;
     const body = h('div', {},
-      h('p.dialog-text', {}, `${n === 1 ? '1 mark has' : `${n} marks have`} no confidence. This study asks for a confidence rating, from 1 (not at all confident) to 5 (completely confident), on every mark.`),
-      h('p.dialog-text', {}, 'Rate them now, one after another with a key from 1 to 5 or a tap, or save them without a rating.'));
-    const choice = await showDialog({ title: 'Marks without a confidence', body, className: 'confidence-check', logText: `${n} mark(s) without a confidence`,
+      h('p.dialog-text', {}, `${n === 1 ? '1 annotation has' : `${n} annotations have`} no confidence. This study asks for a confidence rating, from 1 (not at all confident) to 5 (completely confident), on every annotation.`),
+      h('p.dialog-text', {}, `Rate ${n === 1 ? 'it' : 'them'} now, one after another with a key from 1 to 5 or a tap, or save without a rating.`));
+    const choice = await showDialog({ title: 'Annotations without a confidence', body, className: 'confidence-check', logText: `${plural(n, 'annotation')} without a confidence`,
       buttons: [{ label: 'Save anyway', value: 'save' }, { label: 'Rate them', value: 'rate', kind: 'primary' }], cancelValue: 'cancel' });
     logger.event('confidence_check', { n_unrated: n, n_annotations: this.store.size, choice });
     if (choice === 'rate') this._rateNextUnrated();
@@ -1741,7 +2014,7 @@ export class Workspace {
   /** Rate them: the first mark without a rating is selected, brought into view and asked about; then the next. */
   _rateNextUnrated() {
     const next = this.store.annotations().find((a) => !isConfidence(a.confidence));
-    if (!next) { this.say('Every mark has a confidence now. Press Save and Finish when you are ready.'); return; }
+    if (!next) { this.say('Every annotation has a confidence now. Press Save and Finish when you are ready.'); return; }
     this.select([next.annotation_id], { via: 'confidence_check' });
     this.jumpTo(next.annotation_id, { keepSelection: true });
     this.viewer.over.focus({ preventScroll: true });
@@ -1768,7 +2041,7 @@ export class Workspace {
   _confidenceMenuItems(id, a) {
     const levels = CONFIDENCE_LEVELS.map((lv) => ({ label: `${lv}  ${CONFIDENCE_ANCHORS[lv]}`, checked: a.confidence === lv,
       onSelect: () => { logger.noteInput(`menu:Confidence ${lv}`); this._rateFromControl([id], lv); } }));
-    return [{ label: 'Confidence', shortcut: 'D', submenu: [...levels, { separator: true },
+    return [{ label: 'Confidence', shortcut: touchFirst() ? null : 'D', submenu: [...levels, { separator: true },
       { label: 'Clear', disabled: !isConfidence(a.confidence), onSelect: () => { logger.noteInput('menu:Clear confidence'); this._rateFromControl([id], null); } }] },
     { label: a.note ? 'Edit note…' : 'Add a note…', onSelect: () => this.editNoteOf(id) }];
   }
@@ -1798,7 +2071,7 @@ export class Workspace {
     this.btnNote.disabled = !(editable && anns.length === 1);
   }
 
-  /** What the label cell of the Annotations table shows after the label: the rating ("3/5") and a note icon. */
+  /** What a row of the Annotations table shows below the label, after the channels: the rating ("3/5") and a note icon. */
   _confidenceMarks(a) {
     const out = [];
     if (isConfidence(a.confidence)) out.push(h('span.conf-mark', { title: `Confidence ${a.confidence} of 5: ${CONFIDENCE_ANCHORS[a.confidence]}` }, `${a.confidence}/5`));
@@ -1864,11 +2137,13 @@ export class Workspace {
     if (this.coach && !mod && (k === 'Enter' || k === ' ') && this.coach.takesContinueKey()) {
       return handled('Continue', () => this.coach.continue());
     }
+    if (this.coach && !mod && !e.altKey && (k === 'h' || k === 'H') && this.coach.canShowMe()) {
+      return handled('Show me', () => this.coach.showMe());
+    }
     if (mod && !e.altKey) {
       const lk = k.toLowerCase();
       if (lk === 'z' && !e.shiftKey) return handled('Undo', () => this.undo());
       if ((lk === 'z' && e.shiftKey) || lk === 'y') return handled('Redo', () => this.redo());
-      if (lk === 'f') return handled('Find a type…', () => !this.readOnly && this.findType());
       return;
     }
     if (e.altKey) return;
@@ -1906,6 +2181,8 @@ export class Workspace {
     if (k === '[') return handled('Mark start', () => this.markKey('start'));
     if (k === ']') return handled('Mark end', () => this.markKey('end'));
     if (k === 'c' || k === 'C') return handled('Whole montage or selected channels', () => this.toggleScope());
+    if (k === ',' || k === '<') return handled('Time cursor back', () => this.nudgeCursor(-1, e.shiftKey || k === '<'));
+    if (k === '.' || k === '>') return handled('Time cursor forward', () => this.nudgeCursor(1, e.shiftKey || k === '>'));
     if (k === 'd' || k === 'D') return handled('Confidence', () => this.askConfidence());
     if (k === 'Delete' || k === 'Backspace') return handled('Delete', () => this.deleteSelection());
   }
@@ -1994,7 +2271,9 @@ export class Workspace {
     if (!this.readoutOn) { this._readoutAt = null; this.readoutEl.hidden = true; this.readoutEl.textContent = ''; }
     logger.event('state', { value_readout: this.readoutOn, via });
     this._refreshOverlayState();
-    this.say(this.readoutOn ? 'Value under the pointer: on. Point at a trace to see its channel, time and value (V turns it off).' : 'Value under the pointer: off (V turns it on).');
+    const touch = touchFirst();
+    this.say(this.readoutOn ? `Value under the pointer: on. ${touch ? 'Touch a trace while you draw' : 'Point at a trace'} to see its channel, time and value${touch ? '' : ' (V turns it off)'}.`
+      : `Value under the pointer: off${touch ? '' : ' (V turns it on)'}.`);
   }
 
   /** Pointer moves on the EEG: the readout follows at most once a frame, writing only its text. */
@@ -2027,7 +2306,7 @@ export class Workspace {
     this._logView();
     this._refreshState();
     this._showReadout();
-    this.say(on ? 'Overlay: the channels on screen share one axis, and marks apply to the whole montage. I shows one channel alone; O goes back.'
+    this.say(on ? `Overlay: the channels on screen share one axis, and marks apply to the whole montage. ${touchFirst() ? 'Isolate shows one channel alone; Overlay again goes back.' : 'I shows one channel alone; O goes back.'}`
       : 'Normal view: one channel per row.');
   }
 
@@ -2072,13 +2351,16 @@ export class Workspace {
     logger.event('state', { isolated_channel: name, via });
     this._refreshOverlayState();
     this._showReadout();
-    this.say(name ? `${name} alone. The arrow keys up and down (or the buttons) move to the next channel; I shows them all.` : 'All the channels on screen again.');
+    this.say(name ? (touchFirst() ? `${name} alone. The buttons beside Isolate move to the previous or next channel; Isolate again shows them all.`
+      : `${name} alone. The arrow keys up and down (or the buttons) move to the next channel; I shows them all.`) : 'All the channels on screen again.');
   }
 
   /** After the view moved: an isolated channel stays on screen, and Show all ends when the view changes. */
   _viewToolsOnView(cause) {
     this._overviewView = cause === 'show_all' && this.viewer.view.durationS >= this.viewer.durationTotal - 1e-6;
     if (!this._overviewView && cause !== 'show_all') this._beforeAll = null;
+    // Show all says so over the EEG for as long as it lasts (the message below fades after a while).
+    this.viewer.setCaption(this._overviewView ? `The whole recording, as an overview · ${touchFirst() ? 'Show all' : 'Shift+End'} goes back` : null);
     const v = this.viewer;
     if (!v.overlay || v.isolated === null) return;
     const first = v.view.firstChannel;
@@ -2136,6 +2418,7 @@ export class Workspace {
     const { t, clamped } = clampTime(r.t, total);
     this.viewer.setView({ startS: centredStart(t, this.viewer.view.durationS) }, 'go_to_time');
     this.viewer.setCursor(t);
+    this._cursorKeyedAt = performance.now();
     logger.event('go_to_time', { valid: true, t_s: Math.round(t * 1000) / 1000, clamped, via });
     this.closeGoTo();
     this.say(clamped ? `The recording is ${clockText(total)} long: the time cursor is at its ${t === 0 ? 'start' : 'end'}.`
@@ -2180,14 +2463,20 @@ export class Workspace {
   }
 
   // ------------------------------------------------------------------------- the channel map
-  /** The recording's own electrode positions, when an electrodes.tsv was picked with it (js/data/electrodes.js). */
+  /**
+   * The recording's own electrode positions, when an electrodes.tsv came with it: picked with it, kept
+   * with its copy on this device, or fetched with or beside its link (js/data/electrodes.js). The
+   * interaction log notes which positions the map uses (electrode_positions), never a file's name.
+   */
   async _loadElectrodes() {
     const src = this.s.recording.source;
-    const files = src && src.sidecars;
-    if (!files || !files.length) return;
-    const got = await readElectrodes(files, this.s.recording.fileName);
-    if (!got || this._destroyed) return;
-    this.electrodes = { positions: projectPositions(got.positions, got.system), fileName: got.fileName, system: got.system };
+    const files = await sidecarsOf(src);
+    const got = files.length ? await readElectrodes(files, this.s.recording.fileName) : null;
+    if (this._destroyed) return;
+    if (got) this.electrodes = { positions: projectPositions(got.positions, got.system), fileName: got.fileName, system: got.system };
+    const layout = mapLayout(this.s.channels, this.electrodes ? this.electrodes.positions : null);
+    logger.event('electrode_positions', { source: layout.source, opened_from: (src && src.kind) || 'other',
+      ...(layout.source === 'file' ? { n_placed: layout.points.filter((p) => !p.extra).length, coordinate_system: String(got.system || '').slice(0, 40) } : {}) });
   }
 
   /** What the channel chooser's map needs: where each channel goes, the group colours, and where the choice of view is kept. */
@@ -2218,7 +2507,7 @@ export class Workspace {
     let ok;
     if (s.revision) {
       const summary = counts.size ? [...counts].map(([l, n]) => `  ${l}: ${n}`).join('\n') : '  No artifacts marked';
-      ok = await this._askSave(`Submit the revision with ${this.store.size} annotation(s)?`, summary,
+      ok = await this._askSave(`Submit the revision with ${plural(this.store.size, 'annotation')}?`, summary,
         `It is saved as version ${s.revision.version}. Version ${s.revision.revises} is kept as it was, and analyses use the latest version.`,
         'Submit the revision');
     } else if (!counts.size) {
@@ -2226,7 +2515,7 @@ export class Workspace {
         { yes: 'Save with no artifacts', no: 'Keep annotating', defaultYes: false });
     } else {
       const summary = [...counts].map(([l, n]) => `  ${l}: ${n}`).join('\n');
-      ok = await this._askSave(`Save ${this.store.size} annotation(s) and finish this recording?`, summary);
+      ok = await this._askSave(`Save ${plural(this.store.size, 'annotation')} and finish this recording?`, summary);
     }
     if (!ok) return false;
     this.saveBtn.disabled = true;
@@ -2264,7 +2553,7 @@ export class Workspace {
         this.app.afterSave(this, { saved: true, files: [], next: null, attempt: 0, feedback: null });
         return true;
       }
-      await inform('Could not save', 'Your annotations could not be saved, so this recording has NOT been marked complete.\n\n' +
+      await inform('Could not save', 'Your annotations could not be saved, so this recording is not marked complete yet.\n\n' +
         `${exc.message}\n\nYour annotations are still open: you can try Save and Finish again.`);
       if (exc.status === 422 && this.coach) this.coach.refresh();
       return false;
@@ -2290,17 +2579,19 @@ export class Workspace {
     const total = gaps.reduce((t, [a, b]) => t + (b - a), 0);
     const shown = gaps.slice(0, 6);
     const pc = cov.percentText(cov.viewedFraction(this.s.viewed, this.s.recording.durationS, this._noData()));
+    const one = gaps.length === 1;
     const body = h('div', {},
-      h('p.dialog-text', {}, `You have viewed ${pc} of this recording. ${gaps.length === 1 ? 'This part has' : 'These parts have'} not been on the screen yet:`),
+      h('p.dialog-text', {}, `You have viewed ${pc} of this recording. ${one ? 'This part has' : 'These parts have'} not been on the screen yet:`),
       h('ul.unviewed-list', {}, shown.map(([a, b]) => h('li', {}, `${clockText(a)} to ${clockText(b)} (${friendlyDuration(b - a)})`))),
       gaps.length > shown.length ? h('p.dialog-text', {}, `and ${gaps.length - shown.length} more, ${friendlyDuration(total)} in all.`) : null,
-      h('p.dialog-text', {}, 'Look at them before you save, or save now if you have reviewed them another way.'));
-    const choice = await showDialog({ title: 'Parts not yet viewed', body, className: 'coverage-check', logText: `${gaps.length} unviewed part(s), ${Math.round(total)} s`,
-      buttons: [{ label: 'Save anyway', value: 'save' }, { label: 'Go to the first part', value: 'goto', kind: 'primary' }], cancelValue: 'cancel' });
+      h('p.dialog-text', {}, `Look at ${one ? 'it' : 'them'} before you save, or save now if you have reviewed ${one ? 'it' : 'them'} another way.`));
+    const choice = await showDialog({ title: one ? 'A part not yet viewed' : 'Parts not yet viewed', body, className: 'coverage-check', logText: `${plural(gaps.length, 'unviewed part')}, ${Math.round(total)} s`,
+      buttons: [{ label: 'Keep annotating', value: 'cancel' }, { label: 'Save anyway', value: 'save' },
+        { label: one ? 'Go to that part' : 'Go to the first part', value: 'goto', kind: 'primary' }], cancelValue: 'cancel' });
     logger.event('coverage_check', { viewed_fraction: this._viewedFraction(), n_unviewed: gaps.length, unviewed_s: Math.round(total * 10) / 10, choice });
     if (choice === 'goto') {
       this.viewer.setView({ startS: cov.viewStartFor(gaps[0], this.viewer.view.durationS) }, 'unviewed');
-      this.say(`Not yet viewed: ${clockText(gaps[0][0])} to ${clockText(gaps[0][1])}. Press U (or Next part not yet viewed) for the next one.`);
+      this.say(`Not yet viewed: ${clockText(gaps[0][0])} to ${clockText(gaps[0][1])}.${one ? '' : ` ${touchFirst() ? 'Next part not yet viewed' : 'U (or Next part not yet viewed)'} shows the next one.`}`);
       this.viewer.over.focus({ preventScroll: true });
     }
     return choice === 'save';
@@ -2349,13 +2640,12 @@ export class Workspace {
     const later = 'Close and finish later';
     const discard = 'Discard and close';
     const stay = 'Keep annotating';
-    const choice = await choose('Close without saving?',
-      'This recording has not been saved with Save and Finish, so it is not complete.\n\n' +
-      `${later}: ` + (n ? `your ${n} annotation(s) and the time spent are kept` : 'the time spent so far is kept') +
-      ', and ElectroTag offers to continue the next time you open this recording.\n\n' +
+    const choice = await choose('Close this recording?',
+      `${later}: ` + (n ? `your draft is kept, with your ${plural(n, 'annotation')} and the time spent` : 'your draft is kept, with the time spent so far') +
+      ', and you continue where you left off the next time you open this recording. It is complete once you press Save and Finish.\n\n' +
       `${discard}: your annotations for this recording are deleted.`, [later, discard, stay], 0);
     if (choice === stay) return false;
-    if (choice === discard && n && !(await ask('Discard annotations?', `Delete your ${n} annotation(s) for this recording?`, { yes: 'Delete them', no: 'Keep annotating', defaultYes: false, destructive: true }))) return false;
+    if (choice === discard && n && !(await ask('Discard annotations?', `Delete your ${plural(n, 'annotation')} for this recording?`, { yes: 'Delete them', no: 'Keep annotating', defaultYes: false, destructive: true }))) return false;
     if (choice === later) {
       s.saveLocal();
       await s.saveRemote({ force: true });

@@ -1,7 +1,7 @@
 // The Backend for a study on Firebase (docs/web/api.md, "The same operations on Firebase").
 //
 // Signing in uses Firebase Authentication (email and password) in the browser; every other
-// operation is a callable Cloud Function named ec_<operation> in the study's region, taking
+// operation is a callable Cloud Function named et_<operation> in the study's region, taking
 // {study, ...the HTTP request body...} and returning the same JSON as the server. Errors arrive
 // as HttpsError (a code, details.error and the message for the annotator) and become the same
 // ApiError the rest of the application already handles.

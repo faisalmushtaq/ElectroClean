@@ -5,7 +5,7 @@
 
 import { h, clear } from '../ui/dom.js';
 import { dailyChart } from './chart.js';
-import { ROLES, csvText, minutesText, numberText, percent, projectionFigure, scopeText, whenText } from './model.js';
+import { ROLES, csvText, minutesText, numberText, percent, projectionFigure, routeForSection, scopeText, whenText } from './model.js';
 import {
   card, chip, dataTable, downloadText, messageArea, recordingName, sectionHead, select, shareBar, tabBar, textInput,
 } from './ui.js';
@@ -72,7 +72,7 @@ export class ProgressSection {
   _fillStudy() {
     const t = this.data.totals || {};
     // A figure, or a few words where there is none yet (the projected finish).
-    const tile = (value, label, note = '', figure = false) => h('div.stat-tile', {}, h(`span.stat-value${figure || /^[\d.,–-]+$/.test(String(value)) ? '' : '.words'}`, {}, value), h('span.stat-label', {}, label), note ? h('span.caption', {}, note) : null);
+    const tile = (value, label, note = '', figure = false, to = null) => h(to ? 'a.stat-tile' : 'div.stat-tile', { href: to ? `#${routeForSection(to)}` : null, 'data-to': to }, h(`span.stat-value${figure || /^[\d.,–-]+$/.test(String(value)) ? '' : '.words'}`, {}, value), h('span.stat-label', {}, label), note ? h('span.caption', {}, note) : null);
     const finish = projectionFigure(t.projection, t.pace_days || 14);
     clear(this.tiles);
     this.tiles.append(
@@ -80,10 +80,10 @@ export class ProgressSection {
       tile(numberText(t.annotator_hours, 1), 'Annotator-hours', 'With recordings open, unfinished work included'),
       tile(t.median_minutes === null || t.median_minutes === undefined ? '–' : numberText(t.median_minutes, 1), 'Median minutes per recording', 'Of every recording saved'),
       tile(`${t.done_7d ?? 0}`, 'Done in the last 7 days', `${t.done_30d ?? 0} in the last 30 days`),
-      tile(numberText(t.pace_per_day, 1), 'Recordings a day', `The pace of the last ${t.pace_days || 14} days`),
+      tile(numberText(t.pace_per_day, 1), 'Recordings a day', `The pace of the last ${(t.pace_days || 14) === 1 ? 'day' : `${t.pace_days || 14} days`}`),
       tile(finish.value, 'Projected finish', finish.note, t.projection && t.projection.status === 'projected'),
-      tile(`${t.unusable ?? 0}`, 'Cannot be annotated', `Set aside by annotators, apart from done; ${t.problems_open ?? 0} open problem${t.problems_open === 1 ? '' : 's'}`),
-      tile(`${t.reviewed ?? 0}`, 'Reviewed', 'Saved recordings with a review'));
+      tile(`${t.unusable ?? 0}`, 'Cannot be annotated', `Set aside by annotators, apart from done; ${t.problems_open ?? 0} open problem${t.problems_open === 1 ? '' : 's'}`, false, 'problems'),
+      tile(`${t.reviewed ?? 0}`, 'Reviewed', 'Saved recordings with a review', false, 'results'));
     const keep = this.person.value;
     clear(this.person);
     this.person.append(h('option', { value: '' }, 'The whole study'));

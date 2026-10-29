@@ -8,7 +8,7 @@
 import { h, clear } from '../ui/dom.js';
 import {
   GUIDANCE, METRICS, USES, USE_SHORT, checkSetId, criteriaFromRows, criteriaRows, describeProvenance, parseNumber, plural,
-  readAnnotationDocument, scopeText, tsvText,
+  SLIVER_S, readAnnotationDocument, scopeText, splitSlivers, tsvText,
 } from './model.js';
 import {
   actionButton, card, checkbox, checkList, chip, confirmInline, dataTable, downloadBase64, downloadText, field, loading, messageArea,
@@ -192,7 +192,9 @@ export class TrainingSection {
       h('fieldset.admin-fieldset', {}, h('legend', {}, 'Used for'), use), guidanceField,
       h('div.btn-row', {}, save),
       h('h3', {}, 'Guided notes'),
-      h('p.caption', {}, 'The note shown with each of the experts\' annotations while a trainee is guided through the recording.'),
+      h('p.caption', {}, 'The note shown with each of the experts\' annotations while a trainee is guided through the recording: ' +
+        'what the artifact looks like here and why it is marked on these channels. The example set\'s notes describe only the ' +
+        'simulation; replace them with your experts\' explanations when you use real recordings.'),
       h('div.btn-row', {}, notesBtn), notesHost,
       h('h3', {}, 'Remove'), removeHost));
     host.querySelector('h3').tabIndex = -1;
@@ -310,14 +312,20 @@ export class TrainingSection {
   }
 
   _showDisagreements(rows, rid) {
+    const columns = [
+      { title: 'Kind', render: (d) => d.kind }, { title: 'Type', render: (d) => d.label },
+      { title: 'From (s)', num: true, render: (d) => Number(d.onset_s).toFixed(2) }, { title: 'To (s)', num: true, render: (d) => Number(d.offset_s).toFixed(2) },
+      { title: 'Marked by', render: (d) => d.experts_marking || '–' }, { title: 'Not by', render: (d) => d.experts_not_marking || '–' },
+      { title: 'Note', render: (d) => d.note },
+    ];
+    // Slivers where the experts' boundaries differ by a few tens of milliseconds are listed apart, so that
+    // the stretches worth adjudicating come first; the download holds every row.
+    const { main, slivers } = splitSlivers(rows);
     const box = card(`Where the experts disagreed (${rows.length})`,
       h('p.caption', {}, 'For adjudication: every stretch where the experts differ, and what the consensus kept.'),
-      dataTable([
-        { title: 'Kind', render: (d) => d.kind }, { title: 'Type', render: (d) => d.label },
-        { title: 'From (s)', num: true, render: (d) => Number(d.onset_s).toFixed(2) }, { title: 'To (s)', num: true, render: (d) => Number(d.offset_s).toFixed(2) },
-        { title: 'Marked by', render: (d) => d.experts_marking || '–' }, { title: 'Not by', render: (d) => d.experts_not_marking || '–' },
-        { title: 'Note', render: (d) => d.note },
-      ], rows, { empty: 'The experts agreed everywhere.', pageSize: 20 }),
+      dataTable(columns, main, { empty: slivers.length ? 'The experts differ only at the edges of their annotations (below).' : 'The experts agreed everywhere.', pageSize: 20 }),
+      slivers.length ? h('details.admin-details.slivers', {}, h('summary', {}, `${slivers.length} boundary difference${slivers.length === 1 ? '' : 's'} shorter than ${SLIVER_S} s`),
+        dataTable(columns, slivers, { pageSize: 20 })) : null,
       rows.length ? h('div.btn-row', {}, h('button.btn', { type: 'button', onclick: () => downloadText(`${rid.split('/').pop().replace(/\.[^.]+$/, '')}_disagreements.tsv`, tsvText(DISAGREEMENT_COLUMNS, rows.map((d) => ({ ...d, onset_s: Number(d.onset_s).toFixed(4), offset_s: Number(d.offset_s).toFixed(4) }))), 'text/tab-separated-values') }, 'Download the table (TSV)')) : null);
     this.body.append(box);
     box.scrollIntoView({ block: 'nearest' });
