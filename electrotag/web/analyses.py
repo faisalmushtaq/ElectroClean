@@ -29,6 +29,35 @@ if TYPE_CHECKING:
 MAX_TABLES_BYTES = 12_000_000
 #: Tables dropped first when the answer would be too large (they list every matched or unmatched event).
 LARGE_TABLES = ("events_matched", "events_unmatched")
+#: The columns of annotation_notes.tsv, the annotators' notes, which is always sent.
+NOTE_COLUMNS = ("recording_id", "annotator_id", "mode", "annotation_id", "label", "onset_s", "duration_s", "channels",
+                "confidence", "note")
+
+
+def notes_table(result: Any) -> str:
+    """annotation_notes.tsv: every annotation that carries a note, in the analysis's recordings."""
+    import csv
+    import io
+
+    buf = io.StringIO()
+    w = csv.writer(buf, delimiter="\t", lineterminator="\n")
+    w.writerow(NOTE_COLUMNS)
+    for rid, group in sorted(result.dataset.groups.items()):
+        for aid, doc in sorted(group.docs.items()):
+            timing = doc.recording.timing
+            for a in doc.sorted_annotations():
+                if not a.note:
+                    continue
+                w.writerow([rid, aid, doc.mode, a.annotation_id, a.label, f"{a.onset(timing):.6g}",
+                            f"{a.duration(timing):.6g}", ",".join(a.channels) or "n/a",
+                            "n/a" if a.confidence is None else a.confidence,
+                            " ".join(str(a.note).split())])
+    return buf.getvalue()
+
+
+def agreement_command(settings_name: str = "agreement_settings.json") -> str:
+    """The command that repeats the admin area's agreement analysis on the study's results folder."""
+    return f"electrotag-agreement Annotated_Events --config {settings_name}"
 ANALYSIS_MODES = ("standard", "practice", "assessment")
 
 
@@ -109,16 +138,26 @@ class Analyses:
                              f"{'were' if len(left_out) != 1 else 'was'} left out because an annotator reported "
                              f"{'them' if len(left_out) != 1 else 'it'} as impossible to annotate "
                              f"({people} report{'s' if people != 1 else ''} of a recording that cannot be annotated). "
-                             "Returning a recording to its annotator's list brings it back into the analysis.")
+                             "Returning a recording to its annotator's list brings it back into the analysis. The "
+                             "settings used (JSON) name the recordings left out, so " + agreement_command()
+                             + " leaves them out too.")
             warnings.append(unusable_note)
         tables = {f"{name}.tsv": df.to_csv(sep="\t", index=False, na_rep="n/a", float_format="%.6g")
                   for name, df in result.tables.items()}
         if sum(len(t) for t in tables.values()) > MAX_TABLES_BYTES:
             for name in LARGE_TABLES:
                 if tables.pop(f"{name}.tsv", None) is not None:
-                    warnings.append(f"The table {name}.tsv was too large to send; export the results and run "
-                                    "electrotag-agreement for it.")
+                    warnings.append(f"The table {name}.tsv was too large to send through the page. The annotators' "
+                                    "notes are in annotation_notes.tsv; for the whole table, download the results "
+                                    "zip and The settings used (JSON), and run " + agreement_command() + ".")
+        # The annotators' notes, small enough to send whatever the size of the other tables.
+        tables["annotation_notes.tsv"] = notes_table(result)
         record = result.settings_record
+        # The settings in the form electrotag-agreement --config reads, with the recordings chosen and those set
+        # aside, so that the command analyses the same recordings and gives the same numbers.
+        settings_file = clean_json({"config": record.get("config"), "recording_ids": recordings,
+                                    "exclude_recording_ids": sorted(unusable),
+                                    "command": agreement_command()})
         summary = clean_json({
             "n_recordings": record.get("n_recordings"),
             "n_comparable_recordings": record.get("n_comparable_recordings"),
@@ -130,11 +169,13 @@ class Analyses:
         html = build_html_report(result)
         if unusable_note:
             html = _with_note(html, unusable_note)
-        return {"summary": summary, "report_html": html, "tables": tables, "warnings": warnings}
+        return {"summary": summary, "report_html": html, "tables": tables, "warnings": warnings,
+                "settings_file": settings_file}
 
     @staticmethod
     def _annotation_files(root: Path, recordings: set[str] | None, leave_out: set[str] | None = None) -> list[Path]:
         from electrotag.app.io.naming import INTERNAL_DIR
+        from electrotag.reliability.data import select_annotation_files
 
         out = []
         for p in sorted(root.rglob("*_annotations.json")):
@@ -143,19 +184,9 @@ class Analyses:
                 continue
             if "reports" in rel or "references" in rel:
                 continue
-            if recordings is not None or leave_out:
-                try:
-                    doc = json.loads(p.read_text(encoding="utf-8"))
-                    rid = doc["recording"]["recording_id"]
-                    mode = str((doc.get("session") or {}).get("mode") or "standard")
-                except (OSError, ValueError, KeyError, TypeError):
-                    continue
-                if recordings is not None and rid not in recordings:
-                    continue
-                if leave_out and rid in leave_out and mode == "standard":
-                    continue
             out.append(p)
-        return out
+        # The same choice as electrotag-agreement --recordings and --exclude-recordings makes.
+        return select_annotation_files(out, recordings=recordings, exclude=leave_out)
 
     # ------------------------------------------------------------- activity
     def activity(self, body: dict[str, Any]) -> dict[str, Any]:
@@ -197,11 +228,13 @@ class Analyses:
         rs = self.service.reference_set(set_id)
         required = rs.assessment_recordings
         if not required:
-            raise ApiError(404, "not_complete", f"{rs.name or rs.set_id} has no assessment recordings")
+            raise ApiError(404, "not_complete", f"{rs.name or rs.set_id} has no assessment recordings. Mark some of "
+                           "its recordings for assessment in Training first.")
         done = self.store.completed(aid, "assessment", rs.set_id) & set(required)
         if len(done) < len(required):
             raise ApiError(404, "not_complete", f"{aid} has saved {len(done)} of the {len(required)} assessment "
-                           "recordings; the report is made when every one is saved.")
+                           "recordings; the report is made when every one is saved. Progress shows how far they "
+                           "have got.")
         report = dict(self.store.competency(rs, aid))
         report.pop("paths", None)
         return {"report": clean_json(report), "html": competency_html(report)}

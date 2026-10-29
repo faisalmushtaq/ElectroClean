@@ -165,7 +165,11 @@ test('recordings added as manifests are registered, matched by fingerprint and s
   await admin.admin('recording_update', { scope: 'study', recording_id: rec.recording_id, retired: true, notes: 'Copied from the lab drive' });
   assert.deepEqual(await admin.admin('assign', { annotator_ids: ['A01'], all: true, mode: 'standard', context_id: '' }), { added: 0, already: 3 });
   await assert.rejects(() => admin.admin('recording_remove', { scope: 'study', recording_id: rec.recording_id }), (e) => e.code === 'has_results');
-  await admin.admin('recordings_register', { scope: 'study', manifests: [manifest('sub-tmp/eeg/tmp.edf')] });
+  // The same file as sub-new under another ID: skipped as a copy unless the administrator confirms it.
+  const copy = await admin.admin('recordings_register', { scope: 'study', manifests: [manifest('sub-tmp/eeg/tmp.edf')] });
+  assert.deepEqual([copy.added, copy.skipped[0].duplicate_of], [[], 'sub-new/eeg/sub-new_task-rest_eeg.edf']);
+  assert.match(copy.skipped[0].reason, /^The same file as sub-new/);
+  await admin.admin('recordings_register', { scope: 'study', manifests: [manifest('sub-tmp/eeg/tmp.edf')], allow_duplicates: true });
   await admin.admin('recording_remove', { scope: 'study', recording_id: 'sub-tmp/eeg/tmp.edf' });
   await assert.rejects(() => admin.admin('recording_remove', { scope: 'study', recording_id: TRAINING_SET.practice[0] }), (e) => e.code === 'has_results');
 });

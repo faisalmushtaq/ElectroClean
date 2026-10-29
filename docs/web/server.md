@@ -59,8 +59,10 @@ Three commands set the study up; everything after that is done in the browser.
 Then sign in with that account and open the **admin area** (docs/web/admin.md). There you add the
 recordings (choose the dataset folder on your computer: the browser reads each recording, runs
 ElectroTag's checks and sends only what the study needs to recognise and show it, never the EEG),
-make the annotators' accounts (each gets a temporary password to pass on, which they can keep or you
-can reset; disabling an account ends its sessions at once), assign recordings and training
+make the annotators' accounts (each gets in one of three ways: a temporary password that the study
+makes for you to pass on, a private invitation link with which the person chooses their own
+password, or a password you choose; you can reset it later, and disabling an account ends its
+sessions at once), assign recordings and training
 programmes, build reference sets from annotators' saved work, uploaded annotation files, consensus or
 adjudication, change the study's settings, and run the agreement, activity and competency analyses.
 Every change is kept in the study's audit log, with who made it and when.
@@ -111,7 +113,8 @@ Annotated_Events/                the results, in ElectroTag's results layout
     training/<set>/quiz/         the short-segment quiz results
 ```
 
-The admin area shows who has done what and downloads `Annotated_Events` as a zip; so do
+The admin area shows who has done what and downloads `Annotated_Events` as a zip, with the study's
+settings, its audit log and its recordings' manifests under `study/` and a README; so do
 `electrotag-web progress --study-dir <folder>` (each annotator's recordings and training stages;
 `--json` gives the full report, the same as `GET /api/v1/admin/progress` for an administrator's
 token) and `/api/v1/admin/results.zip`. Back up the whole folder.

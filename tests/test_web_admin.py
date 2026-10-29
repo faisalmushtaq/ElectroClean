@@ -149,7 +149,9 @@ def test_settings_are_read_changed_and_checked(client: TestClient, admin: Api) -
     admin.admin_error("settings_update", {}, 400, "bad_request")
     entry = admin_audit(admin)[0]
     assert entry["op"] == "settings_update" and entry["by"] == "ADMIN"
-    assert "filters.notch_hz" in entry["summary"] and entry["details"]["changes"]["filters.notch_hz"] == 60.0
+    # The summary in words, with the value before and after (the details keep the setting's own name).
+    assert "notch hz (filters) from 50 to 60" in entry["summary"]
+    assert entry["details"]["changes"]["filters.notch_hz"] == 60.0
     admin.admin_ok("settings_update", {"logging_notice": ""})  # back to ElectroTag's own notice
     assert admin.admin_ok("settings_get")["logging_notice_is_default"] is True
     # the admin area sends display.scalings as a whole: a type left out goes back to the default
@@ -189,7 +191,11 @@ def test_accounts_on_the_server(client: TestClient, admin: Api, recordings: Path
     assert (u["display_name"], u["notes"], u["role"]) == ("Ann Three", "Part-time", "admin")
     assert a03.ok("get", "/me")["role"] == "admin"  # at once, on the server
     admin.admin_ok("user_update", {"annotator_id": "A03", "role": "annotator"})
-    admin.admin_ok("user_update", {"annotator_id": "A03", "status": "disabled"})
+    assert admin.admin_ok("user_update", {"annotator_id": "A03", "status": "disabled"})["changed"] is True
+    # Switching off an account that is off already changes nothing, says so, and is not audited.
+    n_audit = len(admin_audit(admin))
+    assert admin.admin_ok("user_update", {"annotator_id": "A03", "status": "disabled"})["changed"] is False
+    assert len(admin_audit(admin)) == n_audit
     r = a03.get("/me")
     assert r.status_code == 401  # the session ends at once
     r = client.post("/api/v1/login", json={"annotator_id": "A03", "password": out["temporary_password"]}, headers=H)
@@ -338,6 +344,28 @@ def test_recordings_registered_from_the_browser(client: TestClient, admin: Api, 
     admin.admin_error("recordings_register", {"scope": "study", "manifests": [manifests[0]] * 501}, 413, "too_large")
     entry = next(e for e in admin_audit(admin) if e["op"] == "recordings_register")
     assert entry["details"]["scope"] == "set:pilot"
+
+
+def test_a_copy_of_a_registered_file_is_skipped_unless_confirmed(admin: Api, tmp_path: Path) -> None:
+    import shutil
+
+    from electrotag.synthetic import write_edf_recording
+
+    folder = tmp_path / "copies"
+    write_edf_recording(folder / "sub-301" / "eeg", "sub-301_task-rest", sfreq=128.0, duration_s=20.0, seed=31)
+    first = build_manifests(folder)
+    assert admin.admin_ok("recordings_register", {"scope": "study", "manifests": first})["added"]
+    # The same bytes under two more IDs: one already registered, the other twice in this request.
+    for sub in ("sub-302", "sub-303"):
+        (folder / sub / "eeg").mkdir(parents=True)
+        shutil.copy(folder / "sub-301/eeg/sub-301_task-rest_eeg.edf", folder / sub / "eeg" / f"{sub}_task-rest_eeg.edf")
+    copies = [m for m in build_manifests(folder) if not m["recording_id"].startswith("sub-301")]
+    r = admin.admin_ok("recordings_register", {"scope": "study", "manifests": copies})
+    assert r["added"] == [] and {s["duplicate_of"] for s in r["skipped"]} == {"sub-301/eeg/sub-301_task-rest_eeg.edf"}
+    assert all("same file" in s["reason"] for s in r["skipped"])
+    # Confirmed: both are added (each will be annotated as a recording of its own).
+    r = admin.admin_ok("recordings_register", {"scope": "study", "manifests": copies, "allow_duplicates": True})
+    assert len(r["added"]) == 2 and r["skipped"] == []
 
 
 def test_recording_notes_retirement_and_removal(client: TestClient, admin: Api, recordings: Path) -> None:

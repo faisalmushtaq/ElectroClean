@@ -345,6 +345,10 @@ class Feedback:
             raise ApiError(409, "retired", f"{rec['recording_id']} is retired, so it is offered for no new "
                            "assignments.")
         added = self.store.assign(to, [rec["recording_id"]], mode="standard", context_id="")
+        if not added:
+            # Nothing was given: the report stays open, so that the recording does not look dealt with.
+            raise ApiError(409, "already_assigned", f"{to} already has {rec['recording_id']}, so giving it to them "
+                           "changes nothing and the report stays open. Choose someone who does not have it yet.")
         kept = self._resolve(user, rec, "reassigned", note, reassigned_to=to)
         audit.record(self.store, user.annotator_id, "problem_reassign",
                      f"Gave {rec['recording_id']} to {to} after {rec['annotator_id']}'s report",
@@ -366,8 +370,10 @@ class Feedback:
             doc = json.loads(raw)
         except ValueError:
             return []
-        keys = ("annotation_id", "label", "onset_sample", "duration_samples", "channels", "created_at", "modified_at")
-        return [{k: a.get(k, [] if k == "channels" else "") for k in keys}
+        keys = ("annotation_id", "label", "onset_sample", "duration_samples", "channels", "created_at", "modified_at",
+                "note")
+        # The annotator's confidence and note go with each annotation, so that the reviewer sees their doubt.
+        return [{**{k: a.get(k, [] if k == "channels" else "") for k in keys}, "confidence": a.get("confidence")}
                 for a in doc.get("annotations", []) if isinstance(a, dict)]
 
     def _target(self, body: dict[str, Any]) -> tuple[str, str, dict[str, Any], dict[str, Any]]:

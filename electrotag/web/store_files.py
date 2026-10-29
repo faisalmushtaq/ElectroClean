@@ -246,7 +246,7 @@ class FilesStore(Store):
             self.db.add_user(annotator_id, password or str(temporary), display_name=display_name, role=role)
         except AccountExists as exc:
             raise AccountProblem("user_exists", f"{annotator_id.upper()} already has an account in this "
-                                 "study") from exc
+                                 "study.") from exc
         except AccountError as exc:
             raise AccountProblem("invalid_user", str(exc), 400) from exc
         if email:

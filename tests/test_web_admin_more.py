@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import math
 import sqlite3
 import time
 from datetime import date, timedelta
@@ -259,8 +258,9 @@ def test_stats_of_a_small_study(client: TestClient, admin: Api, recordings: Path
     assert t["share_done"] == 0.5 and t["done_7d"] == 3 and t["done_30d"] == 3
     assert t["annotator_hours"] == pytest.approx((120 + 60 + 300 + 30) / 3600)
     assert t["median_minutes"] == pytest.approx(2.0)
-    finish = date.today() + timedelta(days=math.ceil(3 / (3 / 14)))
-    assert t["projection"] == {"status": "projected", "date": finish.isoformat()}
+    # Everything was done today: the pace is today's, and a single day projects no finish yet.
+    assert (t["pace_days"], t["pace_per_day"]) == (1, 3.0)
+    assert t["projection"] == {"status": "not_enough", "date": None, "reason": "too_early"}
     assert s["daily"][-1] == 3 and sum(s["daily"]) == 3
     people = {p["annotator_id"]: p for p in s["annotators"]}
     p = people["A01"]
@@ -305,3 +305,24 @@ def test_stats_of_a_small_study(client: TestClient, admin: Api, recordings: Path
     assert admin.admin_ok("stats", {"work": "all"})["work"] == "all"
     admin.admin_error("stats", {"work": "some"}, 400, "bad_request")
     assert Api(client, "A01").admin("stats").status_code == 403
+
+
+def test_the_pace_of_a_young_study_counts_the_days_since_its_first_completion() -> None:
+    from electrotag.web.admin import pace_projection
+
+    today = date(2026, 11, 20)
+    # 199 recordings done today, in a study whose first completion is today: no projection yet.
+    pace, days, p = pace_projection([today] * 199, today, assigned=2000, remaining=1801)
+    assert (pace, days, p) == (199.0, 1, {"status": "not_enough", "date": None, "reason": "too_early"})
+    # Five days into the study, 50 a day: the pace of those five days, not of fourteen.
+    done = [today - timedelta(days=i) for i in range(5) for _ in range(50)]
+    pace, days, p = pace_projection(done, today, assigned=1000, remaining=750)
+    assert (pace, days) == (50.0, 5)
+    assert p == {"status": "projected", "date": (today + timedelta(days=15)).isoformat()}
+    # A study older than fourteen days: the last fourteen.
+    done = [today - timedelta(days=i) for i in range(40)]
+    pace, days, p = pace_projection(done, today, assigned=100, remaining=56)
+    assert (pace, days, p["date"]) == (1.0, 14, (today + timedelta(days=56)).isoformat())
+    # Too little work in the window, and a finished study.
+    assert pace_projection([today - timedelta(days=30)], today, assigned=10, remaining=9)[2]["status"] == "not_enough"
+    assert pace_projection([today], today, assigned=1, remaining=0)[2] == {"status": "complete", "date": None}

@@ -29,7 +29,9 @@ from electrotag.training.reference import GUIDANCE_LEVELS, NONE_OPTION, USES, Re
 from electrotag.web import audit
 from electrotag.web.errors import ApiError
 from electrotag.web.manifest import SCOPE_STUDY, fingerprint_of, manifest_info, set_scope
-from electrotag.web.store import MODES, ROLES, STATUSES, AccountProblem, StoreError, User, attempt_of, latest_entry
+from electrotag.web.store import (
+    MODES, ROLES, STATUSES, AccountProblem, StoreError, User, attempt_of, item_key, latest_entry,
+)
 
 if TYPE_CHECKING:
     from electrotag.app.annotations.model import AnnotationDocument
@@ -51,6 +53,12 @@ ADMIN_NOT_INVITED = ("Invitation links are for annotators: a link sent by email 
 #: ``stats``: the days of the daily completions, the days whose pace projects the finish, and the
 #: fewest completions in them for a projection.
 STATS_DAYS, PACE_DAYS, PACE_MIN = 30, 14, 3
+#: The fewest days since the first completion before the pace projects a finish: in a study's first days
+#: the pace is the completions so far over the days so far, and a single day says too little.
+PACE_MIN_DAYS = 3
+#: The words for each mode in the audit log's summaries (as the admin area shows them).
+MODE_WORDS = {"standard": "Annotation", "guided": "Guided training", "practice": "Practice",
+              "assessment": "Assessment"}
 #: What ``stats`` counts: the study's own annotation, or every mode (training too).
 STATS_WORK = ("study", "all")
 
@@ -160,6 +168,52 @@ def _day(stamp: Any) -> date | None:
         return date.fromisoformat(str(stamp or "")[:10])
     except ValueError:
         return None
+
+
+def pace_projection(days: list[date], today: date, *, assigned: int,
+                    remaining: int) -> tuple[float, int, dict[str, Any]]:
+    """The pace of work (recordings a day), the days it is measured over, and the projected finish.
+
+    ``days`` are the days on which recordings were completed. The pace is that of the last 14 days, or
+    of the days since the first completion when the study is younger, so that a team in its first week
+    is not divided by days on which nobody could have worked yet. Until three days have passed since
+    the first completion, the finish is not projected (``reason: too_early``): one day says too little.
+    """
+    done = [d for d in days if d <= today]
+    history = (today - min(done)).days + 1 if done else 0
+    pace_days = max(1, min(PACE_DAYS, history))
+    first = today - timedelta(days=pace_days - 1)
+    recent = sum(1 for d in done if d >= first)
+    pace = recent / pace_days
+    if assigned and not remaining:
+        projection: dict[str, Any] = {"status": "complete", "date": None}
+    elif remaining and recent >= PACE_MIN and history < PACE_MIN_DAYS:
+        projection = {"status": "not_enough", "date": None, "reason": "too_early"}
+    elif remaining and recent >= PACE_MIN:
+        projection = {"status": "projected", "date": (today + timedelta(days=math.ceil(remaining / pace))).isoformat()}
+    else:
+        projection = {"status": "not_enough", "date": None}
+    return pace, pace_days, projection
+
+
+def _setting_value(value: Any) -> str:
+    if isinstance(value, bool):
+        return "on" if value else "off"
+    if value is None or value == "" or value == [] or value == {}:
+        return "nothing"
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    if isinstance(value, list):
+        return ", ".join(str(v) for v in value)
+    if isinstance(value, dict):
+        return ", ".join(f"{k} {v}" for k, v in value.items())
+    return str(value)
+
+
+def setting_change_text(key: str, old: Any, new: Any) -> str:
+    """A setting's change in words for the audit log: "allow reviews (annotation) from on to off"."""
+    block, name = key.split(".", 1)
+    return f"{name.replace('_', ' ')} ({block}) from {_setting_value(old)} to {_setting_value(new)}"
 
 
 def invitation_out(inv: dict[str, Any] | None) -> dict[str, Any]:
@@ -519,12 +573,16 @@ class Admin:
                     changed.append(f"{block}.{key}")
         if name is None and notice is None and overrides is None:
             raise _bad("Nothing to change: give name, settings or logging_notice")
+        before = self.store.settings.raw
+        what = [setting_change_text(k, (before.get(k.split(".")[0]) or {}).get(k.split(".", 1)[1]),
+                                    body["settings"][k.split(".")[0]][k.split(".", 1)[1]]) for k in changed]
+        what += ["the study's name"] if name is not None else []
+        what += ["the logging notice"] if notice is not None else []
         try:
             self.store.update_study(name=name, overrides=overrides, logging_notice=notice)
         except ValueError as exc:
             raise ApiError(400, "invalid_settings", f"These settings cannot be used: {exc}") from exc
-        what = changed + (["name"] if name is not None else []) + (["logging notice"] if notice is not None else [])
-        self._audit(user, "settings_update", "Changed the study's " + ", ".join(what),
+        self._audit(user, "settings_update", "Changed " + "; ".join(what),
                     changes={k: body["settings"][k.split(".")[0]][k.split(".", 1)[1]] for k in changed},
                     name=name, logging_notice=notice)
         return self.op_settings_get(user, {})
@@ -617,19 +675,22 @@ class Admin:
         if aid == user.annotator_id and (role == "annotator" or status == "disabled"):
             raise ApiError(409, "self", "You cannot take away your own administrator role or disable your own "
                            "account; ask another administrator.")
-        self.store.update_account(aid, display_name=name, role=role, status=status, notes=notes)
         said = []
         if role is not None and role != rec.get("role"):
             said.append("made them an administrator" if role == "admin" else "made them an annotator")
         if status is not None and status != rec.get("status"):
             said.append("disabled the account" if status == "disabled" else "enabled the account")
-        if name is not None and name != rec.get("display_name"):
+        if name is not None and name != rec.get("display_name", ""):
             said.append(f"renamed them {name!r}")
-        if notes is not None and notes != rec.get("notes"):
+        if notes is not None and notes != rec.get("notes", ""):
             said.append("changed the notes")
-        self._audit(user, "user_update", f"{aid}: " + (", ".join(said) if said else "no change"), annotator_id=aid,
+        if not said:
+            # Nothing to change (an account switched off already, say): nothing is written or audited.
+            return {"user": self.user_out(rec), "changed": False}
+        self.store.update_account(aid, display_name=name, role=role, status=status, notes=notes)
+        self._audit(user, "user_update", f"{aid}: " + ", ".join(said), annotator_id=aid,
                     display_name=name, role=role, status=status, notes=notes)
-        return {"user": self.user_out(self._user_record(aid))}
+        return {"user": self.user_out(self._user_record(aid)), "changed": True}
 
     def op_user_reset_password(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
         aid = _aid(body.get("annotator_id"))
@@ -706,7 +767,7 @@ class Admin:
         for aid in aids:
             added += self.store.assign(aid, wanted, mode=mode, context_id=ctx) if wanted else 0
         already = len(wanted) * len(aids) - added
-        where = mode if mode == "standard" else f"{mode}, {ctx}"
+        where = MODE_WORDS.get(mode, mode) if mode == "standard" else f"{MODE_WORDS.get(mode, mode)}, {ctx}"
         self._audit(user, "assign", f"Assigned {audit.count(len(wanted), 'recording')} to {', '.join(aids)} "
                     f"({where}): {added} new", annotator_ids=aids, recording_ids=wanted, mode=mode, context_id=ctx,
                     added=added, already=already, retired=skipped)
@@ -718,6 +779,10 @@ class Admin:
         mode, ctx = _mode_ctx(body)
         if rid in self.store.completed(aid, mode, ctx):
             raise ApiError(409, "done", f"{aid} has already saved {rid}; a completed recording stays assigned.")
+        if item_key(rid, mode, ctx) in self.service.feedback.unusable_keys(aid):
+            raise ApiError(409, "set_aside", f"{aid} set {rid} aside as a recording that cannot be annotated, so it "
+                           "stays with their work. Deal with their report in Problems: return the recording to "
+                           f"{aid}'s list, or give it to someone else.")
         if not self.store.unassign_item(aid, rid, mode, ctx):
             raise ApiError(404, "not_assigned", f"{rid} is not assigned to {aid} in that mode")
         # A recording set aside and then taken away starts afresh if it is ever given back.
@@ -759,12 +824,16 @@ class Admin:
             raise ApiError(413, "too_large", f"At most {MAX_MANIFESTS} recordings can be registered at once; send "
                            "the rest in another request")
         replace_ = _bool(body, "replace") or False
+        # A byte-identical copy of a registered recording would be assigned and annotated as another recording,
+        # inflating the counts and the agreement: it is skipped unless the administrator confirms it.
+        duplicates_ok = _bool(body, "allow_duplicates") or False
         suffixes = tuple(self.store.settings.discovery_suffixes)
         entries = self._entries()
         added: list[str] = []
         replaced: list[str] = []
         skipped: list[dict[str, str]] = []
         seen: set[str] = set()
+        prints: dict[tuple[str, int], str] = {}
         for raw in manifests:
             rid = raw.get("recording_id") if isinstance(raw, dict) and isinstance(raw.get("recording_id"), str) else ""
             try:
@@ -782,6 +851,16 @@ class Admin:
                 skipped.append({"recording_id": rid, "reason": "Already registered (choose to replace it to "
                                 "register it again)"})
                 continue
+            fp = fingerprint_of(m)
+            if not duplicates_ok and fp[0]:
+                same = prints.get(fp) or next((o["recording_id"] for o in self.store.manifests_by_fingerprint(*fp)
+                                               if o.get("scope") == scope and o["recording_id"] != rid), None)
+                if same:
+                    skipped.append({"recording_id": rid, "duplicate_of": same,
+                                    "reason": f"The same file as {same} (the same fingerprint), so it would be "
+                                    "annotated twice under two IDs. Add it only if that is intended."})
+                    continue
+            prints.setdefault(fp, rid)
             if old is not None and fingerprint_of(old) != fingerprint_of(m) and self._has_results(scope, rid, entries):
                 skipped.append({"recording_id": rid, "reason": "Annotations of this recording have been saved, so "
                                 "it can only be registered again from the same file (the same checksum)"})
@@ -1386,15 +1465,9 @@ class Admin:
         times = [t for e in works if (t := _seconds(e.get("elapsed_s"))) is not None]
         # A recording that cannot be annotated is finished for its annotator, but it is not done.
         remaining = totals["assigned"] - totals["done"] - totals["unusable"]
-        recent = since(works, PACE_DAYS)
-        pace = recent / PACE_DAYS
-        if totals["assigned"] and not remaining:
-            projection = {"status": "complete", "date": None}
-        elif remaining and recent >= PACE_MIN:
-            finish = today + timedelta(days=math.ceil(remaining / pace))
-            projection = {"status": "projected", "date": finish.isoformat()}
-        else:
-            projection = {"status": "not_enough", "date": None}
+        pace, pace_days, projection = pace_projection(
+            [d for e in works if (d := _day(e.get("completed_at"))) is not None], today,
+            assigned=totals["assigned"], remaining=remaining)
         return {
             "generated_at": now_local_iso(), "work": work, "today": today.isoformat(),
             "days": [d.isoformat() for d in days],
@@ -1402,7 +1475,7 @@ class Admin:
                        "remaining": remaining, "annotator_hours": (sum(times) + draft_s) / 3600,
                        "median_minutes": (m / 60 if (m := _median(times)) is not None else None),
                        "done_7d": since(works, 7), "done_30d": since(works, 30),
-                       "pace_per_day": pace, "pace_days": PACE_DAYS, "projection": projection,
+                       "pace_per_day": pace, "pace_days": pace_days, "projection": projection,
                        **self._feedback_counts()},
             "daily": daily(works),
             "annotators": people,

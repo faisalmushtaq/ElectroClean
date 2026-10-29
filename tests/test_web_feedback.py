@@ -182,12 +182,30 @@ def test_return_resolve_and_reassign(client: TestClient, admin: Api) -> None:
     assert out["problem"]["resolution"] == "resolved"
 
 
-def test_an_assignment_taken_away_and_given_back_starts_afresh(client: TestClient, admin: Api) -> None:
+def test_a_recording_set_aside_is_not_unassigned(client: TestClient, admin: Api) -> None:
     a01 = Api(client, "A01")
     a01.ok("post", "/problems", report(SUB1, 12, outcome="unusable"))
+    # Unassigning would silently undo the set-aside: the report is the place to deal with it.
+    r = admin.admin_error("unassign", {"annotator_id": "A01", "recording_id": SUB1}, 409, "set_aside")
+    assert "Problems" in r["message"] and r["message"].endswith(".")
+    assert item_of(a01, SUB1)["status"] == "unusable"
+    assert admin.admin_ok("problems_list", {"state": "open"})["problems"][0]["unusable_now"] is True
+    # Returned to the annotator's list, it is an ordinary assignment again and can be taken away.
+    admin.admin_ok("problem_return", {"problem_id": pid(12)})
     admin.admin_ok("unassign", {"annotator_id": "A01", "recording_id": SUB1})
     admin.admin_ok("assign", {"annotator_ids": ["A01"], "recording_ids": [SUB1]})
     assert item_of(a01, SUB1)["status"] == "todo"
+
+
+def test_giving_a_recording_to_someone_who_has_it_leaves_the_report_open(client: TestClient, admin: Api) -> None:
+    Api(client, "A01").ok("post", "/problems", report(SUB1, 13, outcome="unusable"))
+    admin.admin_ok("user_add", {"annotator_id": "A03", "password": "longenough"})
+    admin.admin_ok("assign", {"annotator_ids": ["A03"], "recording_ids": [SUB1]})
+    r = admin.admin_error("problem_reassign", {"problem_id": pid(13), "annotator_id": "A03"}, 409, "already_assigned")
+    assert "A03 already has" in r["message"]
+    open_ = admin.admin_ok("problems_list", {"state": "open"})["problems"]
+    assert [p["problem_id"] for p in open_] == [pid(13)]
+    assert "problem_reassign" not in [e["op"] for e in admin_audit(admin)]
 
 
 def test_training_recordings_are_not_set_aside(client: TestClient) -> None:
@@ -213,6 +231,54 @@ def test_agreement_leaves_out_unusable_recordings(client: TestClient, admin: Api
     assert after["summary"]["unusable"] == {"recordings_left_out": 1, "recording_ids": [SUB2], "assignments": 1}
     assert any("left out" in w for w in after["warnings"])
     assert 'data-note="unusable"' in after["report_html"]
+
+
+def test_the_command_repeats_the_browsers_agreement_analysis(client: TestClient, admin: Api, recordings: Path,
+                                                             app, tmp_path: Path) -> None:
+    from electrotag.reliability import cli
+
+    noted = {**BLINK, "confidence": 2, "note": "Could be a slow eye movement"}
+    a01, a02 = Api(client, "A01"), Api(client, "A02")
+    for api, anns in ((a01, [noted, EMG]), (a02, [BLINK2])):
+        api.ok("post", "/submissions", submission(recordings, SUB1, anns))
+        api.ok("post", "/submissions", submission(recordings, SUB2, anns))
+    admin.admin_ok("user_add", {"annotator_id": "A03", "password": "longenough"})
+    admin.admin_ok("assign", {"annotator_ids": ["A03"], "recording_ids": [SUB2]})
+    Api(client, "A03", "longenough").ok("post", "/problems", report(SUB2, 21, outcome="unusable"))
+    r = admin.admin_ok("agreement", {"config": {"resolutions_s": [0.1]}})
+    file = r["settings_file"]
+    assert file["exclude_recording_ids"] == [SUB2] and file["config"]["resolutions_s"] == [0.1]
+    assert file["command"] == "electrotag-agreement Annotated_Events --config agreement_settings.json"
+    assert file["command"] in " ".join(r["warnings"])
+    # The annotators' notes are always sent, in a small table of their own.
+    notes = r["tables"]["annotation_notes.tsv"].splitlines()
+    assert notes[0].split("\t") == ["recording_id", "annotator_id", "mode", "annotation_id", "label", "onset_s",
+                                    "duration_s", "channels", "confidence", "note"]
+    assert len(notes) == 2 and notes[1].endswith("\t2\tCould be a slow eye movement")
+    # The settings file is what --config reads: the command analyses the same recordings and gives the same numbers.
+    settings = tmp_path / "agreement_settings.json"
+    settings.write_text(json.dumps(file), encoding="utf-8")
+    root = app.state.store.layout.root
+    assert cli.main([str(root), "--config", str(settings), "--out", str(tmp_path / "cli"), "--no-html"]) == 0
+    record = json.loads((tmp_path / "cli" / "analysis_settings.json").read_text(encoding="utf-8"))
+    assert (record["n_recordings"], record["n_comparable_recordings"]) == (
+        r["summary"]["n_recordings"], r["summary"]["n_comparable_recordings"]) == (1, 1)
+    assert record["config"]["resolutions_s"] == [0.1] and record["exclude_recording_ids"] == [SUB2]
+    # Without the recordings set aside left out, the command would analyse both; the earlier settings repeat it too.
+    assert cli.main([str(root), "--out", str(tmp_path / "all"), "--no-html"]) == 0
+    assert json.loads((tmp_path / "all" / "analysis_settings.json").read_text(encoding="utf-8"))["n_recordings"] == 2
+    again = tmp_path / "cli" / "analysis_settings.json"
+    assert cli.main([str(root), "--config", str(again), "--out", str(tmp_path / "again"), "--no-html"]) == 0
+    assert json.loads((tmp_path / "again" / "analysis_settings.json").read_text(encoding="utf-8"))["n_recordings"] == 1
+
+
+def test_a_review_shows_the_annotators_confidence_and_notes(client: TestClient, admin: Api, recordings: Path) -> None:
+    noted = {**BLINK, "confidence": 2, "note": "Unsure"}
+    Api(client, "A01").ok("post", "/submissions", submission(recordings, SUB1, [noted, EMG]))
+    t = admin.admin_ok("saved_attempt_get", {"annotator_id": "A01", "recording_id": SUB1})
+    by_id = {a["annotation_id"]: a for a in t["annotations"]}
+    assert (by_id[BLINK["annotation_id"]]["confidence"], by_id[BLINK["annotation_id"]]["note"]) == (2, "Unsure")
+    assert (by_id[EMG["annotation_id"]]["confidence"], by_id[EMG["annotation_id"]]["note"]) == (None, "")
 
 
 # ------------------------------------------------------------------------- reviews
@@ -307,3 +373,12 @@ def test_the_results_zip_holds_reports_and_reviews(client: TestClient, admin: Ap
     assert js["schema"] == "electrotag.review" and js["attempt"] == 1 and len(js["items"]) == 3
     rows = z.read(next(n for n in review_files if n.endswith(".tsv"))).decode().splitlines()
     assert len(rows) == 1 + 3 + 1  # header, three items and the overall note
+    # The study's own records: its settings, its audit log and its recordings' manifests, and a README.
+    assert {"study/electrotag_study.json", "study/audit_log.jsonl", "study/manifests.json", "README.txt"} <= set(names)
+    assert json.loads(z.read("study/electrotag_study.json"))["study_id"]
+    audit_ops = [json.loads(line)["op"] for line in z.read("study/audit_log.jsonl").decode().splitlines()]
+    assert audit_ops[-1] == "review_save"  # oldest first
+    assert SUB1 in {m["recording_id"] for m in json.loads(z.read("study/manifests.json"))["manifests"]}
+    readme = z.read("README.txt").decode()
+    assert "desktop" not in readme
+    assert "electrotag-agreement Annotated_Events --config agreement_settings.json" in readme
