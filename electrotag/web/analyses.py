@@ -32,6 +32,16 @@ LARGE_TABLES = ("events_matched", "events_unmatched")
 ANALYSIS_MODES = ("standard", "practice", "assessment")
 
 
+def _with_note(html: str, note: str) -> str:
+    """The agreement report with a paragraph about the recordings left out, at the top of its body."""
+    from html import escape
+
+    para = (f'<p class="note" data-note="unusable"><b>Left out:</b> {escape(note)}</p>')
+    i = html.find("<body")
+    j = html.find(">", i) if i >= 0 else -1
+    return html[:j + 1] + para + html[j + 1:] if j >= 0 else para + html
+
+
 def _ids(value: Any, what: str) -> list[str] | None:
     if value is None:
         return None
@@ -76,7 +86,12 @@ class Analyses:
         with tempfile.TemporaryDirectory(prefix="electrotag-agreement-") as tmp:
             root = self.store.results_tree(Path(tmp), annotator_ids=set(annotators) if annotators else None,
                                            modes=set(modes))
-            files = self._annotation_files(root, set(recordings) if recordings else None)
+            # A recording an annotator reported as one that cannot be annotated is left out for everyone: its
+            # other annotations would be compared with a judgement nobody could make (docs/web/api.md).
+            unusable = self.service.feedback.unusable_recordings() if "standard" in modes else {}
+            wanted = set(recordings) if recordings else None
+            files = self._annotation_files(root, wanted, leave_out=set(unusable))
+            left_out = sorted(r for r in unusable if wanted is None or r in wanted)
             if not files:
                 raise ApiError(422, "not_enough", "No saved annotations match: nothing to compare yet.")
             try:
@@ -87,6 +102,15 @@ class Analyses:
             raise ApiError(422, "not_enough", "No recording has been saved by two of the annotators being compared, "
                            "so there is no agreement to measure yet.")
         warnings = list(result.settings_record.get("warnings", []))
+        unusable_note = ""
+        if left_out:
+            people = sum(unusable[r] for r in left_out)
+            unusable_note = (f"{len(left_out)} recording{'s' if len(left_out) != 1 else ''} "
+                             f"{'were' if len(left_out) != 1 else 'was'} left out because an annotator reported "
+                             f"{'them' if len(left_out) != 1 else 'it'} as impossible to annotate "
+                             f"({people} report{'s' if people != 1 else ''} of a recording that cannot be annotated). "
+                             "Returning a recording to its annotator's list brings it back into the analysis.")
+            warnings.append(unusable_note)
         tables = {f"{name}.tsv": df.to_csv(sep="\t", index=False, na_rep="n/a", float_format="%.6g")
                   for name, df in result.tables.items()}
         if sum(len(t) for t in tables.values()) > MAX_TABLES_BYTES:
@@ -101,10 +125,15 @@ class Analyses:
             "annotators": record.get("annotators"), "config": record.get("config"),
             "key_results": json.loads(key_results(result).to_json(orient="records")),
         })
-        return {"summary": summary, "report_html": build_html_report(result), "tables": tables, "warnings": warnings}
+        summary["unusable"] = {"recordings_left_out": len(left_out), "recording_ids": left_out,
+                               "assignments": sum(unusable[r] for r in left_out)}
+        html = build_html_report(result)
+        if unusable_note:
+            html = _with_note(html, unusable_note)
+        return {"summary": summary, "report_html": html, "tables": tables, "warnings": warnings}
 
     @staticmethod
-    def _annotation_files(root: Path, recordings: set[str] | None) -> list[Path]:
+    def _annotation_files(root: Path, recordings: set[str] | None, leave_out: set[str] | None = None) -> list[Path]:
         from electrotag.app.io.naming import INTERNAL_DIR
 
         out = []
@@ -114,12 +143,16 @@ class Analyses:
                 continue
             if "reports" in rel or "references" in rel:
                 continue
-            if recordings is not None:
+            if recordings is not None or leave_out:
                 try:
-                    rid = json.loads(p.read_text(encoding="utf-8"))["recording"]["recording_id"]
+                    doc = json.loads(p.read_text(encoding="utf-8"))
+                    rid = doc["recording"]["recording_id"]
+                    mode = str((doc.get("session") or {}).get("mode") or "standard")
                 except (OSError, ValueError, KeyError, TypeError):
                     continue
-                if rid not in recordings:
+                if recordings is not None and rid not in recordings:
+                    continue
+                if leave_out and rid in leave_out and mode == "standard":
                     continue
             out.append(p)
         return out

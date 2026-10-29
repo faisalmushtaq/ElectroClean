@@ -57,13 +57,14 @@ STATS_WORK = ("study", "all")
 #: Operations that only read (every other one appends an audit entry).
 READ_ONLY = ("overview", "settings_get", "users_list", "assignments_list", "recordings_list", "sets_list",
              "set_guided_notes", "quiz_items", "progress", "stats", "agreement", "activity", "competency",
-             "results_zip", "audit", "visits")
+             "results_zip", "audit", "visits", "problems_list", "reviews_list", "saved_attempt_get")
 OPERATIONS = READ_ONLY + (
     "settings_update", "user_add", "user_update", "user_reset_password", "user_invite", "user_invite_revoke",
     "user_remove", "assign", "unassign",
     "programme_set", "recordings_register", "recording_update", "recording_remove", "set_create", "set_update",
     "set_delete", "set_add_reference", "set_recording_update", "set_remove_recording", "set_guided_note",
-    "set_example_create", "quiz_item_add", "quiz_item_remove")
+    "set_example_create", "quiz_item_add", "quiz_item_remove", "problem_resolve", "problem_return",
+    "problem_reassign", "review_save")
 
 
 # ------------------------------------------------------------------ checking input
@@ -437,11 +438,12 @@ class Admin:
         counts = {"recordings": sum(1 for m in self.store.manifests() if m["scope"] == SCOPE_STUDY),
                   "annotators": sum(1 for u in active if u.get("role") == "annotator"),
                   "admins": sum(1 for u in active if u.get("role") == "admin"),
-                  "assignments": 0, "done": 0, "in_progress": 0, "todo": 0}
+                  "assignments": 0, "done": 0, "in_progress": 0, "todo": 0, "unusable": 0}
         for u in active:
             for i in self.service.work_items(User(u["annotator_id"], u.get("display_name", ""), u["role"])):
                 counts["assignments"] += 1
                 counts[i.status] += 1
+        counts.update(self._feedback_counts())
         recent, _next = self.store.audit_page(None, 10)
         saved = sorted(self._entries(), key=lambda e: e.get("completed_at", ""), reverse=True)[:10]
         return {"study": {"study_id": self.store.study_id, "name": self.store.name}, "counts": counts,
@@ -449,6 +451,34 @@ class Admin:
                 "last_saved": [{"annotator_id": e.get("annotator_id"), "recording_id": e.get("recording_id"),
                                 "mode": e.get("mode", "standard"), "context_id": e.get("context", ""),
                                 "at": e.get("completed_at", "")} for e in saved]}
+
+    def _feedback_counts(self) -> dict[str, int]:
+        """Open problem reports and the study recordings reviewed (Overview and Progress)."""
+        fb = self.service.feedback
+        return {"problems_open": sum(1 for r in self.store.records("problems") if r.get("state") == "open"),
+                "reviewed": len(fb.reviewed_recordings())}
+
+    # ----------------------------------------------- problem reports and reviews
+    def op_problems_list(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.service.feedback.problems_list(user, body)
+
+    def op_problem_resolve(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.service.feedback.problem_resolve(user, body)
+
+    def op_problem_return(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.service.feedback.problem_return(user, body)
+
+    def op_problem_reassign(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.service.feedback.problem_reassign(user, body)
+
+    def op_saved_attempt_get(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.service.feedback.saved_attempt_get(user, body)
+
+    def op_review_save(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.service.feedback.review_save(user, body)
+
+    def op_reviews_list(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.service.feedback.reviews_list(user, body)
 
     # ------------------------------------------------------------ settings
     def op_settings_get(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
@@ -1302,7 +1332,7 @@ class Admin:
             return scopes[(mode, context_id)]
 
         people = []
-        totals = {"assigned": 0, "done": 0, "in_progress": 0, "todo": 0}
+        totals = {"assigned": 0, "done": 0, "in_progress": 0, "todo": 0, "unusable": 0}
         draft_s = 0.0
         for rec in self.store.user_records():
             aid = rec["annotator_id"]
@@ -1310,7 +1340,7 @@ class Admin:
             active = rec.get("status", "active") == "active"
             items = [i for i in self.service.work_items(person) if counted(i.mode)]
             mine = by_person.get(aid, [])
-            counts = {k: sum(1 for i in items if i.status == k) for k in ("done", "in_progress", "todo")}
+            counts = {k: sum(1 for i in items if i.status == k) for k in ("done", "in_progress", "todo", "unusable")}
             in_progress_s, last = 0.0, [str(rec.get("last_seen") or ""), last_visit.get(aid, "")]
             for i in items:
                 if i.status == "in_progress":
@@ -1321,9 +1351,9 @@ class Admin:
                     key = (scope_of(i.mode, i.context_id), i.recording_id)
                     r = recordings.setdefault(key, {"scope": key[0], "recording_id": i.recording_id,
                                                     "file_name": i.manifest.get("file_name", ""), "assigned": 0,
-                                                    "done": 0, "in_progress": 0})
+                                                    "done": 0, "in_progress": 0, "unusable": 0})
                     r["assigned"] += 1
-                    if i.status in ("done", "in_progress"):
+                    if i.status in ("done", "in_progress", "unusable"):
                         r[i.status] += 1
             if active:
                 totals["assigned"] += len(items)
@@ -1352,7 +1382,8 @@ class Admin:
                      min_annotations=min(n_anns) if n_anns else None, max_annotations=max(n_anns) if n_anns else None,
                      saved=len(rows))
         times = [t for e in works if (t := _seconds(e.get("elapsed_s"))) is not None]
-        remaining = totals["assigned"] - totals["done"]
+        # A recording that cannot be annotated is finished for its annotator, but it is not done.
+        remaining = totals["assigned"] - totals["done"] - totals["unusable"]
         recent = since(works, PACE_DAYS)
         pace = recent / PACE_DAYS
         if totals["assigned"] and not remaining:
@@ -1369,7 +1400,8 @@ class Admin:
                        "remaining": remaining, "annotator_hours": (sum(times) + draft_s) / 3600,
                        "median_minutes": (m / 60 if (m := _median(times)) is not None else None),
                        "done_7d": since(works, 7), "done_30d": since(works, 30),
-                       "pace_per_day": pace, "pace_days": PACE_DAYS, "projection": projection},
+                       "pace_per_day": pace, "pace_days": PACE_DAYS, "projection": projection,
+                       **self._feedback_counts()},
             "daily": daily(works),
             "annotators": people,
             "recordings": sorted(recordings.values(), key=lambda r: (r["scope"] != SCOPE_STUDY, r["scope"],

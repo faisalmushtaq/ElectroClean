@@ -16,6 +16,9 @@ Everything lives under ``studies/{study_id}``::
         annotators/{annotator_id}           the annotator's own record: a personal goal, being hidden from
                                             the leaderboard, the share of each saved recording viewed
         private/secrets                     the study's random secrets (the leaderboard's pseudonym key)
+        problems/{problem_id}               a problem an annotator reported with a recording
+        reviews/{review_id}                 an administrator's review of a saved recording
+        unusable/{annotator_id}_{key}       an assignment its annotator found could not be annotated
         submissions/{annotator_id}_{key}_{attempt}   a saved recording: its register row and its files
         result_files/{key}                  other result files, as written (the quiz results)
         progress/{set}_{annotator_id}       stars, scores and times (training_progress)
@@ -62,6 +65,8 @@ from electrotag.web.manifest import SCHEMA_VERSION as MANIFEST_VERSION
 from electrotag.web.manifest import fingerprint_of, manifest_key
 from electrotag.web.store import (
     MODES,
+    RECORD_ID_RE,
+    RECORD_KINDS,
     ROLES,
     AccountProblem,
     Assignment,
@@ -975,6 +980,43 @@ class FirestoreStore(Store):
             return kept[name]
 
         return get_or_make(self.client.transaction())
+
+    # ------------------------------------------- problem reports and reviews
+    def _record_ref(self, kind: str, record_id: str) -> Any:
+        if kind not in RECORD_KINDS or not RECORD_ID_RE.match(str(record_id)):
+            raise StoreError(f"Unsuitable record {kind!r} {record_id!r}")
+        return self.doc.collection(kind).document(record_id)
+
+    def records(self, kind: str, annotator_id: str | None = None) -> list[dict[str, Any]]:
+        from google.cloud.firestore_v1.base_query import FieldFilter
+
+        if kind not in RECORD_KINDS:
+            raise StoreError(f"Unsuitable record kind {kind!r}")
+        q: Any = self.doc.collection(kind)
+        if annotator_id is not None:
+            q = q.where(filter=FieldFilter("annotator_id", "==", annotator_id))
+        return [json.loads((s.to_dict() or {}).get("record_json") or "{}") for s in q.stream()]
+
+    def update_record(self, kind: str, record_id: str, annotator_id: str,
+                      change: Callable[[dict[str, Any] | None], dict[str, Any] | None]) -> dict[str, Any] | None:
+        from google.cloud import firestore
+
+        ref = self._record_ref(kind, record_id)
+
+        @firestore.transactional
+        def update(tx: Any) -> dict[str, Any] | None:
+            snap = ref.get(transaction=tx)
+            old = json.loads((snap.to_dict() or {}).get("record_json") or "{}") if snap.exists else None
+            new = change(None if old is None else dict(old))
+            if new is None:
+                return old
+            text = json.dumps(new, separators=(",", ":"))
+            if len(text.encode("utf-8")) > BLOB_LIMIT:
+                raise StoreError("The record is too large to keep")
+            tx.set(ref, {"annotator_id": annotator_id, "record_json": text, "updated_at": now_local_iso()})
+            return new
+
+        return update(self.client.transaction())
 
     # ------------------------------------------------------------------- quiz
     def _quiz_ref(self, annotator_id: str, set_id: str) -> Any:

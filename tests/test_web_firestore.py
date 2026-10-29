@@ -177,6 +177,44 @@ def test_revisions_and_achievements_on_firestore(service: StudyService, recordin
     assert ok(service, "achievements", A02)["leaderboard"]["you"]["name"] != lb["you"]["name"]
 
 
+def test_problem_reports_and_reviews_on_firestore(service: StudyService, recordings: Path, tmp_path: Path) -> None:
+    import base64
+    import io
+    import zipfile
+
+    report = {"problem_id": "1" * 32, "recording_id": SUB1, "mode": "standard", "reason": "bad_channels",
+              "note": "Flat from 20 s", "outcome": "unusable", "where": "annotate"}
+    assert ok(service, "problem_report", A01, report)["already"] is False
+    assert ok(service, "problem_report", A01, report)["already"] is True  # sent twice: kept once
+    item = next(i for i in ok(service, "assignments", A01)["items"] if i["recording_id"] == SUB1)
+    assert item["status"] == "unusable" and item["problem"]["outcome"] == "unusable"
+    assert ok(service, "match", A01, match_body(recordings, SUB1))["status"] == "unusable"
+    assert err(service, "submit", A01, submission(recordings, SUB1, [BLINK])).code == "unusable"
+    listed = ok(service, "admin", ADMIN, {"op": "problems_list"})
+    assert listed["counts"] == {"open": 1, "resolved": 0, "unusable": 1} and listed["problems"][0]["unusable_now"]
+    assert ok(service, "admin", ADMIN, {"op": "stats"})["totals"]["unusable"] == 1
+    ok(service, "admin", ADMIN, {"op": "problem_return", "problem_id": "1" * 32, "note": "Replaced"})
+    assert next(i for i in ok(service, "assignments", A01)["items"] if i["recording_id"] == SUB1)["status"] == "todo"
+    # a review of saved work, kept apart from its files
+    ok(service, "submit", A02, submission(recordings, SUB1, [BLINK, EMG]))
+    files = service.store.saved_files("A02", SUB1, "standard", "")
+    got = ok(service, "admin", ADMIN, {"op": "saved_attempt_get", "annotator_id": "A02", "recording_id": SUB1})
+    assert got["attempt"] == 1 and len(got["annotations"]) == 2
+    body = {"op": "review_save", "review_id": "2" * 32, "annotator_id": "A02", "recording_id": SUB1, "attempt": 1,
+            "items": [{"annotation_id": BLINK["annotation_id"], "status": "caveat", "note": "Early"},
+                      {"onset_sample": 6000, "duration_samples": 256, "status": "comment"}]}
+    assert ok(service, "admin", ADMIN, body)["already"] is False
+    assert ok(service, "admin", ADMIN, body)["already"] is True
+    assert ok(service, "my_reviews", A02)["reviews"][0]["summary"] == "1 caveat, 1 comment"
+    assert ok(service, "my_reviews", A01)["reviews"] == []
+    assert service.store.saved_files("A02", SUB1, "standard", "") == files
+    z = zipfile.ZipFile(io.BytesIO(base64.b64decode(ok(service, "admin", ADMIN, {"op": "results_zip"})["base64"])))
+    names = z.namelist()
+    assert "Annotated_Events/problem_reports/problem_reports.tsv" in names
+    assert sum(1 for n in names if n.startswith("Annotated_Events/reviews/annotator-A02/")) == 2
+    assert len(names) == len(set(names))
+
+
 @pytest.mark.parametrize("one_after_the_other", [False, True])
 def test_two_revisions_past_the_version_check_save_one_attempt_on_firestore(
         service: StudyService, recordings: Path, monkeypatch: pytest.MonkeyPatch, one_after_the_other: bool) -> None:
@@ -618,6 +656,14 @@ def test_callables_end_to_end(study: str, recordings: Path) -> None:
     assert body["result"]["received"] == 1
     _, body = callable_("et_admin_progress", {"study": study}, token)
     assert body["error"]["details"]["error"] == "forbidden"
+    report = {"study": study, "problem_id": "3" * 32, "recording_id": SUB3, "mode": "standard",
+              "reason": "too_noisy", "outcome": "noted"}
+    _, body = callable_("et_problem_report", report, token)
+    assert body["result"]["already"] is False, body
+    _, body = callable_("et_problem_report", report, token)
+    assert body["result"]["already"] is True
+    _, body = callable_("et_my_reviews", {"study": study}, token)
+    assert body["result"] == {"shown": True, "reviews": []}
     admin = sign_in(f"admin-{study}@example.org")
     _, body = callable_("et_admin_progress", {"study": study}, admin)
     assert {a["annotator_id"] for a in body["result"]["annotators"]} == {"A01", "A02", "T01", "ADMIN"}
@@ -712,7 +758,8 @@ def test_security_rules_keep_clients_out(study: str) -> None:
     token = sign_in(f"a01-{study}@example.org")
     base = f"http://{os.environ['FIRESTORE_EMULATOR_HOST']}/v1/projects/{PROJECT}/databases/(default)/documents"
     paths = [f"studies/{study}", f"studies/{study}/users/A01", f"studies/{study}/manifests",
-             f"studies/{study}/submissions", f"studies/{study}/reference_sets/example"]
+             f"studies/{study}/submissions", f"studies/{study}/reference_sets/example", f"studies/{study}/problems",
+             f"studies/{study}/reviews", f"studies/{study}/unusable"]
     for auth in ({"Authorization": f"Bearer {token}"}, {}):
         for p in paths:
             r = httpx.get(f"{base}/{p}", headers=auth)

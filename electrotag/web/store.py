@@ -35,6 +35,11 @@ if TYPE_CHECKING:
     from electrotag.training.reference import ReferenceSet
 
 MODES = ("standard", "guided", "practice", "assessment")
+#: The kinds of record kept with :meth:`Store.update_record`: problem reports, reviews of saved work, and the
+#: marks of assignments that cannot be annotated (each annotator's, by item key).
+RECORD_KINDS = ("problems", "reviews", "unusable")
+#: A record's ID: letters, digits, "_" and "-" (the browser makes 32 hexadecimal characters).
+RECORD_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
 ROLES = ("annotator", "admin")
 STATUSES = ("active", "disabled")
 #: Who changed something, in the audit log, when it was an ``electrotag-web`` command.
@@ -403,6 +408,18 @@ class Store(ABC):
         """A random secret of the study (64 hexadecimal characters), made the first time it is asked for and
         kept by the store, never sent to a browser (the key of the leaderboard's pseudonyms)."""
 
+    # ------------------------------------------- problem reports and reviews
+    @abstractmethod
+    def records(self, kind: str, annotator_id: str | None = None) -> list[dict[str, Any]]:
+        """The records of one of :data:`RECORD_KINDS` (every annotator's, or one annotator's), in no order."""
+
+    @abstractmethod
+    def update_record(self, kind: str, record_id: str, annotator_id: str,
+                      change: Callable[[dict[str, Any] | None], dict[str, Any] | None]) -> dict[str, Any] | None:
+        """Read, change and write one record in one step: ``change`` gets the record kept (None when there is
+        none) and returns the new one, or None to leave it as it was; returns the record kept. Records are
+        never deleted (docs/web/api.md, "Problem reports" and "Reviews")."""
+
     # ------------------------------------------------------------------ audit
     @abstractmethod
     def audit_append(self, entry: dict[str, Any]) -> None:
@@ -444,7 +461,8 @@ def generated_password() -> str:
     return "-".join("".join(secrets.choice(alphabet) for _ in range(4)) for _ in range(3))
 
 
-__all__ = ["BY_COMMAND", "MODES", "ROLES", "STATUSES", "AccountProblem", "Assignment", "Credentials", "Invitation",
+__all__ = ["BY_COMMAND", "MODES", "RECORD_ID_RE", "RECORD_KINDS", "ROLES", "STATUSES", "AccountProblem", "Assignment",
+           "Credentials", "Invitation",
            "ResultExists",
            "SavedResult", "Store", "StoreError", "User", "attempt_of", "generated_password", "item_key", "latest_entry",
            "settings_from_overrides"]
