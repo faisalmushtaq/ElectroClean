@@ -333,11 +333,11 @@ export const tests = [
       const text = (await page.innerText('.admin-section[data-section="progress"]')).replace(/\s+/g, ' ');
       assert.match(text, /[1-9]\d* Done of \d+ assigned/);
       await page.waitForSelector('svg.chart-svg path.chart-col');
-      // Today's column reads out from the keyboard.
+      // Today's column reads out from the keyboard (it is empty when the work was saved just before midnight).
       await page.focus('svg.chart-svg');
       await page.keyboard.press('End');
       await page.waitForSelector('.chart-tip:not([hidden])');
-      assert.match(await page.innerText('.chart-tip'), /[1-9]\d* recordings?/);
+      assert.match(await page.innerText('.chart-tip'), /\d+ recordings?/);
       await t.screenshot(page, 'admin_server_progress');
       await page.click('.admin-section[data-section="progress"] [data-tab="recordings"]');
       await page.waitForSelector('[data-panel="recordings"] tbody tr');
