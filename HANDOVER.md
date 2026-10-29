@@ -54,6 +54,28 @@ server and the Firebase functions call it. The commands `electroclean-agreement`
 on the [Releases page](https://github.com/faisalmushtaq/ElectroClean/releases) was the last desktop
 release; the results folders it wrote are read unchanged.
 
+On the night of 28 to 29 October 2026 the application gained what a long study needs from day to
+day. Administrators have a menu grouped under Study, People, Data and Settings with Find in the
+header; private invitation links (single use, kept by the study only as a hash); Add several, which
+makes many accounts from pasted lines; a Progress section with study totals, a projected finish date,
+a chart of completions over the last 30 days and sortable tables of people and recordings; and
+actions on many recordings or accounts at once. Annotators can pause and resume (B), with breaks,
+idle time and time out of sight left out of the time worked; they get a gentle break reminder, a
+record of the parts of each recording they have viewed with Next part not yet viewed (U), a check
+before Save and Finish, a draft that reopens where they left it, and display comfort settings. Their
+home page shows their progress with an estimate of the time left, a list with tabs, search and pages
+that stays usable with hundreds of recordings, their history, and revisions: a finished recording can
+be opened again and submitted as a new attempt, the earlier files staying as they were and the
+analyses using the latest. Game elements (milestones, a weekly goal, the team's progress and a
+leaderboard under pseudonyms) follow work done and never the number of annotations, so that they do
+not bias the data, and the study can switch them off. Recordings can be opened from a Dropbox or
+OneDrive link straight into the browser, with a two-step download as the fallback, and kept in the
+browser's own storage with a panel that shows the space used and removes finished recordings in one
+click. Channels can be coloured by region, side or type with a palette checked for colour-blind
+readers that keeps grey for bad channels. On a phone the application says plainly that annotating
+needs a tablet or a computer and offers to email the link. The [CHANGELOG](CHANGELOG.md) has the
+details, and [docs/design_decisions.md](docs/design_decisions.md) the reasons.
+
 **Trying it.** The application at <https://faisalmushtaq.github.io/ElectroClean/>, opened without a
 study, is a demonstration that needs no server and keeps everything in the browser: sign in as A01 to annotate,
 T01 for the training programme or ADMIN for the admin area, with the password `demo`. The home page
@@ -185,7 +207,18 @@ administrator guide says so, and they can be removed. The README has no
 picture of the browser application yet. Three small differences from the desktop application's
 display are documented in [docs/web/architecture.md](docs/web/architecture.md).
 
-**6. Housekeeping.** The project's `ruff` settings give only the line length, so a recent `ruff`
+**6. Loose ends from the night of 28 to 29 October.** A download from a real OneDrive link has not
+been tried (no public link was at hand); Dropbox was checked with real links, through a route that
+works but that Dropbox does not document, and Google Drive cannot be read by a web page, so its links
+always use the two-step download. Attaching a link to each registered recording, so that Open fetches
+it without the annotator pasting anything, is the natural next step: `js/data/fetch_links.js`
+already takes a list of files and their links. The study default for channel colours
+(`display.channel_colours`) has no control in the admin area yet. `electroclean-activity` does not
+yet put the time paused (`paused_s`, in the interaction log) in its tables. A Firebase invitation
+shows no expiry date, because Firebase does not give one. Keeping recordings on an iPad uses the
+faster storage from iPadOS 26 and the browser's database before it; check both on a real iPad.
+
+**7. Housekeeping.** The project's `ruff` settings give only the line length, so a recent `ruff`
 applies many style rules the code was never written to; `ruff check --select E,F,W,B` is the useful
 subset. A shared linting configuration and a lint step in CI would help. Many code comments still
 explain behaviour by comparison with the desktop application ("as the desktop does"); they are
