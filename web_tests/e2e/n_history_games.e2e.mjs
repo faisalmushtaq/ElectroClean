@@ -140,6 +140,8 @@ export const tests = [
       assert.equal((await annotations(page)).length, 1, 'the latest saved annotations open');
       assert.equal(await page.locator('.ws-actions button', { hasText: 'Save and Finish' }).count(), 0);
       await t.screenshot(page, 'history_revising');
+      // A screen counts as viewed after DWELL_MS (400 ms) on screen; a person never saves faster than that.
+      await page.waitForTimeout(600);
       await mark(page, 9.2, 10.8);
       await page.click('.ws-revision button.primary');
       await page.waitForSelector('.dialog');
