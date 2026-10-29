@@ -427,9 +427,14 @@ The map places each electrode, in this order, where the recording's own BIDS ele
 it, where the standard 10-20, 10-10 and 10-05 positions put it, or, for montages whose names say
 nothing about position, on rings in the order of the channels, which the map says plainly
 ("Positions not known: arranged in order") so that nobody reads a ring as anatomy. The
-electrodes.tsv is read only when the annotator picks it with the recording (a folder, or several
-files), on their own computer as the recording is; the study's manifest does not carry positions, so
-that adding them later needs no change to what the study stores. Its coordinates are turned to
+electrodes.tsv is read where the recording is read, in the annotator's browser: when they pick it
+with the recording (a folder, or several files), when it is kept with a copy of the recording on
+the device, and when it comes with a recording opened from a link, either as a link of its own or
+from beside a recording at a plain web address, where the page asks once, quietly, for the BIDS
+names next to the recording and falls back to the standard positions on any failure. An optional
+file is never a reason to refuse or delay a recording, so the recording opens while it is asked
+for, and the map takes its positions when it arrives. The study's manifest does not carry
+positions, so that adding them later needs no change to what the study stores. Its coordinates are turned to
 right, front and up according to the coordinate system its coordsystem.json names (the systems
 the BIDS specification lists as front-left-up, such as EEGLAB and CTF, are turned round; the others
 are right-front-up), centred on the sphere that fits them best, and drawn with the azimuthal

@@ -2,6 +2,7 @@
 // them), then follow its fingerprint and the study's answer.
 
 import { electrodeSidecars } from '../data/electrodes.js';
+import { fetchNeighbourElectrodes } from '../data/fetch_links.js';
 import { h, clear } from '../ui/dom.js';
 import { appHeader, icon } from './common.js';
 import { CAN_CHOOSE_FOLDER, acceptFiles } from '../util.js';
@@ -90,10 +91,18 @@ export class OpenView {
     if (expected) this.openKeptCopy(expected.recording_id);
   }
 
-  /** "Open from a link" (js/views/links_panel.js): the fetched files take the same path as chosen ones. */
+  /**
+   * "Open from a link" (js/views/links_panel.js): the fetched files take the same path as chosen ones.
+   * Without an electrodes.tsv among them, the page looks for one beside the recording's address while
+   * the recording opens (js/data/fetch_links.js); the channel map takes its positions if it arrives.
+   */
   linkSection() {
     const keep = keepLinkCheck(this.app);
-    return linkPanel({ onFiles: (files) => this.handle(files, false, { kind: 'link', keep: Boolean(keep && keep.box.checked) }),
+    return linkPanel({
+      onFiles: (files, info) => {
+        const later = electrodeSidecars(files).length || !info || !info.links ? null : fetchNeighbourElectrodes(info.links);
+        this.handle(files, false, { kind: 'link', keep: Boolean(keep && keep.box.checked), ...(later ? { laterSidecars: later } : {}) });
+      },
       chooseFile: () => this.fileInput.click(), extra: keep ? keep.el : null });
   }
 
@@ -114,7 +123,8 @@ export class OpenView {
     if (this.app.openView !== this || this.app.route !== this.route) return; // a file that arrived after the view was left
     source = source || { kind: 'chosen', keep: Boolean(this.device.box && this.device.box.checked) };
     clear(this.result);
-    // A BIDS electrodes.tsv picked with the recording gives the channel map its positions (js/data/electrodes.js).
+    // A BIDS electrodes.tsv picked with the recording (or fetched or kept with it) gives the channel map
+    // its positions (js/data/electrodes.js).
     const sidecars = electrodeSidecars(files);
     if (sidecars.length) { source = { ...source, sidecars }; files = [...files].filter((f) => !sidecars.includes(f)); }
     let chosen = files;

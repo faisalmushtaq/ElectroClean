@@ -2,8 +2,13 @@
 // straight from the cloud service, with its progress, and makes File objects that the rest of the
 // application opens as if they had been chosen on the computer. Nothing passes through the study:
 // the request carries no cookies and no referrer, and the link is never stored or logged.
-// Plain ES module; `fetch` can be passed in, so that Node can test it.
+// A recording at a plain web address may have its BIDS electrodes.tsv (and coordsystem.json) beside
+// it, which the page then fetches too, quietly: the channel map uses its positions when it arrives
+// and the standard positions when it does not. Plain ES module; `fetch` can be passed in, so that
+// Node can test it.
 
+import { parseBidsName } from './bids.js';
+import { coordinateSystemOf, parseElectrodesTsv } from './electrodes.js';
 import { directLink, fileNameFromDisposition, formatBytes, LinkProblem, SERVICE_NAMES } from './links.js';
 
 /** The largest file fetched from a link: it is held in the browser's memory until it is opened. */
@@ -37,8 +42,10 @@ export function problemForStatus(status, link) {
 
 /**
  * Fetch the files of one recording from their links.
- * @param {{role?: string, url: string}[]} items one entry per file (role is for later use, such as
- *   'header', 'markers' or 'data' when an administrator registers a link for each file)
+ * @param {{role?: string, url: string, optional?: boolean}[]} items one entry per file (role is for
+ *   later use, such as 'header', 'markers' or 'data' when an administrator registers a link for each
+ *   file); an optional file (the recording's electrodes.tsv or coordsystem.json) that cannot be
+ *   fetched is left out, quietly
  * @param {{onProgress?: (p: {index: number, count: number, name: string, loaded: number, total: number|null}) => void,
  *          signal?: AbortSignal, fetchImpl?: typeof fetch, maxBytes?: number, online?: () => boolean}} [options]
  * @returns {Promise<{files: File[], links: object[], bytes: number}>}
@@ -60,11 +67,118 @@ export async function fetchLinkedFiles(items, options = {}) {
   let bytes = 0;
   for (let index = 0; index < links.length; index++) {
     const link = links[index];
-    const file = await fetchOne(link, index, links.length, { fetchImpl, signal, maxBytes, onProgress, online });
+    let file;
+    try {
+      file = await fetchOne(link, index, links.length, { fetchImpl, signal, maxBytes: list[index].optional ? Math.min(maxBytes, SIDECAR_MAX_BYTES) : maxBytes, onProgress, online });
+    } catch (e) {
+      if (list[index].optional && e instanceof LinkError && e.kind !== 'aborted') continue;
+      throw e;
+    }
     files.push(file);
     bytes += file.size;
   }
   return { files, links, bytes };
+}
+
+// ------------------------------------------------------------------------ electrode positions
+/** The largest electrodes.tsv or coordsystem.json fetched (a 256-channel electrodes.tsv is about 10 kB). */
+export const SIDECAR_MAX_BYTES = 512 * 1024;
+/** How long the page waits, in all, for the files beside a recording before it settles for standard positions. */
+export const SIDECAR_WAIT_MS = 8000;
+
+/** Whether a file name is that of a BIDS electrodes.tsv or coordsystem.json. */
+export function isElectrodeSidecarName(name) {
+  return /(^|_)(electrodes\.tsv|coordsystem\.json)$/i.test(String(name || ''));
+}
+
+/**
+ * Where the electrodes.tsv and coordsystem.json of a recording at a plain web address would be: the
+ * same address with the recording's file name replaced by the BIDS names of its electrode files
+ * (sub, then ses and acq when the recording's name has them; the most specific first, as BIDS
+ * inherits them). Share links of Dropbox and OneDrive name one file each, so nothing is beside them;
+ * a recording whose name is not a BIDS name (no sub-) has no candidates either.
+ * @param {object[]} links the converted links of the recording's files (directLink)
+ * @returns {{electrodes: string, electrodesName: string, coordsystem: string, coordsystemName: string}[]}
+ */
+export function neighbourElectrodeLinks(links) {
+  for (const link of links || []) {
+    if (!link || link.service !== 'web' || !link.url) continue;
+    let u;
+    try { u = new URL(link.url); } catch { continue; }
+    const parts = u.pathname.split('/');
+    let name = parts[parts.length - 1];
+    try { name = decodeURIComponent(name); } catch { /* as it is */ }
+    if (!/\.(edf|bdf|vhdr)$/i.test(name)) continue;
+    const parsed = parseBidsName(name);
+    if (!parsed.entities.has('sub')) return [];
+    const keys = ['sub', 'ses', 'acq'].filter((k) => parsed.entities.has(k));
+    const at = (file) => {
+      const v = new URL(u.href);
+      v.hash = '';
+      v.pathname = [...parts.slice(0, -1), encodeURIComponent(file)].join('/');
+      return v.href;
+    };
+    const out = [];
+    for (let n = keys.length; n >= 1; n--) {
+      const prefix = keys.slice(0, n).map((k) => `${k}-${parsed.entities.get(k)}`).join('_');
+      const electrodesName = `${prefix}_electrodes.tsv`;
+      const coordsystemName = `${prefix}_coordsystem.json`;
+      out.push({ electrodes: at(electrodesName), electrodesName, coordsystem: at(coordsystemName), coordsystemName });
+    }
+    return out;
+  }
+  return [];
+}
+
+/** A small text file, or null when it cannot be fetched, is a web page or is too large. */
+async function fetchSmallText(url, fetchImpl, signal, maxBytes) {
+  try {
+    const res = await fetchImpl(url, { method: 'GET', mode: 'cors', credentials: 'omit', referrerPolicy: 'no-referrer', redirect: 'follow', cache: 'no-store', signal });
+    const length = Number(res.headers.get('content-length'));
+    if (!res.ok || (res.headers.get('content-type') || '').toLowerCase().startsWith('text/html') || length > maxBytes) {
+      try { if (res.body && typeof res.body.cancel === 'function') await res.body.cancel(); } catch { /* already closed */ }
+      return null;
+    }
+    const buf = await res.arrayBuffer();
+    return buf.byteLength > maxBytes ? null : new TextDecoder().decode(buf);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch the electrodes.tsv (and coordsystem.json) beside a recording at a plain web address, as
+ * File objects named as BIDS names them. Optional by design: each candidate is asked once, in all for
+ * at most `timeoutMs`; a file that is missing, refused, a web page, too large or without name, x and
+ * y columns is passed over; and the promise never rejects (an empty list means standard positions).
+ * @param {object[]} links the converted links of the recording's files (directLink)
+ * @param {{fetchImpl?: typeof fetch, timeoutMs?: number, maxBytes?: number}} [options]
+ * @returns {Promise<File[]>}
+ */
+export async function fetchNeighbourElectrodes(links, options = {}) {
+  const candidates = neighbourElectrodeLinks(links);
+  if (!candidates.length) return [];
+  const fetchImpl = options.fetchImpl || globalThis.fetch.bind(globalThis);
+  const maxBytes = options.maxBytes ?? SIDECAR_MAX_BYTES;
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), options.timeoutMs ?? SIDECAR_WAIT_MS);
+  try {
+    for (const c of candidates) {
+      if (ac.signal.aborted) break;
+      const text = await fetchSmallText(c.electrodes, fetchImpl, ac.signal, maxBytes);
+      if (text === null) continue;
+      try { if (!parseElectrodesTsv(text).size) continue; } catch { continue; }
+      const out = [new File([text], c.electrodesName, { type: 'text/tab-separated-values' })];
+      const cs = ac.signal.aborted ? null : await fetchSmallText(c.coordsystem, fetchImpl, ac.signal, maxBytes);
+      if (cs !== null && coordinateSystemOf(cs)) out.push(new File([cs], c.coordsystemName, { type: 'application/json' }));
+      return out;
+    }
+    return [];
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function fetchOne(link, index, count, { fetchImpl, signal, maxBytes, onProgress, online }) {

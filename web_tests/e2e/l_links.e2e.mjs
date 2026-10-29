@@ -11,8 +11,12 @@ import { demoSpecs, syntheticEdfBytes } from '../../electrotag/web/static/js/dat
 
 export const NAME = 'sub-demo01_task-rest_eeg.edf';
 
-/** A stand-in cloud service: /cors/<name> lets any page read the file, /nocors/<name> does not. */
-export async function cloudService(bytes) {
+/**
+ * A stand-in cloud service: /cors/<name> lets any page read the file, /nocors/<name> does not.
+ * `files` maps other file names (such as an electrodes.tsv) to the text served under them, in any
+ * folder; every other name is answered with the recording.
+ */
+export async function cloudService(bytes, { files = {} } = {}) {
   const seen = [];
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://x');
@@ -20,6 +24,8 @@ export async function cloudService(bytes) {
     const cors = url.pathname.startsWith('/cors/');
     const base = cors ? { 'Access-Control-Allow-Origin': '*', 'Access-Control-Expose-Headers': 'Content-Disposition, Content-Length' } : {};
     if (req.method === 'OPTIONS') { res.writeHead(204, base); res.end(); return; }
+    const own = Object.hasOwn(files, decodeURIComponent(url.pathname.split('/').pop())) ? files[decodeURIComponent(url.pathname.split('/').pop())] : null;
+    if (own !== null) { res.writeHead(200, { ...base, 'Content-Type': 'text/plain', 'Content-Length': String(Buffer.byteLength(own)) }); res.end(own); return; }
     if (url.pathname.endsWith('/missing.edf')) { res.writeHead(404, { ...base, 'Content-Type': 'text/plain' }); res.end('no such file'); return; }
     res.writeHead(200, { ...base, 'Content-Type': 'application/octet-stream', 'Content-Length': String(bytes.length),
       'Content-Disposition': `attachment; filename="${NAME}"` });

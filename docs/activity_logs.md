@@ -238,7 +238,15 @@ it is now `chosen`; `box` for a box dragged with the mouse or the Pencil, with `
 `pointer`; `all`, `none` and `invert` for the buttons; `zoom`, with the new `zoom`), `n_changed`,
 the number of channels whose choice changed, and `n_chosen`, the number chosen afterwards. A box or
 a button names no channels, only their number; the channels finally chosen are in the `state`
-event (`selected_channels`) or the `annotation_channels_changed` event that follows OK.
+event (`selected_channels`) or the `annotation_channels_changed` event that follows OK. Once per
+recording opened, `electrode_positions` says where the map places the electrodes: `source` (`file`
+for the recording's own electrodes.tsv, `standard` for the standard positions of their names,
+`order` for rings in the order of the channels), `opened_from` (`chosen`, `link`, `device` for a
+copy kept on this device, or `other`, such as an example recording) and, for `file`, `n_placed`,
+the number of channels the file places, and `coordinate_system`, the EEGCoordinateSystem of its
+coordsystem.json (empty when there is none). It names neither the file nor where it came from. When
+a recording is kept on the device, `device_kept` says with `electrodes` (true or false) whether its
+electrode files were kept with it.
 
 **Dialogs.** `dialog_shown` (`dialog` class, `title`; for messages also the
 `text`, `informative` text and the `buttons` offered) and `dialog_closed`

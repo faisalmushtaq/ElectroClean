@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 
 import { electrodeCore, extentOf, fitSphere, mapLayout, mapScale, minSpacing, nearestInDirection, pointsInBox, projectPositions,
   ringLayout, standardPosition } from '../../electrotag/web/static/js/viewer/head_map.js';
-import { coordinateSystemOf, electrodeSidecars, parseElectrodesTsv, pickElectrodeFiles } from '../../electrotag/web/static/js/data/electrodes.js';
+import { coordinateSystemOf, electrodeFilesToKeep, electrodeSidecars, parseElectrodesTsv, pickElectrodeFiles, readElectrodes, sidecarsOf } from '../../electrotag/web/static/js/data/electrodes.js';
 import { centredStart, clampTime, parseTimeText } from '../../electrotag/web/static/js/annotate/goto.js';
 import { OVERLAY_SPAN, microvoltText, overlayAlpha, overlayGain } from '../../electrotag/web/static/js/viewer/geometry.js';
 import { DEMO_CHANNELS, channelType } from '../../electrotag/web/static/js/data/synthetic.js';
@@ -154,6 +154,27 @@ test('the electrodes.tsv that belongs to a recording', () => {
   assert.equal(pickElectrodeFiles([f('sub-01_space-CapTrak_electrodes.tsv')], 'sub-01_task-rest_eeg.edf').electrodes.name, 'sub-01_space-CapTrak_electrodes.tsv');
   assert.equal(pickElectrodeFiles([f('electrodes.tsv')], 'recording.edf').electrodes.name, 'electrodes.tsv');
   assert.equal(pickElectrodeFiles([], 'recording.edf'), null);
+});
+
+test('the electrode files that came with a recording: picked, kept, or arriving from beside its link', async () => {
+  const f = (name, text = '') => new File([text], name);
+  const tsv = f('sub-01_electrodes.tsv', 'name\tx\ty\tz\nFp1\t-30\t-85\t-5\nCz\t0\t0\t100\n');
+  const cs = f('sub-01_coordsystem.json', '{"EEGCoordinateSystem": "CapTrak"}');
+  assert.deepEqual(await sidecarsOf(null), []);
+  assert.deepEqual(await sidecarsOf({ kind: 'chosen' }), []);
+  assert.deepEqual((await sidecarsOf({ kind: 'chosen', sidecars: [tsv] })).map((x) => x.name), ['sub-01_electrodes.tsv']);
+  assert.deepEqual((await sidecarsOf({ kind: 'link', laterSidecars: Promise.resolve([tsv, cs]) })).map((x) => x.name), ['sub-01_electrodes.tsv', 'sub-01_coordsystem.json']);
+  assert.deepEqual(await sidecarsOf({ kind: 'link', laterSidecars: Promise.reject(new Error('gone')) }), [], 'a failure means standard positions');
+  const got = await readElectrodes(await sidecarsOf({ kind: 'link', laterSidecars: Promise.resolve([tsv, cs]) }), 'sub-01_task-rest_eeg.edf');
+  assert.equal(got.fileName, 'sub-01_electrodes.tsv');
+  assert.equal(got.system, 'CapTrak');
+  assert.deepEqual(got.positions.get('Fp1'), [-30, -85, -5]);
+  // A kept copy keeps the files that belong to its recording, and only those.
+  const folder = [f('sub-02_electrodes.tsv'), tsv, f('sub-02_coordsystem.json'), cs];
+  assert.deepEqual(electrodeFilesToKeep(folder, 'sub-01_task-rest_eeg.edf').map((x) => x.name), ['sub-01_electrodes.tsv', 'sub-01_coordsystem.json']);
+  assert.deepEqual(electrodeFilesToKeep([tsv], 'sub-01_task-rest_eeg.edf').map((x) => x.name), ['sub-01_electrodes.tsv']);
+  assert.deepEqual(electrodeFilesToKeep([f('sub-02_electrodes.tsv')], 'sub-01_task-rest_eeg.edf'), []);
+  assert.deepEqual(electrodeFilesToKeep([], 'sub-01_task-rest_eeg.edf'), []);
 });
 
 test('Go to time: seconds, m:ss and h:mm:ss, plain words for anything else, and kept within the recording', () => {

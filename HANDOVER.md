@@ -232,9 +232,21 @@ reviews of saved work, the channel map, the value under the pointer, the overlay
 in place. The activity summary (`electrotag-activity`) does not yet count the new `confidence_set`,
 `confidence_prompt`, `confidence_check`, `note_set`, `problem_reported` and review events, which are in the interaction log. The Annotations
 list in the side panel is narrow, so long labels are cut short, a little more so when a rating
-or a note is shown. Electrode positions from a BIDS `electrodes.tsv` are used only when the
-annotator opens it with the recording; recordings opened from a link or kept on the device use
-standard positions.
+or a note is shown. Electrode positions from a BIDS `electrodes.tsv` are used when the annotator
+opens it with the recording, when it was kept with a copy on the device (`keepOnDevice` in
+`js/views/device.js` keeps the `electrodes.tsv` and `coordsystem.json` that belong to the
+recording), and for a recording opened from a link: pasted as links of their own after the
+recording's (optional, so a failure is passed over), or fetched from beside a recording at a plain
+web address under their BIDS names (`fetchNeighbourElectrodes` in `js/data/fetch_links.js`: each
+candidate asked once, eight seconds in all, while the recording opens; a name with a `space-`
+entity cannot be guessed and is not tried). Dropbox and OneDrive share one file per link, so
+nothing beside them can be found. Recordings a study knows only by their manifest still need the
+annotator to pick the `electrodes.tsv` with the recording. Letting the manifest name it, or carry
+the positions themselves, would change what the study stores: `electrotag/web/manifest.py` and
+`js/data/register.js` would both build the new field (checked by `web_tests/register_parity.py`),
+`manifest_check.py` would have to keep it, and `docs/web/api.md` would describe it; the open
+view could then say which file to pick, or the map use the stored positions. That is left for a
+decision by the project lead.
 
 **7. Housekeeping.** The project's `ruff` settings give only the line length, so a recent `ruff`
 applies many style rules the code was never written to; `ruff check --select E,F,W,B` is the useful

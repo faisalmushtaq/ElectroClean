@@ -179,6 +179,15 @@ had chosen it on your computer. The file never passes through the study, and the
 the link: the link is not stored, not sent anywhere but to the service that holds the file, and
 not written to the interaction log.
 
+The channel map can place the electrodes where the recording's own BIDS electrodes.tsv puts them.
+With Dropbox or OneDrive, paste the links of the electrodes.tsv and its coordsystem.json on lines
+of their own, after the recording's. For a recording at a plain web address, ElectroTag looks for
+them itself, beside the recording at the same address, under their BIDS names (for
+sub-01_ses-1_task-rest_eeg.edf, sub-01_ses-1_electrodes.tsv and then sub-01_electrodes.tsv, each
+with its coordsystem.json). The recording opens straight away while they are fetched; if they are
+not there, cannot be read or take more than a few seconds, the map uses the standard positions and
+nothing else changes.
+
 To share a file from Dropbox, choose Share on the file itself (not on its folder), make sure the
 link is for anyone who has it, and choose Copy link. In OneDrive, choose Share, then Anyone with the
 link can view, and copy the link. Links to other web addresses work too when the server that holds
@@ -205,9 +214,11 @@ ElectroTag finds the copy, checks its fingerprint as it does for any file, and o
 away. Untick Keep a copy on this device under the link field if you would rather download it each
 time. Files you choose on your computer are already on it and are not copied, unless you tick Also
 keep files I choose here on this device (useful on an iPad, where the Files app may not keep a
-downloaded file to hand). Each copy is filed under your study and your sign-in, so people who share a
-computer never see each other's copies, and only the files themselves are kept: never the link they
-came from, because a link works as a password for the file. In a private window, and in browsers
+downloaded file to hand). A recording's electrodes.tsv and coordsystem.json, when they came with it,
+are kept with its copy, so that it opens again with the same positions on the channel map. Each copy
+is filed under your study and your sign-in, so people who share a computer never see each other's
+copies, and only the files themselves are kept: never the link they came from, because a link works
+as a password for the file. In a private window, and in browsers
 that keep nothing for a site, the tick boxes are replaced by a sentence saying that this browser
 cannot keep recordings, and recordings open from the link or the computer each time.
 
@@ -277,8 +288,10 @@ all chosen takes them back). Select all, None and Invert act on every electrode,
 search finds; the search and the group buttons work as in the list, and the two always show the same
 choice. With the keyboard, the arrow keys move from an electrode to its neighbour in that direction
 and Space or Enter chooses it. The electrodes go where the recording's own BIDS electrodes.tsv puts
-them, when you open the recording together with that file (choose its folder, or the file with the
-recording's files); otherwise at the standard places of their 10-20, 10-10 or 10-05 names. A montage
+them, when that file comes with the recording: when you open the recording together with it
+(choose its folder, or the file with the recording's files), when it was kept with the recording's
+copy on this device, or when it came with a recording opened from a link (see Opening a recording
+from a link). Otherwise they go at the standard places of their 10-20, 10-10 or 10-05 names. A montage
 whose names say nothing about where the electrodes are, such as BioSemi's A1 to D32 or EGI's E1 to
 E128, is arranged on rings in the order of its channels, and the map says "Positions not known:
 arranged in order". Channels that are not on the head (EOG, ECG and the like) are under it, as

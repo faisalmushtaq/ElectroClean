@@ -17,7 +17,7 @@ const require = createRequire(import.meta.url);
  * which WebKit (like Safari in a private window) stores no files at all; an annotator's Safari keeps
  * them, and so does this profile.
  */
-async function profilePage(t, { init = null } = {}) {
+export async function profilePage(t, { init = null } = {}) {
   const pw = require('playwright');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ec-profile-'));
   const context = await pw[t.browserName].launchPersistentContext(dir, { headless: true, viewport: { width: 1600, height: 950 }, locale: 'en-GB', acceptDownloads: true });
@@ -30,7 +30,7 @@ async function profilePage(t, { init = null } = {}) {
 }
 
 /** The kept recordings of the signed-in annotator, as the page's own store lists them. */
-async function kept(page) {
+export async function kept(page) {
   return page.evaluate(async () => {
     const { deviceStore } = await import('./js/views/device.js');
     const s = deviceStore(globalThis.ElectroTag);
@@ -66,7 +66,7 @@ async function idbCount(page) {
   }));
 }
 
-async function waitKept(page, n) {
+export async function waitKept(page, n) {
   const t0 = Date.now();
   for (;;) {
     const k = await kept(page);
