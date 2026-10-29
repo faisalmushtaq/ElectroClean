@@ -177,3 +177,17 @@ test('the typeface is served with the application, with its licence', () => {
   assert.ok(html.includes('href="fonts/Newsreader-Variable.woff2"'), 'index.html preloads the roman');
   for (const m of html.matchAll(/href="(fonts\/[^"]+)"/g)) assert.ok(fs.existsSync(path.join(STATIC, m[1])), `${m[1]} exists`);
 });
+
+test('the application has its own mark: the header and the tab and home-screen icons draw the same annotated trace', () => {
+  const html = fs.readFileSync(path.join(STATIC, 'index.html'), 'utf8');
+  for (const [rel, file] of [['icon', 'icon.svg'], ['icon', 'icon-32.png'], ['apple-touch-icon', 'icon-180.png']]) {
+    assert.ok(html.includes(`<link rel="${rel}" href="${file}"`), `index.html links ${file} by a relative path`);
+    assert.ok(fs.statSync(path.join(STATIC, file)).size > 100, `${file} exists`);
+  }
+  const svg = fs.readFileSync(path.join(STATIC, 'icon.svg'), 'utf8');
+  const common = fs.readFileSync(path.join(STATIC, 'js', 'views', 'common.js'), 'utf8');
+  const paths = [...svg.matchAll(/<path d="([^"]+)"/g)].map((m) => m[1]);
+  assert.equal(paths.length, 2, 'the band edges and the trace');
+  for (const d of paths) assert.ok(common.includes(`d: '${d}'`), `brandMark() draws ${d.slice(0, 24)}… as icon.svg does`);
+  assert.match(svg, /fill="#2B4392" fill-opacity="0\.22"/, 'the band is the accent, shaded as an annotation');
+});

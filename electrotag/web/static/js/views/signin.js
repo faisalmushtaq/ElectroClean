@@ -124,7 +124,7 @@ export function signinFrame(app, card) {
       : h('span.chip', {}, b.kind === 'firebase' ? 'Study on Firebase' : 'Study server');
   const art = h('section.signin-art', {}, eegArt(),
     h('div.signin-art-inner', {},
-      h('div.signin-status', {}, brandMark(28, '#FFFFFF'), status),
+      h('div.signin-status', {}, brandMark(28, '#FFFFFF', '#A9B8EE'), status),
       h('div', {},
         h('p.signin-display', {}, 'ElectroTag'),
         h('p.signin-lede', {}, 'Artifact annotation for continuous EEG. ',

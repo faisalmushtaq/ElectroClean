@@ -14,6 +14,13 @@ Firebase functions (`et_`), the environment variables (`ELECTROTAG_…`) and the
 application itself, published at <https://faisalmushtaq.github.io/ElectroTag/>.
 Version 1.1.0 and the versions before it were released as ElectroClean.
 
+ElectroTag has its own mark: a short stretch of EEG marked as an artifact, the
+shaded band with its two edges that the application draws for each
+annotation, in a rounded frame. It replaces the earlier circle with a trace
+through it in the header and on the sign-in page, and it is now also the
+browser tab's icon and the icon an iPad shows when ElectroTag is added to its
+home screen, which the application did not have before.
+
 The browser version holds up better when the study answers late or fails
 once, and when people press things twice. While Save and Finish waits for its
 answer, no draft is sent and Pause, Close and Leave without changes wait, so a

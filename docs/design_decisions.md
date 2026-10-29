@@ -278,11 +278,23 @@ motion also turns off; nothing moves while it fades, so text is never drawn
 between pixels. Newsreader is under the SIL Open Font License, which allows it
 to be served with the application.
 
+The mark, renamed with the software on 29 October 2026, shows what ElectroTag
+is for: a short stretch of EEG marked as an artifact, drawn exactly as the
+application draws an annotation, a shaded band in the accent blue with an edge
+on each side, in a rounded frame. An earlier mark (a circle with a trace
+through it) could have belonged to any EEG or heart-rate tool. The same drawing
+is the browser tab's icon (`icon.svg`, filled with the page colour so that it
+stays visible on dark tab bars, with a 32-pixel PNG for browsers that take no
+SVG icons) and, without its frame, the icon an iPad shows when the application
+is added to its home screen (`icon-180.png`); `scripts/make_web_icons.mjs`
+makes the PNG icons from `icon.svg`.
+
 The rules are checked by `web_tests/unit/ui_design.test.mjs`: the canvas colours
 match the style sheet, every text colour meets WCAG 2.1 AA on the backgrounds
 it is shown on, every size comes from the scale, there are no shadows,
 gradients or capitals, no arrow or tick comes from a font, every icon the
-scripts use has a drawing, and the font is served with its licence.
+scripts use has a drawing, the font is served with its licence, and the header
+mark and the icons draw the same annotated trace.
 
 ## Web-only (28 October 2026)
 

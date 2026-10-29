@@ -85,6 +85,8 @@ electrotag/web/                 the server (FastAPI), the service layer it share
 electrotag/web/firebase/        the Cloud Functions (functions/main.py) and the administrator's access
 electrotag/web/static/          the browser application (plain ES modules, no build step)
     index.html, app.css           the page and the application's design system (tokens, components)
+    icon.svg, icon-*.png          the mark as the tab and home-screen icons (PNGs made by
+                                  scripts/make_web_icons.mjs)
     fonts/                        Newsreader, the one typeface (woff2, with its licence; made by
                                   scripts/make_web_fonts.py)
     admin.css                     the admin area's own layout, loaded when it is first opened
