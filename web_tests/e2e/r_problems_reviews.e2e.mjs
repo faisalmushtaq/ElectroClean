@@ -382,7 +382,8 @@ export const tests = [
       await pressSave(page);
       await clickDialogButton(page, 'Save and Finish');
       await page.waitForSelector('.dialog .dialog-title', { timeout: 30000 });
-      await clickDialogButton(page, 'Back to my recordings');
+      // "Back to my recordings", or OK when that was the last recording left to do
+      await page.locator('.dialog-buttons button', { hasText: /Back to my recordings|^OK$/ }).first().click();
       const folder = path.join(t.study.dir, 'study', 'Annotated_Events', 'annotator-P01', 'sub-003', 'eeg');
       const before = checksums(folder);
       assert.equal(Object.keys(before).length, 5);

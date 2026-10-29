@@ -517,6 +517,8 @@ ul.examples b { font-weight: 400; color: var(--ink); }
 }
 /* A revision of a finished recording: a banner under the header with its two actions (workspace.js, _revisionBar). */
 .view.annotate.revising { grid-template-rows: auto auto auto minmax(0, 1fr) auto; }
+/* A view that only shows annotations has no toolbar: the EEG takes the row it would have had. */
+.view.annotate.view-only { grid-template-rows: auto minmax(0, 1fr) auto; }
 .ws-revision {
   display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; min-width: 0;
   background: var(--accent-soft); border-bottom: 1px solid var(--hairline); border-left: 3px solid var(--accent);
