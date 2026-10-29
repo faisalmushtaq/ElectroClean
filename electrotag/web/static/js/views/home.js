@@ -49,7 +49,8 @@ function continueContent(app, cont) {
 
 /** The progress card: done of assigned with a thin bar, the time worked, today, and the time left. */
 function progressCard(p) {
-  const pc = p.total ? Math.round((p.done / p.total) * 100) : 0;
+  const finished = p.finished ?? p.done;
+  const pc = p.total ? Math.round((finished / p.total) * 100) : 0;
   const capitalised = (t) => t.charAt(0).toUpperCase() + t.slice(1);
   const stat = (value, caption, name) => h('div.stat', { 'data-stat': name }, h('p.stat-value', {}, value), h('p.caption', {}, caption));
   const left = !p.left ? 'Nothing left to do'
@@ -62,10 +63,10 @@ function progressCard(p) {
     p.doneToday ? `${p.doneToday} recording${p.doneToday === 1 ? '' : 's'} finished` : null].filter(Boolean).join(', ');
   return h('section.card.progress-card', { 'aria-label': 'Your progress' },
     h('div.card-head', {}, h('h2', {}, 'Your progress'), h('span.caption', {}, `${pc}% done`)),
-    h('div.progress', { role: 'progressbar', 'aria-label': 'Recordings done', 'aria-valuemin': '0', 'aria-valuemax': String(p.total), 'aria-valuenow': String(p.done) },
+    h('div.progress', { role: 'progressbar', 'aria-label': 'Recordings done', 'aria-valuemin': '0', 'aria-valuemax': String(p.total), 'aria-valuenow': String(finished) },
       h('div.progress-bar', { style: { width: `${pc}%` } })),
     h('div.stats', {},
-      stat(`${p.done} of ${p.total}`, 'recordings done', 'done'),
+      stat(`${finished} of ${p.total}`, p.unusable ? `recordings done (${p.unusable} could not be annotated)` : 'recordings done', 'done'),
       stat(p.workedS > 0 ? capitalised(spanText(p.workedS)) : 'None yet', p.medianS ? `worked in all; ${spanText(p.medianS)} per recording (median)` : 'worked in all, pauses not counted', 'worked'),
       stat(left, leftCaption, 'left')),
     h('p.caption.today', { 'data-stat': 'today' }, `Today: ${today}.`));

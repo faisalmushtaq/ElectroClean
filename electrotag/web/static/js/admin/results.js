@@ -5,6 +5,7 @@
 import { h, clear } from '../ui/dom.js';
 import { MODES, STATUS, bytesText, programmeText, progressCounts, tsvText, whenText } from './model.js';
 import { actionButton, card, chip, dataTable, downloadBase64, downloadText, messageArea, recordingName, sectionHead } from './ui.js';
+import { reviewButton, reviewCount } from './reviews.js';
 
 export class ResultsSection {
   constructor(area) {
@@ -49,15 +50,18 @@ export class ResultsSection {
     this.table.update(this.rows);
   }
 
-  _showWork(r) {
+  async _showWork(r) {
+    try { this.reviews = (await this.area.read('reviews_list', { annotator_id: r.annotator_id })).reviews || []; } catch { this.reviews = []; }
     clear(this.work);
     this.work.append(card(`Work of ${r.annotator_id}`,
       dataTable([
         { title: 'Recording', render: (i) => recordingName(i.recording_id) },
         { title: 'Mode', render: (i) => (MODES[i.mode] || i.mode) + (i.context_id ? ` (${i.context_id})` : '') },
         { title: 'Status', render: (i) => chip(STATUS[i.status] || i.status, i.status === 'done' ? 'done' : i.status === 'in_progress' ? 'active' : '') },
+        { title: 'Reviews', num: true, render: (i) => reviewCount(this.reviews, r.annotator_id, i) },
         { title: 'Saved', num: true, render: (i) => String(i.attempts ?? 0) },
         { title: 'Last activity', render: (i) => whenText(i.last_activity, { never: '–' }) },
+        { title: '', cls: 'actions', render: (i) => reviewButton(this.area, r.annotator_id, i, { route: 'admin-results', params: null }) },
       ], r.items || [], { empty: 'Nothing is assigned to this person.', pageSize: 20 }),
       h('div.btn-row', {}, h('button.btn.quiet', { type: 'button', onclick: () => clear(this.work) }, 'Close'))));
     this.work.querySelector('h2').tabIndex = -1;

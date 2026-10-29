@@ -114,6 +114,8 @@ export class SettingsSection {
     idlePause.name = 'idle_pause_minutes';
     const coverage = checkbox('Before Save and Finish, list the parts of the recording that have not been on the screen', (an.coverage_check ?? 'warn') !== 'off');
     const revisions = checkbox('Let annotators revise recordings they have finished', an.allow_revisions !== false);
+    const reviews = checkbox('Let administrators review saved recordings (Agree, Caveat or Comment on each annotation)', an.allow_reviews !== false);
+    const showReviews = checkbox('Show reviews to the annotators whose work was reviewed (off: blind reviews)', an.show_reviews_to_annotators !== false);
     // game elements
     const games = checkbox('Show goals, milestones and the team\'s progress on the home page', gm.enabled !== false);
     const board = checkbox('Show an anonymised leaderboard (pseudonyms only)', gm.leaderboard !== false);
@@ -149,7 +151,8 @@ export class SettingsSection {
         annotation: { quick_labels: chosen, min_duration_samples: parseNumber(shortest.value, 'Shortest annotation', { min: 1, integer: true }),
           break_reminder_minutes: parseNumber(breakAfter.value, 'Break reminder after', { min: 0, max: 240 }),
           idle_pause_minutes: parseNumber(idlePause.value, 'Pause after', { min: 0, max: 60 }),
-          coverage_check: coverage.input.checked ? 'warn' : 'off', allow_revisions: revisions.input.checked },
+          coverage_check: coverage.input.checked ? 'warn' : 'off', allow_revisions: revisions.input.checked,
+          allow_reviews: reviews.input.checked, show_reviews_to_annotators: showReviews.input.checked },
         gamification: { enabled: games.input.checked, leaderboard: board.input.checked, leaderboard_viewed_only: boardFull.input.checked },
         logging: { interactions: interactions.input.checked, pointer_hz: parseNumber(pointer.value, 'Pointer samples per second', { min: 0, max: 60 }),
           idle_after_s: parseNumber(idle.value, 'Idle after', { min: 5, max: 3600 }) },
@@ -197,6 +200,8 @@ export class SettingsSection {
         field('Shortest annotation (samples)', shortest),
         revisions,
         h('p.caption', {}, 'A revision is saved as a new version beside the earlier ones, which are kept unchanged; analyses use the latest version.'),
+        reviews, showReviews,
+        h('p.caption', {}, 'A review is kept as a record of its own: it never changes the saved annotations, and the agreement analyses do not use it.'),
         h('h3', {}, 'Long sessions'),
         h('p.caption', {}, 'The time worked on a recording is research data: it leaves out the time an annotator is paused.'),
         h('div.form-grid', {},

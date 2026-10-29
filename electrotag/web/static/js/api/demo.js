@@ -18,6 +18,7 @@ import {
 import { ApiError } from './http.js';
 import { DEMO_NOTICE } from './notice.js';
 import { DemoAdmin } from './demo_admin.js';
+import { DemoFeedback } from './demo_feedback.js';
 
 export { DEMO_NOTICE };
 import * as rules from '../training/rules.js';
@@ -148,7 +149,7 @@ function viewedSeconds(viewed) { return Math.round(coveredS(fromDraft(viewed, In
 const LABELS = new Map(CATALOGUE.labels.map((l) => [l.label, l]));
 
 function emptyState() {
-  return { version: 1, drafts: {}, done: {}, submissions: [], guided: {}, practice: {}, quiz: {}, records: {} };
+  return { version: 1, drafts: {}, done: {}, submissions: [], guided: {}, practice: {}, quiz: {}, records: {}, problems: {}, unusable: {}, reviews: [] };
 }
 
 // ------------------------------------------------------------ game elements
@@ -202,6 +203,7 @@ export class DemoBackend {
     this.health = { ok: true, version: 'web', study: 'Demonstration', demo: true };
     this.state = { ...emptyState(), ...(storage.get(STATE_KEY, null) || {}) };
     this._admin = new DemoAdmin(this);
+    this.feedback = new DemoFeedback(this); // problem reports and reviews (demo_feedback.js)
     const saved = tokens.get(TOKEN_KEY, null);
     const user = saved ? this._admin.user(saved.annotator_id) : null;
     this.annotatorId = user && user.status === 'active' ? user.annotator_id : null;
@@ -426,6 +428,7 @@ export class DemoBackend {
   _status(aid, a) {
     const key = this._key(aid, a.rid, a.mode, a.context_id);
     if (this.state.done[key]) return 'done';
+    if (this.feedback.isUnusable(key)) return 'unusable';
     if (this.state.drafts[key]) return 'in_progress';
     if (a.mode === 'guided' && this.state.guided[`${aid}|${a.rid}`]?.index > 0) return 'in_progress';
     return 'todo';
@@ -459,6 +462,7 @@ export class DemoBackend {
         draft: draft ? { elapsed_s: Number(draft.elapsed_s) || 0, n_annotations: (draft.annotations || []).length,
           viewed_s: viewedSeconds(draft.viewed), saved_at: draft.saved_at || null } : null,
         ...this._history(aid, a),
+        problem: this.feedback.problemOf(aid, a),
       };
     });
     return { items, next: this._next(aid) };
@@ -555,7 +559,7 @@ export class DemoBackend {
         r.file_name === body.file_name && JSON.stringify(r.manifest.ch_names) === JSON.stringify(body.ch_names || []));
       if (reg) found = { reg, exact: false };
     }
-    const base = { recording_id: null, mode: 'standard', context_id: '', manifest: null, draft: null, differences: [], revision: null };
+    const base = { recording_id: null, mode: 'standard', context_id: '', manifest: null, draft: null, differences: [], revision: null, saved: null };
     if (!found) {
       return { ...base, status: 'unknown',
         message: 'This file is not one of the recordings of this study. You can still look at it and try the tools, ' +
@@ -573,9 +577,21 @@ export class DemoBackend {
         message: 'This recording belongs to a later stage of your training. Continue from your training path.' };
     }
     const key = this._key(aid, rid, mode, ctx);
+    if (this._status(aid, assignment) === 'unusable') {
+      return { ...base, status: 'unusable', recording_id: rid, mode, context_id: ctx,
+        message: `You reported that ${fileName} cannot be annotated, so it is set aside. If the study team returns it to your list, you can annotate it then. Choose another recording from your list.` };
+    }
     const repeatable = mode === 'practice' && !this._practicePassed(aid);
     let draft = this.state.drafts[key] || null;
     let revision = null;
+    if (this.state.done[key] && !repeatable && body.view_saved === true && mode === 'standard') {
+      // to read the feedback on it: the latest saved version, read only
+      const last = this._attempts(key).pop();
+      const manifest = found.spec ? { ...this._manifest(found.spec), fingerprint: found.fp } : this._admin.publicManifestOf(found.reg);
+      return { ...base, status: found.exact ? 'matched' : 'matched_metadata', recording_id: rid, mode, context_id: ctx, manifest,
+        message: `This is ${fileName}. Your latest saved version opens to read, with the feedback on it.`,
+        saved: { version: last.attempt, saved_at: last.saved_at, annotations: last.annotations.map((a) => ({ ...a, channels: [...a.channels] })) } };
+    }
     if (this.state.done[key] && !repeatable) {
       const saved = this._revisable(aid, rid, mode, ctx);
       if (!(body.revise === true && saved)) {
@@ -608,6 +624,7 @@ export class DemoBackend {
     const aid = this._aid();
     const saved_at = nowLocalIso();
     const key = this._key(aid, recordingId, mode, contextId);
+    this._refuseUnusable(key, recordingId);
     const record = { ...draft, saved_at };
     delete record.revises;
     if (this.state.done[key] && !(mode === 'practice' && !this._practicePassed(aid))) {
@@ -651,6 +668,7 @@ export class DemoBackend {
     const assignment = this._assignmentsFor(aid).find((a) => a.rid === rid && a.mode === body.mode);
     if (!info || !assignment) throw new ApiError(404, 'not_found', 'This recording is not one of yours.');
     const key = this._key(aid, rid, body.mode, body.context_id);
+    this._refuseUnusable(key, rid);
     let revision = null;
     if (this.state.done[key] && !(body.mode === 'practice' && !this._practicePassed(aid))) {
       if (body.revises === undefined || body.revises === null) throw new ApiError(409, 'already_done', 'This recording has already been saved.');
@@ -698,6 +716,19 @@ export class DemoBackend {
       revision: revision ? { version: attempt, revises: revision.revises_version } : null,
     };
   }
+
+  // ------------------------------------------- problem reports and reviews
+  _refuseUnusable(key, rid) {
+    if (this.feedback.isUnusable(key)) {
+      throw new ApiError(409, 'unusable', `You reported that ${rid} cannot be annotated, so it is set aside. If the study team returns it to your list, you can annotate it then.`);
+    }
+  }
+
+  /** POST /problems: a problem with a recording, kept once however often it is sent (demo_feedback.js). */
+  async reportProblem(body) { return this.feedback.report(body || {}); }
+
+  /** GET /me/reviews: the reviews of this annotator's saved work, when the study shows them. */
+  async myReviews() { return this.feedback.mine(); }
 
   // ------------------------------------------------------------ achievements
   /** GET /me/achievements (docs/web/api.md, "Achievements"), from the demonstration's own state. */
@@ -1144,6 +1175,9 @@ export class DemoBackend {
           correct_label: (QUIZ.items.find((it) => it.item_id === item_id) || {}).correct_label || null })),
         score: s.score || quizScore(QUIZ.items, s.answers),
       })),
+      // as the results zip's problem_reports/ and reviews/ (docs/file_formats.md)
+      problem_reports: Object.values(this.state.problems || {}),
+      reviews: [...(this.state.reviews || [])],
     };
   }
 

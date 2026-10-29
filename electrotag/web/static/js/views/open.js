@@ -31,9 +31,13 @@ export function filesForRecording(files, expectedName = null) {
 }
 
 export class OpenView {
-  constructor(app, { expected = null, revise = false } = {}) {
+  constructor(app, { expected = null, revise = false, purpose = null } = {}) {
     this.app = app;
     this.expected = expected;
+    /** Opening the file for something other than annotating it: {kind: 'review' | 'feedback', route, title, note, onBack} (app.js). */
+    this.purpose = purpose;
+    /** The route this view is shown under (an administrator's review stays in the admin area's routes). */
+    this.route = (purpose && purpose.route) || 'open';
     /** Opening a finished recording again to revise it (POST /match with revise). */
     this.revise = Boolean(revise);
     const b = app.backend;
@@ -74,9 +78,10 @@ export class OpenView {
     }
     this.el = h('div.view.open', { 'data-view': 'open' }, appHeader(app),
       h('main.page.narrow', {},
-        h('button.btn.quiet.back', { type: 'button', onclick: () => app.goBack() }, icon('arrow-left'), 'Back'),
-        h('h1', {}, name ? `${this.revise ? 'Revise' : 'Open'} ${name}` : 'Open a recording from your computer'),
+        h('button.btn.quiet.back', { type: 'button', onclick: () => (purpose && purpose.onBack ? purpose.onBack() : app.goBack()) }, icon('arrow-left'), 'Back'),
+        h('h1', {}, purpose && purpose.title ? purpose.title : name ? `${this.revise ? 'Revise' : 'Open'} ${name}` : 'Open a recording from your computer'),
         this.revise ? h('p.note', {}, 'You finished this recording before. It opens with your latest saved annotations; submitting the revision saves a new version and keeps the earlier ones.') : null,
+        purpose && purpose.note ? h('p.note', {}, purpose.note) : null,
         h('p.subtitle', {}, 'The recording is read here, in your browser, and is never uploaded. Only its fingerprint (a checksum of the file) is sent to the study, to recognise it.'),
         h('p', {}, FORMAT_HINT[format] || 'Choose an EDF or BDF file, or the .vhdr, .vmrk and .eeg files of a BrainVision recording (or their folder).'),
         h('section.card', {}, this.drop, this.device.el, this.links.el, this.steps, this.result),
@@ -94,7 +99,7 @@ export class OpenView {
   /** A copy of the expected recording kept on this device (js/views/device.js) opens by itself. */
   async openKeptCopy(recordingId) {
     const got = await keptCopy(this.app, recordingId);
-    if (!got || this.app.openView !== this || this.app.route !== 'open') return;
+    if (!got || this.app.openView !== this || this.app.route !== this.route) return;
     if (got.problem) { this.showMessage(got.problem, [this.chooseAgainButton()]); return; }
     this.handle(got.files, false, { kind: 'device', keep: false, sha256: got.meta.sha256 });
   }
@@ -105,7 +110,7 @@ export class OpenView {
   }
 
   async handle(files, fromFolder = false, source = null) {
-    if (this.app.openView !== this || this.app.route !== 'open') return; // a file that arrived after the view was left
+    if (this.app.openView !== this || this.app.route !== this.route) return; // a file that arrived after the view was left
     source = source || { kind: 'chosen', keep: Boolean(this.device.box && this.device.box.checked) };
     clear(this.result);
     let chosen = files;

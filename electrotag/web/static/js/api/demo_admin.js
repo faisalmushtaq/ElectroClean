@@ -119,7 +119,8 @@ export function defaultSettings() {
     channels: { hide: [...DEFAULT_HIDE], types: {} },
     selection: { strategy: 'manual', seed: null },
     logging: { ...DEFAULT_LOGGING },
-    annotation: { min_duration_samples: 1, ...DEFAULT_ANNOTATION, allow_revisions: true, quick_labels: [...DEFAULT_QUICK_LABELS] },
+    annotation: { min_duration_samples: 1, ...DEFAULT_ANNOTATION, allow_revisions: true, allow_reviews: true, show_reviews_to_annotators: true,
+      quick_labels: [...DEFAULT_QUICK_LABELS] },
     loading: { apply_channel_types_from_bids: true, show_bids_bad_channels: true },
     gamification: { ...DEFAULT_GAMIFICATION },
   };
@@ -132,6 +133,7 @@ export const DEFAULT_GAMIFICATION = Object.freeze({ enabled: true, leaderboard: 
 function withNewSettings(settings) {
   if (!settings.gamification) settings.gamification = { ...DEFAULT_GAMIFICATION };
   if (settings.annotation && settings.annotation.allow_revisions === undefined) settings.annotation.allow_revisions = true;
+  for (const k of ['allow_reviews', 'show_reviews_to_annotators']) if (settings.annotation && settings.annotation[k] === undefined) settings.annotation[k] = true;
   return settings;
 }
 
@@ -314,7 +316,8 @@ export class DemoAdmin {
       // a demonstration saved before the comfort settings existed takes their defaults
       annotation: { min_duration_samples: st.annotation.min_duration_samples, quick_labels: [...st.annotation.quick_labels],
         ...Object.fromEntries(Object.entries(DEFAULT_ANNOTATION).map(([k, d]) => [k, st.annotation[k] ?? d])),
-        allow_revisions: st.annotation.allow_revisions !== false },
+        allow_revisions: st.annotation.allow_revisions !== false, allow_reviews: st.annotation.allow_reviews !== false,
+        show_reviews_to_annotators: st.annotation.show_reviews_to_annotators !== false },
       gamification: { enabled: st.gamification.enabled !== false,
         leaderboard: st.gamification.enabled !== false && st.gamification.leaderboard !== false },
       logging,
@@ -555,6 +558,8 @@ export class DemoAdmin {
         done: items.filter((i) => i.status === 'done').length,
         in_progress: items.filter((i) => i.status === 'in_progress').length,
         todo: items.filter((i) => i.status === 'todo').length,
+        unusable: items.filter((i) => i.status === 'unusable').length,
+        ...this.b.feedback.counts(),
       },
       recent: [...this.s.audit].reverse().slice(0, 10),
       last_saved: [...subs].reverse().slice(0, 10).map((s) => ({ annotator_id: s.annotator_id, recording_id: s.recording_id, mode: s.mode,
@@ -1095,7 +1100,7 @@ export class DemoAdmin {
     };
     const elapsedOf = (s) => s.elapsed_s;
     const items = this._items().filter((i) => counted(i.mode));
-    const totals = { assigned: 0, done: 0, in_progress: 0, todo: 0 };
+    const totals = { assigned: 0, done: 0, in_progress: 0, todo: 0, unusable: 0 };
     const recordings = new Map();
     let draftS = 0;
     const people = this.s.users.map((u) => {
@@ -1103,7 +1108,7 @@ export class DemoAdmin {
       const active = u.status === 'active';
       const mine = items.filter((i) => i.annotator_id === aid);
       const saved = subs.filter((s) => s.annotator_id === aid);
-      const counts = { done: 0, in_progress: 0, todo: 0 };
+      const counts = { done: 0, in_progress: 0, todo: 0, unusable: 0 };
       for (const i of mine) counts[i.status] = (counts[i.status] || 0) + 1;
       let inProgressS = 0;
       const last = [u.last_seen || '', ...this.s.visits.filter((v) => v.annotator_id === aid).map((v) => v.started_at || '')];
@@ -1117,16 +1122,16 @@ export class DemoAdmin {
           const key = `${scope}|${i.recording_id}`;
           if (!recordings.has(key)) {
             const rec = this.record(scope, i.recording_id);
-            recordings.set(key, { scope, recording_id: i.recording_id, file_name: rec ? rec.file_name : i.recording_id.split('/').pop(), assigned: 0, done: 0, in_progress: 0 });
+            recordings.set(key, { scope, recording_id: i.recording_id, file_name: rec ? rec.file_name : i.recording_id.split('/').pop(), assigned: 0, done: 0, in_progress: 0, unusable: 0 });
           }
           const r = recordings.get(key);
           r.assigned += 1;
-          if (i.status === 'done' || i.status === 'in_progress') r[i.status] += 1;
+          if (i.status === 'done' || i.status === 'in_progress' || i.status === 'unusable') r[i.status] += 1;
         }
       }
       if (active) {
         totals.assigned += mine.length;
-        for (const k of ['done', 'in_progress', 'todo']) totals[k] += counts[k];
+        for (const k of ['done', 'in_progress', 'todo', 'unusable']) totals[k] += counts[k];
         draftS += inProgressS;
       }
       const times = saved.map(elapsedOf).filter((t) => t !== null);
@@ -1145,7 +1150,8 @@ export class DemoAdmin {
         min_annotations: n.length ? Math.min(...n) : null, max_annotations: n.length ? Math.max(...n) : null, saved: rows.length });
     }
     const times = subs.map(elapsedOf).filter((t) => t !== null);
-    const remaining = totals.assigned - totals.done;
+    // A recording that cannot be annotated is finished for its annotator, but it is not done.
+    const remaining = totals.assigned - totals.done - totals.unusable;
     const recent = since(subs, PACE_DAYS);
     const pace = recent / PACE_DAYS;
     let projection = { status: 'not_enough', date: null };
@@ -1156,12 +1162,27 @@ export class DemoAdmin {
       generated_at: nowLocalIso(), work, today, days,
       totals: { ...totals, share_done: totals.assigned ? totals.done / totals.assigned : null, remaining,
         annotator_hours: (times.reduce((a, b) => a + b, 0) + draftS) / 3600, median_minutes: m === null ? null : m / 60,
-        done_7d: since(subs, 7), done_30d: since(subs, 30), pace_per_day: pace, pace_days: PACE_DAYS, projection },
+        done_7d: since(subs, 7), done_30d: since(subs, 30), pace_per_day: pace, pace_days: PACE_DAYS, projection, ...this.b.feedback.counts() },
       daily: daily(subs),
       annotators: people,
       recordings: [...recordings.values()].sort((a, b) => (a.scope !== 'study') - (b.scope !== 'study') || a.scope.localeCompare(b.scope) || a.recording_id.localeCompare(b.recording_id)),
     };
   }
+
+  // ----------------------------------------------- problem reports and reviews (demo_feedback.js)
+  op_problems_list(body) { return this.b.feedback.op_problems_list(body); }
+
+  op_problem_resolve(body) { return this.b.feedback.op_problem_resolve(body); }
+
+  op_problem_return(body) { return this.b.feedback.op_problem_return(body); }
+
+  op_problem_reassign(body) { return this.b.feedback.op_problem_reassign(body); }
+
+  op_saved_attempt_get(body) { return this.b.feedback.op_saved_attempt_get(body); }
+
+  op_review_save(body) { return this.b.feedback.op_review_save(body); }
+
+  op_reviews_list(body) { return this.b.feedback.op_reviews_list(body); }
 
   // ---------------------------------------------------------------- records
   op_audit(body) {

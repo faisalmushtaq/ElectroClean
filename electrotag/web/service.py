@@ -448,13 +448,15 @@ class StudyService:
         items = self.work_items(user)
         nxt = self._next(user, items)
         revise = body.get("revise") is True
+        view_saved = body.get("view_saved") is True
         exact = self.store.manifests_by_fingerprint(sha, size)
         if exact:
-            return self._match_answer(user, items, exact, "matched", [], nxt, revise=revise)
+            return self._match_answer(user, items, exact, "matched", [], nxt, revise=revise, view_saved=view_saved)
         candidates = self._metadata_matches(body)
         if len(candidates) == 1:
             m, differences = candidates[0]
-            return self._match_answer(user, items, [m], "matched_metadata", differences, nxt, revise=revise)
+            return self._match_answer(user, items, [m], "matched_metadata", differences, nxt, revise=revise,
+                                      view_saved=view_saved)
         if len(candidates) > 1:
             return self._answer("unknown", "This file looks like several recordings of the study and cannot be told "
                                 "apart from them. Open the exact file you were given, or ask your study administrator.")
@@ -464,7 +466,7 @@ class StudyService:
     @staticmethod
     def _answer(status: str, message: str, **fields: Any) -> dict[str, Any]:
         out = {"status": status, "message": message, "recording_id": None, "mode": None, "context_id": None,
-               "manifest": None, "draft": None, "differences": [], "repeat": False, "revision": None}
+               "manifest": None, "draft": None, "differences": [], "repeat": False, "revision": None, "saved": None}
         out.update(fields)
         return out
 
@@ -503,7 +505,8 @@ class StudyService:
         return out
 
     def _match_answer(self, user: User, items: list[WorkItem], manifests: list[dict[str, Any]], status: str,
-                      differences: list[str], nxt: WorkItem | None, *, revise: bool = False) -> dict[str, Any]:
+                      differences: list[str], nxt: WorkItem | None, *, revise: bool = False,
+                      view_saved: bool = False) -> dict[str, Any]:
         keys = {(m["scope"], m["recording_id"]) for m in manifests}
         mine = [i for i in items if (self.scope_for(i.mode, i.context_id), i.recording_id) in keys]
         rid = manifests[0]["recording_id"]
@@ -520,6 +523,15 @@ class StudyService:
         if not open_items:
             i = mine[0]
             revisable = next((x for x in mine if self.can_revise(x)), None)
+            viewable = next((x for x in mine if x.mode == "standard" and x.saved is not None), None)
+            if view_saved and viewable is not None:  # to read the feedback on it (docs/web/api.md, "Reviews")
+                return self._answer(status, f"Recording found: {viewable.recording_id}. Your latest saved version opens "
+                                    "to read, with the feedback on it.", recording_id=viewable.recording_id,
+                                    mode=viewable.mode, context_id=viewable.context_id,
+                                    manifest=self.public_manifest(viewable.manifest), differences=differences,
+                                    saved={"version": int((viewable.saved or {}).get("version") or 1),
+                                           "saved_at": (viewable.saved or {}).get("saved_at"),
+                                           "annotations": self.saved_annotations(user, viewable)})
             if revise and revisable is not None:
                 return self._revision_answer(user, revisable, status, differences)
             hint = (" To change your annotations, open it from your history with Open to revise."
