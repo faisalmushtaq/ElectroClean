@@ -17,6 +17,10 @@ test('keys keep studies, backends and annotators apart, and are safe as folder n
   assert.notEqual(a, ownerKey({ backend: 'firebase', studyId: 'pilot', annotatorId: 'A02' }));
   assert.notEqual(a, ownerKey({ backend: 'server', studyId: 'pilot', annotatorId: 'A01' }));
   assert.notEqual(a, ownerKey({ backend: 'firebase', studyId: 'main', annotatorId: 'A01' }));
+  // two study servers whose studies have the same ID, opened from the same page
+  const one = ownerKey({ backend: 'server', server: 'https://eeg.one.example', studyId: 'pilot', annotatorId: 'A01' });
+  assert.notEqual(one, ownerKey({ backend: 'server', server: 'https://eeg.two.example', studyId: 'pilot', annotatorId: 'A01' }));
+  assert.equal(one.split('/').length, 2);
   // every part is one folder: no slashes, never "." or ".."
   for (const s of ['..', '.', 'a/b', 'a\\b', '', 'x*y', 'jo.bloggs@uni.ac.uk']) {
     const seg = safeSegment(s);

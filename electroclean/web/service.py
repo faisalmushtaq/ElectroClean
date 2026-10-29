@@ -40,6 +40,9 @@ STAMP_RE = re.compile(r"^[0-9T:.+\-Z ]{0,40}$")
 SHA_RE = re.compile(r"^[0-9a-f]{64}$")
 SESSION_RE = re.compile(r"^[0-9a-f]{32}$")
 MAX_ANNOTATIONS = 20000
+#: The most time worked on one recording that is recorded (a week): the browser's clock pauses when the
+#: annotator is away, so more is a fault or a forged figure, and it would distort the study's totals.
+MAX_ELAPSED_S = 7 * 24 * 3600.0
 #: At most this many [start_s, end_s] stretches of a draft's ``viewed`` (the browser keeps fewer).
 MAX_VIEWED = 5000
 #: What annotators are told when the study records how they use ElectroClean (as on the desktop).
@@ -581,8 +584,10 @@ class StudyService:
         if view is not None and not isinstance(view, dict):
             raise ApiError(422, "invalid_draft", "draft.view must be an object")
         elapsed = draft.get("elapsed_s", 0)
-        if isinstance(elapsed, bool) or not isinstance(elapsed, (int, float)) or not math.isfinite(elapsed):
+        if (isinstance(elapsed, bool) or not isinstance(elapsed, (int, float)) or not math.isfinite(elapsed)
+                or elapsed < 0):
             raise ApiError(422, "invalid_draft", "draft.elapsed_s must be a number of seconds")
+        elapsed = min(float(elapsed), MAX_ELAPSED_S)
         viewed = parse_viewed(draft.get("viewed"))
         saved_at = now_local_iso()
         record = {"schema": "electroclean.web_draft", "recording_id": item.recording_id, "mode": item.mode,
@@ -664,6 +669,10 @@ class StudyService:
             raise ApiError(400, "bad_request", "sha256 (the checksum of the annotated file) is missing")
         elapsed = _number(info.get("elapsed_s", 0.0), "session.elapsed_s", minimum=0.0)
         warnings: list[str] = []
+        if elapsed > MAX_ELAPSED_S:  # kept, never refused: the annotations are what matters
+            warnings.append(f"The browser reported {elapsed:.0f} s of work on this recording, more than a week; "
+                            f"{MAX_ELAPSED_S:.0f} s is recorded instead.")
+            elapsed = MAX_ELAPSED_S
         filters, shown_filters = self._filters(info.get("filters"), warnings)
         loaded = ManifestRecording(item.manifest, display_filters=shown_filters)
         reg_sha, _size = fingerprint_of(item.manifest)

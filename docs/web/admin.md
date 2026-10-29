@@ -115,7 +115,9 @@ opens, the card says that the invitation could not be checked and offers Try aga
 for the browser tab; a link that has expired, been used or been replaced says so, with the way to
 sign in. The link works once. It stops working when it
 has been used, when it expires (after 14 days unless you choose 7, 30 or 90), when you make a newer
-link for the same person, when you withdraw it, and when the account is switched off or removed. On
+link for the same person, when you withdraw it, when you reset the person's password or make them an
+administrator, and when the account is switched off or removed. Administrators are given a password
+rather than a link, because a link travels by email and must not open the admin area. On
 a study server the study keeps only a fingerprint of each link (a SHA-256 hash of its random token),
 so a link is shown only when it is made; if one was not copied, make a new one, and the old one
 stops working. The study's records note every link made and withdrawn, never the link itself.

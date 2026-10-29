@@ -80,7 +80,8 @@ not appear. Recordings of the training programme keep the programme's own rules.
 ## Progress and milestones
 
 Many studies also show Goals and milestones beside your progress (your study can switch them off).
-It shows the whole team's progress through the recordings it was given and the number of
+It shows the whole team's progress through the recordings it was given (except while you share the
+study with just one other person, whose figures it would otherwise give away) and the number of
 annotations you have made, for interest only. You can set yourself a goal for the week (a number of
 recordings, counted from Monday), and a bar shows how far you are. Each milestone's badge says what
 it stands for when you point at it or use a screen reader: a number for recordings saved, a number

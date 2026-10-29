@@ -170,6 +170,26 @@ test('demonstration: a new link, withdrawing it and switching the account off en
   assert.equal((await b.admin('users_list')).users.find((u) => u.annotator_id === 'A12').invitation.state, 'expired');
 });
 
+test('demonstration: administrators are never invited, and a new password or role ends a link', async () => {
+  const b = await demo();
+  await assert.rejects(() => b.admin('user_add', { annotator_id: 'B01', role: 'admin', invite: true }), (e) => e.code === 'admin_account' && e.status === 409);
+  assert.ok(!(await b.admin('users_list')).users.some((u) => u.annotator_id === 'B01'));
+  await assert.rejects(() => b.admin('user_invite', { annotator_id: 'ADMIN' }), (e) => e.code === 'admin_account');
+  await b.admin('user_add', { annotator_id: 'A14' });
+  const first = await b.admin('user_invite', { annotator_id: 'A14' });
+  await b.admin('user_update', { annotator_id: 'A14', role: 'admin' });
+  await assert.rejects(() => b.inviteAccept(first.invite_token, 'a long new password'), (e) => e.code === 'invite_unknown');
+  await b.admin('user_update', { annotator_id: 'A14', role: 'annotator' });
+  const second = await b.admin('user_invite', { annotator_id: 'A14' });
+  b._admin.user('A14').role = 'admin'; // changed behind the admin area's back
+  await assert.rejects(() => b.inviteCheck(second.invite_token), (e) => e.code === 'invite_unknown');
+  b._admin.user('A14').role = 'annotator';
+  const third = await b.admin('user_invite', { annotator_id: 'A14' });
+  await b.admin('user_reset_password', { annotator_id: 'A14' });
+  await assert.rejects(() => b.inviteCheck(third.invite_token), (e) => e.code === 'invite_unknown');
+  assert.equal((await b.admin('users_list')).users.find((u) => u.annotator_id === 'A14').invitation.state, 'revoked');
+});
+
 test('demonstration: stats counts the work done, its time and annotations, by person, recording and day', async () => {
   const b = await demo('ADMIN');
   const empty = await b.admin('stats');

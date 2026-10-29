@@ -167,13 +167,36 @@ def test_revisions_and_achievements_on_firestore(service: StudyService, recordin
     ok(service, "submit", A02, submission(recordings, SUB1, [EMG]))
     out = ok(service, "achievements", A01, {"goal_per_week": 4, "leaderboard_hidden": False})
     assert out["counters"]["done"] == 1 and out["counters"]["annotations"] == 2 and out["goal"]["per_week"] == 4
-    assert out["viewed_in_full"] == 1 and out["team"]["done"] == 2
+    assert out["viewed_in_full"] == 1
+    assert out["team"] == {"done": None, "assigned": None, "people": 2}  # it would give A02's figures away
     lb = out["leaderboard"]
     assert lb["people"] == 2 and lb["rows"] == [] and " " in lb["you"]["name"]
     again = StudyService(FirestoreStore(firestore_client(PROJECT), service.store.study_id))
     assert ok(again, "achievements", A01)["leaderboard"]["you"]["name"] == lb["you"]["name"]
     assert "A02" not in json.dumps(out)
     assert ok(service, "achievements", A02)["leaderboard"]["you"]["name"] != lb["you"]["name"]
+
+
+@pytest.mark.parametrize("one_after_the_other", [False, True])
+def test_two_revisions_past_the_version_check_save_one_attempt_on_firestore(
+        service: StudyService, recordings: Path, monkeypatch: pytest.MonkeyPatch, one_after_the_other: bool) -> None:
+    from tests.web_helpers import race_revisions
+
+    ok(service, "submit", A01, submission(recordings, SUB1, [BLINK]))
+    first = service.store.saved_files("A01", SUB1, "standard", "")
+    bodies = [{**submission(recordings, SUB1, anns), "revises": 1} for anns in ([BLINK, EMG], [EMG])]
+    answers = race_revisions(service, A01, bodies, monkeypatch, one_after_the_other=one_after_the_other)
+    saved = [a for a in answers if isinstance(a, dict)]
+    refused = [a for a in answers if isinstance(a, ApiError)]
+    assert len(saved) == 1 and saved[0]["attempt"] == 2 and len(refused) == 1, answers
+    # The attempt's document is created only if it does not exist yet, and a save that starts after
+    # another finished finds the attempt number taken.
+    assert refused[0].status == 409 and refused[0].code in ("already_done", "already_revised")
+    entries = [e for e in service.store.completion_entries("A01") if e["recording_id"] == SUB1]
+    assert sorted(e["output_basename"] for e in entries) == ["sub-001_task-rest_eeg_annotator-A01",
+                                                             "sub-001_task-rest_eeg_annotator-A01_attempt-02"]
+    root_files = service.store.submission_files("A01")
+    assert len(root_files) == 2 and service.store.saved_files("A01", SUB1, "standard", "") != first
 
 
 def finish_guided(service: StudyService, recordings: Path, rid: str) -> dict[str, Any]:

@@ -17,7 +17,8 @@ const DEFAULT_PREFS = Object.freeze({ keepLinks: true, keepChosen: false, remove
 export function deviceStore(app) {
   if (!app.me || !app.backend) return null;
   const study = app.me.study || {};
-  const owner = ownerKey({ backend: app.backend.kind || '', studyId: study.study_id || study.name || '', annotatorId: app.me.annotator_id || '' });
+  const owner = ownerKey({ backend: app.backend.kind || '', server: app.backend.kind === 'server' ? app.backend.server || '' : '',
+    studyId: study.study_id || study.name || '', annotatorId: app.me.annotator_id || '' });
   if (!app._deviceStore || app._deviceStore.owner !== owner) app._deviceStore = new DeviceStore({ owner });
   return app._deviceStore;
 }

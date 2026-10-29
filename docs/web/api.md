@@ -64,7 +64,8 @@ Draft = {"annotations": [Annotation], "view": {"start_s": 12.0, "duration_s": 10
          "revises": 1}                // only in the draft of a revision: the version being revised
 ```
 
-A draft's `elapsed_s` is the time worked so far, without the time paused. `viewed` lists the
+A draft's `elapsed_s` is the time worked so far, without the time paused (at least 0, or 422
+`invalid_draft`; more than a week is kept as a week). `viewed` lists the
 stretches of the recording that have been on the screen, as `[start_s, end_s]` pairs in seconds
 (sorted and merged by the browser; at most 5000 pairs, each with `0 <= start_s <= end_s`, or 422
 `invalid_draft`). A draft without `viewed` counts as nothing viewed.
@@ -94,7 +95,8 @@ once, and asks two calls that need no sign-in, because the token is the proof:
 the invitation is used, and the person is signed in.
 
 A token that was never made, was replaced by a newer link or was withdrawn, or
-whose account is switched off or removed, is 404 `invite_unknown`; a used one
+whose account was given a new password, made an administrator, switched off or
+removed, is 404 `invite_unknown`; a used one
 409 `invite_used`; an expired one 409 `invite_expired`; each with a message in
 plain words that says what to do. A password of fewer than 8 characters is 400
 `bad_password`. Unsuccessful attempts count towards the limit of `POST /login`
@@ -228,7 +230,10 @@ be revised (409 `already_done` otherwise).
 }
 ```
 
-`session.filters` gives the display filters used (`highpass_hz` or `notch_hz`
+`session.elapsed_s` is at least 0 (422 `invalid_session` otherwise); a figure of more than a
+week, which the browser's pausing clock cannot reach, is recorded as a week with a warning in the
+saved `_session.json`, so that one faulty figure cannot distort the study's totals, and the save
+goes ahead. `session.filters` gives the display filters used (`highpass_hz` or `notch_hz`
 null when that filter was off); when the study fixes the filters, the study's
 are recorded. `session.session_id` (optional, 32 hexadecimal characters, 400
 `bad_request` otherwise) is the browser's ID of the annotation session, the one
@@ -289,7 +294,7 @@ off, both answer `{"enabled": false, "leaderboard_enabled": false}`.
   "save_times": ["…"],                  // every save, revisions included (for streaks of days)
   "viewed_in_full": 9 | null,           // null when no saved recording reported what was viewed
   "goal": {"per_week": 10 | null},
-  "team": {"done": 640, "assigned": 1200, "people": 6},
+  "team": {"done": 640 | null, "assigned": 1200 | null, "people": 6},   // null: see below
   "leaderboard": null | {
     "ranked_by": "completed" | "viewed_in_full",
     "rows": [{"rank": 1, "name": "Steady Heron", "count": 54, "you": false}],   // the top ten
@@ -311,7 +316,9 @@ only by pseudonyms, an adjective and an animal chosen by an HMAC-SHA256 of the
 annotator ID keyed with a random secret of the study that the server keeps and
 never sends; it leaves out anyone who chose to be hidden, and it has no rows
 until at least `min_people` are on it, so that nobody can tell who the others
-are. No annotator ID is ever part of the answer.
+are. For the same reason `team.done` and `team.assigned` are null when exactly
+one other person has recordings, since the team's figures less one's own would
+then be that person's. No annotator ID is ever part of the answer.
 
 `GuidedSaved = {"summary": {"steps", "stars", "max_stars", "attempts", "failed_attempts", "shown", "time_s"},
 "message": "Recording saved: 14 of 18 stars (4.2 min)."}`.
@@ -470,10 +477,10 @@ study's own recordings have `"self_contained": false` and `"scope": "study"`.
 | `settings_get` | `{}` | `{"name", "settings": {"filters", "display", "channels", "selection", "logging", "annotation", "loading", "discovery", "gamification"}, "logging_notice", "logging_notice_is_default"}`: the effective values of the blocks of `electroclean_study.json` that a study may change |
 | `settings_update` | `{"name"?, "settings"?: {block: {key: value}}, "logging_notice"?}` | as `settings_get`. Each key given replaces that setting; the result is checked with ElectroClean's own settings code and refused with 400 `invalid_settings` and the reason (also for a block or key that cannot be changed). `"logging_notice": ""` goes back to ElectroClean's own notice |
 | `users_list` | `{}` | `{"users": [UserRecord]}` (disabled accounts too) |
-| `user_add` | `{"annotator_id", "display_name"?, "email"?, "role"?: "annotator", "password"?, "invite"?: false, "expires_days"?: 14}` | `{"user": UserRecord, "invite_link": str \| null, "temporary_password": str \| null}`, with `"invite_token", "expires_at"` when `invite` is true. On Firebase `email` is required (400 `email_required`), the Firebase Authentication user is created (or, for a person already in another study of the project, given this study) with the custom claims below, and `invite_link` lets the person choose a password when none is given. On the server a temporary password (three groups of four characters) is made when none is given; with `"invite": true` the account is made with an invitation instead (as `user_invite`), and nobody knows its first password. A password has 8 to 200 characters; a password and `invite` together are 400. 409 `user_exists`, 409 `email_in_use` |
+| `user_add` | `{"annotator_id", "display_name"?, "email"?, "role"?: "annotator", "password"?, "invite"?: false, "expires_days"?: 14}` | `{"user": UserRecord, "invite_link": str \| null, "temporary_password": str \| null}`, with `"invite_token", "expires_at"` when `invite` is true. On Firebase `email` is required (400 `email_required`), the Firebase Authentication user is created (or, for a person already in another study of the project, given this study) with the custom claims below, and `invite_link` lets the person choose a password when none is given. On the server a temporary password (three groups of four characters) is made when none is given; with `"invite": true` the account is made with an invitation instead (as `user_invite`), and nobody knows its first password. A password has 8 to 200 characters; a password and `invite` together are 400; `invite` for an administrator is 409 `admin_account`. 409 `user_exists`, 409 `email_in_use` |
 | `user_update` | `{"annotator_id", "display_name"?, "role"?, "status"?, "notes"?}` | `{"user": UserRecord}`; 404 `unknown_user`. Disabling ends the person's sessions at once and stops them signing in; on Firebase the role is also written into their claims. An administrator cannot demote or disable themselves (409 `self`) |
 | `user_reset_password` | `{"annotator_id"}` | `{"invite_link" \| null, "temporary_password" \| null}`: a new password link (Firebase) or a new temporary password (the server, which also ends every session of the account) |
-| `user_invite` | `{"annotator_id", "expires_days"?: 14}` | `{"invite_token": str \| null, "invite_link": str \| null, "expires_at": str \| null, "invitation": UserRecord.invitation}`. On the server a new single-use invitation: a random token (32 bytes) kept only as its SHA-256 hash with its expiry (1 to 90 days, 400 otherwise); any earlier invitation of the account stops working. The browser makes the private link from `invite_token`. On Firebase `invite_link` is Firebase Authentication's link to choose a password (the account needs an email address, 409 `no_email`) and its expiry is Firebase's own. 404 `unknown_user`; 409 `disabled` for an account that is switched off. Switching the account off or removing it ends its invitation |
+| `user_invite` | `{"annotator_id", "expires_days"?: 14}` | `{"invite_token": str \| null, "invite_link": str \| null, "expires_at": str \| null, "invitation": UserRecord.invitation}`. On the server a new single-use invitation: a random token (32 bytes) kept only as its SHA-256 hash with its expiry (1 to 90 days, 400 otherwise); any earlier invitation of the account stops working. The browser makes the private link from `invite_token`. On Firebase `invite_link` is Firebase Authentication's link to choose a password (the account needs an email address, 409 `no_email`) and its expiry is Firebase's own. 404 `unknown_user`; 409 `disabled` for an account that is switched off; 409 `admin_account` for an administrator (on every backend: an administrator is given a password). A new password (`user_reset_password`), making the account an administrator, switching it off or removing it ends its invitation |
 | `user_invite_revoke` | `{"annotator_id"}` | `{"invitation": UserRecord.invitation}`: the open invitation stops working at once; 409 `no_invitation` when there is none; 422 `cannot_revoke` on Firebase, where a link once made cannot be withdrawn (switch the account off instead) |
 | `user_remove` | `{"annotator_id"}` | `{}`: the account leaves the study with its assignments, programme, drafts and guided progress; its results and logs stay; not oneself (409 `self`). On Firebase the study is taken out of the person's claims, and a Firebase user who takes part in no other study is deleted |
 | `assignments_list` | `{"annotator_id"?}` | `{"items": [{"annotator_id", "recording_id", "mode", "context_id", "status", "attempts", "last_activity", "elapsed_s", "n_annotations", "saved_at"}]}` (what each person is given, the training programme's recordings included). `attempts` counts the saves (a revision is another attempt); `elapsed_s` is the time of every saved attempt together, or of the draft while the work is in progress; `n_annotations` and `saved_at` are those of the latest saved attempt by its number (null before one) |

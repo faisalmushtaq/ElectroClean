@@ -34,10 +34,11 @@ export function safeSegment(text) {
 
 /**
  * Whose copies these are: the study (with the kind of backend, so that the demonstration and a
- * real study never mix) and the annotator.
+ * real study never mix, and the study server's address, so that two servers whose studies have the
+ * same ID never mix either) and the annotator.
  */
-export function ownerKey({ backend = '', studyId = '', annotatorId = '' } = {}) {
-  return `${safeSegment(`${backend}:${studyId}`)}/${safeSegment(annotatorId)}`;
+export function ownerKey({ backend = '', server = '', studyId = '', annotatorId = '' } = {}) {
+  return `${safeSegment(`${backend}${server ? `@${server}` : ''}:${studyId}`)}/${safeSegment(annotatorId)}`;
 }
 
 /** The key of one kept recording: its owner and its fingerprint. */

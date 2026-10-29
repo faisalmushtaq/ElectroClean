@@ -16,7 +16,9 @@ The leaderboard shows pseudonyms (an adjective and an animal) made from a keyed 
 annotator ID with a secret of the study that the store keeps and never sends, so no annotator's ID
 reaches anyone else; it ranks by recordings completed (or only those viewed in full), shows the top
 ten and the caller's own place, leaves out anyone who chose to be hidden, and appears only when at
-least three people are on it, so that nobody can tell who the others are by elimination.
+least three people are on it, so that nobody can tell who the others are by elimination. The team's
+progress is left out when exactly one other person has recordings, since an annotator's own figures
+taken from the team's would then be that person's.
 """
 
 from __future__ import annotations
@@ -162,9 +164,18 @@ class Games:
             "viewed_in_full": (sum(1 for c in with_coverage if c["viewed_fraction"] >= VIEWED_IN_FULL)
                                if with_coverage else None),
             "goal": {"per_week": record.get("goal_per_week")},
-            "team": {k: team[k] for k in ("done", "assigned", "people")},
+            "team": self._team_out(aid, team),
             "leaderboard": self._leaderboard(aid, team, record) if s.gamification_leaderboard else None,
         }
+
+    @staticmethod
+    def _team_out(aid: str, team: dict[str, Any]) -> dict[str, Any]:
+        """The team's progress, left out when exactly one other person has recordings: the team's figures
+        less the caller's own would then be that person's."""
+        others = team["people"] - (1 if aid in team["with_work"] else 0)
+        if others == 1:
+            return {"done": None, "assigned": None, "people": team["people"]}
+        return {k: team[k] for k in ("done", "assigned", "people")}
 
     def _update(self, user: User, body: dict[str, Any]) -> None:
         changes: dict[str, Any] = {}
@@ -222,7 +233,8 @@ class Games:
             keys = {item_key(rid, "standard", "") for rid in done[aid]}
             full[aid] = sum(1 for k, v in seen.items() if k in keys and (viewed_fraction(v) or 0.0) >= VIEWED_IN_FULL)
         team = {"done": sum(len(done[a] & given[a]) for a in ids), "assigned": sum(len(given[a]) for a in ids),
-                "people": sum(1 for a in ids if given[a]), "ids": ids, "completed": {a: len(done[a]) for a in ids},
+                "people": sum(1 for a in ids if given[a]), "with_work": {a for a in ids if given[a]}, "ids": ids,
+                "completed": {a: len(done[a]) for a in ids},
                 "full": full, "hidden": {a for a in ids if (records.get(a) or {}).get("leaderboard_hidden") is True},
                 "names": pseudonyms(self.store.study_secret(SECRET), ids)}
         self._team = (now, team)

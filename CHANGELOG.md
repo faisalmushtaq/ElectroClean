@@ -26,6 +26,14 @@ closed mid-run, and an invitation link that could not be checked offers Try
 again. A recording kept on the device is not removed while a recording opened
 from it is open in any tab, since its files are read as it is viewed.
 
+The study server no longer takes a negative time worked in a draft, and records
+a time of more than a week for one recording (which the pausing clock cannot
+reach) as a week, with a warning in the saved session, so that one faulty or
+forged figure cannot distort the totals of the Progress section and the home
+page; the save itself always goes ahead. The team's progress on the home page
+is left out while an annotator shares the study with just one other person,
+whose figures it would otherwise give away.
+
 Annotators can open a recording from a Dropbox or OneDrive link (or any web
 address that lets web pages read its file): Open from a link, on the page
 that opens recordings, takes one link per file, turns share links into the
@@ -251,8 +259,9 @@ Find in the header to go straight to a person or a recording and tabs inside
 the crowded sections. Annotators can be invited with a private link: on a study
 server the link carries a random token that the study keeps only as a SHA-256
 hash, works once, expires after 14 days unless the administrator chooses
-otherwise, and stops working when a newer link is made, when it is withdrawn
-and when the account is switched off; the person opening it sees a welcome card
+otherwise, and stops working when a newer link is made, when it is withdrawn,
+when the account is given a new password or made an administrator, and when it
+is switched off (administrators are given a password, never a link); the person opening it sees a welcome card
 with the study and their ID, chooses a password twice and lands on their
 recordings (new calls `POST /invite/check` and `POST /invite/accept`, and the
 operations `user_invite`, `user_invite_revoke` and `user_add` with `invite`).
