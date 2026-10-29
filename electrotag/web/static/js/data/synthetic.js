@@ -17,7 +17,12 @@ const TYPES = { HEOG: 'eog', VEOG: 'eog', ECG: 'ecg' };
 export const channelType = (name) => TYPES[name] || (/^(EXG|STATUS|STI)/i.test(name) ? 'misc' : 'eeg');
 
 const BLINK = ['Fp1', 'Fp2', 'VEOG'];
-const SIDES = ['F7', 'F8', 'HEOG'];
+// A horizontal (or slow) eye movement as the electrodes see it (µV at the peak), as
+// electrotag/synthetic.py: largest on the horizontal EOG and at the outer corners of the eyes (F7,
+// F8), smaller at Fp1 and Fp2, smaller still further back, with opposite signs on the two sides.
+// The experts' reference marks the channels where it is clear.
+export const EYE_MOVEMENT_GAINS_UV = Object.freeze({ HEOG: 160, F7: 75, F8: -75, Fp1: 35, Fp2: -35, T7: 15, T8: -15, F3: 12, F4: -12 });
+const SIDES = ['Fp1', 'Fp2', 'F7', 'F8', 'HEOG'];
 
 /** The three example recordings of the demonstration (two for guided learning, one for practice). */
 export function demoSpecs() {
@@ -132,11 +137,10 @@ function artifactValue(art, name, t, ci, s, seed, sfreq) {
     }
     case 'Horizontal-eye-movement-artifact':
     case 'Slow-eye-movement-artifact': {
-      if (!on) return 0;
-      const sign = name === 'F8' ? -1 : 1;
-      const amp = name === 'HEOG' ? 160 : 75;
+      const gain = EYE_MOVEMENT_GAINS_UV[name] || 0;
+      if (!gain) return 0;
       const shape = art.label.startsWith('Slow') ? Math.sin(Math.PI * x) : Math.min(1, x * 8, (1 - x) * 8);
-      return sign * amp * UV * shape;
+      return gain * UV * shape;
     }
     case 'EMG-artifact':
       return on ? 28 * UV * noise(seed + 101, ci, s) * Math.min(1, x * 10, (1 - x) * 10) : 0;

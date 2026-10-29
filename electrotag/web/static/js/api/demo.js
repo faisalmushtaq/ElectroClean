@@ -87,7 +87,7 @@ export const QUIZ = Object.freeze({
     ['q05', 'demo-01', 14.0, 14.5, 'Electrode-pops-artifact', [],
       'A sudden jump on C3 alone that dies away within a fraction of a second: an electrode pop.'],
     ['q06', 'demo-02', 40.0, 44.0, 'Slow-eye-movement-artifact', ['Eye-movement-artifact', 'Eye-artifact'],
-      'Slow waves of opposite sign on F7 and F8, largest on HEOG, over four seconds: a slow eye movement.'],
+      'Slow waves of opposite sign on the two sides of the head over four seconds, largest on HEOG and at F7 and F8, smaller at Fp1 and Fp2: a slow eye movement.'],
     ['q07', 'demo-01', 50.0, 52.0, QUIZ_NONE_OPTION, [],
       'Only the background EEG: there is no artifact in this segment.'],
   ].map(([item_id, spec, start_s, end_s, correct_label, accepted_labels, explanation]) => Object.freeze({

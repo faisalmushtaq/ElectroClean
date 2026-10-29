@@ -1,6 +1,6 @@
 {
   "schema": "electrotag.annotations",
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "recording": {
     "recording_id": "sub-001/eeg/sub-001_task-rest_eeg.vhdr",
     "relative_path": "sub-001/eeg/sub-001_task-rest_eeg.vhdr",
@@ -37,43 +37,43 @@
       "vhdr": {
         "path": "sub-001/eeg/sub-001_task-rest_eeg.vhdr",
         "size": 1041,
-        "mtime_ns": 1793186360853328066,
+        "mtime_ns": 1793302801907280233,
         "sha256": "2ba95031595b2557e0c22c1431979db0d4c2a4da4bc3fd814792b727f738bfeb"
       },
       "eeg": {
         "path": "sub-001/eeg/sub-001_task-rest_eeg.eeg",
         "size": 1320000,
-        "mtime_ns": 1793186360851809481,
-        "sha256": "f049e39934f92a79b9d26b34ea1e79f57e667df53836d10895a3f722321cf061"
+        "mtime_ns": 1793302801906475611,
+        "sha256": "16abcf633941c703b992579bc05fc3d8d08d2c71c567a22956ffe05c581f84eb"
       },
       "vmrk": {
         "path": "sub-001/eeg/sub-001_task-rest_eeg.vmrk",
         "size": 1392,
-        "mtime_ns": 1793186360852942022,
+        "mtime_ns": 1793302801907078641,
         "sha256": "22fa2ca5f58043a805e73b001f51443864117904f8d9a0fd882ab8078214e1f5"
       },
       "channels_tsv": {
         "path": "sub-001/eeg/sub-001_task-rest_channels.tsv",
         "size": 384,
-        "mtime_ns": 1793186360854105900,
+        "mtime_ns": 1793302801907809172,
         "sha256": "2606e8830e14c65eed97ea25c80f9f56708eb24e26134f516b754234c6927d82"
       },
       "events_tsv": {
         "path": "sub-001/eeg/sub-001_task-rest_events.tsv",
         "size": 928,
-        "mtime_ns": 1793186360853676336,
+        "mtime_ns": 1793302801907627087,
         "sha256": "23fbd318246db707134f26fd35f535df2bd25580d7cf8c17e33066b3b744c0a8"
       },
       "events_json": {
         "path": "sub-001/eeg/sub-001_task-rest_events.json",
         "size": 289,
-        "mtime_ns": 1793186360853921627,
+        "mtime_ns": 1793302801907736371,
         "sha256": "203b47891160359d51301343101c20872de346b32b5a97b29a70139958c62f00"
       },
       "eeg_json": {
         "path": "sub-001/eeg/sub-001_task-rest_eeg.json",
         "size": 255,
-        "mtime_ns": 1793186360854287960,
+        "mtime_ns": 1793302801907968391,
         "sha256": "b4261e68d3afe2c97349082cc1460d8fb6e73c9427090698dd1e1ec35b914cac"
       }
     }
@@ -83,11 +83,12 @@
     "display_name": "Demo A01"
   },
   "session": {
-    "session_id": "20261028T111921Z-2c8b8d66",
+    "session_id": "20261029T194003Z-b2f33816",
     "mode": "standard",
-    "created_at": "2026-10-28T11:19:21.971+00:00",
+    "created_at": "2026-10-29T19:40:03.022+00:00",
     "app_version": "1.1.0",
-    "context": {}
+    "context": {},
+    "confidence": "optional"
   },
   "time_conventions": {
     "onset_origin": "first_sample",
@@ -104,10 +105,25 @@
     "order": "Channels are stored in the recording's channel order without duplicates.",
     "hidden_channels": "recording.ch_names lists the channels that were shown and could be annotated. Channels in the file that the study settings hide (for example a headset's timestamp or contact-quality channels) and trigger channels (for example BioSemi's Status channel) are listed in recording.hidden_channels, when there are any, and are never part of the whole montage."
   },
+  "confidence_convention": {
+    "scale": "Ordinal 5-point Likert scale of how confident the annotator was that the mark is right.",
+    "levels": {
+      "1": "Not at all confident",
+      "2": "Slightly confident",
+      "3": "Moderately confident",
+      "4": "Very confident",
+      "5": "Completely confident"
+    },
+    "not_rated": "null: the annotator gave no rating.",
+    "settings": {
+      "optional": "Ratings were volunteered: annotators rated a mark only when they wished.",
+      "every_mark": "Annotators were asked to rate each new mark (no mark started with a rating); some marks may still have been left unrated."
+    }
+  },
   "label_catalogue": {
     "catalogue_id": "electrotag-hed-score-artifacts",
     "catalogue_version": "2.0.0",
-    "sha256": "34f144b5c8699afeb41dd6fc9a4fd343e602123e979ee41471971b4fec7800ad",
+    "sha256": "c5b288e57bf0191cf7a1f7b8f29cfdb77e7c772878203fd8895162f01e0f7646",
     "hed_library": "score",
     "hed_library_version": "2.2.0",
     "hed_standard_version": "8.5.0",
@@ -291,7 +307,7 @@
   "n_annotations": 11,
   "annotations": [
     {
-      "annotation_id": "2830b2dd2b244dba9fdbbf1a84de86b6",
+      "annotation_id": "3f23e1b847da4dd28f4a1ec97e9c807b",
       "label": "Eye-blink-artifact",
       "value": 103,
       "onset": 2.996,
@@ -305,11 +321,13 @@
         "VEOG"
       ],
       "scope": "channels",
-      "created_at": "2026-10-28T11:19:21.970+00:00",
-      "modified_at": "2026-10-28T11:19:21.970+00:00"
+      "created_at": "2026-10-29T19:40:03.021+00:00",
+      "modified_at": "2026-10-29T19:40:03.021+00:00",
+      "confidence": null,
+      "note": ""
     },
     {
-      "annotation_id": "023beda0ddbd4c598f6ed854ff1aee65",
+      "annotation_id": "d9585acb62204e1280f9bb4def698924",
       "label": "EMG-artifact",
       "value": 102,
       "onset": 9.172,
@@ -322,11 +340,13 @@
         "T7"
       ],
       "scope": "channels",
-      "created_at": "2026-10-28T11:19:21.970+00:00",
-      "modified_at": "2026-10-28T11:19:21.970+00:00"
+      "created_at": "2026-10-29T19:40:03.021+00:00",
+      "modified_at": "2026-10-29T19:40:03.021+00:00",
+      "confidence": null,
+      "note": ""
     },
     {
-      "annotation_id": "e6f8aa3ad40f4a7d99033cbeccc1ec53",
+      "annotation_id": "54917f7981ee404a93d3bfee3d7c2b9c",
       "label": "Eye-blink-artifact",
       "value": 103,
       "onset": 9.472,
@@ -339,11 +359,13 @@
         "Fp2"
       ],
       "scope": "channels",
-      "created_at": "2026-10-28T11:19:21.970+00:00",
-      "modified_at": "2026-10-28T11:19:21.970+00:00"
+      "created_at": "2026-10-29T19:40:03.021+00:00",
+      "modified_at": "2026-10-29T19:40:03.021+00:00",
+      "confidence": null,
+      "note": ""
     },
     {
-      "annotation_id": "22efc45e9cd446ec8654c796b2370281",
+      "annotation_id": "b1e9e478efb9493d97775dbfe3fc10cc",
       "label": "Electrode-pops-artifact",
       "value": 114,
       "onset": 13.972,
@@ -355,11 +377,13 @@
         "C3"
       ],
       "scope": "channels",
-      "created_at": "2026-10-28T11:19:21.970+00:00",
-      "modified_at": "2026-10-28T11:19:21.970+00:00"
+      "created_at": "2026-10-29T19:40:03.021+00:00",
+      "modified_at": "2026-10-29T19:40:03.021+00:00",
+      "confidence": null,
+      "note": ""
     },
     {
-      "annotation_id": "d82e824062604cc4a734860b8e4d1ea0",
+      "annotation_id": "9c78884508c84818aa62303dadffe7f9",
       "label": "Horizontal-eye-movement-artifact",
       "value": 104,
       "onset": 17.972,
@@ -368,112 +392,129 @@
       "duration_samples": 298,
       "end_sample": 4791,
       "channels": [
+        "Fp1",
+        "Fp2",
         "F7",
         "F8",
         "HEOG"
       ],
       "scope": "channels",
-      "created_at": "2026-10-28T11:19:21.970+00:00",
-      "modified_at": "2026-10-28T11:19:21.970+00:00"
+      "created_at": "2026-10-29T19:40:03.021+00:00",
+      "modified_at": "2026-10-29T19:40:03.021+00:00",
+      "confidence": null,
+      "note": ""
     },
     {
-      "annotation_id": "a4216dc4ad774620b4f42789a183d496",
+      "annotation_id": "a422a49487f640a0b2834bc4f2a16726",
       "label": "Movement-artifact",
       "value": 107,
-      "onset": 23.992,
-      "duration": 2.028,
-      "onset_sample": 5998,
-      "duration_samples": 507,
-      "end_sample": 6505,
+      "onset": 24.008,
+      "duration": 2.008,
+      "onset_sample": 6002,
+      "duration_samples": 502,
+      "end_sample": 6504,
       "channels": [],
       "scope": "whole_montage",
-      "created_at": "2026-10-28T11:19:21.971+00:00",
-      "modified_at": "2026-10-28T11:19:21.971+00:00"
+      "created_at": "2026-10-29T19:40:03.021+00:00",
+      "modified_at": "2026-10-29T19:40:03.021+00:00",
+      "confidence": null,
+      "note": ""
     },
     {
-      "annotation_id": "1afc21321eaa430fa05da5cbd5c8d937",
+      "annotation_id": "188fc2f898314ce98458b0cf828e6564",
       "label": "Chewing-artifact",
       "value": 100,
-      "onset": 30.016,
-      "duration": 2.956,
-      "onset_sample": 7504,
-      "duration_samples": 739,
-      "end_sample": 8243,
+      "onset": 29.996,
+      "duration": 3.036,
+      "onset_sample": 7499,
+      "duration_samples": 759,
+      "end_sample": 8258,
       "channels": [
         "T7",
         "T8"
       ],
       "scope": "channels",
-      "created_at": "2026-10-28T11:19:21.971+00:00",
-      "modified_at": "2026-10-28T11:19:21.971+00:00"
+      "created_at": "2026-10-29T19:40:03.021+00:00",
+      "modified_at": "2026-10-29T19:40:03.021+00:00",
+      "confidence": null,
+      "note": ""
     },
     {
-      "annotation_id": "5d1f92cc5ec049b38d6e3dfe3721ab40",
+      "annotation_id": "829e066805ee4cc583f7ab6c571d83a0",
       "label": "Eye-blink-artifact",
       "value": 103,
-      "onset": 35.26,
-      "duration": 0.372,
-      "onset_sample": 8815,
-      "duration_samples": 93,
-      "end_sample": 8908,
+      "onset": 35.232,
+      "duration": 0.36,
+      "onset_sample": 8808,
+      "duration_samples": 90,
+      "end_sample": 8898,
       "channels": [
         "Fp1",
-        "Fp2",
-        "VEOG"
+        "Fp2"
       ],
       "scope": "channels",
-      "created_at": "2026-10-28T11:19:21.971+00:00",
-      "modified_at": "2026-10-28T11:19:21.971+00:00"
+      "created_at": "2026-10-29T19:40:03.021+00:00",
+      "modified_at": "2026-10-29T19:40:03.021+00:00",
+      "confidence": null,
+      "note": ""
     },
     {
-      "annotation_id": "6d3386928b634891818a204ad022a023",
+      "annotation_id": "e7ecc575636e497d93ea7bcf44d3b286",
       "label": "Slow-eye-movement-artifact",
       "value": 105,
-      "onset": 40.072,
-      "duration": 3.98,
-      "onset_sample": 10018,
-      "duration_samples": 995,
-      "end_sample": 11013,
+      "onset": 40.016,
+      "duration": 3.936,
+      "onset_sample": 10004,
+      "duration_samples": 984,
+      "end_sample": 10988,
       "channels": [
+        "Fp2",
         "F7",
-        "F8"
+        "F8",
+        "HEOG"
       ],
       "scope": "channels",
-      "created_at": "2026-10-28T11:19:21.971+00:00",
-      "modified_at": "2026-10-28T11:19:21.971+00:00"
+      "created_at": "2026-10-29T19:40:03.022+00:00",
+      "modified_at": "2026-10-29T19:40:03.022+00:00",
+      "confidence": null,
+      "note": ""
     },
     {
-      "annotation_id": "4453dcdf5631443082f863e65ebf4954",
+      "annotation_id": "fc6f52556c104e60880909ce939087c3",
       "label": "ECG-artifact",
       "value": 101,
-      "onset": 47.016,
-      "duration": 5.0,
-      "onset_sample": 11754,
-      "duration_samples": 1250,
-      "end_sample": 13004,
+      "onset": 46.972,
+      "duration": 5.012,
+      "onset_sample": 11743,
+      "duration_samples": 1253,
+      "end_sample": 12996,
       "channels": [
         "T7",
-        "P7"
+        "O1"
       ],
       "scope": "channels",
-      "created_at": "2026-10-28T11:19:21.971+00:00",
-      "modified_at": "2026-10-28T11:19:21.971+00:00"
+      "created_at": "2026-10-29T19:40:03.022+00:00",
+      "modified_at": "2026-10-29T19:40:03.022+00:00",
+      "confidence": null,
+      "note": ""
     },
     {
-      "annotation_id": "5d9e5c7faf254f3e9325a503ba4485ca",
+      "annotation_id": "3320809c47be41a38df573a2762b6e8e",
       "label": "Electrode-pops-artifact",
       "value": 114,
-      "onset": 53.452,
-      "duration": 0.516,
-      "onset_sample": 13363,
-      "duration_samples": 129,
-      "end_sample": 13492,
+      "onset": 53.488,
+      "duration": 0.476,
+      "onset_sample": 13372,
+      "duration_samples": 119,
+      "end_sample": 13491,
       "channels": [
         "O2"
       ],
       "scope": "channels",
-      "created_at": "2026-10-28T11:19:21.971+00:00",
-      "modified_at": "2026-10-28T11:19:21.971+00:00"
+      "created_at": "2026-10-29T19:40:03.022+00:00",
+      "modified_at": "2026-10-29T19:40:03.022+00:00",
+      "confidence": null,
+      "note": ""
     }
   ]
 }

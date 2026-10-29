@@ -14,14 +14,20 @@ from __future__ import annotations
 from pathlib import Path
 
 from electrotag.app.annotations.labels import default_catalogue
-from electrotag.synthetic import SyntheticArtifact, default_artifact_plan, truth_document, write_recording
+from electrotag.synthetic import (
+    EYE_MOVEMENT_CHANNELS,
+    SyntheticArtifact,
+    default_artifact_plan,
+    truth_document,
+    write_recording,
+)
 from electrotag.training.guided import example_note
 from electrotag.training.reference import ReferenceSet, ReferenceSetError, reference_sets_dir
 
 EXAMPLE_SET_ID = "example"
 EXAMPLE_EXPERT = "EXAMPLE"
 BLINK = ("Fp1", "Fp2", "VEOG")
-SIDE = ("F7", "F8", "HEOG")
+SIDE = EYE_MOVEMENT_CHANNELS
 
 # Stage 1, recording 1 (shown): six well separated artifacts of common types.
 PLAN_1 = [

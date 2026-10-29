@@ -97,7 +97,7 @@
     "eeg": {
      "path": "sub-example01/eeg/sub-example01_task-example_eeg.eeg",
      "size": 1320000,
-     "sha256": "f837a891b75ae6bd2f5f02d3a31567afa6f7186729fa648cd4cfc6d69af0e0d9"
+     "sha256": "907d2ef7a92950e5144e3d730dc19e1293f0a94871c28b0a75203777da3f735c"
     },
     "vmrk": {
      "path": "sub-example01/eeg/sub-example01_task-example_eeg.vmrk",
@@ -490,7 +490,7 @@
     "report": {
      "measure": "median over channels of the 99.5th percentile of |x - median| in sampled windows (V)",
      "amplitudes_v": {
-      "eeg": 1.7941567436776392e-05,
+      "eeg": 1.8255083470651944e-05,
       "eog": 5.843268773881438e-05,
       "ecg": 0.0007744759564715611
      },
@@ -599,7 +599,7 @@
     "eeg": {
      "path": "sub-example02/eeg/sub-example02_task-example_eeg.eeg",
      "size": 1650000,
-     "sha256": "a349c2b82fcd03ea5a99cf624f8083cbf941d3c4f197af5614bbe79930346c38"
+     "sha256": "593154ba96d32a07b5adecb17c8adf6f05b7684d6221836c68dc2b7193bc36c5"
     },
     "vmrk": {
      "path": "sub-example02/eeg/sub-example02_task-example_eeg.vmrk",
@@ -1155,7 +1155,7 @@
     "eeg": {
      "path": "sub-example03/eeg/sub-example03_task-example_eeg.eeg",
      "size": 1980000,
-     "sha256": "e8914d16bc56bb3dc68ec58aa83c4dc5817a372ed4fc1c20abd712c790a33cc6"
+     "sha256": "d6ebd213ba95a0b269a504c9a43e5c176174d7cb7911502653234291d7fecaee"
     },
     "vmrk": {
      "path": "sub-example03/eeg/sub-example03_task-example_eeg.vmrk",
@@ -1674,7 +1674,7 @@
     "report": {
      "measure": "median over channels of the 99.5th percentile of |x - median| in sampled windows (V)",
      "amplitudes_v": {
-      "eeg": 4.507429976970508e-05,
+      "eeg": 4.497874030352493e-05,
       "eog": 0.00010139203818616742,
       "ecg": 0.0007761225912814513
      },

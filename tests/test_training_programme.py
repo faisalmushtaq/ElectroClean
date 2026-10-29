@@ -207,3 +207,20 @@ def test_old_reference_sets_still_load(dataset):
     old = ReferenceSet.load(rs.directory)
     assert not old.self_contained and old.guided == {} and old.practice_pass == {}
     assert old.guided_recordings == [] and Path(old.directory).is_dir()
+
+
+def test_a_simulated_eye_movement_shows_where_it_really_would():
+    """Largest on the horizontal EOG and beside the eyes, smaller above them, opposite on the two sides."""
+    import numpy as np
+
+    from electrotag.synthetic import ALL_CHANNELS, EYE_MOVEMENT_CHANNELS, SyntheticArtifact, synthesise_signal
+
+    plan = [SyntheticArtifact("Horizontal-eye-movement-artifact", 5.0, 1.2, EYE_MOVEMENT_CHANNELS)]
+    data = synthesise_signal(plan, SF, 10.0, 50.0, np.random.default_rng(1))
+    base = synthesise_signal([], SF, 10.0, 50.0, np.random.default_rng(1))
+    mid = slice(int(5.4 * SF), int(5.8 * SF))
+    shift = {c: float((data[i, mid] - base[i, mid]).mean() * 1e6) for i, c in enumerate(ALL_CHANNELS)}
+    assert shift["HEOG"] > 150 and shift["F7"] > 60 and shift["F8"] < -60
+    assert shift["Fp1"] > 25 and shift["Fp2"] < -25
+    assert abs(shift["O1"]) < 1 and abs(shift["Cz"]) < 1
+    assert EYE_MOVEMENT_CHANNELS == ("Fp1", "Fp2", "F7", "F8", "HEOG")

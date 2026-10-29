@@ -5,6 +5,12 @@ Each section below describes the changes in one version of ElectroTag;
 
 ## Unreleased
 
+The example recordings' eye movements now appear where real ones would: largest
+on the horizontal EOG and at F7 and F8 with opposite signs on the two sides,
+smaller at Fp1 and Fp2 and fading further back, and the experts' reference marks
+them on Fp1, Fp2, F7, F8 and HEOG (the kept registrations of the example set and
+the example outputs in `examples/example_output` were made again).
+
 The activity analysis (`electrotag-activity` and the admin area) now counts
 confidence ratings, notes, problem reports and the feedback on reviewed work.
 Each row of `recordings.tsv` gives the ratings given and cleared, the requests
