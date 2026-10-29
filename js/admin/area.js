@@ -24,11 +24,12 @@ import { AnalysesSection } from './analyses.js';
 import { ResultsSection } from './results.js';
 import { RecordsSection } from './records.js';
 import { SettingsSection } from './settings.js';
+import { ProblemsSection } from './problems.js';
 
 const KINDS = {
   overview: OverviewSection, progress: ProgressSection, annotators: AnnotatorsSection, recordings: RecordingsSection,
   assignments: AssignmentsSection, training: TrainingSection, analyses: AnalysesSection, results: ResultsSection,
-  records: RecordsSection, settings: SettingsSection,
+  records: RecordsSection, settings: SettingsSection, problems: ProblemsSection,
 };
 
 const CSS_HREF = new URL('../../admin.css', import.meta.url).href;

@@ -64,24 +64,28 @@ export function progressSummary(items, { drafts = () => null, todayS = 0, now = 
   let remainingS = null;
   if (timedDone.length >= MIN_FOR_ESTIMATE) {
     const pace = timedDone.reduce((t, i) => t + workS(i), 0) / timedDone.reduce((t, i) => t + Number(i.duration_s), 0);
-    remainingS = counted.filter((i) => i.status !== 'done').reduce((t, i) => {
+    remainingS = counted.filter((i) => i.status !== 'done' && i.status !== 'unusable').reduce((t, i) => {
       const d = unfinished.get(i);
       const spent = d && Number(d.elapsed_s) > 0 ? Number(d.elapsed_s) : 0;
       return t + Math.max(0, Number(i.duration_s) * pace - spent);
     }, 0);
   }
+  // A recording reported as one that cannot be annotated is finished for the annotator, kept apart from done.
+  const unusable = counted.filter((i) => i.status === 'unusable').length;
   const cont = (next && next.status === 'in_progress' ? next : null) || counted.find((i) => i.status === 'in_progress') || null;
   const c = cont ? unfinished.get(cont) : null;
   return {
     total: counted.length,
     done: done.length,
+    unusable,
+    finished: done.length + unusable,
     workedS: totalDoneS + startedS,
     medianS: median(times),
     doneToday: done.filter((i) => isToday(doneAt(i), now)).length,
     todayS,
     remainingS: remainingS === null ? null : remainingS,
     basedOn: timedDone.length,
-    left: counted.length - done.length,
+    left: counted.length - done.length - unusable,
     continue: cont ? {
       item: cont,
       elapsedS: c && Number.isFinite(Number(c.elapsed_s)) ? Number(c.elapsed_s) : null,

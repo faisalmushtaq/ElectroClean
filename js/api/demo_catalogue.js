@@ -279,5 +279,5 @@ export const DEFAULT_DISPLAY = {"duration_s": 10.0, "n_channels": 32, "channel_c
 
 export const DEFAULT_LOGGING = {"interactions": true, "pointer_hz": 5.0, "idle_after_s": 30.0};
 
-// Pauses, break reminders and the check of what has been viewed (annotation block).
-export const DEFAULT_ANNOTATION = {"break_reminder_minutes": 50, "idle_pause_minutes": 3, "coverage_check": "warn"};
+// Pauses, break reminders, the check of what has been viewed and confidence (annotation block).
+export const DEFAULT_ANNOTATION = {"break_reminder_minutes": 50, "idle_pause_minutes": 3, "coverage_check": "warn", "confidence": "optional"};

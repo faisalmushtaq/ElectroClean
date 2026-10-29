@@ -21,6 +21,7 @@ export const SECTIONS = Object.freeze([
   { key: 'assignments', route: 'admin-assignments', title: 'Assignments', group: 'people' },
   { key: 'training', route: 'admin-training', title: 'Training', group: 'people' },
   { key: 'recordings', route: 'admin-recordings', title: 'Recordings', group: 'data' },
+  { key: 'problems', route: 'admin-problems', title: 'Problems', group: 'data' },
   { key: 'settings', route: 'admin-settings', title: 'Study settings', group: 'config' },
 ]);
 
@@ -59,7 +60,7 @@ export function routeForSection(key) {
 
 // --------------------------------------------------------------------- words
 export const MODES = Object.freeze({ standard: 'Annotation', guided: 'Guided training', practice: 'Practice', assessment: 'Assessment' });
-export const STATUS = Object.freeze({ todo: 'To do', in_progress: 'In progress', done: 'Done' });
+export const STATUS = Object.freeze({ todo: 'To do', in_progress: 'In progress', done: 'Done', unusable: 'Cannot be annotated' });
 export const USES = Object.freeze({
   guided: 'Guided: learn with the experts',
   practice: 'Practice: on their own, with feedback',
@@ -360,11 +361,14 @@ export function settingsProblems(s, labels = null) {
   if (minutes('break_reminder_minutes', 240)) out.push('A break reminder comes after between 0 (no reminders) and 240 minutes of work.');
   if (minutes('idle_pause_minutes', 60)) out.push('The clock pauses itself after between 0 (never) and 60 minutes without input.');
   if ('coverage_check' in a && !['warn', 'off'].includes(a.coverage_check)) out.push('The check of the parts not yet viewed is either on (warn) or off.');
+  if ('confidence' in a && !['optional', 'every_mark', 'off', 'on'].includes(a.confidence)) out.push('Confidence is either optional or asked for every mark.');
   const q = a.quick_labels || [];
   if (q.length > 9) out.push('At most nine artifact types fit on the keys 1 to 9.');
   if (new Set(q).size !== q.length) out.push('An artifact type is on two number keys; give each key a different type.');
   if (labels) for (const l of q) if (!labels.includes(l)) out.push(`${l} is not one of the artifact types.`);
   if ('allow_revisions' in a && typeof a.allow_revisions !== 'boolean') out.push('Whether finished recordings may be revised is on or off.');
+  if ('allow_reviews' in a && typeof a.allow_reviews !== 'boolean') out.push('Whether saved recordings may be reviewed is on or off.');
+  if ('show_reviews_to_annotators' in a && typeof a.show_reviews_to_annotators !== 'boolean') out.push('Whether annotators see the reviews of their work is on or off.');
   const g = s.gamification || {};
   for (const k of ['enabled', 'leaderboard', 'leaderboard_viewed_only']) {
     if (k in g && typeof g[k] !== 'boolean') out.push(`gamification.${k} is on or off (true or false).`);
@@ -528,7 +532,7 @@ export function filterAudit(entries, { by = '', op = '' } = {}) {
 
 /** Counts of one annotator's work items in the progress answer. */
 export function progressCounts(items) {
-  const c = { assigned: 0, done: 0, in_progress: 0, todo: 0 };
+  const c = { assigned: 0, done: 0, in_progress: 0, todo: 0, unusable: 0 };
   for (const i of items || []) {
     c.assigned += 1;
     if (i.status in c) c[i.status] += 1;

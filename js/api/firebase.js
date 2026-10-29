@@ -209,6 +209,12 @@ export class FirebaseBackend {
 
   submit(body) { return this._call('et_submit', body); }
 
+  /** A problem with a recording: never repeated by itself (the study may have kept it already); its problem_id makes a second press harmless. */
+  reportProblem(body) { return this._call('et_problem_report', body); }
+
+  /** The reviews of the annotator's saved work: a read, so asked again once after a failure. */
+  myReviews() { return this._call('et_my_reviews', {}, { retry: true }); }
+
   training() { return this._call('et_training', {}, { retry: true }); }
 
   guided(recordingId) { return this._call('et_guided_get', { recording_id: recordingId }, { retry: true }); }

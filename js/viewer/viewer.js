@@ -15,11 +15,12 @@
 import { h } from '../ui/dom.js';
 import { clamp, hexToRgb, legibleOnWhite, rgba } from '../util.js';
 import { COLOURS, FONT } from '../ui/theme.js';
-import { CHANNEL_COUNTS, DURATIONS, decimateColumns, layoutTags, meanOf, niceStep, stepOption, tickLabel, voltsText } from './geometry.js';
+import { CHANNEL_COUNTS, DURATIONS, OVERLAY_SPAN, decimateColumns, layoutTags, meanOf, niceStep, overlayAlpha, overlayGain, stepOption, tickLabel, voltsText } from './geometry.js';
 import { LONG_PRESS_MS, TAP_SLOP_PX, edgePx, isDoubleTap, pinchView, twoFingers } from './touch.js';
 import { complement, mergeIntervals } from './coverage.js';
 import { namePx, traceWidths } from '../ui/comfort.js';
 import { icon } from '../views/common.js';
+import { confidenceFill, confidenceTagText } from '../annotate/confidence.js';
 
 const GUTTER = 92;
 const TAG_ROW_H = 20;
@@ -32,6 +33,21 @@ const EDGE_PX = 6;
 const CLIP = 0.75; // traces are clipped at 1.5 half-rows (MNE's clipping=1.5)
 
 const end = (a) => a.onset_sample + a.duration_samples;
+const NOTE_W = 12; // the note glyph at the end of a tag
+
+/** A small drawn note (a page with a folded corner and two lines) for a tag whose annotation has a note. */
+function drawNoteGlyph(ctx, x, y, colour) {
+  ctx.save();
+  ctx.strokeStyle = colour;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x + 0.5, y + 0.5); ctx.lineTo(x + 6, y + 0.5); ctx.lineTo(x + 9.5, y + 4); ctx.lineTo(x + 9.5, y + 11.5);
+  ctx.lineTo(x + 0.5, y + 11.5); ctx.closePath();
+  ctx.moveTo(x + 2.5, y + 6.5); ctx.lineTo(x + 7.5, y + 6.5);
+  ctx.moveTo(x + 2.5, y + 9); ctx.lineTo(x + 6, y + 9);
+  ctx.stroke();
+  ctx.restore();
+}
 
 function hatch(ctx, x0, y0, w, hgt, colour, spacing = 8) {
   ctx.save();
@@ -108,6 +124,7 @@ export class EegViewer {
     this._raf = 0;
     this._tags = [];
     this._cols = new Map();
+    this._initOverlay();
     this._build(host);
   }
 
@@ -278,6 +295,8 @@ export class EegViewer {
   setCursor(t) { this.cursorT = t; this.invalidate(['over']); }
   setPrefix(map) { this.prefix = map || {}; this.invalidate(['over']); }
   setLabelColours(map) { this.labelColours = map || {}; this.invalidate(['over']); }
+  /** Review feedback over the EEG: [{onset_sample, duration_samples, outline, current}], drawn in the accent blue (_drawMarkers). */
+  setMarkers(list) { this.markers = Array.isArray(list) ? list : []; this.invalidate(['over']); }
   setEdgeZonesVisible(on) { this.showEdgeZones = Boolean(on); this.invalidate(['under']); }
   /** The parts on screen so far (merged [start_s, end_s]); null hides the coverage. Only the overview changes. */
   setCoverage(list) { this.coverage = list ? list.map((p) => [...p]) : null; this.invalidate(['overview']); }
@@ -423,6 +442,7 @@ export class EegViewer {
   /** Vertical extent (y0, y1) of the rows of `channels` on screen; [] means the whole plot. */
   _rowSpans(channels) {
     if (!channels || !channels.length) return [[this.y0, this.y1]];
+    if (this.overlay) return [[this.y0, this.y1]]; // one shared axis: a channel's mark covers it
     const spans = [];
     const set = new Set(channels);
     for (const { row, ch } of this.visibleRows()) {
@@ -442,7 +462,7 @@ export class EegViewer {
     ctx.fillStyle = COLOURS.surface;
     ctx.fillRect(0, 0, this.W, this.H);
     // the selected channels' rows (Selected channels scope)
-    if (this.channelsActive && this.selectedChannels.size) {
+    if (this.channelsActive && this.selectedChannels.size && !this.overlay) {
       ctx.fillStyle = rgba(COLOURS.selection_channel, 0.06);
       for (const { row, ch } of this.visibleRows()) {
         if (this.selectedChannels.has(ch.name)) ctx.fillRect(x0, this.rowCentre(row) - this.rowH / 2, x1 - x0, this.rowH);
@@ -481,7 +501,8 @@ export class EegViewer {
       const sel = this.selected.has(a.annotation_id);
       const xa = clamp(this.sampleToX(a.onset_sample), x0, x1);
       const xb = clamp(this.sampleToX(end(a)), x0, x1);
-      ctx.fillStyle = rgba(colour, sel ? 0.30 : a.channels.length ? 0.24 : 0.16);
+      // marks rated 1 or 2 are filled more lightly (confidence.js)
+      ctx.fillStyle = rgba(colour, (sel ? 0.30 : a.channels.length ? 0.24 : 0.16) * confidenceFill(a));
       for (const [ya, yb] of this._rowSpans(a.channels)) ctx.fillRect(xa, ya, Math.max(1, xb - xa), yb - ya);
     }
     // the experts' annotation (guided training) and the flash of a match
@@ -523,10 +544,10 @@ export class EegViewer {
     const everyNth = this.rowH < fontPx - 1 ? Math.ceil((fontPx - 1) / this.rowH) : 1;
     for (const { row, ch } of this.visibleRows()) {
       if ((row - this.view.firstChannel) % everyNth) continue;
-      const selected = this.channelsActive && this.selectedChannels.has(ch.name);
+      const selected = this.overlay ? this.isolated === row : this.channelsActive && this.selectedChannels.has(ch.name);
       const hover = this.hover && this.hover.area === 'channel_names' && this.hover.row === row;
       ctx.font = `${selected ? '600 ' : ''}${fontPx}px ${FONT}`;
-      ctx.fillStyle = selected ? COLOURS.selection_channel : ch.bad ? COLOURS.text_disabled : hover ? COLOURS.accent : this.groupColour(ch) || COLOURS.text;
+      ctx.fillStyle = selected ? (this.overlay ? COLOURS.accent : COLOURS.selection_channel) : ch.bad ? COLOURS.text_disabled : hover ? COLOURS.accent : this.groupColour(ch) || COLOURS.text;
       ctx.fillText(ch.bad ? `${ch.name} (bad)` : ch.name, x0 - 8, this.rowCentre(row));
     }
     ctx.textBaseline = 'alphabetic';
@@ -575,6 +596,8 @@ export class EegViewer {
       ctx.fillText(this.loadError ? `The EEG could not be read: ${this.loadError.message}` : 'Reading the EEG…', (x0 + x1) / 2, (y0 + y1) / 2);
       return;
     }
+    this._offsets = new Map();
+    if (this.overlay) { this._renderOverlayTraces(ctx, c); this.stats.traceMs = performance.now() - t; return; }
     const sf = this.sfreq;
     const dpr = this.dpr;
     const cols = Math.max(1, Math.round(this.plotW)); // one column per CSS pixel
@@ -619,6 +642,7 @@ export class EegViewer {
       if (!dense) {
         const a = Math.floor(sStart) - c.startSample;
         const offset = meanOf(data, a, a + Math.ceil(span));
+        this._offsets.set(row, offset);
         const yOf = (v) => { const y = (v - offset) * k; return yc - (y > lim ? lim : y < -lim ? -lim : y); };
         let path = groups.get(colour);
         if (!path) { path = new Path2D(); groups.set(colour, path); }
@@ -641,6 +665,7 @@ export class EegViewer {
       let count = 0;
       for (let col = 0; col < cols; col++) { total += d.sum[col]; count += d.cnt[col]; }
       const offset = count ? total / count : 0;
+      this._offsets.set(row, offset);
       decimate += performance.now() - td;
       const { min, max } = d;
       const yOf = (v) => { const y = (v - offset) * k; return yc - (y > lim ? lim : y < -lim ? -lim : y); };
@@ -739,8 +764,8 @@ export class EegViewer {
     // tags above the traces
     ctx.font = `12px ${FONT}`;
     const tags = anns.map((a) => {
-      const text = `${this.prefix[a.annotation_id] || ''}${a.label}${a.channels.length ? ' [ch]' : ''}`;
-      const w = ctx.measureText(text).width + 12;
+      const text = `${this.prefix[a.annotation_id] || ''}${a.label}${a.channels.length ? ' [ch]' : ''}${confidenceTagText(a)}`;
+      const w = ctx.measureText(text).width + 12 + (a.note ? NOTE_W : 0);
       const xa = clamp(this.sampleToX(a.onset_sample), x0, x1);
       const xb = clamp(this.sampleToX(end(a)), x0, x1);
       let x = (xa + xb) / 2;
@@ -761,9 +786,11 @@ export class EegViewer {
       ctx.stroke();
       ctx.fillStyle = legibleOnWhite(colour);
       ctx.textAlign = 'center';
-      ctx.fillText(tg.text, tg.x, y + 13);
+      ctx.fillText(tg.text, tg.x - (tg.a.note ? NOTE_W / 2 : 0), y + 13);
+      if (tg.a.note) drawNoteGlyph(ctx, tg.x + tg.w / 2 - NOTE_W - 2, y + 4, legibleOnWhite(colour));
       this._tags.push({ id: tg.a.annotation_id, x: tg.x - tg.w / 2, y, w: tg.w, h: TAG_ROW_H - 3 });
     });
+    this._drawMarkers(ctx, x0, x1, y0, y1);
     // the drag in progress
     if (this.dragPreview) {
       const p = this.dragPreview;
@@ -808,10 +835,11 @@ export class EegViewer {
         ctx.fillText(label, clamp(x, x0 + w / 2, x1 - w / 2), y1 + 16);
       }
     }
-    // scale bars, one per channel type on screen
+    // scale bars, one per channel type on screen (in the overlay, one for the shared axis)
     const seen = new Set();
     ctx.font = `11px ${FONT}`;
-    for (const { row, ch } of this.visibleRows()) {
+    if (this.overlay) this._renderOverlayOver(ctx);
+    for (const { row, ch } of this.overlay ? [] : this.visibleRows()) {
       if (seen.has(ch.type)) continue;
       seen.add(ch.type);
       const scaling = this.scalings[ch.type] || this.scalings.misc || 1e-3;
@@ -894,6 +922,31 @@ export class EegViewer {
 
   // ------------------------------------------------------------- hit-testing
   /** What is under a point (client coordinates): time, channel, annotation, edge, tag. */
+  /**
+   * The markers of a review (setMarkers): a calm band in the accent blue along the foot of the EEG
+   * under each reviewed stretch, and a dashed outline for a stretch reviewed without an annotation.
+   */
+  _drawMarkers(ctx, x0, x1, y0, y1) {
+    for (const m of this.markers || []) {
+      const xa = this.sampleToX(m.onset_sample);
+      const xb = this.sampleToX(m.onset_sample + m.duration_samples);
+      if (xb < x0 || xa > x1) continue;
+      const a = clamp(xa, x0, x1);
+      const b = clamp(xb, x0, x1);
+      ctx.fillStyle = rgba(COLOURS.accent, m.current ? 0.9 : 0.55);
+      ctx.fillRect(a, y1 - (m.current ? 6 : 4), Math.max(2, b - a), m.current ? 6 : 4);
+      if (m.outline) {
+        ctx.fillStyle = rgba(COLOURS.accent, 0.06);
+        ctx.fillRect(a, y0, Math.max(1, b - a), y1 - y0);
+        ctx.strokeStyle = COLOURS.accent;
+        ctx.lineWidth = m.current ? 2 : 1;
+        ctx.setLineDash([5, 4]);
+        ctx.strokeRect(xa + 0.5, y0 + 0.5, xb - xa, y1 - y0 - 1);
+        ctx.setLineDash([]);
+      }
+    }
+  }
+
   hit(clientX, clientY, { edge = EDGE_PX, trace = 5 } = {}) {
     const r = this.over.getBoundingClientRect();
     const x = clientX - r.left;
@@ -912,6 +965,11 @@ export class EegViewer {
       }
       if (x < this.x0) info.area = 'channel_names';
       else if (x <= this.x1) info.area = 'eeg';
+      // In the overlay the rows are a list of names: the EEG has the isolated channel, or none.
+      if (this.overlay && info.area === 'eeg') {
+        info.row = this.isolated;
+        info.channel = this.isolated === null ? null : this.channels[this.isolated].name;
+      }
     }
     if (info.area !== 'eeg') return info;
     // annotations under the pointer: the selected one first, then the shortest
@@ -919,7 +977,7 @@ export class EegViewer {
       const xa = this.sampleToX(a.onset_sample) - edge;
       const xb = this.sampleToX(end(a)) + edge;
       if (x < xa || x > xb) return false;
-      return !a.channels.length || (info.channel && a.channels.includes(info.channel));
+      return !a.channels.length || this.overlay || (info.channel && a.channels.includes(info.channel));
     }).sort((p, q) => (this.selected.has(q.annotation_id) - this.selected.has(p.annotation_id)) || p.duration_samples - q.duration_samples);
     for (const a of at) {
       const xa = this.sampleToX(a.onset_sample);
@@ -929,7 +987,7 @@ export class EegViewer {
     }
     const inside = at.find((a) => x >= this.sampleToX(a.onset_sample) && x <= this.sampleToX(end(a)));
     if (inside) info.annotation = inside.annotation_id;
-    info.nearTrace = this._nearTrace(info.row, x, y, trace);
+    info.nearTrace = this.overlay ? false : this._nearTrace(info.row, x, y, trace);
     return info;
   }
 
@@ -1081,5 +1139,289 @@ export class EegViewer {
     }
     const d = Math.abs(dx) > Math.abs(dy) ? dx : dy;
     this.scrollBy(((d * unit) / this.plotW) * this.view.durationS, 'wheel');
+  }
+
+  // ------------------------------------------------- the overlay, isolate and the value readout
+  // The overlay (O) draws the channels on screen on one shared axis, in thin semi-transparent lines,
+  // so that what reaches many channels at once (a blink, a movement) stands out as a dark band. The
+  // names on the left become its legend: pointing at one shows that channel on top, and Isolate (I)
+  // shows one channel alone. The time axis, annotations, events and the overview stay as they are.
+
+  _initOverlay() {
+    this.overlay = false;
+    this.isolated = null; // the row (index into channels) shown alone in the overlay, or null
+    this._offsets = new Map(); // row -> the mean removed from its trace on screen (the readout's zero)
+  }
+
+  setOverlay(on) {
+    on = Boolean(on);
+    if (on === this.overlay) return false;
+    this.overlay = on;
+    if (!on) this.isolated = null;
+    this.invalidate(['under', 'traces', 'over']);
+    return true;
+  }
+
+  /** Show one channel alone in the overlay (its index in `channels`), or all of them (null). */
+  setIsolated(row) {
+    const r = row === null || row === undefined ? null : clamp(Math.round(row), 0, this.channels.length - 1);
+    if (r === this.isolated) return false;
+    this.isolated = r;
+    this.invalidate(['under', 'traces', 'over']);
+    return true;
+  }
+
+  /** The geometry of a trace in the overlay: its centre line, gain and clip. */
+  _overlayGeometry(ch) {
+    const scaling = this.scalings[ch.type] || this.scalings.misc || 1e-3;
+    return { yc: (this.y0 + this.y1) / 2, ...overlayGain(this.plotH, scaling, this.view.scaleFactor) };
+  }
+
+  _overlayRows() {
+    const rows = this.visibleRows();
+    return this.isolated === null ? rows : rows.filter((r) => r.row === this.isolated);
+  }
+
+  _overlayColour(ch) {
+    return ch.bad ? COLOURS.trace_bad : this.groupColour(ch) || (ch.type === 'ecg' ? COLOURS.trace_ecg : COLOURS.trace);
+  }
+
+  _renderOverlayTraces(ctx, c) {
+    const sf = this.sfreq;
+    const dpr = this.dpr;
+    const { x0, x1, y0, y1 } = this;
+    const cols = Math.max(1, Math.round(this.plotW));
+    const sStart = this.view.startS * sf;
+    const span = this.view.durationS * sf;
+    const dense = span / cols > 1.5;
+    const rows = this._overlayRows();
+    const alpha = this.isolated === null ? overlayAlpha(rows.length) : 1;
+    const widths = traceWidths(this.comfort.trace, dpr, false);
+    if (!dense) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(x0, y0 - 1, x1 - x0, y1 - y0 + 2);
+      ctx.clip();
+      ctx.lineWidth = widths.css;
+      ctx.lineJoin = 'round';
+      ctx.globalAlpha = alpha;
+      for (const { row, ch } of rows) {
+        const data = c.rows.get(ch.index);
+        if (!data) continue;
+        const { yc, k, lim } = this._overlayGeometry(ch);
+        const a = Math.floor(sStart) - c.startSample;
+        const offset = meanOf(data, a, a + Math.ceil(span));
+        this._offsets.set(row, offset);
+        const path = new Path2D();
+        const sA = Math.max(c.startSample, Math.floor(sStart) - 1);
+        const sB = Math.min(c.startSample + c.nSamples, Math.ceil(sStart + span) + 2);
+        for (let s = sA; s < sB; s++) {
+          const y = (data[s - c.startSample] - offset) * k;
+          const px = x0 + ((s - sStart) / span) * this.plotW;
+          const py = yc - (y > lim ? lim : y < -lim ? -lim : y);
+          if (s === sA) path.moveTo(px, py); else path.lineTo(px, py);
+        }
+        ctx.strokeStyle = this._overlayColour(ch);
+        ctx.stroke(path); // one stroke per channel, so that overlaps darken
+      }
+      ctx.restore();
+      return;
+    }
+    // Dense: min/max columns into the pixels, each blended over what is there already.
+    const W = this.traces.width;
+    const H = this.traces.height;
+    if (!this._img || this._img.width !== W || this._img.height !== H) this._img = new ImageData(W, H);
+    const buf = new Uint32Array(this._img.data.buffer);
+    buf.fill(0);
+    const top = Math.ceil(y0 * dpr);
+    const bottom = Math.floor(y1 * dpr) - 1;
+    const thick = widths.device;
+    const wide = Math.max(1, thick - Math.max(1, Math.round(dpr)) + 1);
+    const colX = new Int32Array(cols + 1);
+    for (let col = 0; col <= cols; col++) colX[col] = Math.round((x0 + col) * dpr);
+    const grid = span / cols;
+    const g0 = Math.round(sStart / grid);
+    const decimated = new Map();
+    const a8 = Math.round(alpha * 255);
+    const inv = 255 - a8;
+    // The opacity after one more trace of the same colour, for every opacity there may be already.
+    const nextAlpha = new Uint8Array(256);
+    for (let da = 0; da < 256; da++) nextAlpha[da] = Math.min(255, a8 + Math.round((da * inv) / 255));
+    for (const { row, ch } of rows) {
+      const data = c.rows.get(ch.index);
+      if (!data) continue;
+      const prev = this._decimated && this._decimated.dataId === c.id ? this._decimated.rows.get(ch.index) : null;
+      const d = decimateColumns(data, c.startSample, grid, g0, cols, prev);
+      decimated.set(ch.index, d);
+      let total = 0; let count = 0;
+      for (let col = 0; col < cols; col++) { total += d.sum[col]; count += d.cnt[col]; }
+      const offset = count ? total / count : 0;
+      this._offsets.set(row, offset);
+      const { yc, k, lim } = this._overlayGeometry(ch);
+      this._cols.set(row, { min: d.min, max: d.max, offset, k, yc, lim });
+      const yOf = (v) => { const y = (v - offset) * k; return yc - (y > lim ? lim : y < -lim ? -lim : y); };
+      const [r, g, b] = hexToRgb(this._overlayColour(ch));
+      const rgb = ((b << 16) | (g << 8) | r) >>> 0;
+      const src = ((a8 << 24) | rgb) >>> 0;
+      let prevLo = -1; let prevHi = -1;
+      for (let col = 0; col < cols; col++) {
+        const lo0 = d.min[col];
+        if (lo0 !== lo0) { prevLo = -1; continue; }
+        let lo = Math.round(yOf(d.max[col]) * dpr);
+        let hi = Math.round(yOf(lo0) * dpr) + thick - 1;
+        const ownLo = lo; const ownHi = hi;
+        if (prevLo >= 0) { if (lo > prevHi) lo = prevHi; if (hi < prevLo) hi = prevLo; }
+        prevLo = ownLo; prevHi = ownHi;
+        if (lo < top) lo = top;
+        if (hi > bottom) hi = bottom;
+        const xa = colX[col];
+        const xb = Math.max(colX[col + 1], xa + wide);
+        for (let y = lo; y <= hi; y++) {
+          const base = y * W;
+          for (let x = xa; x < xb; x++) {
+            const i = base + x;
+            const dst = buf[i];
+            if (!dst) { buf[i] = src; continue; }
+            const da = dst >>> 24;
+            // the same colour (ink, or one group's): only the opacity grows
+            if ((dst & 0xFFFFFF) === rgb) { buf[i] = ((nextAlpha[da] << 24) | rgb) >>> 0; continue; }
+            // source over destination (straight alpha, as ImageData holds it)
+            const dw = (da * inv) / 255;
+            const oa = a8 + dw;
+            const f = 1 / oa;
+            const rr = ((r * a8 + (dst & 255) * dw) * f) | 0;
+            const gg = ((g * a8 + ((dst >>> 8) & 255) * dw) * f) | 0;
+            const bb = ((b * a8 + ((dst >>> 16) & 255) * dw) * f) | 0;
+            buf[i] = (((oa + 0.5) << 24) | (bb << 16) | (gg << 8) | rr) >>> 0;
+          }
+        }
+      }
+    }
+    this._decimated = { dataId: c.id, rows: decimated };
+    ctx.putImageData(this._img, 0, 0);
+  }
+
+  /** The overlay's parts of the foreground: its caption, the shared scale bar, and the channel pointed at in the legend. */
+  _renderOverlayOver(ctx) {
+    const { x0, x1, y0, y1 } = this;
+    const rows = this.visibleRows();
+    // the channel whose name the pointer is on, drawn on top in the accent
+    const h = this.hover;
+    if (h && h.area === 'channel_names' && h.row !== null && this.isolated === null) this._strokeOverlayRow(ctx, h.row, COLOURS.accent);
+    // the caption, top left
+    const iso = this.isolated !== null ? this.channels[this.isolated] : null;
+    const text = iso ? `${iso.name} alone · arrow keys up and down for the next channel`
+      : `Overlay of ${rows.length} channel${rows.length === 1 ? '' : 's'} · marks apply to the whole montage`;
+    ctx.font = `12px ${FONT}`;
+    const w = ctx.measureText(text).width + 12;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.fillRect(x0 + 1, y0 + 1, w, 18);
+    ctx.fillStyle = COLOURS.text_secondary;
+    ctx.textAlign = 'left';
+    ctx.fillText(text, x0 + 6, y0 + 14);
+    // one scale bar: half the plot's height
+    const first = (iso ? [{ ch: iso }] : rows)[0];
+    if (!first) return;
+    const scaling = this.scalings[first.ch.type] || this.scalings.misc || 1e-3;
+    const yc = (y0 + y1) / 2;
+    const half = this.plotH / 4;
+    const x = x1 - 12;
+    ctx.strokeStyle = COLOURS.accent;
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x, yc - half); ctx.lineTo(x, yc + half); ctx.stroke();
+    ctx.font = `11px ${FONT}`;
+    const label = voltsText((OVERLAY_SPAN * scaling) / this.view.scaleFactor);
+    const lw = ctx.measureText(label).width + 8;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+    ctx.fillRect(x - lw - 4, yc - 8, lw, 16);
+    ctx.fillStyle = COLOURS.accent;
+    ctx.textAlign = 'right';
+    ctx.fillText(label, x - 8, yc + 4);
+  }
+
+  /** One channel's trace in the overlay, as a line (for the legend's highlight). */
+  _strokeOverlayRow(ctx, row, colour) {
+    const c = this._cache;
+    const ch = this.channels[row];
+    const data = c && ch ? c.rows.get(ch.index) : null;
+    if (!data) return;
+    const sf = this.sfreq;
+    const sStart = this.view.startS * sf;
+    const span = this.view.durationS * sf;
+    const cols = Math.max(1, Math.round(this.plotW));
+    const { yc, k, lim } = this._overlayGeometry(ch);
+    const offset = this._offsets.has(row) ? this._offsets.get(row) : 0;
+    const yOf = (v) => { const y = (v - offset) * k; return yc - (y > lim ? lim : y < -lim ? -lim : y); };
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(this.x0, this.y0, this.plotW, this.plotH);
+    ctx.clip();
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    const per = span / cols;
+    for (let col = 0; col < cols; col++) {
+      const a = Math.max(0, Math.floor(sStart + col * per) - c.startSample);
+      const b = Math.min(data.length, Math.max(a + 1, Math.floor(sStart + (col + 1) * per) - c.startSample));
+      if (a >= data.length) break;
+      let lo = data[a]; let hi = lo;
+      for (let s = a + 1; s < b; s++) { const v = data[s]; if (v < lo) lo = v; else if (v > hi) hi = v; }
+      const x = this.x0 + col + 0.5;
+      if (col === 0) ctx.moveTo(x, yOf(hi)); else ctx.lineTo(x, yOf(hi));
+      if (hi !== lo) ctx.lineTo(x, yOf(lo));
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /**
+   * The value under a point (client coordinates), for the readout in the status line: {channel, t,
+   * volts} with the signal as drawn (filtered as shown, measured from the trace's centre line, which
+   * is its mean on screen, positive upwards), or null off the traces or before the EEG is read. In
+   * the overlay it is the isolated channel, or the trace drawn nearest the point.
+   */
+  valueAt(clientX, clientY) {
+    const c = this._cache;
+    if (!c || c.filtersKey !== this._filtersKey()) return null;
+    const r = this.over.getBoundingClientRect();
+    const x = clientX - r.left;
+    const y = clientY - r.top;
+    if (x < this.x0 || x > this.x1 || y < this.y0 || y > this.y1) return null;
+    const t = clamp(this.xToT(x), 0, this.durationTotal);
+    const sample = clamp(Math.round(t * this.sfreq), 0, this.nSamples - 1);
+    const valueOf = (row) => {
+      const ch = this.channels[row];
+      const data = ch ? c.rows.get(ch.index) : null;
+      const i = sample - c.startSample;
+      if (!data || i < 0 || i >= data.length || !this._offsets.has(row)) return null;
+      return data[i] - this._offsets.get(row);
+    };
+    let row = null;
+    if (!this.overlay) {
+      row = Math.floor((y - this.y0) / this.rowH) + this.view.firstChannel;
+      if (row >= Math.min(this.channels.length, this.view.firstChannel + this.view.nChannels)) return null;
+    } else if (this.isolated !== null) {
+      row = this.isolated;
+    } else {
+      let best = Infinity;
+      for (const { row: rr, ch } of this.visibleRows()) {
+        const v = valueOf(rr);
+        if (v === null) continue;
+        const { yc, k, lim } = this._overlayGeometry(ch);
+        const d = Math.abs(yc - clamp(v * k, -lim, lim) - y);
+        if (d < best) { best = d; row = rr; }
+      }
+      if (row === null) return null;
+    }
+    const v = valueOf(row);
+    if (v === null || Number.isNaN(v)) return null;
+    return { channel: this.channels[row].name, type: this.channels[row].type, t: sample / this.sfreq, volts: v };
+  }
+
+  /** A group of buttons added to the touch bar under the EEG (the annotation view's View group). */
+  addTouchGroup(caption, buttons) {
+    const g = h('div.touch-group', { role: 'group', 'aria-label': caption }, h('span.touch-caption', {}, caption), ...buttons);
+    this.touchbar.append(g);
+    return g;
   }
 }

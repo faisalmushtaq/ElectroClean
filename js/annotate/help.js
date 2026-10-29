@@ -8,7 +8,7 @@ const arrow = (dir) => `<kbd aria-label="${ARROW_NAMES[dir]}"><span class="ico i
 const HOME_END = IS_MAC ? `<kbd>fn</kbd>+${arrow('left')} / <kbd>fn</kbd>+${arrow('right')}` : '<kbd>Home</kbd> / <kbd>End</kbd>';
 const PAGE = IS_MAC ? `<kbd>fn</kbd>+${arrow('up')} / <kbd>fn</kbd>+${arrow('down')}` : '<kbd>Page Up</kbd> / <kbd>Page Down</kbd>';
 
-export const KEY_HINT = 'Drag to mark  ·  1–9 type  ·  M start, M end  ·  / find a type  ·  N / P next, previous  ·  B pause  ·  ? help';
+export const KEY_HINT = 'Drag to mark  ·  1–9 type  ·  M start, M end  ·  D, 1–5 confidence  ·  N / P next, previous  ·  B pause  ·  ? help';
 export const REVIEW_HINT = 'N / P  next, previous item to look at  ·  arrow keys scroll  ·  ? help';
 /** The same hints for a touch screen (an iPad without a keyboard). */
 export const TOUCH_HINT = 'Drag to mark  ·  tap a numbered type  ·  two fingers move, pinch for more or less time  ·  press and hold an annotation for its menu';
@@ -25,10 +25,16 @@ trace to choose that channel.</li>
 <li><b>Two fingers</b> move the EEG: sideways through time and up and down through the channels.
 <b>Pinch</b> sideways to show more or less time.</li>
 <li><b>Press and hold</b> an annotation for its menu (the common types, Edit times…, Edit
-channels…, Delete), and <b>double-tap</b> it to choose its type from the list.</li>
+channels…, Confidence, Add a note…, Delete), and <b>double-tap</b> it to choose its type from
+the list. The numbers 1 to 5 under the Annotations list rate the selected annotation with one
+tap.</li>
 <li>The buttons under the EEG move through time and the channels and change how much is shown,
-as the keys do on a computer; the last of them shows the next part not yet viewed. Pause, at the
-top, stops the clock. A keyboard attached to the iPad works as on a computer.</li>
+as the keys do on a computer, and one shows the next part not yet viewed. The <b>View</b> buttons
+switch the overlay on and off, show one channel alone (with buttons for the previous and next
+channel), open <b>Go to time</b> and <b>Show all</b>. Pause, at the top, stops the clock. A keyboard
+attached to the iPad works as on a computer.</li>
+<li>In <b>Channels…</b>, <b>Map</b> shows the electrodes on the head: tap one to choose it, drag
+with the Pencil to choose several in a box, and drag with a finger to move a large map.</li>
 </ul>
 `;
 
@@ -44,7 +50,17 @@ export const HELP_HTML = `
 <tr><td>Click empty EEG</td><td>place a time cursor showing the exact time</td></tr>
 <tr><td>Overview bar</td><td>(bottom) shows where you are; click it to jump</td></tr>
 <tr><td><kbd>U</kbd></td><td>the next part not yet viewed</td></tr>
+<tr><td><kbd>G</kbd></td><td>go to a time: type seconds (12.5), m:ss or h:mm:ss and Enter; the time comes to the middle of the screen</td></tr>
+<tr><td><kbd>Shift</kbd>+${IS_MAC ? `<kbd>fn</kbd>+${arrow('right')}` : '<kbd>End</kbd>'}</td><td>show all of the recording, as an overview; again to go back</td></tr>
+<tr><td><kbd>V</kbd></td><td>the channel, time and value under the pointer, in the line at the bottom</td></tr>
+<tr><td><kbd>O</kbd></td><td>overlay: the channels on screen on one shared axis</td></tr>
+<tr><td><kbd>I</kbd></td><td>in the overlay, one channel alone; ${arrow('up')} / ${arrow('down')} go to the previous / next channel</td></tr>
 </table>
+<p>The <b>overlay</b> draws the channels on screen on one axis in thin lines, so that an artifact
+that reaches many channels, such as a blink, stands out as a dark band. Point at a name on the left
+to see that channel on top, or click it (or press <kbd>I</kbd>) to see it alone. In the overlay new
+marks apply to the whole montage; for channel-specific marks, go back to the normal view
+(<kbd>O</kbd>). Show all is for finding your way: the parts it shows do not count as viewed.</p>
 <p>On the overview bar, the parts of the recording that have not been on the screen yet are white
 with a thin grey line above them; the Recording tab and the status line say how much you have viewed.</p>
 <p>Vertical dashed lines labelled in teal are the <b>original experimental events</b>.
@@ -60,7 +76,9 @@ numbered buttons after <i>Draw as</i>, or choose from the menu next to them. Pre
 <li>Choose whether it affects the <b>whole montage</b> or only <b>selected channels</b>
 (the switch in the toolbar, or the key <kbd>C</kbd>). For selected channels,
 click channel names or traces to select them (they turn magenta), or use
-<b>Channels…</b>.</li>
+<b>Channels…</b>, which lists the channels or, with <b>Map</b>, shows them on the head: click an
+electrode to choose it, drag a box to choose several, or move between electrodes with the arrow
+keys and choose with Space.</li>
 <li><b>Drag</b> across the EEG from the start to the end of the artifact. Or, with the
 keyboard, point at the start and press <kbd>M</kbd>, then point at the end and press
 <kbd>M</kbd> again; you can scroll in between, which is the easy way to mark an artifact
@@ -88,6 +106,20 @@ automatically. To merge others of one type, select them in the list and press
 <b>Merge</b>.</li>
 </ul>
 
+<h3>Confidence and notes</h3>
+<p>You can rate how confident you are that a mark is right, from <b>1</b> (not at all confident)
+through 2 (slightly), 3 (moderately) and 4 (very) to <b>5</b> (completely confident). Press
+<kbd>D</kbd>, then a number from <kbd>1</kbd> to <kbd>5</kbd>: it rates the selected annotation, or
+the one you made last; <kbd>0</kbd> clears the rating and <kbd>Esc</kbd> cancels. While ElectroTag
+waits for the number, the number keys rate and do not choose a type. You can also choose
+<b>Confidence</b> in the annotation's menu, or tap a number under the Annotations list. A new mark has
+no rating. If your study asks for a rating on every mark, the question appears after each new mark:
+one number answers it, and carrying on leaves the mark unrated, which Save and Finish lists. The tag
+of a rated mark shows its rating, such as 3/5, and marks rated 1 or 2 are drawn more lightly.
+<b>Add a note…</b>, in the menu or under the list, keeps a short note with an annotation (up to 200
+characters); a small note sign shows which annotations have one. Notes are saved with your
+annotations for the study's researchers.</p>
+
 <h3>Keys for annotating</h3>
 <table class="keys">
 <tr><td><kbd>1</kbd> to <kbd>9</kbd></td><td>type of the next annotation, or of the selected ones</td></tr>
@@ -95,12 +127,15 @@ automatically. To merge others of one type, select them in the list and press
 <tr><td><kbd>M</kbd></td><td>mark the start, then the end, at the pointer</td></tr>
 <tr><td><kbd>[</kbd> / <kbd>]</kbd></td><td>mark the start / the end at the pointer</td></tr>
 <tr><td><kbd>C</kbd></td><td>whole montage or selected channels</td></tr>
+<tr><td><kbd>D</kbd>, then <kbd>1</kbd> to <kbd>5</kbd></td><td>rate your confidence in the selected (or newest) annotation; <kbd>0</kbd> clears it</td></tr>
 <tr><td><kbd>N</kbd> / <kbd>P</kbd></td><td>next / previous annotation</td></tr>
 <tr><td><kbd>Esc</kbd></td><td>cancel a started mark, or end the selection</td></tr>
 <tr><td><kbd>Delete</kbd></td><td>delete the selected annotation</td></tr>
 <tr><td><kbd>${CTRL}+Z</kbd> / <kbd>${CTRL}+Y</kbd></td><td>undo / redo</td></tr>
 <tr><td><kbd>B</kbd></td><td>pause, and resume</td></tr>
 <tr><td><kbd>U</kbd></td><td>the next part not yet viewed</td></tr>
+<tr><td><kbd>G</kbd></td><td>go to a time</td></tr>
+<tr><td><kbd>V</kbd> / <kbd>O</kbd> / <kbd>I</kbd></td><td>value under the pointer / overlay / one channel alone</td></tr>
 <tr><td><kbd>?</kbd></td><td>this help</td></tr>
 </table>
 

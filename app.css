@@ -109,6 +109,8 @@
   --i-star: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1.5l1.9 4.3 4.6.4-3.5 3 1.1 4.6L8 11.4l-4.1 2.4 1.1-4.6-3.5-3 4.6-.4z'/%3E%3C/svg%3E");
   --i-pause: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='square'%3E%3Cpath d='M5.5 3.5v9M10.5 3.5v9'/%3E%3C/svg%3E");
   --i-skip-forward: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='square'%3E%3Cpath d='M2.5 8h8M7 4l4 4-4 4M13.5 3.5v9'/%3E%3C/svg%3E");
+  --i-note: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linejoin='round'%3E%3Cpath d='M3.5 2.5h6l3 3v8h-9z'/%3E%3Cpath d='M9.5 2.5v3h3M5.5 8.5h5M5.5 11h3.5'/%3E%3C/svg%3E");
+  --i-more: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='black'%3E%3Ccircle cx='3.5' cy='8' r='1.25'/%3E%3Ccircle cx='8' cy='8' r='1.25'/%3E%3Ccircle cx='12.5' cy='8' r='1.25'/%3E%3C/svg%3E");
   --i-star-empty: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1' stroke-linejoin='round'%3E%3Cpath d='M8 2.6l1.6 3.7 4 .4-3 2.6.9 3.9L8 11.1l-3.5 2.1.9-3.9-3-2.6 4-.4z'/%3E%3C/svg%3E");
 }
 
@@ -180,6 +182,8 @@ kbd .ico { width: 12px; height: 12px; }
 .ico-star-empty { --i: var(--i-star-empty); }
 .ico-pause { --i: var(--i-pause); }
 .ico-skip-forward { --i: var(--i-skip-forward); }
+.ico-note { --i: var(--i-note); }
+.ico-more { --i: var(--i-more); }
 .stars { display: inline-flex; gap: 2px; vertical-align: -2px; margin-right: 8px; color: var(--ink); }
 .stars .ico { width: 14px; height: 14px; }
 
@@ -515,6 +519,8 @@ ul.examples b { font-weight: 400; color: var(--ink); }
 }
 /* A revision of a finished recording: a banner under the header with its two actions (workspace.js, _revisionBar). */
 .view.annotate.revising { grid-template-rows: auto auto auto minmax(0, 1fr) auto; }
+/* A view that only shows annotations has no toolbar: the EEG takes the row it would have had. */
+.view.annotate.view-only { grid-template-rows: auto minmax(0, 1fr) auto; }
 .ws-revision {
   display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; min-width: 0;
   background: var(--accent-soft); border-bottom: 1px solid var(--hairline); border-left: 3px solid var(--accent);
@@ -667,7 +673,29 @@ ul.unviewed-list { font-variant-numeric: tabular-nums lining-nums; margin-bottom
 .ann-table td.num, .ann-table th.num { text-align: right; font-variant-numeric: tabular-nums lining-nums; }
 .ann-table td.code { color: var(--text-secondary); font-variant-numeric: tabular-nums lining-nums; }
 .ann-table td.label { display: flex; align-items: center; gap: 8px; }
-.ann-table td.label span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.ann-table td.label span:last-child, .ann-table td.label .label-text { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* Confidence and notes: quiet, in the secondary text colour (never the warning or bad-channel greys). */
+.ann-table td.label .conf-mark { flex: none; margin-left: -4px; color: var(--text-secondary); font: var(--t-12); }
+.ann-table td.label .note-mark .ico { width: 12px; height: 12px; vertical-align: 0; }
+.ann-table td.label .note-mark { flex: none; display: inline-flex; margin-left: -4px; color: var(--text-secondary); }
+/* The confidence control below the table: 1 to 5 with one press, and Clear; the whole width of the grid. */
+.conf-row { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 4px; }
+.conf-row .conf-caption { flex: 1 1 100%; font: var(--t-12); }
+.conf-seg { flex: 1 1 auto; }
+.conf-seg .seg { flex: 1 1 0; min-width: 32px; padding: 0 8px; font-variant-numeric: tabular-nums lining-nums; }
+/* The prompt after D or a new mark: a small bar over the top of the EEG, in the panel's calm colours. */
+.conf-prompt {
+  position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 5; display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius); max-width: calc(100% - 16px);
+}
+.conf-prompt-label { font: var(--t-14); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.conf-prompt .seg { min-width: 32px; font-variant-numeric: tabular-nums lining-nums; }
+@media (pointer: coarse) {
+  .conf-seg .seg, .conf-prompt .seg { min-width: 40px; height: 40px; }
+}
+.note-dialog .field, .form .field[name="note"] { width: 100%; }
+.note-count { margin: 0 0 12px; }
+.note-count.error { color: var(--destructive); }
 @media (hover: hover) { .ann-table tr:hover td { background: var(--hover); } }
 .ann-table tr.selected td { background: var(--accent-soft); }
 .ann-table tr.empty td { color: var(--text-secondary); white-space: normal; cursor: default; }
@@ -1031,3 +1059,111 @@ table.leaderboard th:first-child, table.leaderboard td:first-child { width: 56px
   .games-counters { grid-template-columns: minmax(0, 1fr); }
 }
 /* ------------------------------------------ end of the game elements' styles */
+
+/* ------------------------------------------------------------------ problem reports and reviews */
+/* The More button of a recording's row and of the annotation view's header (views/home_feedback.js). */
+.row-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.btn.icon.row-more, .btn.icon.ws-more { padding: 0; }
+.ws-actions .btn.icon.ws-more { width: 32px; padding: 0; }
+.review-line, .problem-line { display: block; margin-top: 4px; }
+.review-line { color: var(--accent); }
+.returned-line { margin: 0 0 12px; }
+/* The report's dialog (annotate/problem.js). */
+.problem-dialog { max-width: 560px; }
+.problem-form fieldset { border: none; margin: 0 0 16px; padding: 0; }
+.problem-form legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
+.problem-option { display: flex; align-items: flex-start; gap: 8px; padding: 4px 0; cursor: pointer; }
+.problem-option input { margin-top: 4px; }
+.problem-option.disabled { color: var(--text-disabled); cursor: default; }
+.problem-option .caption.block { display: block; }
+.problem-note-label { display: flex; flex-direction: column; gap: 4px; margin-bottom: 16px; }
+.problem-note { width: 100%; resize: vertical; min-height: 64px; font: var(--t-16); }
+.problem-note-text { font-style: italic; }
+/* An administrator's review pass and the annotator's feedback (annotate/review_pass.js). */
+.view.annotate.reviewing .ws-side > .review-host { max-height: 72%; }
+.review-pass h3 { font: var(--t-14); font-weight: 600; margin: 16px 0 4px; }
+.review-list, .review-ranges, .feedback-list { list-style: none; margin: 8px 0; padding: 0; }
+.review-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 8px 4px; border-bottom: 1px solid var(--hairline); }
+.review-row.current { background: var(--accent-soft); }
+.review-row[data-status="caveat"] .review-label, .review-row[data-status="comment"] .review-label { color: var(--accent); }
+.review-item-head { display: inline-flex; align-items: center; gap: 8px; flex: 1 1 160px; min-width: 0; border: none; background: none; padding: 0;
+  font: var(--t-14); color: var(--ink); text-align: left; cursor: pointer; }
+.review-item-head .review-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.review-marks .seg { height: 28px; padding: 0 8px; font: var(--t-12); }
+.review-note { flex: 1 1 100%; height: 32px; font: var(--t-14); }
+.review-range-edit { display: flex; gap: 8px; flex: 1 1 100%; }
+.review-range-edit .review-note { flex: 1 1 auto; }
+.review-overall-label { display: flex; flex-direction: column; gap: 4px; margin-top: 16px; }
+.review-overall { width: 100%; resize: vertical; font: var(--t-14); }
+.review-keys, .review-save-msg { margin-top: 8px; }
+.feedback-row { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; padding: 8px 4px; border-bottom: 1px solid var(--hairline); cursor: pointer; }
+.feedback-row.current { background: var(--accent-soft); }
+.feedback-chip { color: var(--accent); border-color: var(--accent); }
+.feedback-note { flex: 1 1 100%; color: var(--text); }
+.feedback-overall { margin: 8px 0; }
+@media (hover: hover) { .feedback-row:hover, .review-item-head:hover .review-label { color: var(--accent); } }
+@media (pointer: coarse) {
+  .review-marks .seg { height: 40px; padding: 0 12px; font: var(--t-14); }
+  .review-note { height: 40px; font: var(--t-16); }
+  .review-overall, .problem-note { font: var(--t-16); }
+  .ws-actions .btn.icon.ws-more { width: 40px; }
+}
+
+/* ------------------------------------------- viewing tools of the annotation view (workspace.js)
+   The value under the pointer in the line at the bottom, Go to time over the EEG, and the switch
+   in the Recording tab. */
+.ws-readout { flex: none; color: var(--ink); white-space: pre; font-variant-numeric: tabular-nums lining-nums; }
+.view-tools { margin: 8px 0 12px; }
+/* Overlay in the toolbar; on a touch screen it is among the View buttons under the EEG instead. */
+.ws-overlay-tool { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+@media (pointer: coarse) { .ws-overlay-tool { display: none; } }
+.view-tools .caption { margin: 0; flex: 1 1 200px; }
+.goto-bar {
+  position: absolute; top: 16px; left: 104px; z-index: 12; max-width: calc(100% - 128px); padding: 12px 16px;
+  background: var(--page); border: 1px solid var(--rule);
+}
+.goto-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.goto-row label { font: var(--t-14); color: var(--ink); }
+.goto-row .field.goto-field { width: 192px; height: 32px; font: var(--t-14); font-variant-numeric: tabular-nums lining-nums; }
+.goto-note { margin: 8px 0 0; max-width: 480px; }
+.goto-note.error { color: var(--destructive); }
+@media (pointer: coarse) {
+  .goto-row .field.goto-field { height: 44px; font: var(--t-16); }
+}
+
+/* --------------------------------------------- the channel chooser's map (channel_map.js)
+   Electrodes as small labelled circles on a drawing of the head, the nose at the top; chosen ones in
+   the magenta of selected channels, bad ones grey with a dashed edge, and the group colours on the
+   edge and name when channels are coloured. */
+.channel-view-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.channel-view-row .caption { margin: 0; }
+.channel-map-block { margin-top: 4px; }
+.map-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 8px; }
+.map-zoom { display: inline-flex; gap: 4px; margin-left: auto; }
+.map-viewport {
+  position: relative; overflow: auto; border: 1px solid var(--hairline); background: var(--surface); touch-action: none;
+  -webkit-user-select: none; user-select: none;
+}
+.map-viewport.disabled { opacity: 0.5; }
+.map-canvas { position: relative; margin: 0 auto; }
+.map-head { position: absolute; left: 0; top: 0; pointer-events: none; }
+.map-head svg { display: block; }
+.map-outline { fill: none; stroke: var(--rule); stroke-width: 1; }
+.map-outline.unknown { stroke-dasharray: 4 4; }
+.map-extra-caption { position: absolute; margin: 0; font: var(--t-12); white-space: nowrap; pointer-events: none; }
+.map-electrode {
+  position: absolute; transform: translate(-50%, -50%); min-width: var(--el-size, 28px); height: var(--el-size, 28px); padding: 0 4px;
+  display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--el-colour, var(--border));
+  border-radius: var(--pill); background: var(--surface); color: var(--el-colour, var(--ink)); font: var(--t-12); white-space: nowrap;
+  cursor: pointer; font-variant-numeric: tabular-nums lining-nums;
+}
+@media (hover: hover) { .map-electrode:hover:not(:disabled) { background: var(--hover); } }
+.map-electrode[aria-pressed="true"] { background: #FBEAF1; border-color: var(--selection-channel); color: var(--selection-channel); font-weight: 600; }
+.map-electrode.bad { color: var(--text-disabled); border-style: dashed; border-color: var(--text-disabled); }
+.map-electrode.bad[aria-pressed="true"] { color: var(--selection-channel); border-color: var(--selection-channel); }
+.map-electrode.dim { opacity: 0.35; }
+.map-electrode:disabled { cursor: default; }
+.map-electrode:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; z-index: 2; }
+.map-box { position: absolute; border: 1px solid var(--accent); background: rgba(43, 67, 146, 0.08); pointer-events: none; }
+.map-note { margin: 8px 0 0; }
+.dialog.wide:has(.channel-map-block:not([hidden])) { max-width: 760px; }

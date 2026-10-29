@@ -11,10 +11,11 @@
 import { h, clear } from '../ui/dom.js';
 import { formatHms, local } from '../util.js';
 import { spanText } from './progress.js';
+import { feedbackCaption, moreButton, returnedLine } from './home_feedback.js';
 
 export const PAGE_SIZE = 25;
 const PREFS_KEY = 'electrotag.home.list';
-const STATUS = { todo: ['To do', ''], in_progress: ['In progress', 'active'], done: ['Done', 'done'] };
+const STATUS = { todo: ['To do', ''], in_progress: ['In progress', 'active'], done: ['Done', 'done'], unusable: ['Cannot be annotated', ''] };
 const MODES = { standard: 'Annotation', guided: 'Guided training', practice: 'Practice', assessment: 'Assessment' };
 export const TABS = [['todo', 'To do'], ['in_progress', 'In progress'], ['done', 'Done'], ['all', 'All'], ['history', 'History']];
 export const SORTS = [['recent', 'Recently worked on'], ['name', 'File name'], ['length', 'Length']];
@@ -57,7 +58,9 @@ export function visibleItems(items, { tab = 'todo', query = '', sort = 'recent' 
   const q = String(query || '').trim().toLowerCase();
   let list = items.map((it, i) => ({ it, i }));
   if (tab === 'history') list = list.filter(({ it }) => it.status === 'done' || (it.saved && typeof it.saved === 'object'));
-  else if (tab === 'todo') list = list.filter(({ it }) => it.status !== 'done'); // everything still to do, started or not
+  else if (tab === 'todo') list = list.filter(({ it }) => it.status !== 'done' && it.status !== 'unusable'); // everything still to do, started or not
+  // a recording that cannot be annotated is finished for the annotator: it is listed with the done ones
+  else if (tab === 'done') list = list.filter(({ it }) => it.status === 'done' || it.status === 'unusable');
   else if (tab !== 'all') list = list.filter(({ it }) => it.status === tab);
   if (q) list = list.filter(({ it }) => String(it.file_name || '').toLowerCase().includes(q) || String(it.recording_id || '').toLowerCase().includes(q));
   const busy = ({ it }) => (it.status === 'in_progress' || it.revising ? 0 : 1);
@@ -114,6 +117,7 @@ export function recordingsCard(app) {
   };
 
   const action = (it) => {
+    if (it.status === 'unusable') return null;
     if (it.status === 'done') {
       if (!canRevise(app, it)) return null;
       return h('button.btn.small', { type: 'button', 'data-log': 'open-to-revise', onclick: () => app.openAssignment(it, { revise: true }) },
@@ -125,23 +129,23 @@ export function recordingsCard(app) {
   const listRow = (it) => {
     const [text, cls] = it.revising ? ['Being revised', 'active'] : STATUS[it.status] || [it.status, ''];
     return h('tr', { 'data-id': it.recording_id, 'data-log-text': it.file_name },
-      h('td', {}, h('span.file', { title: it.recording_id }, it.file_name)),
+      h('td', {}, h('span.file', { title: it.recording_id }, it.file_name), feedbackCaption(app, it)),
       showMode ? h('td.opt', {}, MODES[it.mode] || it.mode) : null,
       h('td.num', {}, formatHms(it.duration_s)),
       h('td.num.opt', {}, String(it.n_channels)),
       h('td', {}, h(`span.chip${cls ? `.${cls}` : ''}`, {}, text)),
-      h('td.actions', {}, action(it)));
+      h('td.actions', {}, h('span.row-actions', {}, action(it), moreButton(app, it))));
   };
 
   const historyRow = (it) => {
     const s = savedOf(it) || {};
     return h('tr', { 'data-id': it.recording_id, 'data-log-text': it.file_name },
       h('td.name', {}, h('span.file-line', { title: it.recording_id }, it.file_name),
-        h('span.caption.when', {}, `Saved ${savedText(s.saved_at)}${it.revising ? ' · revision under way' : ''}`)),
+        h('span.caption.when', {}, `Saved ${savedText(s.saved_at)}${it.revising ? ' · revision under way' : ''}`), feedbackCaption(app, it)),
       h('td.num', {}, String(s.version || 1)),
       h('td.num.opt', {}, s.n_annotations === null || s.n_annotations === undefined ? 'n/a' : String(s.n_annotations)),
       h('td.num.opt', {}, s.elapsed_s === null || s.elapsed_s === undefined ? 'n/a' : spanText(s.elapsed_s)),
-      h('td.actions', {}, action(it)));
+      h('td.actions', {}, h('span.row-actions', {}, action(it), moreButton(app, it))));
   };
 
   const pager = (pg, total) => {
@@ -188,6 +192,7 @@ export function recordingsCard(app) {
 
   return h('section.card.recordings-card', { 'data-section': 'recordings' },
     h('h2', {}, 'Your recordings'),
+    returnedLine(app),
     items.length
       ? [tabs, h('div.rec-tools', {}, search, h('label.rec-sort-label', {}, h('span.caption', {}, 'Sort'), sort)), body]
       : h('p.caption', {}, 'Your study team assigns recordings to you.'),

@@ -5,6 +5,7 @@
 import { h, clear } from '../ui/dom.js';
 import { MODES, STATUS, bytesText, programmeText, progressCounts, tsvText, whenText } from './model.js';
 import { actionButton, card, chip, dataTable, downloadBase64, downloadText, messageArea, recordingName, sectionHead } from './ui.js';
+import { reviewButton, reviewCount } from './reviews.js';
 
 export class ResultsSection {
   constructor(area) {
@@ -17,6 +18,7 @@ export class ResultsSection {
       { title: 'Done', num: true, render: (r) => `${r.c.done} of ${r.c.assigned}` },
       { title: 'In progress', num: true, render: (r) => String(r.c.in_progress) },
       { title: 'To do', num: true, render: (r) => String(r.c.todo) },
+      { title: 'Cannot be annotated', num: true, render: (r) => String(r.c.unusable || 0) },
       { title: 'Training', render: (r) => (r.programme ? h('span', {}, h('span.caption.block', {}, r.programme.name || r.programme.set_id || ''), programmeText(r.programme)) : '–') },
       { title: 'Last seen', render: (r) => whenText(r.last_seen) },
       { title: '', cls: 'actions', render: (r) => h('button.btn.small', { type: 'button', onclick: () => this._showWork(r) }, 'Work') },
@@ -49,15 +51,18 @@ export class ResultsSection {
     this.table.update(this.rows);
   }
 
-  _showWork(r) {
+  async _showWork(r) {
+    try { this.reviews = (await this.area.read('reviews_list', { annotator_id: r.annotator_id })).reviews || []; } catch { this.reviews = []; }
     clear(this.work);
     this.work.append(card(`Work of ${r.annotator_id}`,
       dataTable([
         { title: 'Recording', render: (i) => recordingName(i.recording_id) },
         { title: 'Mode', render: (i) => (MODES[i.mode] || i.mode) + (i.context_id ? ` (${i.context_id})` : '') },
         { title: 'Status', render: (i) => chip(STATUS[i.status] || i.status, i.status === 'done' ? 'done' : i.status === 'in_progress' ? 'active' : '') },
+        { title: 'Reviews', num: true, render: (i) => reviewCount(this.reviews, r.annotator_id, i) },
         { title: 'Saved', num: true, render: (i) => String(i.attempts ?? 0) },
         { title: 'Last activity', render: (i) => whenText(i.last_activity, { never: '–' }) },
+        { title: '', cls: 'actions', render: (i) => reviewButton(this.area, r.annotator_id, i, { route: 'admin-results', params: null }) },
       ], r.items || [], { empty: 'Nothing is assigned to this person.', pageSize: 20 }),
       h('div.btn-row', {}, h('button.btn.quiet', { type: 'button', onclick: () => clear(this.work) }, 'Close'))));
     this.work.querySelector('h2').tabIndex = -1;
@@ -66,8 +71,8 @@ export class ResultsSection {
 
   _downloadTable() {
     const rows = this.rows.map((r) => ({ annotator_id: r.annotator_id, display_name: r.display_name || '', role: r.role, assigned: r.c.assigned,
-      done: r.c.done, in_progress: r.c.in_progress, todo: r.c.todo, training: r.programme ? programmeText(r.programme) : '', last_seen: r.last_seen || '' }));
-    downloadText('progress.tsv', tsvText(['annotator_id', 'display_name', 'role', 'assigned', 'done', 'in_progress', 'todo', 'training', 'last_seen'], rows), 'text/tab-separated-values');
+      done: r.c.done, in_progress: r.c.in_progress, todo: r.c.todo, unusable: r.c.unusable, training: r.programme ? programmeText(r.programme) : '', last_seen: r.last_seen || '' }));
+    downloadText('progress.tsv', tsvText(['annotator_id', 'display_name', 'role', 'assigned', 'done', 'in_progress', 'todo', 'unusable', 'training', 'last_seen'], rows), 'text/tab-separated-values');
   }
 
   async _zip() {

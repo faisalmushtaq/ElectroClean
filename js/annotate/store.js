@@ -2,16 +2,21 @@
 // AnnotationStore (electrotag/app/annotations/store.py), so the rules are the same in both.
 //
 // Annotations are plain objects in samples:
-//   {annotation_id, label, onset_sample, duration_samples, channels: [...], created_at, modified_at}
-// `channels` is [] for the whole montage, otherwise channel names in recording order.
+//   {annotation_id, label, onset_sample, duration_samples, channels: [...], created_at, modified_at,
+//    confidence?, note?}
+// `channels` is [] for the whole montage, otherwise channel names in recording order. `confidence`
+// (a rating from 1 to 5) and `note` (one line of at most 200 characters) are there only when given;
+// no mark starts with a rating (confidence.js).
 //
 // Automatic merging: when an annotation is created or changed so that it overlaps in time another
 // annotation of the same type with the same channels (both whole montage, or exactly the same
 // channels), the two become one annotation spanning both. The older one keeps its identifier, and
 // the merge is part of the same undo step. Annotations that only touch, or cover different
-// channels, stay separate.
+// channels, stay separate. The merged annotation keeps the lowest rating and the notes of
+// both, joined with "; " (confidence.js).
 
 import { newId, nowLocalIso } from '../util.js';
+import { cleanNote, isConfidence, joinNotes, lowerConfidence, noteProblem } from './confidence.js';
 
 export class AnnotationError extends Error {}
 
@@ -19,7 +24,11 @@ export const endSample = (a) => a.onset_sample + a.duration_samples;
 export const isGlobal = (a) => a.channels.length === 0;
 
 function freeze(a) {
-  return Object.freeze({ ...a, channels: Object.freeze([...a.channels]) });
+  const out = { ...a, channels: Object.freeze([...a.channels]) };
+  // A confidence or note is kept only when given, so that annotations without them stay as they were.
+  if (out.confidence === null || out.confidence === undefined || out.confidence === 0 || out.confidence === '') delete out.confidence;
+  if (typeof out.note === 'string' && out.note.trim()) out.note = out.note.trim(); else delete out.note;
+  return Object.freeze(out);
 }
 
 function sortKey(a, b) {
@@ -109,6 +118,9 @@ export class AnnotationStore {
     if (new Set(a.channels).size !== a.channels.length) throw new AnnotationError('A channel is listed more than once');
     const unknown = a.channels.filter((c) => !this._chIndex.has(c));
     if (unknown.length) throw new AnnotationError(`Channels not in the recording: ${unknown.join(', ')}`);
+    if ('confidence' in a && !isConfidence(a.confidence)) throw new AnnotationError(`Confidence must be a whole number from 1 to 5, not ${a.confidence}`);
+    const problem = noteProblem(a.note);
+    if (problem) throw new AnnotationError(problem);
     return a;
   }
 
@@ -151,7 +163,9 @@ export class AnnotationStore {
       const survivor = group.reduce((m, a) => (order.get(a.annotation_id) < order.get(m.annotation_id) ? a : m));
       const start = Math.min(...group.map((a) => a.onset_sample));
       const stop = Math.max(...group.map(endSample));
-      current = this._check(freeze({ ...survivor, onset_sample: start, duration_samples: stop - start, modified_at: nowLocalIso() }));
+      const byAge = [...group].sort((x, y) => order.get(x.annotation_id) - order.get(y.annotation_id));
+      current = this._check(freeze({ ...survivor, onset_sample: start, duration_samples: stop - start, modified_at: nowLocalIso(),
+        confidence: lowerConfidence(byAge.map((x) => x.confidence)), note: joinNotes(byAge.map((x) => x.note)) }));
       const gone = new Set(group.map((a) => a.annotation_id));
       gone.delete(survivor.annotation_id);
       const kept = new Map();
@@ -218,12 +232,13 @@ export class AnnotationStore {
   }
 
   // ----------------------------------------------------------------- editing
-  add(label, onsetSample, durationSamples, channels = [], annotationId = null) {
+  /** Add an annotation (without a rating unless `confidence` is given: no mark starts with one). */
+  add(label, onsetSample, durationSamples, channels = [], annotationId = null, { confidence = null, note = '' } = {}) {
     const stamp = nowLocalIso();
     const ann = this._check(freeze({
       annotation_id: annotationId || newId(), label, onset_sample: Math.round(onsetSample),
       duration_samples: Math.round(durationSamples), channels: this.normaliseChannels(channels),
-      created_at: stamp, modified_at: stamp,
+      created_at: stamp, modified_at: stamp, confidence, note,
     }));
     if (this._items.has(ann.annotation_id)) throw new AnnotationError(`Duplicate annotation id ${ann.annotation_id}`);
     const items = new Map(this._items);
@@ -237,7 +252,8 @@ export class AnnotationStore {
     return this.add(label, on, dur, channels);
   }
 
-  update(id, { label, onset_sample, duration_samples, channels, description } = {}) {
+  /** Change an annotation (a field left out stays as it is; a confidence of 0 or a note of '' removes it). */
+  update(id, { label, onset_sample, duration_samples, channels, confidence, note, description } = {}) {
     const current = this.get(id);
     const changes = {};
     if (label != null && label !== current.label) changes.label = label;
@@ -248,6 +264,15 @@ export class AnnotationStore {
     if (channels != null) {
       const nc = this.normaliseChannels(channels);
       if (nc.length !== current.channels.length || nc.some((c, i) => c !== current.channels[i])) changes.channels = nc;
+    }
+    if (confidence != null) {
+      if (confidence !== 0 && !isConfidence(confidence)) throw new AnnotationError(`Confidence must be a whole number from 1 to 5, not ${confidence}`);
+      if (confidence !== (current.confidence || 0)) changes.confidence = confidence;
+    }
+    if (note != null) {
+      const problem = noteProblem(note);
+      if (problem) throw new AnnotationError(problem);
+      if (cleanNote(note) !== (current.note || '')) changes.note = cleanNote(note);
     }
     const keys = Object.keys(changes);
     if (!keys.length) return current;
@@ -291,6 +316,39 @@ export class AnnotationStore {
     }
   }
 
+  /** Rate an annotation from 1 to 5, or clear its rating with null (or 0). */
+  setConfidence(id, confidence) {
+    return this.update(id, { confidence: confidence || 0, description: confidenceDescription(confidence) });
+  }
+
+  /** Give several annotations one rating (or clear it with null) as one undoable step. */
+  setConfidenceMany(ids, confidence) {
+    const level = confidence || 0;
+    if (level !== 0 && !isConfidence(level)) throw new AnnotationError(`Confidence must be a whole number from 1 to 5, not ${confidence}`);
+    const items = new Map(this._items);
+    const changed = [];
+    const stamp = nowLocalIso();
+    for (const id of [...new Set(ids)]) {
+      const current = this.get(id);
+      if ((current.confidence || 0) !== level) {
+        items.set(id, this._check(freeze({ ...current, confidence: level, modified_at: stamp })));
+        changed.push(id);
+      }
+    }
+    if (changed.length) {
+      const what = confidenceDescription(level);
+      this._commit('update', changed.length === 1 ? what : `${what} (${changed.length} annotations)`, items, changed);
+    }
+  }
+
+  /** Add, change or (with '') remove an annotation's note. */
+  setNote(id, note) {
+    const current = this.get(id);
+    const text = cleanNote(note);
+    const what = !text ? 'remove note' : current.note ? 'change note' : 'add note';
+    return this.update(id, { note: text, description: what });
+  }
+
   setChannels(id, channels) {
     return this.update(id, { channels: [...channels], description: 'change channels' });
   }
@@ -323,9 +381,12 @@ export class AnnotationStore {
     const stop = Math.max(...anns.map(endSample));
     const channels = anns.some(isGlobal) ? [] : this.normaliseChannels(anns.flatMap((a) => a.channels));
     const stamp = nowLocalIso();
+    const order = new Map([...this._items.keys()].map((k, i) => [k, i])); // the oldest first
+    const byAge = [...anns].sort((x, y) => order.get(x.annotation_id) - order.get(y.annotation_id));
     const merged = this._check(freeze({
       annotation_id: newId(), label: anns[0].label, onset_sample: start, duration_samples: stop - start,
       channels, created_at: stamp, modified_at: stamp,
+      confidence: lowerConfidence(anns.map((a) => a.confidence)), note: joinNotes(byAge.map((a) => a.note)),
     }));
     const items = new Map([...this._items].filter(([k]) => !unique.includes(k)));
     items.set(merged.annotation_id, merged);
@@ -337,4 +398,9 @@ export class AnnotationStore {
   toJSON() {
     return this.annotations().map((a) => ({ ...a, channels: [...a.channels] }));
   }
+}
+
+/** How a change of confidence is described in the undo history (as in store.py). */
+export function confidenceDescription(confidence) {
+  return confidence ? `set confidence ${confidence}` : 'clear confidence';
 }
