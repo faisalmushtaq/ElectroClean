@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -10,7 +11,7 @@ import pytest
 from electrotag.activity.cli import main as activity_main
 from electrotag.activity.cli import write_activity
 from electrotag.activity.logs import find_logs, read_logs, read_visit_log
-from electrotag.activity.summary import active_seconds, summarise
+from electrotag.activity.summary import active_seconds, replay_annotations, summarise
 from electrotag.app.session.interaction_log import NULL_LOG, InteractionLog
 from tests.activity_logs_helper import LogBuilder, demo_logs
 
@@ -140,3 +141,140 @@ def test_cli_writes_tables_and_report(tmp_path, capsys):
     assert activity_main([str(tmp_path / "empty_dir_missing")]) == 2
     (tmp_path / "empty").mkdir()
     assert activity_main([str(tmp_path / "empty")]) == 1
+
+
+# ------------------------------------------- confidence, notes, problems and reviews
+def _mark(aid, confidence=None, note_length=0):
+    return {"id": aid, "label": "Eye-blink-artifact", "confidence": confidence, "note_length": note_length}
+
+
+def marks_log(path):
+    """A visit with ratings, notes, a problem report, the feedback on a review and a revision of the work."""
+    b = LogBuilder(path, "A01", T0)
+    b.context = {"recording": "r1", "window_no": 1}
+    b.event(0.0, "recording_opened", duration_s=60, n_channels_shown=22, annotations_restored=0, resumed=False)
+    b.event(0.0, "viewer_ready")
+    for i, aid in enumerate(("a1", "a2", "a3"), start=1):
+        b.event(float(i), "annotation_created", via="eeg_drag", n_total=i, annotations=[_mark(aid)])
+    b.event(4.0, "confidence_set", via="shortcut:Confidence 3", n_total=3,
+            annotations=[{"id": "a1", "label": "Eye-blink-artifact", "confidence": 3, "before": None}])
+    b.event(5.0, "confidence_set", n_total=3, annotations=[{"id": "a2", "confidence": 5, "before": None}])
+    b.event(6.0, "confidence_set", n_total=3, annotations=[{"id": "a2", "confidence": None, "before": 5}])
+    b.event(7.0, "undo", n_total=3, added=[], removed=[], changed=[_mark("a2", 5)])  # the rating is back
+    b.event(8.0, "confidence_prompt", trigger="key", outcome="rated", n_annotations=1, confidence=3)
+    b.event(9.0, "confidence_prompt", trigger="new_mark", outcome="timeout", n_annotations=1)
+    for t, change, length in ((10.0, "added", 12), (11.0, "changed", 20)):
+        b.event(t, "note_set", n_total=3, annotations=[{"id": "a1", "change": change, "note_length": length}])
+    b.event(12.0, "note_set", n_total=3, annotations=[{"id": "a3", "change": "added", "note_length": 5}])
+    b.event(13.0, "note_set", n_total=3, annotations=[{"id": "a3", "change": "removed", "note_length": 0,
+                                                       "previous_length": 5}])
+    b.event(14.0, "problem_reported", recording_id="r1", mode="standard", reason="noisy", outcome="noted",
+            where="annotate", already=False, note_length=0)
+    b.event(15.0, "confidence_check", n_unrated=1, n_annotations=3, choice="rate")
+    b.event(16.0, "confidence_check", n_unrated=1, n_annotations=3, choice="save")
+    b.event(17.0, "recording_finished", n_annotations=3)
+    b.context = {}
+    b.event(18.0, "problem_reported", recording_id="r9", mode="standard", reason="will_not_open",
+            outcome="unusable", where="home", already=False, note_length=30)
+    # The annotator reads the review of r1 (read only), then revises it with the feedback beside it.
+    b.context = {"recording": "r1", "window_no": 2}
+    b.event(20.0, "recording_opened", segment="feedback", annotations_restored=0, duration_s=60)
+    b.event(20.5, "feedback_shown", recording_id="r1", reviews=2, items=3, kind="feedback")
+    b.event(21.0, "feedback_item_jumped", status="caveat", onset_s=1.0, item=1)
+    b.event(22.0, "feedback_item_jumped", status="comment", onset_s=3.0, item=3)
+    b.event(23.0, "feedback_closed", recording_id="r1", to="revision")
+    b.context = {"recording": "r1", "window_no": 3}
+    b.event(24.0, "feedback_shown", recording_id="r1", reviews=2, items=3, kind="annotate")
+    b.event(24.0, "recording_opened", annotations_restored=0, revision=2, duration_s=60)
+    b.event(24.0, "revision_started", version=2, revises=1, annotations_loaded=3)
+    b.event(25.0, "confidence_set", n_total=3, annotations=[{"id": "a3", "confidence": 4, "before": None}])
+    b.event(26.0, "recording_finished", n_annotations=3, version=2)
+    # A draft continued from work the logs do not cover: its ratings are unknown.
+    b.context = {"recording": "r2", "window_no": 4}
+    b.event(30.0, "recording_opened", annotations_restored=2, resumed=True, duration_s=60)
+    b.event(31.0, "confidence_set", n_total=2, annotations=[{"id": "x1", "confidence": 2, "before": None}])
+    b.event(32.0, "recording_finished", n_annotations=2)
+    b.context = {}
+    return b.write()
+
+
+def test_ratings_notes_problems_and_reviews_are_counted(tmp_path):
+    t = rows_for(marks_log(tmp_path / "v.jsonl"))
+    first, feedback, revision, draft = t.recordings
+    assert [r["segment"] for r in t.recordings] == ["recording", "feedback", "recording", "recording"]
+    assert first["ratings_given"] == 2 and first["ratings_cleared"] == 1
+    # a1 rated 3, a2 back at 5 after the undo, a3 never rated
+    assert first["annotations_rated"] == 2 and first["share_rated"] == pytest.approx(2 / 3)
+    assert first["confidence_prompts"] == 2
+    assert json.loads(first["confidence_prompts_by_outcome"]) == {"rated": 1, "timeout": 1}
+    assert first["confidence_checks"] == 2 and json.loads(first["confidence_check_choices"]) == {"rate": 1, "save": 1}
+    assert first["notes_written"] == 3 and first["notes_removed"] == 1 and first["annotations_with_note"] == 1
+    assert first["problems_reported"] == 1 and first["set_aside"] is False
+    assert first["reviews_received"] == 0
+    assert feedback["outcome"] == "finished" and feedback["final_annotations"] == ""
+    assert feedback["reviews_received"] == 2 and feedback["feedback_items"] == 3
+    assert feedback["feedback_items_opened"] == 2 and feedback["annotations_rated"] == ""
+    # The revision starts from the version saved in the first row, and rates the last mark.
+    assert revision["reviews_received"] == 2 and revision["ratings_given"] == 1
+    assert revision["annotations_rated"] == 3 and revision["share_rated"] == pytest.approx(1)
+    assert revision["annotations_with_note"] == 1
+    assert draft["ratings_given"] == 1 and draft["annotations_rated"] == "" and math.isnan(draft["share_rated"])
+    (visit,) = t.visits
+    assert visit["recordings_opened"] == 3  # the feedback view is left out
+    assert visit["ratings_given"] == 4 and visit["notes_written"] == 3
+    assert visit["problems_reported"] == 2 and visit["feedback_views"] == 2
+
+
+def test_ratings_are_left_empty_when_the_log_cannot_show_them(tmp_path):
+    b = LogBuilder(tmp_path / "v.jsonl", "A01", T0)
+    b.recording(0.0, "r1", 1, annotations=[5.0, 6.0], finish=None)
+    b.context = {"recording": "r1", "window_no": 1}
+    b.event(7.0, "confidence_set", n_total=2, annotations=[{"id": "a1", "confidence": 4}])
+    b.event(8.0, "undo", n_total=2)  # without the annotations it changed
+    b.event(9.0, "recording_finished", n_annotations=2)
+    b.recording(10.0, "r2", 2, annotations=[11.0], finish=None)
+    b.context = {"recording": "r2", "window_no": 2}
+    b.event(12.0, "confidence_set", n_total=1, annotations=[{"id": "a1", "confidence": 2}])
+    b.event(13.0, "recording_finished", n_annotations=5)  # disagrees with the annotations in the log
+    b.write()
+    unknown, mismatch = rows_for(b.path).recordings
+    assert unknown["ratings_given"] == 1 and unknown["annotations_rated"] == ""
+    assert mismatch["annotations_rated"] == "" and mismatch["annotations_with_note"] == ""
+    # Entries that do not name their annotation leave the result unknown rather than guessed.
+    created = {"type": "annotation_created", "annotations": [_mark("a1", 2)]}
+    assert replay_annotations({}, [created]) == {"a1": {"confidence": 2, "note_length": 0}}
+    assert replay_annotations({}, [created, {"type": "note_set", "annotations": ["a1"]}]) is None
+    assert replay_annotations({}, [{"type": "annotation_edited", "annotations": [{"label": "x"}]}]) is None
+
+
+def test_report_and_tables_show_ratings_notes_problems_and_reviews(tmp_path):
+    marks_log(tmp_path / "logs" / "v.jsonl")
+    tables, paths = write_activity([tmp_path / "logs"], tmp_path / "out")
+    header = paths["recordings"].read_text(encoding="utf-8").splitlines()[0].split("\t")
+    for column in ("annotations_rated", "share_rated", "notes_written", "annotations_with_note",
+                   "problems_reported", "reviews_received"):
+        assert column in header
+    assert "feedback_views" in paths["visits"].read_text(encoding="utf-8").splitlines()[0].split("\t")
+    page = paths["report"].read_text(encoding="utf-8")
+    assert "Confidence, notes, problems and reviews" in page
+    # A01: 8 saved over three finished recordings; 5 rated of the 6 in the two whose ratings are known (the
+    # continued draft is left out), 2 with a note, 2 problems, and r1's 2 reviews counted once.
+    start = page.index("Confidence, notes, problems and reviews")
+    row = page[page.index("<td>A01</td>", start):page.index("</tr>", page.index("<td>A01</td>", start))]
+    cells = [c.split(">", 1)[1] for c in row.split("</td>") if ">" in c]
+    assert cells == ["A01", "8", "5", "0.83", "2", "2", "2"]
+    plain = demo_logs(tmp_path / "plain")
+    _, paths = write_activity([plain], tmp_path / "out2")
+    assert "Confidence, notes, problems and reviews" not in paths["report"].read_text(encoding="utf-8")
+
+
+def test_the_logs_guide_lists_every_column_as_the_tables_describe_it():
+    from pathlib import Path
+
+    from electrotag.activity.summary import RECORDING_COLUMNS, VISIT_COLUMNS
+
+    guide = (Path(__file__).resolve().parents[1] / "docs" / "activity_logs.md").read_text(encoding="utf-8")
+    for heading, columns in (("### visits.tsv", VISIT_COLUMNS), ("### recordings.tsv", RECORDING_COLUMNS)):
+        section = guide[guide.index(heading):]
+        table = section[section.index("| Column | Meaning |"):].split("\n\n", 1)[0].splitlines()[2:]
+        assert table == [f"| `{c}` | {d} |" for c, d in columns], heading

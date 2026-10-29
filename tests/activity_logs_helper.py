@@ -27,7 +27,7 @@ class LogBuilder:
         }]
         self.context: dict[str, Any] = {}
 
-    def event(self, t: float, kind: str, **fields: Any) -> None:
+    def event(self, t: float, kind: str, /, **fields: Any) -> None:
         self.seq += 1
         wall = (self.started + timedelta(seconds=t)).isoformat(timespec="milliseconds")
         self.lines.append({"seq": self.seq, "t": t, "wall": wall, "type": kind, **self.context, **fields})

@@ -9,6 +9,14 @@ Active time
     first ``idle_after_s`` seconds. Time while ElectroTag was not the active application does not
     count. The opening and the closing of the recording count as inputs, so a recording's active
     time is never longer than its wall-clock time.
+
+Ratings and notes of the annotations saved
+    The annotations are followed through a recording's events (each change carries the annotations
+    it touched, with their ``confidence`` and ``note_length``), so the ratings and notes of the
+    annotations at the end are known. Annotations restored at opening (a draft continued, or the
+    version a revision starts from) are taken from the annotator's previous row for the same
+    recording and mode when that row ended with the same number of annotations; otherwise the
+    columns are left empty. The text of a note is never in the log, and only its length is used.
 """
 
 from __future__ import annotations
@@ -28,6 +36,10 @@ INPUT_EVENTS = frozenset({"mouse_press", "mouse_release", "double_click", "wheel
                           "field_edited"})
 INACTIVE_STATES = frozenset({"inactive", "hidden", "suspended"})
 TRAINING_PREFIXES = ("guided_", "practice_", "assessment_", "training_", "stage_")
+#: Events that change annotations; each carries the annotations it touched.
+ANNOTATION_CHANGES = frozenset({"annotation_created", "annotation_deleted", "annotation_edited",
+                                "annotation_relabelled", "annotation_channels_changed", "confidence_set", "note_set",
+                                "undo", "redo", "annotations_merged", "annotations_reset"})
 
 VISIT_COLUMNS: list[tuple[str, str]] = [
     ("visit_id", "Identifier of the visit (one log file: in the browser, from signing in until signing out "
@@ -48,6 +60,10 @@ VISIT_COLUMNS: list[tuple[str, str]] = [
     ("clicks", "Mouse button presses anywhere in ElectroTag."),
     ("key_presses", "Key presses (not counting held-down repeats or keys typed into text fields)."),
     ("shortcuts", "Keyboard shortcuts used (for example 1 to 9, M, N, Delete, Ctrl+Z)."),
+    ("ratings_given", "Confidence ratings from 1 to 5 given to annotations (a mark rated again counts again)."),
+    ("notes_written", "Notes added to annotations or changed (a count: the text of a note is never logged)."),
+    ("problems_reported", "Problems reported with recordings, from the list of recordings or the annotation view."),
+    ("feedback_views", "Times the feedback on reviewed work was shown, read only or beside a revision."),
     ("events", "Events in the log."),
     ("bad_lines", "Lines that could not be read (usually the last line after a crash)."),
     ("electrotag_version", "ElectroTag version."),
@@ -64,12 +80,14 @@ RECORDING_COLUMNS: list[tuple[str, str]] = [
     ("context_id", "Reference set of training work (empty for standard annotation)."),
     ("recording", "Recording ID (path relative to the dataset); 'quiz' for the short-segment quiz."),
     ("segment", "recording (a recording opened for annotation), review (a practice recording reviewed against "
-                "the reference), quiz, or training (training events outside a recording)."),
+                "the reference), feedback (the annotator reading the reviews of their saved work, read only), "
+                "quiz, or training (training events outside a recording)."),
     ("window_no", "Number of the recording opened within the visit (1, 2, ...)."),
     ("order", "Position among all of this annotator's rows, in the order they were started (1 = first)."),
     ("order_in_mode", "The same, counting only rows of the same mode."),
     ("started_at", "Local date and time the recording opened, with its UTC offset."),
-    ("outcome", "finished (Save and Finish), closed_without_saving, or not_finished (the log ended first)."),
+    ("outcome", "finished (Save and Finish; for a review or feedback row, closed), closed_without_saving, or "
+                "not_finished (the log ended first)."),
     ("resumed", "True if unfinished work from an earlier visit was restored."),
     ("recording_duration_s", "Length of the recording in seconds."),
     ("n_channels_shown", "Channels shown in the viewer."),
@@ -109,6 +127,26 @@ RECORDING_COLUMNS: list[tuple[str, str]] = [
     ("pointer_distance_px", "Distance the pointer travelled over the EEG, in screen pixels."),
     ("dialogs", "Dialogs shown (questions, channel chooser, type picker and so on)."),
     ("status_messages", "Messages shown in the status line."),
+    ("ratings_given", "Confidence ratings from 1 to 5 given to annotations (a mark rated again counts again)."),
+    ("ratings_cleared", "Confidence ratings cleared."),
+    ("annotations_rated", "Annotations with a confidence rating among final_annotations (empty when the log does "
+                          "not show the ratings of annotations restored at opening)."),
+    ("share_rated", "annotations_rated divided by final_annotations (0 to 1)."),
+    ("confidence_prompts", "Requests for a rating (after D, after a new mark in an every-mark study, or with "
+                           "Rate them before Save and Finish)."),
+    ("confidence_prompts_by_outcome", "How the requests for a rating ended (rated, cleared, cancelled, later, "
+                                      "timeout, other_input, replaced) and how often (JSON)."),
+    ("confidence_checks", "Times Save and Finish found marks without a rating in an every-mark study."),
+    ("confidence_check_choices", "The choices at those checks (rate, save, cancel) and how often (JSON)."),
+    ("notes_written", "Notes added to annotations or changed (a count: the text of a note is never logged)."),
+    ("notes_removed", "Notes removed."),
+    ("annotations_with_note", "Annotations with a note among final_annotations (empty as for annotations_rated)."),
+    ("problems_reported", "Problems reported with the recording from the annotation view."),
+    ("set_aside", "True if a problem report set the recording aside as one that cannot be annotated."),
+    ("reviews_received", "Reviews of the recording shown to the annotator (in the feedback view, or beside a "
+                         "revision)."),
+    ("feedback_items", "Items of feedback shown (reviewed annotations and stretches without one)."),
+    ("feedback_items_opened", "Items of feedback the annotator went to."),
     ("guided_steps", "Guided training: steps completed."),
     ("guided_attempts", "Guided training: attempts at the steps."),
     ("guided_show_me", "Guided training: times the expert's answer was shown."),
@@ -206,6 +244,74 @@ class Segment:
     events: list[dict[str, Any]] = field(default_factory=list)
 
 
+def _is_rating(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and 1 <= value <= 5
+
+
+def _most(events: list[dict[str, Any]], key: str) -> int:
+    """The largest whole number in ``key`` of the events (0 for none)."""
+    values = [_num(e.get(key)) for e in events]
+    return max((int(x) for x in values if not math.isnan(x)), default=0)
+
+
+def _length(item: dict[str, Any]) -> int:
+    x = _num(item.get("note_length"))
+    return 0 if math.isnan(x) else int(x)
+
+
+def _ann_id(item: Any) -> str | None:
+    if isinstance(item, dict):
+        return str(item["id"]) if item.get("id") is not None else None
+    return str(item) if item is not None else None
+
+
+def replay_annotations(start: dict[str, dict[str, Any]],
+                       events: Iterable[dict[str, Any]]) -> dict[str, dict[str, Any]] | None:
+    """The annotations after ``events`` (id -> ``confidence`` and ``note_length``), from ``start``.
+
+    None when an event does not say which annotations it touched, so the result cannot be known."""
+    state = {k: dict(v) for k, v in start.items()}
+    for e in events:
+        kind = e.get("type")
+        if kind not in ANNOTATION_CHANGES:
+            continue
+        if kind in ("confidence_set", "note_set"):
+            items = e.get("annotations")
+            if not isinstance(items, list):
+                return None
+            for a in items:
+                aid = _ann_id(a) if isinstance(a, dict) else None
+                if aid is None:
+                    return None
+                cur = state.setdefault(aid, {"confidence": None, "note_length": 0})
+                if kind == "confidence_set":
+                    cur["confidence"] = a.get("confidence")
+                else:
+                    cur["note_length"] = _length(a)
+            continue
+        if kind in ("undo", "redo", "annotations_merged", "annotations_reset"):
+            lists = [e.get(k) for k in ("removed", "added", "changed")]
+            if not all(isinstance(x, list) for x in lists):
+                return None
+            removed, put = lists[0], lists[1] + lists[2]
+        elif kind == "annotation_deleted":
+            removed, put = e.get("annotations"), []
+        else:
+            removed, put = e.get("merged_away") or [], e.get("annotations")
+        if not isinstance(removed, list) or not isinstance(put, list):
+            return None
+        for a in removed:
+            state.pop(_ann_id(a) or "", None)
+        for a in put:
+            aid = _ann_id(a)
+            if aid is None:
+                return None
+            if not isinstance(a, dict):
+                return None
+            state[aid] = {"confidence": a.get("confidence"), "note_length": _length(a)}
+    return state
+
+
 def segments(visit: VisitLog) -> list[Segment]:
     """Split a visit into the recordings opened (by ``window_no``), plus quiz and other training events."""
     by_window: dict[int, Segment] = {}
@@ -226,6 +332,8 @@ def segments(visit: VisitLog) -> list[Segment]:
             latest_for[seg.recording] = seg
             if kind == "practice_review_opened":
                 seg.kind = "review"
+            elif kind == "recording_opened" and e.get("segment") == "feedback":
+                seg.kind = "feedback"
         elif kind.startswith("quiz_"):
             if quiz is None:
                 quiz = Segment(visit, "quiz", "quiz", None)
@@ -260,11 +368,11 @@ def segment_row(seg: Segment) -> dict[str, Any]:
     opened = _first(ev, "recording_opened") or {}
     ready = _first(ev, "viewer_ready")
     finished = _last(ev, "recording_finished")
-    closed = _last(ev, "closed_without_saving") or _last(ev, "practice_review_closed")
+    closed = _last(ev, "closed_without_saving") or _last(ev, "practice_review_closed") or _last(ev, "feedback_closed")
     t0 = _num(ev[0].get("t")) if ev else 0.0
     end_event = finished or closed
     t_end = _num(end_event.get("t")) if end_event else (_num(ev[-1].get("t")) if ev else t0)
-    if seg.kind in ("recording", "review") and opened:
+    if seg.kind in ("recording", "review", "feedback") and opened:
         t0 = _num(opened.get("t"))
     wall = max(0.0, t_end - t0)
     inactive = [(max(a, t0), min(b, t_end)) for a, b in inactive_intervals(v.events, t_end) if b > t0 and a < t_end]
@@ -322,7 +430,20 @@ def segment_row(seg: Segment) -> dict[str, Any]:
     rts = [_num(e.get("response_time_s")) for e in answers if e.get("response_time_s") is not None]
     quiz_prop = quiz_correct / len(answers) if answers else _nan()
     outcome = "finished" if finished else ("closed_without_saving" if closed else "not_finished")
-    if seg.kind == "review":
+    ratings = [a.get("confidence") for e in ev if e.get("type") == "confidence_set"
+               for a in (e.get("annotations") or []) if isinstance(a, dict)]
+    prompts = Counter(str(e.get("outcome", "")) for e in ev if e.get("type") == "confidence_prompt")
+    checks = Counter(str(e.get("choice", "")) for e in ev if e.get("type") == "confidence_check")
+    note_changes = Counter(str(a.get("change", "")) for e in ev if e.get("type") == "note_set"
+                           for a in (e.get("annotations") or []) if isinstance(a, dict))
+    problems = [e for e in ev if e.get("type") == "problem_reported"]
+    shown = [e for e in ev if e.get("type") == "feedback_shown"]
+    revision = _first(ev, "revision_started")
+    if revision is not None and isinstance(revision.get("annotations_loaded"), int):
+        start_n = int(revision["annotations_loaded"])
+    else:
+        start_n = int(opened.get("annotations_restored", 0) or 0) if opened else 0
+    if seg.kind in ("review", "feedback"):
         outcome = "finished" if closed else "not_finished"
     elif seg.kind != "recording":
         outcome = "finished" if (_last(ev, "quiz_finished") or (seg.kind == "training" and ev)) else "not_finished"
@@ -378,6 +499,22 @@ def segment_row(seg: Segment) -> dict[str, Any]:
                                    and e.get("dist_px") is not None),
         "dialogs": kinds["dialog_shown"],
         "status_messages": kinds["status_message"],
+        "ratings_given": sum(1 for c in ratings if _is_rating(c)),
+        "ratings_cleared": sum(1 for c in ratings if c is None),
+        "annotations_rated": "",  # from the annotations followed through the rows (summarise)
+        "share_rated": _nan(),
+        "confidence_prompts": sum(prompts.values()),
+        "confidence_prompts_by_outcome": json.dumps(dict(prompts.most_common()), ensure_ascii=False),
+        "confidence_checks": sum(checks.values()),
+        "confidence_check_choices": json.dumps(dict(checks.most_common()), ensure_ascii=False),
+        "notes_written": note_changes["added"] + note_changes["changed"],
+        "notes_removed": note_changes["removed"],
+        "annotations_with_note": "",
+        "problems_reported": len(problems),
+        "set_aside": any(e.get("outcome") == "unusable" for e in problems),
+        "reviews_received": _most(shown, "reviews"),
+        "feedback_items": _most(shown, "items"),
+        "feedback_items_opened": kinds["feedback_item_jumped"],
         "guided_steps": len(completed_steps),
         "guided_attempts": sum(attempts) if attempts else (kinds["guided_check"] or 0),
         "guided_show_me": show_me,
@@ -391,6 +528,9 @@ def segment_row(seg: Segment) -> dict[str, Any]:
         "quiz_mean_response_s": sum(rts) / len(rts) if rts else _nan(),
     }
     row["score"] = practice_score if not math.isnan(practice_score) else quiz_prop
+    # For following the annotations across rows (summarise); not written to the tables.
+    row["_changes"] = [e for e in ev if e.get("type") in ANNOTATION_CHANGES]
+    row["_start_n"] = start_n
     return row
 
 
@@ -399,6 +539,11 @@ def visit_row(v: VisitLog, rows: list[dict[str, Any]]) -> dict[str, Any]:
     end = _num(ev[-1].get("t")) if ev else 0.0
     inputs = [_num(e.get("t")) for e in ev if e.get("type") in INPUT_EVENTS]
     kinds = Counter(str(e.get("type")) for e in ev)
+    feedback_opened = sum(1 for e in ev if e.get("type") == "recording_opened" and e.get("segment") == "feedback")
+    ratings = [a.get("confidence") for e in ev if e.get("type") == "confidence_set"
+               for a in (e.get("annotations") or []) if isinstance(a, dict)]
+    notes = [a for e in ev if e.get("type") == "note_set" for a in (e.get("annotations") or [])
+             if isinstance(a, dict) and a.get("change") in ("added", "changed")]
     screens = v.header.get("screens") or []
     primary = screens[0] if screens else {}
     geo = primary.get("geometry") or []
@@ -412,13 +557,18 @@ def visit_row(v: VisitLog, rows: list[dict[str, Any]]) -> dict[str, Any]:
         "ended": v.close_reason,
         "wall_s": end,
         "active_s": active_seconds(inputs, 0.0, end, v.idle_after_s, inactive_intervals(ev, end)),
-        "recordings_opened": kinds["recording_opened"] - kinds["practice_review_opened"],  # reviews aside
+        # practice reviews and the feedback on reviewed work aside
+        "recordings_opened": kinds["recording_opened"] - kinds["practice_review_opened"] - feedback_opened,
         "recordings_finished": kinds["recording_finished"],
         "recordings_closed_without_saving": kinds["closed_without_saving"],
         "annotations_saved": sum(int(e.get("n_annotations", 0) or 0) for e in ev if e.get("type") == "recording_finished"),
         "clicks": kinds["mouse_press"],
         "key_presses": sum(1 for e in ev if e.get("type") == "key" and not e.get("auto_repeat")),
         "shortcuts": kinds["shortcut"],
+        "ratings_given": sum(1 for c in ratings if _is_rating(c)),
+        "notes_written": len(notes),
+        "problems_reported": kinds["problem_reported"],
+        "feedback_views": kinds["feedback_shown"],
         "events": len(ev),
         "bad_lines": v.bad_lines,
         "electrotag_version": (v.header.get("versions") or {}).get("electrotag", ""),
@@ -468,9 +618,36 @@ def summarise(visits: list[VisitLog], *, annotators: Iterable[str] | None = None
         for rows in groups.values():
             for i, r in enumerate(sorted(rows, key=when), start=1):
                 r[key] = i
+    _follow_annotations(rrows)
     names = [c for c, _ in RECORDING_COLUMNS]
     rrows = [{c: r.get(c, "") for c in names} for r in sorted(rrows, key=lambda r: (r["annotator_id"], r["order"]))]
     return ActivityTables(visits=vrows, recordings=rrows, events=erows, warnings=list(warnings or []))
+
+
+def _follow_annotations(rows: list[dict[str, Any]]) -> None:
+    """annotations_rated, share_rated and annotations_with_note of each recording row (see the module's notes)."""
+    ends: dict[tuple[Any, ...], dict[str, dict[str, Any]] | None] = {}
+    for r in sorted(rows, key=lambda r: (r["annotator_id"], r["order"])):
+        if r["segment"] != "recording":
+            continue
+        key = (r["annotator_id"], r["recording"], r["mode"])
+        before = ends.get(key)
+        if r["_start_n"] == 0:
+            start: dict[str, dict[str, Any]] | None = {}
+        elif before is not None and len(before) == r["_start_n"]:
+            start = before
+        else:
+            start = None
+        state = replay_annotations(start, r["_changes"]) if start is not None else None
+        if state is not None and len(state) != r["final_annotations"]:
+            state = None  # the log and the count saved disagree: better empty than wrong
+        ends[key] = state
+        if state is None:
+            continue
+        rated = sum(1 for a in state.values() if _is_rating(a.get("confidence")))
+        r["annotations_rated"] = rated
+        r["share_rated"] = rated / len(state) if state else _nan()
+        r["annotations_with_note"] = sum(1 for a in state.values() if a.get("note_length"))
 
 
 # ------------------------------------------------------------------ writing

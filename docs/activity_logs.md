@@ -155,7 +155,9 @@ on reviewed work (docs/web/using.md, "Reviews of your work") gives
 only or `annotate` beside a revision), `feedback_item_jumped` (`status`,
 `onset_s`, `item`) and `feedback_closed` (`to`, `home` or `revision`). An
 administrator's review pass belongs to the admin area, whose work is not part of
-the interaction log.
+the interaction log: the reviews given are in the study's review records
+([file formats](file_formats.md)), and the activity tables count the reviews
+each annotator received and read.
 
 **Milestones and goals (browser).** When the game elements are on
 (docs/web/admin.md, "Study settings"), `milestone_reached` (`milestone`, such
@@ -344,8 +346,13 @@ is one, each against the order in which the annotator did their recordings, one
 line per annotator with the median across annotators as a grey band (with more
 than eight annotators every line is grey and the median carries the colour).
 Holding the pointer over a chart shows the values at that recording. A table
-then compares each annotator's first finished recordings with their last ones,
-and the last table lists every row.
+then compares each annotator's first finished recordings with their last ones.
+When the logs hold confidence ratings, notes, problem reports or feedback on
+reviewed work, a table gives for each annotator the annotations saved in their
+finished recordings, how many of them had a rating and the share rated, how
+many had a note, the problems they reported and the reviews of their work they
+read, with each recording's reviews counted once however often they were
+opened. The last table lists every row.
 
 ### Active time
 
@@ -355,6 +362,31 @@ first `idle_after_s` seconds. Time while ElectroTag was not the active
 application (another program in front) does not count. Opening and closing the
 recording count as inputs, so a recording's active time is never longer than its
 wall-clock time. `idle_s` is the rest of the wall-clock time.
+
+### Ratings, notes, problems and reviews
+
+The counts of ratings, prompts, checks and notes come from the
+`confidence_set`, `confidence_prompt`, `confidence_check` and `note_set` events
+of each row; a rating changed and changed back counts each time it was given.
+`annotations_rated`, `share_rated` and `annotations_with_note` describe the
+annotations at the end of the row instead, and so follow undo and redo. They
+are worked out by following the annotations through the row's events, each of
+which names the annotations it changed with their rating and the length of
+their note. A recording that opens with annotations already in it, from a
+draft continued or the version a revision starts from, takes them from the
+annotator's previous row for the same recording and mode when that row ended
+with the same number of annotations; when there is no such row, or the
+annotations followed in the log do not add up to `final_annotations`, the three
+columns are empty. The text of a note is never in the log, so the tables count
+notes and nothing more.
+
+`problems_reported` in visits.tsv counts every report sent during the visit,
+including those sent from the list of recordings; in recordings.tsv it counts
+the reports sent from the annotation view while that recording was open. The
+feedback an annotator reads on reviewed work forms a row with `segment` set to
+`feedback`, with `reviews_received`, `feedback_items` and
+`feedback_items_opened`; a revision opened with the feedback beside it gives the
+same columns on its own row.
 
 ### visits.tsv
 
@@ -376,6 +408,10 @@ wall-clock time. `idle_s` is the rest of the wall-clock time.
 | `clicks` | Mouse button presses anywhere in ElectroTag. |
 | `key_presses` | Key presses (not counting held-down repeats or keys typed into text fields). |
 | `shortcuts` | Keyboard shortcuts used (for example 1 to 9, M, N, Delete, Ctrl+Z). |
+| `ratings_given` | Confidence ratings from 1 to 5 given to annotations (a mark rated again counts again). |
+| `notes_written` | Notes added to annotations or changed (a count: the text of a note is never logged). |
+| `problems_reported` | Problems reported with recordings, from the list of recordings or the annotation view. |
+| `feedback_views` | Times the feedback on reviewed work was shown, read only or beside a revision. |
 | `events` | Events in the log. |
 | `bad_lines` | Lines that could not be read (usually the last line after a crash). |
 | `electrotag_version` | ElectroTag version. |
@@ -388,9 +424,10 @@ wall-clock time. `idle_s` is the rest of the wall-clock time.
 One row per annotator, recording and visit. A recording annotated over two
 visits (continued from a draft) has two rows, the second with `resumed`
 true. A practice recording reviewed against the reference has a second row
-with `segment` set to `review` (the time and clicks spent in the review). Quiz
-answers form a row with `recording` set to `quiz`, and training events that
-happened outside a recording a row with `segment` set to `training`.
+with `segment` set to `review` (the time and clicks spent in the review).
+Reading the feedback on reviewed work gives a row with `segment` set to
+`feedback`. Quiz answers form a row with `recording` set to `quiz`, and training
+events that happened outside a recording a row with `segment` set to `training`.
 In the training programme, `mode` is each recording's own mode (`guided`,
 `practice` or `assessment`), so `order_in_mode` counts guided, practice and
 assessment recordings separately.
@@ -402,12 +439,12 @@ assessment recordings separately.
 | `mode` | standard, guided, practice or assessment: the recording's own mode (in the training programme one visit has recordings of several modes). |
 | `context_id` | Reference set of training work (empty for standard annotation). |
 | `recording` | Recording ID (path relative to the dataset); 'quiz' for the short-segment quiz. |
-| `segment` | recording (a recording opened for annotation), review (a practice recording reviewed against the reference), quiz, or training (training events outside a recording). |
+| `segment` | recording (a recording opened for annotation), review (a practice recording reviewed against the reference), feedback (the annotator reading the reviews of their saved work, read only), quiz, or training (training events outside a recording). |
 | `window_no` | Number of the recording opened within the visit (1, 2, ...). |
 | `order` | Position among all of this annotator's rows, in the order they were started (1 = first). |
 | `order_in_mode` | The same, counting only rows of the same mode. |
 | `started_at` | Local date and time the recording opened, with its UTC offset. |
-| `outcome` | finished (Save and Finish), closed_without_saving, or not_finished (the log ended first). |
+| `outcome` | finished (Save and Finish; for a review or feedback row, closed), closed_without_saving, or not_finished (the log ended first). |
 | `resumed` | True if unfinished work from an earlier visit was restored. |
 | `recording_duration_s` | Length of the recording in seconds. |
 | `n_channels_shown` | Channels shown in the viewer. |
@@ -447,6 +484,22 @@ assessment recordings separately.
 | `pointer_distance_px` | Distance the pointer travelled over the EEG, in screen pixels. |
 | `dialogs` | Dialogs shown (questions, channel chooser, type picker and so on). |
 | `status_messages` | Messages shown in the status line. |
+| `ratings_given` | Confidence ratings from 1 to 5 given to annotations (a mark rated again counts again). |
+| `ratings_cleared` | Confidence ratings cleared. |
+| `annotations_rated` | Annotations with a confidence rating among final_annotations (empty when the log does not show the ratings of annotations restored at opening). |
+| `share_rated` | annotations_rated divided by final_annotations (0 to 1). |
+| `confidence_prompts` | Requests for a rating (after D, after a new mark in an every-mark study, or with Rate them before Save and Finish). |
+| `confidence_prompts_by_outcome` | How the requests for a rating ended (rated, cleared, cancelled, later, timeout, other_input, replaced) and how often (JSON). |
+| `confidence_checks` | Times Save and Finish found marks without a rating in an every-mark study. |
+| `confidence_check_choices` | The choices at those checks (rate, save, cancel) and how often (JSON). |
+| `notes_written` | Notes added to annotations or changed (a count: the text of a note is never logged). |
+| `notes_removed` | Notes removed. |
+| `annotations_with_note` | Annotations with a note among final_annotations (empty as for annotations_rated). |
+| `problems_reported` | Problems reported with the recording from the annotation view. |
+| `set_aside` | True if a problem report set the recording aside as one that cannot be annotated. |
+| `reviews_received` | Reviews of the recording shown to the annotator (in the feedback view, or beside a revision). |
+| `feedback_items` | Items of feedback shown (reviewed annotations and stretches without one). |
+| `feedback_items_opened` | Items of feedback the annotator went to. |
 | `guided_steps` | Guided training: steps completed. |
 | `guided_attempts` | Guided training: attempts at the steps. |
 | `guided_show_me` | Guided training: times the expert's answer was shown. |
