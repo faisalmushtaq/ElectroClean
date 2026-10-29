@@ -857,7 +857,7 @@ export class EegViewer {
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = COLOURS.surface_alt;
     ctx.fillRect(0, 0, W, H);
-    // What has not been on screen yet: white, with a thin amber line along the top.
+    // What has not been on screen yet: white, with a thin grey line along the top (a calm mark, not a warning).
     if (this.coverage) {
       const gaps = this.gaps.map(([a, b]) => [a / this.sfreq, b / this.sfreq]);
       const ts = (t) => (t / this.durationTotal) * W;
@@ -866,7 +866,7 @@ export class EegViewer {
         const w = Math.max(1, Math.ceil(ts(b)) - xa);
         ctx.fillStyle = COLOURS.surface;
         ctx.fillRect(xa, 0, w, H);
-        ctx.fillStyle = COLOURS.warning_border;
+        ctx.fillStyle = COLOURS.hatch;
         ctx.fillRect(xa, 0, w, 3);
       }
     }

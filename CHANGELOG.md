@@ -297,6 +297,10 @@ the role of list items. An automated audit (axe-core) of every page of the
 demonstration found nothing after these changes, and a new end-to-end test
 (`o_landmarks.e2e.mjs`) keeps the structure it checked.
 
+A design pass over the new views makes them calmer and more consistent. The
+parts of a recording not yet viewed are marked on the overview bar by a thin
+grey line instead of an amber one, which read as a warning.
+
 ## 1.1.0
 
 The first public release, with stand-alone applications for Windows (64-bit),

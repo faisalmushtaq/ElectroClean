@@ -46,7 +46,7 @@ export const HELP_HTML = `
 <tr><td><kbd>U</kbd></td><td>the next part not yet viewed</td></tr>
 </table>
 <p>On the overview bar, the parts of the recording that have not been on the screen yet are white
-with an amber line above them; the Recording tab and the status line say how much you have viewed.</p>
+with a thin grey line above them; the Recording tab and the status line say how much you have viewed.</p>
 <p>Vertical dashed lines labelled in teal are the <b>original experimental events</b>.
 They cannot be edited. Hatched grey zones mark where the display filters may
 distort the signal (recording edges and discontinuities) and where the recording has no data.</p>

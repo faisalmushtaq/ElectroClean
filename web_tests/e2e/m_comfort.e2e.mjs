@@ -191,8 +191,8 @@ export const tests = [
       let viewed = await page.evaluate(() => globalThis.ElectroClean.ws.s.viewed);
       assert.deepEqual(viewed, [[0, 10]]);
       assert.match(await page.textContent('.ws-viewed'), /^Viewed 14 %/);
-      // On the overview bar: the rest white with an amber line above it.
-      assert.equal(await overviewPixel(page, 0.9, 1), '#D9A441');
+      // On the overview bar: the rest white with a thin grey line above it (calm: no warning colour).
+      assert.equal(await overviewPixel(page, 0.9, 1), '#BDB8B0');
       assert.equal(await overviewPixel(page, 0.9, 12), '#FFFFFF');
       // Recording a view redraws the overview only.
       await waitForTraces(page);

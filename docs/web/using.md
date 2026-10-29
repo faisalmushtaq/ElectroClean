@@ -278,7 +278,7 @@ ElectroClean remembers your choice in this browser; until you choose, the study'
 ElectroClean keeps track of the parts of the recording that have been on the screen, so that none
 is missed in a long recording. A part counts as viewed once it has stayed on the screen for a moment
 while you are working. On the overview bar under the EEG, the parts not yet viewed are white with a
-thin amber line above them, and the parts viewed keep the bar's usual warm grey. The Recording tab
+thin grey line above them, and the parts viewed keep the bar's usual warm grey. The Recording tab
 and the line at the bottom say how much you have viewed, for example "Viewed 64 %"; stretches where
 the recording has no data count as viewed, since there is nothing to see there.
 

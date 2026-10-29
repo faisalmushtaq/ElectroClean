@@ -439,7 +439,7 @@ export class Workspace {
     return h('div.coverage-block', {},
       this.coverageText,
       h('div.progress', { role: 'presentation' }, this.coverageBar),
-      h('p.caption', {}, 'On the overview bar under the EEG, the parts not yet on the screen are white with an amber line above them.'),
+      h('p.caption', {}, 'On the overview bar under the EEG, the parts not yet on the screen are white with a thin grey line above them.'),
       h('div.btn-row', {}, this.nextUnviewedBtn));
   }
 
