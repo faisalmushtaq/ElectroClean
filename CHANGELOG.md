@@ -24,7 +24,9 @@ two cross, Find reads its lists once however fast the person types, actions on
 several recordings or people run one at a time and ask before the page is
 closed mid-run, and an invitation link that could not be checked offers Try
 again. A recording kept on the device is not removed while a recording opened
-from it is open in any tab, since its files are read as it is viewed.
+from it is open in any tab, since its files are read as it is viewed. Two tabs
+that keep the same recording at once write it one after the other, and a tab
+that opens a copy another tab is still writing waits until it is whole.
 
 The study server no longer takes a negative time worked in a draft, and records
 a time of more than a week for one recording (which the pausing clock cannot

@@ -249,6 +249,17 @@ export function inUseLockName(sha256) {
   return `electroclean-kept-${sha256}`;
 }
 
+/** The name of the lock held while a tab writes a copy (exclusive) or reads it back (shared). */
+export function writeLockName(sha256) {
+  return `electroclean-writing-${sha256}`;
+}
+
+/** Run fn under the copy's write lock; without Web Locks, run it as it is. */
+function underWriteLock(sha256, mode, fn) {
+  const locks = webLocks();
+  return locks ? locks.request(writeLockName(sha256), { mode }, fn) : fn();
+}
+
 function webLocks() {
   try { return (globalThis.navigator && globalThis.navigator.locks && typeof globalThis.navigator.locks.request === 'function') ? globalThis.navigator.locks : null; } catch { return null; }
 }
@@ -316,7 +327,15 @@ export class DeviceStore {
     const meta = makeMeta({ sha256, recordingId, fileName, files });
     recordingKey(this.owner, sha256);
     try {
-      await this._backend.put(this.owner, meta, Array.from(files));
+      // Two tabs keeping the same recording at once write it one after the other, and the second
+      // finds the first's whole copy and leaves it as it is.
+      const kept = await underWriteLock(sha256, 'exclusive', async () => {
+        const whole = await this._whole(sha256);
+        if (whole) return whole.meta;
+        await this._backend.put(this.owner, meta, Array.from(files));
+        return null;
+      });
+      if (kept) return kept;
     } catch (e) {
       if (isQuotaError(e)) throw new DeviceStoreError('There is no room left on this device to keep the recording', 'full');
       // Private windows of some browsers refuse the file system: IndexedDB may still work.
@@ -331,7 +350,8 @@ export class DeviceStore {
     if (!this._backend) return null;
     let got;
     try {
-      got = await this._backend.get(this.owner, sha256);
+      // a copy that another tab is still writing is read once it is whole
+      got = await underWriteLock(sha256, 'shared', () => this._backend.get(this.owner, sha256));
     } catch {
       await this.remove(sha256).catch(() => {});
       throw new DeviceStoreError('The copy kept on this device could not be read', 'broken');
@@ -343,6 +363,15 @@ export class DeviceStore {
       throw new DeviceStoreError('The copy kept on this device is incomplete', 'broken');
     }
     return got;
+  }
+
+  /** The kept copy when it is there and whole, otherwise null (nothing is removed). */
+  async _whole(sha256) {
+    let got;
+    try { got = await this._backend.get(this.owner, sha256); } catch { return null; }
+    if (!got) return null;
+    const sizes = got.meta.files.map((f) => f.size);
+    return got.files.length === sizes.length && got.files.every((f, i) => f.size === sizes[i]) ? got : null;
   }
 
   /**
