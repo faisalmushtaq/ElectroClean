@@ -110,7 +110,10 @@ same place.
 
 A private invitation link lets one person choose their own password and sign in. When they open
 it, a welcome card names the study and their annotator ID and asks for the new password twice;
-then they are signed in and see their recordings. The link works once. It stops working when it
+then they are signed in and see their recordings. When the study cannot be reached as the link
+opens, the card says that the invitation could not be checked and offers Try again, keeping the link
+for the browser tab; a link that has expired, been used or been replaced says so, with the way to
+sign in. The link works once. It stops working when it
 has been used, when it expires (after 14 days unless you choose 7, 30 or 90), when you make a newer
 link for the same person, when you withdraw it, and when the account is switched off or removed. On
 a study server the study keeps only a fingerprint of each link (a SHA-256 hash of its random token),

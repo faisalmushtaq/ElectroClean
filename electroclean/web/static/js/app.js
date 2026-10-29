@@ -168,13 +168,16 @@ export class App {
     this._render(h('main.page.loading', {}, h('p.subtitle', {}, 'Checking your invitation…')), 'signin');
     let info = null;
     let problem = '';
+    let retry = false;
     try {
       info = await this.backend.inviteCheck(token);
     } catch (exc) {
       problem = exc.message;
       if (exc.code && /^invite_/.test(exc.code)) session.remove(INVITE_KEY);
+      else retry = true; // the study could not answer: the link may be good, so it is kept to ask again
     }
-    this._render(inviteView(this, token, { info, problem }), 'signin');
+    if (this.route !== 'signin') return; // the person went on while the study answered
+    this._render(inviteView(this, token, { info, problem, retry }), 'signin');
   }
 
   /** Set the password with the invitation and sign in (POST /invite/accept). */
@@ -242,13 +245,31 @@ export class App {
   async loadAchievements() {
     const g = this.me && this.me.study && this.me.study.gamification;
     if (!g || !g.enabled || this.me.programme || !this.backend.achievements) { this.achievements = null; return null; }
+    const changes = this._gamesSeq || 0;
     try {
-      this.achievements = await this.backend.achievements();
+      const facts = await this.backend.achievements();
+      // A change of the goal made while this was read is newer than what it read.
+      if ((this._gamesSeq || 0) === changes) this.achievements = facts;
     } catch (exc) {
       if (exc.status === 401) throw exc;
       this.achievements = null; // the home page works without them
     }
     return this.achievements;
+  }
+
+  /**
+   * POST /me/achievements: changes are sent one after another, never two at once, and the answer
+   * is kept only when no newer change was made meanwhile, so that a late answer never brings back
+   * an older goal. Never repeated by itself after a failure, like every change.
+   */
+  changeAchievements(body) {
+    const seq = (this._gamesSeq = (this._gamesSeq || 0) + 1);
+    const sent = (this._gamesChain || Promise.resolve()).catch(() => {}).then(() => this.backend.setAchievements(body));
+    this._gamesChain = sent;
+    return sent.then((facts) => {
+      if (seq === this._gamesSeq) this.achievements = facts;
+      return facts;
+    });
   }
 
   /** Draw the home page again after a change to the goal or the leaderboard (its list keeps its tab, search and page). */
