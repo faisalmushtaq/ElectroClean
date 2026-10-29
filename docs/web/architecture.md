@@ -99,7 +99,7 @@ electroclean/web/static/          the browser application (plain ES modules, no 
                                   edf.js, brainvision.js, channels.js, filters.js, fft.js, pool.js,
                                   filterworker.js, sha256.js, hashworker.js, amplitude.js, util.js,
                                   synthetic.js; links.js and fetch_links.js (recordings opened from
-                                  a link); registering them: register.js, bids.js, events.js,
+                                  a link), device_store.js (copies kept on the device); registering them: register.js, bids.js, events.js,
                                   mnewarn.js, pyfmt.js, pyjson.js
     js/viewer/                    drawing the EEG, axes, overview, navigation; touch.js for two
                                   fingers, long presses and double taps on a touch screen
@@ -233,6 +233,18 @@ when Open fetches it automatically; the panel of the open view
 (`js/views/links_panel.js`) builds it from the links pasted one per line.
 A file larger than 2 GiB is refused, since it is held in memory until it is
 opened.
+
+`device_store.js` keeps copies of recordings on the device: in the Origin
+Private File System (`ROOT_NAME/<owner>/<sha256>/`, the files and a `meta.json`
+written last) where the page can write files there with
+`FileSystemFileHandle.createWritable` (Chrome, Edge, Firefox, and Safari from
+version 26), and as Blobs in IndexedDB otherwise (Safari before 26 writes to
+that file system only from workers). The owner is the backend, the study and
+the annotator; a copy is opened by its fingerprint and checked again as it is
+opened. A probe of a few bytes finds browsers that offer the interfaces but
+store nothing (private windows, and the private profiles of the test runner's
+WebKit, which is why `l_device.e2e.mjs` uses a profile on disk). The panel and
+the choices remembered per annotator are in `js/views/device.js`.
 
 ### What is read, and how it compares with MNE-Python
 

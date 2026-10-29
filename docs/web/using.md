@@ -86,6 +86,39 @@ finished with it: in the Files app on an iPad, press and hold the file and choos
 Mac, drag it from Downloads in the Finder to the Bin; in Windows, select it in File Explorer and
 press Delete.
 
+## Recordings kept on this device
+
+A recording opened from a link is kept on the device, in this browser's own storage for
+ElectroClean, so that it opens again without downloading: the next time you open that recording,
+ElectroClean finds the copy, checks its fingerprint as it does for any file, and opens it straight
+away. Untick Keep a copy on this device under the link field if you would rather download it each
+time. Files you choose on your computer are already on it and are not copied, unless you tick Also
+keep files I choose here on this device (useful on an iPad, where the Files app may not keep a
+downloaded file to hand). Each copy is filed under your study and your sign-in, so people who share a
+computer never see each other's copies, and only the files themselves are kept: never the link they
+came from, because a link works as a password for the file. In a private window, and in browsers
+that keep nothing for a site, the tick boxes are replaced by a sentence saying that this browser
+cannot keep recordings, and recordings open from the link or the computer each time.
+
+The home page says how many recordings are kept and how much space they take, with Manage, and the
+page that opens recordings has a button, Recordings on this device…; both show the kept recordings with their
+sizes and whether you have finished them, the space this site uses and how much more the browser
+allows, and the ways to free space: Remove next to each recording, Remove finished recordings, which
+says how much it frees before it does so, and Remove all. Tick Remove a recording from this device
+when I finish it to have each copy removed once Save and Finish has saved your work. Removing a copy
+never touches your annotations, drafts or results, which the study keeps. When the device is full,
+the recording still opens, from memory, and ElectroClean offers to remove the recordings you have
+finished. When the first recording is kept, ElectroClean asks the browser to keep the site's storage
+even when space runs low (some browsers ask you, others decide for themselves); without that, a
+browser short of space may clear the copies, and they are then downloaded again from the link.
+
+When you sign out with recordings kept, ElectroClean asks whether to keep them or remove them.
+Keeping them is the default, for your own device; on a computer that others use, remove them. The
+copies also go when you clear this site's data in the browser's settings. Files you downloaded
+yourself, with Download the file or in any other way, are in your Downloads folder, which
+ElectroClean cannot reach: delete those in the Files app, the Finder or File Explorer as described
+above.
+
 ## The annotation view
 
 The EEG fills most of the window, one channel per row with its name on the left, the time along the

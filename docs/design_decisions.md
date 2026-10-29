@@ -344,6 +344,37 @@ and a style shown on hover would stay on a tapped control, so hover styles apply
 pointer can hover. The end-to-end tests run in WebKit, Safari's engine, as well as in Chromium, and
 `k_ipad.e2e.mjs` checks the touch gestures, the layouts and the file pickers.
 
+## Recordings from cloud links, and copies kept on the device (28 October 2026)
+
+The project lead asked for recordings to open straight from private Dropbox and OneDrive links, so
+that the study need not hold or send the data, and for a way to keep downloaded recordings on the
+device and remove them easily when space is short. The browser fetches the file itself from the
+service, without cookies, referrer or custom headers, and gives it to the code that opens files
+chosen on the computer, so the fingerprint check is the same. Dropbox's share links are rewritten to
+`dl.dropboxusercontent.com` with `dl=1`; checked in October 2026 with curl, that host answers a file
+request with `Access-Control-Allow-Origin: *`, exposes `Content-Disposition` and `Content-Range`, and
+answers 403 and 404 with the same header, so the page can say why a link failed, while
+`www.dropbox.com` only redirects without it. Dropbox's staff describe this host on its forum as
+working but undocumented, so the page always offers the fallback of downloading the file and
+choosing it. OneDrive links go through the shares API as Microsoft documents its encoding; its
+answers echo the page's origin in `Access-Control-Allow-Origin`, but no public OneDrive link was at
+hand to follow a whole download, and Microsoft documents that work and school accounts need signing
+in, so OneDrive is offered with the same fallback. Google Drive does not let other pages read its
+files, and its links go straight to the fallback.
+
+Share links are secrets: whoever has one can read the file. They are therefore never stored, not
+even as recently used links, never sent to the study and never written to the interaction log; the
+log records the service, the number of files and their size. Copies kept on the device hold the
+files and their names only, filed under the study, the annotator and the fingerprint, so that a
+shared computer does not mix people's copies, and a copy's fingerprint is checked again each time it
+opens. The Origin Private File System is used where the page can write to it (Safari only from
+version 26, according to MDN's compatibility data), and IndexedDB elsewhere. Links are kept by
+default, since downloading again is what the lead wanted to avoid, and files chosen on the computer
+only on request, since they are already there. Signing out offers removal with keeping as the
+default, which suits an annotator's own device, and the documentation advises removal on shared
+computers. A copy is removed for a finished recording only after Save and Finish has saved and
+verified the results, and only when none of the annotator's assignments still needs the recording.
+
 ## Decisions still open
 
 1. **Agreement settings to pre-register:** bin widths, the bin coverage rule,

@@ -137,7 +137,9 @@ practice recording's reference only after that recording is saved.
 
 The study folder holds no EEG: the recordings stay on the annotators' computers. A recording
 opened from a Dropbox or OneDrive link goes straight from that service to the annotator's browser,
-and neither the file nor the link reaches the server. It holds the
+and neither the file nor the link reaches the server. Copies that annotators keep on their
+device, to open a recording again without downloading it, stay in their browser's storage for
+the site until they remove them or the browser clears the site's data. It holds the
 annotators' IDs, names, email addresses (when given), notes and password hashes, their results,
 drafts and quiz answers, the interaction logs (times, clicks, keys and what was on screen; never
 typed text or passwords) and the audit log of the administrators' changes (which never holds a

@@ -16,6 +16,21 @@ not let web pages read the file (Google Drive, most work and school OneDrive
 links, links that are not public), the page says why in plain words and
 offers the next step: download the file in a new tab, then choose it.
 
+Recordings can be kept on the device, in the browser's own storage for the
+site (the Origin Private File System, or IndexedDB where the page cannot write
+files there), so that they open again without downloading. A recording opened
+from a link is kept unless the annotator unticks it, files chosen on the
+computer only when they ask, and each copy is filed under the study, the
+annotator and the recording's fingerprint, which is checked again whenever the
+copy is opened; the link is never kept. Recordings on this device, reached
+from a line on the home page and from the page that opens recordings, lists
+the copies with their sizes and whether they are finished, shows the space
+used and available, and removes one, the finished ones or all of them; a
+setting removes each recording when it is finished, after Save and Finish has
+saved it. A full device leaves the recording open from memory and offers to
+remove finished recordings, signing out offers to remove the copies, and the
+interaction log records what was kept and removed by size and count only.
+
 ElectroClean now runs in the web browser only, and the desktop application
 has been removed. Annotators open the browser application from a link, sign
 in, and open the recordings they were given from their own computer; the page

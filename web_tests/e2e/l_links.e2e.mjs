@@ -76,6 +76,10 @@ export const tests = [
         await t.screenshot(page, 'links_open_view');
 
         // A link the page may read: fetched, fingerprinted, recognised and opened.
+        // (not kept on the device here, so that the next Open asks again: l_device.e2e.mjs keeps)
+        // (WebKit's private profiles store nothing, and the tick box is then a sentence instead)
+        await page.evaluate(async () => (await import('./js/views/device.js')).deviceStore(globalThis.ElectroClean).usable());
+        if (await page.locator('[data-log="keep-link"]').count()) await page.uncheck('[data-log="keep-link"]');
         const good = `${cloud.base}/cors/${NAME}?rlkey=secret-key-123`;
         await page.fill('.link-panel textarea', good);
         await page.click('[data-log="open-link"]');

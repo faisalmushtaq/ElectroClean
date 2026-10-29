@@ -438,6 +438,14 @@ ul.examples b { font-weight: 400; color: var(--ink); }
 .step.done .step-icon { background: var(--accent); color: #FFFFFF; }
 .step.failed .step-icon { background: var(--danger-bg); color: var(--destructive); }
 .result { margin-top: 12px; }
+/* Recordings kept on this device (js/views/device.js) */
+.device-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-top: 12px; }
+.device-row label.check { margin: 0; }
+.link-panel label.check { margin: 12px 0 0; }
+.device-line { margin: 12px 0 0; }
+.device-panel table.list { margin: 12px 0; }
+.device-panel .device-confirm { flex-basis: 100%; margin: 0; }
+.device-panel label.check { margin-top: 16px; }
 /* "Open from a link" (js/views/links_panel.js), under the drop zone */
 .link-panel { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--hairline); }
 .link-panel h3 { margin-top: 0; }

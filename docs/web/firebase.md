@@ -274,6 +274,8 @@ person's email address and a hash of their password. Everything is in Google's L
 project only you administer; browsers can read or write none of it directly. Firestore holds no
 EEG: annotators open the recordings from their own computers, or from a Dropbox or OneDrive link
 that their browser reads straight from that service, and neither the file nor the link reaches
-Firebase. To end a study, export
+Firebase. The EEG stays on the device: copies kept there, to open a recording again without
+downloading it, live in the browser's storage for the site until the annotator removes them or the
+browser clears the site's data. To end a study, export
 the results, then delete its data in the console (Firestore, `studies/<id>`) and its users
 (Authentication), or delete the whole project.

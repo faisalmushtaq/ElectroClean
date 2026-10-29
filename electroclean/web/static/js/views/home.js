@@ -5,6 +5,7 @@ import { appHeader } from './common.js';
 import { ask } from '../ui/dialog.js';
 import { formatHms } from '../util.js';
 import { quizCard } from '../training/quiz.js';
+import { deviceHomeLine } from './device.js';
 
 const STATUS = { todo: ['To do', ''], in_progress: ['In progress', 'active'], done: ['Done', 'done'] };
 const MODES = { standard: 'Annotation', guided: 'Guided training', practice: 'Practice', assessment: 'Assessment' };
@@ -45,7 +46,8 @@ export function homeView(app) {
     h('div.card-head', {}, h('h2', {}, 'Your recordings'), h('span.caption', {}, `${done} of ${items.length} done`)),
     items.length ? h('table.list', {}, h('thead', {}, h('tr', {}, h('th', {}, 'File'), h('th', {}, 'Mode'), h('th.num', {}, 'Length'), h('th.num', {}, 'Channels'), h('th', {}, 'Status'), h('th', {}))), h('tbody', {}, rows))
       : h('p.caption', {}, 'Your study team assigns recordings to you.'),
-    h('div.btn-row', {}, h('button.btn.quiet', { type: 'button', onclick: () => app.openFromComputer(null) }, 'Open a recording from your computer…')));
+    h('div.btn-row', {}, h('button.btn.quiet', { type: 'button', onclick: () => app.openFromComputer(null) }, 'Open a recording from your computer…')),
+    deviceHomeLine(app));
 
   let demo = null;
   if (b && b.isDemo) {

@@ -56,6 +56,14 @@ Learn. https://learn.microsoft.com/en-us/graph/api/driveitem-get-content?view=gr
 (the `/content` request answers with a redirect to a pre-authenticated
 download address, which a request that needs a CORS preflight cannot follow)
 
+MDN contributors. (2026). FileSystemFileHandle: createWritable() method; and
+the browser compatibility data of `@mdn/browser-compat-data` 8.1.7.
+https://developer.mozilla.org/en-US/docs/Web/API/FileSystemFileHandle/createWritable
+(writing from the page arrived in Safari and Safari on iOS 26;
+`StorageManager.getDirectory`, `FileSystemFileHandle.getFile` and
+`createSyncAccessHandle`, the last only in workers, in 15.2;
+`StorageManager.estimate` in 17)
+
 ## Filtering
 
 Widmann, A., Schröger, E., & Maess, B. (2015). Digital filter design for
