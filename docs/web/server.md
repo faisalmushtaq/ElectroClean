@@ -2,27 +2,32 @@
 
 Real studies of ElectroTag in the browser run on Firebase (docs/web/firebase.md). The ElectroTag
 server is the other back end: the same operations (docs/web/api.md) over HTTP, from a study folder on
-a computer you control. It is how the whole system is tried on one computer (`electrotag-web
+a computer you control. It is how the whole system is tried on one computer (`electrotag web
 demo`), how the browser application is tested, and it suits a study that prefers its own machine,
 for example a university server.
 
 ## Install
 
-In the ElectroTag folder:
+ElectroTag's Python package is installed from its repository (it is not on PyPI). In a terminal
+in a copy of the repository, with a virtual environment made and activated as the
+[README](../../README.md#installing-the-python-package) shows (on Windows `.venv\Scripts\activate`,
+on macOS and Linux `source .venv/bin/activate`):
 
 ```
-python -m pip install -r requirements.txt
-python -m pip install --no-deps -e .
+pip install -r requirements.txt
+pip install -e .
 ```
 
-This installs ElectroTag's Python code with the server and the administrator's command,
-`electrotag-web`, the analyses' commands `electrotag-agreement` and `electrotag-activity`,
-and MNE-Python for registering recordings. The browser application itself needs nothing installed.
+This installs ElectroTag's Python code with the server and the `electrotag` command, whose tools
+are the administrator's `electrotag web`, the analyses `electrotag agreement` and
+`electrotag activity`, and `electrotag admin` for reference sets in a folder, together with
+MNE-Python for registering recordings. The README also shows how to install straight from GitHub.
+The browser application itself needs nothing installed.
 
 ## The demonstration
 
 ```
-electrotag-web demo
+electrotag web demo
 ```
 
 makes a demonstration study in `./electrotag-demo` (once; `--fresh` makes it again) and serves the
@@ -36,7 +41,7 @@ after each answer. The files to open in the browser are in `electrotag-demo/reco
 for A01 and A02, `training/` for T01 and for the quiz), also downloadable from
 `http://localhost:8000/demo/recordings.zip`. Results appear in
 `electrotag-demo/study/Annotated_Events`, in ElectroTag's results layout, so
-`electrotag-agreement electrotag-demo/study/Annotated_Events` and `electrotag-activity` work
+`electrotag agreement electrotag-demo/study/Annotated_Events` and `electrotag activity` work
 on them straight away, as do the analyses of the admin area.
 
 `--port` and `--host` choose where it listens (`--host 0.0.0.0` for other computers on the network);
@@ -47,12 +52,12 @@ Pages: open `https://faisalmushtaq.github.io/ElectroTag/?server=http://localhost
 
 Three commands set the study up; everything after that is done in the browser.
 
-1. Create the study folder: `electrotag-web init-study --study-dir /srv/pilot --study pilot --name "Pilot study"`
+1. Create the study folder: `electrotag web init-study --study-dir /srv/pilot --study pilot --name "Pilot study"`
    (with `--settings settings.json` for settings that differ from ElectroTag's defaults, in the form
    of the `settings` block of `electrotag_study.json`).
-2. Create your own administrator account: `electrotag-web add-user ADMIN --admin --name "Your name"
+2. Create your own administrator account: `electrotag web add-user ADMIN --admin --name "Your name"
    --study-dir /srv/pilot` asks for a password (at least 8 characters).
-3. Serve it: `electrotag-web serve --study-dir /srv/pilot --host 0.0.0.0 --port 8000`. Put it behind
+3. Serve it: `electrotag web serve --study-dir /srv/pilot --host 0.0.0.0 --port 8000`. Put it behind
    your institution's HTTPS (a reverse proxy such as nginx); browsers must reach it over HTTPS
    unless it is on the same computer.
 
@@ -68,15 +73,15 @@ Every change is kept in the study's audit log, with who made it and when.
 The commands remain an alternative for each of these, and the audit log records their changes too
 (by "command"):
 
-* `electrotag-web register /data/Pilot --study-dir /srv/pilot` registers a dataset's recordings
+* `electrotag web register /data/Pilot --study-dir /srv/pilot` registers a dataset's recordings
   where they are, with ElectroTag's loader (`electrotag/app/eeg/loading.py`, which reads the
   files with MNE-Python), and its training reference sets with their experts' annotations and
   without their recordings. When the recordings are on another computer, run
-  `electrotag-web export-manifests /data/Pilot --out pilot.json` there and
-  `electrotag-web import-manifests pilot.json --study-dir /srv/pilot` on the server.
-* `electrotag-web add-user A01 --name "Annotator one" --study-dir /srv/pilot` makes an account.
-* `electrotag-web assign A01 --all --study-dir /srv/pilot`, or `--recordings ...`, or
-  `--programme <set>` for a trainee, assigns the work; `electrotag-web list --study-dir /srv/pilot`
+  `electrotag web export-manifests /data/Pilot --out pilot.json` there and
+  `electrotag web import-manifests pilot.json --study-dir /srv/pilot` on the server.
+* `electrotag web add-user A01 --name "Annotator one" --study-dir /srv/pilot` makes an account.
+* `electrotag web assign A01 --all --study-dir /srv/pilot`, or `--recordings ...`, or
+  `--programme <set>` for a trainee, assigns the work; `electrotag web list --study-dir /srv/pilot`
   shows the study.
 
 The server serves the browser application from `/` when the application is included
@@ -112,7 +117,7 @@ Annotated_Events/                the results, in ElectroTag's results layout
 ```
 
 The admin area shows who has done what and downloads `Annotated_Events` as a zip; so do
-`electrotag-web progress --study-dir <folder>` (each annotator's recordings and training stages;
+`electrotag web progress --study-dir <folder>` (each annotator's recordings and training stages;
 `--json` gives the full report, the same as `GET /api/v1/admin/progress` for an administrator's
 token) and `/api/v1/admin/results.zip`. Back up the whole folder.
 

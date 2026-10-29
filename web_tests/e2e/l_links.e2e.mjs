@@ -71,7 +71,7 @@ export const tests = [
       const { assert } = t;
       const bytes = syntheticEdfBytes(demoSpecs()[0]);
       const cloud = await cloudService(bytes);
-      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ec-links-'));
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'et-links-'));
       try {
         const page = await t.newPage();
         await signIn(page, 'A01');

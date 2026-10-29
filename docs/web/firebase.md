@@ -11,7 +11,7 @@ The pieces are Firebase Authentication (accounts), Firestore (the study's record
 ElectroTag's Cloud Functions (the private work: matching a file to the study, checking and saving
 annotations, the training coach and practice scores, so the experts' answers never reach a
 browser). The application itself is published on GitHub Pages. You run ElectroTag's administrator
-command, `electrotag-web`, on your own computer, where the recordings are.
+command, `electrotag web`, on your own computer, where the recordings are.
 
 Allow an afternoon for the first set-up. Steps 1 to 8 are done once per Firebase project; steps 9
 to 14 once per study. After step 11, when your own administrator account exists, the study is run
@@ -27,16 +27,23 @@ and the recordings of the study.
 
 ## 1. Install the administrator's tools
 
-Download ElectroTag (the repository, or its source archive) and, in a terminal in its folder:
+Download ElectroTag (clone the repository, or download and unpack its source archive): the
+deployment in step 8 uses its files. ElectroTag's Python package is installed from this copy, since
+it is not on PyPI. In a terminal in its folder, make a virtual environment for it, activate it and
+install the package:
 
 ```
-python -m pip install -r requirements.txt
-python -m pip install --no-deps -e .
-electrotag-web --help
+python3 -m venv .venv            # Windows: py -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+pip install -e .
+electrotag web --help
 ```
 
-The last command lists everything `electrotag-web` can do. Every command used below also has its
-own help, for example `electrotag-web add-user --help`.
+The [README](../../README.md#installing-the-python-package) explains each line, with the Windows
+details. In a new terminal later on, only the activation line is needed again. The last command
+lists everything `electrotag web` can do. Every command used below also has its own help, for
+example `electrotag web add-user --help`.
 
 ## 2. Create the Firebase project
 
@@ -78,7 +85,7 @@ goes through ElectroTag's functions, which check who is signed in.
 
 ## 7. A key for the administrator's command
 
-`electrotag-web` works on the project with a service account key. In **Project settings**,
+`electrotag web` works on the project with a service account key. In **Project settings**,
 **Service accounts**, choose **Generate new private key** and save the file somewhere private
 (not in a shared or synchronised folder). It gives full access to the project: keep it like a
 password, and delete it from the console if it is ever lost. Then tell the command where it is,
@@ -106,7 +113,7 @@ On Windows the environment's Python is `electrotag\web\firebase\functions\venv\S
 Before uploading, the deployment copies the ElectroTag code the functions need into their folder
 (`scripts/vendor_functions.py`, which needs only Python itself). The first deployment takes several
 minutes, because Google switches on the services the functions use; later ones are quicker. When it
-ends, the console's **Functions** page lists seventeen functions whose names start with `ec_`, all in
+ends, the console's **Functions** page lists ElectroTag's twenty functions, whose names start with `et_`, all in
 europe-west2; `et_admin`, which answers the admin area, has more memory and time than the others
 for the analyses. Deploy again after updating ElectroTag (or use the GitHub workflow at the end of
 this guide).
@@ -117,7 +124,7 @@ One Firebase project can hold several studies. Give each an ID of letters, digit
 or underscores:
 
 ```
-electrotag-web init-study --firebase-project my-eeg-study --study pilot --name "Pilot study"
+electrotag web init-study --firebase-project my-eeg-study --study pilot --name "Pilot study"
 ```
 
 Settings that differ from ElectroTag's defaults (fixed display filters, the artifact types on the
@@ -132,7 +139,7 @@ Each person has an ID within the study (for example A01) and signs in with their
 Start with yourself as administrator:
 
 ```
-electrotag-web add-user ADMIN --email you@example.ac.uk --admin --firebase-project my-eeg-study --study pilot
+electrotag web add-user ADMIN --email you@example.ac.uk --admin --firebase-project my-eeg-study --study pilot
 ```
 
 Without `--password` the command prints a link with which you choose your password (it works once;
@@ -171,15 +178,15 @@ that holds the recordings; training reference sets in the dataset
 without their recordings:
 
 ```
-electrotag-web register /data/Pilot --firebase-project my-eeg-study --study pilot
-electrotag-web create-example-set --firebase-project my-eeg-study --study pilot --recordings-to ./example-set
-electrotag-web add-user A01 --email a01@example.ac.uk --name "Annotator one" --firebase-project my-eeg-study --study pilot
-electrotag-web assign A01 --all --firebase-project my-eeg-study --study pilot
-electrotag-web assign A02 --recordings sub-001/eeg/sub-001_task-rest_eeg.vhdr --firebase-project my-eeg-study --study pilot
-electrotag-web assign T01 --programme example --firebase-project my-eeg-study --study pilot
+electrotag web register /data/Pilot --firebase-project my-eeg-study --study pilot
+electrotag web create-example-set --firebase-project my-eeg-study --study pilot --recordings-to ./example-set
+electrotag web add-user A01 --email a01@example.ac.uk --name "Annotator one" --firebase-project my-eeg-study --study pilot
+electrotag web assign A01 --all --firebase-project my-eeg-study --study pilot
+electrotag web assign A02 --recordings sub-001/eeg/sub-001_task-rest_eeg.vhdr --firebase-project my-eeg-study --study pilot
+electrotag web assign T01 --programme example --firebase-project my-eeg-study --study pilot
 ```
 
-`electrotag-web list --firebase-project my-eeg-study --study pilot` shows what the study holds.
+`electrotag web list --firebase-project my-eeg-study --study pilot` shows what the study holds.
 When the computer with the recordings cannot reach the Internet, `export-manifests` writes the
 registrations to a file and `import-manifests` stores them from another computer. To save typing,
 set `ELECTROTAG_FIREBASE_PROJECT=my-eeg-study` and `ELECTROTAG_STUDY=pilot` in the terminal;
@@ -189,7 +196,7 @@ The example set's recordings are simulated by ElectroTag itself. The Cloud Funct
 include MNE-Python, so for them ElectroTag keeps the registrations of those recordings
 (`electrotag/config/example_set_manifests.json`) and checks every file it makes against them
 before adding the set; should they ever differ, the admin area says so and
-`electrotag-web create-example-set` adds the set instead.
+`electrotag web create-example-set` adds the set instead.
 
 ## 12. Tell the application about the project
 
@@ -197,7 +204,7 @@ The application reads a `config.json` beside it. Write it from the configuration
 step 6:
 
 ```
-electrotag-web config --firebase-project my-eeg-study --study pilot --web-config firebase-config.txt --out electrotag/web/static/config.json
+electrotag web config --firebase-project my-eeg-study --study pilot --web-config firebase-config.txt --out electrotag/web/static/config.json
 ```
 
 Commit `electrotag/web/static/config.json` and push it. The GitHub Pages workflow
@@ -216,16 +223,16 @@ arrangements require (for example on an encrypted drive). In the application the
 list, and open each recording from their own disk; ElectroTag checks that the file is the
 registered one before they start, and keeps a draft of unfinished work.
 
-Follow progress in the admin area, or with `electrotag-web progress --firebase-project my-eeg-study
+Follow progress in the admin area, or with `electrotag web progress --firebase-project my-eeg-study
 --study pilot`, which lists each annotator's recordings (to do, in progress or done, with the time of
 their last activity) and their training stages.
 
 ## 14. Export the results for the analyses
 
 ```
-electrotag-web export --firebase-project my-eeg-study --study pilot --to ~/Pilot-results
-electrotag-agreement ~/Pilot-results/Annotated_Events
-electrotag-activity ~/Pilot-results/Annotated_Events
+electrotag web export --firebase-project my-eeg-study --study pilot --to ~/Pilot-results
+electrotag agreement ~/Pilot-results/Annotated_Events
+electrotag activity ~/Pilot-results/Annotated_Events
 ```
 
 The export writes `Annotated_Events/` in ElectroTag's results layout: per annotator and
@@ -251,7 +258,7 @@ is missing.
 
 ## Trying it without a Firebase project
 
-`electrotag-web demo` runs the whole system on your computer with the ElectroTag server instead
+`electrotag web demo` runs the whole system on your computer with the ElectroTag server instead
 of Firebase (docs/web/server.md). `scripts/test_firebase_emulators.sh` runs ElectroTag's tests of
 the Firebase side on Google's Firebase Emulator Suite, which needs Java but no Firebase project.
 `scripts/test_web_firebase.sh` goes further: on the same emulators it sets up a study with the

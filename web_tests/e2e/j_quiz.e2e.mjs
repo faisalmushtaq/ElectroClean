@@ -39,7 +39,7 @@ async function answer(page, label) {
 }
 
 function writeExamples() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ec-quiz-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'et-quiz-'));
   const specs = demoSpecs().slice(0, 2);
   const files = specs.map((s) => {
     const p = path.join(dir, `${s.stem}_eeg.edf`);

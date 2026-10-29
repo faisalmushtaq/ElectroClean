@@ -372,13 +372,13 @@ def cmd_resolve(a: argparse.Namespace) -> int:
     return 0
 
 
-def build_parser() -> argparse.ArgumentParser:
+def build_parser(prog: str = "electrotag-admin") -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="electrotag-admin",
+        prog=prog,
         description="ElectroTag study administration: study set-up, viewing filters, allocation, reference sets, "
         "competency criteria and reports.",
-        epilog="Run 'electrotag-admin COMMAND --help' for the options of one command. "
-        "Example: electrotag-admin show /data/MyStudy. See docs/administrator_guide.md.",
+        epilog=f"Run '{prog} COMMAND --help' for the options of one command. "
+        f"Example: {prog} show /data/MyStudy. See docs/administrator_guide.md.",
     )
     sub = p.add_subparsers(dest="command", required=True, metavar="COMMAND", title="commands")
 
@@ -506,8 +506,8 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+def main(argv: list[str] | None = None, prog: str = "electrotag-admin") -> int:
+    args = build_parser(prog).parse_args(argv)
     try:
         if getattr(args, "dataset", None) is not None:
             check_dataset(args.dataset, args.command, create=getattr(args, "create", False))

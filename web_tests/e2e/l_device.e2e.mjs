@@ -19,7 +19,7 @@ const require = createRequire(import.meta.url);
  */
 export async function profilePage(t, { init = null } = {}) {
   const pw = require('playwright');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ec-profile-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'et-profile-'));
   const context = await pw[t.browserName].launchPersistentContext(dir, { headless: true, viewport: { width: 1600, height: 950 }, locale: 'en-GB', acceptDownloads: true });
   const page = context.pages()[0] || await context.newPage();
   page.on('pageerror', (e) => t.errors.push(`pageerror: ${(e.stack || e.message).split('\n').slice(0, 4).join(' | ')}`));

@@ -83,8 +83,8 @@ def summary_text(tables: ActivityTables, paths: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="electrotag-activity", description=__doc__.split("\n\n")[0])
+def main(argv: list[str] | None = None, prog: str = "electrotag-activity") -> int:
+    ap = argparse.ArgumentParser(prog=prog, description=__doc__.split("\n\n")[0])
     ap.add_argument("inputs", nargs="+", type=Path, help="results folder, interaction_logs folder or log files")
     ap.add_argument("--out", type=Path, help="folder for the tables and the report")
     ap.add_argument("--annotator", action="append", help="only this annotator (may be repeated)")

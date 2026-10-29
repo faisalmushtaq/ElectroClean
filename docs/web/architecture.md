@@ -27,14 +27,14 @@ application in one of two ways:
   pick another study of the same project with `?study=<id>`. A command exports
   the results from Firestore into ElectroTag's usual folders for the
   agreement and activity analyses.
-* **Study on an ElectroTag server** (`electrotag-web`, Python): the same
+* **Study on an ElectroTag server** (`electrotag web`, Python): the same
   operations over HTTP, used for local testing and the demonstration server,
   and available to a study that prefers its own server (for example a
   university machine). Its address comes from `?server=https://…`,
   `config.json` (`{"server": "…"}`) or the sign-in screen.
 
 Both study back ends perform the same operations with the same JSON (docs/web/api.md):
-over HTTP for the server, and as Firebase callable functions named `ec_<operation>`
+over HTTP for the server, and as Firebase callable functions named `et_<operation>`
 for Firebase. In the browser, `js/api/http.js` and `js/api/firebase.js` implement the
 same Backend interface, so the rest of the application does not know which is in use.
 On the server side one Python service layer implements the operations against a
@@ -82,7 +82,7 @@ and sends the study only their manifests.
 electrotag/web/                 the server (FastAPI), the service layer it shares with the Firebase
                                   functions (with games.py for the achievements and the
                                   leaderboard, feedback.py for problem reports and reviews of
-                                  saved work), and the administrator's command, electrotag-web
+                                  saved work), and the administrator's command, electrotag web
 electrotag/web/firebase/        the Cloud Functions (functions/main.py) and the administrator's access
 electrotag/web/static/          the browser application (plain ES modules, no build step)
     index.html, app.css           the page and the application's design system (tokens, components)
@@ -133,9 +133,9 @@ electrotag/app/                 the Python core: annotations, reading recordings
                                   (eeg/), files and the export (io/), the journalled save (session/)
 electrotag/config/              the default settings and the artifact label catalogue
 electrotag/training/            reference sets, guided training, practice scoring, the quiz and
-                                  competency reports (electrotag-admin)
-electrotag/reliability/         the agreement analysis (electrotag-agreement)
-electrotag/activity/            the activity analysis of the interaction logs (electrotag-activity)
+                                  competency reports (electrotag admin)
+electrotag/reliability/         the agreement analysis (electrotag agreement)
+electrotag/activity/            the activity analysis of the interaction logs (electrotag activity)
 web_tests/unit/                   node --test unit tests of the browser modules
 web_tests/e2e/                    Playwright end-to-end tests
 docs/web/api.md                   the HTTP API (the contract between browser and server)
@@ -431,9 +431,9 @@ scipy, pybv). `python scripts/make_web_fixtures.py --perf` also writes the
 
 `node web_tests/run_e2e.mjs` runs the application in Chromium with Playwright:
 the demonstration, a stand-in server, and the real demonstration server
-(`electrotag-web demo`, started by the runner when the Python of
+(`electrotag web demo`, started by the runner when the Python of
 `ELECTROTAG_PYTHON` or the repository's `.venv` has the packages of
-requirements-web.txt), with recordings opened from disk and the results checked
+requirements.txt), with recordings opened from disk and the results checked
 in the study folder; `--browser webkit` runs the same tests in WebKit, Safari's
 engine, which iPads use. `scripts/test_web_firebase.sh` does the same for a study
 on Firebase, on the Firebase Emulator Suite. The workflow **Browser version
@@ -590,12 +590,19 @@ BrainVision recordings with inherited sidecars, EDF+, EDF and BDF files of many
 kinds, a BrainVision header written by hand and a collection of odd and broken
 metadata) with default and with a study's own settings, and compares every
 field with the manifests that `web_tests/register_parity.py` builds as
-`electrotag-web register` does, with ElectroTag's Python loader
+`electrotag web register` does, with ElectroTag's Python loader
 (`load_recording` in `electrotag/app/eeg/loading.py`). The amplitudes may
 differ by 1 part in 100,000, as elsewhere in the data layer, because the
 display copy is filtered in single precision; everything else must be equal.
 `web_tests/unit/data_register_py.test.mjs` checks the imitations of Python
-against Python on a few hundred values. Ten Emotiv EDF+ recordings of a BIDS
+against Python on a few hundred values. Both use the Python named by
+`ELECTROTAG_PYTHON`, the repository's `.venv` or `python3`, the first that can
+import MNE-Python and pybv, and are skipped, saying so, when none can. A
+sidecar that cannot be read is reported in the manifest in Python's own words,
+and Python 3.12 words a trailing comma differently from Python 3.13 (whose
+words the browser uses), so `loads_json` in `electrotag/app/io/bids.py` gives
+3.12 the newer message; the workflow runs these tests against both versions.
+Ten Emotiv EDF+ recordings of a BIDS
 dataset (14 channels shown, 44 or 46 hidden, events in events.tsv, padding
 marked BAD_ACQ_SKIP, four with amplitudes stored in the wrong unit), three
 128-channel BrainVision recordings with channels.tsv and bad channels, and a
@@ -641,7 +648,7 @@ The browser records the events that docs/activity_logs.md describes
 (`mouse_press`, `key`, `shortcut`, `view`, `annotation_created`, `pointer`,
 `idle_start`, the training events ...) with `t` measured from the start of the
 visit, and sends them in batches. The server writes them as JSON Lines files in
-`interaction_logs/`, which `electrotag-activity` and the admin area's
+`interaction_logs/`, which `electrotag activity` and the admin area's
 activity analysis summarise. Logs written by the desktop application (version
 1.1.0 and earlier) have the same format, so the analysis reads them together
 with the browser's. Typed text and passwords are never recorded.

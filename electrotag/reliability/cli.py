@@ -44,12 +44,12 @@ def default_out_dir(now: datetime | None = None) -> Path:
     return Path(f"agreement_{(now or datetime.now()).strftime('%Y%m%d-%H%M%S')}")
 
 
-def build_parser() -> argparse.ArgumentParser:
+def build_parser(prog: str = "electrotag-agreement") -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="electrotag-agreement",
+        prog=prog,
         description="Inter-rater agreement of ElectroTag annotations: by artifact category, over time, by channel "
         "and by matched events. Writes tab-separated tables and an HTML report.",
-        epilog=EPILOG,
+        epilog=EPILOG.replace("electrotag-agreement ", f"{prog} "),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p.add_argument("inputs", nargs="+", type=Path,
@@ -141,8 +141,8 @@ def config_from_args(args: argparse.Namespace) -> AnalysisConfig:
     return AnalysisConfig.from_dict(data)
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+def main(argv: list[str] | None = None, prog: str = "electrotag-agreement") -> int:
+    args = build_parser(prog).parse_args(argv)
     from electrotag.app.annotations.model import AnnotationError
     from electrotag.reliability.analysis import has_earlier_results, run_analysis, write_outputs
 

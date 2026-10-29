@@ -162,7 +162,7 @@ async function toOpenView(page) {
 /** A browser profile kept on disk (WebKit's private profiles store no files), with pages that share its storage. */
 async function profile(t, { init = null } = {}) {
   const pw = require('playwright');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ec-robust-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'et-robust-'));
   const context = await pw[t.browserName].launchPersistentContext(dir, { headless: true, viewport: { width: 1440, height: 900 }, locale: 'en-GB' });
   if (init) await context.addInitScript(init);
   const open = async () => {

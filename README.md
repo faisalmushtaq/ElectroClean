@@ -18,9 +18,9 @@ from the admin area of the same application.
 | Part | What it does | Where |
 |---|---|---|
 | **Annotation** | View continuous EEG (EDF, EDF+, BDF or BrainVision), mark artifacts by mouse, keyboard or touch (on a computer or an iPad), and save with Save and Finish; unfinished work is kept as a draft. | The browser application |
-| **Inter-rater agreement** | Compare annotators by category, time and channel: time-resolved and event-based agreement, with an HTML report and tables. | The admin area, or `electrotag-agreement` |
-| **Training and assessment** | A training programme from guided learning with the experts to practice with a pass mark, a blinded competency assessment with criteria set by the study, and a short-segment quiz. | The browser application; set up in the admin area or with `electrotag-admin` |
-| **Interaction logs** | A time-stamped record of how each annotator works, as research data, with tables and learning curves. | The admin area, or `electrotag-activity` |
+| **Inter-rater agreement** | Compare annotators by category, time and channel: time-resolved and event-based agreement, with an HTML report and tables. | The admin area, or `electrotag agreement` |
+| **Training and assessment** | A training programme from guided learning with the experts to practice with a pass mark, a blinded competency assessment with criteria set by the study, and a short-segment quiz. | The browser application; set up in the admin area or with `electrotag admin` |
+| **Interaction logs** | A time-stamped record of how each annotator works, as research data, with tables and learning curves. | The admin area, or `electrotag activity` |
 
 The original EEG files and their metadata are never modified.
 
@@ -29,6 +29,26 @@ desktop application (Windows, macOS and Linux, built on MNE-Python's Qt
 browser). It remains available on the
 [Releases page](https://github.com/faisalmushtaq/ElectroTag/releases); its
 results folders are read by the analyses below unchanged.
+
+## Documentation
+
+Each guide is written for the people who use that part of ElectroTag.
+Annotators need only [Using ElectroTag](docs/web/using.md), which takes them
+from the study's link to Save and Finish, with the training programme, the
+quiz and the keys. The study team, who run a study day to day, start with
+[the admin area](docs/web/admin.md); the
+[administrator guide](docs/administrator_guide.md) explains every setting and
+choice behind it, and the [reliability guide](docs/reliability_guide.md) and
+[interaction logs](docs/activity_logs.md) explain the agreement measures and
+the activity tables. Whoever sets up a real study on Firebase follows
+[Running a study on Firebase](docs/web/firebase.md) step by step, and
+[the ElectroTag server](docs/web/server.md) covers the demonstration on your
+own computer and a study on a server of your own. Developers start with the
+[architecture](docs/web/architecture.md), the [API](docs/web/api.md), the
+[developer guide](docs/developer_guide.md), the
+[testing guide](docs/testing_guide.md) and the
+[handover notes](HANDOVER.md). All the guides are listed
+[below](#all-the-guides).
 
 ## Trying it
 
@@ -41,10 +61,12 @@ can also be downloaded as EDF files and opened from your computer, as
 annotators open real recordings.
 
 To try the whole system on one computer, with a real study server, install
-the Python package (below) and run:
+ElectroTag's Python package from this repository, as
+[described below](#installing-the-python-package) (it is not on PyPI), and
+run:
 
 ```bash
-electrotag-web demo        # the application and a study server on http://localhost:8000/
+electrotag web demo        # the application and a study server on http://localhost:8000/
 ```
 
 [docs/web/server.md](docs/web/server.md) lists the accounts and where the
@@ -59,7 +81,7 @@ to the study, validating and saving results with ElectroTag's own code,
 checking guided training steps and scoring practice, so the experts' answers
 never reach a browser). [docs/web/firebase.md](docs/web/firebase.md) sets one
 up step by step. A study can instead run on the **ElectroTag server**
-(`electrotag-web serve`, [docs/web/server.md](docs/web/server.md)), on a
+(`electrotag web serve`, [docs/web/server.md](docs/web/server.md)), on a
 computer the study controls; both run the same Python service layer.
 
 The lead researcher adds recordings, accounts and assignments, changes the
@@ -68,40 +90,95 @@ settings, prepares reference sets and follows progress in the admin area
 [administrator guide](docs/administrator_guide.md) explains every setting and
 choice. Annotators follow [docs/web/using.md](docs/web/using.md).
 
-## The Python package
+## Installing the Python package
 
 ElectroTag's Python package holds the study server, the Firebase functions'
-code and the commands, all built on one core that reads recordings with
-MNE-Python and writes and verifies the result files. It needs **Python 3.12 or
-3.13** (64-bit) and runs on Windows, macOS and Linux. From a copy of this
-repository:
+code and the `electrotag` command, all built on one core that reads
+recordings with MNE-Python and writes and verifies the result files. It needs
+**Python 3.12 or 3.13** (64-bit) and runs on Windows, macOS and Linux. The
+package is installed from this repository, either from a copy of it or
+straight from GitHub; it is not published on PyPI, so
+`pip install electrotag` on its own finds nothing. Install it into a virtual
+environment of its own, so that its packages stay apart from the rest of the
+computer.
+
+**From a copy of the repository** (a clone, or the source archive from
+GitHub's *Code* button, unpacked), open a terminal in its folder and make and
+activate the environment. On macOS and Linux:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate            # Windows: .venv\Scripts\activate
-python -m pip install -r requirements.txt
-python -m pip install --no-deps -e .
-python -m electrotag               # lists the commands
+python3 -m venv .venv
+source .venv/bin/activate
 ```
+
+On Windows, in Command Prompt or PowerShell:
+
+```bat
+py -m venv .venv
+.venv\Scripts\activate
+```
+
+If PowerShell refuses to run the activation script, allow scripts you have
+made yourself once with
+`Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser`, then
+activate again. While the environment is active, the terminal's prompt starts
+with `(.venv)`, and `python` and `pip` are the environment's own on every
+system. Then install ElectroTag:
+
+```bash
+pip install -r requirements.txt
+pip install -e .
+electrotag                           # lists the tools
+```
+
+In a new terminal later on, only the activation line is needed again. A copy
+of the repository is what a study on Firebase needs, because its functions
+and rules are deployed from it ([docs/web/firebase.md](docs/web/firebase.md)).
+
+**Straight from GitHub**, without a copy of the repository, in an active
+environment made as above (this needs [Git](https://git-scm.com/)):
+
+```bash
+pip install -r https://raw.githubusercontent.com/faisalmushtaq/ElectroTag/main/requirements.txt
+pip install "electrotag @ git+https://github.com/faisalmushtaq/ElectroTag"
+```
+
+On a computer without Git, the second line can name GitHub's archive of the
+code instead:
+`pip install "electrotag @ https://github.com/faisalmushtaq/ElectroTag/archive/refs/heads/main.zip"`.
+Either way the package includes the browser application, so
+`electrotag web demo` and the analyses work as they do from a copy.
+
+`requirements.txt` pins every package ElectroTag uses, and the packages those
+use in turn, to the versions it was tested with (MNE 1.13.2, NumPy 2.5.4,
+SciPy 1.18.1, pandas 3.1.0, FastAPI 0.162.0, firebase-admin 7.7.0), and lists
+nothing more; colorama is used only on Windows. Installing it first is
+recommended for a study: the browser reproduces MNE-Python's reading and
+filtering of recordings, the tests check that against these versions, and so
+every computer of the study builds the same manifests and results.
+`pyproject.toml` gives the compatible ranges, so `pip install -e .` on its own
+also works, with the newest versions in those ranges. The browser application
+itself needs nothing installed: it is static files
+(`electrotag/web/static`) with no build step.
 
 | Command | For |
 |---|---|
-| `electrotag-web` | The study server and the demonstration, and the administrator's commands for a study: create it, register recordings, add accounts, assign work, follow progress and export the results |
-| `electrotag-agreement` | Inter-rater agreement of saved annotations |
-| `electrotag-admin` | Reference sets, competency criteria and the training programme, in a dataset folder or a server's study folder |
-| `electrotag-activity` | Tables and learning curves from the interaction logs |
+| `electrotag` | Lists the tools below; `electrotag TOOL --help` explains each one |
+| `electrotag web` | The study server and the demonstration, and the administrator's commands for a study: create it, register recordings, add accounts, assign work, follow progress and export the results |
+| `electrotag agreement` | Inter-rater agreement of saved annotations |
+| `electrotag admin` | Reference sets, competency criteria and the training programme, in a dataset folder or a server's study folder |
+| `electrotag activity` | Tables and learning curves from the interaction logs |
 
-`requirements.txt` pins every package to the versions used for testing
-(MNE 1.13.2, NumPy 2.5.4, SciPy 1.18.1, pandas 3.1.0, FastAPI 0.162.0,
-firebase-admin 7.7.0); `pyproject.toml` gives the compatible ranges. The
-browser application itself needs nothing installed: it is static files
-(`electrotag/web/static`) with no build step.
+Each tool also has a name of its own, `electrotag-web`,
+`electrotag-agreement`, `electrotag-admin` and `electrotag-activity`, which
+works the same way (`electrotag-web demo` is `electrotag web demo`), and
+`python -m electrotag` is the same as `electrotag`.
 
 For development, `requirements-dev.txt` adds the test tools:
 
 ```bash
-python -m pip install -r requirements-dev.txt
-python -m pip install --no-deps -e .
+pip install -r requirements-dev.txt
+pip install -e .
 python -m pytest                              # the Python tests, a few minutes
 node --test web_tests/unit/*.test.mjs         # the browser modules (Node.js 22)
 ```
@@ -115,7 +192,7 @@ For each recording and annotator ElectroTag writes five files whose names
 start with the recording's name and the annotator, for example
 `sub-001_task-rest_eeg_annotator-A01`, into an `Annotated_Events` folder: in
 the study folder of an ElectroTag server as each recording is saved, and for
-a study on Firebase when `electrotag-web export` writes the study's results
+a study on Firebase when `electrotag web export` writes the study's results
 to your computer.
 
 | File | Contents |
@@ -152,7 +229,7 @@ a competency assessment. Its outputs are kept in `examples/example_output/`.
 ## Agreement analysis
 
 ```bash
-electrotag-agreement path/to/Annotated_Events
+electrotag agreement path/to/Annotated_Events
 ```
 
 This produces `agreement_report.html` and tab-separated tables, in a new
@@ -184,12 +261,12 @@ reach the browser. See the [administrator guide](docs/administrator_guide.md).
 ElectroTag keeps a time-stamped log of each annotator's visit: clicks, keys
 and shortcuts, what was on screen, every change to the annotations, dialogs and
 idle periods (never the text typed into fields or passwords). The admin area
-and `electrotag-activity` turn the logs into tables (time, clicks and keys
+and `electrotag activity` turn the logs into tables (time, clicks and keys
 per recording, how much of each recording was seen) and a report with learning
 curves, to show for example whether annotators got faster. See
 [interaction logs](docs/activity_logs.md).
 
-## Documentation
+## All the guides
 
 | Document | For |
 |---|---|

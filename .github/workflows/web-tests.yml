@@ -1,4 +1,4 @@
-# Tests of the browser version: the browser modules (node --test), the application in Chromium
+# Tests of the browser version: the browser modules (node --test, with Python 3.13 and 3.12), the application in Chromium
 # against the demonstration and the real study server (Playwright), the same in WebKit, the engine
 # of Safari on iPads and Macs (with the iPad's touch, layouts and file pickers), and a study on Firebase on the
 # Firebase Emulator Suite (the functions' tests and the application signing in, annotating,
@@ -77,6 +77,32 @@ jobs:
           path: e2e-screenshots
           if-no-files-found: ignore
           retention-days: 14
+
+  python-312:
+    # Python 3.12 is the oldest version ElectroTag supports. The browser builds a recording's
+    # manifest as Python does (js/data/register.js and pyjson.js), so the modules are checked
+    # against 3.12 as well; Python 3.12 words some errors differently from 3.13.
+    name: Browser modules against Python 3.12
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Install Python requirements
+        run: python -m pip install -r requirements-dev.txt
+      - name: Browser modules (node --test)
+        env:
+          ELECTROTAG_PYTHON: python
+        run: node --test web_tests/unit/*.test.mjs
 
   webkit:
     name: End-to-end in WebKit (Safari's engine, as on an iPad)

@@ -12,15 +12,15 @@ study from the beginning, and [the ElectroTag server](web/server.md) covers
 the demonstration and a study on a computer of your own.
 
 The same settings and rules apply wherever a choice is made. The admin area
-changes the study it is signed in to. The command `electrotag-web` does the
+changes the study it is signed in to. The command `electrotag web` does the
 same from a terminal, for example when a study is created
-(`electrotag-web init-study --settings settings.json`) and when the
-recordings of a dataset folder are registered (`electrotag-web register`).
-The command `electrotag-admin` works on a folder: a dataset folder whose
+(`electrotag web init-study --settings settings.json`) and when the
+recordings of a dataset folder are registered (`electrotag web register`).
+The command `electrotag admin` works on a folder: a dataset folder whose
 reference sets you prepare before registering them, or the study folder of an
 ElectroTag server, which keeps the study's settings in
 `electrotag_study.json` just as a dataset folder does. Each command explains
-its options, for example `electrotag-admin set-criteria --help`.
+its options, for example `electrotag admin set-criteria --help`.
 
 ## The settings
 
@@ -49,7 +49,7 @@ them before registering the recordings.
 ElectroTag reads BrainVision (`*_eeg.vhdr` with its `.eeg` and `.vmrk`
 files), EDF and EDF+ (`*_eeg.edf`) and BDF (`*_eeg.bdf`) recordings. A
 recording is read when it is registered, on the computer that holds it (with
-MNE-Python by `electrotag-web register`, or by the browser in the admin area,
+MNE-Python by `electrotag web register`, or by the browser in the admin area,
 which builds the same registration), and again when an annotator opens their
 own copy, by the browser itself, which reproduces MNE's reading
 ([architecture](web/architecture.md)). The registration stores the
@@ -133,14 +133,14 @@ for recordings made with 60 Hz mains. For a reliability study all annotators
 should see the same filtered signal, so the filters can be fixed with
 `"filters": {"locked": true}` together with the values wanted
 (`highpass_enabled`, `highpass_hz`, `notch_enabled`, `notch_hz`,
-`notch_harmonics`). In a folder, `electrotag-admin fix-filters` and
+`notch_harmonics`). In a folder, `electrotag admin fix-filters` and
 `unlock-filters` write the same settings:
 
 ```bash
-electrotag-admin fix-filters /data/MyStudy                     # 1 Hz high-pass, 50 Hz notch, FIR
-electrotag-admin fix-filters /data/MyStudy --notch 60          # for 60 Hz mains
-electrotag-admin fix-filters /data/MyStudy --no-highpass --notch off
-electrotag-admin unlock-filters /data/MyStudy
+electrotag admin fix-filters /data/MyStudy                     # 1 Hz high-pass, 50 Hz notch, FIR
+electrotag admin fix-filters /data/MyStudy --notch 60          # for 60 Hz mains
+electrotag admin fix-filters /data/MyStudy --no-highpass --notch off
+electrotag admin unlock-filters /data/MyStudy
 ```
 
 Annotators then see the filters in the viewing options but cannot change
@@ -238,7 +238,7 @@ more than ten seconds. The interaction log records each pause and its length
 ## Which recording comes next
 
 Each annotator works on the recordings assigned to them, in the admin area or
-with `electrotag-web assign`. The page of their recordings offers one of them
+with `electrotag web assign`. The page of their recordings offers one of them
 as the next to do. A recording they have started and not finished always comes
 first; otherwise the setting `selection.strategy` decides. With `random` (the
 default) it is a random choice among their open recordings, which stays the
@@ -247,16 +247,16 @@ annotator gets a reproducible order, derived from the seed and their annotator
 ID. With `manual` it is the first open recording in the order they were
 assigned. Annotators can still open any of their recordings from the list.
 
-To plan a controlled overlap, `electrotag-admin allocate` computes a
+To plan a controlled overlap, `electrotag admin allocate` computes a
 balanced allocation for the recordings of a folder: every recording is given
 to exactly the number of annotators asked for, balancing the workload and the
 number of recordings each pair of annotators shares. It writes the allocation
-into the folder's study file, where `electrotag-admin show` lists it; assign
+into the folder's study file, where `electrotag admin show` lists it; assign
 those recordings to each annotator in the admin area or with
-`electrotag-web assign`.
+`electrotag web assign`.
 
 ```bash
-electrotag-admin allocate /data/MyStudy --annotators A01 A02 A03 CAM \
+electrotag admin allocate /data/MyStudy --annotators A01 A02 A03 CAM \
     --raters-per-recording 2 --seed 7
 ```
 
@@ -342,17 +342,17 @@ There are three ways to establish a reference.
    with it.
 
 The admin area makes references in all three ways from the annotations saved
-in the study. In a folder, `electrotag-admin` does the same from files
+in the study. In a folder, `electrotag admin` does the same from files
 (`create-reference-set`, then `add-reference`, `build-consensus` with
 `--min-agreement`, `--merge-gap`, `--min-duration` and `--disagreements`,
-`export-disagreements` and `add-adjudicated`), and `electrotag-web register`
+`export-disagreements` and `add-adjudicated`), and `electrotag web register`
 then stores the folder's reference sets with the study, with their experts'
 annotations and without their recordings:
 
 ```bash
-electrotag-admin create-reference-set /data/MyStudy pilot --name "Pilot set" \
+electrotag admin create-reference-set /data/MyStudy pilot --name "Pilot set" \
     --method consensus --experts E1 E2 E3
-electrotag-admin build-consensus /data/MyStudy pilot E1.json E2.json E3.json \
+electrotag admin build-consensus /data/MyStudy pilot E1.json E2.json E3.json \
     --use assessment --disagreements dis.tsv
 ```
 
@@ -362,7 +362,7 @@ reference sets are kept in `derivatives/electrotag_reference_sets` unless
 `training.reference_sets_dir` names another place.
 
 A reference set can be restricted to particular annotators (none means
-anyone): in the admin area, or with `electrotag-admin assign /data/MyStudy
+anyone): in the admin area, or with `electrotag admin assign /data/MyStudy
 pilot CAM A03`. `practice_review` (on by default) offers a side-by-side review
 against the reference after each practice recording.
 
@@ -401,7 +401,7 @@ refers to a different version of the recording); the report lists the
 reasons.
 
 ```bash
-electrotag-admin set-criteria /data/MyStudy pilot \
+electrotag admin set-criteria /data/MyStudy pilot \
     --criterion event_f1:0.8 --criterion event_recall:0.7:each_category \
     --criterion label_accuracy:0.85 --min-reference-events 3
 ```
@@ -415,7 +415,7 @@ measures are based on them.
 ### The training programme
 
 An annotator enrolled in a reference set's training programme (in the admin
-area, or with `electrotag-web assign T01 --programme SET`) goes straight to
+area, or with `electrotag web assign T01 --programme SET`) goes straight to
 their training path when they sign in. They work through three stages of the
 set, each unlocked by the one before: **learn with the experts** (the set's
 guided recordings), **on your own** (its practice recordings, with a pass
@@ -426,8 +426,8 @@ the next step; the [guide for annotators](web/using.md) describes what they
 see.
 
 **The example training set.** Until your experts' files are ready, the example
-training set (in the admin area, or `electrotag-web create-example-set`, or
-`electrotag-admin create-example-set` in a folder) is a set called *Example
+training set (in the admin area, or `electrotag web create-example-set`, or
+`electrotag admin create-example-set` in a folder) is a set called *Example
 training set (placeholder)* with three simulated recordings: two for guided
 learning and one for practice. Its reference is the simulation's ground truth,
 known exactly because the artifacts were simulated, and each guided step has a
@@ -437,7 +437,7 @@ ready.
 
 **Real expert files.** Each expert annotates the recordings in standard mode,
 and their annotations become references as described above. In a folder,
-`electrotag-admin import-recording /data/MyStudy SET recording_eeg.vhdr
+`electrotag admin import-recording /data/MyStudy SET recording_eeg.vhdr
 E1_annotations.json --use guided` copies the recording, its companion files and
 its BIDS sidecars into the set's own folder (`recordings/` inside the set, laid
 out like a small BIDS dataset) and uses the expert's file as the reference. To
@@ -451,12 +451,12 @@ each artifact (a dashed outline of the experts' interval and channels), the
 second names the type and shows a screen that contains it, and later ones only
 say that another artifact follows. Each recording's level can be chosen
 (`show`, `find` or `find_unnamed`; `auto` chooses by its place), in the admin
-area or with `electrotag-admin set-guidance /data/MyStudy SET RECORDING
+area or with `electrotag admin set-guidance /data/MyStudy SET RECORDING
 show|find|find_unnamed`.
 
 **Notes from the experts.** Each guided step can show the experts' explanation
 of that artifact, written in the admin area or with
-`electrotag-admin set-note /data/MyStudy SET ANNOTATION_ID "Look at the
+`electrotag admin set-note /data/MyStudy SET ANNOTATION_ID "Look at the
 frontal channels first"`. The notes are stored under `guided.notes` in the
 set's `reference_set.json`.
 
@@ -466,7 +466,7 @@ or 20 % of the experts' duration (whichever is larger), it has the same scope
 (whole montage or particular channels) and, for channel-specific annotations,
 at least 75 % of the channels are the same (Jaccard index: the channels both
 chose divided by the channels either chose). These are set for each reference
-set, in the admin area or with `electrotag-admin set-programme
+set, in the admin area or with `electrotag admin set-programme
 /data/MyStudy SET --tolerance-s 0.25 --tolerance-fraction 0.2
 --channel-overlap 0.75`. Alternatives that are also accepted for a type can be
 listed in `guided.tolerance.accepted_labels` in `reference_set.json`, for
@@ -475,7 +475,7 @@ example `{"Eye-blink-artifact": ["Eye-artifact"]}`.
 **The pass mark for practice.** A practice recording passes when the
 annotator finds at least 80 % of the experts' artifacts (event F1) and gives
 at least 80 % of those found the experts' type, by default; both are set for
-each reference set (`electrotag-admin set-programme /data/MyStudy SET
+each reference set (`electrotag admin set-programme /data/MyStudy SET
 --pass-f1 0.8 --pass-types 0.8` in a folder). One passed practice recording
 unlocks the assessment. When every practice recording has been done without
 passing, the training path offers one of them again, saved as a second attempt
@@ -488,8 +488,8 @@ each guided recording's summary (steps, stars, attempts, steps shown) is also
 in its session file, so the progress can be rebuilt if it is lost. Every step
 (each check with what differed, each *Show me*, each step's time and stars,
 each practice score, and each item opened in a review) is recorded in the
-visit's interaction log. The admin area, `electrotag-web progress` and
-`electrotag-admin progress` list, for each annotator, the guided recordings
+visit's interaction log. The admin area, `electrotag web progress` and
+`electrotag admin progress` list, for each annotator, the guided recordings
 done with their stars, the practice recordings done and whether one passed,
 and the assessment recordings done.
 
@@ -516,8 +516,8 @@ every input file. It is in the admin area, in the exported results
 (`training/<set>/reports/`), and can be made again from a results folder:
 
 ```bash
-electrotag-admin progress /data/MyStudy pilot --annotators CAM A03
-electrotag-admin report /data/MyStudy pilot CAM
+electrotag admin progress /data/MyStudy pilot --annotators CAM A03
+electrotag admin report /data/MyStudy pilot CAM
 ```
 
 Each competency report carries a `results_sha256` digest of its contents.
@@ -537,7 +537,7 @@ eye blink) and an explanation, shown after each answer when the quiz is used
 for practice. Items are added in the admin area, or in a folder with:
 
 ```bash
-electrotag-admin add-quiz-item /data/MyStudy pilot --item-id q01 \
+electrotag admin add-quiz-item /data/MyStudy pilot --item-id q01 \
     --recording sub-002/eeg/sub-002_task-rest_eeg.vhdr --start 9.2 --end 10.8 \
     --label EMG-artifact --explanation "High-frequency activity over temporal channels"
 ```
@@ -564,7 +564,7 @@ switches them off with `{"settings": {"logging": {"interactions": false}}}`;
 `logging.pointer_hz` (5 by default, 0 for none) sets how often the pointer
 position over the EEG is recorded, and `logging.idle_after_s` (30 s) how long
 without input counts as idle. The admin area shows the tables and report of
-time, clicks, keys and learning curves, and `electrotag-activity` makes them
+time, clicks, keys and learning curves, and `electrotag activity` makes them
 from exported results; every event and column is described in
 [interaction logs](activity_logs.md).
 
@@ -572,12 +572,12 @@ from exported results; every event and column is described in
 
 A study file written for the desktop application (version 1.1.0 and earlier)
 can hold three things the browser does not use: the administrator passphrase
-(`admin_passphrase`, set with `electrotag-admin set-passphrase`), which kept
+(`admin_passphrase`, set with `electrotag admin set-passphrase`), which kept
 annotators out of the desktop's administrator tools, where accounts with the
 administrator role now do that; the list of annotators with
 `allow_unlisted_annotators`, where accounts now decide who annotates; and
 manual assignments in its `allocation` block, where the study's assignments now
-decide. `electrotag-admin resolve-failure` marks a load failure in a results
+decide. `electrotag admin resolve-failure` marks a load failure in a results
 folder of the desktop application as resolved; in a browser study a recording
 that cannot be read is reported when it is registered. The settings blocks of
 such a file apply unchanged.
@@ -590,6 +590,6 @@ such a file apply unchanged.
 2. Fix the viewing filters, choose how the next recording is chosen, and set
    the channels to hide and their types before registering the recordings.
 3. Register the recordings and check that every one was registered; the
-   admin area and `electrotag-web list` show what the study holds.
+   admin area and `electrotag web list` show what the study holds.
 4. Agree the settings of the agreement analysis and write them in a JSON file
-   (`electrotag-agreement --config settings.json …`).
+   (`electrotag agreement --config settings.json …`).

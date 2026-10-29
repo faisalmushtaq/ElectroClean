@@ -325,8 +325,8 @@ local demonstration and the tests, and remains available to a study that
 prefers a computer of its own. The Python core stays (annotations, loading
 with MNE-Python, export, the journalled save, training, reliability, activity
 and the synthetic data), because the server and the functions save results
-with it and the commands `electrotag-agreement`, `electrotag-admin` and
-`electrotag-activity` work on exported results. Nothing in the package
+with it and the commands `electrotag agreement`, `electrotag admin` and
+`electrotag activity` work on exported results. Nothing in the package
 imports a desktop toolkit any more, and the requirements no longer include Qt.
 The open decision on code signing of the stand-alone applications no longer
 applies.

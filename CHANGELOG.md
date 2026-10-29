@@ -65,6 +65,33 @@ The branch that publishes the preview keeps its name, `claude/electroclean-web`;
 the rename had also changed it in the workflows, so the preview under
 `preview/` stopped updating until this was put right.
 
+One command, `electrotag`, now starts every tool of the Python package:
+`electrotag web demo`, `electrotag agreement FOLDER`, `electrotag admin ...`
+and `electrotag activity FOLDER` pass the rest of the line to the tool, each
+explains itself with `--help` under the name it was started by, and
+`electrotag` on its own (or `python -m electrotag`) lists the tools and how to
+start the demonstration. The tools keep their own names, `electrotag-web` and
+so on, which work as before. The guides now use the new form, and the guides
+that still named the Firebase functions `ec_` give their names as they are now
+(`et_`) and their number, twenty.
+
+The README says plainly that the Python package is installed from the
+repository, since it is not on PyPI, and shows the shortest ways to do it: from
+a copy of the repository with a virtual environment, `pip install -r
+requirements.txt` and `pip install -e .`, with the activation lines for Windows,
+macOS and Linux, or straight from GitHub with
+`pip install "electrotag @ git+https://github.com/faisalmushtaq/ElectroTag"`.
+It also explains why the pinned versions are recommended for a study, and
+opens with a Documentation section that sends annotators, the study team,
+whoever sets up Firebase or a server, and developers to their own guides.
+
+With Python 3.12, a JSON sidecar with a comma before its closing bracket was
+reported in different words from Python 3.13, so a recording registered by
+the command line on 3.12 had a manifest that differed from the one the browser
+builds, and the browser's tests failed there. Such a sidecar is now reported
+in the same words on both versions, and the browser's modules are tested
+against Python 3.12 as well as 3.13.
+
 ElectroTag has its own mark: a short stretch of EEG marked as an artifact, the
 shaded band with its two edges that the application draws for each
 annotation, in a rounded frame. It replaces the earlier circle with a trace

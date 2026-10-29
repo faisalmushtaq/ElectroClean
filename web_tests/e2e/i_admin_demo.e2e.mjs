@@ -61,7 +61,7 @@ async function stubBuilder(page) {
 /** A dataset folder with one new simulated EDF recording and a file that is not a recording. */
 async function dataset() {
   const { syntheticEdfBytes } = await import(pathToFileURL(path.join(STATIC, 'js', 'data', 'synthetic.js')).href);
-  const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'ec-admin-'));
+  const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'et-admin-'));
   const dir = path.join(root, 'dataset', 'sub-new01', 'eeg');
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, 'sub-new01_task-rest_eeg.edf');
