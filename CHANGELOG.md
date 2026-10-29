@@ -299,7 +299,10 @@ demonstration found nothing after these changes, and a new end-to-end test
 
 A design pass over the new views makes them calmer and more consistent. The
 parts of a recording not yet viewed are marked on the overview bar by a thin
-grey line instead of an amber one, which read as a warning.
+grey line instead of an amber one, which read as a warning. Big figures stay on
+one line: the home page gives the time left as "3 h 15 min" (with "roughly"
+in the words under it) and the admin area's Progress gives the projected
+finish as "3 Nov", with "around then" in its note.
 
 ## 1.1.0
 

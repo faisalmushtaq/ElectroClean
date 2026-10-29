@@ -96,6 +96,11 @@ test('CSV, sorting and the words of the progress figures', () => {
   assert.equal(m.projectionText({ status: 'not_enough' }), 'Not enough work yet');
   assert.equal(m.projectionText({ status: 'complete' }), 'Every assigned recording is done');
   assert.equal(m.projectionText({ status: 'projected', date: '2026-12-01' }), 'Around 1 Dec 2026');
+  // A tile's figure stays on one line: the day and month, the year only when it is another year's.
+  const now = new Date('2026-10-29T12:00:00');
+  assert.deepEqual(m.projectionFigure({ status: 'projected', date: '2026-12-01' }, 14, now), { value: '1 Dec', note: 'Around then, at the pace of the last 14 days' });
+  assert.equal(m.projectionFigure({ status: 'projected', date: '2027-01-05' }, 14, now).value, '5 Jan 2027');
+  assert.deepEqual(m.projectionFigure({ status: 'not_enough' }), { value: 'Not enough work yet', note: '' });
   assert.equal(m.numberText(2.25, 1), '2.3');
   assert.equal(m.numberText(1200), '1,200');
   assert.deepEqual(niceTicks(0), [0, 1]);

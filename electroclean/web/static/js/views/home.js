@@ -54,10 +54,10 @@ function progressCard(p) {
   const stat = (value, caption, name) => h('div.stat', { 'data-stat': name }, h('p.stat-value', {}, value), h('p.caption', {}, caption));
   const left = !p.left ? 'Nothing left to do'
     : p.remainingS === null ? 'Not estimated yet'
-      : p.remainingS < 60 ? 'Nearly done' : `About ${spanText(roundEstimate(p.remainingS))}`;
+      : p.remainingS < 60 ? 'Nearly done' : spanText(roundEstimate(p.remainingS));
   const leftCaption = !p.left ? 'You have finished every recording.'
     : p.remainingS === null ? `An estimate of the time left appears after your first ${MIN_FOR_ESTIMATE} recordings.`
-      : `left at your pace so far, judged from ${p.basedOn} recordings. Recordings differ, so take it as a guide.`;
+      : `left, roughly, at your pace so far, judged from ${p.basedOn} recordings. Recordings differ, so take it as a guide.`;
   const today = [p.todayS >= 60 ? `${spanText(p.todayS)} of work in this browser` : 'no work yet in this browser',
     p.doneToday ? `${p.doneToday} recording${p.doneToday === 1 ? '' : 's'} finished` : null].filter(Boolean).join(', ');
   return h('section.card.progress-card', { 'aria-label': 'Your progress' },
