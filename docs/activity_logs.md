@@ -186,7 +186,7 @@ ended it, `counts_as_break`, true for Take a break or a pause of five minutes or
 `break_reminder_closed` (`choice`: `take_break`, `remind_later` or `paused` when a pause put it
 away). `next_unviewed` (`from_s` and `to_s` of the stretch shown, `n_unviewed`, the stretches left,
 and `via`). `coverage_check`, before Save and Finish (`viewed_fraction`, `n_unviewed`,
-`unviewed_s`, and `choice`: `save` for Save anyway, `goto` for Go to the first, or `cancel`). A
+`unviewed_s`, and `choice`: `save` for Save anyway, `goto` for Go to the first part, or `cancel`). A
 change of the annotator's display comfort is a `state` event with `comfort` (`trace`, `names`
 and `panel`).
 

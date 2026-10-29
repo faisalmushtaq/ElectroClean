@@ -204,7 +204,7 @@ export async function showDevicePanel(app) {
     body.append(actions, prefCheck(app, 'removeWhenFinished', 'Remove a recording from this device when I finish it', 'device-remove-when-finished').el);
   };
   await render();
-  await showDialog({ title: 'Recordings on this device', body, wide: true, className: 'device', buttons: [{ label: 'Close', value: true, kind: 'primary' }], cancelValue: true });
+  await showDialog({ title: 'Recordings on this device', body, wide: true, className: 'device', buttons: [{ label: 'Close', value: true }], cancelValue: true });
 }
 
 /** The home page's line: "3 recordings kept on this device, 1.2 GB. Manage" (nothing when none). */

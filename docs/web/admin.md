@@ -395,7 +395,7 @@ them, and the shortest annotation in samples. Under Long sessions it also sets t
 annotators who work for hours: after how many minutes of work since their last break they are
 offered a break (50 by default), after how many minutes without any input the working-time clock
 pauses itself (3 by default), and whether Save and Finish first lists the parts of the recording that
-have never been on the screen, with Go to the first and Save anyway (on by default). A value of 0
+have never been on the screen, with Go to the first part and Save anyway (on by default). A value of 0
 turns the reminder or the pause off. The time annotators work on each recording is research data,
 and it always leaves out the time they were paused, whether they pressed Pause, stopped giving input
 or left the page out of sight for more than ten seconds; the annotators' guide describes what they

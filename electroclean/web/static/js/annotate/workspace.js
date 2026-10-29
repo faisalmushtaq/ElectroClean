@@ -1653,7 +1653,7 @@ export class Workspace {
     return true;
   }
 
-  /** Before Save and Finish: the stretches never on screen, with Go to the first and Save anyway. True to go on saving. */
+  /** Before Save and Finish: the stretches never on screen, with Go to the first part and Save anyway. True to go on saving. */
   async _coverageCheck() {
     const gaps = this._unviewed();
     if (!gaps.length) return true;
@@ -1666,7 +1666,7 @@ export class Workspace {
       gaps.length > shown.length ? h('p.dialog-text', {}, `and ${gaps.length - shown.length} more, ${friendlyDuration(total)} in all.`) : null,
       h('p.dialog-text', {}, 'Look at them before you save, or save now if you have reviewed them another way.'));
     const choice = await showDialog({ title: 'Parts not yet viewed', body, className: 'coverage-check', logText: `${gaps.length} unviewed part(s), ${Math.round(total)} s`,
-      buttons: [{ label: 'Save anyway', value: 'save' }, { label: 'Go to the first', value: 'goto', kind: 'primary' }], cancelValue: 'cancel' });
+      buttons: [{ label: 'Save anyway', value: 'save' }, { label: 'Go to the first part', value: 'goto', kind: 'primary' }], cancelValue: 'cancel' });
     logger.event('coverage_check', { viewed_fraction: this._viewedFraction(), n_unviewed: gaps.length, unviewed_s: Math.round(total * 10) / 10, choice });
     if (choice === 'goto') {
       this.viewer.setView({ startS: cov.viewStartFor(gaps[0], this.viewer.view.durationS) }, 'unviewed');

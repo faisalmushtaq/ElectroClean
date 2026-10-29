@@ -236,7 +236,7 @@ export const tests = [
       assert.match(text, /You have viewed 68 % of this recording\. This part has not been on the screen yet:/);
       assert.match(text, /0:28 to 0:50 \(22 s\)/);
       await t.screenshot(page, 'comfort_coverage_check');
-      await clickDialogButton(page, 'Go to the first');
+      await clickDialogButton(page, 'Go to the first part');
       assert.equal(await page.locator('.dialog').count(), 0, 'nothing is saved');
       assert.equal((await state(page)).view.startS, 27);
       await page.waitForFunction(() => globalThis.ElectroClean.ws.s.viewed.length === 2 && globalThis.ElectroClean.ws.s.viewed[0][1] === 37);

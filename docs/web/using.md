@@ -149,7 +149,7 @@ Some links cannot be read by a web page. Google Drive never allows it, OneDrive 
 school (SharePoint) usually does not, and a link that is not shared with everyone, has expired or
 points to a folder fails too. ElectroClean then says what went wrong in plain words and offers
 the next step in the same place: Download the file opens the link in a new tab, where your browser
-downloads the file, and then choose the downloaded file opens the usual file chooser so that you
+downloads the file, and then Choose the downloaded file opens the usual file chooser so that you
 can pick it from your Downloads folder (on an iPad, Downloads in the Files app). ElectroClean
 cannot reach your Downloads folder, so delete the downloaded file there yourself when you have
 finished with it: in the Files app on an iPad, press and hold the file and choose Delete; on a
@@ -351,7 +351,7 @@ download, such as your results in the demonstration, go to the Downloads folder 
 
 Press Save and Finish when you have looked through the whole recording. If some parts of at least a
 second have not been on the screen, ElectroClean first lists them with their times; Go to the first
-takes you to the first of them, and Save anyway goes on, for example when you reviewed them another
+part takes you to the first of them, and Save anyway goes on, for example when you reviewed them another
 way. Your study may turn this check off. ElectroClean then shows how many annotations of each type you
 are saving and asks you to confirm; once saved, the recording is complete. You can still revise it
 later from your history when your study allows revisions (see "History and revisions"); each
