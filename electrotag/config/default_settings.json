@@ -60,6 +60,7 @@
     "break_reminder_minutes": 50,
     "idle_pause_minutes": 3,
     "coverage_check": "warn",
+    "confidence": "optional",
     "quick_labels": [
       "Eye-blink-artifact", "Horizontal-eye-movement-artifact", "EMG-artifact", "Movement-artifact",
       "Electrode-pops-artifact", "Chewing-artifact", "ECG-artifact", "Line-noise-artifact", "Data-artifact"

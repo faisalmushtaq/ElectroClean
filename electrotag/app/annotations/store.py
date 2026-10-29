@@ -15,7 +15,10 @@ type with the same channel scope (both whole montage, or exactly the same
 channels), the two become one annotation spanning both. The older annotation
 keeps its identifier. The merge is part of the same undo step as the change
 that caused it. Annotations of the same type that only touch, or that cover
-different channels, stay separate.
+different channels, stay separate. The merged annotation takes the lowest
+confidence of those merged (definite, then probable, then possible; one without a
+confidence adds none) and their notes, each different note once, oldest first,
+joined with "; " (and shortened to 200 characters, ending with "…", if longer).
 """
 
 from __future__ import annotations
@@ -25,9 +28,13 @@ from dataclasses import dataclass
 
 from electrotag.app.annotations.labels import LabelCatalogue
 from electrotag.app.annotations.model import (
+    CONFIDENCE_LEVELS,
     AnnotationError,
     ArtifactAnnotation,
     RecordingInfo,
+    check_note,
+    join_notes,
+    lower_confidence,
     normalise_channels,
     validate_annotation,
 )
@@ -58,8 +65,13 @@ class AnnotationStore:
         max_history: int = 2000,
         initial: Iterable[ArtifactAnnotation] = (),
         auto_merge: bool = True,
+        default_confidence: str = "",
     ) -> None:
+        if default_confidence and default_confidence not in CONFIDENCE_LEVELS:
+            raise AnnotationError(f"Unknown confidence {default_confidence!r}")
         self.recording = recording
+        #: The confidence of a new annotation: "" (none given) or "definite" (the study's "every_mark" setting).
+        self.default_confidence = default_confidence
         self.catalogue = catalogue
         self.min_duration_samples = int(min_duration_samples)
         self.auto_merge = bool(auto_merge)
@@ -164,8 +176,12 @@ class AnnotationStore:
             survivor = min(group, key=lambda a: order[a.annotation_id])
             start = min(a.onset_sample for a in group)
             stop = max(a.end_sample for a in group)
+            by_age = sorted(group, key=lambda a: order[a.annotation_id])
             current = self._check(
-                survivor.with_changes(onset_sample=start, duration_samples=stop - start, modified_at=now_local_iso())
+                survivor.with_changes(
+                    onset_sample=start, duration_samples=stop - start, modified_at=now_local_iso(),
+                    confidence=lower_confidence(a.confidence for a in by_age), note=join_notes(a.note for a in by_age),
+                )
             )
             gone = {a.annotation_id for a in group} - {survivor.annotation_id}
             kept = {k: (current if k == survivor.annotation_id else v) for k, v in items.items() if k not in gone}
@@ -238,7 +254,10 @@ class AnnotationStore:
         channels: Iterable[str] | None = (),
         *,
         annotation_id: str | None = None,
+        confidence: str | None = None,
+        note: str = "",
     ) -> ArtifactAnnotation:
+        """Add an annotation; its confidence is the store's default unless one is given."""
         stamp = now_local_iso()
         ann = self._check(
             ArtifactAnnotation(
@@ -249,6 +268,8 @@ class AnnotationStore:
                 channels=self._channels(channels),
                 created_at=stamp,
                 modified_at=stamp,
+                confidence=self.default_confidence if confidence is None else confidence,
+                note=check_note(note),
             )
         )
         if ann.annotation_id in self._items:
@@ -280,8 +301,11 @@ class AnnotationStore:
         onset_sample: int | None = None,
         duration_samples: int | None = None,
         channels: Iterable[str] | None = None,
+        confidence: str | None = None,
+        note: str | None = None,
         description: str | None = None,
     ) -> ArtifactAnnotation:
+        """Change an annotation (``None`` leaves a field as it is; a confidence of "" removes it)."""
         current = self.get(annotation_id)
         changes: dict[str, object] = {}
         if label is not None and label != current.label:
@@ -294,6 +318,10 @@ class AnnotationStore:
             new_channels = self._channels(channels)
             if new_channels != current.channels:
                 changes["channels"] = new_channels
+        if confidence is not None and confidence != current.confidence:
+            changes["confidence"] = confidence
+        if note is not None and check_note(note) != current.note:
+            changes["note"] = check_note(note)
         if not changes:
             return current
         updated = self._check(current.with_changes(modified_at=now_local_iso(), **changes))
@@ -330,6 +358,33 @@ class AnnotationStore:
             what = f"relabel as {label}" if len(changed) == 1 else f"relabel {len(changed)} annotations as {label}"
             self._commit("update", what, items, tuple(changed))
 
+    def set_confidence(self, annotation_id: str, confidence: str) -> ArtifactAnnotation:
+        """Give an annotation a confidence (one of CONFIDENCE_LEVELS), or remove it with ""."""
+        return self.update(annotation_id, confidence=confidence, description=confidence_description(confidence))
+
+    def set_confidence_many(self, annotation_ids: Iterable[str], confidence: str) -> None:
+        """Give several annotations one confidence as one undoable step."""
+        ids = tuple(dict.fromkeys(annotation_ids))
+        items = dict(self._items)
+        changed = []
+        stamp = now_local_iso()
+        for aid in ids:
+            current = self.get(aid)
+            if current.confidence != confidence:
+                items[aid] = self._check(current.with_changes(confidence=confidence, modified_at=stamp))
+                changed.append(aid)
+        if changed:
+            what = confidence_description(confidence)
+            self._commit("update", what if len(changed) == 1 else f"{what} ({len(changed)} annotations)", items,
+                         tuple(changed))
+
+    def set_note(self, annotation_id: str, note: str) -> ArtifactAnnotation:
+        """Add, change or (with "") remove an annotation's note."""
+        current = self.get(annotation_id)
+        text = check_note(note)
+        what = "remove note" if not text else "change note" if current.note else "add note"
+        return self.update(annotation_id, note=text, description=what)
+
     def set_channels(self, annotation_id: str, channels: Iterable[str]) -> ArtifactAnnotation:
         return self.update(annotation_id, channels=list(channels), description="change channels")
 
@@ -363,12 +418,14 @@ class AnnotationStore:
         Only called when the annotator asks for it. The merged interval spans
         from the earliest onset to the latest end of the selection. If any of
         the merged annotations covered the whole montage, the result does too;
-        otherwise its channels are the union of the selected channels.
+        otherwise its channels are the union of the selected channels. Its
+        confidence and note follow the rule of automatic merging.
         """
         ids = tuple(dict.fromkeys(annotation_ids))
         if len(ids) < 2:
             raise AnnotationError("Select at least two annotations to merge")
         anns = [self.get(a) for a in ids]
+        order = {k: i for i, k in enumerate(self._items)}  # the oldest first
         labels = {a.label for a in anns}
         if len(labels) != 1:
             raise AnnotationError("Only annotations with the same label can be merged")
@@ -388,6 +445,8 @@ class AnnotationStore:
                 channels=channels,
                 created_at=stamp,
                 modified_at=stamp,
+                confidence=lower_confidence(a.confidence for a in anns),
+                note=join_notes(a.note for a in sorted(anns, key=lambda a: order[a.annotation_id])),
             )
         )
         items = {k: v for k, v in self._items.items() if k not in ids}
@@ -405,3 +464,8 @@ class AnnotationStore:
             and a.onset_sample < ref.end_sample
             and ref.onset_sample < a.end_sample
         ]
+
+
+def confidence_description(confidence: str) -> str:
+    """How a change of confidence is described in the undo history."""
+    return f"set confidence {confidence}" if confidence else "remove confidence"

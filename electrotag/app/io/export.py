@@ -9,7 +9,7 @@ The exported ``*_events.tsv`` contains every original event row, unchanged,
 followed (in onset order) by one row per artifact annotation. Columns are the
 original columns in their original order, then any of ``onset``,
 ``duration``, ``trial_type``, ``value``, ``sample`` and ``channels`` that the
-original lacked, then four ElectroTag columns:
+original lacked, then seven ElectroTag columns:
 
 ``event_source``
     ``original:events_tsv``, ``original:brainvision_vmrk``,
@@ -23,6 +23,17 @@ original lacked, then four ElectroTag columns:
 ``original_row``
     1-based row number in the original events file (``n/a`` for artifacts),
     so the original table can be rebuilt exactly.
+``confidence``
+    How sure the annotator was of the artifact: ``definite``, ``probable`` or
+    ``possible``; ``n/a`` when no confidence was given, and on original rows.
+``annotation_note``
+    The annotator's short note on the artifact (``n/a`` when there is none,
+    and on original rows).
+
+``artifact_code`` (the first of the seven) holds the artifact's fixed code.
+Files written before version 1.1.0 have no ``confidence`` or
+``annotation_note`` column; their artifacts are read as having no confidence
+given and no note.
 
 ``channels`` is a JSON array of channel names for artifact rows. ``[]``
 (an empty selection) means the whole recording montage. Original rows keep
@@ -37,7 +48,13 @@ import json
 from typing import Any
 
 from electrotag.app.annotations.labels import LabelCatalogue
-from electrotag.app.annotations.model import AnnotationDocument, AnnotationError, ArtifactAnnotation, RecordingInfo
+from electrotag.app.annotations.model import (
+    MAX_NOTE_CHARS,
+    AnnotationDocument,
+    AnnotationError,
+    ArtifactAnnotation,
+    RecordingInfo,
+)
 from electrotag.app.annotations.timing import TIME_CONVENTIONS
 from electrotag.app.eeg.events import (
     SOURCE_EVENTS_TSV,
@@ -52,7 +69,10 @@ from electrotag.app.io.tsv import parse_tsv_text, tsv_bytes
 REQUIRED_COLUMNS = ["onset", "duration", "trial_type", "value", "sample", "channels"]
 # Artifact codes have their own column, so they can never be confused with the dataset's
 # own marker values (which stay in ``value``, untouched).
-ELECTROTAG_COLUMNS = ["artifact_code", "event_source", "annotation_id", "annotator_id", "original_row"]
+ELECTROTAG_COLUMNS = ["artifact_code", "event_source", "annotation_id", "annotator_id", "original_row", "confidence",
+                      "annotation_note"]
+#: Columns that files written by earlier versions may lack (a missing column means unknown).
+OPTIONAL_COLUMNS = ("artifact_code", "confidence", "annotation_note")
 ARTIFACT_SOURCE = "electrotag_artifact"
 NA = "n/a"
 
@@ -120,6 +140,8 @@ def build_events_table(
         out[index["event_source"]] = ARTIFACT_SOURCE
         out[index["annotation_id"]] = ann.annotation_id
         out[index["annotator_id"]] = doc.annotator_id
+        out[index["confidence"]] = ann.confidence or NA
+        out[index["annotation_note"]] = ann.note or NA
         keyed.append(((ann.onset(timing), 1, j), out))
 
     keyed.sort(key=lambda kv: kv[0])
@@ -139,7 +161,7 @@ def annotations_from_events_tsv(
     columns, rows = parse_tsv_text(text, "exported events.tsv")
     # Files written before version 2 kept artifact codes in ``value``.
     code_column = "artifact_code" if "artifact_code" in columns else "value"
-    missing = [c for c in REQUIRED_COLUMNS + ELECTROTAG_COLUMNS if c not in columns and c != "artifact_code"]
+    missing = [c for c in REQUIRED_COLUMNS + ELECTROTAG_COLUMNS if c not in columns and c not in OPTIONAL_COLUMNS]
     if missing:
         raise AnnotationError(f"Exported events file lacks columns {missing}")
     idx = {c: i for i, c in enumerate(columns)}
@@ -168,9 +190,17 @@ def annotations_from_events_tsv(
                 onset_sample=sample,
                 duration_samples=timing.duration_to_samples(duration),
                 channels=decode_channels(row[idx["channels"]]),
+                confidence=_optional_cell(row, idx, "confidence"),
+                note=_optional_cell(row, idx, "annotation_note"),
             )
         )
     return out
+
+
+def _optional_cell(row: list[str], idx: dict[str, int], column: str) -> str:
+    """A cell of a column that older files lack: "" when the column is missing or the cell is n/a."""
+    value = row[idx[column]] if column in idx else NA
+    return "" if value == NA else value
 
 
 def original_rows_from_events_tsv(data: bytes | str) -> tuple[list[str], list[list[str]]]:
@@ -295,6 +325,34 @@ def build_events_sidecar(
     out["annotation_id"] = {"Description": "Stable identifier of the ElectroTag artifact annotation (n/a for original rows)."}
     out["annotator_id"] = {"Description": "Identifier of the annotator who created the artifact annotation (n/a for original rows)."}
     out["original_row"] = {"Description": "1-based row number in the original events file (n/a for artifact rows)."}
+    confidence_mode = doc.confidence_mode or "optional"
+    out["confidence"] = {
+        "LongName": "Confidence of the artifact annotation",
+        "Description": (
+            f"How sure the annotator was of the artifact, on rows with event_source '{ARTIFACT_SOURCE}' (n/a on "
+            "original rows). n/a on an artifact row means that no confidence was given. "
+            + (
+                "In this study every new annotation started as 'definite' and the annotator changed it when unsure "
+                "(annotation.confidence 'every_mark'), so a confidence was given for every annotation made."
+                if confidence_mode == "every_mark"
+                else "In this study a confidence was optional (annotation.confidence 'optional'): annotators gave one "
+                "only when they wished, so the annotations with a confidence are a self-selected subset and n/a "
+                "means not given, not definite."
+            )
+        ),
+        "Levels": {
+            "definite": "The annotator was sure this is an artifact of this type.",
+            "probable": "The annotator thought it is probably an artifact of this type.",
+            "possible": "The annotator thought it is possibly an artifact of this type.",
+        },
+    }
+    out["annotation_note"] = {
+        "LongName": "Annotator's note",
+        "Description": (
+            f"The annotator's optional short note on the artifact (at most {MAX_NOTE_CHARS} characters), on rows "
+            f"with event_source '{ARTIFACT_SOURCE}'; n/a when there is no note, and on original rows."
+        ),
+    }
     out["ElectroTagMetadata"] = {
         "GeneratedBy": "ElectroTag " + (doc.app_version or ""),
         "recording_id": doc.recording.recording_id,
@@ -305,6 +363,7 @@ def build_events_sidecar(
         "time_conventions": TIME_CONVENTIONS,
         "label_catalogue": cat.to_metadata(),
         "event_code_check": event_report or {},
+        "confidence_setting": confidence_mode,
         "notes": notes,
     }
     return out, notes

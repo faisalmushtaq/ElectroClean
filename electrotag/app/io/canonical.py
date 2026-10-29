@@ -15,6 +15,7 @@ from typing import Any
 from electrotag import __version__
 from electrotag.app.annotations.labels import LabelCatalogue, default_catalogue
 from electrotag.app.annotations.model import (
+    CONFIDENCE_CONVENTION,
     CHANNEL_CONVENTION,
     SCHEMA_ANNOTATIONS,
     SCHEMA_VERSION,
@@ -31,9 +32,11 @@ ANNOTATION_FILE_FIELDS = {
     "schema_version": "Semantic version of this file format.",
     "recording": "recording_id, relative_path, sfreq, n_samples, first_samp, meas_date, duration_s, ch_names, fingerprint.",
     "annotator": "annotator_id (file-name safe) and optional display_name.",
-    "session": "session_id, mode (standard/practice/assessment), created_at, app_version, context.",
+    "session": "session_id, mode (standard/practice/assessment), created_at, app_version, context, and confidence "
+    "(the study's annotation.confidence setting: optional or every_mark; absent before version 1.1.0).",
     "time_conventions": "How onset, duration and sample are defined.",
     "channel_convention": "Meaning of the channels list (empty = whole montage).",
+    "confidence_convention": "Meaning of each annotation's confidence (definite, probable, possible; null: not given).",
     "label_catalogue": "Catalogue id, version, SHA-256 and the (value, label) pairs used.",
     "annotations": "List of annotation records (see ArtifactAnnotation.to_dict).",
 }
@@ -74,6 +77,15 @@ def catalogue_from_metadata(meta: dict[str, Any]) -> LabelCatalogue:
 
 def document_to_dict(doc: AnnotationDocument) -> dict[str, Any]:
     timing = doc.recording.timing
+    session: dict[str, Any] = {
+        "session_id": doc.session_id,
+        "mode": doc.mode,
+        "created_at": doc.created_at,
+        "app_version": doc.app_version or __version__,
+        "context": doc.context,
+    }
+    if doc.confidence_mode:
+        session["confidence"] = doc.confidence_mode
     return {
         "schema": SCHEMA_ANNOTATIONS,
         "schema_version": SCHEMA_VERSION,
@@ -82,15 +94,10 @@ def document_to_dict(doc: AnnotationDocument) -> dict[str, Any]:
             "annotator_id": doc.annotator_id,
             "display_name": doc.annotator_display_name,
         },
-        "session": {
-            "session_id": doc.session_id,
-            "mode": doc.mode,
-            "created_at": doc.created_at,
-            "app_version": doc.app_version or __version__,
-            "context": doc.context,
-        },
+        "session": session,
         "time_conventions": TIME_CONVENTIONS,
         "channel_convention": CHANNEL_CONVENTION,
+        "confidence_convention": CONFIDENCE_CONVENTION,
         "label_catalogue": doc.catalogue.to_metadata(),
         "n_annotations": len(doc.annotations),
         "annotations": [a.to_dict(timing, doc.catalogue) for a in doc.sorted_annotations()],
@@ -133,6 +140,7 @@ def document_from_dict(data: dict[str, Any], *, validate: bool = True) -> Annota
         created_at=str(session.get("created_at", "")),
         app_version=str(session.get("app_version", "")),
         context=dict(session.get("context") or {}),
+        confidence_mode=str(session.get("confidence") or ""),
     )
     if validate:
         doc.validate()

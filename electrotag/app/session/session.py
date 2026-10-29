@@ -27,7 +27,7 @@ from typing import Any
 
 from electrotag import APP_NAME, __version__
 from electrotag.app.annotations.labels import LabelCatalogue
-from electrotag.app.annotations.model import AnnotationDocument, ArtifactAnnotation
+from electrotag.app.annotations.model import CONFIDENCE_LEVELS, AnnotationDocument, ArtifactAnnotation
 from electrotag.app.annotations.store import AnnotationStore
 from electrotag.app.annotations.timing import TIME_CONVENTIONS
 from electrotag.app.common import new_session_id, normalise_annotator_id, now_local_iso, validate_mode
@@ -46,7 +46,7 @@ from electrotag.app.validation.exports import ValidationError, make_bundle_valid
 from electrotag.config.settings import FilterSettings, Settings
 
 SCHEMA_SESSION = "electrotag.session"
-SESSION_SCHEMA_VERSION = "1.0.0"
+SESSION_SCHEMA_VERSION = "1.1.0"  # 1.1.0: annotations.confidence and annotations.n_with_note
 
 
 class SessionError(RuntimeError):
@@ -140,6 +140,7 @@ class AnnotationSession:
             catalogue,
             min_duration_samples=settings.min_duration_samples,
             initial=initial_annotations or (),
+            default_confidence="definite" if settings.confidence == "every_mark" else "",
         )
         self.autosave_enabled = autosave_enabled
         self.autosave_path = autosave_path(
@@ -404,6 +405,7 @@ class AnnotationSession:
             created_at=self.finished_at or now_local_iso(),
             app_version=__version__,
             context=self.context,
+            confidence_mode=self.settings.confidence,
         )
 
     def build_session_metadata(self, doc: AnnotationDocument, elapsed: float, basename: str, names: dict[str, str]) -> dict[str, Any]:
@@ -466,6 +468,8 @@ class AnnotationSession:
                 "n_channel_specific": sum(1 for a in doc.annotations if not a.is_global),
                 "by_label": {k: v for k, v in counts.items() if v},
                 "time_conventions": TIME_CONVENTIONS,
+                "confidence": confidence_summary(doc),
+                "n_with_note": sum(1 for a in doc.annotations if a.note),
             },
             "label_catalogue": self.catalogue.to_metadata(),
             "original_events": {
@@ -603,6 +607,20 @@ class AnnotationSession:
             n_annotations=len(self.store),
         )
         self.lock.release()
+
+
+def confidence_summary(doc: AnnotationDocument) -> dict[str, Any]:
+    """The ``annotations.confidence`` block of the session file: the study's setting and how often each
+    confidence was given."""
+    by_level = {lv: sum(1 for a in doc.annotations if a.confidence == lv) for lv in CONFIDENCE_LEVELS}
+    return {
+        "setting": doc.confidence_mode or "optional",
+        "meaning": "optional: annotators gave a confidence only when they wished (new annotations had none); "
+                   "every_mark: every new annotation started as definite and annotators changed it when unsure.",
+        "n_given": sum(by_level.values()),
+        "n_not_given": sum(1 for a in doc.annotations if not a.confidence),
+        "by_level": by_level,
+    }
 
 
 def _rel(path: Path | None, root: Path) -> str | None:

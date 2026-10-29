@@ -54,6 +54,8 @@ class Event:
     stop: int
     channels: frozenset[str]
     whole_montage: bool
+    confidence: str = ""  # listed with the event in the matched and unmatched tables, never used to match
+    note: str = ""
 
 
 def events_for(
@@ -81,7 +83,8 @@ def events_for(
         chans = frozenset(ch_names) if a.is_global else frozenset(c for c in a.channels if c in allowed)
         if require_channels and not chans:
             continue
-        out.append(Event(doc.annotator_id, a.annotation_id, a.label, a.onset_sample, a.end_sample, chans, a.is_global))
+        out.append(Event(doc.annotator_id, a.annotation_id, a.label, a.onset_sample, a.end_sample, chans, a.is_global,
+                         a.confidence, a.note))
     out.sort(key=lambda e: (e.start, e.stop, e.annotation_id))
     return out
 
@@ -245,6 +248,9 @@ def event_agreement(dataset: AgreementDataset, config: AnalysisConfig) -> dict[s
                                 "channel_jaccard": jac,
                                 "reference_channels": "ALL" if r.whole_montage else ",".join(sorted(r.channels)),
                                 "compared_channels": "ALL" if t.whole_montage else ",".join(sorted(t.channels)),
+                                "reference_confidence": r.confidence or None,
+                                "compared_confidence": t.confidence or None,
+                                "reference_note": r.note or None, "compared_note": t.note or None,
                             })
                         for who, idx_list, events in (("reference", out.unmatched_ref, evs[a]), ("compared", out.unmatched_test, evs[b])):
                             for i in idx_list:
@@ -256,6 +262,7 @@ def event_agreement(dataset: AgreementDataset, config: AnalysisConfig) -> dict[s
                                     "annotator": e.annotator, "annotation_id": e.annotation_id, "label": e.label,
                                     "onset_s": e.start / sf, "offset_s": e.stop / sf,
                                     "channels": "ALL" if e.whole_montage else ",".join(sorted(e.channels)),
+                                    "confidence": e.confidence or None, "note": e.note or None,
                                 })
                 for (a, b), acc in sorted(pooled.items()):
                     summary.append(_summary_row(cat, mode, thr, config, a, b, acc))

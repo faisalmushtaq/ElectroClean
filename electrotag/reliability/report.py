@@ -113,6 +113,33 @@ COLUMN_TITLES: dict[str, tuple[str, str]] = {
     "seconds": ("Time (s)", "Summed over annotator pairs"),
     "path": ("File", ""),
     "status": ("Status", ""),
+    "annotator": ("Annotator", ""),
+    "confidence_setting": ("Confidence setting", "optional: given only when the annotator wished; every_mark: every "
+                          "new mark started as definite"),
+    "n_recordings": ("Recordings", ""),
+    "n_annotations": ("Annotations", ""),
+    "n_confidence_given": ("Confidence given", "Annotations with a confidence"),
+    "share_confidence_given": ("Share given", "Share of the annotations with a confidence"),
+    "n_definite": ("Definite", ""),
+    "n_probable": ("Probable", ""),
+    "n_possible": ("Possible", ""),
+    "n_not_given": ("Not given", "Annotations without a confidence"),
+    "share_definite": ("Share definite", "Of the annotations with a confidence"),
+    "share_probable": ("Share probable", "Of the annotations with a confidence"),
+    "share_possible": ("Share possible", "Of the annotations with a confidence"),
+    "n_with_note": ("With a note", "Annotations that carry a note (notes take part in no statistic)"),
+    "rater_1": ("Annotator 1", ""),
+    "rater_2": ("Annotator 2", ""),
+    "n_marks_all": ("Marks, all", "Events of both annotators"),
+    "n_marks_without_doubtful": ("Marks, without doubtful", "Events of both annotators, leaving out those given "
+                                 "probable or possible"),
+    "positive_agreement_all": ("Positive agreement, all", "Sample by sample, all recordings pooled"),
+    "positive_agreement_without_doubtful": ("Positive agreement, without doubtful", "Leaving out marks given "
+                                            "probable or possible"),
+    "cohen_kappa_all": ("Kappa, all", "Cohen's kappa sample by sample, all recordings pooled"),
+    "cohen_kappa_without_doubtful": ("Kappa, without doubtful", "Leaving out marks given probable or possible"),
+    "f1_all": ("F1, all", "Event F1 at the main threshold"),
+    "f1_without_doubtful": ("F1, without doubtful", "Leaving out marks given probable or possible"),
 }
 NOWRAP = {"category", "pair", "recording", "reference", "compared", "label_rater_1", "label_rater_2",
           "channel_mode", "annotator", "path"}
@@ -467,6 +494,36 @@ summary { cursor: pointer; font-size: 14px; line-height: 20px; color: var(--seco
 """
 
 
+def _confidence_section(result: Any, add: Callable[[str], None]) -> None:
+    """Section 5: how sure the annotators said they were, and agreement without the marks they doubted."""
+    from electrotag.reliability.confidence import confidence_given, explanation
+
+    add("<h2>5. Confidence of the annotations</h2>")
+    add(f"<p>{html.escape(explanation(result.dataset, result.config))} Notes that annotators added to their marks "
+        "are listed with each event in <code>events_matched.tsv</code> and <code>events_unmatched.tsv</code> and "
+        "take part in none of the statistics.</p>")
+    by = result.tables.get("confidence_by_annotator", pd.DataFrame())
+    if not by.empty:
+        add(_table(by, caption="For each annotator, all recordings together: how many annotations had a confidence "
+                   "given, how those were spread over definite, probable and possible, and how many carry a note. "
+                   "An annotator who rarely leaves the default may differ in habit rather than in doubt."))
+    if not confidence_given(result.dataset, result.config):
+        return
+    sens = result.tables.get("confidence_sensitivity", pd.DataFrame())
+    if sens.empty:
+        add("<p class='muted'>No annotator pair to compare.</p>")
+        return
+    cfg = result.config
+    shown = sens[(sens.channel_mode == "time_only") & (sens.category == ANY_ARTIFACT)]
+    add(_table(shown if not shown.empty else sens.head(40), caption="Agreement of each pair of annotators for all "
+               "marks and again without the marks given probable or possible: positive agreement and Cohen's kappa "
+               "sample by sample and event F1 at the main threshold "
+               f"({html.escape(f'{cfg.primary_iou_threshold:g}')}), for any artifact, time only, all recordings "
+               "pooled. "
+               "Higher agreement without the doubtful marks means that much of the disagreement lies in marks the "
+               "annotators themselves were unsure of. confidence_sensitivity.tsv has every category and mode."))
+
+
 def build_html_report(result: Any) -> str:
     cfg = result.config
     tables = result.tables
@@ -507,7 +564,8 @@ def build_html_report(result: Any) -> str:
     warnings = rec.get("warnings", [])
     if not has_pairs:
         add("<div class='warn'><b>Nothing to compare.</b> " + html.escape(warnings[0] if warnings else "")
-            + " Sections 2 to 7 are therefore empty; section 1 lists the annotations.</div>")
+            + " Sections 2 to 8 (except the counts of confidence in section 5) are therefore empty; section 1 lists "
+            "the annotations.</div>")
     add(
         "<div class='box'><b>How to read this report.</b> Agreement is reported along three dimensions: "
         "<i>category</i> (do annotators use the same artifact type?), <i>time</i> (do they mark the same parts of the "
@@ -651,8 +709,10 @@ def build_html_report(result: Any) -> str:
         if img:
             add(_img(img, "Boundary differences of matched events (compared minus reference)"))
 
+    _confidence_section(result, add)
+
     # Channels
-    add("<h2>5. Channel-specific agreement</h2>")
+    add("<h2>6. Channel-specific agreement</h2>")
     add("<p>In time-and-channel mode every channel is analysed separately and the results are pooled (units: "
         "channel-seconds or channel-bins). Whole-montage annotations count for every channel of the recording. "
         "Event matching additionally requires the events to share channels; the channel Jaccard index of matched "
@@ -666,7 +726,7 @@ def build_html_report(result: Any) -> str:
 
     # Confusion
     conf = tables.get("confusion_time_weighted", pd.DataFrame())
-    add("<h2>6. Category disagreements</h2>")
+    add("<h2>7. Category disagreements</h2>")
     if not conf.empty:
         tot = conf.groupby(["label_rater_1", "label_rater_2"])["seconds"].sum().reset_index()
         tot = tot[(tot.label_rater_1 != tot.label_rater_2)].sort_values("seconds", ascending=False)
@@ -676,7 +736,7 @@ def build_html_report(result: Any) -> str:
         add("<p class='muted'>No data.</p>")
 
     # Timelines
-    add("<h2>7. Interval overlap by recording</h2>")
+    add("<h2>8. Interval overlap by recording</h2>")
     for i, (rid, group) in enumerate(sorted(result.dataset.groups.items())):
         if i >= cfg.timeline_max_recordings:
             add(f"<p class='muted'>Timelines shown for the first {cfg.timeline_max_recordings} recordings only.</p>")
@@ -686,17 +746,19 @@ def build_html_report(result: Any) -> str:
             add(_img(img, f"Annotations in {rid}"))
 
     # Extra measures
-    extra = [n for n in tables if not n.startswith(("descriptives_", "timeresolved_", "events_", "confusion_"))]
+    extra = [n for n in tables
+             if not n.startswith(("descriptives_", "timeresolved_", "events_", "confusion_", "confidence_"))]
     if extra:
         add("<h2>Additional measures</h2>")
         for n in extra:
             add(f"<h3>{html.escape(n)}</h3>" + _table(tables[n]))
 
-    add("<h2>8. Analysis settings</h2>")
+    add("<h2>9. Analysis settings</h2>")
     add("<pre>" + html.escape(json.dumps(result.settings_record.get("config", {}), indent=2)) + "</pre>")
     add("<details><summary>Input files</summary>" + _table(pd.DataFrame(result.settings_record.get("input_files", []))) + "</details>")
     add("<p class='muted'>All tables are also saved as tab-separated files next to this report, with the column names "
         "shown in the headings' tooltips. The matched and unmatched event lists (<code>events_matched.tsv</code>, "
-        "<code>events_unmatched.tsv</code>) keep every pairing decision for further analysis.</p>")
+        "<code>events_unmatched.tsv</code>) keep every pairing decision for further analysis, with each "
+        "annotation's confidence and note.</p>")
     add("</body></html>")
     return "\n".join(parts)

@@ -28,6 +28,10 @@ CHANNEL_TYPES = ("eeg", "eog", "ecg", "emg", "misc", "stim", "resp", "bio", "gsr
 FILTER_METHODS = ("fir", "iir")
 NOTCH_FREQUENCIES = (50.0, 60.0)
 COVERAGE_CHECKS = ("warn", "off")
+#: annotation.confidence: "optional" (annotators may give a confidence when they wish; new marks have none)
+#: or "every_mark" (every new mark starts as definite). The first design's "off" and "on" are read as these.
+CONFIDENCE_SETTINGS = ("optional", "every_mark")
+_CONFIDENCE_ALIASES = {"off": "optional", "on": "every_mark"}
 
 
 class SettingsError(ValueError):
@@ -45,6 +49,12 @@ def _minutes(value: Any, name: str) -> float:
     if out != out or out in (float("inf"), float("-inf")):
         raise SettingsError(f"{name} must be a number of minutes")
     return out
+
+
+def _confidence_setting(value: Any) -> str:
+    """annotation.confidence, with the first design's "off" and "on" read as "optional" and "every_mark"."""
+    text = str(value)
+    return _CONFIDENCE_ALIASES.get(text, text) if isinstance(value, str) else repr(value)
 
 
 def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -198,6 +208,7 @@ class Settings:
     break_reminder_minutes: float = 50.0  # minutes of work since the last break before a reminder (0: none)
     idle_pause_minutes: float = 3.0  # minutes without input after which the clock pauses itself (0: never)
     coverage_check: str = "warn"  # "warn": Save and Finish lists the parts never on screen; "off"
+    confidence: str = "optional"  # CONFIDENCE_SETTINGS: how sure the annotator is of each mark (docs/web/using.md)
     raw: dict[str, Any] = field(repr=False, default_factory=dict)
 
     @classmethod
@@ -252,6 +263,7 @@ class Settings:
                                                 "annotation.break_reminder_minutes"),
                 idle_pause_minutes=_minutes(ann.get("idle_pause_minutes", 3.0), "annotation.idle_pause_minutes"),
                 coverage_check=str(ann.get("coverage_check", "warn")),
+                confidence=_confidence_setting(ann.get("confidence", "optional")),
                 channel_type_patterns=tuple((str(k), str(v).strip().lower()) for k, v in types.items()),
                 logging_interactions=bool(logs.get("interactions", True)),
                 logging_pointer_hz=float(logs.get("pointer_hz", 5.0)),
@@ -309,6 +321,10 @@ class Settings:
         if self.coverage_check not in COVERAGE_CHECKS:
             raise SettingsError('annotation.coverage_check must be "warn" (list the parts not yet viewed before '
                                 'Save and Finish) or "off"')
+        if self.confidence not in CONFIDENCE_SETTINGS:
+            raise SettingsError('annotation.confidence must be "optional" (annotators may say how sure they are of a '
+                                'mark when they wish) or "every_mark" (every mark has a confidence, starting as '
+                                'definite)')
         if not 0 <= self.logging_pointer_hz <= 60:
             raise SettingsError("logging.pointer_hz must be between 0 (no pointer samples) and 60")
         if not 5 <= self.logging_idle_after_s <= 3600:

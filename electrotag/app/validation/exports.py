@@ -2,7 +2,8 @@
 
 Each check re-reads the bytes that were written and compares them with the
 in-memory annotations, so a successful validation proves that the files on disk
-can reproduce every onset, duration, label and channel selection exactly, and
+can reproduce every onset, duration, label, channel selection, confidence and
+note exactly, and
 that the original event rows are unchanged.
 """
 
@@ -29,7 +30,7 @@ class ValidationError(ValueError):
 
 
 def _key(a: Any) -> tuple:
-    return (a.annotation_id, a.label, a.onset_sample, a.duration_samples, tuple(a.channels))
+    return (a.annotation_id, a.label, a.onset_sample, a.duration_samples, tuple(a.channels), a.confidence, a.note)
 
 
 def validate_annotation_document(doc: AnnotationDocument, min_samples: int = 1) -> None:
@@ -67,6 +68,9 @@ def validate_events_tsv(data: bytes, original: OriginalEvents, doc: AnnotationDo
             raise ValidationError(f"events.tsv line {n}: artifact rows must leave value as n/a")
         if not artifact and row[idx["artifact_code"]] != "n/a":
             raise ValidationError(f"events.tsv line {n}: original rows must not have an artifact_code")
+        if not artifact and (row[idx["confidence"]] != "n/a" or row[idx["annotation_note"]] != "n/a"):
+            raise ValidationError(f"events.tsv line {n}: original rows must leave confidence and annotation_note "
+                                  "as n/a")
     if len(rows) != len(original.rows) + len(doc.annotations):
         raise ValidationError("events.tsv has an unexpected number of rows")
 
@@ -88,6 +92,8 @@ def validate_annotations_json(data: bytes, doc: AnnotationDocument) -> None:
         raise ValidationError("annotations.json channel list differs")
     if parsed.recording.hidden_channels != doc.recording.hidden_channels:
         raise ValidationError("annotations.json list of hidden channels differs")
+    if parsed.confidence_mode != doc.confidence_mode:
+        raise ValidationError("annotations.json records a different confidence setting")
 
 
 def validate_time_file(data: bytes, elapsed_s: float) -> None:
@@ -113,6 +119,18 @@ def validate_json_object(data: bytes, name: str, required: tuple[str, ...] = ())
     return obj
 
 
+def validate_session_confidence(session: dict[str, Any], doc: AnnotationDocument) -> None:
+    """The session file records the study's confidence setting and how often each confidence was given."""
+    annotations = session.get("annotations")
+    block = annotations.get("confidence") if isinstance(annotations, dict) else None
+    if not isinstance(block, dict):
+        raise ValidationError("session.json does not record the study's confidence setting")
+    if block.get("setting") != (doc.confidence_mode or "optional"):
+        raise ValidationError("session.json records a different confidence setting")
+    if block.get("n_given") != sum(1 for a in doc.annotations if a.confidence):
+        raise ValidationError("session.json counts the confidence ratings given differently")
+
+
 def make_bundle_validator(
     original: OriginalEvents, doc: AnnotationDocument, elapsed_s: float
 ) -> Callable[[dict[str, bytes]], None]:
@@ -123,8 +141,9 @@ def make_bundle_validator(
         validate_annotations_json(files["annotations_json"], doc)
         validate_time_file(files["time_viewed"], elapsed_s)
         validate_json_object(files["events_json"], "events.json", ("trial_type", "channels", "event_source"))
-        validate_json_object(
+        session = validate_json_object(
             files["session_json"], "session.json", ("schema", "session_id", "recording", "annotator", "timing")
         )
+        validate_session_confidence(session, doc)
 
     return validate

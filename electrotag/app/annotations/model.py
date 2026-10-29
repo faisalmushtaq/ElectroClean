@@ -14,7 +14,23 @@ from electrotag.app.annotations.labels import LabelCatalogue, LabelError
 from electrotag.app.annotations.timing import RecordingTiming, TimingError
 
 SCHEMA_ANNOTATIONS = "electrotag.annotations"
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "1.1.0"  # 1.1.0: each annotation's confidence and note, and the study's confidence setting
+
+#: How sure the annotator is of an annotation, from most to least sure ("" when none was given).
+CONFIDENCE_LEVELS = ("definite", "probable", "possible")
+#: The study's setting ``annotation.confidence``: annotators may give a confidence when they wish
+#: ("optional", new marks have none), or every mark has one ("every_mark", new marks start as definite).
+CONFIDENCE_MODES = ("optional", "every_mark")
+#: The longest note an annotation can carry, in characters.
+MAX_NOTE_CHARS = 200
+CONFIDENCE_CONVENTION = {
+    "levels": list(CONFIDENCE_LEVELS),
+    "not_given": "null: the annotator gave no confidence (possible only when the study's setting is 'optional').",
+    "settings": {
+        "optional": "Confidence was volunteered: new annotations had none, and the annotator could give one.",
+        "every_mark": "Every new annotation started as 'definite', and the annotator changed it when unsure.",
+    },
+}
 
 CHANNEL_CONVENTION = {
     "encoding": "List of channel names exactly as they appear in the recording.",
@@ -35,6 +51,48 @@ CHANNEL_CONVENTION = {
 
 class AnnotationError(ValueError):
     """Raised when an annotation record is invalid."""
+
+
+def confidence_rank(level: str) -> int:
+    """0 for definite, 1 probable, 2 possible; -1 when no confidence was given."""
+    return CONFIDENCE_LEVELS.index(level) if level in CONFIDENCE_LEVELS else -1
+
+
+def lower_confidence(levels: Any) -> str:
+    """The lowest confidence given ("" when none of them was given).
+
+    Used when annotations are merged: the merged annotation is only as confident as its least confident part."""
+    given = [lv for lv in levels if lv in CONFIDENCE_LEVELS]
+    return max(given, key=confidence_rank) if given else ""
+
+
+def check_note(note: Any) -> str:
+    """A note as stored: text of at most :data:`MAX_NOTE_CHARS` characters on one line, without
+    leading or trailing spaces. Raises :class:`AnnotationError` otherwise."""
+    if note is None:
+        return ""
+    if not isinstance(note, str):
+        raise AnnotationError("A note must be text")
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in note):
+        raise AnnotationError("A note must be a single line of text (no tabs or line breaks)")
+    note = note.strip()
+    if note.lower() == "n/a":
+        raise AnnotationError('A note cannot be just "n/a", which the saved files use for "no note"')
+    if len(note) > MAX_NOTE_CHARS:
+        raise AnnotationError(f"A note has at most {MAX_NOTE_CHARS} characters (this one has {len(note)})")
+    return note
+
+
+def join_notes(notes: Any) -> str:
+    """The notes of merged annotations as one note: each different note once, in order, joined with
+    "; " and shortened to :data:`MAX_NOTE_CHARS` characters (ending with "…") when longer."""
+    kept: list[str] = []
+    for n in notes:
+        n = (n or "").strip()
+        if n and n not in kept:
+            kept.append(n)
+    text = "; ".join(kept)
+    return text if len(text) <= MAX_NOTE_CHARS else text[: MAX_NOTE_CHARS - 1].rstrip() + "…"
 
 
 @dataclass(frozen=True)
@@ -90,6 +148,8 @@ class ArtifactAnnotation:
 
     Boundaries are integer sample indices (see :mod:`timing` for the
     conventions). ``channels`` is empty for a whole-montage annotation.
+    ``confidence`` is one of :data:`CONFIDENCE_LEVELS`, or "" when none was given;
+    ``note`` is the annotator's optional short note ("" when there is none).
     """
 
     annotation_id: str
@@ -99,6 +159,8 @@ class ArtifactAnnotation:
     channels: tuple[str, ...] = ()
     created_at: str = ""
     modified_at: str = ""
+    confidence: str = ""
+    note: str = ""
 
     @property
     def end_sample(self) -> int:
@@ -142,6 +204,8 @@ class ArtifactAnnotation:
             "scope": self.scope,
             "created_at": self.created_at,
             "modified_at": self.modified_at,
+            "confidence": self.confidence or None,
+            "note": self.note,
         }
 
     @classmethod
@@ -176,6 +240,9 @@ class ArtifactAnnotation:
                 channels=tuple(str(c) for c in data.get("channels", [])),
                 created_at=str(data.get("created_at", "")),
                 modified_at=str(data.get("modified_at", "")),
+                # Files written before version 1.1.0 have neither: no confidence given, no note.
+                confidence=str(data.get("confidence") or ""),
+                note=str(data.get("note") or ""),
             )
         except KeyError as exc:
             raise AnnotationError(f"Annotation record is missing field {exc}") from exc
@@ -200,6 +267,13 @@ def validate_annotation(
         raise AnnotationError(f"{ann.label} at sample {ann.onset_sample}: {exc}") from exc
     if len(set(ann.channels)) != len(ann.channels):
         raise AnnotationError(f"Annotation {ann.annotation_id} lists a channel more than once")
+    if ann.confidence and ann.confidence not in CONFIDENCE_LEVELS:
+        raise AnnotationError(
+            f"Annotation {ann.annotation_id}: confidence must be one of {', '.join(CONFIDENCE_LEVELS)}, "
+            f"or none, not {ann.confidence!r}"
+        )
+    if check_note(ann.note) != ann.note:
+        raise AnnotationError(f"Annotation {ann.annotation_id}: its note has spaces at either end")
     unknown = [c for c in ann.channels if c not in recording.ch_names]
     if unknown:
         raise AnnotationError(
@@ -234,6 +308,9 @@ class AnnotationDocument:
     created_at: str = ""
     app_version: str = ""
     context: dict[str, Any] = field(default_factory=dict)
+    #: The study's ``annotation.confidence`` setting when the annotations were made ("" when not recorded,
+    #: as in files written before version 1.1.0).
+    confidence_mode: str = ""
 
     def sorted_annotations(self) -> list[ArtifactAnnotation]:
         return sorted(

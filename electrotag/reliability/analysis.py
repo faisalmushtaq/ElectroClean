@@ -22,6 +22,13 @@ import pandas as pd
 from electrotag import __version__
 from electrotag.app.io.atomic import atomic_write_bytes, atomic_write_text
 from electrotag.hints import unknown_names
+from electrotag.reliability.confidence import (
+    BY_ANNOTATOR_COLUMNS,
+    SENSITIVITY_COLUMNS,
+    confidence_measure,
+    dataset_setting,
+)
+from electrotag.reliability.confidence import explanation as confidence_explanation
 from electrotag.reliability.config import AnalysisConfig
 from electrotag.reliability.data import AgreementDataset, load_dataset
 from electrotag.reliability.intervals import total_length, union
@@ -60,10 +67,14 @@ TABLE_COLUMNS: dict[str, list[str]] = {
                        "reference_id", "compared_id", "reference_label", "compared_label", "reference_onset_s",
                        "reference_offset_s", "compared_onset_s", "compared_offset_s", "iou", "onset_diff_s",
                        "offset_diff_s", "duration_diff_s", "channel_jaccard", "reference_channels",
-                       "compared_channels"],
+                       "compared_channels", "reference_confidence", "compared_confidence", "reference_note",
+                       "compared_note"],
     "events_unmatched": ["recording", "category", "channel_mode", "threshold", "criterion", "reference", "compared",
-                         "side", "kind", "annotator", "annotation_id", "label", "onset_s", "offset_s", "channels"],
+                         "side", "kind", "annotator", "annotation_id", "label", "onset_s", "offset_s", "channels",
+                         "confidence", "note"],
     "confusion_time_weighted": ["rater_1", "rater_2", "label_rater_1", "label_rater_2", "seconds"],
+    "confidence_by_annotator": BY_ANNOTATOR_COLUMNS,
+    "confidence_sensitivity": SENSITIVITY_COLUMNS,
 }
 
 RESULT_FILES = ("analysis_settings.json", "agreement_report.html")
@@ -128,6 +139,7 @@ register_measure("descriptives", descriptives)
 register_measure("timeresolved", _time_resolved)
 register_measure("events", _events)
 register_measure("confusion", _confusion)
+register_measure("confidence", confidence_measure)
 
 
 @dataclass
@@ -232,9 +244,10 @@ def run_analysis(
             "no pairwise comparisons"
         )
     titles = {"descriptives": "Counting the annotations", "timeresolved": "Time-resolved agreement",
-              "events": "Matching events", "confusion": "Category disagreements"}
+              "events": "Matching events", "confusion": "Category disagreements",
+              "confidence": "Confidence of the annotations"}
     tables: dict[str, pd.DataFrame] = {}
-    names = ["descriptives", "timeresolved", "events", "confusion", *cfg.extra_measures]
+    names = ["descriptives", "timeresolved", "events", "confusion", "confidence", *cfg.extra_measures]
     for name in names:
         if name not in MEASURES:
             raise ValueError(f"Unknown measure {name!r}; registered: {sorted(MEASURES)}")
@@ -253,6 +266,7 @@ def run_analysis(
         "n_comparable_recordings": len(comparable_recordings(ds, cfg)),
         "annotators": ds.annotators,
         "input_files": ds.files,
+        "confidence": {"setting": dataset_setting(ds), "explanation": confidence_explanation(ds, cfg)},
         "warnings": first + ds.warnings + [w for g in ds.groups.values() for w in g.warnings],
     }
     return AnalysisResult(cfg, ds, tables, record)

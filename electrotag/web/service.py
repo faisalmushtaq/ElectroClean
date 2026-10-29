@@ -21,9 +21,11 @@ from typing import Any
 
 from electrotag import __version__
 from electrotag.app.annotations.model import (
+    CONFIDENCE_LEVELS,
     AnnotationError,
     ArtifactAnnotation,
     RecordingInfo,
+    check_note,
     normalise_channels,
     validate_annotation,
 )
@@ -74,6 +76,21 @@ def _number(value: Any, what: str, *, minimum: float | None = None) -> float:
     return float(value)
 
 
+def confidence_and_note(a: dict[str, Any], where: str, code: str = "invalid_annotation") -> tuple[str, str]:
+    """An annotation's ``confidence`` (one of CONFIDENCE_LEVELS, or none: missing, null or "") and ``note``
+    (text of at most 200 characters on one line, or none), checked."""
+    confidence = a.get("confidence")
+    if confidence in (None, ""):
+        confidence = ""
+    elif confidence not in CONFIDENCE_LEVELS:
+        raise ApiError(422, code, f"{where}: confidence must be {', '.join(CONFIDENCE_LEVELS)} or none")
+    try:
+        note = check_note(a.get("note"))
+    except AnnotationError as exc:
+        raise ApiError(422, code, f"{where}: {exc}") from exc
+    return confidence, note
+
+
 def parse_annotations(items: Any, info: RecordingInfo, catalogue: Any, min_samples: int) -> list[ArtifactAnnotation]:
     """The browser's annotations as ElectroTag annotations, each checked as the desktop checks them."""
     if not isinstance(items, list):
@@ -102,11 +119,13 @@ def parse_annotations(items: Any, info: RecordingInfo, catalogue: Any, min_sampl
             raise ApiError(422, "invalid_annotation", f"Annotation {i}: channels must be a list of channel names")
         if len(set(channels)) != len(channels):
             raise ApiError(422, "invalid_annotation", f"Annotation {i} ({label}) lists a channel more than once")
+        confidence, note = confidence_and_note(a, f"Annotation {i} ({label})")
         try:
             ann = ArtifactAnnotation(
                 annotation_id=aid, label=label, onset_sample=onset, duration_samples=dur,
                 channels=normalise_channels(channels, info.ch_names),
                 created_at=_stamp(a.get("created_at")) or now, modified_at=_stamp(a.get("modified_at")) or now,
+                confidence=confidence, note=note,
             )
             validate_annotation(ann, info, catalogue, min_samples)
         except AnnotationError as exc:
@@ -118,7 +137,8 @@ def parse_annotations(items: Any, info: RecordingInfo, catalogue: Any, min_sampl
 def annotation_dict(a: ArtifactAnnotation) -> dict[str, Any]:
     return {"annotation_id": a.annotation_id, "label": a.label, "onset_sample": a.onset_sample,
             "duration_samples": a.duration_samples, "channels": list(a.channels),
-            "created_at": a.created_at, "modified_at": a.modified_at}
+            "created_at": a.created_at, "modified_at": a.modified_at, "confidence": a.confidence or None,
+            "note": a.note}
 
 
 def _float_or_none(value: Any) -> float | None:
@@ -275,7 +295,7 @@ class StudyService:
                            "quick_labels": [q for q in s.quick_labels if cat.is_permitted(q)],
                            "break_reminder_minutes": s.break_reminder_minutes,
                            "idle_pause_minutes": s.idle_pause_minutes, "coverage_check": s.coverage_check,
-                           "allow_revisions": s.allow_revisions},
+                           "allow_revisions": s.allow_revisions, "confidence": s.confidence},
             "gamification": {"enabled": s.gamification_enabled,
                              "leaderboard": s.gamification_enabled and s.gamification_leaderboard},
             "logging": self.logging_info(),
@@ -543,8 +563,10 @@ class StudyService:
             doc = json.loads(raw)
         except ValueError:
             return []
-        keys = ("annotation_id", "label", "onset_sample", "duration_samples", "channels", "created_at", "modified_at")
-        return [{k: a.get(k, [] if k == "channels" else "") for k in keys}
+        keys = ("annotation_id", "label", "onset_sample", "duration_samples", "channels", "created_at", "modified_at",
+                "confidence", "note")
+        defaults: dict[str, Any] = {"channels": [], "confidence": None}
+        return [{k: a.get(k, defaults.get(k, "")) for k in keys}
                 for a in doc.get("annotations", []) if isinstance(a, dict)]
 
     def _revision_answer(self, user: User, item: WorkItem, status: str, differences: list[str]) -> dict[str, Any]:
@@ -580,6 +602,8 @@ class StudyService:
         anns = draft.get("annotations", [])
         if not isinstance(anns, list) or len(anns) > MAX_ANNOTATIONS or not all(isinstance(a, dict) for a in anns):
             raise ApiError(422, "invalid_draft", "draft.annotations must be a list of annotations")
+        for i, a in enumerate(anns, start=1):  # kept as sent; checked in full when the recording is saved
+            confidence_and_note(a, f"draft annotation {i}", "invalid_draft")
         view = draft.get("view")
         if view is not None and not isinstance(view, dict):
             raise ApiError(422, "invalid_draft", "draft.view must be an object")
