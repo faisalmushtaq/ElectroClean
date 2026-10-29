@@ -167,6 +167,12 @@ class Feedback:
 
         self.store.update_record("unusable", f"{aid}_{item_k}", aid, change)
 
+    def clear_mark(self, aid: str, recording_id: str, mode: str, context_id: str) -> None:
+        """The assignment is no longer set aside (it was taken away from the annotator)."""
+        key = item_key(recording_id, mode, context_id)
+        if key in self.unusable_keys(aid):
+            self._mark(aid, key, None, active=False)
+
     def problem_report(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
         """``POST /problems`` (``et_problem_report``): an annotator reports a problem with a recording."""
         pid = _request_id(body.get("problem_id"), "problem_id")

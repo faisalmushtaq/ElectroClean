@@ -747,6 +747,7 @@ export class DemoAdmin {
       throw conflict('done', `${u.annotator_id} has already finished ${body.recording_id}, so it stays with their results.`);
     }
     this.s.assignments.splice(i, 1);
+    this.b.feedback.clearMark(u.annotator_id, body.recording_id, mode, ctx); // set aside, then taken away: afresh if given back
     this._audit('unassign', `Took ${body.recording_id} away from ${u.annotator_id}`, { annotator_id: u.annotator_id, recording_id: body.recording_id, mode, context_id: ctx });
     return {};
   }

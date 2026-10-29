@@ -75,6 +75,12 @@ export class DemoFeedback {
     return out;
   }
 
+  /** The assignment is no longer set aside (it was taken away from the annotator). */
+  clearMark(aid, rid, mode, ctx) {
+    const key = this.b._key(aid, rid, mode, ctx);
+    if (this.isUnusable(key)) this.state.unusable[key] = { ...this.state.unusable[key], active: false, changed_at: nowLocalIso() };
+  }
+
   problemOut(rec, { mine = false } = {}) {
     const keys = ['problem_id', 'recording_id', 'file_name', 'mode', 'context_id', 'reason', 'note', 'outcome', 'where', 'reported_at', 'state',
       'resolution', 'resolution_note', 'resolved_at', 'returned_at'];

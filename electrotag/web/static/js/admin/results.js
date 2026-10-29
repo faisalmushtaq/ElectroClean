@@ -18,6 +18,7 @@ export class ResultsSection {
       { title: 'Done', num: true, render: (r) => `${r.c.done} of ${r.c.assigned}` },
       { title: 'In progress', num: true, render: (r) => String(r.c.in_progress) },
       { title: 'To do', num: true, render: (r) => String(r.c.todo) },
+      { title: 'Cannot be annotated', num: true, render: (r) => String(r.c.unusable || 0) },
       { title: 'Training', render: (r) => (r.programme ? h('span', {}, h('span.caption.block', {}, r.programme.name || r.programme.set_id || ''), programmeText(r.programme)) : '–') },
       { title: 'Last seen', render: (r) => whenText(r.last_seen) },
       { title: '', cls: 'actions', render: (r) => h('button.btn.small', { type: 'button', onclick: () => this._showWork(r) }, 'Work') },
@@ -70,8 +71,8 @@ export class ResultsSection {
 
   _downloadTable() {
     const rows = this.rows.map((r) => ({ annotator_id: r.annotator_id, display_name: r.display_name || '', role: r.role, assigned: r.c.assigned,
-      done: r.c.done, in_progress: r.c.in_progress, todo: r.c.todo, training: r.programme ? programmeText(r.programme) : '', last_seen: r.last_seen || '' }));
-    downloadText('progress.tsv', tsvText(['annotator_id', 'display_name', 'role', 'assigned', 'done', 'in_progress', 'todo', 'training', 'last_seen'], rows), 'text/tab-separated-values');
+      done: r.c.done, in_progress: r.c.in_progress, todo: r.c.todo, unusable: r.c.unusable, training: r.programme ? programmeText(r.programme) : '', last_seen: r.last_seen || '' }));
+    downloadText('progress.tsv', tsvText(['annotator_id', 'display_name', 'role', 'assigned', 'done', 'in_progress', 'todo', 'unusable', 'training', 'last_seen'], rows), 'text/tab-separated-values');
   }
 
   async _zip() {

@@ -720,6 +720,8 @@ class Admin:
             raise ApiError(409, "done", f"{aid} has already saved {rid}; a completed recording stays assigned.")
         if not self.store.unassign_item(aid, rid, mode, ctx):
             raise ApiError(404, "not_assigned", f"{rid} is not assigned to {aid} in that mode")
+        # A recording set aside and then taken away starts afresh if it is ever given back.
+        self.service.feedback.clear_mark(aid, rid, mode, ctx)
         self._audit(user, "unassign", f"Took {rid} away from {aid}", annotator_id=aid, recording_id=rid, mode=mode,
                     context_id=ctx)
         return {}

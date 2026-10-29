@@ -182,6 +182,14 @@ def test_return_resolve_and_reassign(client: TestClient, admin: Api) -> None:
     assert out["problem"]["resolution"] == "resolved"
 
 
+def test_an_assignment_taken_away_and_given_back_starts_afresh(client: TestClient, admin: Api) -> None:
+    a01 = Api(client, "A01")
+    a01.ok("post", "/problems", report(SUB1, 12, outcome="unusable"))
+    admin.admin_ok("unassign", {"annotator_id": "A01", "recording_id": SUB1})
+    admin.admin_ok("assign", {"annotator_ids": ["A01"], "recording_ids": [SUB1]})
+    assert item_of(a01, SUB1)["status"] == "todo"
+
+
 def test_training_recordings_are_not_set_aside(client: TestClient) -> None:
     t01 = Api(client, "T01")
     first = next(i for i in t01.ok("get", "/assignments")["items"])

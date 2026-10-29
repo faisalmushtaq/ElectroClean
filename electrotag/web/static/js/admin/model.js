@@ -531,7 +531,7 @@ export function filterAudit(entries, { by = '', op = '' } = {}) {
 
 /** Counts of one annotator's work items in the progress answer. */
 export function progressCounts(items) {
-  const c = { assigned: 0, done: 0, in_progress: 0, todo: 0 };
+  const c = { assigned: 0, done: 0, in_progress: 0, todo: 0, unusable: 0 };
   for (const i of items || []) {
     c.assigned += 1;
     if (i.status in c) c[i.status] += 1;

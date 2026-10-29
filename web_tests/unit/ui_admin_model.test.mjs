@@ -155,7 +155,7 @@ test('words for people', () => {
   assert.equal(m.describeProvenance({ method: 'consensus', experts: ['E1', 'E2', 'E3'], min_agreement: 2 }), 'consensus of several experts: E1, E2, E3 (2 needed to agree)');
   assert.equal(m.programmeText({ stages: [{ key: 'guided', status: 'completed', done: 2, total: 2 }, { key: 'practice', status: 'locked', done: 0, total: 1 },
     { key: 'assessment', status: 'not_used', done: 0, total: 0 }] }), 'Guided 2 of 2 (completed) · Practice 0 of 1 (locked)');
-  assert.deepEqual(m.progressCounts([{ status: 'done' }, { status: 'todo' }, { status: 'in_progress' }, { status: 'done' }]),
-    { assigned: 4, done: 2, in_progress: 1, todo: 1 });
+  assert.deepEqual(m.progressCounts([{ status: 'done' }, { status: 'todo' }, { status: 'in_progress' }, { status: 'done' }, { status: 'unusable' }]),
+    { assigned: 5, done: 2, in_progress: 1, todo: 1, unusable: 1 });
   assert.deepEqual(m.filterAudit([{ by: 'ADMIN', op: 'assign' }, { by: 'command', op: 'register' }], { by: 'admin' }), [{ by: 'ADMIN', op: 'assign' }]);
 });
