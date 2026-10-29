@@ -9,6 +9,9 @@ let logger = null;
 /** The interaction logger records every dialog shown and closed (title and button only). */
 export function setDialogLogger(l) { logger = l; }
 
+/** Presses this soon after a dialog opened belong to the press that opened it (a double click). */
+const DOUBLE_PRESS_MS = 500;
+
 export function dialogOpen() { return openCount > 0; }
 
 /**
@@ -38,8 +41,11 @@ export function showDialog({ title, body, buttons = [{ label: 'OK', value: true,
       title ? h('h2.dialog-title', {}, title) : null,
       h('div.dialog-body', {}, content),
       buttons.length ? h('div.dialog-buttons', {}, btns) : null);
+    // A press outside closes the dialog, except straight after it opened: the second press of a
+    // double click on the button that opened it would otherwise close it at once.
+    const openedAt = Date.now();
     const overlay = h('div.dialog-overlay', {
-      onmousedown: (e) => { if (e.target === overlay && dismissable) close(cancelValue); },
+      onmousedown: (e) => { if (e.target === overlay && dismissable && Date.now() - openedAt > DOUBLE_PRESS_MS) close(cancelValue); },
     }, box);
     const onKey = (e) => {
       if (e.key === 'Escape' && dismissable) { e.preventDefault(); e.stopPropagation(); close(cancelValue); return; }

@@ -275,6 +275,9 @@ export const DEFAULT_HIDE = ["TIME_STAMP_s", "TIME_STAMP_ms", "OR_TIME_STAMP_s",
 
 export const DEFAULT_FILTERS = {"highpass_enabled": true, "highpass_hz": 1.0, "notch_enabled": true, "notch_hz": 50.0, "notch_harmonics": false, "method": "fir", "iir_order": 4, "locked": false};
 
-export const DEFAULT_DISPLAY = {"duration_s": 10.0, "n_channels": 32};
+export const DEFAULT_DISPLAY = {"duration_s": 10.0, "n_channels": 32, "channel_colours": "off"};
 
 export const DEFAULT_LOGGING = {"interactions": true, "pointer_hz": 5.0, "idle_after_s": 30.0};
+
+// Pauses, break reminders and the check of what has been viewed (annotation block).
+export const DEFAULT_ANNOTATION = {"break_reminder_minutes": 50, "idle_pause_minutes": 3, "coverage_check": "warn"};

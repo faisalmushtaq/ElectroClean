@@ -89,6 +89,19 @@ export async function findBackend() {
   return { kind: 'demo', source: 'none' };
 }
 
+/**
+ * What the sign-in page says when the backend chosen by findBackend() cannot be started: a study
+ * server that does not answer, a Firebase study that does not load, or the demonstration itself.
+ */
+export function unreachableText(where, exc = null) {
+  if (where && where.kind === 'firebase') return `The study could not be loaded (${exc && exc.message ? exc.message : 'no answer'}). Check your internet connection and try again.`;
+  if (!where || where.kind !== 'server' || !where.address) {
+    return 'The demonstration could not be started in this browser. Reload the page to try again; if it keeps happening, try another browser.';
+  }
+  return `The study server at ${where.address} does not answer${exc && exc.code === 'not_electroclean' ? ' as an ElectroClean study server' : ''}. ` +
+    'Check your internet connection and the address, then try again. If it keeps happening, tell your study team.';
+}
+
 /** A study server's backend, once it has answered GET /health. */
 export async function connectServer(address, opts = {}) {
   const server = normaliseServer(address);

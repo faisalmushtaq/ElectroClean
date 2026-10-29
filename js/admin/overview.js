@@ -25,7 +25,7 @@ export class OverviewSection {
       sectionHead('Overview', 'The study at a glance. Choose a section to change something.'),
       this.msg, this.tiles,
       h('div.btn-row.quick-links', {}, go('recordings', 'Add recordings'), go('annotators', 'Add an annotator'),
-        go('assignments', 'Assign recordings'), go('results', 'See progress')),
+        go('assignments', 'Assign recordings'), go('progress', 'See progress')),
       h('div.admin-grid', {},
         card('Recent changes', this.recent, h('div.btn-row', {}, h('button.btn.quiet', { type: 'button', onclick: () => area.go('records') }, 'All records…'))),
         card('Recently saved work', this.saved)));
@@ -50,7 +50,7 @@ export class OverviewSection {
     this.tiles.append(
       tile(c.recordings, 'Recordings', 'registered for the study'),
       tile(c.annotators, 'Annotators', `and ${c.admins ?? 0} administrator${c.admins === 1 ? '' : 's'}`),
-      tile(c.assignments, 'Assigned', 'recordings to annotate'),
+      tile(c.assignments, 'Assigned', 'of every kind, training included (Progress counts each kind apart)'),
       tile(c.done, 'Done', c.assignments ? `${Math.round((100 * (c.done || 0)) / c.assignments)}% of the assigned` : ''),
       tile(c.in_progress, 'In progress'),
       tile(c.todo, 'To do'));

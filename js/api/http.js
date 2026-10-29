@@ -123,6 +123,19 @@ export class HttpBackend {
     return data;
   }
 
+  /** A study server takes private invitation links (?invite=<token>, docs/web/api.md). */
+  get acceptsInvites() { return true; }
+
+  /** Whose invitation a link's token is: {annotator_id, display_name, study_name, expires_at} (no sign-in). */
+  inviteCheck(token) { return this._request('POST', '/invite/check', { token }, { auth: false }); }
+
+  /** Choose the password with an invitation; the answer is a sign-in, as POST /login gives. */
+  async inviteAccept(token, password) {
+    const data = await this._request('POST', '/invite/accept', { token, password }, { auth: false });
+    this._setToken(data.token);
+    return data;
+  }
+
   async logout() {
     try { if (this.token) await this._request('POST', '/logout', {}); } catch { /* signed out anyway */ }
     this._setToken(null);
@@ -130,6 +143,13 @@ export class HttpBackend {
   }
 
   me() { return this._request('GET', '/me'); }
+
+  /** The annotator's counters, the facts of their milestones, their goal, the team's progress and the
+   *  anonymised leaderboard (docs/web/api.md, "Achievements"). */
+  achievements() { return this._request('GET', '/me/achievements'); }
+
+  /** Sets the personal goal ({goal_per_week}) or whether to appear on the leaderboard ({leaderboard_hidden}). */
+  setAchievements(body) { return this._request('POST', '/me/achievements', body || {}); }
 
   // ------------------------------------------------------ assignments, opening
   assignments() { return this._request('GET', '/assignments'); }

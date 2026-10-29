@@ -182,7 +182,7 @@ export class InteractionLogger {
       else if (d.widget.endsWith(':menuitem')) this.noteInput(`menu:${d.text || ''}`);
       else if (d.widget === 'tr') this.noteInput(`list:${d.name || 'annotations'}`);
       this.event('mouse_press', {
-        button: BUTTONS[e.button] || String(e.button), modifiers: modifiers(e), ...d, top_window: this.topWindow,
+        button: BUTTONS[e.button] || String(e.button), pointer: e.pointerType || 'mouse', modifiers: modifiers(e), ...d, top_window: this.topWindow,
         x: Math.round(e.clientX), y: Math.round(e.clientY), ...where,
       });
     }, opts);
@@ -193,7 +193,7 @@ export class InteractionLogger {
       if (this._press && this._press.eeg) extra.drag_px = Math.round(Math.hypot(e.clientX - this._press.x, e.clientY - this._press.y));
       this._press = null;
       this.event('mouse_release', {
-        button: BUTTONS[e.button] || String(e.button), modifiers: modifiers(e), ...describeTarget(e.target),
+        button: BUTTONS[e.button] || String(e.button), pointer: e.pointerType || 'mouse', modifiers: modifiers(e), ...describeTarget(e.target),
         top_window: this.topWindow, x: Math.round(e.clientX), y: Math.round(e.clientY), ...where, ...extra,
       });
     }, opts);

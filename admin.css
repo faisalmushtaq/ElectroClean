@@ -1,6 +1,6 @@
 /* The admin area (js/admin/), loaded when an administrator first opens it. It uses the tokens
    and components of app.css (cards, badges, buttons, fields, tables, messages) and adds its own
-   layout: the numbered list of sections, grids of cards that become one column on narrow screens,
+   layout: the numbered menu of sections in groups that fold away, grids of cards that become one column on narrow screens,
    figures in a bento grid, and tables whose rows become small cards on a phone, so nothing
    scrolls sideways. */
 
@@ -11,22 +11,46 @@
 .admin-layout {
   display: grid; grid-template-columns: 210px minmax(0, 1fr); max-width: 1440px; margin: 0 auto; align-items: start;
 }
-.admin-nav { position: sticky; top: 64px; padding: 24px 16px 24px 24px; align-self: start; }
-.admin-nav ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0; counter-reset: section; border-top: 1px solid var(--hairline); }
-.admin-nav li { counter-increment: section; border-bottom: 1px solid var(--hairline); }
+.admin-nav { position: sticky; top: 64px; padding: 24px 16px 24px 24px; align-self: start; display: flex; flex-direction: column; gap: 16px; }
+/* The menu in four groups, each under a heading that folds it away. Sections are numbered through
+   the whole menu, 01 Overview, 02 Progress … */
+.admin-group-toggle {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 12px 4px 0; border: none; background: none; cursor: pointer;
+  color: var(--ink); font: var(--t-14); font-weight: 600; text-align: left; border-radius: 0;
+}
+.admin-group-toggle .ico { transition: transform var(--fast) var(--ease); }
+.admin-group-toggle[aria-expanded="false"] .ico { transform: rotate(-90deg); }
+@media (hover: hover) { .admin-group-toggle:hover { color: var(--accent); } }
+.admin-nav ul { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 0; border-top: 1px solid var(--hairline); }
+.admin-nav li { border-bottom: 1px solid var(--hairline); }
 .admin-nav-link {
   display: flex; align-items: baseline; gap: 12px; padding: 8px 12px; border-left: 2px solid transparent; color: var(--text-secondary);
   text-decoration: none; font: var(--t-16); white-space: nowrap;
   transition: background-color var(--fast) var(--ease), color var(--fast) var(--ease);
 }
-/* Sections are numbered, 01 Overview, 02 Annotators … */
-.admin-nav-link::before { content: counter(section, decimal-leading-zero); min-width: 16px; color: var(--text-tertiary); font: var(--t-12); font-variant-numeric: tabular-nums lining-nums; }
-.admin-nav-link:hover { background: var(--hover); color: var(--ink); }
+.admin-nav-link::before { content: attr(data-n); min-width: 16px; color: var(--text-tertiary); font: var(--t-12); font-variant-numeric: tabular-nums lining-nums; }
+@media (hover: hover) { .admin-nav-link:hover { background: var(--hover); color: var(--ink); } }
 .admin-nav-link[aria-current="page"] { background: var(--band); color: var(--ink); border-left-color: var(--ink); }
 .admin-nav-link[aria-current="page"]::before { color: var(--ink); }
+.admin-group.folded ul { border-top: none; }
+
+/* Find, in the header: a person or a recording, chosen with the pointer or the arrow keys. */
+.admin-find { position: relative; flex: 0 1 320px; min-width: 160px; }
+.admin-find-input { height: 32px; font: var(--t-14); }
+.admin-find-list {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 30; list-style: none; margin: 4px 0 0; padding: 4px 0;
+  background: var(--surface); border: 1px solid var(--rule); max-height: 360px; overflow-y: auto;
+}
+.admin-find-item { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; padding: 8px 12px; cursor: pointer; }
+.admin-find-item[aria-selected="true"] { background: var(--band); }
+@media (hover: hover) { .admin-find-item:hover { background: var(--hover); } }
+.admin-find-item .caption { font: var(--t-12); }
+.admin-find-text { color: var(--ink); overflow-wrap: anywhere; min-width: 0; }
+.admin-find-item .caption.block { flex-basis: 100%; overflow-wrap: anywhere; }
+.admin-find-none { padding: 8px 12px; color: var(--text-secondary); font: var(--t-14); }
 .admin-body { padding: 24px 32px 64px 16px; min-width: 0; }
 .admin-main { min-width: 0; }
-.admin-demo-note { margin-bottom: 16px; }
+.admin-demo-note { margin-bottom: 24px; }
 
 .admin-section { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
 .admin-section .card + .card { margin-top: 0; }
@@ -44,7 +68,6 @@
 .admin-loading { margin: 8px 0; }
 .block { display: block; }
 .caption.block { margin-top: 0; }
-.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* ----------------------------------------------------------------- messages */
 .admin-msg:empty { display: none; }
@@ -74,9 +97,11 @@ ul.warnings li { font: var(--t-14); }
 /* The figures of the overview: a bento grid, each figure large in the serif over its label; the
    work done is the one figure in the accent colour. */
 .stat-tiles {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px;
+  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 1px;
   background: var(--hairline); border: 1px solid var(--hairline);
 }
+/* Six figures in rows that always fill: six, three or two to a row. */
+@media (max-width: 1180px) { .stat-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .stat-tile { display: flex; flex-direction: column; gap: 4px; background: var(--page); padding: 24px; }
 .stat-tile:nth-child(4) .stat-value { color: var(--accent); }
 .stat-value { font: var(--t-56); letter-spacing: -0.04em; color: var(--ink); font-variation-settings: var(--display); font-variant-numeric: tabular-nums lining-nums; }
@@ -87,6 +112,8 @@ ul.warnings li { font: var(--t-14); }
 .table-scroll { overflow-x: auto; }
 table.admin-list { margin: 4px 0; }
 table.admin-list td { vertical-align: top; }
+/* Headings of one line and of two sit on the same rule. */
+table.admin-list thead th { vertical-align: bottom; }
 table.admin-list td.actions, table.admin-list td.num { white-space: nowrap; }
 table.admin-list .file { overflow-wrap: anywhere; word-break: normal; }
 .admin-table .empty { margin: 8px 0; }
@@ -177,10 +204,84 @@ table.admin-info th { width: 1%; }
   border-left: 2px solid transparent; border-radius: 0; background: transparent; color: var(--text); font: inherit; cursor: pointer;
   transition: background-color var(--fast) var(--ease);
 }
-.set-item:hover { background: var(--hover); }
+@media (hover: hover) { .set-item:hover { background: var(--hover); } }
 .set-item[aria-current="true"] { border-left-color: var(--ink); background: var(--band); }
 .set-name { font-weight: 600; }
 .admin-tabs { padding: 0; margin-bottom: 0; flex-wrap: wrap; }
+
+/* ------------------------------------------------------------ actions on many */
+/* Tables whose rows can be chosen: a column of checkboxes, the rows chosen in the band colour,
+   and a bar of actions above the table while any are chosen. */
+table.admin-list th.pick, table.admin-list td.pick { width: 1%; padding-right: 8px; }
+table.admin-list tr.chosen td { background: var(--band); }
+.bulk-bar { border: 1px solid var(--hairline); border-left: 2px solid var(--ink); background: var(--band); padding: 12px 16px; margin: 4px 0 8px; }
+.bulk-bar > p { margin: 0; }
+.bulk-bar .btn-row { margin-top: 8px; }
+.bulk-bar select.field { width: auto; height: 32px; font: var(--t-14); flex: 0 1 140px; }
+/* New invitation links with how long they last, kept together on one line. */
+.bulk-group { display: inline-flex; align-items: center; gap: 8px; }
+.bulk-group .form-label.inline { color: var(--text-secondary); font: var(--t-14); }
+.bulk-result:empty { display: none; }
+.bulk-result h3 { margin: 16px 0 0; }
+.links-made { margin-top: 12px; }
+.links-made .admin-table { background: var(--page); padding: 0 12px; margin: 8px 0 0; }
+.secret-value.link-value { display: block; font: 12px/16px var(--font-code); padding: 4px 8px; }
+.invite-actions { justify-content: flex-end; }
+.row.inline-form.invite-days .field { flex: 0 1 200px; }
+.several-out:not(:empty) { margin-top: 16px; }
+.links-made .admin-table { color: var(--text); }
+table.admin-list td.when { white-space: nowrap; }
+.mail-form .field.area { min-height: 240px; }
+.label-inline, .form-label.inline { margin: 0; white-space: nowrap; }
+
+/* Sorting: each heading that sorts is a quiet button with a chevron for its direction. */
+.th-sort {
+  display: inline-flex; align-items: center; gap: 4px; border: none; background: none; padding: 0; cursor: pointer; color: inherit; font: inherit;
+  text-align: inherit; border-radius: 0;
+}
+.th-sort .ico { width: 12px; height: 12px; opacity: 0; transition: opacity var(--fast) var(--ease); }
+.th-sort.on { color: var(--ink); }
+.th-sort.on .ico, .th-sort:focus-visible .ico { opacity: 1; }
+@media (hover: hover) { .th-sort:hover { color: var(--ink); } .th-sort:hover .ico { opacity: 1; } }
+th.num .th-sort { flex-direction: row-reverse; }
+
+/* A share as a thin bar with its percentage. */
+.share { display: inline-flex; align-items: center; gap: 8px; min-width: 120px; }
+.share-text { min-width: 40px; text-align: right; font-variant-numeric: tabular-nums lining-nums; }
+.share-bar { flex: 1 1 64px; height: 4px; background: var(--hairline); border-radius: var(--pill); overflow: hidden; }
+.share-fill { display: block; height: 100%; background: var(--accent); border-radius: var(--pill); }
+
+/* ------------------------------------------------------------------ progress */
+.progress-filters { align-items: center; gap: 8px 12px; }
+.row.filters.progress-filters select.field { flex: 0 1 280px; }
+.progress-filters .caption { margin: 0; }
+.progress-tiles .stat-tile:nth-child(4) .stat-value { color: var(--ink); }
+.progress-tiles .stat-tile:first-child .stat-value { color: var(--accent); }
+.progress-tiles .stat-value { font: var(--t-40); letter-spacing: -0.04em; font-variation-settings: var(--display); }
+.stat-tile .caption { margin: 0; }
+.progress-tiles .stat-value.words { font: var(--t-28); letter-spacing: -0.02em; font-variation-settings: var(--display); }
+.card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-bottom: 8px; }
+.card-head h2 { margin: 0; }
+.card-head select.field { width: auto; flex: 0 1 280px; }
+.person-link { font-weight: 600; }
+
+/* The daily chart: one series in the accent colour, thin columns on a hairline base. */
+.chart { position: relative; margin: 8px 0 0; }
+.chart-plot { width: 100%; min-width: 0; }
+.chart-svg { display: block; outline: none; }
+.chart-svg:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.chart-grid { stroke: var(--hairline); stroke-width: 1; }
+.chart-base { stroke: var(--rule); stroke-width: 1; }
+.chart-tick { fill: var(--text-secondary); font: var(--t-12); font-variant-numeric: tabular-nums lining-nums; }
+.chart-col { fill: var(--accent); }
+.chart-col.on { fill: var(--accent-pressed); }
+.chart-cross { stroke: var(--rule); stroke-width: 1; }
+.chart-tip {
+  position: absolute; top: 0; width: 144px; padding: 8px 12px; background: var(--surface); border: 1px solid var(--rule);
+  pointer-events: none; font: var(--t-14); color: var(--text);
+}
+.chart-tip .caption { font: var(--t-12); }
+.chart-numbers { margin: 12px 0 0; }
 
 /* ----------------------------------------------------------------- progress */
 .admin-progress { margin: 12px 0 4px; }
@@ -194,23 +295,35 @@ table.admin-info th { width: 1%; }
 .downloads { margin-bottom: 4px; }
 
 /* ------------------------------------------------------------ narrow screens */
+/* A narrower header keeps the brand whole and gives Find the room of the name beside Sign out. */
+@media (max-width: 1180px) {
+  .view.admin .brand { flex: none; }
+  .view.admin .who-name, .view.admin .brand-study { display: none; }
+  .view.admin .admin-find { flex: 1 1 200px; min-width: 120px; }
+}
 @media (max-width: 1100px) {
   .admin-grid, .admin-grid.wide-first, .admin-grid.side-first { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 900px) {
   .admin-layout { grid-template-columns: minmax(0, 1fr); }
-  .admin-nav { position: static; padding: 8px 16px; background: var(--page); border-bottom: 1px solid var(--hairline); }
-  .admin-nav ul { flex-direction: row; flex-wrap: wrap; gap: 4px; border-top: none; }
+  .admin-nav { position: static; padding: 8px 16px; background: var(--page); border-bottom: 1px solid var(--hairline); gap: 4px; }
+  .admin-group { display: flex; flex-wrap: wrap; align-items: center; gap: 0 8px; }
+  .admin-group-toggle { width: auto; padding: 4px 4px 4px 0; }
+  .admin-nav ul { flex-direction: row; flex-wrap: wrap; gap: 4px; border-top: none; margin: 0; }
   .admin-nav li { border-bottom: none; }
   .admin-nav-link { padding: 8px; border-left: none; border-bottom: 1px solid transparent; font: var(--t-14); gap: 8px; }
   .admin-nav-link[aria-current="page"] { border-bottom-color: var(--ink); }
   .admin-body { padding: 24px 16px 48px; }
+  /* An iPad upright: Find takes a line of its own under the brand, whole rather than cut short. */
+  .view.admin .app-header { position: static; height: auto; min-height: 56px; flex-wrap: wrap; padding: 8px 16px; row-gap: 8px; }
+  .view.admin .admin-find { order: 3; flex: 1 1 100%; }
 }
 @media (max-width: 640px) {
   .view.admin .app-header { position: static; height: auto; min-height: 56px; flex-wrap: wrap; padding: 8px 16px; row-gap: 4px; }
-  .view.admin .brand { flex-wrap: wrap; row-gap: 8px; }
+  .view.admin .brand { flex: 0 1 auto; flex-wrap: wrap; row-gap: 8px; }
   .view.admin .who { flex-wrap: wrap; gap: 8px; }
   .view.admin .who-name, .view.admin .brand-study { display: none; }
+  .view.admin .admin-find { order: 3; flex: 1 1 100%; }
   .card { padding: 16px; }
   .stat-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .stat-tile { padding: 16px; }
@@ -227,4 +340,17 @@ table.admin-info th { width: 1%; }
   table.admin-list td > * { min-width: 0; }
   .field.num { max-width: none; }
   .report-frame { height: 60vh; }
+}
+
+/* Fingers: fields at 16 pixels (Safari zooms into smaller ones) and larger section links. */
+@media (pointer: coarse) {
+  .field.area, .field.small { font: var(--t-16); }
+  .field.small { height: 40px; }
+  .admin-nav-link { padding: 12px; }
+  .admin-group-toggle { min-height: 40px; }
+  .admin-find-input { height: 40px; font: var(--t-16); }
+  .admin-find-item { padding: 12px; }
+  .bulk-bar select.field { height: 40px; font: var(--t-16); }
+  .th-sort { min-height: 40px; }
+  .th-sort .ico { opacity: 1; }
 }

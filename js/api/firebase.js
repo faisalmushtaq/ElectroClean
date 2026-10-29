@@ -12,7 +12,7 @@
 import { ADMIN_OP, ApiError } from './http.js';
 
 /** The admin operations that only read (docs/web/api.md, "Administration"), which may be retried. */
-const ADMIN_READS = new Set(['overview', 'progress', 'audit', 'visits', 'sets_list', 'quiz_items', 'set_guided_notes']);
+const ADMIN_READS = new Set(['overview', 'progress', 'stats', 'audit', 'visits', 'sets_list', 'quiz_items', 'set_guided_notes']);
 
 export function isAdminRead(op) {
   return ADMIN_READS.has(op) || /_(list|get)$/.test(String(op));
@@ -112,6 +112,9 @@ export class FirebaseBackend {
 
   get isDemo() { return false; }
 
+  /** Invitations on Firebase are Firebase Authentication's own links, not ?invite= links. */
+  get acceptsInvites() { return false; }
+
   get server() { return ''; }
 
   get signedIn() { return Boolean(this.auth && this.auth.currentUser); }
@@ -186,6 +189,11 @@ export class FirebaseBackend {
   }
 
   me() { return this._call('ec_me', {}, { retry: true }); }
+
+  achievements() { return this._call('ec_achievements', {}, { retry: true }); }
+
+  /** Changes the goal or the leaderboard's visibility: not repeated after a failure, like every change. */
+  setAchievements(body) { return this._call('ec_achievements', body || {}); }
 
   assignments() { return this._call('ec_assignments', {}, { retry: true }); }
 

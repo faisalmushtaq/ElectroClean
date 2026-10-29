@@ -2,15 +2,18 @@
 // (notes, retire, remove), and adding recordings from this computer: the browser reads the files
 // chosen (js/data/register.js builds each recording's manifest, as electroclean-web register does
 // with MNE-Python), shows what it found and what failed, and sends only the manifests. The EEG
-// never leaves this computer.
+// never leaves this computer. Several recordings chosen in the list are assigned, retired, brought
+// back into use or removed together; removing deletes only a registration, and a recording with
+// saved results is always kept.
 
 import { h, clear } from '../ui/dom.js';
+import { CAN_CHOOSE_FOLDER, acceptFiles } from '../util.js';
 import {
   bytesText, chunkManifests, durationText, manifestSummary, mergeRegisterResults, plural, progressText, scopeText, whenText,
 } from './model.js';
 import {
-  actionButton, card, checkbox, chip, confirmInline, dataTable, field, infoTable, messageArea, progressLine, recordingName, sectionHead, select,
-  textArea, textInput,
+  STILL_RUNNING, actionButton, card, checkbox, chip, confirmInline, dataTable, eachInTurn, oneAtATime, field, infoTable, messageArea, progressLine, recordingName, resultsTable,
+  sectionHead, select, textArea, textInput,
 } from './ui.js';
 
 /** The module that reads recordings for the register (js/data/register.js); tests may replace it. */
@@ -39,12 +42,19 @@ export class RecordingsSection {
     this.msg.clear();
     if (params.scope) this.filters.scope.value = params.scope;
     await this.reload();
+    if (params.recording) {
+      const r = this.recordings.find((x) => x.recording_id === params.recording && (!params.scope || x.scope === params.scope));
+      if (r) this.openDetail(r);
+    }
   }
 
   async reload() {
+    // An earlier, slower answer must not replace a newer one (a list read before a change).
+    const turn = (this._turn = (this._turn || 0) + 1);
     this.listNote.textContent = 'Loading…';
     try {
       const [r, s] = await Promise.all([this.area.read('recordings_list'), this.area.read('sets_list').catch(() => ({ sets: [] }))]);
+      if (turn !== this._turn) return;
       this.recordings = r.recordings || [];
       this.sets = s.sets || [];
       this.listNote.textContent = '';
@@ -82,17 +92,87 @@ export class RecordingsSection {
     this.filters = { scope, status, search };
     for (const f of [scope, status, search]) f.addEventListener('input', () => this._filter());
     this.listNote = h('p.caption', { role: 'status' });
+    this.bulkBar = h('div.bulk-bar', { hidden: true, role: 'region', 'aria-label': 'Act on the recordings chosen' });
+    this.bulkResult = h('div.admin-stack.bulk-result');
     this.table = dataTable([
-      { title: 'Recording', render: (r) => recordingName(r.recording_id, r.file_name) },
-      { title: 'Where', render: (r) => scopeText(r.scope, this.sets) },
-      { title: 'Length', num: true, render: (r) => durationText(r.duration_s) },
-      { title: 'Channels', num: true, render: (r) => String(r.n_channels ?? '') },
-      { title: 'Done', num: true, render: (r) => `${r.done ?? 0} of ${r.assigned ?? 0}` },
-      { title: 'Status', render: (r) => h('span.chips-inline', {}, r.retired ? chip('Retired', 'warning') : chip('In use', 'done'),
+      { title: 'Recording', sort: (r) => r.file_name || r.recording_id, render: (r) => recordingName(r.recording_id, r.file_name) },
+      { title: 'Where', sort: (r) => scopeText(r.scope, this.sets), render: (r) => scopeText(r.scope, this.sets) },
+      { title: 'Length', num: true, sort: (r) => r.duration_s, render: (r) => durationText(r.duration_s) },
+      { title: 'Channels', num: true, sort: (r) => r.n_channels, render: (r) => String(r.n_channels ?? '') },
+      { title: 'Done', num: true, sort: (r) => r.done ?? 0, render: (r) => `${r.done ?? 0} of ${r.assigned ?? 0}` },
+      { title: 'Status', sort: (r) => (r.retired ? 1 : 0), render: (r) => h('span.chips-inline', {}, r.retired ? chip('Retired', 'warning') : chip('In use', 'done'),
         (r.warnings || []).length ? chip(plural(r.warnings.length, 'warning'), 'warning') : null) },
       { title: '', cls: 'actions', render: (r) => h('button.btn.small', { type: 'button', onclick: () => this.openDetail(r) }, 'Manage') },
-    ], [], { empty: 'No recordings match. Add some from this computer.', rowKey: (r) => `${r.scope}|${r.recording_id}`, caption: 'Recordings' });
-    this.listCard = card('Registered recordings', h('div.row.filters', {}, scope, status, search), this.listNote, this.table);
+    ], [], { empty: 'No recordings match. Add some from this computer.', rowKey: (r) => `${r.scope}|${r.recording_id}`, caption: 'Recordings',
+      sortable: true, selectable: true, onSelect: (keys) => this._bulkBar(keys) });
+    this.listCard = card('Registered recordings', h('div.row.filters', {}, scope, status, search), this.listNote, this.bulkBar, this.table, this.bulkResult);
+  }
+
+  /** The recordings of the list's keys ("scope|recording ID"). */
+  _chosen(keys) {
+    const want = new Set(keys);
+    return this.recordings.filter((r) => want.has(`${r.scope}|${r.recording_id}`));
+  }
+
+  _bulkBar(keys) {
+    clear(this.bulkBar);
+    this.bulkBar.hidden = !keys.length;
+    if (!keys.length) return;
+    const chosen = this._chosen(keys);
+    const study = chosen.filter((r) => r.scope === 'study');
+    const msg = messageArea();
+    const progress = progressLine();
+    const name = (r) => recordingName(r.recording_id, r.file_name);
+    const retire = (to) => actionButton(to ? 'Retire' : 'Bring back into use', { kind: 'small', working: 'Working…', msg, log: to ? 'bulk-retire' : 'bulk-unretire', onClick: async () => {
+      const list = this._chosen(this.table.selected()).filter((r) => Boolean(r.retired) !== to);
+      if (!list.length) throw new Error(to ? 'The recordings chosen are retired already.' : 'The recordings chosen are in use already.');
+      await oneAtATime(this, async () => {
+        const results = await eachInTurn(list, (r) => this.area.write('recording_update', { scope: r.scope, recording_id: r.recording_id, retired: to }),
+          { progress, words: (i, n) => `${to ? 'Retiring' : 'Bringing back'} ${i} of ${n}…` });
+        await this._showResults(results, name, () => (to ? 'Retired: offered for no new assignments; work already assigned stays.' : 'In use again: it can be assigned.'));
+      });
+    } });
+    const removeHost = h('span.inline-confirm');
+    removeHost.append(h('button.btn.small.destructive', { type: 'button', 'data-log': 'bulk-remove', onclick: async () => {
+      if (this._bulkRunning) { msg.problem(new Error(STILL_RUNNING)); return; }
+      const list = this._chosen(this.table.selected());
+      const yes = await confirmInline(removeHost, { text: `Remove the registration of ${plural(list.length, 'recording')}? Only their descriptions are deleted from the study; the EEG files never reached it and stay where they are. Recordings that someone has saved, or that a reference set uses, are kept.`,
+        yes: `Remove ${plural(list.length, 'registration')}` });
+      if (!yes) return;
+      try {
+        await oneAtATime(this, async () => {
+          const results = await eachInTurn(list, (r) => this.area.write('recording_remove', { scope: r.scope, recording_id: r.recording_id }),
+            { progress, words: (i, n) => `Removing ${i} of ${n}…` });
+          for (const r of results) if (!r.ok && r.error && r.error.code === 'has_results') r.kept = true;
+          await this._showResults(results, name, () => 'Removed: its registration is deleted.');
+        });
+      } catch (exc) { msg.problem(exc); }
+    } }, 'Remove…'));
+    this.bulkBar.append(
+      h('p', {}, h('b', {}, `${plural(keys.length, 'recording')} chosen`)),
+      h('div.btn-row', {},
+        h('button.btn.small', { type: 'button', 'data-log': 'bulk-assign-to', disabled: !study.length,
+          title: study.length ? null : 'Only the study\'s own recordings are assigned from here; training recordings come from their reference set.',
+          onclick: () => this.area.go('assignments', { recordings: study.map((r) => r.recording_id) }) }, 'Assign to…'),
+        retire(true), retire(false), removeHost,
+        h('button.btn.small.quiet', { type: 'button', onclick: () => this.table.clearSelection() }, 'Clear the choice')),
+      progress, msg);
+  }
+
+  /** What happened to each recording; recordings kept because of their results can be retired instead. */
+  async _showResults(results, name, done) {
+    this.table.clearSelection();
+    await this.reload();
+    clear(this.bulkResult);
+    const kept = results.filter((r) => r.kept).map((r) => r.item);
+    this.bulkResult.append(h('h3', {}, `Done for ${results.filter((r) => r.ok).length} of ${plural(results.length, 'recording')}`),
+      kept.length ? h('div.banner', { role: 'status' },
+        h('p', {}, h('b', {}, `${plural(kept.length, 'recording')} kept`), ': someone has saved annotations of them, or a reference set uses them, and research results are never deleted. Retire them instead, so that they are offered for no new assignments.'),
+        h('div.btn-row', {}, actionButton(`Retire the ${plural(kept.length, 'kept recording')}`, { working: 'Retiring…', log: 'bulk-retire-kept', onClick: async () => {
+          const again = await eachInTurn(kept.filter((r) => !r.retired), (r) => this.area.write('recording_update', { scope: r.scope, recording_id: r.recording_id, retired: true }));
+          await this._showResults(again, name, () => 'Retired: offered for no new assignments.');
+        } }))) : null,
+      resultsTable(results, { name, done, title: 'Recording' }));
   }
 
   _filter() {
@@ -131,7 +211,7 @@ export class RecordingsSection {
     } });
     const removeHost = h('div.btn-row');
     removeHost.append(h('button.btn.destructive', { type: 'button', onclick: async () => {
-      if (!(await confirmInline(removeHost, { text: `Remove ${r.recording_id} from ${scopeText(r.scope, this.sets).toLowerCase()}? Its description is deleted; the file on your computer is not touched.`, yes: 'Remove it' }))) return;
+      if (!(await confirmInline(removeHost, { text: `Remove the registration of ${r.recording_id} from ${scopeText(r.scope, this.sets).toLowerCase()}? Only its description is deleted; the EEG file never reached the study and is not touched.`, yes: 'Remove it' }))) return;
       try {
         await this.area.write('recording_remove', body);
         this.detailKey = null;
@@ -155,7 +235,7 @@ export class RecordingsSection {
       (r.warnings || []).length ? h('div.banner', {}, h('p', {}, h('b', {}, 'Found when it was added')), h('ul', {}, r.warnings.map((w) => h('li', {}, w)))) : null,
       field('Notes', notes), h('div.btn-row', {}, save, retire),
       h('h3', {}, 'Remove'),
-      h('p.caption', {}, 'A recording that someone has saved, or that a reference set uses, stays; retire it instead.'),
+      h('p.caption', {}, 'Removing deletes the recording\'s registration, its description in the study; the EEG file never reached the study. A recording that someone has saved, or that a reference set uses, stays; retire it instead.'),
       removeHost));
     if (note) msg.show(...note);
   }
@@ -168,15 +248,16 @@ export class RecordingsSection {
     const folderInput = h('input', { type: 'file', multiple: true, webkitdirectory: true, hidden: true, 'data-log': 'register-folder',
       onchange: () => { const f = [...folderInput.files]; folderInput.value = ''; if (f.length) this.read(f); } });
     const filesInput = h('input', { type: 'file', multiple: true, hidden: true, 'data-log': 'register-files',
-      accept: '.edf,.bdf,.rec,.vhdr,.vmrk,.eeg,.tsv,.json',
+      accept: acceptFiles('.edf,.bdf,.rec,.vhdr,.vmrk,.eeg,.tsv,.json'),
       onchange: () => { const f = [...filesInput.files]; filesInput.value = ''; if (f.length) this.read(f); } });
-    this.folderBtn = h('button.btn.primary', { type: 'button', onclick: () => folderInput.click() }, 'Choose a folder…');
-    this.filesBtn = h('button.btn', { type: 'button', onclick: () => filesInput.click() }, 'Choose files…');
+    this.folderBtn = h('button.btn.primary', { type: 'button', hidden: !CAN_CHOOSE_FOLDER, onclick: () => folderInput.click() }, 'Choose a folder…');
+    this.filesBtn = h(`button.btn${CAN_CHOOSE_FOLDER ? '' : '.primary'}`, { type: 'button', onclick: () => filesInput.click() }, 'Choose files…');
     this.progress = progressLine();
     this.review = h('div.admin-review');
     this.addCard = card('Add recordings from this computer',
       h('p', {}, 'Choose the dataset folder (or the files of some recordings). This browser reads each recording, works out its fingerprint and describes its channels, events and timing; only these descriptions are sent to the study, never the EEG.'),
       h('p.caption', {}, 'The folder you choose is the dataset folder: recording IDs are the paths inside it, for example sub-001/eeg/sub-001_task-rest_eeg.vhdr. BIDS sidecar files (channels.tsv, events.tsv) beside a recording are read too.'),
+      CAN_CHOOSE_FOLDER ? null : h('p.note', {}, 'On an iPad, choose the files of the recordings: their names become their IDs. Choosing a whole dataset folder, with its paths, needs a computer.'),
       field('Add them to', this.addScope, { hint: 'Recordings for a reference set are only offered for training, never for study annotation.' }),
       this.replace,
       h('div.btn-row', {}, this.folderBtn, this.filesBtn), folderInput, filesInput,
