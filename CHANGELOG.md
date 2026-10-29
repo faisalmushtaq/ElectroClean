@@ -322,7 +322,8 @@ list keeps Start and End whole ("23.000") in the narrower side panel of a
 more compact and scrolls from its top instead of cutting off its title. The
 home page's card for an unfinished recording is headed In progress, so that
 Continue where you left off is said once, on its button, and the admin
-area's tables set headings of one and two lines on the same rule. Percentages
+area's tables and the home page's lists set headings of one and two lines on
+the same rule. Percentages
 are written one way throughout ("74%"), as the admin area, the quiz and the
 training path already wrote them, where the new views had "74 %". The
 Recording tab gives the time worked as the paused panel does ("3 min 05 s"

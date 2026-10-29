@@ -432,7 +432,7 @@ table.list { width: 100%; border-collapse: collapse; margin: 8px 0; }
 table.list th, table.list td { text-align: left; padding: 12px 8px; border-bottom: 1px solid var(--hairline); }
 table.list th:first-child, table.list td:first-child { padding-left: 0; }
 table.list th:last-child, table.list td:last-child { padding-right: 0; }
-table.list thead th { color: var(--text-secondary); font: var(--t-14); border-bottom-color: var(--rule); padding-top: 8px; padding-bottom: 8px; }
+table.list thead th { color: var(--text-secondary); font: var(--t-14); border-bottom-color: var(--rule); padding-top: 8px; padding-bottom: 8px; vertical-align: bottom; }
 table.list tbody th { font-weight: 600; }
 table.list td.num, table.list th.num { text-align: right; font-variant-numeric: tabular-nums lining-nums; }
 table.list td.actions { text-align: right; }
