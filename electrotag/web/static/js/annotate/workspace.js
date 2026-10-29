@@ -10,12 +10,17 @@
 // screen (coverage.js), shown on the overview bar, with Next part not yet viewed (U) and a check
 // before Save and Finish; a line that welcomes the annotator back to a restored draft; the time the
 // draft was last kept; and each annotator's display comfort (ui/comfort.js).
+//
+// Each annotation may carry a confidence (definite, probable or possible; D, the menu or the
+// Annotations table) and a short note (confidence.js); the functions for them are together under
+// "confidence and notes".
 
 import { h, clear } from '../ui/dom.js';
 import { showDialog, ask, inform, choose, dialogOpen } from '../ui/dialog.js';
 import { showMenu, closeMenu } from '../ui/menu.js';
 import { EegViewer } from '../viewer/viewer.js';
-import { pickType, chooseChannels, editTimes } from './dialogs.js';
+import { pickType, chooseChannels, editTimes, editNote } from './dialogs.js';
+import { CONFIDENCE_TEXT, confidenceChoices, nextConfidence } from './confidence.js';
 import { AnnotationError, endSample } from './store.js';
 import { helpHtml, KEY_HINT, REVIEW_HINT, TOUCH_HINT, TOUCH_REVIEW_HINT, TOUCH_VIEW_HINT } from './help.js';
 import { edgeHalfWidthS } from '../data/synthetic.js';
@@ -62,7 +67,9 @@ export function minutesWords(seconds) {
 
 function annSummary(a, sf) {
   return { id: a.annotation_id, label: a.label, onset_s: Math.round((a.onset_sample / sf) * 1e4) / 1e4,
-    offset_s: Math.round((endSample(a) / sf) * 1e4) / 1e4, channels: [...a.channels], n_channels: a.channels.length };
+    offset_s: Math.round((endSample(a) / sf) * 1e4) / 1e4, channels: [...a.channels], n_channels: a.channels.length,
+    // the confidence, and only the length of a note: its text is research content, never logged
+    confidence: a.confidence || null, note_length: (a.note || '').length };
 }
 
 export class Workspace {
@@ -105,6 +112,7 @@ export class Workspace {
     this._hiddenAt = null;
     this._breakShown = false;
     this._saved = { browser: null, study: null };
+    this.lastMadeId = null; // the annotation made last, which D changes when nothing is selected
     this._build();
   }
 
@@ -335,7 +343,8 @@ export class Workspace {
     this.btnDel = btn('Delete', () => this.deleteSelectedRows(), '.destructive');
     p.append(this.countLabel, this.tableWrap,
       this.readOnly ? h('div.btn-row', {}, this.btnGoto)
-        : h('div.btn-grid', {}, this.btnGoto, this.btnTimes, this.btnLabel, this.btnChans, this.btnMerge, this.btnDel));
+        : h('div.btn-grid', {}, this.btnGoto, this.btnTimes, this.btnLabel, this.btnChans, this.btnMerge, this.btnDel,
+          ...this._confidenceButtons(btn)));
   }
 
   _recordingPanel() {
@@ -961,6 +970,7 @@ export class Workspace {
     this.btnChans.disabled = !(ed && anns.length === 1);
     this.btnDel.disabled = !(ed && anns.length);
     this.btnMerge.disabled = !(ed && anns.length >= 2 && new Set(anns.map((a) => a.label)).size === 1);
+    this._refreshConfidenceButtons(anns, ed);
     if (this.saveBtn && this.coach) this.coach.syncSaveButton(this.saveBtn);
   }
 
@@ -982,7 +992,8 @@ export class Workspace {
         onclick: (e) => this._rowClick(e, i, anns),
         ondblclick: () => this.jumpTo(a.annotation_id),
       },
-      h('td.label', {}, h('span.swatch', { style: { background: l.colour } }), h('span', { style: { color: this.labelColours?.[a.annotation_id] || null } }, prefix + a.label)),
+      h('td.label', {}, h('span.swatch', { style: { background: l.colour } }), h('span.label-text', { style: { color: this.labelColours?.[a.annotation_id] || null } }, prefix + a.label),
+        ...this._confidenceMarks(a)),
       h('td.code', {}, String(l.value)),
       h('td.num', { title: `${(a.onset_sample / this.sf).toFixed(3)} to ${(endSample(a) / this.sf).toFixed(3)} s, duration ${(a.duration_samples / this.sf).toFixed(3)} s` }, (a.onset_sample / this.sf).toFixed(3)),
       h('td.num', {}, (endSample(a) / this.sf).toFixed(3)),
@@ -1064,11 +1075,14 @@ export class Workspace {
         ...(this.store.lastAutoMerged ? { auto_merged: this.store.lastAutoMerged, merged_away: removed } : {}) });
     } else if (act === 'delete') {
       logger.event('annotation_deleted', { ...base, annotations: removed.map((k) => sum(prev.get(k))) });
+    } else if (act === 'update' && this._logConfidenceOrNote(change.description || '', changed, prev, now, base)) {
+      // a change of confidence or note only: logged as confidence_set or note_set
     } else if (act === 'update') {
       const d = change.description || '';
       const type = d.startsWith('relabel') ? 'annotation_relabelled' : /channel/.test(d) ? 'annotation_channels_changed' : 'annotation_edited';
       logger.event(type, { ...base, annotations: changed.map((k) => sum(now.get(k))), before: changed.map((k) => sum(prev.get(k))),
         ...(this.store.lastAutoMerged ? { auto_merged: this.store.lastAutoMerged, merged_away: removed } : {}) });
+      this._logNotes(changed, prev, now, base); // a note changed together with the times (Edit times…)
     } else if (act === 'merge' || act === 'undo' || act === 'redo' || act === 'reset') {
       const type = { merge: 'annotations_merged', undo: 'undo', redo: 'redo', reset: 'annotations_reset' }[act];
       logger.event(type, { ...base, added: added.map((k) => sum(now.get(k))), removed: removed.map((k) => sum(prev.get(k))), changed: changed.map((k) => sum(now.get(k))) });
@@ -1097,6 +1111,7 @@ export class Workspace {
       throw exc;
     }
     this._revealRow(ann.annotation_id);
+    this.lastMadeId = ann.annotation_id;
     const where = ann.channels.length ? `${ann.channels.length} channel(s)` : 'whole montage';
     const span = `${(ann.onset_sample / this.sf).toFixed(3)}–${(endSample(ann) / this.sf).toFixed(3)} s`;
     if (this.store.lastAutoMerged) {
@@ -1177,7 +1192,7 @@ export class Workspace {
     }
     items.push({ label: this.quick.length ? 'Other type' : 'Change type to', submenu: sub });
     items.push({ separator: true }, { label: 'Edit times…', onSelect: () => { this.select([id]); this.editTimesOfSelected(); } },
-      { label: 'Edit channels…', onSelect: () => this.editChannelsOf(id) });
+      { label: 'Edit channels…', onSelect: () => this.editChannelsOf(id) }, ...this._confidenceMenuItems(id, a));
     if (a.channels.length) items.push({ label: 'Apply to whole montage', onSelect: () => { logger.noteInput('menu:Apply to whole montage'); this.setAnnotationChannels(id, []); } });
     items.push({ separator: true }, { label: 'Delete', onSelect: () => { logger.noteInput('menu:Delete'); this.deleteOne(id); } });
     showMenu(items, x, y);
@@ -1269,11 +1284,17 @@ export class Workspace {
     const ids = this.targetIds();
     if (ids.length !== 1 || !this._checkEditable()) return;
     const a = this.store.get(ids[0]);
-    const v = await editTimes({ start: a.onset_sample / this.sf, end: endSample(a) / this.sf, sfreq: this.sf, duration: this.s.recording.durationS });
+    const v = await editTimes({ start: a.onset_sample / this.sf, end: endSample(a) / this.sf, sfreq: this.sf, duration: this.s.recording.durationS, note: a.note || '' });
     if (!v) return;
     logger.noteInput('dialog:Edit times');
     try {
-      this.store.setInterval(ids[0], v[0], v[1]);
+      if (!this.store.has(ids[0])) return;
+      const [on, dur] = this.store.snapInterval(v[0], v[1]);
+      const cur = this.store.get(ids[0]);
+      const moved = on !== cur.onset_sample || dur !== cur.duration_samples;
+      const noted = v[2] !== (cur.note || '');
+      this.store.update(ids[0], { onset_sample: on, duration_samples: dur, note: v[2],
+        description: moved && noted ? 'move/resize and note' : moved ? 'move/resize' : (cur.note ? (v[2] ? 'change note' : 'remove note') : 'add note') });
     } catch (exc) {
       inform('Times not changed', exc.message);
     }
@@ -1529,6 +1550,116 @@ export class Workspace {
       else cursor = this.editable ? 'crosshair' : 'default';
     } else if (info && (info.area === 'channel_names' || info.area === 'tags')) cursor = 'pointer';
     if (c.style.cursor !== cursor) c.style.cursor = cursor;
+    this._noteTooltip(info);
+  }
+
+  // ===================================================== confidence and notes
+  /** The annotations D and the table's Confidence button change: the selected ones, or the one made last. */
+  _confidenceTargets() {
+    const ids = this.targetIds();
+    if (ids.length) return ids;
+    return this.lastMadeId && this.store.has(this.lastMadeId) ? [this.lastMadeId] : [];
+  }
+
+  /** One press of D (or the table's button): the next confidence (confidence.js) of the selected or newest annotation. */
+  cycleConfidence() {
+    if (!this._checkEditable()) return;
+    const ids = this._confidenceTargets();
+    if (!ids.length) { this.say('Select an annotation (click it, or press N) to set its confidence with D.'); return; }
+    this.setConfidenceOf(ids, nextConfidence(this.store.get(ids[0]).confidence, this.s.confidenceMode));
+  }
+
+  setConfidenceOf(ids, level) {
+    if (!this._checkEditable()) return;
+    const live = ids.filter((i) => this.store.has(i));
+    if (!live.length) return;
+    this.store.setConfidenceMany(live, level);
+    const what = live.length === 1 ? this.store.get(live[0]).label : `${live.length} annotations`;
+    this.say(`Confidence of ${what}: ${CONFIDENCE_TEXT[level || ''].toLowerCase()} (D for the next; ${UNDO_HINT})`);
+  }
+
+  async editNoteOf(id) {
+    if (!id || !this.store.has(id) || !this._checkEditable()) return;
+    const a = this.store.get(id);
+    const note = await editNote({ title: `Note on this ${a.label}`, note: a.note || '' });
+    if (note === null || !this.store.has(id)) return;
+    logger.noteInput(`dialog:Note on this ${a.label}`);
+    try {
+      const had = Boolean(this.store.get(id).note);
+      this.store.setNote(id, note);
+      // The note itself is never shown in the status line, which the interaction log records.
+      this.say(note ? `Note ${had ? 'changed' : 'added'} (${note.length} characters)` : 'Note removed');
+    } catch (exc) {
+      inform('Note not kept', exc.message);
+    }
+  }
+
+  /** The context menu's items: Set confidence… (the levels) and Add a note… / Edit note…. */
+  _confidenceMenuItems(id, a) {
+    const mode = this.s.confidenceMode;
+    const levels = confidenceChoices(mode).map((lv) => ({ label: CONFIDENCE_TEXT[lv], checked: (a.confidence || '') === lv,
+      onSelect: () => { logger.noteInput(`menu:${CONFIDENCE_TEXT[lv]}`); this.setConfidenceOf([id], lv); } }));
+    return [{ label: 'Set confidence…', shortcut: 'D', submenu: [{ section: 'Confidence' }, ...levels] },
+      { label: a.note ? 'Edit note…' : 'Add a note…', onSelect: () => this.editNoteOf(id) }];
+  }
+
+  /** The Annotations table's Confidence button (one press: the next level) and its note button. */
+  _confidenceButtons(btn) {
+    this.btnConfidence = btn('Confidence', () => this.cycleConfidence(), '.span-2');
+    this.btnConfidence.dataset.log = 'confidence';
+    this.btnNote = btn('Add a note…', () => this.editNoteOf(this.targetIds()[0]));
+    this.btnNote.dataset.log = 'note';
+    return [this.btnConfidence, this.btnNote];
+  }
+
+  _refreshConfidenceButtons(anns, editable) {
+    if (!this.btnConfidence) return;
+    const level = anns.length ? anns[0].confidence || '' : null;
+    this.btnConfidence.textContent = level === null ? 'Confidence' : `Confidence: ${CONFIDENCE_TEXT[level].toLowerCase()}`;
+    this.btnConfidence.title = 'How sure you are of the selected annotation: each press (or D) gives the next level';
+    this.btnConfidence.disabled = !(editable && anns.length);
+    this.btnNote.textContent = anns.length === 1 && anns[0].note ? 'Edit note…' : 'Add a note…';
+    this.btnNote.disabled = !(editable && anns.length === 1);
+  }
+
+  /** What the label cell of the Annotations table shows after the label: probable or possible, a tiny mark for definite, and a note icon. */
+  _confidenceMarks(a) {
+    const out = [];
+    // short words, so that the label keeps its room in the narrow list; the title has the whole word
+    if (a.confidence === 'probable' || a.confidence === 'possible') out.push(h('span.conf-mark', { title: `Confidence: ${a.confidence}` }, a.confidence === 'probable' ? 'prob.' : 'poss.'));
+    else if (a.confidence === 'definite') out.push(h('span.conf-mark.definite', { title: 'Confidence: definite' }, icon('check')));
+    if (a.note) out.push(h('span.note-mark', { title: a.note, 'aria-label': 'Has a note' }, icon('note')));
+    return out;
+  }
+
+  /** On the EEG, the note of the annotation under the pointer as a tooltip. */
+  _noteTooltip(info) {
+    const c = this.viewer.over;
+    const id = info && info.annotation;
+    const note = id && this.store.has(id) ? this.store.get(id).note || '' : '';
+    if ((c.title || '') !== note) { if (note) c.title = note; else c.removeAttribute('title'); }
+  }
+
+  /** Log a change of confidence (confidence_set) or of a note (note_set); false for any other change. */
+  _logConfidenceOrNote(description, changed, prev, now, base) {
+    if (/^(set|remove) confidence/.test(description)) {
+      logger.event('confidence_set', { ...base, annotations: changed.map((k) => ({ id: k, label: now.get(k).label,
+        confidence: now.get(k).confidence || null, before: prev.get(k).confidence || null })) });
+      return true;
+    }
+    if (/^(add|change|remove) note$/.test(description)) { this._logNotes(changed, prev, now, base); return true; }
+    return false;
+  }
+
+  /** note_set for each annotation whose note changed: whether it was added, changed or removed, and its length (never its text). */
+  _logNotes(changed, prev, now, base) {
+    const notes = changed.filter((k) => (now.get(k).note || '') !== (prev.get(k).note || '')).map((k) => {
+      const before = prev.get(k).note || '';
+      const after = now.get(k).note || '';
+      return { id: k, label: now.get(k).label, change: !before ? 'added' : !after ? 'removed' : 'changed',
+        note_length: after.length, previous_length: before.length };
+    });
+    if (notes.length) logger.event('note_set', { ...base, annotations: notes });
   }
 
   // ======================================================================= keys
@@ -1598,6 +1729,7 @@ export class Workspace {
     if (k === '[') return handled('Mark start', () => this.markKey('start'));
     if (k === ']') return handled('Mark end', () => this.markKey('end'));
     if (k === 'c' || k === 'C') return handled('Whole montage or selected channels', () => this.toggleScope());
+    if (k === 'd' || k === 'D') return handled('Confidence', () => this.cycleConfidence());
     if (k === 'Delete' || k === 'Backspace') return handled('Delete', () => this.deleteSelection());
   }
 

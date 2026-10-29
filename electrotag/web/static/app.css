@@ -109,6 +109,7 @@
   --i-star: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1.5l1.9 4.3 4.6.4-3.5 3 1.1 4.6L8 11.4l-4.1 2.4 1.1-4.6-3.5-3 4.6-.4z'/%3E%3C/svg%3E");
   --i-pause: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='square'%3E%3Cpath d='M5.5 3.5v9M10.5 3.5v9'/%3E%3C/svg%3E");
   --i-skip-forward: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='square'%3E%3Cpath d='M2.5 8h8M7 4l4 4-4 4M13.5 3.5v9'/%3E%3C/svg%3E");
+  --i-note: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linejoin='round'%3E%3Cpath d='M3.5 2.5h6l3 3v8h-9z'/%3E%3Cpath d='M9.5 2.5v3h3M5.5 8.5h5M5.5 11h3.5'/%3E%3C/svg%3E");
   --i-star-empty: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1' stroke-linejoin='round'%3E%3Cpath d='M8 2.6l1.6 3.7 4 .4-3 2.6.9 3.9L8 11.1l-3.5 2.1.9-3.9-3-2.6 4-.4z'/%3E%3C/svg%3E");
 }
 
@@ -180,6 +181,7 @@ kbd .ico { width: 12px; height: 12px; }
 .ico-star-empty { --i: var(--i-star-empty); }
 .ico-pause { --i: var(--i-pause); }
 .ico-skip-forward { --i: var(--i-skip-forward); }
+.ico-note { --i: var(--i-note); }
 .stars { display: inline-flex; gap: 2px; vertical-align: -2px; margin-right: 8px; color: var(--ink); }
 .stars .ico { width: 14px; height: 14px; }
 
@@ -667,7 +669,15 @@ ul.unviewed-list { font-variant-numeric: tabular-nums lining-nums; margin-bottom
 .ann-table td.num, .ann-table th.num { text-align: right; font-variant-numeric: tabular-nums lining-nums; }
 .ann-table td.code { color: var(--text-secondary); font-variant-numeric: tabular-nums lining-nums; }
 .ann-table td.label { display: flex; align-items: center; gap: 8px; }
-.ann-table td.label span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.ann-table td.label span:last-child, .ann-table td.label .label-text { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* Confidence and notes: quiet, in the secondary text colour (never the warning or bad-channel greys). */
+.ann-table td.label .conf-mark { flex: none; margin-left: -4px; color: var(--text-secondary); font: var(--t-12); }
+.ann-table td.label .conf-mark.definite .ico, .ann-table td.label .note-mark .ico { width: 12px; height: 12px; vertical-align: 0; }
+.ann-table td.label .note-mark { flex: none; display: inline-flex; margin-left: -4px; color: var(--text-secondary); }
+.btn-grid .btn.span-2 { grid-column: span 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note-dialog .field, .form .field[name="note"] { width: 100%; }
+.note-count { margin: 0 0 12px; }
+.note-count.error { color: var(--destructive); }
 @media (hover: hover) { .ann-table tr:hover td { background: var(--hover); } }
 .ann-table tr.selected td { background: var(--accent-soft); }
 .ann-table tr.empty td { color: var(--text-secondary); white-space: normal; cursor: default; }

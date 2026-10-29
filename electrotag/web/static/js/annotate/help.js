@@ -8,7 +8,7 @@ const arrow = (dir) => `<kbd aria-label="${ARROW_NAMES[dir]}"><span class="ico i
 const HOME_END = IS_MAC ? `<kbd>fn</kbd>+${arrow('left')} / <kbd>fn</kbd>+${arrow('right')}` : '<kbd>Home</kbd> / <kbd>End</kbd>';
 const PAGE = IS_MAC ? `<kbd>fn</kbd>+${arrow('up')} / <kbd>fn</kbd>+${arrow('down')}` : '<kbd>Page Up</kbd> / <kbd>Page Down</kbd>';
 
-export const KEY_HINT = 'Drag to mark  ·  1–9 type  ·  M start, M end  ·  / find a type  ·  N / P next, previous  ·  B pause  ·  ? help';
+export const KEY_HINT = 'Drag to mark  ·  1–9 type  ·  M start, M end  ·  D confidence  ·  N / P next, previous  ·  B pause  ·  ? help';
 export const REVIEW_HINT = 'N / P  next, previous item to look at  ·  arrow keys scroll  ·  ? help';
 /** The same hints for a touch screen (an iPad without a keyboard). */
 export const TOUCH_HINT = 'Drag to mark  ·  tap a numbered type  ·  two fingers move, pinch for more or less time  ·  press and hold an annotation for its menu';
@@ -25,7 +25,9 @@ trace to choose that channel.</li>
 <li><b>Two fingers</b> move the EEG: sideways through time and up and down through the channels.
 <b>Pinch</b> sideways to show more or less time.</li>
 <li><b>Press and hold</b> an annotation for its menu (the common types, Edit times…, Edit
-channels…, Delete), and <b>double-tap</b> it to choose its type from the list.</li>
+channels…, Set confidence…, Add a note…, Delete), and <b>double-tap</b> it to choose its type from
+the list. The Confidence button under the Annotations list gives the selected annotation the next
+level with one tap.</li>
 <li>The buttons under the EEG move through time and the channels and change how much is shown,
 as the keys do on a computer; the last of them shows the next part not yet viewed. Pause, at the
 top, stops the clock. A keyboard attached to the iPad works as on a computer.</li>
@@ -88,6 +90,16 @@ automatically. To merge others of one type, select them in the list and press
 <b>Merge</b>.</li>
 </ul>
 
+<h3>Confidence and notes</h3>
+<p>When you are unsure of a mark, say how sure you are: press <kbd>D</kbd> to give the selected
+annotation (or the one you made last) the next level of <b>confidence</b>, <i>definite</i>,
+<i>probable</i> or <i>possible</i>, or use <b>Set confidence…</b> in its menu or the
+<b>Confidence</b> button under the Annotations list. A new mark has no confidence until you give
+one, unless your study starts every mark as definite. Probable and possible marks are drawn more
+lightly. <b>Add a note…</b>, in the menu or under the list, keeps a short note with an annotation
+(up to 200 characters); a small note sign shows which annotations have one. Notes are saved with
+your annotations for the study's researchers.</p>
+
 <h3>Keys for annotating</h3>
 <table class="keys">
 <tr><td><kbd>1</kbd> to <kbd>9</kbd></td><td>type of the next annotation, or of the selected ones</td></tr>
@@ -95,6 +107,7 @@ automatically. To merge others of one type, select them in the list and press
 <tr><td><kbd>M</kbd></td><td>mark the start, then the end, at the pointer</td></tr>
 <tr><td><kbd>[</kbd> / <kbd>]</kbd></td><td>mark the start / the end at the pointer</td></tr>
 <tr><td><kbd>C</kbd></td><td>whole montage or selected channels</td></tr>
+<tr><td><kbd>D</kbd></td><td>confidence of the selected (or newest) annotation: the next level</td></tr>
 <tr><td><kbd>N</kbd> / <kbd>P</kbd></td><td>next / previous annotation</td></tr>
 <tr><td><kbd>Esc</kbd></td><td>cancel a started mark, or end the selection</td></tr>
 <tr><td><kbd>Delete</kbd></td><td>delete the selected annotation</td></tr>

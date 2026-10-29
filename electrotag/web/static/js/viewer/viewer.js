@@ -20,6 +20,7 @@ import { LONG_PRESS_MS, TAP_SLOP_PX, edgePx, isDoubleTap, pinchView, twoFingers 
 import { complement, mergeIntervals } from './coverage.js';
 import { namePx, traceWidths } from '../ui/comfort.js';
 import { icon } from '../views/common.js';
+import { confidenceFill, confidenceTagText } from '../annotate/confidence.js';
 
 const GUTTER = 92;
 const TAG_ROW_H = 20;
@@ -32,6 +33,21 @@ const EDGE_PX = 6;
 const CLIP = 0.75; // traces are clipped at 1.5 half-rows (MNE's clipping=1.5)
 
 const end = (a) => a.onset_sample + a.duration_samples;
+const NOTE_W = 12; // the note glyph at the end of a tag
+
+/** A small drawn note (a page with a folded corner and two lines) for a tag whose annotation has a note. */
+function drawNoteGlyph(ctx, x, y, colour) {
+  ctx.save();
+  ctx.strokeStyle = colour;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x + 0.5, y + 0.5); ctx.lineTo(x + 6, y + 0.5); ctx.lineTo(x + 9.5, y + 4); ctx.lineTo(x + 9.5, y + 11.5);
+  ctx.lineTo(x + 0.5, y + 11.5); ctx.closePath();
+  ctx.moveTo(x + 2.5, y + 6.5); ctx.lineTo(x + 7.5, y + 6.5);
+  ctx.moveTo(x + 2.5, y + 9); ctx.lineTo(x + 6, y + 9);
+  ctx.stroke();
+  ctx.restore();
+}
 
 function hatch(ctx, x0, y0, w, hgt, colour, spacing = 8) {
   ctx.save();
@@ -481,7 +497,8 @@ export class EegViewer {
       const sel = this.selected.has(a.annotation_id);
       const xa = clamp(this.sampleToX(a.onset_sample), x0, x1);
       const xb = clamp(this.sampleToX(end(a)), x0, x1);
-      ctx.fillStyle = rgba(colour, sel ? 0.30 : a.channels.length ? 0.24 : 0.16);
+      // probable and possible marks are filled more lightly (confidence.js)
+      ctx.fillStyle = rgba(colour, (sel ? 0.30 : a.channels.length ? 0.24 : 0.16) * confidenceFill(a));
       for (const [ya, yb] of this._rowSpans(a.channels)) ctx.fillRect(xa, ya, Math.max(1, xb - xa), yb - ya);
     }
     // the experts' annotation (guided training) and the flash of a match
@@ -739,8 +756,8 @@ export class EegViewer {
     // tags above the traces
     ctx.font = `12px ${FONT}`;
     const tags = anns.map((a) => {
-      const text = `${this.prefix[a.annotation_id] || ''}${a.label}${a.channels.length ? ' [ch]' : ''}`;
-      const w = ctx.measureText(text).width + 12;
+      const text = `${this.prefix[a.annotation_id] || ''}${a.label}${a.channels.length ? ' [ch]' : ''}${confidenceTagText(a)}`;
+      const w = ctx.measureText(text).width + 12 + (a.note ? NOTE_W : 0);
       const xa = clamp(this.sampleToX(a.onset_sample), x0, x1);
       const xb = clamp(this.sampleToX(end(a)), x0, x1);
       let x = (xa + xb) / 2;
@@ -761,7 +778,8 @@ export class EegViewer {
       ctx.stroke();
       ctx.fillStyle = legibleOnWhite(colour);
       ctx.textAlign = 'center';
-      ctx.fillText(tg.text, tg.x, y + 13);
+      ctx.fillText(tg.text, tg.x - (tg.a.note ? NOTE_W / 2 : 0), y + 13);
+      if (tg.a.note) drawNoteGlyph(ctx, tg.x + tg.w / 2 - NOTE_W - 2, y + 4, legibleOnWhite(colour));
       this._tags.push({ id: tg.a.annotation_id, x: tg.x - tg.w / 2, y, w: tg.w, h: TAG_ROW_H - 3 });
     });
     // the drag in progress

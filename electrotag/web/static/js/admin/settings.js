@@ -8,7 +8,7 @@
 
 import { h, clear } from '../ui/dom.js';
 import { CHANNEL_TYPES, SCALING_TYPES, SELECTION, deepCopy, fromMicrovolts, mergeSettings, parseNumber, settingsProblems, toMicrovolts } from './model.js';
-import { actionButton, card, checkbox, field, loading, messageArea, numberInput, sectionHead, select, textArea, textInput } from './ui.js';
+import { actionButton, card, checkbox, field, loading, messageArea, numberInput, radios, sectionHead, select, textArea, textInput } from './ui.js';
 
 /** Only what differs from the current settings, block by block and key by key. */
 function changes(current, wanted) {
@@ -114,6 +114,7 @@ export class SettingsSection {
     idlePause.name = 'idle_pause_minutes';
     const coverage = checkbox('Before Save and Finish, list the parts of the recording that have not been on the screen', (an.coverage_check ?? 'warn') !== 'off');
     const revisions = checkbox('Let annotators revise recordings they have finished', an.allow_revisions !== false);
+    const confidence = confidenceChoice(an.confidence);
     // game elements
     const games = checkbox('Show goals, milestones and the team\'s progress on the home page', gm.enabled !== false);
     const board = checkbox('Show an anonymised leaderboard (pseudonyms only)', gm.leaderboard !== false);
@@ -149,7 +150,8 @@ export class SettingsSection {
         annotation: { quick_labels: chosen, min_duration_samples: parseNumber(shortest.value, 'Shortest annotation', { min: 1, integer: true }),
           break_reminder_minutes: parseNumber(breakAfter.value, 'Break reminder after', { min: 0, max: 240 }),
           idle_pause_minutes: parseNumber(idlePause.value, 'Pause after', { min: 0, max: 60 }),
-          coverage_check: coverage.input.checked ? 'warn' : 'off', allow_revisions: revisions.input.checked },
+          coverage_check: coverage.input.checked ? 'warn' : 'off', allow_revisions: revisions.input.checked,
+          confidence: confidence.value() },
         gamification: { enabled: games.input.checked, leaderboard: board.input.checked, leaderboard_viewed_only: boardFull.input.checked },
         logging: { interactions: interactions.input.checked, pointer_hz: parseNumber(pointer.value, 'Pointer samples per second', { min: 0, max: 60 }),
           idle_after_s: parseNumber(idle.value, 'Idle after', { min: 5, max: 3600 }) },
@@ -197,6 +199,9 @@ export class SettingsSection {
         field('Shortest annotation (samples)', shortest),
         revisions,
         h('p.caption', {}, 'A revision is saved as a new version beside the earlier ones, which are kept unchanged; analyses use the latest version.'),
+        h('h3', {}, 'Confidence'),
+        h('p.caption', {}, 'Annotators can always say how sure they are of a mark (definite, probable or possible) with the key D, the menu or the Annotations list, and add a short note.'),
+        confidence,
         h('h3', {}, 'Long sessions'),
         h('p.caption', {}, 'The time worked on a recording is research data: it leaves out the time an annotator is paused.'),
         h('div.form-grid', {},
@@ -214,4 +219,15 @@ export class SettingsSection {
         field('Notice shown to annotators', notice, { hint: 'Say what is recorded and why, as the study\'s information sheet does.' })),
       h('div.btn-row.sticky-save', {}, save), msg);
   }
+}
+
+/** The two choices of annotation.confidence, each with what it does (the first design's 'off' and 'on' read as these). */
+function confidenceChoice(value) {
+  const current = value === 'every_mark' || value === 'on' ? 'every_mark' : 'optional';
+  const el = radios('confidence', [
+    ['optional', 'Optional', 'A new mark has no confidence; annotators give one only when they wish. Costs nothing, and records doubt when they feel it.'],
+    ['every_mark', 'Every mark', 'Every new mark starts as definite, and annotators change it when unsure. Gives a confidence for every mark.'],
+  ], current);
+  el.setAttribute('aria-label', 'Confidence');
+  return el;
 }

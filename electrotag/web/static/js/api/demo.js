@@ -26,6 +26,7 @@ import { escapeHtml, local, newId, nowLocalIso, session } from '../util.js';
 import { sha256Hex } from '../data/sha256.js';
 import { coveredS, fromDraft } from '../viewer/coverage.js';
 import { ADJECTIVES, ANIMALS } from '../games/words.js';
+import { CONFIDENCE_LEVELS, noteProblem } from '../annotate/confidence.js';
 
 const STATE_KEY = 'electrotag.demo.v1';
 const TOKEN_KEY = 'electrotag.demo.token';
@@ -608,6 +609,9 @@ export class DemoBackend {
     const aid = this._aid();
     const saved_at = nowLocalIso();
     const key = this._key(aid, recordingId, mode, contextId);
+    (draft.annotations || []).forEach((a, i) => this._checkConfidenceAndNote(a, (why) => {
+      throw new ApiError(422, 'invalid_draft', `draft annotation ${i + 1}: ${why}`);
+    }));
     const record = { ...draft, saved_at };
     delete record.revises;
     if (this.state.done[key] && !(mode === 'practice' && !this._practicePassed(aid))) {
@@ -640,7 +644,15 @@ export class DemoBackend {
       if (a.onset_sample < 0 || a.duration_samples < 1 || a.onset_sample + a.duration_samples > manifest.n_samples) fail('it lies outside the recording');
       if (a.duration_samples < shortest) fail(`it is shorter than the study's shortest annotation (${shortest} samples)`);
       if (!Array.isArray(a.channels) || a.channels.some((c) => !chans.has(c))) fail('a channel is not in the recording');
+      this._checkConfidenceAndNote(a, fail);
     }
+  }
+
+  /** As service.py: a confidence is definite, probable, possible or none, and a note one line of at most 200 characters. */
+  _checkConfidenceAndNote(a, fail) {
+    if (a.confidence && !CONFIDENCE_LEVELS.includes(a.confidence)) fail(`confidence must be ${CONFIDENCE_LEVELS.join(', ')} or none`);
+    const problem = noteProblem(a.note);
+    if (problem) fail(problem);
   }
 
   async submit(body) {
@@ -682,6 +694,7 @@ export class DemoBackend {
     this.state.submissions.push({
       key, annotator_id: aid, recording_id: rid, mode: body.mode, context_id: body.context_id || '', attempt, saved_at,
       annotations: body.annotations, session: body.session || {}, sha256: body.sha256 || '',
+      confidence_setting: this._admin.studyBlock().annotation.confidence,
       recording: { file_name: info.file_name, sfreq: info.sfreq, n_samples: info.n_samples, ch_names: info.ch_names, size_bytes: info.size_bytes },
       guided: body.mode === 'guided' ? this.state.guided[`${aid}|${rid}`]?.summary || null : null,
       feedback: feedback ? { passed: feedback.passed, metrics: feedback.metrics } : null,
@@ -1107,6 +1120,7 @@ export class DemoBackend {
           fingerprint: { algorithm: 'sha256', role: 'eeg', hex: s.sha256, size_bytes: rec.size_bytes } },
         annotator: { annotator_id: s.annotator_id, display_name: this._admin.user(s.annotator_id)?.display_name || ACCOUNTS[s.annotator_id]?.display_name || '' },
         session: { session_id: `${s.annotator_id}-${s.saved_at}`, mode: s.mode, created_at: s.saved_at, app_version: 'web demonstration',
+          confidence: s.confidence_setting || 'optional',
           context: { context_id: s.context_id, attempt: s.attempt, browser_session: s.session, guided: s.guided, practice: s.feedback,
             ...(s.revision ? { revision: s.revision } : {}) } },
         time_conventions: {
@@ -1127,6 +1141,7 @@ export class DemoBackend {
           onset: a.onset_sample / sf, duration: a.duration_samples / sf, onset_sample: a.onset_sample,
           duration_samples: a.duration_samples, end_sample: a.onset_sample + a.duration_samples, channels: [...a.channels],
           scope: a.channels.length ? 'channels' : 'whole_montage', created_at: a.created_at, modified_at: a.modified_at,
+          confidence: a.confidence || null, note: a.note || '',
         })),
       };
     });

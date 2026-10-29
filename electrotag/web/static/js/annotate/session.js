@@ -5,6 +5,7 @@
 
 import { AnnotationStore } from './store.js';
 import { WorkClock } from './clock.js';
+import { confidenceMode, defaultConfidence } from './confidence.js';
 import { fromDraft, toDraft, viewedFraction as coverageFraction } from '../viewer/coverage.js';
 import { local, newId, nowLocalIso } from '../util.js';
 import { DEFAULT_ANNOTATION, DEFAULT_HIDE, DEFAULT_SCALINGS } from '../api/demo_catalogue.js';
@@ -79,9 +80,11 @@ export class AnnotationSession {
     this.minDuration = (study.annotation && study.annotation.min_duration_samples) || 1;
     this.quickLabels = this.catalogue.quickLabels(study.annotation && study.annotation.quick_labels);
     this.comfort = comfortSettings(study);
+    // annotation.confidence: 'optional' (a confidence when the annotator wishes) or 'every_mark' (confidence.js).
+    this.confidenceMode = confidenceMode(study.annotation && study.annotation.confidence);
     this.store = new AnnotationStore({
       chNames: this.channels.map((c) => c.name), nSamples: this.recording.nSamples, sfreq: this.recording.sfreq,
-      labels: this.catalogue.labelNames, minDurationSamples: this.minDuration,
+      labels: this.catalogue.labelNames, minDurationSamples: this.minDuration, defaultConfidence: defaultConfidence(this.confidenceMode),
     });
     this.scalings = { ...DEFAULT_SCALINGS, ...((this.manifest && this.manifest.display && this.manifest.display.scalings) || {}) };
     this.events = this.manifest ? this.manifest.original_events || []

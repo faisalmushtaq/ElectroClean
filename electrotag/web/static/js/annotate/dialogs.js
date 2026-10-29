@@ -1,10 +1,11 @@
 // The dialogs of the annotation view: the type picker (/ or a double-click), the channel chooser,
-// and the editor for an annotation's start and end.
+// the editor for an annotation's start and end (and its note), and the note editor.
 
 import { h, clear } from '../ui/dom.js';
 import { showDialog } from '../ui/dialog.js';
 import { Catalogue, displayCode } from '../catalogue.js';
 import { legibleOnWhite } from '../util.js';
+import { MAX_NOTE_CHARS, cleanNote, noteProblem } from './confidence.js';
 
 /**
  * The searchable list of every artifact type. Resolves with the chosen label, or null.
@@ -346,12 +347,56 @@ export function chooseChannels({ title, channels, chosen = [], allowWholeMontage
 }
 
 /** Edit the start and end (seconds). Resolves with [start, end] or null. */
-export function editTimes({ start, end, sfreq, duration }) {
+/**
+ * A one-line field for an annotation's note, with the characters left. Its text is never logged (the
+ * interaction log skips text fields), and the dialogs close with 'ok', never with the note itself.
+ */
+function noteField(note, id) {
+  const input = h('input.field', { type: 'text', id, name: 'note', maxlength: String(MAX_NOTE_CHARS), value: note || '',
+    autocomplete: 'off', spellcheck: 'true', placeholder: 'For example: could be an eye movement' });
+  const count = h('p.caption.note-count');
+  const update = () => {
+    const problem = noteProblem(input.value);
+    count.textContent = problem || `${cleanNote(input.value).length} of ${MAX_NOTE_CHARS} characters. Only the study's researchers see notes.`;
+    count.classList.toggle('error', Boolean(problem));
+    return !problem;
+  };
+  input.addEventListener('input', update);
+  update();
+  return { input, count, update };
+}
+
+/** The note of one annotation: resolves with the new note ('' to remove it), or null when cancelled. */
+export function editNote({ title, note = '' }) {
+  const f = noteField(note, 'note-text');
+  const body = h('div.form', {}, h('label.form-row', { for: 'note-text' }, h('span', {}, 'Note'), f.input), f.count);
+  const buttons = [{ label: 'Cancel', value: null }];
+  if (note) buttons.push({ label: 'Remove note', value: 'remove' });
+  buttons.push({ label: 'Keep note', value: 'ok', kind: 'primary' });
+  return showDialog({
+    title, body, buttons, cancelValue: null, className: 'note-dialog',
+    onOpen: ({ box, close }) => {
+      const ok = box.querySelector('button[data-value="ok"]');
+      const sync = () => { ok.disabled = !f.update(); };
+      f.input.addEventListener('input', sync);
+      sync();
+      f.input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !ok.disabled) { e.preventDefault(); close('ok'); } });
+      f.input.focus();
+    },
+  }).then((v) => (v === 'ok' ? cleanNote(f.input.value) : v === 'remove' ? '' : null));
+}
+
+/**
+ * The start and end of an annotation in seconds, and its note when `note` is given (a string):
+ * resolves with [start, end] (or [start, end, note]), or null when cancelled.
+ */
+export function editTimes({ start, end, sfreq, duration, note = null }) {
   const digits = Math.max(3, Math.ceil(Math.log10(sfreq)));
   const step = (1 / sfreq).toFixed(digits);
   const a = h('input.field', { type: 'number', step, min: '0', max: String(duration), value: start.toFixed(digits), id: 'times-start', name: 'start' });
   const b = h('input.field', { type: 'number', step, min: '0', max: String(duration), value: end.toFixed(digits), id: 'times-end', name: 'end' });
   const msg = h('p.caption');
+  const nf = typeof note === 'string' ? noteField(note, 'times-note') : null;
   let ok = null;
   const check = () => {
     const s = Number(a.value);
@@ -362,24 +407,26 @@ export function editTimes({ start, end, sfreq, duration }) {
     else if (e <= s) problem = 'The end must come after the start.';
     msg.textContent = problem || `Duration ${(e - s).toFixed(3)} s. Times are rounded to the nearest sample (${sfreq} per second).`;
     msg.classList.toggle('error', Boolean(problem));
-    if (ok) ok.disabled = Boolean(problem);
+    if (ok) ok.disabled = Boolean(problem) || (nf ? !nf.update() : false);
   };
   a.addEventListener('input', check);
   b.addEventListener('input', check);
+  if (nf) nf.input.addEventListener('input', check);
   const body = h('div.form', {},
     h('label.form-row', { for: 'times-start' }, h('span', {}, 'Start (s)'), a),
-    h('label.form-row', { for: 'times-end' }, h('span', {}, 'End (s)'), b), msg);
+    h('label.form-row', { for: 'times-end' }, h('span', {}, 'End (s)'), b), msg,
+    nf ? h('label.form-row', { for: 'times-note' }, h('span', {}, 'Note (optional)'), nf.input) : null, nf ? nf.count : null);
   return showDialog({
     title: 'Edit times', body,
     buttons: [{ label: 'Cancel', value: null }, { label: 'OK', value: 'ok', kind: 'primary' }], cancelValue: null,
     onOpen: ({ box, close }) => {
       ok = box.querySelector('button[data-value="ok"]');
       check();
-      for (const f of [a, b]) f.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !ok.disabled) { e.preventDefault(); close('ok'); } });
+      for (const f of [a, b, ...(nf ? [nf.input] : [])]) f.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !ok.disabled) { e.preventDefault(); close('ok'); } });
       a.focus();
       a.select();
     },
-  }).then((v) => (v === 'ok' ? [Number(a.value), Number(b.value)] : null));
+  }).then((v) => (v !== 'ok' ? null : nf ? [Number(a.value), Number(b.value), cleanNote(nf.input.value)] : [Number(a.value), Number(b.value)]));
 }
 
 /** A small swatch-and-name element for a type. */
