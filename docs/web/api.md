@@ -111,7 +111,8 @@ password.
     "study_id": "…", "name": "…",
     "filters": {"highpass_enabled": true, "highpass_hz": 1.0, "notch_enabled": true, "notch_hz": 50.0,
                 "notch_harmonics": false, "locked": false},
-    "display": {"duration_s": 10.0, "n_channels": 32, "scalings": {"eeg": 5e-05, "…": 0.0}},
+    "display": {"duration_s": 10.0, "n_channels": 32, "scalings": {"eeg": 5e-05, "…": 0.0},
+                "channel_colours": "off" | "region" | "side" | "type"},     // the study's default
     "annotation": {"min_duration_samples": 1, "quick_labels": ["Eye-blink-artifact", "…"],
                    "break_reminder_minutes": 50, "idle_pause_minutes": 3, "coverage_check": "warn" | "off",
                    "allow_revisions": true},

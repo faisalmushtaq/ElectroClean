@@ -346,6 +346,64 @@ and a style shown on hover would stay on a tapped control, so hover styles apply
 pointer can hover. The end-to-end tests run in WebKit, Safari's engine, as well as in Chromium, and
 `k_ipad.e2e.mjs` checks the touch gestures, the layouts and the file pickers.
 
+## Recordings from cloud links, and copies kept on the device (28 October 2026)
+
+The project lead asked for recordings to open straight from private Dropbox and OneDrive links, so
+that the study need not hold or send the data, and for a way to keep downloaded recordings on the
+device and remove them easily when space is short. The browser fetches the file itself from the
+service, without cookies, referrer or custom headers, and gives it to the code that opens files
+chosen on the computer, so the fingerprint check is the same. Dropbox's share links are rewritten to
+`dl.dropboxusercontent.com` with `dl=1`; checked in October 2026 with curl, that host answers a file
+request with `Access-Control-Allow-Origin: *`, exposes `Content-Disposition` and `Content-Range`, and
+answers 403 and 404 with the same header, so the page can say why a link failed, while
+`www.dropbox.com` only redirects without it. Dropbox's staff describe this host on its forum as
+working but undocumented, so the page always offers the fallback of downloading the file and
+choosing it. OneDrive links go through the shares API as Microsoft documents its encoding; its
+answers echo the page's origin in `Access-Control-Allow-Origin`, but no public OneDrive link was at
+hand to follow a whole download, and Microsoft documents that work and school accounts need signing
+in, so OneDrive is offered with the same fallback. Google Drive does not let other pages read its
+files, and its links go straight to the fallback.
+
+Share links are secrets: whoever has one can read the file. They are therefore never stored, not
+even as recently used links, never sent to the study and never written to the interaction log; the
+log records the service, the number of files and their size. Copies kept on the device hold the
+files and their names only, filed under the study, the annotator and the fingerprint, so that a
+shared computer does not mix people's copies, and a copy's fingerprint is checked again each time it
+opens. The Origin Private File System is used where the page can write to it (Safari only from
+version 26, according to MDN's compatibility data), and IndexedDB elsewhere. Links are kept by
+default, since downloading again is what the lead wanted to avoid, and files chosen on the computer
+only on request, since they are already there. Signing out offers removal with keeping as the
+default, which suits an annotator's own device, and the documentation advises removal on shared
+computers. A copy is removed for a finished recording only after Save and Finish has saved and
+verified the results, and only when none of the annotator's assignments still needs the recording.
+
+## Channels coloured by group (29 October 2026)
+
+The project lead asked for channels to be coloured by group, following other EEG viewers, without
+the colours suggesting a bad channel. MNE-Python's browser colours traces by channel type (EEG and
+EOG black, ECG magenta) and draws bad channels in light grey, its `make_1020_channel_selections`
+groups 10-20 names into left (odd numbers), midline (z) and right (even numbers), and NeuroScope
+lets users colour channels by anatomical group; no common clinical convention for hemisphere colours
+was found. ElectroClean therefore offers region, side and type, with the grouping the channel
+chooser already used, and keeps the meanings the EEG already has: bad channels stay grey with
+"(bad)" after their name, selected channels stay pink, the experimental events stay teal, and the
+ink-blue accent still marks the channel name under the pointer.
+
+The palette had to be dark (4.5:1 on white, so that a 1-pixel trace stays readable), calm (no red,
+orange or amber, which read as warnings, no pink, which marks selection, no teal and no grey) and
+separable for people with red-green colour blindness. Measured with the palette checks of the design
+work (OKLab distances under the Machado, Oliveira and Fernandes simulation of protanopia and
+deuteranopia), only four hues meet all of these at once: blue `#4360E6`, green `#4A7D23`, violet
+`#74209C` and mauve `#90609A`, each at least 15 apart with full colour vision and 12.8 apart under
+simulation, every pair. A fifth (a brown, a petrol blue or an olive) came too close to the warning
+text, the events' teal or the green. Regions that touch on the scalp therefore never share a colour,
+and frontal and occipital, at opposite ends of the head, share blue; the montage's order tells them
+apart. Sides use blue and green, so that left and right differ in hue for everyone, and the midline
+stays black. A montage that is not named by the 10-20 or 10-10 system (fewer than 60% of its EEG
+channels, the chooser's rule) is not coloured by region or side, since BioSemi's C1 to C32 are a
+bank of electrodes rather than central sites. `web_tests/unit/ui_channel_colours.test.mjs` checks
+the contrast, the hues, the distances from the reserved colours and the separations.
+
 ## Revisions and game elements (28 October 2026)
 
 Annotators asked to return to recordings they had finished and correct them. A revision is a new

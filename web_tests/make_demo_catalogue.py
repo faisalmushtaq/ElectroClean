@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
+DISPLAY_KEYS = ('duration_s', 'n_channels', 'channel_colours')
 sys.path.insert(0, str(REPO))
 
 from electroclean.app.annotations.labels import default_catalogue  # noqa: E402
@@ -36,7 +37,7 @@ def main() -> int:
         f"export const DEFAULT_SCALINGS = {json.dumps(settings['display']['scalings'])};\n\n"
         f"export const DEFAULT_HIDE = {json.dumps(settings['channels']['hide'])};\n\n"
         f"export const DEFAULT_FILTERS = {json.dumps(settings['filters'])};\n\n"
-        f"export const DEFAULT_DISPLAY = {json.dumps({k: settings['display'][k] for k in ('duration_s', 'n_channels')})};\n\n"
+        f"export const DEFAULT_DISPLAY = {json.dumps({k: settings['display'][k] for k in DISPLAY_KEYS})};\n\n"
         f"export const DEFAULT_LOGGING = {json.dumps(settings.get('logging', {}))};\n\n"
         "// Pauses, break reminders and the check of what has been viewed (annotation block).\n"
         f"export const DEFAULT_ANNOTATION = {json.dumps({k: settings['annotation'][k] for k in COMFORT_KEYS})};\n",

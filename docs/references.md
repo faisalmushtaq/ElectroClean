@@ -44,6 +44,41 @@ Brodbeck, C., Goj, R., Jas, M., Brooks, T., Parkkonen, L., & Hämäläinen, M.
 (2013). MEG and EEG data analysis with MNE-Python. *Frontiers in Neuroscience*,
 7, 267. https://doi.org/10.3389/fnins.2013.00267
 
+## Web platform and cloud services
+
+Microsoft. (2025). Access shared items (Microsoft Graph v1.0). Microsoft Learn.
+https://learn.microsoft.com/en-us/graph/api/shares-get?view=graph-rest-1.0
+(how a sharing URL is encoded as `u!` and unpadded base64url; anonymous access
+does not work for OneDrive for Business and SharePoint)
+
+Microsoft. (2025). Download driveItem content (Microsoft Graph v1.0). Microsoft
+Learn. https://learn.microsoft.com/en-us/graph/api/driveitem-get-content?view=graph-rest-1.0
+(the `/content` request answers with a redirect to a pre-authenticated
+download address, which a request that needs a CORS preflight cannot follow)
+
+MDN contributors. (2026). FileSystemFileHandle: createWritable() method; and
+the browser compatibility data of `@mdn/browser-compat-data` 8.1.7.
+https://developer.mozilla.org/en-US/docs/Web/API/FileSystemFileHandle/createWritable
+(writing from the page arrived in Safari and Safari on iOS 26;
+`StorageManager.getDirectory`, `FileSystemFileHandle.getFile` and
+`createSyncAccessHandle`, the last only in workers, in 15.2;
+`StorageManager.estimate` in 17)
+
+MNE-Python developers. (2026). `mne.channels.make_1020_channel_selections` and
+`mne.viz.plot_raw` (MNE 1.13). https://mne.tools/stable/generated/mne.channels.make_1020_channel_selections.html
+and https://mne.tools/stable/generated/mne.viz.plot_raw.html (10-20 names
+grouped as left for odd numbers, right for even numbers and midline for z; the
+browser's trace colours by channel type, with bad channels in light grey)
+
+NeuroScope, part of the NDManager suite. User manual, NeuroScope page, Channel
+Colors. https://ndmanager.sourceforge.net/UserManual/neuroscope.html (channels
+coloured by anatomical group, by spike group or one by one)
+
+Machado, G. M., Oliveira, M. M., & Fernandes, L. A. F. (2009). A
+physiologically-based model for simulation of color vision deficiency. *IEEE
+Transactions on Visualization and Computer Graphics*, 15(6), 1291–1298.
+https://doi.org/10.1109/TVCG.2009.113
+
 ## Filtering
 
 Widmann, A., Schröger, E., & Maess, B. (2015). Digital filter design for

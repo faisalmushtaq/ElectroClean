@@ -127,6 +127,68 @@ the recording, the same channels, amount of time and trace size, and the parts y
 viewed. A short line at the top of the Annotations tab welcomes you back
 with where you were, the annotations kept and the time worked so far.
 
+## Opening a recording from a link
+
+Your study team may keep the recordings in Dropbox or OneDrive and send you a link to each one
+instead of the file. Paste the link into Open from a link, under the place where you drop files,
+and press Open the link. For a BrainVision recording paste the links of its three files, one per
+line. The page fetches the file straight from Dropbox or OneDrive into this browser, showing how
+much of it has arrived, and then reads it, checks its fingerprint and opens it exactly as if you
+had chosen it on your computer. The file never passes through the study, and the study never sees
+the link: the link is not stored, not sent anywhere but to the service that holds the file, and
+not written to the interaction log.
+
+To share a file from Dropbox, choose Share on the file itself (not on its folder), make sure the
+link is for anyone who has it, and choose Copy link. In OneDrive, choose Share, then Anyone with the
+link can view, and copy the link. Links to other web addresses work too when the server that holds
+the file allows web pages to read it. Treat a share link as you would the file: anyone who has it
+can download the recording until its owner switches the link off, so send it only to the person
+who annotates the recording and switch it off when the study no longer needs it.
+
+Some links cannot be read by a web page. Google Drive never allows it, OneDrive for work or
+school (SharePoint) usually does not, and a link that is not shared with everyone, has expired or
+points to a folder fails too. ElectroClean then says what went wrong in plain words and offers
+the next step in the same place: Download the file opens the link in a new tab, where your browser
+downloads the file, and then choose the downloaded file opens the usual file chooser so that you
+can pick it from your Downloads folder (on an iPad, Downloads in the Files app). ElectroClean
+cannot reach your Downloads folder, so delete the downloaded file there yourself when you have
+finished with it: in the Files app on an iPad, press and hold the file and choose Delete; on a
+Mac, drag it from Downloads in the Finder to the Bin; in Windows, select it in File Explorer and
+press Delete.
+
+## Recordings kept on this device
+
+A recording opened from a link is kept on the device, in this browser's own storage for
+ElectroClean, so that it opens again without downloading: the next time you open that recording,
+ElectroClean finds the copy, checks its fingerprint as it does for any file, and opens it straight
+away. Untick Keep a copy on this device under the link field if you would rather download it each
+time. Files you choose on your computer are already on it and are not copied, unless you tick Also
+keep files I choose here on this device (useful on an iPad, where the Files app may not keep a
+downloaded file to hand). Each copy is filed under your study and your sign-in, so people who share a
+computer never see each other's copies, and only the files themselves are kept: never the link they
+came from, because a link works as a password for the file. In a private window, and in browsers
+that keep nothing for a site, the tick boxes are replaced by a sentence saying that this browser
+cannot keep recordings, and recordings open from the link or the computer each time.
+
+The home page says how many recordings are kept and how much space they take, with Manage, and the
+page that opens recordings has a button, Recordings on this device…; both show the kept recordings with their
+sizes and whether you have finished them, the space this site uses and how much more the browser
+allows, and the ways to free space: Remove next to each recording, Remove finished recordings, which
+says how much it frees before it does so, and Remove all. Tick Remove a recording from this device
+when I finish it to have each copy removed once Save and Finish has saved your work. Removing a copy
+never touches your annotations, drafts or results, which the study keeps. When the device is full,
+the recording still opens, from memory, and ElectroClean offers to remove the recordings you have
+finished. When the first recording is kept, ElectroClean asks the browser to keep the site's storage
+even when space runs low (some browsers ask you, others decide for themselves); without that, a
+browser short of space may clear the copies, and they are then downloaded again from the link.
+
+When you sign out with recordings kept, ElectroClean asks whether to keep them or remove them.
+Keeping them is the default, for your own device; on a computer that others use, remove them. The
+copies also go when you clear this site's data in the browser's settings. Files you downloaded
+yourself, with Download the file or in any other way, are in your Downloads folder, which
+ElectroClean cannot reach: delete those in the Files app, the Finder or File Explorer as described
+above.
+
 ## The annotation view
 
 The EEG fills most of the window, one channel per row with its name on the left, the time along the
@@ -197,6 +259,19 @@ Home, End and Page keys, use fn with the arrow keys.
 The Recording tab holds the viewing options: the 1 Hz high-pass filter and the notch filter for
 mains interference (50 Hz in the UK and Europe, 60 Hz in North America). They change only what you
 see; the file is never changed. Some studies fix these settings, and the tab then says so.
+
+Colour channels by, in the same place, colours each channel's trace and name by its group, which
+makes it easier to keep track of where a channel sits in a dense montage. By region, frontal
+channels are blue, central green, temporal violet, parietal mauve and occipital blue again (the two
+are at opposite ends of the head, and regions that touch never share a colour); by side, channels
+on the left (odd numbers) are blue, those on the right (even numbers) green, and the midline (z)
+stays black; by type, EOG is blue, ECG green, EMG violet and other channels mauve, and the EEG stays
+black. A small legend under the choice says what each colour means and how many channels have it.
+The colours only tell groups apart: a bad channel stays grey and is labelled "(bad)", the channels
+you select stay pink, and no colour stands for a problem. Regions and sides follow the 10-20 and
+10-10 names; a montage named otherwise, such as BioSemi's A1 to D32, stays black by region and side.
+ElectroClean remembers your choice in this browser; until you choose, the study's default applies
+(none, unless the study team set one).
 
 ## Seeing the whole recording
 
@@ -359,5 +434,7 @@ results), the page says so.
 
 If the page says the study does not answer, check your internet connection and try again; if it
 keeps happening, tell your study team. If a file is not recognised although it should be, make sure
-you chose the study's copy of the recording and, for BrainVision, all three of its files. If your
+you chose the study's copy of the recording and, for BrainVision, all three of its files. If a link
+does not open, download the file with the button ElectroClean offers and choose it, or ask your
+study team for a link that anyone with it can open. If your
 sign-in has ended, sign in again: your unsaved work is still in the browser.

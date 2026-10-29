@@ -7,6 +7,7 @@ import { appHeader } from './common.js';
 import { ask } from '../ui/dialog.js';
 import { formatHms, local } from '../util.js';
 import { quizCard } from '../training/quiz.js';
+import { deviceHomeLine } from './device.js';
 import { recordingsCard } from './home_list.js';
 import { gameCards } from './home_games.js';
 import { localDraft } from '../annotate/session.js';
@@ -96,8 +97,10 @@ export function homeView(app) {
         : [h('h2', {}, items.length ? 'All done' : 'Nothing to do yet'),
           h('p.success', {}, items.length ? `You have finished all ${items.length} of your recordings. Thank you.` : 'No recordings are assigned to you at the moment.')]);
 
-  // The list of recordings, with its tabs, history, search and pages (home_list.js).
+  // The list of recordings, with its tabs, history, search and pages (home_list.js), and the
+  // recordings kept on this device under it (device.js).
   const list = recordingsCard(app);
+  list.append(deviceHomeLine(app));
 
   let demo = null;
   if (b && b.isDemo) {

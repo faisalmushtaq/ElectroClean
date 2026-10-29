@@ -24,6 +24,7 @@ import { channelsText, clamp, formatHms, local, readableTextColour, UNDO_HINT, C
 import { isTyping } from '../ui/dom.js';
 import { displayCode } from '../catalogue.js';
 import { icon } from '../views/common.js';
+import { CHANNEL_COLOUR_MODES, MODE_TEXT as COLOUR_MODE_TEXT, channelColours, legendOf, normaliseMode } from '../viewer/channel_colours.js';
 import { BREAK_MIN_S, HIDDEN_PAUSE_MS, SNOOZE_S, idleDue, todayKey } from './clock.js';
 import * as cov from '../viewer/coverage.js';
 import { NAME_SIZES, PANEL_TEXT, TRACE_WIDTHS, loadComfort, saveComfort } from '../ui/comfort.js';
@@ -139,6 +140,7 @@ export class Workspace {
       this.viewer.setView({ startS: s.view.start_s || 0, durationS: s.view.duration_s || 10, firstChannel: s.view.first_channel || 0,
         nChannels: s.view.n_channels || 32, scaleFactor: s.view.scale_factor || 1 }, 'restore');
     }
+    this._applyChannelColours();
     this._syncViewState();
     this.viewer.onView = (v, cause) => {
       this._syncViewState(); this._logView();
@@ -392,7 +394,41 @@ export class Workspace {
       h('div.opt', {}, h('label', {}, hpOn, ` Apply ${hpHz} Hz high-pass filter (recommended)`)),
       h('div.opt', {}, h('label', {}, hpOff, ' No high-pass filter')),
       h('div.opt', {}, h('label', {}, notch, ' Apply notch filter'), ' ', h('label', {}, n50, ' 50 Hz (UK, Europe)'), ' ', h('label', {}, n60, ' 60 Hz (North America)')),
-      h('div.opt', {}, h('label', {}, harm, ' Also remove harmonics (100, 150 Hz … or 120, 180 Hz …)')));
+      h('div.opt', {}, h('label', {}, harm, ' Also remove harmonics (100, 150 Hz … or 120, 180 Hz …)')),
+      this._channelColourOption());
+  }
+
+  /** "Colour channels by" (js/viewer/channel_colours.js), remembered for the annotator in this browser. */
+  _channelColourOption() {
+    const s = this.s;
+    const study = (s.me && s.me.study) || {};
+    const key = `electroclean.channel_colours|${study.study_id || ''}|${(s.me && s.me.annotator_id) || ''}`;
+    this.channelColourMode = normaliseMode(local.get(key, null) || (study.display && study.display.channel_colours));
+    const select = h('select.field', { id: 'channel-colours', name: 'channel-colours', 'data-log': 'channel-colours' },
+      CHANNEL_COLOUR_MODES.map((m) => h('option', { value: m }, COLOUR_MODE_TEXT[m])));
+    select.value = this.channelColourMode;
+    const legend = h('ul.channel-legend', { 'aria-label': 'What the colours mean' });
+    const show = () => {
+      clear(legend);
+      const items = legendOf(s.channels, this.channelColourMode);
+      legend.hidden = !items.length;
+      legend.append(...items.map((it) => h('li', {}, h('span.legend-line', { style: { background: it.colour } }),
+        h('span', {}, it.group), h('span.caption', {}, String(it.count)))));
+    };
+    select.addEventListener('change', () => {
+      this.channelColourMode = normaliseMode(select.value);
+      local.set(key, this.channelColourMode);
+      this._applyChannelColours();
+      show();
+      logger.event('state', { channel_colours: this.channelColourMode, via: logger.via() });
+    });
+    show();
+    return h('div.opt.channel-colours', {}, h('label', { for: 'channel-colours' }, 'Colour channels by'), select,
+      h('p.caption.legend-note', {}, 'Colours show groups only. Bad channels stay grey.'), legend);
+  }
+
+  _applyChannelColours() {
+    if (this.viewer) this.viewer.setChannelColours(channelColours(this.s.channels, this.channelColourMode));
   }
 
   _coverageBlock() {

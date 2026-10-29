@@ -4,6 +4,8 @@
 import { h, clear } from '../ui/dom.js';
 import { appHeader, icon } from './common.js';
 import { CAN_CHOOSE_FOLDER, acceptFiles } from '../util.js';
+import { linkPanel } from './links_panel.js';
+import { deviceRow, keepLinkCheck, keptCopy } from './device.js';
 
 const FORMAT_HINT = {
   edf: 'Choose the .edf file.',
@@ -55,6 +57,8 @@ export class OpenView {
       const files = [...(e.dataTransfer ? e.dataTransfer.files : [])];
       if (files.length) this.handle(files);
     });
+    this.device = deviceRow(app);
+    this.links = this.linkSection();
     this.steps = h('ol.steps', { hidden: true, 'aria-live': 'polite' });
     this.result = h('div.result');
     const name = expected ? expected.file_name : null;
@@ -75,11 +79,28 @@ export class OpenView {
         this.revise ? h('p.note', {}, 'You finished this recording before. It opens with your latest saved annotations; submitting the revision saves a new version and keeps the earlier ones.') : null,
         h('p.subtitle', {}, 'The recording is read here, in your browser, and is never uploaded. Only its fingerprint (a checksum of the file) is sent to the study, to recognise it.'),
         h('p', {}, FORMAT_HINT[format] || 'Choose an EDF or BDF file, or the .vhdr, .vmrk and .eeg files of a BrainVision recording (or their folder).'),
-        h('section.card', {}, this.drop, this.steps, this.result),
+        h('section.card', {}, this.drop, this.device.el, this.links.el, this.steps, this.result),
         example));
+    if (expected) this.openKeptCopy(expected.recording_id);
   }
 
-  async handle(files, fromFolder = false) {
+  /** "Open from a link" (js/views/links_panel.js): the fetched files take the same path as chosen ones. */
+  linkSection() {
+    const keep = keepLinkCheck(this.app);
+    return linkPanel({ onFiles: (files) => this.handle(files, false, { kind: 'link', keep: Boolean(keep && keep.box.checked) }),
+      chooseFile: () => this.fileInput.click(), extra: keep ? keep.el : null });
+  }
+
+  /** A copy of the expected recording kept on this device (js/views/device.js) opens by itself. */
+  async openKeptCopy(recordingId) {
+    const got = await keptCopy(this.app, recordingId);
+    if (!got || this.app.openView !== this || this.app.route !== 'open') return;
+    if (got.problem) { this.showMessage(got.problem, [this.chooseAgainButton()]); return; }
+    this.handle(got.files, false, { kind: 'device', keep: false, sha256: got.meta.sha256 });
+  }
+
+  async handle(files, fromFolder = false, source = null) {
+    source = source || { kind: 'chosen', keep: Boolean(this.device.box && this.device.box.checked) };
     clear(this.result);
     let chosen = files;
     if (fromFolder || files.length > 3) {
@@ -90,7 +111,7 @@ export class OpenView {
       }
       if (!chosen.length) { this.showProblem('There is no EDF, BDF or BrainVision recording in this folder.'); return; }
     }
-    this.app.processFiles(chosen, this);
+    this.app.processFiles(chosen, this, source);
   }
 
   // progress

@@ -105,6 +105,7 @@ def test_sign_in_tokens_and_sign_out(client: TestClient, app) -> None:
     me = api.ok("get", "/me")
     assert me["annotator_id"] == "A01" and me["role"] == "annotator"
     assert me["study"]["filters"]["notch_hz"] == 50.0 and me["study"]["logging_notice"]
+    assert me["study"]["display"]["channel_colours"] == "off"  # the study's default for colouring channels
     assert len(me["catalogue"]["labels"]) == 29 and me["programme"] is None
     # only a hash of the token is kept
     db = app.state.store.db

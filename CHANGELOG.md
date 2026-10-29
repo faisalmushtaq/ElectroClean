@@ -5,6 +5,43 @@ Each section below describes the changes in one version of ElectroClean;
 
 ## Unreleased
 
+Annotators can open a recording from a Dropbox or OneDrive link (or any web
+address that lets web pages read its file): Open from a link, on the page
+that opens recordings, takes one link per file, turns share links into the
+addresses their files are downloaded from, fetches the file straight from the
+service with its progress, and opens it as if it had been chosen on the
+computer, with the same fingerprint check. The study never receives the file
+or the link, and the link is neither stored nor logged. When a service does
+not let web pages read the file (Google Drive, most work and school OneDrive
+links, links that are not public), the page says why in plain words and
+offers the next step: download the file in a new tab, then choose it.
+
+Recordings can be kept on the device, in the browser's own storage for the
+site (the Origin Private File System, or IndexedDB where the page cannot write
+files there), so that they open again without downloading. A recording opened
+from a link is kept unless the annotator unticks it, files chosen on the
+computer only when they ask, and each copy is filed under the study, the
+annotator and the recording's fingerprint, which is checked again whenever the
+copy is opened; the link is never kept. Recordings on this device, reached
+from a line on the home page and from the page that opens recordings, lists
+the copies with their sizes and whether they are finished, shows the space
+used and available, and removes one, the finished ones or all of them; a
+setting removes each recording when it is finished, after Save and Finish has
+saved it. A full device leaves the recording open from memory and offers to
+remove finished recordings, signing out offers to remove the copies, and the
+interaction log records what was kept and removed by size and count only.
+
+Channels can be coloured by group: Colour channels by, in the Recording tab,
+colours each channel's trace and name by its region (frontal, central,
+temporal, parietal, occipital), its side (left, midline, right) or its type
+(EEG, EOG, ECG, EMG, other), with a legend, using the grouping of the channel
+chooser. The four colours are dark enough for 1-pixel traces on white, stay
+apart for people with red-green colour blindness, and avoid red, orange, pink,
+teal and grey, so that bad channels keep their grey and no colour reads as a
+warning. The choice is remembered for each annotator in their browser, and a
+study can set the starting choice with the new setting
+`display.channel_colours`.
+
 ElectroClean now runs in the web browser only, and the desktop application
 has been removed. Annotators open the browser application from a link, sign
 in, and open the recordings they were given from their own computer; the page

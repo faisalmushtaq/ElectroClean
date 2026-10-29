@@ -15,6 +15,7 @@ import { displayChannels } from '../annotate/session.js';
 import { logger } from '../log/logger.js';
 import { DEFAULT_SCALINGS } from '../api/demo_catalogue.js';
 import { CAN_CHOOSE_FOLDER, acceptFiles } from '../util.js';
+import { linkPanel } from '../views/links_panel.js';
 
 /** The answer for a segment without an artifact (electroclean.training.reference.NONE_OPTION). */
 export const NONE_OPTION = 'No artifact / none of these';
@@ -316,8 +317,13 @@ export class QuizView {
       problems.length ? h('div.banner', { role: 'alert' }, problems.map((p) => h('p', {}, p))) : null,
       h('section.card', {}, h('h2', {}, needed.length === 1 ? 'The recording of this quiz' : 'The recordings of this quiz'),
         h('p.caption', {}, 'For a BrainVision recording choose its .vhdr, .vmrk and .eeg files together, or the folder that holds them. A folder may hold all of them.'),
-        list, drop, this.steps),
+        list, drop, this._linkPanel(item, fileInput), this.steps),
       example));
+  }
+
+  /** "Open from a link" (js/views/links_panel.js) for the recording needed now. */
+  _linkPanel(item, fileInput) {
+    return linkPanel({ onFiles: (files) => this._openFiles(files, item), chooseFile: () => fileInput.click() }).el;
   }
 
   _step(key, text, state = 'working') {

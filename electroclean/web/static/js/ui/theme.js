@@ -30,6 +30,11 @@ export const COLOURS = Object.freeze({
   trace_bad: '#A8A6A2',
   grid: '#EFECE7',
   hatch: '#BDB8B0',
+  // channels coloured by group (js/viewer/channel_colours.js): dark enough for 1-pixel traces
+  group_blue: '#4360E6',
+  group_green: '#4A7D23',
+  group_violet: '#74209C',
+  group_mauve: '#90609A',
 });
 
 // Labels, channel names and figures on the canvas are set in the application's one typeface.
