@@ -28,8 +28,8 @@ CHANNEL_TYPES = ("eeg", "eog", "ecg", "emg", "misc", "stim", "resp", "bio", "gsr
 FILTER_METHODS = ("fir", "iir")
 NOTCH_FREQUENCIES = (50.0, 60.0)
 COVERAGE_CHECKS = ("warn", "off")
-#: annotation.confidence: "optional" (annotators may give a confidence when they wish; new marks have none)
-#: or "every_mark" (every new mark starts as definite). The first design's "off" and "on" are read as these.
+#: annotation.confidence: "optional" (annotators rate a mark from 1 to 5 when they wish) or "every_mark" (they
+#: are asked to rate each new mark; no mark starts with a rating). "off" and "on" are read as these.
 CONFIDENCE_SETTINGS = ("optional", "every_mark")
 _CONFIDENCE_ALIASES = {"off": "optional", "on": "every_mark"}
 
@@ -328,9 +328,8 @@ class Settings:
             raise SettingsError('annotation.coverage_check must be "warn" (list the parts not yet viewed before '
                                 'Save and Finish) or "off"')
         if self.confidence not in CONFIDENCE_SETTINGS:
-            raise SettingsError('annotation.confidence must be "optional" (annotators may say how sure they are of a '
-                                'mark when they wish) or "every_mark" (every mark has a confidence, starting as '
-                                'definite)')
+            raise SettingsError('annotation.confidence must be "optional" (annotators rate their confidence in a '
+                                'mark when they wish) or "every_mark" (annotators are asked to rate each new mark)')
         if not 0 <= self.logging_pointer_hz <= 60:
             raise SettingsError("logging.pointer_hz must be between 0 (no pointer samples) and 60")
         if not 5 <= self.logging_idle_after_s <= 3600:

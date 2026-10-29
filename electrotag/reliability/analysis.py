@@ -24,6 +24,7 @@ from electrotag.app.io.atomic import atomic_write_bytes, atomic_write_text
 from electrotag.hints import unknown_names
 from electrotag.reliability.confidence import (
     BY_ANNOTATOR_COLUMNS,
+    CALIBRATION_COLUMNS,
     SENSITIVITY_COLUMNS,
     confidence_measure,
     dataset_setting,
@@ -75,6 +76,7 @@ TABLE_COLUMNS: dict[str, list[str]] = {
     "confusion_time_weighted": ["rater_1", "rater_2", "label_rater_1", "label_rater_2", "seconds"],
     "confidence_by_annotator": BY_ANNOTATOR_COLUMNS,
     "confidence_sensitivity": SENSITIVITY_COLUMNS,
+    "confidence_calibration": CALIBRATION_COLUMNS,
 }
 
 RESULT_FILES = ("analysis_settings.json", "agreement_report.html")

@@ -205,7 +205,7 @@ export class SettingsSection {
         reviews, showReviews,
         h('p.caption', {}, 'A review is kept as a record of its own: it never changes the saved annotations, and the agreement analyses do not use it.'),
         h('h3', {}, 'Confidence'),
-        h('p.caption', {}, 'Annotators can always say how sure they are of a mark (definite, probable or possible) with the key D, the menu or the Annotations list, and add a short note.'),
+        h('p.caption', {}, 'Annotators can always rate their confidence in a mark from 1 (not at all confident) to 5 (completely confident), with D and a number, the menu or the Annotations list, and add a short note. No mark starts with a rating.'),
         confidence,
         h('h3', {}, 'Long sessions'),
         h('p.caption', {}, 'The time worked on a recording is research data: it leaves out the time an annotator is paused.'),
@@ -230,8 +230,8 @@ export class SettingsSection {
 function confidenceChoice(value) {
   const current = value === 'every_mark' || value === 'on' ? 'every_mark' : 'optional';
   const el = radios('confidence', [
-    ['optional', 'Optional', 'A new mark has no confidence; annotators give one only when they wish. Costs nothing, and records doubt when they feel it.'],
-    ['every_mark', 'Every mark', 'Every new mark starts as definite, and annotators change it when unsure. Gives a confidence for every mark.'],
+    ['optional', 'Optional', 'Annotators rate a mark only when they wish. Costs nothing, and records confidence when they want to say it.'],
+    ['every_mark', 'Every mark', 'After each new mark annotators are asked for a rating, answered with one key or tap; Save and Finish lists the marks left unrated.'],
   ], current);
   el.setAttribute('aria-label', 'Confidence');
   return el;

@@ -1,22 +1,25 @@
-"""How sure annotators said they were, and agreement without the marks they doubted.
+"""How confident annotators said they were of their marks, and what that tells about agreement.
 
-Each annotation may carry a confidence (``definite``, ``probable`` or ``possible``; see
-``docs/design_decisions.md``). With the study setting ``annotation.confidence`` = ``"every_mark"``
-every new mark starts as definite and the annotator changes it when unsure; with ``"optional"``
-(the default) a confidence is given only when the annotator wishes, so the marks with one are a
-self-selected subset.
+Each annotation may carry a confidence rating on an ordinal 5-point Likert scale, from 1 (not at all
+confident) to 5 (completely confident); see ``docs/design_decisions.md``. With the study setting
+``annotation.confidence`` = ``"every_mark"`` annotators are asked to rate each new mark (no mark
+starts with a rating); with ``"optional"`` (the default) they rate a mark only when they wish, so
+the rated marks are a self-selected subset.
 
-Two tables are made:
+Three tables are made:
 
 ``confidence_by_annotator``
-    For each annotator, how many marks had a confidence given and how they were distributed over
-    the three levels, and how many carry a note.
+    For each annotator: how many marks were rated, the distribution over 1 to 5, the median rating,
+    and how many marks carry a note.
 ``confidence_sensitivity``
-    The definite-confidence sensitivity analysis, made only when some confidence was given: the main agreement measures
-    (positive agreement and Cohen's kappa sample by sample, all recordings pooled, and event F1 at
-    the main threshold) for all marks and again without the marks given *probable* or *possible*.
-    Marks without a confidence are kept in both, so in an optional study the second set is "all
-    marks except those the annotator doubted"; in an every-mark study it is the definite marks.
+    Made only when some mark was rated: the main agreement measures (positive agreement and Cohen's
+    kappa sample by sample, all recordings pooled, and event F1 at the main threshold) for all marks,
+    and again without the marks of low confidence (ratings 1 and 2). Unrated marks are kept in both,
+    so in an optional study the second set is "all marks except those the annotator doubted".
+``confidence_calibration``
+    For each annotator and rating (and all annotators together): the share of their marks matched by
+    a mark of the same type from at least one other annotator of the recording (time only, at the
+    main threshold). If confident marks are matched more often, the ratings carry information.
 
 Notes are research content: they are listed with each annotation in ``events_matched`` and
 ``events_unmatched`` and take part in none of the statistics.
@@ -25,25 +28,30 @@ Notes are research content: they are listed with each annotation in ``events_mat
 from __future__ import annotations
 
 import dataclasses
+import statistics
 from typing import Any
 
-from electrotag.app.annotations.model import CONFIDENCE_LEVELS
+from electrotag.app.annotations.model import CONFIDENCE_ANCHORS, CONFIDENCE_LEVELS
 from electrotag.reliability.config import AnalysisConfig
 from electrotag.reliability.data import AgreementDataset, RecordingGroup
-from electrotag.reliability.matching import event_agreement
+from electrotag.reliability.matching import event_agreement, events_for, match_events
 from electrotag.reliability.statistics import PairTable, pair_statistics
 from electrotag.reliability.timeresolved import categories_for, category_label_set, recording_tables
 
-#: Confidences left out of the sensitivity analysis.
-DOUBTFUL = ("probable", "possible")
+#: Ratings left out of the sensitivity analysis.
+LOW_CONFIDENCE = (1, 2)
 NOT_RECORDED = "not recorded"
+NOT_RATED = "not rated"
+ALL_ANNOTATORS = "ALL annotators"
 
-BY_ANNOTATOR_COLUMNS = ["annotator", "confidence_setting", "n_recordings", "n_annotations", "n_confidence_given",
-                        "share_confidence_given", "n_definite", "n_probable", "n_possible", "n_not_given",
-                        "share_definite", "share_probable", "share_possible", "n_with_note"]
-SENSITIVITY_COLUMNS = ["category", "channel_mode", "rater_1", "rater_2", "n_marks_all", "n_marks_without_doubtful",
-                       "positive_agreement_all", "positive_agreement_without_doubtful", "cohen_kappa_all",
-                       "cohen_kappa_without_doubtful", "f1_all", "f1_without_doubtful"]
+BY_ANNOTATOR_COLUMNS = ["annotator", "confidence_setting", "n_recordings", "n_annotations", "n_rated", "share_rated",
+                        *[f"n_rated_{lv}" for lv in CONFIDENCE_LEVELS], "n_not_rated", "median_confidence",
+                        "n_with_note"]
+SENSITIVITY_COLUMNS = ["category", "channel_mode", "rater_1", "rater_2", "n_marks_all",
+                       "n_marks_without_low_confidence", "positive_agreement_all",
+                       "positive_agreement_without_low_confidence", "cohen_kappa_all",
+                       "cohen_kappa_without_low_confidence", "f1_all", "f1_without_low_confidence"]
+CALIBRATION_COLUMNS = ["annotator", "confidence", "anchor", "n_marks", "n_matched", "share_matched"]
 
 
 def _labels(ds: AgreementDataset, cfg: AnalysisConfig) -> set[str]:
@@ -65,17 +73,18 @@ def dataset_setting(ds: AgreementDataset) -> str:
 
 
 def confidence_given(ds: AgreementDataset, cfg: AnalysisConfig | None = None) -> bool:
-    """True when at least one analysed annotation has a confidence."""
+    """True when at least one analysed annotation was rated."""
     labels = _labels(ds, cfg) if cfg is not None else None
-    return any(a.confidence for g in ds.groups.values() for d in g.docs.values() for a in d.annotations
+    return any(a.confidence is not None for g in ds.groups.values() for d in g.docs.values() for a in d.annotations
                if labels is None or a.label in labels)
 
 
-def without_doubtful(ds: AgreementDataset) -> AgreementDataset:
-    """The dataset without the annotations given probable or possible (the rest kept as they are)."""
+def without_low_confidence(ds: AgreementDataset) -> AgreementDataset:
+    """The dataset without the annotations rated 1 or 2 (the rest, unrated ones included, kept as they are)."""
     groups = {}
     for rid, g in ds.groups.items():
-        docs = {aid: dataclasses.replace(doc, annotations=[a for a in doc.annotations if a.confidence not in DOUBTFUL])
+        docs = {aid: dataclasses.replace(doc, annotations=[a for a in doc.annotations
+                                                           if a.confidence not in LOW_CONFIDENCE])
                 for aid, doc in g.docs.items()}
         groups[rid] = RecordingGroup(g.recording_id, g.timing, g.ch_names, docs, list(g.warnings))
     return AgreementDataset(groups=groups, catalogue=ds.catalogue, files=ds.files, warnings=list(ds.warnings))
@@ -93,19 +102,18 @@ def by_annotator(ds: AgreementDataset, cfg: AnalysisConfig) -> list[dict[str, An
     rows = []
     for aid, p in sorted(per.items()):
         anns = p["anns"]
-        counts = {lv: sum(1 for a in anns if a.confidence == lv) for lv in CONFIDENCE_LEVELS}
-        given = sum(counts.values())
+        ratings = [a.confidence for a in anns if a.confidence is not None]
         nan = float("nan")
         rows.append({
             "annotator": aid,
             "confidence_setting": setting_of(p["modes"]),
             "n_recordings": p["recordings"],
             "n_annotations": len(anns),
-            "n_confidence_given": given,
-            "share_confidence_given": given / len(anns) if anns else nan,
-            **{f"n_{lv}": counts[lv] for lv in CONFIDENCE_LEVELS},
-            "n_not_given": len(anns) - given,
-            **{f"share_{lv}": counts[lv] / given if given else nan for lv in CONFIDENCE_LEVELS},
+            "n_rated": len(ratings),
+            "share_rated": len(ratings) / len(anns) if anns else nan,
+            **{f"n_rated_{lv}": sum(1 for r in ratings if r == lv) for lv in CONFIDENCE_LEVELS},
+            "n_not_rated": len(anns) - len(ratings),
+            "median_confidence": float(statistics.median(ratings)) if ratings else nan,
             "n_with_note": sum(1 for a in anns if a.note),
         })
     return rows
@@ -142,10 +150,10 @@ def _f1(ds: AgreementDataset, cfg: AnalysisConfig) -> dict[tuple[str, str, str, 
 
 
 def sensitivity(ds: AgreementDataset, cfg: AnalysisConfig) -> list[dict[str, Any]]:
-    """Agreement for all marks and without those given probable or possible (empty when no confidence was given)."""
+    """Agreement for all marks and without those rated 1 or 2 (empty when no mark was rated)."""
     if not confidence_given(ds, cfg):
         return []
-    sub = without_doubtful(ds)
+    sub = without_low_confidence(ds)
     exact_all, exact_sub = _pooled_exact(ds, cfg), _pooled_exact(sub, cfg)
     f1_all, f1_sub = _f1(ds, cfg), _f1(sub, cfg)
     nan = float("nan")
@@ -158,34 +166,79 @@ def sensitivity(ds: AgreementDataset, cfg: AnalysisConfig) -> list[dict[str, Any
             continue
         rows.append({
             "category": cat, "channel_mode": mode, "rater_1": a, "rater_2": b,
-            "n_marks_all": fa.get("n_marks", 0), "n_marks_without_doubtful": fs.get("n_marks", 0),
+            "n_marks_all": fa.get("n_marks", 0), "n_marks_without_low_confidence": fs.get("n_marks", 0),
             "positive_agreement_all": ea.get("positive_agreement", nan),
-            "positive_agreement_without_doubtful": es.get("positive_agreement", nan),
-            "cohen_kappa_all": ea.get("cohen_kappa", nan), "cohen_kappa_without_doubtful": es.get("cohen_kappa", nan),
-            "f1_all": fa.get("f1", nan), "f1_without_doubtful": fs.get("f1", nan),
+            "positive_agreement_without_low_confidence": es.get("positive_agreement", nan),
+            "cohen_kappa_all": ea.get("cohen_kappa", nan),
+            "cohen_kappa_without_low_confidence": es.get("cohen_kappa", nan),
+            "f1_all": fa.get("f1", nan), "f1_without_low_confidence": fs.get("f1", nan),
         })
     return rows
 
 
+def calibration(ds: AgreementDataset, cfg: AnalysisConfig) -> list[dict[str, Any]]:
+    """For each annotator and rating, the share of their marks that another annotator also found.
+
+    A mark counts as found when, on the same recording, at least one other annotator has a mark of the
+    same type that matches it (time only, the study's matching criterion at the main threshold,
+    one-to-one within each pair). Empty when no mark was rated or no recording has two annotators."""
+    if not confidence_given(ds, cfg):
+        return []
+    labels = _labels(ds, cfg)
+    counts: dict[tuple[str, Any], list[int]] = {}
+    for g in ds.groups.values():
+        if len(g.docs) < 2:
+            continue
+        sf = g.timing.sfreq
+        for label in sorted(labels):
+            evs = {aid: events_for(doc, label, g.ch_names) for aid, doc in g.docs.items()}
+            found: dict[str, set[str]] = {aid: set() for aid in evs}
+            names = sorted(evs)
+            for i, a in enumerate(names):
+                for b in names[i + 1:]:
+                    out = match_events(evs[a], evs[b], sfreq=sf, criterion=cfg.match_criterion,
+                                       iou_threshold=cfg.primary_iou_threshold,
+                                       onset_tolerance_s=cfg.onset_tolerance_s,
+                                       offset_tolerance_s=cfg.offset_tolerance_s, require_channels=False,
+                                       min_channel_jaccard=cfg.min_channel_jaccard,
+                                       many_to_one=cfg.allow_many_to_one)
+                    for x, y in out.pairs:
+                        found[a].add(evs[a][x].annotation_id)
+                        found[b].add(evs[b][y].annotation_id)
+            for aid, events in evs.items():
+                for e in events:
+                    level = e.confidence if e.confidence is not None else NOT_RATED
+                    for who in (aid, ALL_ANNOTATORS):
+                        c = counts.setdefault((who, level), [0, 0])
+                        c[0] += 1
+                        c[1] += e.annotation_id in found[aid]
+    order = {lv: i for i, lv in enumerate([*CONFIDENCE_LEVELS, NOT_RATED])}
+    rows = []
+    for (who, level), (n, m) in sorted(counts.items(), key=lambda kv: (kv[0][0] == ALL_ANNOTATORS, kv[0][0],
+                                                                      order[kv[0][1]])):
+        rows.append({"annotator": who, "confidence": level, "anchor": CONFIDENCE_ANCHORS.get(level, ""),
+                     "n_marks": n, "n_matched": m, "share_matched": m / n if n else float("nan")})
+    return rows
+
+
 def confidence_measure(ds: AgreementDataset, cfg: AnalysisConfig) -> dict[str, list[dict[str, Any]]]:
-    return {"by_annotator": by_annotator(ds, cfg), "sensitivity": sensitivity(ds, cfg)}
+    return {"by_annotator": by_annotator(ds, cfg), "sensitivity": sensitivity(ds, cfg),
+            "calibration": calibration(ds, cfg)}
 
 
 def explanation(ds: AgreementDataset, cfg: AnalysisConfig) -> str:
     """A plain statement of what the confidence tables mean for this data (for the report and the settings)."""
     setting = dataset_setting(ds)
     if not confidence_given(ds, cfg):
-        return ("No annotation in this analysis has a confidence, so agreement is reported once, for all marks.")
-    common = ("Agreement is reported twice: for all marks, and again as definite-confidence agreement, without the "
-              "marks the annotators gave probable or possible (a sensitivity analysis). ")
+        return "No annotation in this analysis has a confidence rating, so agreement is reported once, for all marks."
+    common = ("Confidence was rated on a 5-point scale, from 1 (not at all confident) to 5 (completely confident). "
+              "Agreement is reported twice: for all marks, and again without the marks of low confidence, rated "
+              "1 or 2 (a sensitivity analysis); unrated marks are kept in both. ")
     if setting == "every_mark":
-        return common + ("In this study every new mark started as definite and annotators changed it when unsure, "
-                         "so the second set is the marks left as definite. Some annotators may rarely change the "
-                         "default; compare their distributions of confidence before reading much into the difference.")
+        return common + ("In this study annotators were asked to rate each new mark, and no mark started with a "
+                         "rating; marks left unrated are counted as not rated.")
     if setting == "optional":
-        return common + ("In this study a confidence was optional: annotators gave one only when they wished, so the "
-                         "marks with a confidence are a self-selected subset, and the confidence of a mark without one "
-                         "is unknown. Marks without a confidence are kept in both sets.")
+        return common + ("In this study ratings were optional: annotators rated a mark only when they wished, so the "
+                         "rated marks are a self-selected subset, and the confidence of an unrated mark is unknown.")
     return common + ("The files analysed come from different confidence settings (or older files that do not record "
-                     "the setting), so whether a confidence was volunteered or asked for every mark differs between "
-                     "them; marks without a confidence are kept in both sets.")
+                     "the setting), so whether ratings were volunteered or asked for differs between them.")

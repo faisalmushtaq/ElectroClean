@@ -36,7 +36,7 @@ ANNOTATION_FILE_FIELDS = {
     "(the study's annotation.confidence setting: optional or every_mark; absent before version 1.1.0).",
     "time_conventions": "How onset, duration and sample are defined.",
     "channel_convention": "Meaning of the channels list (empty = whole montage).",
-    "confidence_convention": "Meaning of each annotation's confidence (definite, probable, possible; null: not given).",
+    "confidence_convention": "Meaning of each annotation's confidence: a 5-point scale (1 to 5; null: not rated).",
     "label_catalogue": "Catalogue id, version, SHA-256 and the (value, label) pairs used.",
     "annotations": "List of annotation records (see ArtifactAnnotation.to_dict).",
 }

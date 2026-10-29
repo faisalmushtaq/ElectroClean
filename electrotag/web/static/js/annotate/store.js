@@ -5,18 +5,18 @@
 //   {annotation_id, label, onset_sample, duration_samples, channels: [...], created_at, modified_at,
 //    confidence?, note?}
 // `channels` is [] for the whole montage, otherwise channel names in recording order. `confidence`
-// ('definite', 'probable' or 'possible') and `note` (one line of at most 200 characters) are there
-// only when given (confidence.js).
+// (a rating from 1 to 5) and `note` (one line of at most 200 characters) are there only when given;
+// no mark starts with a rating (confidence.js).
 //
 // Automatic merging: when an annotation is created or changed so that it overlaps in time another
 // annotation of the same type with the same channels (both whole montage, or exactly the same
 // channels), the two become one annotation spanning both. The older one keeps its identifier, and
 // the merge is part of the same undo step. Annotations that only touch, or cover different
-// channels, stay separate. The merged annotation keeps the lowest confidence and the notes of
+// channels, stay separate. The merged annotation keeps the lowest rating and the notes of
 // both, joined with "; " (confidence.js).
 
 import { newId, nowLocalIso } from '../util.js';
-import { CONFIDENCE_LEVELS, cleanNote, joinNotes, lowerConfidence, noteProblem } from './confidence.js';
+import { cleanNote, isConfidence, joinNotes, lowerConfidence, noteProblem } from './confidence.js';
 
 export class AnnotationError extends Error {}
 
@@ -26,7 +26,7 @@ export const isGlobal = (a) => a.channels.length === 0;
 function freeze(a) {
   const out = { ...a, channels: Object.freeze([...a.channels]) };
   // A confidence or note is kept only when given, so that annotations without them stay as they were.
-  if (out.confidence) out.confidence = String(out.confidence); else delete out.confidence;
+  if (out.confidence === null || out.confidence === undefined || out.confidence === 0 || out.confidence === '') delete out.confidence;
   if (typeof out.note === 'string' && out.note.trim()) out.note = out.note.trim(); else delete out.note;
   return Object.freeze(out);
 }
@@ -50,8 +50,6 @@ export class AnnotationStore {
     this.labels = new Set(opts.labels);
     this.minDurationSamples = opts.minDurationSamples ?? 1;
     this.autoMerge = opts.autoMerge ?? true;
-    // The confidence of a new annotation: '' (none given) or 'definite' (the study's every-mark setting).
-    this.defaultConfidence = opts.defaultConfidence || '';
     this.maxHistory = opts.maxHistory ?? 2000;
     this.lastAutoMerged = 0;
     this.lastSurvivors = new Map();
@@ -120,7 +118,7 @@ export class AnnotationStore {
     if (new Set(a.channels).size !== a.channels.length) throw new AnnotationError('A channel is listed more than once');
     const unknown = a.channels.filter((c) => !this._chIndex.has(c));
     if (unknown.length) throw new AnnotationError(`Channels not in the recording: ${unknown.join(', ')}`);
-    if (a.confidence && !CONFIDENCE_LEVELS.includes(a.confidence)) throw new AnnotationError(`Unknown confidence: ${a.confidence}`);
+    if ('confidence' in a && !isConfidence(a.confidence)) throw new AnnotationError(`Confidence must be a whole number from 1 to 5, not ${a.confidence}`);
     const problem = noteProblem(a.note);
     if (problem) throw new AnnotationError(problem);
     return a;
@@ -234,13 +232,13 @@ export class AnnotationStore {
   }
 
   // ----------------------------------------------------------------- editing
-  /** Add an annotation; its confidence is the store's default unless `confidence` is given. */
+  /** Add an annotation (without a rating unless `confidence` is given: no mark starts with one). */
   add(label, onsetSample, durationSamples, channels = [], annotationId = null, { confidence = null, note = '' } = {}) {
     const stamp = nowLocalIso();
     const ann = this._check(freeze({
       annotation_id: annotationId || newId(), label, onset_sample: Math.round(onsetSample),
       duration_samples: Math.round(durationSamples), channels: this.normaliseChannels(channels),
-      created_at: stamp, modified_at: stamp, confidence: confidence ?? this.defaultConfidence, note,
+      created_at: stamp, modified_at: stamp, confidence, note,
     }));
     if (this._items.has(ann.annotation_id)) throw new AnnotationError(`Duplicate annotation id ${ann.annotation_id}`);
     const items = new Map(this._items);
@@ -254,7 +252,7 @@ export class AnnotationStore {
     return this.add(label, on, dur, channels);
   }
 
-  /** Change an annotation (a field left out stays as it is; a confidence or note of '' removes it). */
+  /** Change an annotation (a field left out stays as it is; a confidence of 0 or a note of '' removes it). */
   update(id, { label, onset_sample, duration_samples, channels, confidence, note, description } = {}) {
     const current = this.get(id);
     const changes = {};
@@ -267,7 +265,10 @@ export class AnnotationStore {
       const nc = this.normaliseChannels(channels);
       if (nc.length !== current.channels.length || nc.some((c, i) => c !== current.channels[i])) changes.channels = nc;
     }
-    if (confidence != null && confidence !== (current.confidence || '')) changes.confidence = confidence;
+    if (confidence != null) {
+      if (confidence !== 0 && !isConfidence(confidence)) throw new AnnotationError(`Confidence must be a whole number from 1 to 5, not ${confidence}`);
+      if (confidence !== (current.confidence || 0)) changes.confidence = confidence;
+    }
     if (note != null) {
       const problem = noteProblem(note);
       if (problem) throw new AnnotationError(problem);
@@ -315,20 +316,21 @@ export class AnnotationStore {
     }
   }
 
-  /** Give an annotation a confidence, or remove it with ''. */
+  /** Rate an annotation from 1 to 5, or clear its rating with null (or 0). */
   setConfidence(id, confidence) {
-    return this.update(id, { confidence: confidence || '', description: confidenceDescription(confidence) });
+    return this.update(id, { confidence: confidence || 0, description: confidenceDescription(confidence) });
   }
 
-  /** Give several annotations one confidence as one undoable step. */
+  /** Give several annotations one rating (or clear it with null) as one undoable step. */
   setConfidenceMany(ids, confidence) {
-    const level = confidence || '';
+    const level = confidence || 0;
+    if (level !== 0 && !isConfidence(level)) throw new AnnotationError(`Confidence must be a whole number from 1 to 5, not ${confidence}`);
     const items = new Map(this._items);
     const changed = [];
     const stamp = nowLocalIso();
     for (const id of [...new Set(ids)]) {
       const current = this.get(id);
-      if ((current.confidence || '') !== level) {
+      if ((current.confidence || 0) !== level) {
         items.set(id, this._check(freeze({ ...current, confidence: level, modified_at: stamp })));
         changed.push(id);
       }
@@ -400,5 +402,5 @@ export class AnnotationStore {
 
 /** How a change of confidence is described in the undo history (as in store.py). */
 export function confidenceDescription(confidence) {
-  return confidence ? `set confidence ${confidence}` : 'remove confidence';
+  return confidence ? `set confidence ${confidence}` : 'clear confidence';
 }

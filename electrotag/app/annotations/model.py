@@ -16,19 +16,29 @@ from electrotag.app.annotations.timing import RecordingTiming, TimingError
 SCHEMA_ANNOTATIONS = "electrotag.annotations"
 SCHEMA_VERSION = "1.1.0"  # 1.1.0: each annotation's confidence and note, and the study's confidence setting
 
-#: How sure the annotator is of an annotation, from most to least sure ("" when none was given).
-CONFIDENCE_LEVELS = ("definite", "probable", "possible")
-#: The study's setting ``annotation.confidence``: annotators may give a confidence when they wish
-#: ("optional", new marks have none), or every mark has one ("every_mark", new marks start as definite).
+#: How confident the annotator is of an annotation: an ordinal 5-point Likert scale with these anchors
+#: (None when no rating was given).
+CONFIDENCE_LEVELS = (1, 2, 3, 4, 5)
+CONFIDENCE_ANCHORS = {
+    1: "Not at all confident",
+    2: "Slightly confident",
+    3: "Moderately confident",
+    4: "Very confident",
+    5: "Completely confident",
+}
+#: The study's setting ``annotation.confidence``: annotators rate a mark when they wish ("optional"), or
+#: they are asked to rate every new mark ("every_mark"). No mark ever starts with a rating.
 CONFIDENCE_MODES = ("optional", "every_mark")
 #: The longest note an annotation can carry, in characters.
 MAX_NOTE_CHARS = 200
 CONFIDENCE_CONVENTION = {
-    "levels": list(CONFIDENCE_LEVELS),
-    "not_given": "null: the annotator gave no confidence (possible only when the study's setting is 'optional').",
+    "scale": "Ordinal 5-point Likert scale of how confident the annotator was that the mark is right.",
+    "levels": {str(k): v for k, v in CONFIDENCE_ANCHORS.items()},
+    "not_rated": "null: the annotator gave no rating.",
     "settings": {
-        "optional": "Confidence was volunteered: new annotations had none, and the annotator could give one.",
-        "every_mark": "Every new annotation started as 'definite', and the annotator changed it when unsure.",
+        "optional": "Ratings were volunteered: annotators rated a mark only when they wished.",
+        "every_mark": "Annotators were asked to rate each new mark (no mark started with a rating); some marks "
+                      "may still have been left unrated.",
     },
 }
 
@@ -53,17 +63,17 @@ class AnnotationError(ValueError):
     """Raised when an annotation record is invalid."""
 
 
-def confidence_rank(level: str) -> int:
-    """0 for definite, 1 probable, 2 possible; -1 when no confidence was given."""
-    return CONFIDENCE_LEVELS.index(level) if level in CONFIDENCE_LEVELS else -1
+def is_confidence(value: Any) -> bool:
+    """True for a rating of the scale: an integer from 1 to 5 (booleans are not ratings)."""
+    return isinstance(value, int) and not isinstance(value, bool) and value in CONFIDENCE_LEVELS
 
 
-def lower_confidence(levels: Any) -> str:
-    """The lowest confidence given ("" when none of them was given).
+def lower_confidence(levels: Any) -> int | None:
+    """The lowest rating given (None when none of them was rated).
 
     Used when annotations are merged: the merged annotation is only as confident as its least confident part."""
-    given = [lv for lv in levels if lv in CONFIDENCE_LEVELS]
-    return max(given, key=confidence_rank) if given else ""
+    given = [lv for lv in levels if is_confidence(lv)]
+    return min(given) if given else None
 
 
 def check_note(note: Any) -> str:
@@ -148,7 +158,7 @@ class ArtifactAnnotation:
 
     Boundaries are integer sample indices (see :mod:`timing` for the
     conventions). ``channels`` is empty for a whole-montage annotation.
-    ``confidence`` is one of :data:`CONFIDENCE_LEVELS`, or "" when none was given;
+    ``confidence`` is a rating from 1 to 5 (:data:`CONFIDENCE_ANCHORS`), or None when none was given;
     ``note`` is the annotator's optional short note ("" when there is none).
     """
 
@@ -159,7 +169,7 @@ class ArtifactAnnotation:
     channels: tuple[str, ...] = ()
     created_at: str = ""
     modified_at: str = ""
-    confidence: str = ""
+    confidence: int | None = None
     note: str = ""
 
     @property
@@ -204,7 +214,7 @@ class ArtifactAnnotation:
             "scope": self.scope,
             "created_at": self.created_at,
             "modified_at": self.modified_at,
-            "confidence": self.confidence or None,
+            "confidence": self.confidence,
             "note": self.note,
         }
 
@@ -241,7 +251,7 @@ class ArtifactAnnotation:
                 created_at=str(data.get("created_at", "")),
                 modified_at=str(data.get("modified_at", "")),
                 # Files written before version 1.1.0 have neither: no confidence given, no note.
-                confidence=str(data.get("confidence") or ""),
+                confidence=data.get("confidence"),
                 note=str(data.get("note") or ""),
             )
         except KeyError as exc:
@@ -267,10 +277,10 @@ def validate_annotation(
         raise AnnotationError(f"{ann.label} at sample {ann.onset_sample}: {exc}") from exc
     if len(set(ann.channels)) != len(ann.channels):
         raise AnnotationError(f"Annotation {ann.annotation_id} lists a channel more than once")
-    if ann.confidence and ann.confidence not in CONFIDENCE_LEVELS:
+    if ann.confidence is not None and not is_confidence(ann.confidence):
         raise AnnotationError(
-            f"Annotation {ann.annotation_id}: confidence must be one of {', '.join(CONFIDENCE_LEVELS)}, "
-            f"or none, not {ann.confidence!r}"
+            f"Annotation {ann.annotation_id}: confidence must be a whole number from 1 to 5, or none, "
+            f"not {ann.confidence!r}"
         )
     if check_note(ann.note) != ann.note:
         raise AnnotationError(f"Annotation {ann.annotation_id}: its note has spaces at either end")

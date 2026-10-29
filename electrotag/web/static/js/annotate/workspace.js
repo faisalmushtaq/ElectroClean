@@ -11,16 +11,16 @@
 // before Save and Finish; a line that welcomes the annotator back to a restored draft; the time the
 // draft was last kept; and each annotator's display comfort (ui/comfort.js).
 //
-// Each annotation may carry a confidence (definite, probable or possible; D, the menu or the
-// Annotations table) and a short note (confidence.js); the functions for them are together under
-// "confidence and notes".
+// Each annotation may carry a confidence rating on a 5-point scale (D then a digit, the menu or the
+// Annotations table; in an every-mark study the prompt opens after each new mark) and a short note
+// (confidence.js); the functions for them are together under "confidence and notes".
 
 import { h, clear } from '../ui/dom.js';
 import { showDialog, ask, inform, choose, dialogOpen } from '../ui/dialog.js';
 import { showMenu, closeMenu } from '../ui/menu.js';
 import { EegViewer } from '../viewer/viewer.js';
 import { pickType, chooseChannels, editTimes, editNote } from './dialogs.js';
-import { CONFIDENCE_TEXT, confidenceChoices, nextConfidence } from './confidence.js';
+import { CONFIDENCE_ANCHORS, CONFIDENCE_LEVELS, isConfidence } from './confidence.js';
 import { AnnotationError, endSample } from './store.js';
 import { helpHtml, KEY_HINT, REVIEW_HINT, TOUCH_HINT, TOUCH_REVIEW_HINT, TOUCH_VIEW_HINT } from './help.js';
 import { edgeHalfWidthS } from '../data/synthetic.js';
@@ -76,7 +76,7 @@ function annSummary(a, sf) {
   return { id: a.annotation_id, label: a.label, onset_s: Math.round((a.onset_sample / sf) * 1e4) / 1e4,
     offset_s: Math.round((endSample(a) / sf) * 1e4) / 1e4, channels: [...a.channels], n_channels: a.channels.length,
     // the confidence, and only the length of a note: its text is research content, never logged
-    confidence: a.confidence || null, note_length: (a.note || '').length };
+    confidence: a.confidence ?? null, note_length: (a.note || '').length };
 }
 
 export class Workspace {
@@ -1167,6 +1167,7 @@ export class Workspace {
     } else {
       this.say(`Added ${ann.label} ${span} (${where})`);
     }
+    this._afterNewMark(ann); // in an every-mark study the confidence prompt follows (its line replaces the one above)
     return ann.annotation_id;
   }
 
@@ -1607,28 +1608,144 @@ export class Workspace {
   }
 
   // ===================================================== confidence and notes
-  /** The annotations D and the table's Confidence button change: the selected ones, or the one made last. */
+  /** The annotations D and the table's control rate: the selected ones, or the one made last. */
   _confidenceTargets() {
     const ids = this.targetIds();
     if (ids.length) return ids;
     return this.lastMadeId && this.store.has(this.lastMadeId) ? [this.lastMadeId] : [];
   }
 
-  /** One press of D (or the table's button): the next confidence (confidence.js) of the selected or newest annotation. */
-  cycleConfidence() {
-    if (!this._checkEditable()) return;
-    const ids = this._confidenceTargets();
-    if (!ids.length) { this.say('Select an annotation (click it, or press N) to set its confidence with D.'); return; }
-    this.setConfidenceOf(ids, nextConfidence(this.store.get(ids[0]).confidence, this.s.confidenceMode));
+  /** True where an every-mark study asks for a rating: study recordings annotated and saved here. */
+  get _asksEveryMark() {
+    return this.s.confidenceMode === 'every_mark' && this.kind === 'annotate' && this.s.mode === 'standard' && !this.readOnly;
   }
 
+  /** D: the prompt for the selected or newest annotation, answered with a digit from 1 to 5 (0 clears). */
+  askConfidence() {
+    if (!this._checkEditable()) return;
+    const ids = this._confidenceTargets();
+    if (!ids.length) { this.say('Select an annotation (click it, or press N), then press D and a number from 1 to 5.'); return; }
+    this.startConfidencePrompt(ids, 'key');
+  }
+
+  /** In an every-mark study, the prompt opens for each new mark; carrying on without answering leaves it unrated. */
+  _afterNewMark(ann) {
+    if (this._asksEveryMark) this.startConfidencePrompt([ann.annotation_id], 'new_mark');
+  }
+
+  /**
+   * The confidence prompt: a short mode in which the keys 1 to 5 rate the annotations (and not choose a type),
+   * 0 clears and Esc cancels. It ends after the answer, Esc, any other key, or a few seconds (on a touch screen
+   * a little longer, for its bar); while rating the unrated marks before Save and Finish it waits.
+   */
+  startConfidencePrompt(ids, trigger) {
+    this._endConfidencePrompt('replaced');
+    const live = ids.filter((i) => this.store.has(i));
+    if (!live.length) return;
+    const first = this.store.get(live[0]);
+    const what = live.length === 1 ? first.label : `${live.length} annotations`;
+    const ms = trigger === 'rate_them' ? 0 : touchFirst() ? 8000 : 3000;
+    this._prompt = { ids: live, trigger, timer: ms ? setTimeout(() => this._endConfidencePrompt('timeout'), ms) : null };
+    this.say(`Confidence for ${what}: press 1–5, 0 to clear, Esc to cancel`, ms || 60000);
+    this._showConfidenceBar(what, live.length === 1 ? first.confidence : null);
+  }
+
+  _endConfidencePrompt(outcome, level = null) {
+    const p = this._prompt;
+    if (!p) return;
+    clearTimeout(p.timer);
+    this._prompt = null;
+    if (this.confBar) this.confBar.hidden = true;
+    logger.event('confidence_prompt', { trigger: p.trigger, outcome, n_annotations: p.ids.length, ...(level ? { confidence: level } : {}) });
+    if (p.trigger === 'rate_them' && outcome === 'rated') this._rateNextUnrated();
+    else if (p.trigger === 'rate_them' && outcome === 'cancelled') {
+      const left = this.store.annotations().filter((a) => !isConfidence(a.confidence)).length;
+      this.say(`Rating stopped: ${left} mark${left === 1 ? '' : 's'} still without a confidence.`);
+    }
+  }
+
+  /** The answer to the prompt: a rating from 1 to 5, or null to clear. */
+  _answerPrompt(level) {
+    const p = this._prompt;
+    if (!p) return;
+    this.setConfidenceOf(p.ids, level);
+    this._endConfidencePrompt(level ? 'rated' : 'cleared', level);
+  }
+
+  /** The keys while the prompt is open; false lets any other key end it and do what it does. */
+  _confidencePromptKey(e, handled) {
+    if (!this._prompt) return false;
+    const k = e.key;
+    if (['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(k)) return false;
+    if (/^[0-5]$/.test(k) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      handled(k === '0' ? 'Clear confidence' : `Confidence ${k}`, () => this._answerPrompt(Number(k) || null));
+      return true;
+    }
+    if (k === 'Escape') {
+      handled('Cancel confidence', () => { const walk = this._prompt.trigger === 'rate_them'; this._endConfidencePrompt('cancelled'); if (!walk) this.say('No confidence given'); });
+      return true;
+    }
+    this._endConfidencePrompt('other_input');
+    return false;
+  }
+
+  /** The prompt's small bar over the top of the EEG: 1 to 5, Clear and Later, for a finger or the mouse. */
+  _showConfidenceBar(what, current) {
+    if (!this.confBar) {
+      this.confBarLabel = h('span.conf-prompt-label');
+      this.confBarSegs = CONFIDENCE_LEVELS.map((lv) => h('button.seg', { type: 'button', 'data-level': String(lv), 'data-log': `confidence-prompt-${lv}`,
+        title: `${lv}: ${CONFIDENCE_ANCHORS[lv]}`, 'aria-pressed': 'false', onclick: () => this._answerPrompt(lv) }, String(lv)));
+      this.confBar = h('div.conf-prompt', { hidden: true, role: 'group', 'aria-label': 'Confidence of the new mark, 1 (not at all) to 5 (completely confident)', 'data-log': 'confidence-prompt' },
+        this.confBarLabel, h('div.segmented', {}, ...this.confBarSegs),
+        h('button.btn.small.quiet', { type: 'button', 'data-log': 'confidence-prompt-clear', onclick: () => this._answerPrompt(null) }, 'Clear'),
+        h('button.btn.small.quiet', { type: 'button', 'data-log': 'confidence-prompt-later', onclick: () => this._endConfidencePrompt('later') }, 'Later'));
+      this.main.append(this.confBar);
+    }
+    this.confBarLabel.textContent = `Confidence for ${what}`;
+    for (const b of this.confBarSegs) b.setAttribute('aria-pressed', String(Number(b.dataset.level) === current));
+    this.confBar.hidden = false;
+  }
+
+  /** A rating from the menu or the table: it answers the prompt when the prompt is about the same annotations. */
+  _rateFromControl(ids, level) {
+    const p = this._prompt;
+    if (p && p.ids.length === ids.length && p.ids.every((x, i) => x === ids[i])) this._answerPrompt(level);
+    else this.setConfidenceOf(ids, level);
+  }
+
+  /** Rate annotations from 1 to 5, or clear their rating with null. */
   setConfidenceOf(ids, level) {
     if (!this._checkEditable()) return;
     const live = ids.filter((i) => this.store.has(i));
     if (!live.length) return;
     this.store.setConfidenceMany(live, level);
     const what = live.length === 1 ? this.store.get(live[0]).label : `${live.length} annotations`;
-    this.say(`Confidence of ${what}: ${CONFIDENCE_TEXT[level || ''].toLowerCase()} (D for the next; ${UNDO_HINT})`);
+    this.say(level ? `Confidence of ${what}: ${level}/5, ${CONFIDENCE_ANCHORS[level].toLowerCase()} (${UNDO_HINT})` : `Confidence of ${what} cleared (${UNDO_HINT})`);
+  }
+
+  /** Before Save and Finish in an every-mark study: the marks without a rating, with Rate them and Save anyway. */
+  async _confidenceCheck(s) {
+    if (!this._asksEveryMark || s.revision) return true;
+    const n = this.store.annotations().filter((a) => !isConfidence(a.confidence)).length;
+    if (!n) return true;
+    const body = h('div', {},
+      h('p.dialog-text', {}, `${n === 1 ? '1 mark has' : `${n} marks have`} no confidence. This study asks for a confidence rating, from 1 (not at all confident) to 5 (completely confident), on every mark.`),
+      h('p.dialog-text', {}, 'Rate them now, one after another with a key from 1 to 5 or a tap, or save them without a rating.'));
+    const choice = await showDialog({ title: 'Marks without a confidence', body, className: 'confidence-check', logText: `${n} mark(s) without a confidence`,
+      buttons: [{ label: 'Save anyway', value: 'save' }, { label: 'Rate them', value: 'rate', kind: 'primary' }], cancelValue: 'cancel' });
+    logger.event('confidence_check', { n_unrated: n, n_annotations: this.store.size, choice });
+    if (choice === 'rate') this._rateNextUnrated();
+    return choice === 'save';
+  }
+
+  /** Rate them: the first mark without a rating is selected, brought into view and asked about; then the next. */
+  _rateNextUnrated() {
+    const next = this.store.annotations().find((a) => !isConfidence(a.confidence));
+    if (!next) { this.say('Every mark has a confidence now. Press Save and Finish when you are ready.'); return; }
+    this.select([next.annotation_id], { via: 'confidence_check' });
+    this.jumpTo(next.annotation_id, { keepSelection: true });
+    this.viewer.over.focus({ preventScroll: true });
+    this.startConfidencePrompt([next.annotation_id], 'rate_them');
   }
 
   async editNoteOf(id) {
@@ -1647,40 +1764,44 @@ export class Workspace {
     }
   }
 
-  /** The context menu's items: Set confidence… (the levels) and Add a note… / Edit note…. */
+  /** The context menu's items: Confidence (1 to 5 with their anchors, and Clear) and Add a note… / Edit note…. */
   _confidenceMenuItems(id, a) {
-    const mode = this.s.confidenceMode;
-    const levels = confidenceChoices(mode).map((lv) => ({ label: CONFIDENCE_TEXT[lv], checked: (a.confidence || '') === lv,
-      onSelect: () => { logger.noteInput(`menu:${CONFIDENCE_TEXT[lv]}`); this.setConfidenceOf([id], lv); } }));
-    return [{ label: 'Set confidence…', shortcut: 'D', submenu: [{ section: 'Confidence' }, ...levels] },
-      { label: a.note ? 'Edit note…' : 'Add a note…', onSelect: () => this.editNoteOf(id) }];
+    const levels = CONFIDENCE_LEVELS.map((lv) => ({ label: `${lv}  ${CONFIDENCE_ANCHORS[lv]}`, checked: a.confidence === lv,
+      onSelect: () => { logger.noteInput(`menu:Confidence ${lv}`); this._rateFromControl([id], lv); } }));
+    return [{ label: 'Confidence', shortcut: 'D', submenu: [...levels, { separator: true },
+      { label: 'Clear', disabled: !isConfidence(a.confidence), onSelect: () => { logger.noteInput('menu:Clear confidence'); this._rateFromControl([id], null); } }] },
+    { label: a.note ? 'Edit note…' : 'Add a note…', onSelect: () => this.editNoteOf(id) }];
   }
 
-  /** The Annotations table's Confidence button (one press: the next level) and its note button. */
+  /** Below the Annotations table: the note button, and the confidence control (1 to 5 with one tap, and Clear). */
   _confidenceButtons(btn) {
-    this.btnConfidence = btn('Confidence', () => this.cycleConfidence(), '.span-2');
-    this.btnConfidence.dataset.log = 'confidence';
     this.btnNote = btn('Add a note…', () => this.editNoteOf(this.targetIds()[0]));
     this.btnNote.dataset.log = 'note';
-    return [this.btnConfidence, this.btnNote];
+    this.confSegs = CONFIDENCE_LEVELS.map((lv) => h('button.seg', { type: 'button', 'data-level': String(lv), 'data-log': `confidence-${lv}`,
+      title: `${lv}: ${CONFIDENCE_ANCHORS[lv]}`, 'aria-pressed': 'false', onclick: () => this._rateFromControl(this.targetIds(), lv) }, String(lv)));
+    this.confClear = h('button.btn.small.quiet', { type: 'button', 'data-log': 'confidence-clear', onclick: () => this._rateFromControl(this.targetIds(), null) }, 'Clear');
+    this.confRow = h('div.conf-row', { role: 'group', 'aria-label': 'Confidence of the selected annotation' },
+      h('span.caption.conf-caption', {}, 'Confidence: 1 not at all, 5 completely'), h('div.segmented.conf-seg', {}, ...this.confSegs), this.confClear);
+    return [this.btnNote, this.confRow];
   }
 
   _refreshConfidenceButtons(anns, editable) {
-    if (!this.btnConfidence) return;
-    const level = anns.length ? anns[0].confidence || '' : null;
-    this.btnConfidence.textContent = level === null ? 'Confidence' : `Confidence: ${CONFIDENCE_TEXT[level].toLowerCase()}`;
-    this.btnConfidence.title = 'How sure you are of the selected annotation: each press (or D) gives the next level';
-    this.btnConfidence.disabled = !(editable && anns.length);
+    if (!this.confRow) return;
+    const levels = new Set(anns.map((a) => a.confidence ?? null));
+    const shown = anns.length && levels.size === 1 ? [...levels][0] : null;
+    for (const b of this.confSegs) {
+      b.setAttribute('aria-pressed', String(Number(b.dataset.level) === shown));
+      b.disabled = !(editable && anns.length);
+    }
+    this.confClear.disabled = !(editable && anns.some((a) => isConfidence(a.confidence)));
     this.btnNote.textContent = anns.length === 1 && anns[0].note ? 'Edit note…' : 'Add a note…';
     this.btnNote.disabled = !(editable && anns.length === 1);
   }
 
-  /** What the label cell of the Annotations table shows after the label: probable or possible, a tiny mark for definite, and a note icon. */
+  /** What the label cell of the Annotations table shows after the label: the rating ("3/5") and a note icon. */
   _confidenceMarks(a) {
     const out = [];
-    // short words, so that the label keeps its room in the narrow list; the title has the whole word
-    if (a.confidence === 'probable' || a.confidence === 'possible') out.push(h('span.conf-mark', { title: `Confidence: ${a.confidence}` }, a.confidence === 'probable' ? 'prob.' : 'poss.'));
-    else if (a.confidence === 'definite') out.push(h('span.conf-mark.definite', { title: 'Confidence: definite' }, icon('check')));
+    if (isConfidence(a.confidence)) out.push(h('span.conf-mark', { title: `Confidence ${a.confidence} of 5: ${CONFIDENCE_ANCHORS[a.confidence]}` }, `${a.confidence}/5`));
     if (a.note) out.push(h('span.note-mark', { title: a.note, 'aria-label': 'Has a note' }, icon('note')));
     return out;
   }
@@ -1695,9 +1816,9 @@ export class Workspace {
 
   /** Log a change of confidence (confidence_set) or of a note (note_set); false for any other change. */
   _logConfidenceOrNote(description, changed, prev, now, base) {
-    if (/^(set|remove) confidence/.test(description)) {
+    if (/^(set|clear) confidence/.test(description)) {
       logger.event('confidence_set', { ...base, annotations: changed.map((k) => ({ id: k, label: now.get(k).label,
-        confidence: now.get(k).confidence || null, before: prev.get(k).confidence || null })) });
+        confidence: now.get(k).confidence ?? null, before: prev.get(k).confidence ?? null })) });
       return true;
     }
     if (/^(add|change|remove) note$/.test(description)) { this._logNotes(changed, prev, now, base); return true; }
@@ -1739,6 +1860,7 @@ export class Workspace {
       if (action) logger.shortcut(keyName(e), action);
       fn();
     };
+    if (this._confidencePromptKey(e, handled)) return;
     if (this.coach && !mod && (k === 'Enter' || k === ' ') && this.coach.takesContinueKey()) {
       return handled('Continue', () => this.coach.continue());
     }
@@ -1784,7 +1906,7 @@ export class Workspace {
     if (k === '[') return handled('Mark start', () => this.markKey('start'));
     if (k === ']') return handled('Mark end', () => this.markKey('end'));
     if (k === 'c' || k === 'C') return handled('Whole montage or selected channels', () => this.toggleScope());
-    if (k === 'd' || k === 'D') return handled('Confidence', () => this.cycleConfidence());
+    if (k === 'd' || k === 'D') return handled('Confidence', () => this.askConfidence());
     if (k === 'Delete' || k === 'Backspace') return handled('Delete', () => this.deleteSelection());
   }
 
@@ -2091,6 +2213,7 @@ export class Workspace {
     if (this.coach && !this.coach.canSave()) return false;
     // A revision starts with nothing viewed and may fix one place only, so it is not asked to view everything again.
     if (this.timed && this.settings.coverageCheck === 'warn' && s.mode !== 'guided' && !s.revision && !(await this._coverageCheck())) return false;
+    if (!(await this._confidenceCheck(s))) return false;
     const counts = s.countsByLabel();
     let ok;
     if (s.revision) {
