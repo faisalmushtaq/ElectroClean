@@ -94,8 +94,8 @@ def test_the_quiz_with_feedback_after_each_answer(admin: Api, client: TestClient
     add_items(admin)
     a01 = Api(client, "A01")
     quizzes = a01.ok("get", "/me")["quizzes"]
-    assert quizzes == [{"set_id": "example", "name": quizzes[0]["name"], "n_items": 4, "finished": False,
-                        "feedback": "immediate"}]
+    assert quizzes == [{"set_id": "example", "name": quizzes[0]["name"], "n_items": 4, "n_answered": 0,
+                        "finished": False, "feedback": "immediate"}]
     g = a01.quiz("example", {"action": "get"}).json()
     store = FilesStore(study)
     order = [it.item_id for it in item_order(store.reference_set("example").quiz_items, "A01", "example")]
@@ -121,6 +121,7 @@ def test_the_quiz_with_feedback_after_each_answer(admin: Api, client: TestClient
     assert other.json()["label"] == "Eye-artifact"
     wrong = a01.quiz("example", {"action": "answer", "item_id": "q02", "label": "EMG-artifact"}).json()
     assert wrong["correct"] is False and wrong["correct_label"] == "Electrode-pops-artifact"
+    assert a01.ok("get", "/me")["quizzes"][0]["n_answered"] == 2  # the quiz card says how far it went
     for body, status, code in (({"action": "answer", "item_id": "q99", "label": "EMG-artifact"}, 404, "unknown_item"),
                                ({"action": "answer", "item_id": "q03", "label": "Bad"}, 400, "bad_label"),
                                ({"action": "answer", "item_id": "q03", "label": "EMG-artifact",

@@ -1,7 +1,7 @@
 {
   "schema": "electrotag.session",
-  "schema_version": "1.0.0",
-  "session_id": "20261028T111922Z-cdd443af",
+  "schema_version": "1.1.0",
+  "session_id": "20261029T194003Z-016d5ad1",
   "mode": "standard",
   "context": {},
   "annotator": {
@@ -62,52 +62,52 @@
       "vhdr": {
         "path": "sub-002/eeg/sub-002_task-rest_eeg.vhdr",
         "size": 1041,
-        "mtime_ns": 1793186360896013967,
+        "mtime_ns": 1793302801948653749,
         "sha256": "39c9670180b236ad71c67a8cbeeadbce024b0ae7d9bdffe03af31af6f66daed7"
       },
       "eeg": {
         "path": "sub-002/eeg/sub-002_task-rest_eeg.eeg",
         "size": 1320000,
-        "mtime_ns": 1793186360894834450,
-        "sha256": "30bfb0ef69c5004d7df42aaaf17ded051f2e5b2900cf3900cfe1d2012eb7aa15"
+        "mtime_ns": 1793302801947617632,
+        "sha256": "ec34048246425f40d1c3e9a0121be1c96b440e378897fc289b0229c14e1b5b53"
       },
       "vmrk": {
         "path": "sub-002/eeg/sub-002_task-rest_eeg.vmrk",
         "size": 1392,
-        "mtime_ns": 1793186360895759128,
+        "mtime_ns": 1793302801948397689,
         "sha256": "50bdfcc2c130fb5dd2297db938f08df0d0b8a725754126bc167ae811dccaca99"
       },
       "channels_tsv": {
         "path": "sub-002/eeg/sub-002_task-rest_channels.tsv",
         "size": 384,
-        "mtime_ns": 1793186360896671435,
+        "mtime_ns": 1793302801949062052,
         "sha256": "2606e8830e14c65eed97ea25c80f9f56708eb24e26134f516b754234c6927d82"
       },
       "events_tsv": {
         "path": "sub-002/eeg/sub-002_task-rest_events.tsv",
         "size": 928,
-        "mtime_ns": 1793186360896278170,
+        "mtime_ns": 1793302801948897044,
         "sha256": "23fbd318246db707134f26fd35f535df2bd25580d7cf8c17e33066b3b744c0a8"
       },
       "events_json": {
         "path": "sub-002/eeg/sub-002_task-rest_events.json",
         "size": 289,
-        "mtime_ns": 1793186360896487561,
+        "mtime_ns": 1793302801948997844,
         "sha256": "203b47891160359d51301343101c20872de346b32b5a97b29a70139958c62f00"
       },
       "eeg_json": {
         "path": "sub-002/eeg/sub-002_task-rest_eeg.json",
         "size": 255,
-        "mtime_ns": 1793186360896904260,
+        "mtime_ns": 1793302801949140907,
         "sha256": "b4261e68d3afe2c97349082cc1460d8fb6e73c9427090698dd1e1ec35b914cac"
       }
     }
   },
   "timing": {
-    "session_opened": "2026-10-28T11:19:22.740+00:00",
-    "start_timestamp": "2026-10-28T11:19:22.740+00:00",
-    "finish_timestamp": "2026-10-28T11:19:22.740+00:00",
-    "elapsed_seconds": 0.001,
+    "session_opened": "2026-10-29T19:40:03.781+00:00",
+    "start_timestamp": "2026-10-29T19:40:03.781+00:00",
+    "finish_timestamp": "2026-10-29T19:40:03.782+00:00",
+    "elapsed_seconds": 0.0,
     "clock": "time.monotonic (started when the viewer became usable, stopped at Save and Finish)",
     "elapsed_in_earlier_sessions_seconds": 0.0,
     "resumed_from_autosave": []
@@ -115,7 +115,7 @@
   "application": {
     "name": "ElectroTag",
     "version": "1.1.0",
-    "platform": "Linux-6.18.44-fc-v180-x86_64-with-glibc2.39",
+    "platform": "Linux-6.18.44-fc-v185-x86_64-with-glibc2.39",
     "libraries": {
       "python": "3.13.17",
       "electrotag": "1.1.0",
@@ -251,14 +251,15 @@
     }
   },
   "annotations": {
-    "n_annotations": 10,
+    "n_annotations": 11,
     "n_whole_montage": 1,
-    "n_channel_specific": 9,
+    "n_channel_specific": 10,
     "by_label": {
       "Eye-blink-artifact": 3,
       "Horizontal-eye-movement-artifact": 1,
       "Slow-eye-movement-artifact": 1,
       "EMG-artifact": 1,
+      "Chewing-artifact": 1,
       "Movement-artifact": 1,
       "ECG-artifact": 1,
       "Electrode-pops-artifact": 2
@@ -270,12 +271,33 @@
       "interval": "Half-open: an annotation covers samples [onset_sample, onset_sample + duration_samples).",
       "boundary_snapping": "Boundaries are snapped to the nearest sample when created or edited.",
       "mne_annotations": "In mne.Annotations attached to Raw, onset_mne = onset + first_samp / sfreq (relative to orig_time)."
-    }
+    },
+    "confidence": {
+      "setting": "optional",
+      "scale": {
+        "1": "Not at all confident",
+        "2": "Slightly confident",
+        "3": "Moderately confident",
+        "4": "Very confident",
+        "5": "Completely confident"
+      },
+      "meaning": "optional: annotators rated a mark (1 to 5) only when they wished; every_mark: annotators were asked to rate each new mark, which started without a rating.",
+      "n_given": 0,
+      "n_not_given": 11,
+      "by_level": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0
+      }
+    },
+    "n_with_note": 0
   },
   "label_catalogue": {
     "catalogue_id": "electrotag-hed-score-artifacts",
     "catalogue_version": "2.0.0",
-    "sha256": "34f144b5c8699afeb41dd6fc9a4fd343e602123e979ee41471971b4fec7800ad",
+    "sha256": "c5b288e57bf0191cf7a1f7b8f29cfdb77e7c772878203fd8895162f01e0f7646",
     "hed_library": "score",
     "hed_library_version": "2.2.0",
     "hed_standard_version": "8.5.0",

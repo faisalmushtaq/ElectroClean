@@ -284,7 +284,7 @@ test('the demonstration training set: its guided notes, pass mark and guidance r
   const rid = TRAINING_SET.guided[0].rid;
   const notes = (await b.admin('set_guided_notes', { set_id: 'example', recording_id: rid })).notes;
   assert.equal(notes.length, 6);
-  assert.match(notes[0].note, /^Placeholder note/);
+  assert.match(notes[0].note, /^Simulated example\. /);
   assert.equal(notes[0].onset_s, 3);
   await b.admin('set_guided_note', { set_id: 'example', annotation_id: notes[0].annotation_id, text: 'A blink: both frontal channels dip together.' });
   await assert.rejects(() => b.admin('set_guided_note', { set_id: 'example', annotation_id: 'nope', text: 'x' }), (e) => e.status === 404);
@@ -295,7 +295,7 @@ test('the demonstration training set: its guided notes, pass mark and guidance r
   assert.equal(g.current.note, 'A blink: both frontal channels dip together.');
   assert.equal((await b.guided(TRAINING_SET.guided[1].rid)).guidance, 'find_unnamed');
   const path = await b.training();
-  assert.equal(path.stages[1].pass_rule, '50% for finding the artifacts and for their types');
+  assert.match(path.stages[1].detail, /To pass, you need a score of at least 50% and the right type for at least 50% of the artifacts you find\.$/);
   await as(b, 'ADMIN');
   // The programme can be given to another account, but only this set runs as a programme here.
   await b.admin('user_add', { annotator_id: 'T02', password: 'trainee two' });

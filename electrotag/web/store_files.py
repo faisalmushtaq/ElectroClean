@@ -398,12 +398,13 @@ class FilesStore(Store):
 
         return competency_report(self.layout, rs, annotator_id)
 
-    def report_text(self, set_id: str, annotator_id: str) -> str:
+    def report_result(self, set_id: str, annotator_id: str) -> dict[str, str]:
         path = self.layout.root / "training" / set_id / "reports" / f"annotator-{annotator_id}_competency_report.json"
         try:
-            return str(json.loads(path.read_text(encoding="utf-8")).get("status_text", ""))
+            rep = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
-            return ""
+            return {}
+        return {"status": str(rep.get("status", "")), "status_text": str(rep.get("status_text", ""))}
 
     def saved_files(self, annotator_id: str, recording_id: str, mode: str, context_id: str) -> dict[str, bytes]:
         from electrotag.app.io.naming import OUTPUT_SUFFIXES

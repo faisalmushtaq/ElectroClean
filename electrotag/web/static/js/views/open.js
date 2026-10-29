@@ -15,6 +15,16 @@ const FORMAT_HINT = {
   brainvision: 'Choose the .vhdr, .vmrk and .eeg files together, or the folder that holds them.',
 };
 
+const TRAINING_STAGES = { guided: 'Learn with the experts', practice: 'On your own', assessment: 'Competency assessment' };
+
+/** For a training recording: which stage it is for, and where the file comes from. */
+function trainingNote(expected) {
+  const stage = expected && TRAINING_STAGES[expected.mode];
+  if (!stage) return null;
+  return h('p.note.training-note', {}, `This recording is for your training: ${stage}. Your study team sends you the training ` +
+    'recordings; choose this one from where you saved them.');
+}
+
 /** Pick the files of one recording from a folder's files (the expected one, if it is there). */
 export function filesForRecording(files, expectedName = null) {
   const list = [...files].filter((f) => /\.(edf|bdf|rec|vhdr|vmrk|eeg)$/i.test(f.name));
@@ -95,6 +105,7 @@ export class OpenView {
         h('h1', {}, purpose && purpose.title ? purpose.title : name ? `${this.revise ? 'Revise' : 'Open'} ${name}` : 'Open a recording from your computer'),
         this.revise ? h('p.note', {}, 'You finished this recording before. It opens with your latest saved annotations; submitting the revision saves a new version and keeps the earlier ones.') : null,
         purpose && purpose.note ? h('p.note', {}, purpose.note) : null,
+        trainingNote(expected),
         h('p.subtitle', {}, 'The recording is read here, in your browser, and is never uploaded. Only its fingerprint (a checksum of the file) is sent to the study, to recognise it.'),
         h('p', {}, FORMAT_HINT[format] || 'Choose an EDF or BDF file, or the .vhdr, .vmrk and .eeg files of a BrainVision recording (or their folder).'),
         h('section.card', {}, this.drop, this.device.el, this.steps, this.result, this.links.el),

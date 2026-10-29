@@ -49,3 +49,18 @@ test('display filters mark their edge zones; a gap has no data', async () => {
   const filtered = await rec.readWindow({ startSample: 0, nSamples: 2500, channels: [0], filters: f });
   assert.deepEqual(filtered.edgeZones[0], [0, Math.round(edgeHalfWidthS(f) * 250)]);
 });
+
+test('a horizontal eye movement shows where it really would, with opposite signs on the two sides', async () => {
+  const rec = makeSyntheticRecording(spec1);
+  const names = rec.channels.map((c) => c.name);
+  const hem = truthAnnotations(spec1).find((a) => a.label === 'Horizontal-eye-movement-artifact');
+  assert.deepEqual(hem.channels, ['Fp1', 'Fp2', 'F7', 'F8', 'HEOG'], 'the reference marks the EOG and the scalp channels where it is clear');
+  const mid = hem.onset_sample + Math.round(hem.duration_samples / 2);
+  const read = async (s0) => rec.readWindow({ startSample: s0, nSamples: 25, channels: names.map((_, i) => i), filters: null });
+  const during = await read(mid - 12);
+  const before = await read(hem.onset_sample - 300);
+  const shift = (name) => { const i = names.indexOf(name); const m = (d) => d.data[i].reduce((a, b) => a + b, 0) / d.data[i].length; return (m(during) - m(before)) * 1e6; };
+  assert.ok(shift('HEOG') > 120 && shift('F7') > 50 && shift('F8') < -50, 'largest on the horizontal EOG and beside the eyes');
+  assert.ok(shift('Fp1') > 20 && shift('Fp2') < -20, 'smaller above the eyes, opposite on the two sides');
+  assert.ok(Math.abs(shift('O1')) < 10 && Math.abs(shift('Cz')) < 10, 'nothing at the back or the top of the head');
+});

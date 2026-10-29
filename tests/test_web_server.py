@@ -490,7 +490,7 @@ def test_guided_training_with_the_coach(client: TestClient, recordings: Path, st
     store.close()
     api = Api(client, "T01")
     me = api.ok("get", "/me")
-    assert me["programme"] == {"set_id": "example", "name": me["programme"]["name"]}
+    assert me["programme"] == {"set_id": "example", "name": me["programme"]["name"], "complete": False}
     tr = api.ok("get", "/training")
     assert [(s["key"], s["status"]) for s in tr["stages"]] == [("guided", "available"), ("practice", "locked"),
                                                                ("assessment", "not_used")]
@@ -565,6 +565,42 @@ def test_guided_training_with_the_coach(client: TestClient, recordings: Path, st
     assert GUIDED1 in json.loads(prog.read_text())["guided"]
 
 
+def test_guided_step_time_leaves_out_the_time_the_recording_was_closed(client: TestClient, study: Path,
+                                                                      monkeypatch: pytest.MonkeyPatch) -> None:
+    """Research data: a step's time runs from its start to the trainee's last action before the recording
+    was closed, and on again from when it is opened; the time closed in between is not counted."""
+    import electrotag.web.coach as coach_mod
+    from electrotag.web.store_files import FilesStore
+
+    clock = [1_000_000.0]
+    monkeypatch.setattr(coach_mod.time, "time", lambda: clock[0])
+    store = FilesStore(study)
+    steps = reference_annotations(store, "example", GUIDED1)
+    store.close()
+    api = Api(client, "T01")
+    api.ok("get", f"/training/guided/{GUIDED1}")  # the recording opens: step 1 starts
+    clock[0] += 20  # 20 s looking, then a first try
+    wrong = as_wire(steps[0], "f" * 32)
+    wrong["onset_sample"] -= 200
+    api.ok("post", f"/training/guided/{GUIDED1}/check", {"step": 1, "annotations": [wrong]})
+    clock[0] += 600  # the recording is closed for ten minutes
+    api.ok("get", f"/training/guided/{GUIDED1}")  # and opened again
+    clock[0] += 5
+    mine = [as_wire(steps[0], "1" * 32)]
+    api.ok("post", f"/training/guided/{GUIDED1}/check", {"step": 1, "annotations": mine})
+    clock[0] += 2
+    nxt = api.ok("post", f"/training/guided/{GUIDED1}/continue", {"step": 1})
+    assert nxt["previous"]["seconds"] == pytest.approx(27.0)  # 20 + 5 + 2, without the 600 closed
+    # step 2 starts at Continue: closed at once and opened later, it starts from nothing
+    clock[0] += 300
+    api.ok("get", f"/training/guided/{GUIDED1}")
+    clock[0] += 4
+    mine.append(as_wire(steps[1], "2" * 32))
+    api.ok("post", f"/training/guided/{GUIDED1}/check", {"step": 2, "annotations": mine})
+    nxt = api.ok("post", f"/training/guided/{GUIDED1}/continue", {"step": 2})
+    assert nxt["previous"]["seconds"] == pytest.approx(4.0)
+
+
 def _finish_guided(api: Api, study: Path, recordings: Path, rid: str) -> None:
     from electrotag.web.store_files import FilesStore
 
@@ -594,7 +630,13 @@ def test_practice_feedback_reveals_the_reference_after_saving(client: TestClient
     mine = [as_wire(a, f"{i + 1:032x}") for i, a in enumerate(ref[:-1])]  # one missed
     r = api.ok("post", "/submissions", submission(recordings, PRACTICE1, mine, "practice", "example"))
     fb = r["feedback"]
-    assert fb["review"] and fb["metrics"]["event_recall"] < 1.0 and fb["summary_html"].startswith("<h2>")
+    assert fb["review"] and fb["metrics"]["event_recall"] < 1.0 and "summary_html" not in fb
+    # the plain words of the review, the same as the demonstration's (scoring.js, checked against these)
+    n = len(ref)
+    assert fb["counts"] == {"reference_events": n, "your_events": n - 1, "found": n - 1, "extra": 0, "other_type": 0}
+    assert fb["summary"] == f"You found {n - 1} of the experts' {n} artifacts and made no marks they did not make."
+    assert fb["verdict"].startswith("Passed: you reached the pass mark, a score of at least 80%" if fb["passed"]
+                                    else "Not yet: you need a score of at least 80%")
     assert [f["kind"] for f in fb["flags"]] == ["MISSED"] and fb["flags"][0]["source"] == "reference"
     assert len(fb["reference"]) == len(ref) and fb["pass_rule"]
     tr = api.ok("get", "/training")
@@ -634,6 +676,35 @@ def test_assessment_completion_gives_the_competency_result(client: TestClient, r
     assert "assessment" in r["assessment"]["summary_html"]
     report = study / "Annotated_Events" / "training" / "example" / "reports" / "annotator-A01_competency_report.json"
     assert json.loads(report.read_text())["status"] == r["assessment"]["status"]
+
+
+def test_a_trainee_sees_the_assessment_result_on_the_path(client: TestClient, recordings: Path, study: Path) -> None:
+    """A finished assessment shows its result (no tick when the criteria are not met), and the
+    path then says what comes next; training complete, the trainee lands on the home page."""
+    from electrotag.training.reference import ReferenceSet
+    from electrotag.web.store_files import FilesStore
+
+    store = FilesStore(study)
+    rs = ReferenceSet.load(store.reference_set("example").directory)
+    rs.set_use(PRACTICE1, "assessment")
+    rs.set_criteria({"criteria": [{"metric": "event_f1", "threshold": 0.9, "scope": "overall"}]})
+    rs.save()
+    ref = reference_annotations(store, "example", PRACTICE1)
+    store.close()
+    api = Api(client, "T01")
+    for rid in (GUIDED1, GUIDED2):
+        _finish_guided(api, study, recordings, rid)
+    tr = api.ok("get", "/training")
+    assert tr["stages"][2]["status"] == "available" and tr["stages"][1]["status"] == "not_used"
+    assert api.ok("get", "/me")["programme"]["complete"] is False
+    api.ok("post", "/submissions", submission(recordings, PRACTICE1, [as_wire(ref[0], "1" * 32)], "assessment",
+                                              "example"))
+    tr = api.ok("get", "/training")
+    a = tr["stages"][2]
+    assert a["status"] == "completed" and a["result"] == "not_met"
+    assert a["detail"].startswith("Does not yet meet the competency criteria. Please talk to your study administrator")
+    assert tr["next"] is None and tr["complete"] is True and "talk to your study administrator" in tr["message"]
+    assert api.ok("get", "/me")["programme"]["complete"] is True
 
 
 # ------------------------------------------------------------- administration

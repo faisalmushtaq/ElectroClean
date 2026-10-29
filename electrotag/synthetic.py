@@ -35,6 +35,13 @@ EEG_CHANNELS = [
     "C4", "T8", "P7", "P3", "Pz", "P4", "P8", "O1", "O2",
 ]  # fmt: skip
 EOG_CHANNELS = ["HEOG", "VEOG"]
+#: A horizontal (or slow) eye movement as the electrodes see it (µV at the peak): the eyes' electrical
+#: field swings sideways, so it is largest on the horizontal EOG and at the outer corners of the eyes
+#: (F7, F8), smaller at Fp1 and Fp2 above the eyes, and smaller still further back, with opposite
+#: signs on the two sides of the head. The reference marks the channels where it is clear.
+EYE_MOVEMENT_GAINS_UV = {"HEOG": 200.0, "F7": 80.0, "F8": -80.0, "Fp1": 35.0, "Fp2": -35.0,
+                         "T7": 15.0, "T8": -15.0, "F3": 12.0, "F4": -12.0}
+EYE_MOVEMENT_CHANNELS = ("Fp1", "Fp2", "F7", "F8", "HEOG")
 ECG_CHANNELS = ["ECG"]
 ALL_CHANNELS = EEG_CHANNELS + EOG_CHANNELS + ECG_CHANNELS
 
@@ -54,11 +61,11 @@ def default_artifact_plan(duration_s: float, rng: np.random.Generator) -> list[S
         SyntheticArtifact("Eye-blink-artifact", 9.5, 0.36, ("Fp1", "Fp2", "VEOG")),
         SyntheticArtifact("EMG-artifact", 9.2, 1.60, ("T7", "T8", "F7", "F8")),  # overlaps a blink
         SyntheticArtifact("Electrode-pops-artifact", 14.0, 0.50, ("C3",)),
-        SyntheticArtifact("Horizontal-eye-movement-artifact", 18.0, 1.20, ("F7", "F8", "HEOG")),
+        SyntheticArtifact("Horizontal-eye-movement-artifact", 18.0, 1.20, EYE_MOVEMENT_CHANNELS),
         SyntheticArtifact("Movement-artifact", 24.0, 2.00, ()),
         SyntheticArtifact("Chewing-artifact", 30.0, 3.00, ("T7", "T8")),
         SyntheticArtifact("Eye-blink-artifact", 35.2, 0.38, ("Fp1", "Fp2", "VEOG")),
-        SyntheticArtifact("Slow-eye-movement-artifact", 40.0, 4.00, ("F7", "F8", "HEOG")),
+        SyntheticArtifact("Slow-eye-movement-artifact", 40.0, 4.00, EYE_MOVEMENT_CHANNELS),
         SyntheticArtifact("ECG-artifact", 47.0, 5.00, ("T7", "P7", "O1")),
         SyntheticArtifact("Electrode-pops-artifact", 53.5, 0.40, ("O2",)),
     ]
@@ -147,9 +154,8 @@ def synthesise_signal(
                 shape = np.clip(np.minimum(tt, art.duration_s - tt) / 0.08, 0, 1)
             else:
                 shape = np.sin(np.pi * tt / art.duration_s) * np.sin(2 * np.pi * 0.35 * tt)
-            data[idx["F7"], seg] += 80 * uv * shape
-            data[idx["F8"], seg] -= 80 * uv * shape
-            data[idx["HEOG"], seg] += 200 * uv * shape
+            for ch, gain in EYE_MOVEMENT_GAINS_UV.items():
+                data[idx[ch], seg] += gain * uv * shape
         elif art.label == "Movement-artifact":
             drift = np.sin(np.pi * tt / art.duration_s)
             for ch in ALL_CHANNELS:

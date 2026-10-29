@@ -134,8 +134,8 @@ password.
   "catalogue": {"labels": [{"label": "Eye-blink-artifact", "value": 103, "short_code": "BLINK",
                              "colour": "#0067A5", "section": "Eye", "is_group": false,
                              "parent": "Eye-artifact" | null, "description": "…"}]},
-  "programme": null | {"set_id": "example", "name": "…"},           // when the annotator is in a training programme
-  "quizzes": [{"set_id": "example", "name": "…", "n_items": 4, "finished": false, "feedback": "immediate"}]
+  "programme": null | {"set_id": "example", "name": "…", "complete": false},  // in a training programme; complete when every stage is done
+  "quizzes": [{"set_id": "example", "name": "…", "n_items": 4, "n_answered": 0, "finished": false, "feedback": "immediate"}]
 }
 ```
 
@@ -420,14 +420,23 @@ recording is saved, then `{"complete": true, "done", "total", "status": "met" | 
 full report stays with the administrator).
 
 `PracticeFeedback` (practice mode only):
-`{"passed": true, "pass_rule": "80% for finding the artifacts and for their types", "rule": {"event_f1", "label_accuracy"},
-"score": {"event_f1", "label_accuracy"}, "metrics": {"event_f1", "event_recall", "event_precision", "label_accuracy",
+`{"passed": true, "pass_rule": "a score of at least 80% and the right type for at least 80% of the artifacts you find",
+"rule": {"event_f1", "label_accuracy"}, "score": {"event_f1", "label_accuracy"},
+"counts": {"reference_events": 8, "your_events": 10, "found": 7, "extra": 3, "other_type": 0},
+"verdict": "Not yet: you need … Look at what you missed below, then …", "summary": "You found 7 of the experts' 8 artifacts and made 3 marks they did not make.",
+"metrics": {"event_f1", "event_recall", "event_precision", "label_accuracy",
 "mean_iou", "mean_channel_jaccard", …}, "per_category": [{"category", "reference_events", "your_events", "found",
-"event_f1", …}], "summary_html": "…", "review": true,
+"event_f1", …}], "review": true,
 "flags": [{"kind": "MISSED" | "EXTRA" | "TYPE", "label", "your_label", "onset_sample",
 "duration_samples", "channels", "annotation_id", "source": "reference" | "yours", "onset_s", "offset_s",
 "text": "Missed: Eye-blink-artifact, 4.00–4.40 s"}], "reference": [Annotation]}`.
-For MISSED the flag describes the experts' annotation (`your_label` null); for
+The score is the event F1 (`score.event_f1`, an artifact counts as found when a mark of the
+same type overlaps it); `counts` say what it is made of (`found` counts the experts' artifacts
+matched by a mark of any type, `other_type` those of them marked with another type). `verdict` and
+`summary` are the review's plain words, which the server builds with
+`electrotag.training.programme.practice_verdict` and `score_sentence` and the demonstration with
+the same words in `js/training/scoring.js`; the verdict's last part depends on how many practice
+recordings the set has. For MISSED the flag describes the experts' annotation (`your_label` null); for
 EXTRA and TYPE the annotator's own (`label` is the experts' type for TYPE). The
 reference is revealed only for practice recordings, after they are saved, and
 only when the reference set allows the review (`review`; otherwise `flags` and
@@ -437,18 +446,27 @@ only when the reference set allows the review (`review`; otherwise `flags` and
 
 `GET /training` → `{"set_id", "name", "description", "stages": [{"key": "guided" | "practice" | "assessment",
 "title", "description", "status": "locked" | "available" | "in_progress" | "completed" | "not_used", "done", "total",
-"stars", "max_stars", "best_score", "time_s", "detail"}], "next": {"stage", "recording_id", "label", "text", "mode",
+"stars", "max_stars", "best_score", "time_s", "detail", "result"}], "next": {"stage", "recording_id", "label", "text", "mode",
 "context_id", "file_name", "repeat"} | null, "complete": false, "message": "…"}` (404 `no_programme` for an
-annotator outside a programme).
+annotator outside a programme). `detail` is the stage's line of results, shown on the training path:
+for practice the best score and the pass mark (`electrotag.training.programme.practice_detail`, the
+same words as `practiceDetail` in `js/training/scoring.js`), for a finished assessment its result
+and what happens next. `result` is null, or `"passed"` / `"not_passed"` for practice once tried, and
+`"met"` / `"not_met"` / `"not_determined"` for a finished assessment (from the competency report;
+`not_determined` also while there is none). When every practice recording was tried without a pass,
+`next` is the practice recording practised longest ago (`repeat` true). `message` is `next.text`,
+or once everything is done what comes next, which depends on the assessment's result.
 
 `GET /training/guided/{recording_id}` → `{"recording_id", "context_id", "n_steps", "guidance": "show" | "find" |
 "find_unnamed", "tolerance": {"seconds", "fraction", "channel_jaccard"}, "completed": [{"step", "stars",
 "annotation_id"}], "current": Step | null, "complete": false, "summary": … | null, "empty_message": "…" | null}`
 where
 `Step = {"step": 3, "n_steps": 6, "guidance": "show", "instruction": "Mark this Eye-blink-artifact",
-"text": "The experts' annotation is outlined with a dashed line. …", "label": "Eye-blink-artifact" | null,
+"text": "The experts' annotation is outlined with a dashed line. To mark it:\n1. Press **1** …", "label": "Eye-blink-artifact" | null,
 "description": "…", "note": "…" | null, "ghost": {"onset_sample", "duration_samples", "channels"} | null,
-"view": {"start_s", "duration_s"} | null}`. The label is null for `find_unnamed`,
+"view": {"start_s", "duration_s"} | null}`. `text` says what to do, one line per action (choose the
+type, choose the channels, drag), with `**` around the keys and controls to show in bold
+(`electrotag.training.guided.step_text`, the same words as the demonstration's `stepBody`). The label is null for `find_unnamed`,
 the ghost only present for `show`, the view absent for `find_unnamed`. Where a
 trainee is in a guided recording is kept by the server, so it survives a reload
 or another computer. A recording without expert annotations has `n_steps` 0 and
@@ -456,7 +474,7 @@ is complete at once (`empty_message` says so).
 
 `POST /training/guided/{recording_id}/check` `{"step": 3, "annotations": [Annotation]}` →
 `{"matched": false, "candidate_id": "…" | null, "problems": ["missing" | "type" | "start" | "end" | "scope" |
-"channels" | "extra"], "messages": ["Almost: the start is 0.24 s too early …"], "extras": ["<annotation_id>"],
+"channels" | "extra"], "messages": ["Start: 0.24 s too early. Drag the left edge …"], "extras": ["<annotation_id>"],
 "can_continue": false, "stars": null, "failed_attempts": 1, "deltas": {"start_s", "end_s", "allowed_s", "iou",
 "channel_jaccard"}}`. `annotations` are all the trainee's annotations. A check
 counts as a failed attempt when the annotations changed since the last check
@@ -468,7 +486,9 @@ extras (`"complete": true`). When `can_continue` is true,
 `POST …/continue {"step": 3, "paused_s": 12.5}` records the step (stars from failed checks and
 Show me, and its time in `seconds`, less `paused_s`, the seconds the trainee was
 paused during the step, which is optional and ignored unless a number of at
-least 0) and returns the next `Step` with `"previous": {"step", "stars",
+least 0; a step's time runs from its start to the trainee's last check or Show
+me before the recording was closed, and on again from the `GET` that opens it
+once more, so the time it was closed is not counted) and returns the next `Step` with `"previous": {"step", "stars",
 "attempts", "failed_attempts", "used_show_me", "seconds"}`, or `{"complete": true,
 "summary": {"steps", "stars", "max_stars", "attempts", "failed_attempts", "shown", "time_s"}, "previous",
 "message"}` (409 `not_matched` if the last check of that step did not allow it).
@@ -719,8 +739,8 @@ ElectroTag installed.
 
 A reference set with quiz items offers its quiz to the annotators allowed to
 use the set (everyone when `allowed_annotators` is empty); `GET /me` lists them
-as `"quizzes": [{"set_id", "name", "n_items", "finished": false, "feedback":
-"immediate" | "end"}]` (empty when there are none). `POST /quiz/{set_id}`
+as `"quizzes": [{"set_id", "name", "n_items", "n_answered", "finished": false, "feedback":
+"immediate" | "end"}]` (empty when there are none; `n_answered` counts the answers kept so far). `POST /quiz/{set_id}`
 (`et_quiz` with `{"set_id", "action", …}` on Firebase,
 `StudyService.quiz(user, set_id, body)`, `electrotag/web/quiz.py`) takes an
 `action`:

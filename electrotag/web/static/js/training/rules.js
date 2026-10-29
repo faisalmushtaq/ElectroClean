@@ -49,12 +49,24 @@ export function channelJaccard(a, b) {
   return inter / union.size;
 }
 
-function keyHint(label, quickKeys) {
+/** How to change a selected annotation to `label` (a number key, or the type finder). */
+function changeTypeHint(label, quickKeys) {
   const key = (quickKeys || {})[label];
-  return key ? ` (press ${key})` : ' (press / and type its name)';
+  return key ? `press ${key} to change its type` : `press / and choose ${label}`;
 }
 
 const r4 = (v) => Math.round(v * 1e4) / 1e4;
+
+/** How to put an annotation's channels right with the controls there are (Shift+click on a channel
+ *  inside an annotation takes it off; Edit channels… adds and takes off), as guided.py _channels_fix. */
+function channelsFix(missing, extra) {
+  if (missing.length) {
+    if (extra.length) return `Right-click your annotation, choose Edit channels…, tick ${listWords(missing)} and untick ${listWords(extra)}.`;
+    return `Right-click your annotation, choose Edit channels… and tick ${listWords(missing)}.`;
+  }
+  return `Hold Shift and click your annotation on ${listWords(extra)} to take ${extra.length === 1 ? 'it' : 'them'} off ` +
+    '(or right-click it and choose Edit channels…).';
+}
 
 /**
  * Check the trainee's annotations against one step. Returns
@@ -76,8 +88,8 @@ export function checkStep(step, annotations, sfreq, tol = DEFAULT_TOLERANCE, { t
   const deltas = {};
   if (!accepts(tol, target.label, cand.label)) {
     problems.push('type');
-    messages.push(`Type: the experts marked this as ${article(target.label)} ${target.label}` +
-      `${keyHint(target.label, quickKeys)}; yours is ${article(cand.label)} ${cand.label}.`);
+    messages.push(`Type: the experts marked this as ${article(target.label)} ${target.label}; yours is ` +
+      `${article(cand.label)} ${cand.label}. Click your annotation to select it, then ${changeTypeHint(target.label, quickKeys)}.`);
   }
   const win = windowS(tol, target.duration_samples / sfreq);
   const dStart = (cand.onset_sample - target.onset_sample) / sfreq;
@@ -85,20 +97,23 @@ export function checkStep(step, annotations, sfreq, tol = DEFAULT_TOLERANCE, { t
   Object.assign(deltas, { start_s: r4(dStart), end_s: r4(dEnd), allowed_s: r4(win), iou: r4(iou(cand, target)) });
   if (Math.abs(dStart) > win) {
     problems.push('start');
-    messages.push(`Almost: the start is ${Math.abs(dStart).toFixed(2)} s too ${dStart < 0 ? 'early' : 'late'}. Drag the left edge to move it.`);
+    messages.push(`Start: ${Math.abs(dStart).toFixed(2)} s too ${dStart < 0 ? 'early' : 'late'}. ` +
+      `Drag the left edge of your annotation to the ${dStart < 0 ? 'right' : 'left'}.`);
   }
   if (Math.abs(dEnd) > win) {
     problems.push('end');
-    messages.push(`Almost: the end is ${Math.abs(dEnd).toFixed(2)} s too ${dEnd < 0 ? 'early' : 'late'}. Drag the right edge to move it.`);
+    messages.push(`End: ${Math.abs(dEnd).toFixed(2)} s too ${dEnd < 0 ? 'early' : 'late'}. ` +
+      `Drag the right edge of your annotation to the ${dEnd < 0 ? 'right' : 'left'}.`);
   }
   if (isGlobal(target) && !isGlobal(cand)) {
     problems.push('scope');
-    messages.push('Channels: the experts marked this on the whole montage. Right-click it and choose ' +
-      'Apply to whole montage, or switch to Whole montage (C) and mark it again.');
+    messages.push('Channels: the experts marked this on the whole montage. Right-click your annotation and choose ' +
+      'Apply to whole montage.');
   } else if (!isGlobal(target) && isGlobal(cand)) {
     problems.push('scope');
-    messages.push(`Channels: the experts marked this on ${listWords(target.channels)} only. Right-click it and ` +
-      'choose Edit channels…, or choose those channels (Selected channels, C) and mark it again.');
+    const names = listWords(target.channels);
+    messages.push(`Channels: the experts marked this on ${names} only. Right-click your annotation, choose Edit ` +
+      `channels…, then choose Only these channels and tick ${names}.`);
   } else if (!isGlobal(target)) {
     const jac = channelJaccard(cand, target);
     deltas.channel_jaccard = r4(jac);
@@ -110,7 +125,7 @@ export function checkStep(step, annotations, sfreq, tol = DEFAULT_TOLERANCE, { t
       if (missing.length) parts.push(`${listWords(missing)} ${missing.length === 1 ? 'is' : 'are'} missing`);
       if (extra.length) parts.push(`${listWords(extra)} ${extra.length === 1 ? 'is' : 'are'} not part of it`);
       messages.push(`Channels: the experts marked this on ${listWords(target.channels)}; ` + parts.join('; ') +
-        '. Shift+click a channel inside the annotation to add or remove it.');
+        `. ${channelsFix(missing, extra)}`);
     }
   }
   if (problems.length) return { matched: false, candidate_id: cand.annotation_id, problems, messages, deltas };
@@ -164,20 +179,83 @@ export function instruction(label, guidance) {
   return 'Find the next artifact';
 }
 
-/** The explanation under the title (plain text with **bold** marks for the keys). */
+/** The first step of marking `label`: its number key or button, or the type finder. */
+export function chooseTypeText(label, quickKeys) {
+  const key = (quickKeys || {})[label];
+  if (key) return `Press **${key}** (or click **${key}** next to Draw as) to choose ${label}.`;
+  return `Press **/**, type ${label} and press **Enter** to choose it.`;
+}
+
+const SCOPE_EITHER = 'Decide which channels it affects. For all of them, choose **Whole montage** in the toolbar; for ' +
+  'some, choose **Selected channels** and click their names at the left of the EEG (**C** switches ' +
+  'between the two).';
+
+/** The second step of marking an annotation on the whole montage or on `channels`. */
+export function scopeText(channels) {
+  if (!channels || !channels.length) return 'Make sure **Whole montage** is chosen in the toolbar (click it, or press **C** to switch).';
+  return `Make sure **Selected channels** is chosen in the toolbar (click it, or press **C** to switch), then ` +
+    `click the channel names ${listWords(channels)} at the left of the EEG. Only ` +
+    `${channels.length === 1 ? 'this one' : 'these'} should be chosen: click a name again to take it off.`;
+}
+
+/**
+ * What to do for a step, one line per action (plain text with **bold** marks for the keys and
+ * controls): the same words as electrotag/training/guided.py step_text.
+ */
 export function stepBody(guidance, label, channels, quickKeys) {
-  const key = label ? (quickKeys || {})[label] : null;
-  const keyText = key ? `press **${key}**` : 'press **/** and type its name';
-  if (guidance === 'show') {
-    const where = !channels || channels.length === 0 ? 'the whole montage (Whole montage, or C)'
-      : `${listWords(channels)} (Selected channels, then click the channel names)`;
-    return `The experts' annotation is outlined with a dashed line. Choose its type (${keyText}), choose ${where}, ` +
-      'and drag across it from start to end (or press **M** at the start and at the end).';
+  if (guidance === 'show' && label) {
+    return [
+      "The experts' annotation is outlined with a dashed line. To mark it:",
+      `1. ${chooseTypeText(label, quickKeys)}`,
+      `2. ${scopeText(channels)}`,
+      '3. Drag across the EEG from the start of the outline to its end (or point at the start and press **M**, ' +
+        'then at the end and press **M** again).',
+    ].join('\n');
   }
-  if (guidance === 'find') {
-    return `There is ${article(label)} ${label} somewhere on this screen. Choose its type (${keyText}), decide which ` +
-      'channels it affects, and mark it.';
+  if (guidance === 'find' && label) {
+    return [
+      `There is ${article(label)} ${label} somewhere on this screen. Find it, then mark it:`,
+      `1. ${chooseTypeText(label, quickKeys)}`,
+      `2. ${SCOPE_EITHER}`,
+      '3. Drag across the EEG from where it starts to where it ends.',
+    ].join('\n');
   }
-  return 'Scroll on from here. Mark the next artifact you see, choose its type and channels, and the feedback tells ' +
-    'you how close you are to the experts.';
+  return [
+    'Move on to the next artifact (the **right arrow** key, with **Shift** for a whole screen), then mark it:',
+    '1. Choose its type: press its number (the numbers next to Draw as), or press **/** and type its name.',
+    `2. ${SCOPE_EITHER}`,
+    '3. Drag across the EEG from where it starts to where it ends. The feedback tells you how close you are ' +
+      'to the experts.',
+  ].join('\n');
+}
+
+/**
+ * The coach's words for a touch screen (an iPad): the same steps and fixes, with taps, press and hold,
+ * and the buttons on screen in place of keys, right-clicks and Shift. The study and the demonstration
+ * give the keyboard's words (step_text and check_step in electrotag/training/guided.py, stepBody and
+ * checkStep here); the coach turns them into these where the main pointer is a finger.
+ */
+export function touchWords(text) {
+  return String(text)
+    .replace(/Press \*\*(\d)\*\* \(or click \*\*\1\*\* next to Draw as\) to choose/g, 'Tap **$1** next to Draw as to choose')
+    .replace(/Press \*\*\/\*\*, type (\S+) and press \*\*Enter\*\* to choose it\./g, 'Tap the menu of all types after the numbered buttons next to Draw as and choose $1.')
+    .replace(/press its number \(the numbers next to Draw as\), or press \*\*\/\*\* and type its name/g, 'tap its number next to Draw as, or choose it in the menu of all types after them')
+    .replace(/ \(click it, or press \*\*C\*\* to switch\)/g, ' (tap it)')
+    .replace(/ \(\*\*C\*\* switches between the two\)/g, '')
+    .replace(/then click the channel names/g, 'then tap the channel names')
+    .replace(/click their names/g, 'tap their names')
+    .replace(/click a name again to take it off/g, 'tap a name again to take it off')
+    .replace(/ \(or point at the start and press \*\*M\*\*, then at the end and press \*\*M\*\* again\)/g, '')
+    .replace(/Drag across the EEG/g, 'Drag one finger across the EEG')
+    .replace(/\(the \*\*right arrow\*\* key, with \*\*Shift\*\* for a whole screen\)/g, '(move the EEG sideways with two fingers, or use the buttons under it)')
+    .replace(/Hold Shift and click your annotation on (.+?) to take (?:it|them) off \(or right-click it and choose Edit channels…\)\./g,
+      'Press and hold your annotation, choose Edit channels… and untick $1.')
+    .replace(/Right-click your annotation/g, 'Press and hold your annotation')
+    .replace(/Click your annotation to select it, then press (\d) to change its type\./g, 'Tap your annotation to select it, then tap $1 next to Change to.')
+    .replace(/Click your annotation to select it, then press \/ and choose (\S+?)\./g, 'Tap your annotation to select it, then choose $1 in the menu of all types.')
+    .replace(/\(select it and press Delete\)/g, '(tap it, then Delete at the top)')
+    .replace(/\(it is selected; press Delete\)/g, '(it is selected; tap Delete at the top)')
+    .replace(/press (?:Ctrl|⌘)\+Z(?: \(⌘Z on a Mac\))? to undo/g, 'tap Undo at the top')
+    .replace(/press \*\*Continue\*\* \(Enter\)/g, 'tap **Continue**')
+    .replace(/Press \*\*Continue\*\* \(Enter\)/g, 'Tap **Continue**');
 }

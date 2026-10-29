@@ -372,7 +372,7 @@ export class Workspace {
     }
     this._annotationsPanel();
     this._recordingPanel();
-    this.tabPanels.help.appendChild(h('div.help-text', { html: helpHtml(touchFirst()) }));
+    this.tabPanels.help.appendChild(h('div.help-text', { html: helpHtml(touchFirst(), { training: ['guided', 'practice'].includes(this.s.mode) && this.kind === 'annotate' }) }));
     this.side.append(this.coachHost, this.reviewHost, h('div.side-tabs', {}, bar, ...Object.values(this.tabPanels)));
     this.showTab('annotations');
   }
@@ -2136,6 +2136,9 @@ export class Workspace {
     if (this._confidencePromptKey(e, handled)) return;
     if (this.coach && !mod && (k === 'Enter' || k === ' ') && this.coach.takesContinueKey()) {
       return handled('Continue', () => this.coach.continue());
+    }
+    if (this.coach && !mod && !e.altKey && (k === 'h' || k === 'H') && this.coach.canShowMe()) {
+      return handled('Show me', () => this.coach.showMe());
     }
     if (mod && !e.altKey) {
       const lk = k.toLowerCase();

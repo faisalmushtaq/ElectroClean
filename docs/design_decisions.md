@@ -376,7 +376,7 @@ note sign shortened it further. Each row of the Annotations list now has two lin
 its colour across the panel's whole width, and below it, in the smaller secondary text, the
 channels, the rating, the note sign and the start and end, the times kept to the right in tabular
 figures so that they still line up from row to row. Every label then fits on its line at the panel's
-narrowest, and a longer text (the larger panel text, or the "TYPE: should be … · YOU:" of a training
+narrowest, and a longer text (the larger panel text, or the "Should be …:" of a training
 review) wraps at its hyphens and spaces and is still read in full. The code of the type moved into the
 row's title with the description. `t_annotation_list.e2e.mjs` checks that nothing in any row is cut
 short, for all 29 types with ratings, notes and channels, at 1280 × 720, 1440 × 900, 1920 × 1080 and

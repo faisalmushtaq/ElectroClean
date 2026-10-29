@@ -628,21 +628,54 @@ EEG.
 
 ## The training programme
 
-Trainees see their training path: three stages, each with its progress, and one button to continue.
-In the first stage, Learn with the experts, a coach on the right takes you through the experts'
-annotations of a recording one at a time. In the first recording the experts' annotation is outlined
-with a dashed line for you to copy; in the next you find each artifact on the screen yourself. The
-coach checks your work after every change and says what to put right (the type, the start, the end
-or the channels). When your annotation matches, press Continue (or Enter). Show me places the
-experts' annotation for you. Each artifact you match yourself earns up to three stars, fewer after
-several tries, and one when you used Show me. Save and Finish becomes available once every artifact
-matches.
+Trainees see their training path: three stages, each with its progress and result, and one button to
+continue. Until the training is complete, signing in opens the training path. When the path takes
+you to a recording, the page for opening it names the stage the recording is for; your study team
+sends you the training recordings. In the first stage, Learn with the experts, a coach on the right
+takes you through the experts' annotations of a recording one at a time. In the first recording the
+experts' annotation is outlined with a dashed line for you to copy; in the next you find each
+artifact on the screen yourself. For each one the coach says what to do with the controls in front
+of you: press the type's number (or click the numbered button next to Draw as), make sure Whole
+montage or Selected channels is chosen and, for selected channels, click the names of the channels
+at the left of the EEG, then drag across the artifact. It checks your work after every change and
+says what to put right and how: the type (select your annotation and press the right number), the
+start or the end (drag that edge, and which way), or the channels (right-click your annotation for
+Edit channels… or Apply to whole montage, or hold Shift and click it on a channel to take that
+channel off). On an iPad the coach speaks of taps, press and hold and the buttons on screen instead.
+When your annotation matches, press Continue (or Enter). Show me (or H) places the experts'
+annotation for you. When the coach holds more than fits, More below under it scrolls on. Under the
+instructions, a note says what the artifact looks like and why the experts marked it on those
+channels. Each artifact you match yourself earns up to three stars, fewer after several tries, and
+one when you used Show me. Save and Finish becomes available once every artifact matches. The time
+each step took counts only while the recording is open: if you close it and come back later, the
+step's time carries on from your last action on it.
 
-In the second stage, On your own, you annotate a practice recording without help. After you save
-it, ElectroTag shows your score, whether you reached the pass mark, and your annotations next to
-the experts', with every disagreement labelled on the EEG: MISSED for an artifact you did not mark,
-EXTRA for one the experts did not mark, and TYPE for one you gave another type. The list "What to
-look at" takes you to each of them, and N and P step through it.
+In the second stage, On your own, you annotate a practice recording without help. After you save it,
+ElectroTag shows your result in plain words: whether you reached the pass mark, your score, and what
+the score is made of, for example "You found 7 of the experts' 8 artifacts and made 3 marks they did
+not make." The score is highest when you find every artifact the experts marked, with the right
+type, and make no marks they did not make; each missed artifact, extra mark or wrong type lowers it.
+The pass mark, set by the study (80% unless it says otherwise), needs both a score of at least that
+much and the right type for at least that share of the artifacts you found. Under the result, your
+annotations are shown next to the experts' on the EEG, labelled You and Experts, with every
+disagreement marked: Missed for an artifact you did not mark, Extra for a mark the experts did not
+make, and "Should be …" for one you gave another type. The list "What to look at" takes you to each
+of them, and N and P step through it. The figures behind the score (such as the share of the
+experts' artifacts you found with their type) are under "The figures behind the score". If you do
+not pass, your training path offers a practice recording again: when there are several, the one you
+practised longest ago, so that you do not repeat answers you have just seen; with only one, the same
+recording.
+
+The third stage, the Competency assessment, unlocks when you have passed the practice. You annotate
+its recordings as in the second stage but without feedback, and nothing tells you how you did until
+every recording of the assessment is saved. Then the training path shows the result: Criteria met,
+Criteria not met yet (and your study administrator goes through the results with you before you try
+again), or Result to come, when the study team has to judge it. A stage that your programme does not
+use is marked Not included.
+
+Once every stage is done, ElectroTag opens on your home page when you sign in, with Open next
+recording for the study's own work and a line that takes you back to your training path. The
+recordings of your training are counted on the training path, apart from the study's.
 
 ## The short-segment quiz
 
@@ -662,15 +695,18 @@ recordings the quiz needs and which one it needs now.
 Each segment is shown with a few seconds of EEG around it, read only, with the study's filters. The
 answers are listed by family, as in the annotation view, with group terms such as Eye-artifact
 marked "group: exact type unclear"; some quizzes also offer "No artifact / none of these". Choose
-one and press Submit answer. Depending on the quiz, you see straight away whether it was right, with
-a short explanation, and press Next segment; or you go on to the next segment and see your result at
-the end. Every answer is kept with the study as soon as you send it, together with the time you took
-to give it, and cannot be changed afterwards: if you answer a segment on two pages or computers, the
-first answer is kept and the page says so. ‹ Stop the quiz offers two choices: Stop for now keeps
-your answers so that you can carry on another time from where you stopped, and End the quiz now
-finishes it with the score of the segments you answered. At the end ElectroTag shows how many
-segments you answered correctly, overall and for each artifact type, and opening a finished quiz
-again shows the same result.
+one and press Submit answer (or Enter); the description of the type you chose appears under the
+list, and How the quiz works, at the top of the page for opening the recordings, sums this up.
+Depending on the quiz, you see straight away whether it was right, with a short explanation, and
+press Next segment; or you go on to the next segment and see your result at the end. Every answer is
+kept with the study as soon as you send it, together with the time you took to give it, and cannot
+be changed afterwards: if you answer a segment on two pages or computers, the first answer is kept
+and the page says so. ‹ Stop the quiz offers two choices: Stop for now keeps your answers so that
+you can carry on another time from where you stopped, and End the quiz now finishes it with the
+score of the segments you answered. At the end ElectroTag shows how many segments you answered
+correctly, overall and for each artifact type (after End the quiz now, under the heading Quiz ended
+early). The quiz's entry on your first page says how far a stopped quiz went, with Continue the
+quiz, and a finished quiz has See my result, which shows the same result again.
 
 ## The demonstration
 

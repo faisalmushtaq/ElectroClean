@@ -10,7 +10,7 @@ const SIZES = [
   { width: 1280, height: 720 }, { width: 1440, height: 900 }, { width: 1920, height: 1080 },
   { width: 820, height: 1180, ipad: true }, { width: 1180, height: 820, ipad: true },
 ];
-const REVIEW_PREFIX = 'TYPE: should be Horizontal-eye-movement · YOU: ';
+const REVIEW_PREFIX = 'Should be Horizontal-eye-movement: ';
 
 /** Mark every type of the catalogue once: ratings on most, notes and channels on some. */
 async function markEveryType(page) {
@@ -90,7 +90,7 @@ export const tests = [
           assert.ok(await page.evaluate(() => document.querySelector('.ws-side').classList.contains('large-text')));
           checkList(assert, await listReport(page), names, `${where}, larger text`);
           await t.screenshot(page, 'annotation_list_large_text');
-          // A training review puts "TYPE: should be … · YOU: " before a label; the row wraps and keeps the whole text.
+          // A training review puts "Should be …: " before a label; the row wraps and keeps the whole text.
           await page.evaluate((prefix) => {
             const ws = globalThis.ElectroTag.ws;
             ws.prefix = { t00: prefix };

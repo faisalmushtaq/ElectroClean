@@ -132,11 +132,26 @@
   "original_row": {
     "Description": "1-based row number in the original events file (n/a for artifact rows)."
   },
+  "confidence": {
+    "LongName": "Confidence of the artifact annotation",
+    "Description": "How confident the annotator was that the artifact annotation is right, on an ordinal 5-point Likert scale, on rows with event_source 'electrotag_artifact' (n/a on original rows). n/a on an artifact row means that the annotation was not rated. In this study a rating was optional (annotation.confidence 'optional'): annotators rated an annotation only when they wished, so the rated annotations are a self-selected subset.",
+    "Levels": {
+      "1": "Not at all confident",
+      "2": "Slightly confident",
+      "3": "Moderately confident",
+      "4": "Very confident",
+      "5": "Completely confident"
+    }
+  },
+  "annotation_note": {
+    "LongName": "Annotator's note",
+    "Description": "The annotator's optional short note on the artifact (at most 200 characters), on rows with event_source 'electrotag_artifact'; n/a when there is no note, and on original rows."
+  },
   "ElectroTagMetadata": {
     "GeneratedBy": "ElectroTag 1.1.0",
     "recording_id": "sub-001/eeg/sub-001_task-rest_eeg.vhdr",
     "annotator_id": "A01",
-    "session_id": "20261028T111921Z-2c8b8d66",
+    "session_id": "20261029T194003Z-b2f33816",
     "original_events_source": "events_tsv",
     "original_sample_column_computed": false,
     "time_conventions": {
@@ -150,7 +165,7 @@
     "label_catalogue": {
       "catalogue_id": "electrotag-hed-score-artifacts",
       "catalogue_version": "2.0.0",
-      "sha256": "34f144b5c8699afeb41dd6fc9a4fd343e602123e979ee41471971b4fec7800ad",
+      "sha256": "c5b288e57bf0191cf7a1f7b8f29cfdb77e7c772878203fd8895162f01e0f7646",
       "hed_library": "score",
       "hed_library_version": "2.2.0",
       "hed_standard_version": "8.5.0",
@@ -345,6 +360,7 @@
       },
       "summary": []
     },
+    "confidence_setting": "optional",
     "notes": []
   }
 }

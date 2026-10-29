@@ -3,9 +3,12 @@
     python web_tests/practice_parity.py < cases.json
 
 Each case is {"sfreq", "n_samples", "ch_names", "reference": [Annotation], "mine": [Annotation]};
-the answer gives, per case, the event F1, the label accuracy, the pass decision (default pass rule)
-and the missed, extra and relabelled artifacts, so web_tests/unit/ui_scoring.test.mjs can check
-js/training/scoring.js against electrotag.training.assessment.practice_feedback.
+the answer gives, per case, the event F1, the label accuracy, the pass decision (the pass rule of
+the case's "rule", or the default), the missed, extra and relabelled artifacts, the counts the score
+is made of, and the words the trainee reads (the pass mark, the score's sentence, the review's
+verdict for "n_practice" practice recordings and the training path's line), so
+web_tests/unit/ui_scoring.test.mjs can check js/training/scoring.js against
+electrotag.training.assessment.practice_feedback and electrotag.training.programme.
 """
 
 from __future__ import annotations
@@ -21,7 +24,12 @@ from electrotag.app.annotations.labels import default_catalogue  # noqa: E402
 from electrotag.app.annotations.model import AnnotationDocument, ArtifactAnnotation, RecordingInfo  # noqa: E402
 from electrotag.app.annotations.timing import RecordingTiming  # noqa: E402
 from electrotag.training.assessment import practice_feedback  # noqa: E402
-from electrotag.training.programme import PassRule  # noqa: E402
+from electrotag.training.programme import (  # noqa: E402
+    PassRule,
+    practice_detail,
+    practice_verdict,
+    score_sentence,
+)
 from electrotag.training.reference import REFERENCE_ANNOTATOR  # noqa: E402
 
 
@@ -43,7 +51,9 @@ def main() -> int:
     out = []
     for case in json.load(sys.stdin):
         fb = practice_feedback(doc(case, "mine", "T01", "practice"), doc(case, "reference", REFERENCE_ANNOTATOR, "reference"))
-        verdict = PassRule().evaluate(fb)
+        rule = PassRule.from_dict(case.get("rule"))
+        verdict = rule.evaluate(fb)
+        counts = {k: verdict[k] for k in ("reference_events", "your_events", "found", "extra", "other_type")}
         out.append({
             "event_f1": num(fb["overall"]["event_f1"]),
             "label_accuracy": num(fb["overall"]["label_accuracy"]),
@@ -51,6 +61,14 @@ def main() -> int:
             "missed": sorted([m["label"], round(m["onset_s"], 3)] for m in fb["missed"]),
             "extra": sorted([e["label"], round(e["onset_s"], 3)] for e in fb["extra"]),
             "type": sorted([d["reference_label"], d["your_label"], round(d["onset_s"], 3)] for d in fb["label_differences"]),
+            "counts": counts,
+            "words": {
+                "rule": rule.describe(),
+                "sentence": score_sentence(counts),
+                "verdict": practice_verdict(verdict["passed"], rule, int(case.get("n_practice", 1)),
+                                            case.get("unlocked", "")),
+                "detail": practice_detail(verdict, rule, verdict["passed"]),
+            },
         })
     json.dump(out, sys.stdout)
     return 0

@@ -74,16 +74,19 @@ function progressCard(p) {
 
 
 export function homeView(app) {
-  const items = (app.assignments && app.assignments.items) || [];
+  const allItems = (app.assignments && app.assignments.items) || [];
+  const programme = app.me && app.me.programme;
+  // A trainee's training recordings are counted on the training path; home counts the study's own.
+  const items = programme ? allItems.filter((i) => i.context_id !== programme.set_id) : allItems;
   const nextId = app.assignments && app.assignments.next;
   const next = items.find((i) => i.recording_id === nextId) || null;
-  const programme = app.me && app.me.programme;
+  const training = programme && !programme.complete;
   const b = app.backend;
   const p = annotatorProgress(app, items, next);
   const cont = p.continue;
 
   const nextCard = h('section.card.next-card', {},
-    programme
+    training
       ? [h('h2', {}, 'Training programme'), h('p.subtitle', {}, `${programme.name}. Your training path shows each stage and what to do next.`),
         h('div.btn-row', {}, h('button.btn.primary', { type: 'button', onclick: () => app.go('training') }, 'Go to my training path'))]
       : cont
@@ -132,7 +135,8 @@ export function homeView(app) {
       h('h1', {}, `Hello${app.me && app.me.display_name ? `, ${app.me.display_name}` : ''}`),
       guideLine(),
       h('div.home-grid', {},
-        h('div.col', {}, nextCard, !programme && items.length ? progressCard(p) : null, list, quizCard(app)),
+        h('div.col', {}, nextCard, !training && items.length ? progressCard(p) : null, programme && !training ? trainingDoneCard(app) : null,
+          list, quizCard(app)),
         sideColumn([...gameCards(app), demo]))));
 }
 
@@ -140,6 +144,13 @@ export function homeView(app) {
 export function guideLine() {
   return h('p.caption.guide-link', {}, 'How each step works, from opening a recording to saving it, is in the ',
     h('a', { href: docsUrl('web/using.md'), target: '_blank', rel: 'noopener', 'data-log': 'guide' }, 'annotators\' guide'), ' (it opens in a new tab).');
+}
+
+/** After training: a line that it is complete, with the way back to the training path. */
+function trainingDoneCard(app) {
+  return h('section.card.training-done', { 'data-log': 'training-done' },
+    h('p.caption', {}, `Training complete: ${app.me.programme.name}. `,
+      h('button.link', { type: 'button', 'data-log': 'training-path', onclick: () => app.go('training') }, 'See my training path')));
 }
 
 /** The right-hand column: the game cards (home_games.js) and the demonstration's card, when there are any. */
