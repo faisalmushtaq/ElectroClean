@@ -10,6 +10,7 @@ every recording whose entities they match; closer files take precedence).
 from __future__ import annotations
 
 import json
+import sys
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -138,6 +139,42 @@ def resolve_sidecars(recording_path: Path, dataset_root: Path) -> SidecarResolut
     return res
 
 
+_JSON_WHITESPACE = " \t\n\r"
+
+
+def loads_json(text: str, **kwargs: Any) -> Any:
+    """``json.loads``, with the error messages of Python 3.13 on every supported version.
+
+    A sidecar's error is recorded word for word in a recording's manifest, and the browser builds
+    the same manifest with Python 3.13's words (``js/data/pyjson.js``). Python 3.13 reports a comma
+    before a closing bracket as "Illegal trailing comma before end of object" (or array) at the
+    comma, where Python 3.12 reports a missing property name or value at the bracket; this gives
+    3.12 the newer message, so the manifest is the same whichever supported Python builds it.
+    """
+    try:
+        return json.loads(text, **kwargs)
+    except json.JSONDecodeError as exc:
+        newer = _trailing_comma_error(exc) if sys.version_info < (3, 13) else None
+        if newer is None:
+            raise
+        raise newer from None
+
+
+def _trailing_comma_error(exc: json.JSONDecodeError) -> json.JSONDecodeError | None:
+    """Python 3.13's error for Python 3.12's report of a comma before ``}`` or ``]``, else None."""
+    doc, pos = exc.doc, exc.pos
+    closing = {"Expecting property name enclosed in double quotes": "}", "Expecting value": "]"}.get(exc.msg)
+    if closing is None or doc[pos:pos + 1] != closing:
+        return None
+    comma = pos - 1
+    while comma >= 0 and doc[comma] in _JSON_WHITESPACE:
+        comma -= 1
+    if comma < 0 or doc[comma] != ",":
+        return None
+    kind = "object" if closing == "}" else "array"
+    return json.JSONDecodeError(f"Illegal trailing comma before end of {kind}", doc, comma)
+
+
 def load_json_chain(paths: list[Path]) -> tuple[dict[str, Any], list[str]]:
     """Merge JSON sidecars from least to most specific (later keys win)."""
     merged: dict[str, Any] = {}
@@ -151,7 +188,7 @@ def load_json_chain(paths: list[Path]) -> tuple[dict[str, Any], list[str]]:
 
         try:
             # utf-8-sig: files saved by Windows Notepad may start with a byte-order mark.
-            data = json.loads(p.read_text(encoding="utf-8-sig"), parse_constant=constant)
+            data = loads_json(p.read_text(encoding="utf-8-sig"), parse_constant=constant)
         except (OSError, ValueError) as exc:
             problems.append(f"Could not read JSON sidecar {p.name}: {exc}")
             continue

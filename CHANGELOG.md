@@ -65,6 +65,13 @@ The branch that publishes the preview keeps its name, `claude/electroclean-web`;
 the rename had also changed it in the workflows, so the preview under
 `preview/` stopped updating until this was put right.
 
+With Python 3.12, a JSON sidecar with a comma before its closing bracket was
+reported in different words from Python 3.13, so a recording registered by
+the command line on 3.12 had a manifest that differed from the one the browser
+builds, and the browser's tests failed there. Such a sidecar is now reported
+in the same words on both versions, and the browser's modules are tested
+against Python 3.12 as well as 3.13.
+
 ElectroTag has its own mark: a short stretch of EEG marked as an artifact, the
 shaded band with its two edges that the application draws for each
 annotation, in a rounded frame. It replaces the earlier circle with a trace

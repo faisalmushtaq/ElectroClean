@@ -127,8 +127,10 @@ The *Tests* workflow (`.github/workflows/tests.yml`) runs the Python tests on
 Linux for every push (with Python 3.13 and 3.12), and on Windows, macOS and
 Linux for pushes to main, for pull requests into main and when started by hand,
 because the commands run on researchers' own computers. The *Browser version
-tests* workflow (`.github/workflows/web-tests.yml`) runs the browser modules,
-the application in Chromium and the Firebase emulators on Linux.
+tests* workflow (`.github/workflows/web-tests.yml`) runs the browser modules
+(against Python 3.13 and 3.12, because the browser builds a recording's
+manifest as Python does and the two versions word some errors differently),
+the application in Chromium and WebKit, and the Firebase emulators, on Linux.
 
 ## Checks that need a person
 

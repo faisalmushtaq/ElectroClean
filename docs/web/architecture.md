@@ -433,7 +433,7 @@ scipy, pybv). `python scripts/make_web_fixtures.py --perf` also writes the
 the demonstration, a stand-in server, and the real demonstration server
 (`electrotag-web demo`, started by the runner when the Python of
 `ELECTROTAG_PYTHON` or the repository's `.venv` has the packages of
-requirements-web.txt), with recordings opened from disk and the results checked
+requirements.txt), with recordings opened from disk and the results checked
 in the study folder; `--browser webkit` runs the same tests in WebKit, Safari's
 engine, which iPads use. `scripts/test_web_firebase.sh` does the same for a study
 on Firebase, on the Firebase Emulator Suite. The workflow **Browser version
@@ -595,7 +595,14 @@ field with the manifests that `web_tests/register_parity.py` builds as
 differ by 1 part in 100,000, as elsewhere in the data layer, because the
 display copy is filtered in single precision; everything else must be equal.
 `web_tests/unit/data_register_py.test.mjs` checks the imitations of Python
-against Python on a few hundred values. Ten Emotiv EDF+ recordings of a BIDS
+against Python on a few hundred values. Both use the Python named by
+`ELECTROTAG_PYTHON`, the repository's `.venv` or `python3`, the first that can
+import MNE-Python and pybv, and are skipped, saying so, when none can. A
+sidecar that cannot be read is reported in the manifest in Python's own words,
+and Python 3.12 words a trailing comma differently from Python 3.13 (whose
+words the browser uses), so `loads_json` in `electrotag/app/io/bids.py` gives
+3.12 the newer message; the workflow runs these tests against both versions.
+Ten Emotiv EDF+ recordings of a BIDS
 dataset (14 channels shown, 44 or 46 hidden, events in events.tsv, padding
 marked BAD_ACQ_SKIP, four with amplitudes stored in the wrong unit), three
 128-channel BrainVision recordings with channels.tsv and bad channels, and a

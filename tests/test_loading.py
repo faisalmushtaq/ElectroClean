@@ -176,6 +176,44 @@ def test_inconsistent_channels_and_bad_json_are_warnings(dataset, catalogue, set
     lr.close()
 
 
+# Python 3.13's words for these, which the browser reproduces (js/data/pyjson.js); Python 3.12 has
+# others for a trailing comma, so the same sidecar must give the same manifest on both.
+SIDECAR_JSON_ERRORS = [
+    ('{"a": 1,}', "Illegal trailing comma before end of object: line 1 column 8 (char 7)"),
+    ("[1,]", "Illegal trailing comma before end of array: line 1 column 3 (char 2)"),
+    ('{"a": 1 , \n }', "Illegal trailing comma before end of object: line 1 column 9 (char 8)"),
+    ("[1 ,\n ]", "Illegal trailing comma before end of array: line 1 column 4 (char 3)"),
+    ('{"a":[1,],}', "Illegal trailing comma before end of array: line 1 column 8 (char 7)"),
+    ("[1,x]", "Expecting value: line 1 column 4 (char 3)"),
+    ('{"a":]', "Expecting value: line 1 column 6 (char 5)"),
+    ('{"a": 1, x}', "Expecting property name enclosed in double quotes: line 1 column 10 (char 9)"),
+    ("[,]", "Expecting value: line 1 column 2 (char 1)"),
+    ("{,}", "Expecting property name enclosed in double quotes: line 1 column 2 (char 1)"),
+    ("[1,,]", "Expecting value: line 1 column 4 (char 3)"),
+    ("{ not json", "Expecting property name enclosed in double quotes: line 1 column 3 (char 2)"),
+]
+
+
+@pytest.mark.parametrize(("text", "message"), SIDECAR_JSON_ERRORS)
+def test_sidecar_json_errors_have_the_same_words_on_every_python(text, message):
+    from electrotag.app.io.bids import loads_json
+
+    with pytest.raises(json.JSONDecodeError) as caught:
+        loads_json(text)
+    assert str(caught.value) == message
+    assert loads_json('{"a": [1, 2], "b": NaN}', parse_constant=lambda _c: None) == {"a": [1, 2], "b": None}
+
+
+def test_a_trailing_comma_in_a_sidecar_is_reported_in_python_3_13s_words(tmp_path):
+    from electrotag.app.io.bids import load_json_chain
+
+    p = tmp_path / "sub-01_eeg.json"
+    p.write_text('{"SamplingFrequency": 250,}', encoding="utf-8")
+    assert load_json_chain([p]) == ({}, [
+        "Could not read JSON sidecar sub-01_eeg.json: "
+        "Illegal trailing comma before end of object: line 1 column 26 (char 25)"])
+
+
 def test_original_codes_like_artifact_codes_load_without_a_policy(rich_dataset, catalogue):
     """sub-099's own events use code 101; artifact codes have their own column, so it simply loads."""
     root, _ = rich_dataset

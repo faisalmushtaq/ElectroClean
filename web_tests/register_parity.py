@@ -16,7 +16,8 @@ Run it with ``-I`` (the folders are test data, never imported from) and the repo
     python -I web_tests/register_parity.py --python-text < cases.json
 
 answers how Python writes and reads the values that js/data/pyfmt.js and pyjson.js imitate
-(repr of floats, format specifications, repr of strings, json and UTF-8 errors, the desktop's
+(repr of floats, format specifications, repr of strings, the JSON errors that
+``electrotag.app.io.bids.loads_json`` reports for a sidecar, UTF-8 errors, the desktop's
 parse_float and parse_int_code, timedelta's rounding), for web_tests/unit/data_register_py.test.mjs.
 
     python -I web_tests/register_parity.py --check < manifests.json
@@ -65,10 +66,11 @@ def python_text(cases: dict) -> dict:
     import math
 
     from electrotag.app.eeg.events import parse_float, parse_int_code
+    from electrotag.app.io.bids import loads_json
 
     def errors_of(text: str) -> str:
         try:
-            json.loads(text)
+            loads_json(text)
             return ""
         except ValueError as exc:
             return str(exc)
