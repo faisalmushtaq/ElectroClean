@@ -1084,3 +1084,62 @@ table.leaderboard th:first-child, table.leaderboard td:first-child { width: 56px
   .review-overall, .problem-note { font: var(--t-16); }
   .ws-actions .btn.icon.ws-more { width: 40px; }
 }
+
+/* ------------------------------------------- viewing tools of the annotation view (workspace.js)
+   The value under the pointer in the line at the bottom, Go to time over the EEG, and the switch
+   in the Recording tab. */
+.ws-readout { flex: none; color: var(--ink); white-space: pre; font-variant-numeric: tabular-nums lining-nums; }
+.view-tools { margin: 8px 0 12px; }
+/* Overlay in the toolbar; on a touch screen it is among the View buttons under the EEG instead. */
+.ws-overlay-tool { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+@media (pointer: coarse) { .ws-overlay-tool { display: none; } }
+.view-tools .caption { margin: 0; flex: 1 1 200px; }
+.goto-bar {
+  position: absolute; top: 16px; left: 104px; z-index: 12; max-width: calc(100% - 128px); padding: 12px 16px;
+  background: var(--page); border: 1px solid var(--rule);
+}
+.goto-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.goto-row label { font: var(--t-14); color: var(--ink); }
+.goto-row .field.goto-field { width: 192px; height: 32px; font: var(--t-14); font-variant-numeric: tabular-nums lining-nums; }
+.goto-note { margin: 8px 0 0; max-width: 480px; }
+.goto-note.error { color: var(--destructive); }
+@media (pointer: coarse) {
+  .goto-row .field.goto-field { height: 44px; font: var(--t-16); }
+}
+
+/* --------------------------------------------- the channel chooser's map (channel_map.js)
+   Electrodes as small labelled circles on a drawing of the head, the nose at the top; chosen ones in
+   the magenta of selected channels, bad ones grey with a dashed edge, and the group colours on the
+   edge and name when channels are coloured. */
+.channel-view-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.channel-view-row .caption { margin: 0; }
+.channel-map-block { margin-top: 4px; }
+.map-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 8px; }
+.map-zoom { display: inline-flex; gap: 4px; margin-left: auto; }
+.map-viewport {
+  position: relative; overflow: auto; border: 1px solid var(--hairline); background: var(--surface); touch-action: none;
+  -webkit-user-select: none; user-select: none;
+}
+.map-viewport.disabled { opacity: 0.5; }
+.map-canvas { position: relative; margin: 0 auto; }
+.map-head { position: absolute; left: 0; top: 0; pointer-events: none; }
+.map-head svg { display: block; }
+.map-outline { fill: none; stroke: var(--rule); stroke-width: 1; }
+.map-outline.unknown { stroke-dasharray: 4 4; }
+.map-extra-caption { position: absolute; margin: 0; font: var(--t-12); white-space: nowrap; pointer-events: none; }
+.map-electrode {
+  position: absolute; transform: translate(-50%, -50%); min-width: var(--el-size, 28px); height: var(--el-size, 28px); padding: 0 4px;
+  display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--el-colour, var(--border));
+  border-radius: var(--pill); background: var(--surface); color: var(--el-colour, var(--ink)); font: var(--t-12); white-space: nowrap;
+  cursor: pointer; font-variant-numeric: tabular-nums lining-nums;
+}
+@media (hover: hover) { .map-electrode:hover:not(:disabled) { background: var(--hover); } }
+.map-electrode[aria-pressed="true"] { background: #FBEAF1; border-color: var(--selection-channel); color: var(--selection-channel); font-weight: 600; }
+.map-electrode.bad { color: var(--text-disabled); border-style: dashed; border-color: var(--text-disabled); }
+.map-electrode.bad[aria-pressed="true"] { color: var(--selection-channel); border-color: var(--selection-channel); }
+.map-electrode.dim { opacity: 0.35; }
+.map-electrode:disabled { cursor: default; }
+.map-electrode:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; z-index: 2; }
+.map-box { position: absolute; border: 1px solid var(--accent); background: rgba(43, 67, 146, 0.08); pointer-events: none; }
+.map-note { margin: 8px 0 0; }
+.dialog.wide:has(.channel-map-block:not([hidden])) { max-width: 760px; }
