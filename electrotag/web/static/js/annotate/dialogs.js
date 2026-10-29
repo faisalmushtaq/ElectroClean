@@ -4,7 +4,9 @@
 import { h, clear } from '../ui/dom.js';
 import { showDialog } from '../ui/dialog.js';
 import { Catalogue, displayCode } from '../catalogue.js';
-import { legibleOnWhite } from '../util.js';
+import { legibleOnWhite, local } from '../util.js';
+import { logger } from '../log/logger.js';
+import { channelMap } from './channel_map.js';
 import { MAX_NOTE_CHARS, cleanNote, noteProblem } from './confidence.js';
 
 /**
@@ -237,9 +239,11 @@ export function typeSuffixes(channels) {
 
 /**
  * Choose channels. Resolves with {wholeMontage, channels} or null when cancelled.
- * channels: [{name, type}] in display order.
+ * channels: [{name, type}] in display order. `map` ({layout, fileName, colours, storageKey}, from the
+ * annotation view) adds the head map (channel_map.js) beside the list, with the person's last choice
+ * of the two kept under storageKey.
  */
-export function chooseChannels({ title, channels, chosen = [], allowWholeMontage = false, wholeMontage = false }) {
+export function chooseChannels({ title, channels, chosen = [], allowWholeMontage = false, wholeMontage = false, map = null }) {
   const names = channels.map((c) => c.name);
   const known = new Set(names);
   const picked = new Set(chosen.filter((n) => known.has(n)));
@@ -267,6 +271,7 @@ export function chooseChannels({ title, channels, chosen = [], allowWholeMontage
       btn.setAttribute('aria-pressed', String(members.every((n) => picked.has(n))));
     }
     for (const b of [all, none, ...(onlyChosen ? [onlyChosen] : [])]) b.disabled = disabled;
+    if (mapPart) mapPart.setDisabled(disabled);
     const narrowed = shown < channels.length;
     if (many) {
       all.textContent = narrowed ? `Select ${shown} shown` : 'Select all';
@@ -328,17 +333,19 @@ export function chooseChannels({ title, channels, chosen = [], allowWholeMontage
     'Type names or their beginnings, separated by commas: b1 finds B1 and B10 to B19, and z finds the names containing z ' +
     'when none begins with it. Put a name in quotes for that channel only ("b1"), or use * for any characters (*z).') : null;
   const foot = many ? h('div.channel-foot', {}, count, h('label.channel-only', {}, onlyChosen, ' Show chosen only')) : count;
+  const { mapPart, viewRow, showView } = channelViews({ map, channels, picked, grid, listOnly: [all, none, help],
+    isShown: (n) => !boxes.get(n).parentElement.hidden, onChange: () => { for (const [n, b] of boxes) b.checked = picked.has(n); apply(); } });
   const body = h(`div.channel-chooser${many ? '.many' : ''}`, {},
     allowWholeMontage ? h('div.radio-row', {},
       h('label', {}, wholeRadio, ' Whole montage'), h('label', {}, someRadio, ' Only these channels:')) : null,
-    h('div.row', {}, filter, all, none), help, groupsBlock, grid, foot);
+    viewRow, h('div.row', {}, filter, all, none), help, groupsBlock, grid, mapPart ? mapPart.el : null, foot);
   update();
   return showDialog({
     title, body, wide: true,
     buttons: [{ label: 'Cancel', value: null }, { label: 'OK', value: 'ok', kind: 'primary' }],
     cancelValue: null,
     // In a large montage, typing finds channels straight away.
-    onOpen: many ? () => filter.focus({ preventScroll: true }) : null,
+    onOpen: () => { showView(); if (many) filter.focus({ preventScroll: true }); },
   }).then((v) => {
     if (v !== 'ok') return null;
     if (isWhole()) return { wholeMontage: true, channels: [] };
@@ -346,7 +353,35 @@ export function chooseChannels({ title, channels, chosen = [], allowWholeMontage
   });
 }
 
-/** Edit the start and end (seconds). Resolves with [start, end] or null. */
+/**
+ * The List and Map views of the channel chooser: the switch between them, and the map. Returns
+ * {mapPart, viewRow, showView}; without `map` there is only the list.
+ */
+function channelViews({ map, channels, picked, grid, listOnly, isShown, onChange }) {
+  if (!map || !map.layout || !map.layout.points.length) return { mapPart: null, viewRow: null, showView: () => {} };
+  const mapPart = channelMap({ layout: map.layout, fileName: map.fileName, channels, picked, colours: map.colours, isShown, onChange });
+  let view = local.get(map.storageKey, 'list') === 'map' ? 'map' : 'list';
+  const seg = (kind, label) => {
+    const b = h('button.seg', { type: 'button', 'data-view': kind, 'data-log': `channel-view-${kind}`,
+      onclick: () => { if (view === kind) return; view = kind; local.set(map.storageKey, kind); logger.event('channel_chooser_view', { view: kind }); showView(); } }, label);
+    return b;
+  };
+  const listBtn = seg('list', 'List');
+  const mapBtn = seg('map', 'Map');
+  const viewRow = h('div.channel-view-row', {}, h('span.caption', {}, 'Show the channels as'),
+    h('div.segmented', { role: 'group', 'aria-label': 'Show the channels as' }, listBtn, mapBtn));
+  const showView = () => {
+    const onMap = view === 'map';
+    listBtn.setAttribute('aria-pressed', String(!onMap));
+    mapBtn.setAttribute('aria-pressed', String(onMap));
+    grid.hidden = onMap;
+    for (const b of listOnly) if (b) b.hidden = onMap; // the map has its own buttons, and its note says how to choose
+    mapPart.el.hidden = !onMap;
+    if (onMap) { mapPart.place(); mapPart.refresh(); }
+  };
+  return { mapPart, viewRow, showView };
+}
+
 /**
  * A one-line field for an annotation's note, with the characters left. Its text is never logged (the
  * interaction log skips text fields), and the dialogs close with 'ok', never with the note itself.

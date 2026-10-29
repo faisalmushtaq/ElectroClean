@@ -1,6 +1,7 @@
 // The open view: choose a recording on this computer (a file, several files or a folder, or drop
 // them), then follow its fingerprint and the study's answer.
 
+import { electrodeSidecars } from '../data/electrodes.js';
 import { h, clear } from '../ui/dom.js';
 import { appHeader, icon } from './common.js';
 import { CAN_CHOOSE_FOLDER, acceptFiles } from '../util.js';
@@ -108,6 +109,9 @@ export class OpenView {
     if (this.app.openView !== this || this.app.route !== 'open') return; // a file that arrived after the view was left
     source = source || { kind: 'chosen', keep: Boolean(this.device.box && this.device.box.checked) };
     clear(this.result);
+    // A BIDS electrodes.tsv picked with the recording gives the channel map its positions (js/data/electrodes.js).
+    const sidecars = electrodeSidecars(files);
+    if (sidecars.length) { source = { ...source, sidecars }; files = [...files].filter((f) => !sidecars.includes(f)); }
     let chosen = files;
     if (fromFolder || files.length > 3) {
       chosen = filesForRecording(files, this.expected ? this.expected.file_name : null);

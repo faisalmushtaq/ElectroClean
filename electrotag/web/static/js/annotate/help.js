@@ -29,8 +29,12 @@ channels…, Set confidence…, Add a note…, Delete), and <b>double-tap</b> it
 the list. The Confidence button under the Annotations list gives the selected annotation the next
 level with one tap.</li>
 <li>The buttons under the EEG move through time and the channels and change how much is shown,
-as the keys do on a computer; the last of them shows the next part not yet viewed. Pause, at the
-top, stops the clock. A keyboard attached to the iPad works as on a computer.</li>
+as the keys do on a computer, and one shows the next part not yet viewed. The <b>View</b> buttons
+switch the overlay on and off, show one channel alone (with buttons for the previous and next
+channel), open <b>Go to time</b> and <b>Show all</b>. Pause, at the top, stops the clock. A keyboard
+attached to the iPad works as on a computer.</li>
+<li>In <b>Channels…</b>, <b>Map</b> shows the electrodes on the head: tap one to choose it, drag
+with the Pencil to choose several in a box, and drag with a finger to move a large map.</li>
 </ul>
 `;
 
@@ -46,7 +50,17 @@ export const HELP_HTML = `
 <tr><td>Click empty EEG</td><td>place a time cursor showing the exact time</td></tr>
 <tr><td>Overview bar</td><td>(bottom) shows where you are; click it to jump</td></tr>
 <tr><td><kbd>U</kbd></td><td>the next part not yet viewed</td></tr>
+<tr><td><kbd>G</kbd></td><td>go to a time: type seconds (12.5), m:ss or h:mm:ss and Enter; the time comes to the middle of the screen</td></tr>
+<tr><td><kbd>Shift</kbd>+${IS_MAC ? `<kbd>fn</kbd>+${arrow('right')}` : '<kbd>End</kbd>'}</td><td>show all of the recording, as an overview; again to go back</td></tr>
+<tr><td><kbd>V</kbd></td><td>the channel, time and value under the pointer, in the line at the bottom</td></tr>
+<tr><td><kbd>O</kbd></td><td>overlay: the channels on screen on one shared axis</td></tr>
+<tr><td><kbd>I</kbd></td><td>in the overlay, one channel alone; ${arrow('up')} / ${arrow('down')} go to the previous / next channel</td></tr>
 </table>
+<p>The <b>overlay</b> draws the channels on screen on one axis in thin lines, so that an artifact
+that reaches many channels, such as a blink, stands out as a dark band. Point at a name on the left
+to see that channel on top, or click it (or press <kbd>I</kbd>) to see it alone. In the overlay new
+marks apply to the whole montage; for channel-specific marks, go back to the normal view
+(<kbd>O</kbd>). Show all is for finding your way: the parts it shows do not count as viewed.</p>
 <p>On the overview bar, the parts of the recording that have not been on the screen yet are white
 with a thin grey line above them; the Recording tab and the status line say how much you have viewed.</p>
 <p>Vertical dashed lines labelled in teal are the <b>original experimental events</b>.
@@ -62,7 +76,9 @@ numbered buttons after <i>Draw as</i>, or choose from the menu next to them. Pre
 <li>Choose whether it affects the <b>whole montage</b> or only <b>selected channels</b>
 (the switch in the toolbar, or the key <kbd>C</kbd>). For selected channels,
 click channel names or traces to select them (they turn magenta), or use
-<b>Channels…</b>.</li>
+<b>Channels…</b>, which lists the channels or, with <b>Map</b>, shows them on the head: click an
+electrode to choose it, drag a box to choose several, or move between electrodes with the arrow
+keys and choose with Space.</li>
 <li><b>Drag</b> across the EEG from the start to the end of the artifact. Or, with the
 keyboard, point at the start and press <kbd>M</kbd>, then point at the end and press
 <kbd>M</kbd> again; you can scroll in between, which is the easy way to mark an artifact
@@ -114,6 +130,8 @@ your annotations for the study's researchers.</p>
 <tr><td><kbd>${CTRL}+Z</kbd> / <kbd>${CTRL}+Y</kbd></td><td>undo / redo</td></tr>
 <tr><td><kbd>B</kbd></td><td>pause, and resume</td></tr>
 <tr><td><kbd>U</kbd></td><td>the next part not yet viewed</td></tr>
+<tr><td><kbd>G</kbd></td><td>go to a time</td></tr>
+<tr><td><kbd>V</kbd> / <kbd>O</kbd> / <kbd>I</kbd></td><td>value under the pointer / overlay / one channel alone</td></tr>
 <tr><td><kbd>?</kbd></td><td>this help</td></tr>
 </table>
 

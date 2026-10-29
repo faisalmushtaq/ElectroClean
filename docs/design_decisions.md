@@ -416,6 +416,47 @@ channels, the chooser's rule) is not coloured by region or side, since BioSemi's
 bank of electrodes rather than central sites. `web_tests/unit/ui_channel_colours.test.mjs` checks
 the contrast, the hues, the distances from the reserved colours and the separations.
 
+## Viewing tools: the head map, the readout, the overlay and Go to time (29 October 2026)
+
+The project lead compared ElectroTag with EEGNet, a LORIS-based EEG platform, and asked for four
+of its ways of looking at the EEG, because they help annotators judge artifacts faster and more
+accurately: choosing channels on a map of the head, the value under the pointer, all channels on
+one axis (EEGNet's Stack, ElectroTag's Overlay), and typing a time to go to.
+
+The map places each electrode, in this order, where the recording's own BIDS electrodes.tsv puts
+it, where the standard 10-20, 10-10 and 10-05 positions put it, or, for montages whose names say
+nothing about position, on rings in the order of the channels, which the map says plainly
+("Positions not known: arranged in order") so that nobody reads a ring as anatomy. The
+electrodes.tsv is read only when the annotator picks it with the recording (a folder, or several
+files), on their own computer as the recording is; the study's manifest does not carry positions, so
+that adding them later needs no change to what the study stores. Its coordinates are turned to
+right, front and up according to the coordinate system its coordsystem.json names (the systems
+the BIDS specification lists as front-left-up, such as EEGLAB and CTF, are turned round; the others
+are right-front-up), centred on the sphere that fits them best, and drawn with the azimuthal
+equidistant projection that EEG topographies use. The standard positions are not a table copied
+from one software package: they are worked out on an ideal spherical head from the percentage rules
+of the 10-20 system as Oostenveld and Praamstra extended them to 5% steps, so that every name of
+the 10-05 system, the old names T3 to T6 and the names as EDF files write them have a place, and the
+unit tests check the rules (the ring at 10% steps of the half circumference, the rows divided in
+equal parts, left and right mirrored). A montage is placed by its names under the channel
+chooser's 60% rule, so that BioSemi's C1 to C32 are not taken for central sites. Bad channels are
+grey with a dashed edge and can still be chosen, as in the list, since ElectroTag never forbids
+marking an artifact on a bad channel.
+
+In the overlay, channel-specific marking is not offered. A channel-specific mark is made by
+choosing channels by their rows, and in the overlay there are no rows: every channel is drawn on the
+same axis, so a drag cannot say which channels it meant, and a mark made there would look the same
+whichever channels it named. New marks in the overlay therefore apply to the whole montage, as the
+toolbar and a caption on the EEG say, and the switch to Selected channels waits until the normal
+view is back. Existing channel-specific annotations are drawn over the whole height in the overlay,
+so that they stay visible, and can still be edited with Edit channels…. The overlay's axis is
+shared by every type of channel, each keeping its own scaling, and half its height stands for four
+times the type's scaling (200 µV for EEG at the usual 50 µV), so that blinks and movements stay
+within it; overlapping lines darken, and the lines grow lighter as more channels are drawn. Go to
+time puts the time typed in the middle of the screen with the time cursor on it, so that what comes
+before is as visible as what comes after, and Show all is an overview: a view of a whole long
+recording shows too little of each second to count as viewed.
+
 ## Revisions and game elements (28 October 2026)
 
 Annotators asked to return to recordings they had finished and correct them. A revision is a new

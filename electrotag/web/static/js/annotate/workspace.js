@@ -33,6 +33,10 @@ import { CHANNEL_COLOUR_MODES, MODE_TEXT as COLOUR_MODE_TEXT, channelColours, le
 import { BREAK_MIN_S, HIDDEN_PAUSE_MS, SNOOZE_S, idleDue, todayKey } from './clock.js';
 import * as cov from '../viewer/coverage.js';
 import { NAME_SIZES, PANEL_TEXT, TRACE_WIDTHS, loadComfort, saveComfort } from '../ui/comfort.js';
+import { microvoltText } from '../viewer/geometry.js';
+import { mapLayout, projectPositions } from '../viewer/head_map.js';
+import { readElectrodes } from '../data/electrodes.js';
+import { centredStart, clampTime, parseTimeText } from './goto.js';
 
 const MODE_TEXT = { standard: 'Annotation', guided: 'Guided training', practice: 'Practice', assessment: 'Assessment', tryout: 'Try-out', review: 'Practice review' };
 const DRAG_PX = 3;
@@ -150,9 +154,11 @@ export class Workspace {
     }
     this._applyChannelColours();
     this._syncViewState();
+    this._buildViewTools();
     this.viewer.onView = (v, cause) => {
+      this._viewToolsOnView(cause);
       this._syncViewState(); this._logView();
-      if (this.timed) this._noteViewDwell();
+      if (this.timed && !this._overviewView) this._noteViewDwell();
       if (cause !== 'restore') this._afterViewChange();
     };
     this.viewer.onPointer = (type, info, e) => this._pointer(type, info, e);
@@ -265,7 +271,8 @@ export class Workspace {
     this.chanSummary = h('span.ws-chansummary');
     this.toolbar = h('div.ws-toolbar', { role: 'toolbar', 'aria-label': 'Artifact annotation' },
       this.typeCaption, h('div.chips', {}, this.chips), this.typeMenuBtn, h('span.sep'),
-      h('div.segmented', { role: 'group', 'aria-label': 'Applies to' }, this.scopeWhole, this.scopeSome), this.chooseBtn, this.chanSummary);
+      h('div.segmented', { role: 'group', 'aria-label': 'Applies to' }, this.scopeWhole, this.scopeSome), this.chooseBtn, this.chanSummary,
+      h('span.ws-overlay-tool', {}, h('span.sep'), this._overlayButton()));
     this._ro = new ResizeObserver(() => this._fitToolbar());
     this._ro.observe(this.toolbar);
     return this.toolbar;
@@ -291,7 +298,8 @@ export class Workspace {
     this.countEl = h('span.ws-fixed');
     this.viewedEl = h('span.ws-fixed.ws-viewed', { title: 'How much of the recording has been on the screen' });
     this._fixedText = `Annotator: ${who}   |   Mode: ${MODE_TEXT[this.kind === 'annotate' ? s.mode : this.kind] || s.mode}`;
-    return h('footer.ws-status', {}, h('div.ws-status-left', {}, this.hintEl, this.msgEl),
+    this.readoutEl = h('span.ws-readout', { 'aria-hidden': 'true', hidden: true });
+    return h('footer.ws-status', {}, h('div.ws-status-left', {}, this.hintEl, this.msgEl), this.readoutEl,
       h('div.ws-status-right', {}, this.timed ? this.viewedEl : null, this.countEl, this.fixedEl));
   }
 
@@ -367,7 +375,7 @@ export class Workspace {
     const table = h('table.info', {}, rows.map(([k, v]) => h('tr', {}, h('th', {}, k), h('td', {}, v))), h('tr', {}, h('th', {}, 'Filter edge zones'), this.edgeRow));
     p.append(this.clockLabel);
     if (this.timed) p.append(h('p.caption.clock-note', {}, 'Time while you are paused is not counted.'), this._coverageBlock());
-    p.append(h('label.check', {}, zones, ' Show filter edge zones'), opts, this._comfortOptions(), table);
+    p.append(h('label.check', {}, zones, ' Show filter edge zones'), this._viewToolsRow(), opts, this._comfortOptions(), table);
     if (s.warnings.length) p.append(h('h4', {}, 'Checks and warnings'), h('ul.warnings', {}, s.warnings.map((w) => h('li', {}, w))));
     p.append(h('p.caption', {}, 'Filters change only what you see. The recording files are never modified. Zero-phase filters can make sharp transients appear to start slightly earlier; mark the artifact where the underlying event begins.'));
     this._updateEdgeText();
@@ -568,7 +576,7 @@ export class Workspace {
       filters: this.filtersText(), filter_settings: this._filtersLog(), original_events: s.events.length, resumed: s.resumed,
       annotations_restored: s.restored, window_px: [window.innerWidth, window.innerHeight],
       ...(this.timed ? { elapsed_restored_s: Math.round(s.elapsedBase * 1000) / 1000, viewed_fraction: this._viewedFraction() } : {}),
-      comfort: { ...this.comfort }, ...extra,
+      comfort: { ...this.comfort }, overlay: Boolean(this.viewer.overlay), value_readout: Boolean(this.readoutOn), ...extra,
     });
     logger.event('viewer_ready', {});
   }
@@ -586,6 +594,7 @@ export class Workspace {
     clearTimeout(this._hiddenTimer);
     clearInterval(this._pauseTimer);
     this._noteViewDwell.cancel();
+    cancelAnimationFrame(this._readoutRaf);
     if (this.clock) {
       if (this.clock.paused) this.resume('close', { quiet: true });
       this._tally(true);
@@ -774,6 +783,7 @@ export class Workspace {
 
   _recordViewed() {
     if (!this.timed || !this.clock || this.clock.paused || document.visibilityState === 'hidden') return;
+    if (this._overviewView) return; // Show all is a look at the whole recording, not viewing it
     if (!this.viewer._covers()) { this._noteViewDwell(); return; } // still reading the EEG
     const v = this.viewer.view;
     const before = this.s.viewed;
@@ -888,11 +898,13 @@ export class Workspace {
   }
 
   toggleScope() {
+    if (this.viewer.overlay) { this.say('In the overlay, marks apply to the whole montage. Press O for the normal view to mark channels.'); return; }
     this.setScope(this.scope === 'whole' ? 'channels' : 'whole');
     this.say(this.scope === 'whole' ? 'Next annotation: whole montage' : 'Next annotation: selected channels (click channel names to choose them)');
   }
 
   onChannelClicked(name) {
+    if (this.viewer.overlay) { this.isolate(name, logger.via()); return; }
     if (this.scope !== 'channels') {
       this.say(`${name}: switch to 'Selected channels' to choose channels by clicking. Channels are not marked bad in ElectroTag.`);
       return;
@@ -972,6 +984,7 @@ export class Workspace {
     this.btnMerge.disabled = !(ed && anns.length >= 2 && new Set(anns.map((a) => a.label)).size === 1);
     this._refreshConfidenceButtons(anns, ed);
     if (this.saveBtn && this.coach) this.coach.syncSaveButton(this.saveBtn);
+    this._refreshOverlayState();
   }
 
   _refreshFixed() {
@@ -1050,7 +1063,7 @@ export class Workspace {
     const last = Math.min(ch.length, v.firstChannel + v.nChannels) - 1;
     logger.event('view', {
       t_start: Math.round(v.startS * 1000) / 1000, duration: v.durationS, ch_start: v.firstChannel, n_channels: v.nChannels,
-      first_channel: ch[v.firstChannel]?.name, last_channel: ch[last]?.name, scale_factor: Math.round(v.scaleFactor * 1e4) / 1e4, butterfly: false,
+      first_channel: ch[v.firstChannel]?.name, last_channel: ch[last]?.name, scale_factor: Math.round(v.scaleFactor * 1e4) / 1e4, butterfly: Boolean(this.viewer.overlay),
     });
   }, 250);
 
@@ -1098,11 +1111,12 @@ export class Workspace {
 
   createAnnotation(t0, t1) {
     if (!this._checkEditable()) return null;
-    if (this.scope === 'channels' && !this.selectedChannels.length) {
+    const byChannel = this._marksChannels();
+    if (byChannel && !this.selectedChannels.length) {
       this.say("No channels selected: click channel names, use 'Channels…', or choose 'Whole montage'.");
       return null;
     }
-    const channels = this.scope === 'channels' ? [...this.selectedChannels] : [];
+    const channels = byChannel ? [...this.selectedChannels] : [];
     let ann;
     try {
       ann = this.store.addInterval(this.currentLabel, t0, t1, channels);
@@ -1304,7 +1318,7 @@ export class Workspace {
     if (!this.store.has(id) || !this._checkEditable()) return;
     const a = this.store.get(id);
     const chosen = await chooseChannels({ title: `Channels affected by this ${a.label}`, channels: this.s.channels, chosen: a.channels,
-      allowWholeMontage: true, wholeMontage: !a.channels.length });
+      allowWholeMontage: true, wholeMontage: !a.channels.length, map: this._channelMapOptions() });
     if (!chosen) return;
     logger.noteInput(`dialog:Channels affected by this ${a.label}`);
     if (!chosen.wholeMontage && !chosen.channels.length) { inform('Channels not changed', 'Choose at least one channel, or Whole montage.'); return; }
@@ -1312,7 +1326,7 @@ export class Workspace {
   }
 
   async chooseChannelsForNew() {
-    const chosen = await chooseChannels({ title: 'Channels for new annotations', channels: this.s.channels, chosen: this.selectedChannels });
+    const chosen = await chooseChannels({ title: 'Channels for new annotations', channels: this.s.channels, chosen: this.selectedChannels, map: this._channelMapOptions() });
     if (!chosen) return;
     logger.noteInput('dialog:Channels for new annotations');
     this.setSelectedChannels(chosen.channels);
@@ -1400,6 +1414,7 @@ export class Workspace {
 
   // ============================================================ mouse and touch
   _pointer(type, info, e) {
+    if (type === 'pointermove' || type === 'pointerleave' || type === 'pointerdown') this._noteReadout(type, e);
     if (type === 'pointermove' || type === 'pointerleave') this.pointerXY = info && info.area === 'eeg' ? { x: e.clientX, y: e.clientY } : null;
     const g = this.gesture;
     if (type === 'cancel') {
@@ -1465,7 +1480,7 @@ export class Workspace {
       }
       if (g.kind === 'draw') {
         const t = clamp(info.t, 0, this.s.recording.durationS);
-        this.viewer.setDragPreview({ t0: g.t, t1: t, colour: g.colour, channels: this.scope === 'channels' ? this.selectedChannels : [] });
+        this.viewer.setDragPreview({ t0: g.t, t1: t, colour: g.colour, channels: this._marksChannels() ? this.selectedChannels : [] });
         g.t1 = t;
       } else if (g.kind === 'resize') {
         if (dx > 1) g.moved = true;
@@ -1697,6 +1712,7 @@ export class Workspace {
       return;
     }
     if (e.altKey) return;
+    if (this._viewKey(e, handled)) return;
     const v = this.viewer;
     switch (k) {
       case 'ArrowLeft': e.preventDefault(); v.scrollBy(-(e.shiftKey ? 1 : 0.25) * v.view.durationS, 'key'); return;
@@ -1731,6 +1747,296 @@ export class Workspace {
     if (k === 'c' || k === 'C') return handled('Whole montage or selected channels', () => this.toggleScope());
     if (k === 'd' || k === 'D') return handled('Confidence', () => this.cycleConfidence());
     if (k === 'Delete' || k === 'Backspace') return handled('Delete', () => this.deleteSelection());
+  }
+
+  // ============================================ viewing tools: readout, overlay, isolate, go to time
+  // The value under the pointer (V), the overlay of the channels on one axis (O) with one channel
+  // alone (I), Go to time (G) and Show all (Shift+End), with their buttons in the toolbar, the
+  // Recording tab and, on a touch screen, the View group under the EEG. The overlay and the readout
+  // are each annotator's own choices, kept in this browser as the comfort settings are.
+
+  _toolKey(name) { return `electrotag.${name}|${(this.s.me && this.s.me.annotator_id) || 'anon'}`; }
+
+  _buildViewTools() {
+    const kept = local.get(this._toolKey('value_readout'), null);
+    // On by default with a mouse; off on a touch screen, where a finger only moves while it marks.
+    this.readoutOn = typeof kept === 'boolean' ? kept : !touchFirst();
+    if (local.get(this._toolKey('overlay'), false) === true) this.viewer.setOverlay(true);
+    this._viewTouchGroup();
+    this.eegHost.append(this._goToBar());
+    this._loadElectrodes();
+  }
+
+  _overlayButton() {
+    this.overlayBtn = h('button.btn.toggle', { type: 'button', 'aria-pressed': 'false', 'data-log': 'overlay',
+      title: 'Overlay: the channels on screen on one shared axis, so that what reaches many of them stands out (O). I shows one channel alone.',
+      onclick: () => this.setOverlay(!this.viewer.overlay, 'button') }, 'Overlay');
+    this.overlayBtn.tabIndex = -1;
+    this.overlayBtn.addEventListener('mousedown', (e) => e.preventDefault());
+    return this.overlayBtn;
+  }
+
+  /** The Recording tab's switch for the value under the pointer. */
+  _viewToolsRow() {
+    this.readoutBtn = h('button.btn.small.toggle', { type: 'button', 'aria-pressed': 'false', 'data-log': 'value-readout',
+      title: 'Show the channel, time and value under the pointer in the line at the bottom (V)',
+      onclick: () => this.setReadout(!this.readoutOn, 'button') }, 'Value under the pointer');
+    return h('div.btn-row.view-tools', {}, this.readoutBtn,
+      h('span.caption', {}, 'The channel, time and value under the pointer, in the line at the bottom (V).'));
+  }
+
+  _viewTouchGroup() {
+    const btn = (label, log, fn, pressed = null) => h('button.btn.small', { type: 'button', 'data-log': `touch-${log}`, 'data-log-text': label,
+      ...(pressed === null ? {} : { 'aria-pressed': String(pressed), class: 'toggle' }), onclick: fn }, label);
+    const iconBtn = (name, label, log, fn) => h('button.btn.icon.small', { type: 'button', 'aria-label': label, title: label,
+      'data-log': `touch-${log}`, 'data-log-text': label, onclick: fn }, icon(name));
+    this.touchOverlay = btn('Overlay', 'overlay', () => this.setOverlay(!this.viewer.overlay, 'button'), false);
+    this.touchIsolate = btn('Isolate', 'isolate', () => this.toggleIsolate('button'), false);
+    this.touchPrevCh = iconBtn('chevron-up', 'Previous channel alone', 'isolate-previous', () => this.stepIsolated(-1, 'button'));
+    this.touchNextCh = iconBtn('chevron-down', 'Next channel alone', 'isolate-next', () => this.stepIsolated(1, 'button'));
+    this.viewer.addTouchGroup('View', [this.touchOverlay, this.touchIsolate, this.touchPrevCh, this.touchNextCh,
+      btn('Go to time', 'goto', () => this.openGoTo('button')), btn('Show all', 'show-all', () => this.showAll('button'))]);
+  }
+
+  _refreshOverlayState() {
+    const v = this.viewer;
+    if (!v) return;
+    const on = v.overlay;
+    const iso = on && v.isolated !== null;
+    if (this.overlayBtn) this.overlayBtn.setAttribute('aria-pressed', String(on));
+    if (this.readoutBtn) this.readoutBtn.setAttribute('aria-pressed', String(Boolean(this.readoutOn)));
+    if (this.touchOverlay) {
+      this.touchOverlay.setAttribute('aria-pressed', String(on));
+      this.touchIsolate.setAttribute('aria-pressed', String(iso));
+      this.touchPrevCh.hidden = !iso;
+      this.touchNextCh.hidden = !iso;
+    }
+    if (this.toolbar && on) {
+      // Channel-specific marks need a row per channel: in the overlay every mark is on the whole montage.
+      this.scopeWhole.setAttribute('aria-pressed', 'true');
+      this.scopeSome.setAttribute('aria-pressed', 'false');
+      this.scopeSome.disabled = true;
+      this.chooseBtn.disabled = true;
+      this.chanSummary.className = 'ws-chansummary';
+      this.chanSummary.textContent = 'all channels in the overlay';
+      this.chanSummary.title = 'In the overlay, new marks apply to the whole montage. Channel-specific marks are made in the normal view (O).';
+    }
+  }
+
+  /** Whether the next mark is on the selected channels (never in the overlay). */
+  _marksChannels() { return this.scope === 'channels' && !this.viewer.overlay; }
+
+  // ------------------------------------------------------------------ the value under the pointer
+  setReadout(on, via = 'button') {
+    this.readoutOn = Boolean(on);
+    local.set(this._toolKey('value_readout'), this.readoutOn);
+    if (!this.readoutOn) { this._readoutAt = null; this.readoutEl.hidden = true; this.readoutEl.textContent = ''; }
+    logger.event('state', { value_readout: this.readoutOn, via });
+    this._refreshOverlayState();
+    this.say(this.readoutOn ? 'Value under the pointer: on. Point at a trace to see its channel, time and value (V turns it off).' : 'Value under the pointer: off (V turns it on).');
+  }
+
+  /** Pointer moves on the EEG: the readout follows at most once a frame, writing only its text. */
+  _noteReadout(type, e) {
+    if (!this.readoutOn) return;
+    this._readoutAt = type === 'pointerleave' ? null : { x: e.clientX, y: e.clientY };
+    if (!this._readoutRaf) this._readoutRaf = requestAnimationFrame(() => { this._readoutRaf = 0; this._showReadout(); });
+  }
+
+  _showReadout() {
+    if (this._destroyed) return;
+    const at = this._readoutAt;
+    const r = at && this.readoutOn ? this.viewer.valueAt(at.x, at.y) : null;
+    let text = '';
+    if (r) {
+      const volts = ['eeg', 'eog', 'ecg', 'emg', 'seeg', 'ecog', ''].includes(String(r.type || '').toLowerCase());
+      text = `${r.channel}   ${r.t.toFixed(3)} s   ${volts ? microvoltText(r.volts) : `${+r.volts.toPrecision(4)}`}`;
+    }
+    if (this.readoutEl.textContent !== text) this.readoutEl.textContent = text;
+    this.readoutEl.hidden = !text;
+  }
+
+  // ------------------------------------------------------------------------- overlay and isolate
+  setOverlay(on, via = 'button') {
+    on = Boolean(on);
+    if (!this.viewer.setOverlay(on)) return;
+    local.set(this._toolKey('overlay'), on);
+    if (this.gesture && this.gesture.kind === 'draw') { this.gesture = null; this.viewer.setDragPreview(null); }
+    logger.event('state', { overlay: on, via });
+    this._logView();
+    this._refreshState();
+    this._showReadout();
+    this.say(on ? 'Overlay: the channels on screen share one axis, and marks apply to the whole montage. I shows one channel alone; O goes back.'
+      : 'Normal view: one channel per row.');
+  }
+
+  /** Show one channel alone (by name; the same name again shows them all), turning the overlay on. */
+  isolate(name, via = 'button') {
+    const row = this.s.channels.findIndex((c) => c.name === name);
+    if (row < 0) return;
+    if (!this.viewer.overlay) this.setOverlay(true, via);
+    this._setIsolated(this.viewer.isolated === row ? null : row, via);
+  }
+
+  /** I: one channel alone (the one pointed at, or the first on screen), or all of them again. */
+  toggleIsolate(via = 'key') {
+    const v = this.viewer;
+    if (v.overlay && v.isolated !== null) { this._setIsolated(null, via); return; }
+    let row = v.hover && v.hover.area === 'channel_names' ? v.hover.row : null;
+    if (row === null && this.pointerXY) {
+      const r = v.valueAt(this.pointerXY.x, this.pointerXY.y);
+      if (r) row = this.s.channels.findIndex((c) => c.name === r.channel);
+    }
+    if (row === null || row < 0) row = v.view.firstChannel;
+    if (!v.overlay) this.setOverlay(true, via);
+    this._setIsolated(row, via);
+  }
+
+  /** The next or previous channel alone, moving the channels on screen to keep it there. */
+  stepIsolated(dir, via = 'key') {
+    const v = this.viewer;
+    if (!v.overlay || v.isolated === null) return;
+    const row = clamp(v.isolated + dir, 0, this.s.channels.length - 1);
+    if (row === v.isolated) { this.say(dir > 0 ? 'That was the last channel.' : 'That was the first channel.'); return; }
+    this._setIsolated(row, via);
+    const first = v.view.firstChannel;
+    const last = first + v.view.nChannels - 1;
+    if (row < first) v.scrollChannels(row - first, via);
+    else if (row > last) v.scrollChannels(row - last, via);
+  }
+
+  _setIsolated(row, via) {
+    if (!this.viewer.setIsolated(row)) return;
+    const name = row === null ? null : this.s.channels[row].name;
+    logger.event('state', { isolated_channel: name, via });
+    this._refreshOverlayState();
+    this._showReadout();
+    this.say(name ? `${name} alone. The arrow keys up and down (or the buttons) move to the next channel; I shows them all.` : 'All the channels on screen again.');
+  }
+
+  /** After the view moved: an isolated channel stays on screen, and Show all ends when the view changes. */
+  _viewToolsOnView(cause) {
+    this._overviewView = cause === 'show_all' && this.viewer.view.durationS >= this.viewer.durationTotal - 1e-6;
+    if (!this._overviewView && cause !== 'show_all') this._beforeAll = null;
+    const v = this.viewer;
+    if (!v.overlay || v.isolated === null) return;
+    const first = v.view.firstChannel;
+    const last = Math.min(this.s.channels.length, first + v.view.nChannels) - 1;
+    if (v.isolated < first || v.isolated > last) this._setIsolated(clamp(v.isolated, first, last), 'view');
+  }
+
+  // --------------------------------------------------------------------- go to time, show all
+  _goToBar() {
+    const id = `goto-time-${this.windowNo}`;
+    this.gotoInput = h('input.field.goto-field', { type: 'text', id, name: 'goto-time', autocomplete: 'off', spellcheck: 'false',
+      enterkeyhint: 'go', placeholder: '12.5, 1:05 or 1:02:05', 'aria-describedby': `${id}-note` });
+    this.gotoNote = h('p.caption.goto-note', { id: `${id}-note`, 'aria-live': 'polite' });
+    this.gotoInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); this.goToTime(); }
+      else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); this.closeGoTo(); }
+    });
+    const go = h('button.btn.small', { type: 'button', 'data-log': 'goto-go', onclick: () => this.goToTime() }, 'Go');
+    const all = h('button.btn.small', { type: 'button', 'data-log': 'goto-show-all', title: 'The whole recording on the screen (Shift+End); again to go back',
+      onclick: () => { this.closeGoTo(); this.showAll('button'); } }, 'Show all');
+    const close = h('button.btn.icon.small', { type: 'button', 'aria-label': 'Close Go to time', title: 'Close (Esc)', 'data-log': 'goto-close',
+      onclick: () => this.closeGoTo() }, icon('close'));
+    this.gotoEl = h('div.goto-bar', { role: 'group', 'aria-label': 'Go to time', hidden: true, 'data-log': 'goto-bar' },
+      h('div.goto-row', {}, h('label', { for: id }, 'Go to time'), this.gotoInput, go, all, close), this.gotoNote);
+    return this.gotoEl;
+  }
+
+  /** G (or the touch button): the field for a time to go to. */
+  openGoTo(via = 'key') {
+    this._gotoVia = via;
+    this.gotoEl.hidden = false;
+    this.gotoInput.value = '';
+    this.gotoNote.classList.remove('error');
+    this.gotoNote.textContent = `Seconds, m:ss or h:mm:ss, up to ${clockText(this.s.recording.durationS)}. The time comes to the middle of the screen.`;
+    this.gotoInput.focus({ preventScroll: true });
+  }
+
+  closeGoTo() {
+    if (this.gotoEl.hidden) return;
+    this.gotoEl.hidden = true;
+    this.viewer.over.focus({ preventScroll: true });
+  }
+
+  /** Go to the typed time: the view centred on it, with the time cursor there. Only the time is logged, never the text. */
+  goToTime() {
+    const r = parseTimeText(this.gotoInput.value);
+    const via = this._gotoVia || 'key';
+    if (r.error) {
+      this.gotoNote.textContent = r.error;
+      this.gotoNote.classList.add('error');
+      logger.event('go_to_time', { valid: false, via });
+      return false;
+    }
+    const total = this.s.recording.durationS;
+    const { t, clamped } = clampTime(r.t, total);
+    this.viewer.setView({ startS: centredStart(t, this.viewer.view.durationS) }, 'go_to_time');
+    this.viewer.setCursor(t);
+    logger.event('go_to_time', { valid: true, t_s: Math.round(t * 1000) / 1000, clamped, via });
+    this.closeGoTo();
+    this.say(clamped ? `The recording is ${clockText(total)} long: the time cursor is at its ${t === 0 ? 'start' : 'end'}.`
+      : `The time cursor is at ${t.toFixed(3)} s (${clockText(t)}).`);
+    return true;
+  }
+
+  /** Show all (Shift+End): the whole recording on the screen, and the view before it again. */
+  showAll(via = 'key') {
+    const v = this.viewer;
+    const total = v.durationTotal;
+    if (v.view.durationS >= total - 1e-6 && this._beforeAll) {
+      const b = this._beforeAll;
+      this._beforeAll = null;
+      v.setView({ startS: b.startS, durationS: b.durationS }, 'show_all_back');
+      logger.event('show_all', { on: false, via });
+      this.say('Back to the view before Show all.');
+      return;
+    }
+    const before = { startS: v.view.startS, durationS: v.view.durationS };
+    v.setView({ startS: 0, durationS: total }, 'show_all');
+    this._beforeAll = before;
+    logger.event('show_all', { on: true, duration_s: Math.round(total * 1000) / 1000, via });
+    this.say('The whole recording is on the screen, as an overview: it does not count as viewed. Shift+End or Show all goes back.');
+  }
+
+  /** V, O, I, G and Shift+End, and the arrow keys up and down while one channel is shown alone. True when the key was taken. */
+  _viewKey(e, handled) {
+    const k = e.key;
+    const v = this.viewer;
+    const take = (action, fn) => { handled(action, fn); return true; };
+    if (v.overlay && v.isolated !== null && (k === 'ArrowUp' || k === 'ArrowDown')) {
+      return take(k === 'ArrowUp' ? 'Previous channel alone' : 'Next channel alone', () => this.stepIsolated(k === 'ArrowUp' ? -1 : 1, 'key'));
+    }
+    if (k === 'End' && e.shiftKey) return take('Show all', () => this.showAll('key'));
+    const lk = k.length === 1 ? k.toLowerCase() : '';
+    if (lk === 'v') return take('Value under the pointer', () => this.setReadout(!this.readoutOn, 'key'));
+    if (lk === 'o') return take('Overlay', () => this.setOverlay(!v.overlay, 'key'));
+    if (lk === 'i') return take('Isolate', () => this.toggleIsolate('key'));
+    if (lk === 'g') return take('Go to time', () => this.openGoTo('key'));
+    return false;
+  }
+
+  // ------------------------------------------------------------------------- the channel map
+  /** The recording's own electrode positions, when an electrodes.tsv was picked with it (js/data/electrodes.js). */
+  async _loadElectrodes() {
+    const src = this.s.recording.source;
+    const files = src && src.sidecars;
+    if (!files || !files.length) return;
+    const got = await readElectrodes(files, this.s.recording.fileName);
+    if (!got || this._destroyed) return;
+    this.electrodes = { positions: projectPositions(got.positions, got.system), fileName: got.fileName, system: got.system };
+  }
+
+  /** What the channel chooser's map needs: where each channel goes, the group colours, and where the choice of view is kept. */
+  _channelMapOptions() {
+    return {
+      layout: mapLayout(this.s.channels, this.electrodes ? this.electrodes.positions : null),
+      fileName: this.electrodes ? this.electrodes.fileName : null,
+      colours: channelColours(this.s.channels, this.channelColourMode),
+      storageKey: this._toolKey('channel_view'),
+    };
   }
 
   // ================================================================ finishing
