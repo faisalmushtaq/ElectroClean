@@ -472,6 +472,15 @@ ul.examples b { font-weight: 400; color: var(--ink); }
   color: var(--warning-text); background: var(--warning-bg); border-left: 3px solid var(--warning-bar);
   border-radius: 0; padding: 2px 8px; font: var(--t-14);
 }
+/* A revision of a finished recording: a banner under the header with its two actions (workspace.js, _revisionBar). */
+.view.annotate.revising { grid-template-rows: auto auto auto minmax(0, 1fr) auto; }
+.ws-revision {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; min-width: 0;
+  background: var(--accent-soft); border-bottom: 1px solid var(--hairline); border-left: 3px solid var(--accent);
+}
+.ws-revision p { margin: 0; font: var(--t-14); color: var(--text); min-width: 0; }
+.ws-revision b { font-weight: 600; color: var(--accent-hover); }
+.ws-revision-actions { display: flex; gap: 8px; flex: none; }
 .ws-actions { display: flex; align-items: center; gap: 4px; flex: none; }
 .ws-actions .btn, .ws-header .btn { height: 32px; padding: 0 14px; font: var(--t-14); }
 .ws-header .btn.quiet.back { margin: 0 4px 0 0; padding: 0; }
@@ -694,9 +703,15 @@ ul.warnings { font: var(--t-14); }
 /* Annotating needs a tablet's screen or larger (an iPad is at least 744 pixels wide, upright). On a
    phone the sign-in page and the admin area (admin.css) still work, and the rest asks for a larger
    screen. */
+.small-screen { position: relative; z-index: 1; }
+.small-screen .btn-row { margin-top: 24px; }
+a.btn { text-decoration: none; }
+.phone-note { display: none; margin: 16px 0; }
+.phone-note p { margin: 0; }
 @media (max-width: 699px), (max-height: 479px) {
   body:not([data-route="signin"]):not([data-route^="admin"]) .app-content { display: none; }
   body:not([data-route="signin"]):not([data-route^="admin"]) .small-screen { display: flex; }
+  .phone-note { display: block; }
 }
 /* A tablet held upright (or a narrow window): the EEG takes the width, with the coach and the side
    panel below it, side by side, and the toolbars wrap onto a second line when they need one. */
@@ -819,3 +834,91 @@ ul.quiz-files .file { word-break: break-all; }
 .channel-foot .caption { margin: 0; }
 .channel-only { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font: var(--t-14); }
 /* ------------------------------------------------ end of the channel chooser's styles */
+
+/* -------------------------------------------------- the home page's list of recordings
+   (js/views/home_list.js): tabs, a search, sorting and pages of 25 rows. */
+.recordings-card .rec-tabs { padding: 0; gap: 24px; margin: 4px 0 16px; overflow-x: auto; }
+.recordings-card .tab { white-space: nowrap; }
+.tab-count { margin-left: 8px; color: var(--text-tertiary); font-variant-numeric: tabular-nums lining-nums; }
+.rec-tools { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+.rec-search { flex: 1 1 240px; min-width: 0; }
+.rec-sort-label { display: flex; align-items: center; gap: 8px; flex: none; }
+.rec-sort { width: auto; }
+.rec-empty { margin: 16px 0; }
+.rec-pager { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.rec-pager .btn-row { margin-top: 0; }
+/* The history: fixed columns, the file name on one line (shortened when it must be) with when it
+   was saved beneath it. */
+table.list.history { table-layout: fixed; }
+table.history th.version { width: 72px; }
+table.history th.count { width: 104px; }
+table.history th.time { width: 88px; }
+table.history th.act { width: 176px; }
+table.history .file-line { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
+table.history .when { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums lining-nums; }
+@media (max-width: 899px) {
+  table.list .opt { display: none; }
+}
+/* ---------------------------------------------- end of the list of recordings' styles */
+
+/* ------------------------------------------------- the game elements of the home page
+   (js/views/home_games.js): counters, the goal, the team, milestones and the leaderboard. Calm,
+   like the rest: figures in the text face, drawn badges, one blue for what has been reached. */
+.games-card h2, .leaderboard-card h2 { margin-bottom: 16px; }
+.games-counters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 0; }
+.games-counters dt { color: var(--text-secondary); font: var(--t-14); }
+.games-counters dd { margin: 4px 0 0; font: var(--t-20); letter-spacing: -0.02em; white-space: nowrap; color: var(--ink); font-variant-numeric: tabular-nums lining-nums; font-variation-settings: var(--display); }
+.games-counters dd .caption { letter-spacing: 0; font-variation-settings: normal; }
+.games-note { margin: 8px 0 16px; }
+.games-goal, .games-team { padding: 16px 0; border-top: 1px solid var(--hairline); }
+.games-goal .caption, .games-team .caption { margin: 0 0 8px; }
+.games-line { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font: var(--t-16); }
+.games-figure { font-variant-numeric: tabular-nums lining-nums; color: var(--ink); white-space: nowrap; }
+.games-bar { height: 4px; margin: 8px 0; }
+.games-bar .progress-bar { background: var(--accent); }
+.goal-edit { display: flex; align-items: center; gap: 12px; }
+.goal-input { width: 96px; }
+.games-milestones { border-top: 1px solid var(--hairline); padding-top: 16px; }
+.games-milestones h3 { margin-top: 0; }
+ul.badge-row { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; padding: 0; margin: 8px 0; }
+ul.badge-row li { display: flex; }
+ul.milestone-list { list-style: none; padding: 0; margin: 8px 0 0; }
+ul.milestone-list li { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--hairline); font: var(--t-14); }
+ul.milestone-list li b { font-weight: 600; color: var(--ink); }
+ul.milestone-list li.open b { font-weight: 400; color: var(--text-secondary); }
+.games-all { margin-top: 8px; }
+.games-all summary { color: var(--accent); font: var(--t-14); min-height: 32px; }
+.badge { flex: none; display: block; }
+.badge .badge-ring { fill: none; stroke: var(--border); stroke-width: 1; stroke-dasharray: 2 3; }
+.badge.reached .badge-ring { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; stroke-dasharray: none; }
+.badge .badge-text { font: var(--t-12); fill: var(--text-tertiary); font-variant-numeric: tabular-nums lining-nums; }
+.badge.reached .badge-text { fill: var(--accent-hover); font-weight: 600; }
+.badge .badge-mark, .badge .badge-fill { fill: var(--text-disabled); }
+.badge.reached .badge-mark, .badge.reached .badge-fill { fill: var(--accent); }
+.badge .badge-track { fill: none; stroke: var(--text-disabled); stroke-width: 1; }
+.badge.reached .badge-track { stroke: var(--accent); }
+.badge .badge-inner { fill: none; stroke: var(--text-disabled); stroke-width: 1; }
+.badge.reached .badge-inner { stroke: var(--accent); }
+/* A milestone just reached: a short note at the top of the card, its ring drawn once (motion is
+   switched off for those who ask for less, by the rule after the page's fade). */
+.celebrate {
+  display: flex; align-items: center; gap: 16px; padding: 16px; margin: 0 0 24px;
+  background: var(--accent-soft); border-left: 3px solid var(--accent); animation: fade-in 400ms var(--ease) both;
+}
+.celebrate-badges { display: flex; gap: 4px; flex: none; }
+.celebrate-text { flex: 1; min-width: 0; }
+.celebrate-title { margin: 0; font: var(--t-20); color: var(--ink); letter-spacing: -0.02em; font-variation-settings: var(--display); }
+.celebrate .caption { margin: 4px 0 0; }
+.celebrate .badge.reached .badge-ring { stroke-dasharray: 100; animation: ring-draw 900ms var(--ease) 200ms both; }
+@keyframes ring-draw { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .celebrate, .celebrate .badge.reached .badge-ring { animation: none; }
+}
+table.leaderboard tr.you td { background: var(--accent-soft); color: var(--ink); }
+table.leaderboard tr.gap td { padding: 4px 0; border-bottom: none; }
+table.leaderboard th:first-child, table.leaderboard td:first-child { width: 56px; }
+.leaderboard-card label.check { margin-top: 16px; }
+@media (max-width: 480px) {
+  .games-counters { grid-template-columns: minmax(0, 1fr); }
+}
+/* ------------------------------------------ end of the game elements' styles */

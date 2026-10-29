@@ -80,7 +80,8 @@ and sends the study only their manifests.
 
 ```
 electroclean/web/                 the server (FastAPI), the service layer it shares with the Firebase
-                                  functions, and the administrator's command, electroclean-web
+                                  functions (with games.py for the achievements and the
+                                  leaderboard), and the administrator's command, electroclean-web
 electroclean/web/firebase/        the Cloud Functions (functions/main.py) and the administrator's access
 electroclean/web/static/          the browser application (plain ES modules, no build step)
     index.html, app.css           the page and the application's design system (tokens, components)
@@ -90,7 +91,10 @@ electroclean/web/static/          the browser application (plain ES modules, no 
     js/main.js, js/app.js         start-up; the backend, signing in and the moves between views
     js/catalogue.js, js/util.js   the label catalogue; small helpers
     js/views/                     sign in (with its illustration, eegart.js and montage.js), the
-                                  annotator's recordings, opening a recording
+                                  annotator's recordings (home.js, with the list, its tabs and
+                                  history in home_list.js and the game elements in home_games.js),
+                                  opening a recording
+    js/games/                     the milestones' rules (milestones.js) and the pseudonyms' words
     js/api/                       the Backend interface: http.js (a study server), firebase.js (a
                                   study on Firebase), demo.js and demo_admin.js (the demonstration,
                                   in the browser), choose.js (which of them), demo_catalogue.js,

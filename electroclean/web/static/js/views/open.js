@@ -29,9 +29,11 @@ export function filesForRecording(files, expectedName = null) {
 }
 
 export class OpenView {
-  constructor(app, { expected = null } = {}) {
+  constructor(app, { expected = null, revise = false } = {}) {
     this.app = app;
     this.expected = expected;
+    /** Opening a finished recording again to revise it (POST /match with revise). */
+    this.revise = Boolean(revise);
     const b = app.backend;
     const fileInput = h('input', { type: 'file', multiple: true, accept: acceptFiles('.edf,.bdf,.rec,.vhdr,.vmrk,.eeg'), hidden: true, 'data-log': 'file-input',
       onchange: () => { if (fileInput.files.length) this.handle([...fileInput.files]); fileInput.value = ''; } });
@@ -69,7 +71,8 @@ export class OpenView {
     this.el = h('div.view.open', { 'data-view': 'open' }, appHeader(app),
       h('main.page.narrow', {},
         h('button.btn.quiet.back', { type: 'button', onclick: () => app.goBack() }, icon('arrow-left'), 'Back'),
-        h('h1', {}, name ? `Open ${name}` : 'Open a recording from your computer'),
+        h('h1', {}, name ? `${this.revise ? 'Revise' : 'Open'} ${name}` : 'Open a recording from your computer'),
+        this.revise ? h('p.note', {}, 'You finished this recording before. It opens with your latest saved annotations; submitting the revision saves a new version and keeps the earlier ones.') : null,
         h('p.subtitle', {}, 'The recording is read here, in your browser, and is never uploaded. Only its fingerprint (a checksum of the file) is sent to the study, to recognise it.'),
         h('p', {}, FORMAT_HINT[format] || 'Choose an EDF or BDF file, or the .vhdr, .vmrk and .eeg files of a BrainVision recording (or their folder).'),
         h('section.card', {}, this.drop, this.steps, this.result),

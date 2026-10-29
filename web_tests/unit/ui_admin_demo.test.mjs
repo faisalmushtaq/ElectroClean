@@ -187,7 +187,7 @@ test('manifests are checked before they are kept, and shown to annotators as the
 test('study settings: checked, changed block by block, and used by the demonstration', async () => {
   const b = await demo();
   const before = await b.admin('settings_get');
-  assert.deepEqual(Object.keys(before.settings).sort(), ['annotation', 'channels', 'display', 'filters', 'loading', 'logging', 'selection']);
+  assert.deepEqual(Object.keys(before.settings).sort(), ['annotation', 'channels', 'display', 'filters', 'gamification', 'loading', 'logging', 'selection']);
   await assert.rejects(() => b.admin('settings_update', { settings: { filters: { notch_hz: 55 } } }), (e) => e.status === 400 && e.code === 'invalid_settings');
   await assert.rejects(() => b.admin('settings_update', { settings: { output: { directory: '/' } } }), (e) => e.code === 'invalid_settings');
   const quick = ['EMG-artifact', 'Eye-blink-artifact', 'Chewing-artifact'];

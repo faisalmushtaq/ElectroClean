@@ -81,8 +81,8 @@ export class Workspace {
       notchHarmonics: Boolean(f.notch_harmonics),
     };
     this.filtersLocked = Boolean(fl.locked);
-    this.el = h('div.view.annotate', { 'data-view': 'annotate' },
-      this._header(), this.kind === 'review' ? null : this._toolbar(),
+    this.el = h('div.view.annotate', { 'data-view': 'annotate', class: s.revision && this.kind === 'annotate' ? 'revising' : null },
+      this._header(), this._revisionBar(), this.kind === 'review' ? null : this._toolbar(),
       h('div.ws-main', {}, this.eegHost = h('div.ws-eeg'), this.side = h('aside.ws-side', { 'aria-label': 'Annotations and help' })),
       this._statusBar());
     this._sidePanel();
@@ -122,7 +122,9 @@ export class Workspace {
       actions.append(this.drawBtn, this.deleteBtn, this.undoBtn, this.redoBtn, h('span.sep'));
     }
     actions.append(h('button.btn.quiet', { type: 'button', title: 'Keys and mouse actions (?)', onclick: () => this.showHelp() }, 'Help'));
-    if (this.kind === 'annotate') {
+    if (this.kind === 'annotate' && s.revision) {
+      // A revision: its two actions are on the banner below (_revisionBar).
+    } else if (this.kind === 'annotate') {
       this.saveBtn = h('button.btn.primary', { type: 'button', title: 'Validate and save your annotations, then mark this recording complete', onclick: () => this.saveAndFinish() }, 'Save and Finish');
       actions.append(this.saveBtn);
     } else if (this.kind === 'tryout') {
@@ -131,6 +133,39 @@ export class Workspace {
       actions.append(h('button.btn.primary', { type: 'button', onclick: () => this.close() }, 'Back to my training path'));
     }
     return h('header.ws-header', {}, title, actions);
+  }
+
+  /** The banner of a revision: which version is being revised, and its two ways out. */
+  _revisionBar() {
+    const r = this.s.revision;
+    if (this.kind !== 'annotate' || !r) return null;
+    this.saveBtn = h('button.btn.small.primary', { type: 'button', 'data-log': 'submit-revision',
+      title: `Validate and save your changes as version ${r.version}; version ${r.revises} is kept as it was`, onclick: () => this.saveAndFinish() }, 'Submit the revision');
+    const leave = h('button.btn.small', { type: 'button', 'data-log': 'leave-revision', onclick: () => this.leaveRevision() }, 'Leave without changes');
+    return h('div.ws-revision', { role: 'status' },
+      h('p', {}, h('b', {}, `Revising version ${r.revises}. `),
+        `Submitting saves your changes as version ${r.version}; version ${r.revises} stays as it was saved.`),
+      h('div.ws-revision-actions', {}, leave, this.saveBtn));
+  }
+
+  /** Leave a revision: the saved versions stay as they are and the revision's draft is deleted. */
+  async leaveRevision() {
+    const s = this.s;
+    if (this._leaving) return false; // pressed again while the first press is still under way
+    this._leaving = true;
+    try { return await this._leaveRevision(s); } finally { this._leaving = false; }
+  }
+
+  async _leaveRevision(s) {
+    if (s.changedSinceSaved && !(await ask('Leave without changes?',
+      `Your changes in this revision are discarded. Version ${s.revision.revises} stays as it was saved.`,
+      { yes: 'Leave without changes', no: 'Keep revising', defaultYes: false, destructive: true }))) return false;
+    await s.discardDrafts();
+    logger.event('revision_left', { session_id: s.sessionId, revises: s.revision.revises, changed: s.changedSinceSaved,
+      elapsed_s: Math.round(s.elapsedS * 1000) / 1000 });
+    s.finished = true;
+    this.app.leaveRecording(this, 'revision left without changes');
+    return true;
   }
 
   _toolbar() {
@@ -1129,7 +1164,12 @@ export class Workspace {
     if (this.coach && !this.coach.canSave()) return false;
     const counts = s.countsByLabel();
     let ok;
-    if (!counts.size) {
+    if (s.revision) {
+      const summary = counts.size ? [...counts].map(([l, n]) => `  ${l}: ${n}`).join('\n') : '  No artifacts marked';
+      ok = await this._askSave(`Submit the revision with ${this.store.size} annotation(s)?`, summary,
+        `It is saved as version ${s.revision.version}. Version ${s.revision.revises} is kept as it was, and analyses use the latest version.`,
+        'Submit the revision');
+    } else if (!counts.size) {
       ok = await ask('Save and Finish', 'You have not marked any artifacts in this recording.\n\nSave it as reviewed with no artifacts found, and finish?',
         { yes: 'Save with no artifacts', no: 'Keep annotating', defaultYes: false });
     } else {
@@ -1146,6 +1186,13 @@ export class Workspace {
     } catch (exc) {
       this.saveBtn.disabled = false;
       this.saveBtn.textContent = oldText;
+      if (exc.status === 409 && (exc.code === 'already_revised' || exc.code === 'revisions_off')) {
+        await inform('Not saved', `${exc.message}\n\nYour changes in this window were not saved.`);
+        s.finished = true;
+        s.forgetLocal();
+        this.app.leaveRecording(this, 'revision refused');
+        return false;
+      }
       if (exc.status === 409 && exc.code === 'already_done') {
         await inform('Already saved', `${exc.message}\n\nThis recording was saved before, so there is nothing more to do here.`);
         s.finished = true;
@@ -1159,16 +1206,25 @@ export class Workspace {
       return false;
     }
     logger.event('recording_finished', { session_id: s.sessionId, n_annotations: this.store.size,
-      counts_by_label: Object.fromEntries(counts), elapsed_s: Math.round(s.elapsedS * 1000) / 1000 });
+      counts_by_label: Object.fromEntries(counts), elapsed_s: Math.round(s.elapsedS * 1000) / 1000,
+      ...(s.revision ? { version: s.revision.version } : {}) });
+    if (s.revision) {
+      logger.event('revision_submitted', { session_id: s.sessionId, version: (result.revision && result.revision.version) || s.revision.version,
+        revises: s.revision.revises, n_annotations: this.store.size, changed: s.changedSinceSaved, elapsed_s: Math.round(s.elapsedS * 1000) / 1000 });
+    }
     this.app.afterSave(this, result);
     return true;
   }
 
-  _askSave(question, summary) {
+  _askSave(question, summary, after = null, label = 'Save and Finish') {
+    const allow = this.s.me && this.s.me.study && this.s.me.study.annotation && this.s.me.study.annotation.allow_revisions;
+    const note = after || (allow && this.s.mode === 'standard'
+      ? 'You can still revise them later from your history; each revision is saved as a new version.'
+      : 'You will not be able to change them afterwards.');
     const body = h('div', {}, h('p.dialog-text', {}, question),
-      h('pre.dialog-summary', {}, summary), h('p.dialog-text', {}, 'You will not be able to change them afterwards.'));
-    return showDialog({ title: 'Save and Finish', body, logText: question,
-      buttons: [{ label: 'Keep annotating', value: false }, { label: 'Save and Finish', value: true, kind: 'primary' }], cancelValue: false }).then(Boolean);
+      h('pre.dialog-summary', {}, summary), h('p.dialog-text', {}, note));
+    return showDialog({ title: label, body, logText: question,
+      buttons: [{ label: 'Keep annotating', value: false }, { label, value: true, kind: 'primary' }], cancelValue: false }).then(Boolean);
   }
 
   /** Close (the Close button, or leaving the page's view): unfinished work is kept for later or discarded, as the annotator chooses. */
@@ -1186,6 +1242,7 @@ export class Workspace {
       return true;
     }
     if (s.finished) { this.app.leaveRecording(this, 'finished'); return true; }
+    if (s.revision) return this._closeRevision();
     const n = this.store.size;
     const later = 'Close and finish later';
     const discard = 'Discard and close';
@@ -1207,6 +1264,31 @@ export class Workspace {
       logger.event('closed_without_saving', { n_annotations: n, kept: false });
       this.app.leaveRecording(this, 'viewer closed without Save and Finish');
     }
+    return true;
+  }
+
+  /** Close during a revision: keep the changes to continue later, or leave without them. */
+  async _closeRevision() {
+    const s = this.s;
+    if (!s.changedSinceSaved) return this.leaveRevision();
+    const later = 'Close and revise later';
+    const leave = 'Leave without changes';
+    const stay = 'Keep revising';
+    const choice = await choose('Close the revision?',
+      `Version ${s.revision.revises} stays as it was saved until you submit the revision.\n\n` +
+      `${later}: your changes and the time spent are kept, and you can continue from your history.\n\n` +
+      `${leave}: your changes in this revision are discarded.`, [later, leave, stay], 0);
+    if (choice === stay) return false;
+    if (choice === leave) {
+      await s.discardDrafts();
+      logger.event('revision_left', { session_id: s.sessionId, revises: s.revision.revises, changed: true, elapsed_s: Math.round(s.elapsedS * 1000) / 1000 });
+      this.app.leaveRecording(this, 'revision left without changes');
+      return true;
+    }
+    s.saveLocal();
+    await s.saveRemote({ force: true });
+    logger.event('closed_without_saving', { n_annotations: this.store.size, kept: true, revises: s.revision.revises });
+    this.app.leaveRecording(this, 'closed to revise later');
     return true;
   }
 

@@ -331,6 +331,11 @@ export function settingsProblems(s, labels = null) {
   if (q.length > 9) out.push('At most nine artifact types fit on the keys 1 to 9.');
   if (new Set(q).size !== q.length) out.push('An artifact type is on two number keys; give each key a different type.');
   if (labels) for (const l of q) if (!labels.includes(l)) out.push(`${l} is not one of the artifact types.`);
+  if ('allow_revisions' in a && typeof a.allow_revisions !== 'boolean') out.push('Whether finished recordings may be revised is on or off.');
+  const g = s.gamification || {};
+  for (const k of ['enabled', 'leaderboard', 'leaderboard_viewed_only']) {
+    if (k in g && typeof g[k] !== 'boolean') out.push(`gamification.${k} is on or off (true or false).`);
+  }
   return out;
 }
 

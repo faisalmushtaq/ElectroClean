@@ -68,9 +68,20 @@ export function defaultSettings() {
     channels: { hide: [...DEFAULT_HIDE], types: {} },
     selection: { strategy: 'manual', seed: null },
     logging: { ...DEFAULT_LOGGING },
-    annotation: { min_duration_samples: 1, quick_labels: [...DEFAULT_QUICK_LABELS] },
+    annotation: { min_duration_samples: 1, allow_revisions: true, quick_labels: [...DEFAULT_QUICK_LABELS] },
     loading: { apply_channel_types_from_bids: true, show_bids_bad_channels: true },
+    gamification: { ...DEFAULT_GAMIFICATION },
   };
+}
+
+/** The game elements of the home page (gamification in electroclean/config/default_settings.json). */
+export const DEFAULT_GAMIFICATION = Object.freeze({ enabled: true, leaderboard: true, leaderboard_viewed_only: false });
+
+/** Settings kept by an earlier version of the demonstration gain the blocks and keys added since. */
+function withNewSettings(settings) {
+  if (!settings.gamification) settings.gamification = { ...DEFAULT_GAMIFICATION };
+  if (settings.annotation && settings.annotation.allow_revisions === undefined) settings.annotation.allow_revisions = true;
+  return settings;
 }
 
 // ------------------------------------------------------------- manifests
@@ -189,6 +200,7 @@ export class DemoAdmin {
 
   get s() {
     if (!this.b.state.admin || this.b.state.admin.version !== 1) this.b.state.admin = initialAdminState(this.b._builtIn());
+    withNewSettings(this.b.state.admin.settings);
     return this.b.state.admin;
   }
 
@@ -247,7 +259,10 @@ export class DemoAdmin {
       study_id: 'demo', name: this.s.name,
       filters: { ...st.filters },
       display: { duration_s: st.display.duration_s, n_channels: st.display.n_channels, scalings: { ...st.display.scalings } },
-      annotation: { min_duration_samples: st.annotation.min_duration_samples, quick_labels: [...st.annotation.quick_labels] },
+      annotation: { min_duration_samples: st.annotation.min_duration_samples, quick_labels: [...st.annotation.quick_labels],
+        allow_revisions: st.annotation.allow_revisions !== false },
+      gamification: { enabled: st.gamification.enabled !== false,
+        leaderboard: st.gamification.enabled !== false && st.gamification.leaderboard !== false },
       logging,
       logging_notice: logging.interactions ? this.s.logging_notice : '',
     };

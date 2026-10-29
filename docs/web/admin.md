@@ -300,7 +300,22 @@ a change to apply to it.
 random among those they have not finished, in a reproducible order made from a seed and the
 annotator's ID, or in the order they were assigned. Unfinished work always comes first.
 **Annotation** chooses the artifact types on the number keys 1 to 9, in the order the toolbar shows
-them, and the shortest annotation in samples. **Interaction log** chooses whether the study records
+them, the shortest annotation in samples, and whether annotators may revise recordings they have
+finished (on by default; `annotation.allow_revisions`). A revision is saved as a new attempt of the
+same assignment beside the earlier files, which stay exactly as they were; the completion register
+gains the new attempt, and the analyses and exports use each annotator's latest attempt. Switch
+revisions off when the study's design needs each recording to be annotated once and then left.
+
+**Game elements** (`gamification.enabled` and `gamification.leaderboard`, both on by default) show
+annotators their progress on the home page: counters of recordings done, time worked and
+annotations made, a goal for the week, the team's progress, milestones, and an anonymised
+leaderboard on which each annotator appears under a pseudonym and may choose to be hidden. Rank the
+leaderboard by recordings viewed in full (`gamification.leaderboard_viewed_only`) to reward
+thoroughness over completion. The milestones reward finishing recordings and viewing them in full,
+never speed or the number of annotations, so that nothing pushes annotators to mark more than they
+see. Game elements may still change how people work, so a study that uses them should say so in
+its methods, with the settings it used; switch them off, or the leaderboard alone, when the study
+needs annotators who are not nudged at all. **Interaction log** chooses whether the study records
 how annotators use ElectroClean (clicks, keys and what is on the screen, never what they type), how
 often the pointer is sampled over the EEG, after how many seconds without input an annotator counts
 as idle, and the notice each annotator reads once after signing in; say there what is recorded and

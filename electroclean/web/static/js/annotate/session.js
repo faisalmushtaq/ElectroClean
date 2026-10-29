@@ -31,7 +31,8 @@ export function displayChannels(recording, manifest) {
 export class AnnotationSession {
   /**
    * @param {object} o backend, recording, manifest (null in try-out), recordingId, mode, contextId,
-   *   me (GET /me), catalogue (Catalogue), match (POST /match answer), sha256, readOnly
+   *   me (GET /me), catalogue (Catalogue), match (POST /match answer), sha256, readOnly, and for a
+   *   revision of a finished recording `revision` ({version, revises, saved_at, annotations} of POST /match)
    */
   constructor(o) {
     this.backend = o.backend;
@@ -70,15 +71,26 @@ export class AnnotationSession {
     this._dirty = false;
     this._lastRemote = performance.now();
     this._remoteBusy = false;
+    // A revision opens with the annotations of the latest saved version (docs/web/using.md, "History and revisions").
+    this.revision = o.revision && Number.isInteger(o.revision.revises) ? { ...o.revision } : null;
+    if (this.revision) {
+      this.store.reset((this.revision.annotations || []).filter((a) => this.catalogue.has(a.label)));
+      this.savedVersion = JSON.stringify(this.store.toJSON());
+    }
     this.store.addListener(() => { this._dirty = true; this._scheduleLocal(); });
   }
+
+  /** True when the annotations differ from the version being revised. */
+  get changedSinceSaved() { return Boolean(this.revision) && JSON.stringify(this.store.toJSON()) !== this.savedVersion; }
 
   get elapsedS() { return this.elapsedBase + (performance.now() - this.openedAt) / 1000; }
 
   get localKey() {
     const who = (this.me && this.me.annotator_id) || 'anon';
     const where = this.backend.server || this.backend.kind;
-    return `electroclean.draft|${where}|${who}|${this.recordingId}|${this.mode}|${this.contextId}`;
+    // A revision's copy is kept apart, so that it is never confused with older unfinished work.
+    const rev = this.revision ? `|revises-${this.revision.revises}` : '';
+    return `electroclean.draft|${where}|${who}|${this.recordingId}|${this.mode}|${this.contextId}${rev}`;
   }
 
   get canSave() { return !this.readOnly && !this.tryOut && !this.finished; }
@@ -90,13 +102,15 @@ export class AnnotationSession {
       view: this.view ? { ...this.view } : null,
       elapsed_s: Math.round(this.elapsedS * 10) / 10,
       saved_at: nowLocalIso(),
+      ...(this.revision ? { revises: this.revision.revises } : {}),
     };
   }
 
   /** The unfinished work to offer: the newer of the server's draft and this browser's copy. */
   pickDraft(remote) {
     const mine = local.get(this.localKey, null);
-    const candidates = [remote, mine].filter((d) => d && Array.isArray(d.annotations));
+    const rev = this.revision ? this.revision.revises : undefined;
+    const candidates = [remote, mine].filter((d) => d && Array.isArray(d.annotations) && (rev === undefined || d.revises === rev));
     if (!candidates.length) return null;
     candidates.sort((a, b) => String(b.saved_at || '').localeCompare(String(a.saved_at || '')));
     const d = candidates[0];
@@ -168,13 +182,25 @@ export class AnnotationSession {
         screen: { width: screen.width, height: screen.height, pixel_ratio: window.devicePixelRatio || 1 },
         window: { width: window.innerWidth, height: window.innerHeight },
       },
+      ...(this.viewedFraction() !== null ? { viewed_fraction: this.viewedFraction() } : {}),
     };
+  }
+
+  /**
+   * The share of the recording that was on screen (0 to 1), when the workspace measures it
+   * (`this.coverage`, with a `fraction`); null otherwise. It feeds the "viewed in full" milestones.
+   */
+  viewedFraction() {
+    const c = this.coverage;
+    const v = c && typeof c.fraction === 'function' ? c.fraction() : c ? c.fraction : null;
+    return typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : null;
   }
 
   async submit(visitId) {
     const result = await this.backend.submit({
       recording_id: this.recordingId, mode: this.mode, context_id: this.contextId,
       annotations: this.store.toJSON(), session: this.sessionInfo(visitId), sha256: this.sha256,
+      ...(this.revision ? { revises: this.revision.revises } : {}),
     });
     this.finished = true;
     this.forgetLocal();

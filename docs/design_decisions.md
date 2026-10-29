@@ -337,12 +337,42 @@ menu.
 Upright, an iPad is 744 to 1024 pixels wide, too narrow for the side panel beside the EEG, so up to
 1024 pixels the panel and the coach go below the EEG, side by side. A phone is too small for the
 EEG, and the views other than signing in and the admin area ask for a larger screen below 700
-pixels of width or 480 of height. Three Safari habits shaped the details: iPadOS greys out files
+pixels of width or 480 of height. On such a screen the sign-in page itself says that annotating
+needs a tablet or a computer and that administrators can sign in to check progress, and an
+annotator who signs in anyway is offered an email with the page's address and Sign out. Three Safari habits shaped the details: iPadOS greys out files
 whose extension it does not know in the file picker, so the application offers every file and
 checks it; Safari zooms into a field set below 16 pixels, so fields are 16 pixels on a touch screen;
 and a style shown on hover would stay on a tapped control, so hover styles apply only where the
 pointer can hover. The end-to-end tests run in WebKit, Safari's engine, as well as in Chromium, and
 `k_ipad.e2e.mjs` checks the touch gestures, the layouts and the file pickers.
+
+## Revisions and game elements (28 October 2026)
+
+Annotators asked to return to recordings they had finished and correct them. A revision is a new
+attempt of the same assignment, saved by the same journalled save as any recording: the earlier
+attempt's five files stay untouched, the completion register gains a row, and the new files record
+which version and session they revise. Analyses use each annotator's latest attempt, chosen by the
+attempt number (which only grows) rather than by the time saved, so that clocks in different time
+zones cannot reorder them. A revision must name the version it revises, and the server refuses it
+when that is no longer the latest, so the same revision sent twice saves once. Nothing is deleted:
+a study can always see what was changed and when. A study whose design needs a single pass
+switches revisions off (`annotation.allow_revisions`). Training recordings keep their own rules,
+because a guided or assessed recording that could be redone would change what its score means.
+
+Annotating a couple of hundred recordings is long and repetitive work, so the home page offers game
+elements: counters, a weekly goal the annotator sets, the team's progress, milestones and an
+anonymised leaderboard. They follow common principles of game design (clear goals, visible progress,
+feedback at the moment something is achieved, and autonomy over taking part) and one rule of our
+own: rewards follow progress through the recordings and thoroughness, never speed and never the
+number of annotations. The annotations are the research data; a reward for marking more would push
+annotators to mark artifacts they do not see, and a reward for speed would push them to look less
+carefully, either of which would bias the data that the study exists to collect. The number of
+annotations is therefore shown for interest only, a revision earns nothing, and the leaderboard can
+rank by recordings viewed in full instead of recordings finished. The leaderboard uses pseudonyms
+made from a keyed hash of the annotator ID with a secret the server keeps, shows nobody until three
+people are on it, and lets each person leave it. Celebrations are short, quiet and never modal, and
+respect a request for reduced motion. Because even well-meant game elements can change behaviour,
+they can be switched off, and a study that uses them should report them in its methods.
 
 ## Decisions still open
 

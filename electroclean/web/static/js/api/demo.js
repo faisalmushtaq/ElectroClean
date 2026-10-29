@@ -24,6 +24,7 @@ import * as rules from '../training/rules.js';
 import { DEFAULT_PASS, describePassRule, practiceFeedback } from '../training/scoring.js';
 import { escapeHtml, local, newId, nowLocalIso, session } from '../util.js';
 import { sha256Hex } from '../data/sha256.js';
+import { ADJECTIVES, ANIMALS } from '../games/words.js';
 
 const STATE_KEY = 'electroclean.demo.v1';
 const TOKEN_KEY = 'electroclean.demo.token';
@@ -143,7 +144,47 @@ function fileNameOf(spec) { return `${spec.stem}_eeg.edf`; }
 const LABELS = new Map(CATALOGUE.labels.map((l) => [l.label, l]));
 
 function emptyState() {
-  return { version: 1, drafts: {}, done: {}, submissions: [], guided: {}, practice: {}, quiz: {} };
+  return { version: 1, drafts: {}, done: {}, submissions: [], guided: {}, practice: {}, quiz: {}, records: {} };
+}
+
+// ------------------------------------------------------------ game elements
+// As electroclean/web/games.py: the share of a recording seen from which it counts as viewed in full,
+// the fewest people a leaderboard is shown for, how many rows it shows, and the largest weekly goal.
+const VIEWED_IN_FULL = 0.99;
+const MIN_PEOPLE = 3;
+const TOP = 10;
+const MAX_GOAL = 200;
+
+function viewedFraction(v) {
+  return typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1 ? Math.round(v * 10000) / 10000 : null;
+}
+
+/** A pseudonym from a hash of the study's secret and the annotator ID (the server keys an HMAC with its secret). */
+export function demoPseudonym(secret, annotatorId, salt = 0) {
+  const hex = sha256Hex(new TextEncoder().encode(`${secret}:${String(annotatorId).toUpperCase()}:${salt}`));
+  const n = parseInt(hex.slice(0, 12), 16);
+  return `${ADJECTIVES[n % ADJECTIVES.length]} ${ANIMALS[Math.floor(n / ADJECTIVES.length) % ANIMALS.length]}`;
+}
+
+/**
+ * The leaderboard of games.py's Games._leaderboard: people with at least one recording, without those
+ * who chose to be hidden, ranked by count (ties share a rank), shown only when MIN_PEOPLE are on it.
+ * `team` holds ids, counts, hidden and names; only pseudonyms leave this function.
+ */
+export function leaderboardOf(aid, team, { hiddenMe = false, byFull = false } = {}) {
+  const counts = byFull ? team.full : team.completed;
+  const on = team.ids.filter((a) => (counts[a] || 0) > 0 && !team.hidden.has(a) && a !== aid);
+  if (!hiddenMe && (counts[aid] || 0) > 0) on.push(aid);
+  on.sort((a, b) => (counts[b] - counts[a]) || (team.names[a] < team.names[b] ? -1 : team.names[a] > team.names[b] ? 1 : 0));
+  const ranks = {};
+  on.forEach((a, i) => { ranks[a] = i && counts[on[i - 1]] === counts[a] ? ranks[on[i - 1]] : i + 1; });
+  const enough = on.length >= MIN_PEOPLE;
+  return {
+    ranked_by: byFull ? 'viewed_in_full' : 'completed',
+    rows: enough ? on.slice(0, TOP).map((a) => ({ rank: ranks[a], name: team.names[a], count: counts[a], you: a === aid })) : [],
+    you: { name: team.names[aid] || '', hidden: hiddenMe, count: counts[aid] || 0, rank: enough ? ranks[aid] ?? null : null },
+    people: on.length, min_people: MIN_PEOPLE,
+  };
 }
 
 export class DemoBackend {
@@ -380,10 +421,42 @@ export class DemoBackend {
       return {
         recording_id: a.rid, file_name: info.file_name, format: info.format, mode: a.mode, context_id: a.context_id,
         status: this._status(aid, a), duration_s: info.n_samples / info.sfreq, n_channels: info.ch_names.length,
-        size_bytes: info.size_bytes,
+        size_bytes: info.size_bytes, ...this._history(aid, a),
       };
     });
     return { items, next: this._next(aid) };
+  }
+
+  // ---------------------------------------------------------------- revisions
+  /** The saved attempts of one assignment, oldest first. */
+  _attempts(key) {
+    return this.state.submissions.filter((s) => s.key === key).sort((x, y) => x.attempt - y.attempt);
+  }
+
+  /** What the history shows of a saved recording (games.saved_summary on the server), or null. */
+  _savedSummary(key) {
+    const list = this._attempts(key);
+    if (!list.length) return null;
+    const last = list[list.length - 1];
+    const times = list.map((s) => Number(s.session && s.session.elapsed_s)).filter(Number.isFinite);
+    const elapsed = Number(last.session && last.session.elapsed_s);
+    return { version: last.attempt, saved_at: last.saved_at, first_saved_at: list[0].saved_at, n_annotations: last.annotations.length,
+      elapsed_s: Number.isFinite(elapsed) ? elapsed : null,
+      total_elapsed_s: times.length ? Math.round(times.reduce((x, y) => x + y, 0) * 1000) / 1000 : null };
+  }
+
+  _revisionsAllowed() { return this._admin.s.settings.annotation.allow_revisions !== false; }
+
+  /** The saved summary of a done study recording that may be revised, or null. */
+  _revisable(aid, rid, mode, ctx) {
+    const key = this._key(aid, rid, mode, ctx);
+    return mode === 'standard' && this.state.done[key] && this._revisionsAllowed() ? this._savedSummary(key) : null;
+  }
+
+  /** The fields of GET /assignments for the history: the latest saved attempt and whether a revision is under way. */
+  _history(aid, a) {
+    const key = this._key(aid, a.rid, a.mode, a.context_id);
+    return { saved: this._savedSummary(key), revising: Boolean(this.state.done[key] && this.state.drafts[key]) };
   }
 
   _next(aid) {
@@ -443,7 +516,7 @@ export class DemoBackend {
         r.file_name === body.file_name && JSON.stringify(r.manifest.ch_names) === JSON.stringify(body.ch_names || []));
       if (reg) found = { reg, exact: false };
     }
-    const base = { recording_id: null, mode: 'standard', context_id: '', manifest: null, draft: null, differences: [] };
+    const base = { recording_id: null, mode: 'standard', context_id: '', manifest: null, draft: null, differences: [], revision: null };
     if (!found) {
       return { ...base, status: 'unknown',
         message: 'This file is not one of the recordings of this study. You can still look at it and try the tools, ' +
@@ -462,22 +535,32 @@ export class DemoBackend {
     }
     const key = this._key(aid, rid, mode, ctx);
     const repeatable = mode === 'practice' && !this._practicePassed(aid);
+    let draft = this.state.drafts[key] || null;
+    let revision = null;
     if (this.state.done[key] && !repeatable) {
-      return { ...base, status: 'done', recording_id: rid, mode, context_id: ctx,
-        message: `You have already finished ${fileName}.` };
+      const saved = this._revisable(aid, rid, mode, ctx);
+      if (!(body.revise === true && saved)) {
+        return { ...base, status: 'done', recording_id: rid, mode, context_id: ctx,
+          message: `You have already finished ${fileName}.${saved ? ' To change your annotations, open it from your history with Open to revise.' : ''}` };
+      }
+      const last = this._attempts(key).pop();
+      revision = { version: saved.version + 1, revises: saved.version, saved_at: saved.saved_at,
+        annotations: last.annotations.map((a) => ({ ...a, channels: [...a.channels] })) };
+      draft = draft && draft.revises === saved.version ? draft : null;
     }
     const manifest = found.spec ? { ...this._manifest(found.spec), fingerprint: found.fp } : this._admin.publicManifestOf(found.reg);
-    const draft = this.state.drafts[key] || null;
     if (found.exact) {
-      return { ...base, status: 'matched', recording_id: rid, mode, context_id: ctx, manifest, draft,
-        message: `This is ${fileName}, one of your recordings.` };
+      return { ...base, status: 'matched', recording_id: rid, mode, context_id: ctx, manifest, draft, revision,
+        message: revision
+          ? `This is ${fileName}. You are revising it: your version ${revision.revises} opens, and submitting the revision saves version ${revision.version}, keeping the earlier one.`
+          : `This is ${fileName}, one of your recordings.` };
     }
     const studySize = manifest.fingerprint.size_bytes;
     const differences = ['Its fingerprint (SHA-256) differs from the study\'s copy, so its contents are not exactly the same.'];
     if (body.size_bytes !== studySize) {
       differences.push(`Its size is ${Number(body.size_bytes).toLocaleString('en-GB')} bytes; the study's copy has ${studySize.toLocaleString('en-GB')}.`);
     }
-    return { ...base, status: 'matched_metadata', recording_id: rid, mode, context_id: ctx, manifest, draft, differences,
+    return { ...base, status: 'matched_metadata', recording_id: rid, mode, context_id: ctx, manifest, draft, differences, revision,
       message: `This file has the name, sampling rate, length and channels of ${fileName}, but it is not exactly the study's copy.` };
   }
 
@@ -485,7 +568,15 @@ export class DemoBackend {
   async putDraft(recordingId, mode, contextId, draft) {
     const aid = this._aid();
     const saved_at = nowLocalIso();
-    this.state.drafts[this._key(aid, recordingId, mode, contextId)] = { ...draft, saved_at };
+    const key = this._key(aid, recordingId, mode, contextId);
+    const record = { ...draft, saved_at };
+    delete record.revises;
+    if (this.state.done[key] && !(mode === 'practice' && !this._practicePassed(aid))) {
+      const saved = this._revisable(aid, recordingId, mode, contextId);
+      if (!saved) throw new ApiError(409, 'already_done', `${recordingId} has already been completed`);
+      record.revises = saved.version; // the draft of a revision
+    }
+    this.state.drafts[key] = record;
     this._save();
     return { saved_at };
   }
@@ -521,8 +612,19 @@ export class DemoBackend {
     const assignment = this._assignmentsFor(aid).find((a) => a.rid === rid && a.mode === body.mode);
     if (!info || !assignment) throw new ApiError(404, 'not_found', 'This recording is not one of yours.');
     const key = this._key(aid, rid, body.mode, body.context_id);
+    let revision = null;
     if (this.state.done[key] && !(body.mode === 'practice' && !this._practicePassed(aid))) {
-      throw new ApiError(409, 'already_done', 'This recording has already been saved.');
+      if (body.revises === undefined || body.revises === null) throw new ApiError(409, 'already_done', 'This recording has already been saved.');
+      const saved = this._revisable(aid, rid, body.mode, body.context_id);
+      if (!saved) {
+        throw new ApiError(409, 'revisions_off', `You have already completed ${rid}, and this study does not take revisions of finished recordings.`);
+      }
+      if (!Number.isInteger(body.revises)) throw new ApiError(400, 'bad_request', 'revises must be the version being revised (a whole number)');
+      if (body.revises !== saved.version) {
+        throw new ApiError(409, 'already_revised', `${rid} has been saved again since you opened it (version ${saved.version}). ` +
+          'Open it again from your history to revise the latest version.');
+      }
+      revision = { version: saved.version + 1, revises_version: saved.version };
     }
     const manifest = spec ? this._manifest(spec) : this._admin.publicManifestOf(info.record);
     this._validate(body.annotations, manifest);
@@ -544,16 +646,125 @@ export class DemoBackend {
       recording: { file_name: info.file_name, sfreq: info.sfreq, n_samples: info.n_samples, ch_names: info.ch_names, size_bytes: info.size_bytes },
       guided: body.mode === 'guided' ? this.state.guided[`${aid}|${rid}`]?.summary || null : null,
       feedback: feedback ? { passed: feedback.passed, metrics: feedback.metrics } : null,
+      revision,
     });
     this.state.done[key] = { saved_at, attempt };
     delete this.state.drafts[key];
     this._save();
     const stem = info.stem;
-    const tag = `annotator-${aid}`;
+    const tag = `annotator-${aid}${attempt > 1 ? `_attempt-${String(attempt).padStart(2, '0')}` : ''}`;
     return {
       saved: true, attempt, feedback, next: this._next(aid), demo_notice: DEMO_NOTICE,
       files: [`${stem}_${tag}_annotations.json`, `${stem}_${tag}_events.tsv`, `${stem}_${tag}_session.json`],
+      revision: revision ? { version: attempt, revises: revision.revises_version } : null,
     };
+  }
+
+  // ------------------------------------------------------------ achievements
+  /** GET /me/achievements (docs/web/api.md, "Achievements"), from the demonstration's own state. */
+  async achievements() { return this._achievements({}); }
+
+  /** POST /me/achievements: the personal goal ({goal_per_week}) or being hidden from the leaderboard. */
+  async setAchievements(body) { return this._achievements(body || {}); }
+
+  _achievements(body) {
+    const aid = this._aid();
+    const g = this._admin.s.settings.gamification || {};
+    if (g.enabled === false) return { enabled: false, leaderboard_enabled: false };
+    const records = this.state.records || (this.state.records = {});
+    if ('goal_per_week' in body || 'leaderboard_hidden' in body) {
+      const change = {};
+      if ('goal_per_week' in body) {
+        const v = body.goal_per_week;
+        if (v !== null && !(Number.isInteger(v) && v >= 1 && v <= MAX_GOAL)) {
+          throw new ApiError(400, 'bad_request', `goal_per_week must be a whole number from 1 to ${MAX_GOAL} (or null for no goal)`);
+        }
+        change.goal_per_week = v;
+      }
+      if ('leaderboard_hidden' in body) {
+        if (typeof body.leaderboard_hidden !== 'boolean') throw new ApiError(400, 'bad_request', 'leaderboard_hidden must be true or false');
+        change.leaderboard_hidden = body.leaderboard_hidden;
+      }
+      records[aid] = { ...(records[aid] || {}), ...change };
+      this._save();
+    }
+    const record = records[aid] || {};
+    const mine = this._savedByKey(aid);
+    let worked = 0;
+    let annotations = 0;
+    const completions = [];
+    for (const [key, list] of mine) {
+      const sum = this._savedSummary(key);
+      worked += sum.total_elapsed_s || 0;
+      annotations += sum.n_annotations || 0;
+      completions.push({ first_saved_at: sum.first_saved_at, viewed_fraction: this._viewed(list) });
+    }
+    completions.sort((x, y) => String(x.first_saved_at).localeCompare(String(y.first_saved_at)));
+    const withCoverage = completions.filter((c) => c.viewed_fraction !== null);
+    const team = this._team();
+    const assigned = this._assignmentsFor(aid).filter((a) => a.mode === 'standard').length;
+    return {
+      enabled: true,
+      leaderboard_enabled: g.leaderboard !== false,
+      counters: { done: mine.size, assigned, worked_s: Math.round(worked * 1000) / 1000, annotations },
+      completions,
+      save_times: [...mine.values()].flat().map((s) => s.saved_at).sort(),
+      viewed_in_full: withCoverage.length ? withCoverage.filter((c) => c.viewed_fraction >= VIEWED_IN_FULL).length : null,
+      goal: { per_week: record.goal_per_week ?? null },
+      team: { done: team.done, assigned: team.assigned, people: team.people },
+      leaderboard: g.leaderboard !== false
+        ? leaderboardOf(aid, team, { hiddenMe: record.leaderboard_hidden === true, byFull: g.leaderboard_viewed_only === true }) : null,
+    };
+  }
+
+  /** An annotator's saved study recordings: key -> submissions. */
+  _savedByKey(aid) {
+    const out = new Map();
+    for (const s of this.state.submissions) {
+      if (s.annotator_id !== aid || s.mode !== 'standard') continue;
+      if (!out.has(s.key)) out.set(s.key, []);
+      out.get(s.key).push(s);
+    }
+    return out;
+  }
+
+  /** The most of a recording viewed in any of its saved attempts, or null when that was not measured. */
+  _viewed(list) {
+    const vs = list.map((s) => viewedFraction(s.session && s.session.viewed_fraction)).filter((v) => v !== null);
+    return vs.length ? Math.max(...vs) : null;
+  }
+
+  _team() {
+    if (!this.state.secret) { this.state.secret = sha256Hex(new TextEncoder().encode(`${newId()}${newId()}`)); this._save(); }
+    const people = this._admin.s.users.filter((u) => u.role !== 'admin')
+      .sort((x, y) => String(x.created_at || '').localeCompare(String(y.created_at || '')) || (x.annotator_id < y.annotator_id ? -1 : 1));
+    const ids = people.map((u) => u.annotator_id);
+    const names = {};
+    const taken = new Set();
+    for (const id of ids) {
+      let salt = 0;
+      let name = demoPseudonym(this.state.secret, id, salt);
+      while (taken.has(name) && salt < 1000) name = demoPseudonym(this.state.secret, id, ++salt);
+      taken.add(name);
+      names[id] = name;
+    }
+    const completed = {};
+    const full = {};
+    let done = 0;
+    let assigned = 0;
+    let withWork = 0;
+    const records = this.state.records || {};
+    for (const id of ids) {
+      const given = this._admin.standardAssignments(id).filter((a) => a.mode === 'standard' && this._recordingInfo(a.rid));
+      const mine = this._savedByKey(id);
+      completed[id] = mine.size;
+      full[id] = [...mine.values()].filter((list) => (this._viewed(list) || 0) >= VIEWED_IN_FULL).length;
+      assigned += given.length;
+      done += given.filter((a) => this.state.done[this._key(id, a.rid, 'standard', '')]).length;
+      if (given.length) withWork += 1;
+    }
+    const hidden = new Set(ids.filter((id) => (records[id] || {}).leaderboard_hidden === true));
+    return { ids, names, completed, full, hidden, done, assigned, people: withWork };
   }
 
   // ---------------------------------------------------------------- training
@@ -854,7 +1065,8 @@ export class DemoBackend {
           fingerprint: { algorithm: 'sha256', role: 'eeg', hex: s.sha256, size_bytes: rec.size_bytes } },
         annotator: { annotator_id: s.annotator_id, display_name: this._admin.user(s.annotator_id)?.display_name || ACCOUNTS[s.annotator_id]?.display_name || '' },
         session: { session_id: `${s.annotator_id}-${s.saved_at}`, mode: s.mode, created_at: s.saved_at, app_version: 'web demonstration',
-          context: { context_id: s.context_id, attempt: s.attempt, browser_session: s.session, guided: s.guided, practice: s.feedback } },
+          context: { context_id: s.context_id, attempt: s.attempt, browser_session: s.session, guided: s.guided, practice: s.feedback,
+            ...(s.revision ? { revision: s.revision } : {}) } },
         time_conventions: {
           onset_origin: 'first_sample',
           onset: 'Seconds from the first sample stored in the data file (BIDS events.tsv convention; equal to MNE raw.times).',
