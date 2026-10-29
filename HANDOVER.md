@@ -227,6 +227,15 @@ removes the copy and opens the recording from memory, so no work is lost). A per
 around writing is the natural fix, but a first attempt made WebKit refuse some reads in the tests,
 so it was taken out again before the push.
 
+**6b. Loose ends from the EEGNet comparison (29 October).** Confidence, notes, problem reports,
+reviews of saved work, the channel map, the value under the pointer, the overlay and Go to time are
+in place. The activity summary (`electrotag-activity`) does not yet count the new `confidence_set`,
+`note_set`, `problem_reported` and review events, which are in the interaction log. The Annotations
+list in the side panel is narrow, so long labels are cut short, a little more so when a confidence
+or a note is shown. Electrode positions from a BIDS `electrodes.tsv` are used only when the
+annotator opens it with the recording; recordings opened from a link or kept on the device use
+standard positions.
+
 **7. Housekeeping.** The project's `ruff` settings give only the line length, so a recent `ruff`
 applies many style rules the code was never written to; `ruff check --select E,F,W,B` is the useful
 subset. A shared linting configuration and a lint step in CI would help. Many code comments still
