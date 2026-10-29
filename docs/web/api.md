@@ -82,7 +82,8 @@ token gets 401 `not_signed_in`; one without the header, 403 `missing_header`.
     "study_id": "…", "name": "…",
     "filters": {"highpass_enabled": true, "highpass_hz": 1.0, "notch_enabled": true, "notch_hz": 50.0,
                 "notch_harmonics": false, "locked": false},
-    "display": {"duration_s": 10.0, "n_channels": 32, "scalings": {"eeg": 5e-05, "…": 0.0}},
+    "display": {"duration_s": 10.0, "n_channels": 32, "scalings": {"eeg": 5e-05, "…": 0.0},
+                "channel_colours": "off" | "region" | "side" | "type"},     // the study's default
     "annotation": {"min_duration_samples": 1, "quick_labels": ["Eye-blink-artifact", "…"]},
     "logging": {"interactions": true, "pointer_hz": 5, "idle_after_s": 30},
     "logging_notice": "This study records how you use ElectroClean …"   // "" when logging is off

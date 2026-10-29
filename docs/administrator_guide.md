@@ -159,7 +159,9 @@ The `display` settings choose how the EEG first appears: `scalings` (the
 amplitude per channel type, in volts; the scale bar shows twice the value),
 `duration_s` (seconds shown, 10 by default) and `n_channels` (channels shown
 at once, 32 by default, so that a 10-20 montage with its EOG and ECG channels
-fits without scrolling). Annotators can still change the amplitude, and the
+fits without scrolling). `channel_colours` sets how the browser colours the
+channels at first (`off`, `region`, `side` or `type`; `off` by default), which
+each annotator can change in the Recording tab. Annotators can still change the amplitude, and the
 scale, seconds and channels on screen at Save and Finish are written to each
 session file (`display` in session.json), so you can see at what scale each
 recording was annotated. For a reliability study it helps to choose a starting

@@ -375,6 +375,33 @@ default, which suits an annotator's own device, and the documentation advises re
 computers. A copy is removed for a finished recording only after Save and Finish has saved and
 verified the results, and only when none of the annotator's assignments still needs the recording.
 
+## Channels coloured by group (29 October 2026)
+
+The project lead asked for channels to be coloured by group, following other EEG viewers, without
+the colours suggesting a bad channel. MNE-Python's browser colours traces by channel type (EEG and
+EOG black, ECG magenta) and draws bad channels in light grey, its `make_1020_channel_selections`
+groups 10-20 names into left (odd numbers), midline (z) and right (even numbers), and NeuroScope
+lets users colour channels by anatomical group; no common clinical convention for hemisphere colours
+was found. ElectroClean therefore offers region, side and type, with the grouping the channel
+chooser already used, and keeps the meanings the EEG already has: bad channels stay grey with
+"(bad)" after their name, selected channels stay pink, the experimental events stay teal, and the
+ink-blue accent still marks the channel name under the pointer.
+
+The palette had to be dark (4.5:1 on white, so that a 1-pixel trace stays readable), calm (no red,
+orange or amber, which read as warnings, no pink, which marks selection, no teal and no grey) and
+separable for people with red-green colour blindness. Measured with the palette checks of the design
+work (OKLab distances under the Machado, Oliveira and Fernandes simulation of protanopia and
+deuteranopia), only four hues meet all of these at once: blue `#4360E6`, green `#4A7D23`, violet
+`#74209C` and mauve `#90609A`, each at least 15 apart with full colour vision and 12.8 apart under
+simulation, every pair. A fifth (a brown, a petrol blue or an olive) came too close to the warning
+text, the events' teal or the green. Regions that touch on the scalp therefore never share a colour,
+and frontal and occipital, at opposite ends of the head, share blue; the montage's order tells them
+apart. Sides use blue and green, so that left and right differ in hue for everyone, and the midline
+stays black. A montage that is not named by the 10-20 or 10-10 system (fewer than 60% of its EEG
+channels, the chooser's rule) is not coloured by region or side, since BioSemi's C1 to C32 are a
+bank of electrodes rather than central sites. `web_tests/unit/ui_channel_colours.test.mjs` checks
+the contrast, the hues, the distances from the reserved colours and the separations.
+
 ## Decisions still open
 
 1. **Agreement settings to pre-register:** bin widths, the bin coverage rule,

@@ -188,6 +188,19 @@ The Recording tab holds the viewing options: the 1 Hz high-pass filter and the n
 mains interference (50 Hz in the UK and Europe, 60 Hz in North America). They change only what you
 see; the file is never changed. Some studies fix these settings, and the tab then says so.
 
+Colour channels by, in the same place, colours each channel's trace and name by its group, which
+makes it easier to keep track of where a channel sits in a dense montage. By region, frontal
+channels are blue, central green, temporal violet, parietal mauve and occipital blue again (the two
+are at opposite ends of the head, and regions that touch never share a colour); by side, channels
+on the left (odd numbers) are blue, those on the right (even numbers) green, and the midline (z)
+stays black; by type, EOG is blue, ECG green, EMG violet and other channels mauve, and the EEG stays
+black. A small legend under the choice says what each colour means and how many channels have it.
+The colours only tell groups apart: a bad channel stays grey and is labelled "(bad)", the channels
+you select stay pink, and no colour stands for a problem. Regions and sides follow the 10-20 and
+10-10 names; a montage named otherwise, such as BioSemi's A1 to D32, stays black by region and side.
+ElectroClean remembers your choice in this browser; until you choose, the study's default applies
+(none, unless the study team set one).
+
 ## On an iPad
 
 Everything described here works on an iPad, with your fingers or an Apple Pencil, in Safari or

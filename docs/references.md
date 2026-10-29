@@ -64,6 +64,21 @@ https://developer.mozilla.org/en-US/docs/Web/API/FileSystemFileHandle/createWrit
 `createSyncAccessHandle`, the last only in workers, in 15.2;
 `StorageManager.estimate` in 17)
 
+MNE-Python developers. (2026). `mne.channels.make_1020_channel_selections` and
+`mne.viz.plot_raw` (MNE 1.13). https://mne.tools/stable/generated/mne.channels.make_1020_channel_selections.html
+and https://mne.tools/stable/generated/mne.viz.plot_raw.html (10-20 names
+grouped as left for odd numbers, right for even numbers and midline for z; the
+browser's trace colours by channel type, with bad channels in light grey)
+
+NeuroScope, part of the NDManager suite. User manual, NeuroScope page, Channel
+Colors. https://ndmanager.sourceforge.net/UserManual/neuroscope.html (channels
+coloured by anatomical group, by spike group or one by one)
+
+Machado, G. M., Oliveira, M. M., & Fernandes, L. A. F. (2009). A
+physiologically-based model for simulation of color vision deficiency. *IEEE
+Transactions on Visualization and Computer Graphics*, 15(6), 1291–1298.
+https://doi.org/10.1109/TVCG.2009.113
+
 ## Filtering
 
 Widmann, A., Schröger, E., & Maess, B. (2015). Digital filter design for

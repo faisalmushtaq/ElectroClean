@@ -211,7 +211,7 @@ class StudyService:
                         "notch_enabled": f.notch_enabled, "notch_hz": f.notch_hz,
                         "notch_harmonics": f.notch_harmonics, "locked": f.locked},
             "display": {"duration_s": s.display.duration_s, "n_channels": s.display.n_channels,
-                        "scalings": dict(s.display.scalings)},
+                        "scalings": dict(s.display.scalings), "channel_colours": s.display.channel_colours},
             "annotation": {"min_duration_samples": s.min_duration_samples,
                            "quick_labels": [q for q in s.quick_labels if cat.is_permitted(q)]},
             "logging": self.logging_info(),

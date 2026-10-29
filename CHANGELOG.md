@@ -31,6 +31,17 @@ saved it. A full device leaves the recording open from memory and offers to
 remove finished recordings, signing out offers to remove the copies, and the
 interaction log records what was kept and removed by size and count only.
 
+Channels can be coloured by group: Colour channels by, in the Recording tab,
+colours each channel's trace and name by its region (frontal, central,
+temporal, parietal, occipital), its side (left, midline, right) or its type
+(EEG, EOG, ECG, EMG, other), with a legend, using the grouping of the channel
+chooser. The four colours are dark enough for 1-pixel traces on white, stay
+apart for people with red-green colour blindness, and avoid red, orange, pink,
+teal and grey, so that bad channels keep their grey and no colour reads as a
+warning. The choice is remembered for each annotator in their browser, and a
+study can set the starting choice with the new setting
+`display.channel_colours`.
+
 ElectroClean now runs in the web browser only, and the desktop application
 has been removed. Annotators open the browser application from a link, sign
 in, and open the recordings they were given from their own computer; the page

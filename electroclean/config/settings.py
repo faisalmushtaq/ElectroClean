@@ -119,6 +119,10 @@ DEFAULT_QUICK_LABELS: tuple[str, ...] = (
 )
 
 
+#: How the browser may colour the EEG's channels: not at all, or by region, side or channel type.
+CHANNEL_COLOUR_MODES = ("off", "region", "side", "type")
+
+
 @dataclass(frozen=True)
 class DisplaySettings:
     duration_s: float = 10.0
@@ -126,6 +130,9 @@ class DisplaySettings:
     scalings: dict[str, float] = field(default_factory=dict)
     theme: str = "light"
     overview_mode: str = "empty"
+    # The study's default for colouring the EEG's channels by group in the browser; each annotator
+    # can choose otherwise in the Recording tab (their choice is kept in their browser).
+    channel_colours: str = "off"
 
 
 @dataclass(frozen=True)
@@ -191,6 +198,7 @@ class Settings:
                     scalings={k: float(v) for k, v in disp.get("scalings", {}).items()},
                     theme=str(disp.get("theme", "light")),
                     overview_mode=str(disp.get("overview_mode", "empty")),
+                    channel_colours=str(disp.get("channel_colours", "off")),
                 ),
                 preload_memory_limit_mb=float(load["preload_memory_limit_mb"]),
                 hash_source_files=bool(load["hash_source_files"]),
@@ -237,6 +245,11 @@ class Settings:
                 raise SettingsError(
                     f"channels.types: {pattern!r} is given the type {ch_type!r}; use one of {', '.join(CHANNEL_TYPES)}"
                 )
+        if self.display.channel_colours not in CHANNEL_COLOUR_MODES:
+            raise SettingsError(
+                f"display.channel_colours must be one of {', '.join(CHANNEL_COLOUR_MODES)}, "
+                f"got {self.display.channel_colours!r}"
+            )
         if self.min_duration_samples < 1:
             raise SettingsError("annotation.min_duration_samples must be at least 1")
         if len(self.quick_labels) > 9:

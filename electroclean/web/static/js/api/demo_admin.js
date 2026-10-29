@@ -246,7 +246,8 @@ export class DemoAdmin {
     return {
       study_id: 'demo', name: this.s.name,
       filters: { ...st.filters },
-      display: { duration_s: st.display.duration_s, n_channels: st.display.n_channels, scalings: { ...st.display.scalings } },
+      display: { duration_s: st.display.duration_s, n_channels: st.display.n_channels, scalings: { ...st.display.scalings },
+        channel_colours: st.display.channel_colours || 'off' },
       annotation: { min_duration_samples: st.annotation.min_duration_samples, quick_labels: [...st.annotation.quick_labels] },
       logging,
       logging_notice: logging.interactions ? this.s.logging_notice : '',

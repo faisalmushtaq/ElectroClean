@@ -271,6 +271,20 @@ export class EegViewer {
   setLabelColours(map) { this.labelColours = map || {}; this.invalidate(['over']); }
   setEdgeZonesVisible(on) { this.showEdgeZones = Boolean(on); this.invalidate(['under']); }
 
+  /**
+   * Colour channels by group (js/viewer/channel_colours.js): a Map of channel name to colour for
+   * the trace and the name, or null for none. Selected and bad channels are drawn as before.
+   */
+  setChannelColours(colours) {
+    this.channelColours = colours && colours.size ? colours : null;
+    this.invalidate(['under', 'traces']);
+  }
+
+  /** A channel's group colour, or null (bad channels never take one). */
+  groupColour(ch) {
+    return this.channelColours && !ch.bad ? this.channelColours.get(ch.name) || null : null;
+  }
+
   setSelectedChannels(names, active) {
     this.selectedChannels = new Set(names || []);
     this.channelsActive = Boolean(active);
@@ -492,7 +506,7 @@ export class EegViewer {
       const selected = this.channelsActive && this.selectedChannels.has(ch.name);
       const hover = this.hover && this.hover.area === 'channel_names' && this.hover.row === row;
       ctx.font = `${selected ? '600 ' : ''}${fontPx}px ${FONT}`;
-      ctx.fillStyle = selected ? COLOURS.selection_channel : ch.bad ? COLOURS.text_disabled : hover ? COLOURS.accent : COLOURS.text;
+      ctx.fillStyle = selected ? COLOURS.selection_channel : ch.bad ? COLOURS.text_disabled : hover ? COLOURS.accent : this.groupColour(ch) || COLOURS.text;
       ctx.fillText(ch.bad ? `${ch.name} (bad)` : ch.name, x0 - 8, this.rowCentre(row));
     }
     ctx.textBaseline = 'alphabetic';
@@ -579,7 +593,7 @@ export class EegViewer {
       const k = (half / scaling) * this.view.scaleFactor;
       const yc = this.rowCentre(row);
       const colour = this.channelsActive && this.selectedChannels.has(ch.name) ? COLOURS.selection_channel
-        : ch.bad ? COLOURS.trace_bad : ch.type === 'ecg' ? COLOURS.trace_ecg : COLOURS.trace;
+        : ch.bad ? COLOURS.trace_bad : this.groupColour(ch) || (ch.type === 'ecg' ? COLOURS.trace_ecg : COLOURS.trace);
       if (!dense) {
         const a = Math.floor(sStart) - c.startSample;
         const offset = meanOf(data, a, a + Math.ceil(span));

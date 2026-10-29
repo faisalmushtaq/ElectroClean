@@ -174,6 +174,28 @@ def test_channel_types_setting_is_validated(types, words):
         SettingsCls.from_dict(data)
 
 
+@pytest.mark.parametrize("mode", ["off", "region", "side", "type"])
+def test_channel_colours_setting_takes_the_four_modes(mode):
+    data = load_default_settings_dict()
+    assert data["display"]["channel_colours"] == "off"
+    data["display"]["channel_colours"] = mode
+    assert SettingsCls.from_dict(data).display.channel_colours == mode
+
+
+@pytest.mark.parametrize("mode", ["hemisphere", "", "Region", None])
+def test_channel_colours_setting_is_validated(mode):
+    data = load_default_settings_dict()
+    data["display"]["channel_colours"] = mode
+    with pytest.raises(SettingsError, match="display.channel_colours must be one of off, region, side, type"):
+        SettingsCls.from_dict(data)
+
+
+def test_older_study_files_without_channel_colours_leave_them_off():
+    data = load_default_settings_dict()
+    del data["display"]["channel_colours"]
+    assert SettingsCls.from_dict(data).display.channel_colours == "off"
+
+
 # ---------------------------------------------------------------- amplitude check
 def _raw(scale: float, n_ch: int = 8, ch_type: str = "eeg", flat: int = 0, n: int = N) -> mne.io.RawArray:
     rng = np.random.default_rng(3)
