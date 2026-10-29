@@ -369,7 +369,7 @@ export const tests = [
       await page.fill('input[name="break_reminder_minutes"]', '45');
       await page.locator(`${section} label.check`, { hasText: 'list the parts of the recording' }).locator('input').uncheck();
       await page.click('[data-log="settings-save"]');
-      await page.waitForFunction((s) => /The settings are saved/.test(document.querySelector(`${s} > .admin-msg`)?.textContent || ''), section);
+      await page.waitForFunction((s) => /The settings are saved/.test(document.querySelector(`${s} .sticky-save .admin-msg`)?.textContent || ''), section);
       await page.locator(`${section} h3`, { hasText: 'Long sessions' }).scrollIntoViewIfNeeded();
       await t.screenshot(page, 'comfort_admin_settings');
       const me = await page.evaluate(async () => (await globalThis.ElectroTag.backend.me()).study.annotation);

@@ -148,7 +148,11 @@ export const tests = [
       assert.equal('annotators' in sent.config || 'modes' in sent.config, false);
       const text = await page.innerText('.admin-section[data-section="analyses"]');
       assert.match(text, /One recording has only one annotator\./);
-      assert.match(text, /kappa any artifact\s+0\.712/i); // the label is shown in capitals
+      // The summary in plain words (the key results are in the report), and the command that repeats the analysis.
+      assert.match(text, /Recordings analysed\s+1/);
+      assert.match(text, /Annotators\s+E1, E2/);
+      assert.doesNotMatch(text, /object Object|kappa_any|n recordings/);
+      assert.equal(await page.textContent('pre.agreement-command'), 'electrotag-agreement Annotated_Events --config agreement_settings.json');
       const frame = page.frameLocator('iframe.report-frame').first();
       assert.equal(await frame.locator('h1').textContent(), 'Agreement report');
       await frame.locator('body[data-ran="yes"]').waitFor({ timeout: 5000 }); // the report's own script runs in its sandbox
@@ -161,7 +165,10 @@ export const tests = [
       assert.equal(html.name, 'agreement_report.html');
       assert.match(html.text, /Agreement report/);
       const settings = await download(page, () => page.locator('button', { hasText: 'The settings used (JSON)' }).click());
-      assert.deepEqual(JSON.parse(settings.text).config.resolutions_s, [0.1, 0.5]);
+      const file = JSON.parse(settings.text);
+      // The form electrotag-agreement --config reads: the settings under "config", with the annotators and modes.
+      assert.deepEqual(file.config.resolutions_s, [0.1, 0.5]);
+      assert.deepEqual([file.config.annotators, file.config.modes, file.exclude_recording_ids], [['E1', 'E2'], ['standard'], []]);
       await t.screenshot(page, 'admin_contract_agreement');
 
       // Activity, and a competency report.

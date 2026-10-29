@@ -217,7 +217,7 @@ works but that Dropbox does not document, and Google Drive cannot be read by a w
 always use the two-step download. Attaching a link to each registered recording, so that Open fetches
 it without the annotator pasting anything, is the natural next step: `js/data/fetch_links.js`
 already takes a list of files and their links. The study default for channel colours
-(`display.channel_colours`) has no control in the admin area yet. `electrotag-activity` does not
+(`display.channel_colours`) is set in Study settings. `electrotag-activity` does not
 yet put the time paused (`paused_s`, in the interaction log) in its tables. A Firebase invitation
 shows no expiry date, because Firebase does not give one. Keeping recordings on an iPad uses the
 faster storage from iPadOS 26 and the browser's database before it; check both on a real iPad. Two tabs that keep the same
@@ -249,6 +249,13 @@ the positions themselves, would change what the study stores: `electrotag/web/ma
 `manifest_check.py` would have to keep it, and `docs/web/api.md` would describe it; the open
 view could then say which file to pick, or the map use the stored positions. That is left for a
 decision by the project lead.
+
+**6c. The admin area after its usability review (29 October).** Sharing a study's recordings out
+among its annotators, each recording to a chosen number of people, is to be built as "tasks"; until
+then Assignments gives every recording, or those ticked, to the people ticked. An administrator's own
+visits are still logged in the mode Annotation (Records marks them as an administrator's), since the
+admin area itself is never logged; give them a mode of their own if the activity analysis should
+tell them apart.
 
 **7. Housekeeping.** The project's `ruff` settings give only the line length, so a recent `ruff`
 applies many style rules the code was never written to; `ruff check --select E,F,W,B` is the useful

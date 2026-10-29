@@ -96,15 +96,23 @@ ul.warnings li { font: var(--t-14); }
 /* -------------------------------------------------------------- stat tiles */
 /* The figures of the overview: a bento grid, each figure large in the serif over its label; the
    work done is the one figure in the accent colour. */
+/* The tiles draw their own hairlines (right and bottom; the grid gives the top and left), so a row that
+   is not full ends in the page's own colour rather than a block of grey. Eight figures (Overview,
+   Progress) are four to a row, then two; three figures (Problems) fill one row at every width. */
 .stat-tiles {
-  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 1px;
-  background: var(--hairline); border: 1px solid var(--hairline);
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0;
+  border-top: 1px solid var(--hairline); border-left: 1px solid var(--hairline);
 }
-/* Six figures in rows that always fill: six, three or two to a row. */
-@media (max-width: 1180px) { .stat-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-/* Three figures (Problems) fill one row at every width. */
+@media (max-width: 1180px) { .stat-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .stat-tiles.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.stat-tile { display: flex; flex-direction: column; gap: 4px; background: var(--page); padding: 24px; }
+.stat-tile {
+  display: flex; flex-direction: column; gap: 4px; background: var(--page); padding: 24px; min-width: 0;
+  border-right: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline);
+}
+/* A figure with a section behind it is a link to that section. */
+a.stat-tile { color: inherit; text-decoration: none; transition: background-color var(--fast) var(--ease); }
+@media (hover: hover) { a.stat-tile:hover { background: var(--hover); } }
+a.stat-tile:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .stat-tile:nth-child(4) .stat-value { color: var(--accent); }
 .stat-value { font: var(--t-56); letter-spacing: -0.04em; color: var(--ink); font-variation-settings: var(--display); font-variant-numeric: tabular-nums lining-nums; }
 .stat-label { font: var(--t-16); color: var(--ink); margin-top: 12px; }
@@ -191,6 +199,13 @@ table.admin-info th { width: 1%; }
 .sticky-save {
   position: sticky; bottom: 0; z-index: 5; background: var(--page); padding: 12px 0; margin: 0; border-top: 1px solid var(--rule);
 }
+.sticky-save .btn-row { margin: 0; align-items: center; }
+.sticky-save .admin-msg > div { margin: 8px 0 0; }
+.sticky-save .leave-host:empty { display: none; }
+.sticky-save .leave-host { margin-top: 8px; }
+.unsaved-note { margin: 0; color: var(--ink); }
+.field[aria-invalid="true"] { border-bottom-color: var(--destructive); }
+.made-here .made-one + .made-one { border-top: 1px solid var(--hairline); padding-top: 8px; }
 
 /* ---------------------------------------------------------------- confirming */
 .confirm-strip { background: var(--danger-bg); border: 1px solid var(--hairline); border-left: 3px solid var(--danger-bar); border-radius: 0; padding: 12px; }
@@ -216,7 +231,12 @@ table.admin-info th { width: 1%; }
    and a bar of actions above the table while any are chosen. */
 table.admin-list th.pick, table.admin-list td.pick { width: 1%; padding-right: 8px; }
 table.admin-list tr.chosen td { background: var(--band); }
-.bulk-bar { border: 1px solid var(--hairline); border-left: 2px solid var(--ink); background: var(--band); padding: 12px 16px; margin: 4px 0 8px; }
+/* The bar follows the table and stays at the foot of the window while the table is in view, so that it is
+   in sight whichever rows were ticked. */
+.bulk-bar {
+  border: 1px solid var(--hairline); border-left: 2px solid var(--ink); background: var(--band); padding: 12px 16px; margin: 8px 0;
+  position: sticky; bottom: 0; z-index: 6;
+}
 .bulk-bar > p { margin: 0; }
 .bulk-bar .btn-row { margin-top: 8px; }
 .bulk-bar select.field { width: auto; height: 32px; font: var(--t-14); flex: 0 1 140px; }
@@ -356,3 +376,25 @@ th.num .th-sort { flex-direction: row-reverse; }
   .th-sort { min-height: 40px; }
   .th-sort .ico { opacity: 1; }
 }
+
+/* ------------------------------------------------------------------- help */
+/* Each section's heading has Help beside it: its part of the administrators' guide, in a new tab. */
+.admin-head-row { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
+.admin-head-row h1 { margin-bottom: 0; }
+.docs-link { font: var(--t-14); color: var(--accent); }
+.admin-head .subtitle { margin-top: 12px; }
+
+/* Reviews: each opens to show its marks and notes. */
+.review-details summary { cursor: pointer; color: var(--accent); }
+.review-details ol { margin: 4px 0 0; padding-left: 20px; font: var(--t-14); }
+.review-details p { margin: 4px 0 0; font: var(--t-14); }
+
+/* Skip to the section: hidden until it has the keyboard's focus, then over the top of the header. */
+.skip-link {
+  position: absolute; left: 16px; top: 8px; z-index: 50; transform: translateY(-200%);
+  background: var(--ink); color: var(--page); border: none; border-radius: var(--pill); padding: 8px 16px; font: var(--t-14); cursor: pointer;
+}
+.skip-link:focus-visible, .skip-link:focus { transform: none; outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* Add an account, under the list: its fields side by side, three to a row on a wide screen. */
+.form-grid.add-account { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }

@@ -1,7 +1,7 @@
 // Overview: the study in numbers, the latest changes from the audit log and the latest saved work.
 
 import { h, clear } from '../ui/dom.js';
-import { MODES, opText, whenText } from './model.js';
+import { MODES, opText, routeForSection, whenText } from './model.js';
 import { card, dataTable, loading, messageArea, recordingName, sectionHead } from './ui.js';
 
 export class OverviewSection {
@@ -44,18 +44,19 @@ export class OverviewSection {
       return;
     }
     const c = o.counts || {};
-    const tile = (n, label, note = '') => h('div.stat-tile', {}, h('span.stat-value', {}, String(n ?? 0)), h('span.stat-label', {}, label),
-      note ? h('span.caption', {}, note) : null);
+    // Each figure links to the section behind it (Open problems to Problems, and so on).
+    const tile = (n, label, note = '', to = null) => h(to ? 'a.stat-tile' : 'div.stat-tile', { href: to ? `#${routeForSection(to)}` : null, 'data-to': to },
+      h('span.stat-value', {}, String(n ?? 0)), h('span.stat-label', {}, label), note ? h('span.caption', {}, note) : null);
     clear(this.tiles);
     this.tiles.append(
-      tile(c.recordings, 'Recordings', 'registered for the study'),
-      tile(c.annotators, 'Annotators', `and ${c.admins ?? 0} administrator${c.admins === 1 ? '' : 's'}`),
-      tile(c.assignments, 'Assigned', 'of every kind, training included (Progress counts each kind apart)'),
-      tile(c.done, 'Done', c.assignments ? `${Math.round((100 * (c.done || 0)) / c.assignments)}% of the assigned` : ''),
-      tile(c.in_progress, 'In progress'),
-      tile(c.todo, 'To do'),
-      tile(c.problems_open, 'Open problems', c.unusable ? `${c.unusable} cannot be annotated` : 'reported by annotators'),
-      tile(c.reviewed, 'Reviewed', 'saved recordings with a review'));
+      tile(c.recordings, 'Recordings', 'registered for the study', 'recordings'),
+      tile(c.annotators, 'Annotators', `and ${c.admins ?? 0} administrator${c.admins === 1 ? '' : 's'}`, 'annotators'),
+      tile(c.assignments, 'Assigned', 'of every kind, training included (Progress counts each kind apart)', 'assignments'),
+      tile(c.done, 'Done', c.assignments ? `${Math.round((100 * (c.done || 0)) / c.assignments)}% of the assigned` : '', 'progress'),
+      tile(c.in_progress, 'In progress', '', 'progress'),
+      tile(c.todo, 'To do', '', 'progress'),
+      tile(c.problems_open, 'Open problems', c.unusable ? `${c.unusable} cannot be annotated` : 'reported by annotators', 'problems'),
+      tile(c.reviewed, 'Reviewed', 'saved recordings with a review', 'results'));
     this.recent.update(o.recent || []);
     this.saved.update(o.last_saved || []);
   }

@@ -126,7 +126,7 @@ export const tests = [
       await page.waitForFunction((s) => document.querySelectorAll(`${s} tbody .chip`).length && ![...document.querySelectorAll(`${s} tbody .chip`)].some((c) => c.textContent === 'Retired'), sel);
       await page.check(`${sel} input[data-select-all]`);
       await page.click(`${sel} [data-log="bulk-remove"]`);
-      assert.match(await page.innerText(`${sel} .confirm-strip`), /EEG files never reached it/);
+      assert.match(await page.innerText(`${sel} .confirm-strip`), /EEG files never reached the study/);
       await page.click(`${sel} .confirm-strip button:has-text("Remove 3 registrations")`);
       await page.waitForSelector(`${sel} .bulk-result [data-log="bulk-retire-kept"]`);
       assert.match(await page.innerText(`${sel} .bulk-result`), /3 recordings kept.*research results are never deleted/s);
@@ -201,6 +201,9 @@ export const tests = [
       await page.check('[data-panel="accounts"] input[data-select="L11"]');
       await page.check('[data-panel="accounts"] input[data-select="L12"]');
       await page.click('[data-log="bulk-switch-off"]');
+      // Switching off signs people out at once, so it asks first.
+      assert.match(await page.innerText('[data-panel="accounts"] .bulk-bar .confirm-strip'), /Switch off 2 accounts\? They are signed out at once/);
+      await page.click('[data-panel="accounts"] .bulk-bar .confirm-strip button:has-text("Switch off")');
       await page.waitForSelector('[data-panel="accounts"] .bulk-result h3');
       assert.match(await page.innerText('[data-panel="accounts"] .bulk-result'), /Done for 2 of 2 people/);
       assert.equal(await page.locator('[data-panel="accounts"] tbody .chip:has-text("Switched off")').count(), 2);

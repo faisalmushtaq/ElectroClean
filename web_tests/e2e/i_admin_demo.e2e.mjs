@@ -151,14 +151,15 @@ export const tests = [
       assert.match(await page.textContent('.admin-section[data-section="settings"] .error-banner'), /two number keys/);
       await page.selectOption('select[aria-label="Key 2"]', 'Horizontal-eye-movement-artifact');
       await page.click('[data-log="settings-save"]');
-      await page.waitForFunction(() => /The settings are saved/.test(document.querySelector('.admin-section[data-section="settings"] > .admin-msg')?.textContent || ''));
+      // The answer is in the bar beside Save, at the foot of the window.
+      await page.waitForFunction(() => /The settings are saved/.test(document.querySelector('.admin-section[data-section="settings"] .sticky-save .admin-msg')?.textContent || ''));
       await t.screenshot(page, 'admin_settings');
 
       // The audit log has each change, newest first, and can be filtered.
       await goSection(page, 'Records', 'admin-records');
       await page.waitForSelector('.admin-section[data-section="records"] td');
       const log = await sectionText(page);
-      for (const re of [/Added A05 \(Annotator five\)/, /Assigned 3 recordings to A05/, /Changed the study settings \(annotation, name\)/, /Study created/]) assert.match(log, re);
+      for (const re of [/Added A05 \(Annotator five\)/, /Assigned 3 recordings to A05/, /Changed quick labels \(annotation\) from .* to Nystagmus-artifact, Horizontal-eye-movement-artifact.*; the study's name/, /Study created/]) assert.match(log, re);
       await page.selectOption('select[aria-label="Kind of change"]', 'assign');
       assert.match(await page.textContent('.admin-section[data-section="records"] .admin-card'), /1 of \d+ entries shown/);
       await t.screenshot(page, 'admin_records');

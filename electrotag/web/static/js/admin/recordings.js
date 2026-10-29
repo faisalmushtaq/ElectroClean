@@ -9,16 +9,23 @@
 import { h, clear } from '../ui/dom.js';
 import { CAN_CHOOSE_FOLDER, acceptFiles } from '../util.js';
 import {
-  bytesText, chunkManifests, durationText, manifestSummary, mergeRegisterResults, plural, progressText, scopeText, whenText,
+  bytesText, chunkManifests, durationText, duplicatesOf, failureText, formatName, manifestSummary, mergeRegisterResults, plural, progressText, scopeText,
+  whenText,
 } from './model.js';
 import {
-  STILL_RUNNING, actionButton, card, checkbox, chip, confirmInline, dataTable, eachInTurn, oneAtATime, field, infoTable, messageArea, progressLine, recordingName, resultsTable,
+  STILL_RUNNING, actionButton, put, card, checkbox, chip, confirmInline, dataTable, eachInTurn, oneAtATime, field, infoTable, messageArea, progressLine, recordingName, resultsTable,
   sectionHead, select, textArea, textInput,
 } from './ui.js';
 
 /** The module that reads recordings for the register (js/data/register.js); tests may replace it. */
 export async function loadRegisterModule() {
   return import('../data/register.js');
+}
+
+/** What removing a recording takes with it, asked before it is removed. */
+export function removeQuestion(r, where) {
+  const given = r.assigned || 0;
+  return `Remove the registration of ${r.recording_id} from ${where}? Its description is deleted${given ? `, and it is taken away from the ${plural(given, 'person', 'people')} it is assigned to; work in progress is kept by the study and comes back if the recording is added and assigned again. To keep the assignments, retire it instead` : ''}. The EEG file never reached the study and is not touched.`;
 }
 
 export class RecordingsSection {
@@ -105,7 +112,7 @@ export class RecordingsSection {
       { title: '', cls: 'actions', render: (r) => h('button.btn.small', { type: 'button', onclick: () => this.openDetail(r) }, 'Manage') },
     ], [], { empty: 'No recordings match. Add some from this computer.', rowKey: (r) => `${r.scope}|${r.recording_id}`, caption: 'Recordings',
       sortable: true, selectable: true, onSelect: (keys) => this._bulkBar(keys) });
-    this.listCard = card('Registered recordings', h('div.row.filters', {}, scope, status, search), this.listNote, this.bulkBar, this.table, this.bulkResult);
+    this.listCard = card('Registered recordings', h('div.row.filters', {}, scope, status, search), this.listNote, this.table, this.bulkBar, this.bulkResult);
   }
 
   /** The recordings of the list's keys ("scope|recording ID"). */
@@ -136,7 +143,8 @@ export class RecordingsSection {
     removeHost.append(h('button.btn.small.destructive', { type: 'button', 'data-log': 'bulk-remove', onclick: async () => {
       if (this._bulkRunning) { msg.problem(new Error(STILL_RUNNING)); return; }
       const list = this._chosen(this.table.selected());
-      const yes = await confirmInline(removeHost, { text: `Remove the registration of ${plural(list.length, 'recording')}? Only their descriptions are deleted from the study; the EEG files never reached it and stay where they are. Recordings that someone has saved, or that a reference set uses, are kept.`,
+      const given = list.reduce((n, r) => n + (r.assigned || 0), 0);
+      const yes = await confirmInline(removeHost, { text: `Remove the registration of ${plural(list.length, 'recording')}? Their descriptions are deleted from the study${given ? `, and their ${plural(given, 'assignment')} go with them; work in progress is kept by the study and comes back if a recording is added and assigned again. To keep the assignments, retire them instead` : ''}. The EEG files never reached the study and stay where they are. Recordings that someone has saved, or that a reference set uses, are kept.`,
         yes: `Remove ${plural(list.length, 'registration')}` });
       if (!yes) return;
       try {
@@ -165,7 +173,7 @@ export class RecordingsSection {
     await this.reload();
     clear(this.bulkResult);
     const kept = results.filter((r) => r.kept).map((r) => r.item);
-    this.bulkResult.append(h('h3', {}, `Done for ${results.filter((r) => r.ok).length} of ${plural(results.length, 'recording')}`),
+    put(this.bulkResult, h('h3', {}, `Done for ${results.filter((r) => r.ok).length} of ${plural(results.length, 'recording')}`),
       kept.length ? h('div.banner', { role: 'status' },
         h('p', {}, h('b', {}, `${plural(kept.length, 'recording')} kept`), ': someone has saved annotations of them, or a reference set uses them, and research results are never deleted. Retire them instead, so that they are offered for no new assignments.'),
         h('div.btn-row', {}, actionButton(`Retire the ${plural(kept.length, 'kept recording')}`, { working: 'Retiring…', log: 'bulk-retire-kept', onClick: async () => {
@@ -178,6 +186,7 @@ export class RecordingsSection {
   _filter() {
     const { scope, status, search } = this.filters;
     const q = search.value.trim().toLowerCase();
+    this.table.setEmpty(this.recordings.length ? 'No recordings match the filters.' : 'No recordings are registered yet. Add some from this computer.');
     this.table.update(this.recordings.filter((r) => (!scope.value || r.scope === scope.value) &&
       (!status.value || (status.value === 'retired') === Boolean(r.retired)) &&
       (!q || `${r.recording_id} ${r.file_name || ''}`.toLowerCase().includes(q))), { keepPage: true });
@@ -211,7 +220,7 @@ export class RecordingsSection {
     } });
     const removeHost = h('div.btn-row');
     removeHost.append(h('button.btn.destructive', { type: 'button', onclick: async () => {
-      if (!(await confirmInline(removeHost, { text: `Remove the registration of ${r.recording_id} from ${scopeText(r.scope, this.sets).toLowerCase()}? Only its description is deleted; the EEG file never reached the study and is not touched.`, yes: 'Remove it' }))) return;
+      if (!(await confirmInline(removeHost, { text: removeQuestion(r, scopeText(r.scope, this.sets).toLowerCase()), yes: 'Remove it' }))) return;
       try {
         await this.area.write('recording_remove', body);
         this.detailKey = null;
@@ -225,7 +234,7 @@ export class RecordingsSection {
       h('div.card-head', {}, h('h2', {}, r.file_name || r.recording_id), close),
       msg,
       infoTable([
-        ['Recording ID', r.recording_id], ['Where', scopeText(r.scope, this.sets)], ['Format', String(r.format || '').toUpperCase()],
+        ['Recording ID', r.recording_id], ['Where', scopeText(r.scope, this.sets)], ['Format', formatName(r.format)],
         ['Length', `${durationText(r.duration_s)} at ${r.sfreq} Hz (${Number(r.n_samples || 0).toLocaleString('en-GB')} samples)`],
         ['Channels', String(r.n_channels ?? '')], ['File size', bytesText(r.size_bytes)],
         ['Fingerprint', h('code.fingerprint', {}, r.sha256 || '–')],
@@ -308,23 +317,40 @@ export class RecordingsSection {
     clear(this.review);
     const { manifests, failures } = this.found;
     const rows = manifests.map((m) => ({ m, s: manifestSummary(m) }));
-    const known = new Set(this.recordings.filter((r) => r.scope === (this.addScope.value || 'study')).map((r) => r.recording_id));
+    const scope = this.addScope.value || 'study';
+    const known = new Set(this.recordings.filter((r) => r.scope === scope).map((r) => r.recording_id));
+    // Byte-identical copies, of a registered recording or of another one found here: skipped unless confirmed.
+    const same = duplicatesOf(manifests, this.recordings.filter((r) => r.scope === scope));
     const table = dataTable([
-      { title: 'Recording', render: ({ s }) => h('span', {}, recordingName(s.recordingId), known.has(s.recordingId) ? h('span.chip.warning', {}, 'registered already') : null) },
-      { title: 'Format', render: ({ s }) => String(s.format).toUpperCase() },
+      { title: 'Recording', render: ({ s }) => h('span', {}, recordingName(s.recordingId), known.has(s.recordingId) ? h('span.chip.warning', {}, 'registered already') : null,
+        same.has(s.recordingId) ? h('span.chip.warning', { 'data-duplicate': same.get(s.recordingId) }, `same file as ${same.get(s.recordingId)}`) : null) },
+      { title: 'Format', render: ({ s }) => formatName(s.format) },
       { title: 'Channels', num: true, render: ({ s }) => `${s.nChannels}${s.nHidden ? ` (+${s.nHidden} hidden)` : ''}` },
       { title: 'Length', num: true, render: ({ s }) => durationText(s.durationS) },
       { title: 'Warnings', render: ({ s }) => (s.warnings.length ? h('ul.warnings', {}, s.warnings.map((w) => h('li', {}, w))) : '–') },
     ], rows, { empty: 'No recordings were found among these files.', pageSize: 20, caption: 'Recordings found' });
-    this.registerBtn = h('button.btn.primary', { type: 'button', 'data-log': 'register', disabled: !manifests.length, onclick: () => this.register() },
-      manifests.length ? `Add ${plural(manifests.length, 'recording')}` : 'Nothing to add');
+    this.allowCopies = checkbox('Add the copies too (each is then annotated as a recording of its own)');
+    this.registerBtn = h('button.btn.primary', { type: 'button', 'data-log': 'register', onclick: () => this.register() });
+    // The button counts what will be added: recordings registered already only with Replace, copies only when ticked.
+    const count = () => {
+      const n = manifests.filter((m) => (this.replace.input.checked || !known.has(m.recording_id)) && (this.allowCopies.input.checked || !same.has(m.recording_id))).length;
+      this.registerBtn.textContent = n ? `Add ${plural(n, 'recording')}` : 'Nothing to add';
+      this.registerBtn.disabled = !n;
+    };
+    this.allowCopies.input.addEventListener('change', count);
+    this.replace.input.onchange = count;
+    count();
     const again = h('button.btn', { type: 'button', onclick: () => { this.found = null; clear(this.review); this.addMsg.clear(); } }, 'Start again');
-    this.review.append(
+    put(this.review, 
       h('h3', {}, `Found ${plural(manifests.length, 'recording')}`),
       table,
+      same.size ? h('div.banner.duplicates', { role: 'status' },
+        h('p', {}, h('b', {}, `${plural(same.size, 'recording')} ${same.size === 1 ? 'is' : 'are'} the same file as another`),
+          ' (the same fingerprint), under another ID. Each would be assigned and annotated as a separate recording, which inflates the counts and the agreement, so copies are skipped.'),
+        this.allowCopies) : null,
       failures.length ? h('div.banner.failures', { role: 'status' },
         h('p', {}, h('b', {}, `${plural(failures.length, 'file')} could not be read`)),
-        h('ul', {}, failures.map((f) => h('li', {}, h('span.file', {}, f.path || f.recording_id || '?'), `: ${f.reason || 'not readable'}`)))) : null,
+        h('ul', {}, failures.map((f) => h('li', {}, h('span.file', {}, f.path || f.recording_id || '?'), `: ${failureText(f.path || f.recording_id, f.reason)}`)))) : null,
       h('div.btn-row', {}, this.registerBtn, again));
   }
 
@@ -341,7 +367,9 @@ export class RecordingsSection {
     try {
       for (const group of groups) {
         this.progress.set(sent / manifests.length, `Adding ${sent + 1}–${sent + group.length} of ${manifests.length}…`);
-        results.push(await this.area.write('recordings_register', { scope, manifests: group, replace: this.replace.input.checked }));
+        const body = { scope, manifests: group, replace: this.replace.input.checked };
+        if (this.allowCopies && this.allowCopies.input.checked) body.allow_duplicates = true;
+        results.push(await this.area.write('recordings_register', body));
         sent += group.length;
       }
     } catch (exc) {
@@ -358,13 +386,13 @@ export class RecordingsSection {
     this.found = null;
     clear(this.review);
     const list = (items) => h('ul.compact', {}, items.slice(0, 50).map((x) => h('li.file', {}, x)), items.length > 50 ? h('li', {}, `and ${items.length - 50} more`) : null);
-    this.review.append(h('div.success', { role: 'status' },
+    put(this.review, h('div.success', { role: 'status' },
       h('p', {}, h('b', {}, `Added ${plural(r.added.length, 'recording')}${r.replaced.length ? `, replaced ${r.replaced.length}` : ''}${r.skipped.length ? `, skipped ${r.skipped.length}` : ''}.`)),
       r.added.length ? list(r.added) : null),
       r.replaced.length ? h('div.note', {}, h('p', {}, h('b', {}, 'Replaced')), list(r.replaced)) : null,
       r.skipped.length ? h('div.banner', {}, h('p', {}, h('b', {}, 'Skipped')),
         h('ul', {}, r.skipped.map((x) => h('li', {}, h('span.file', {}, x.recording_id), `: ${x.reason}`)))) : null,
-      r.added.length && scope === 'study' ? h('div.btn-row', {}, h('button.btn', { type: 'button', onclick: () => this.area.go('assignments') }, 'Assign them…')) : null);
+      r.added.length && scope === 'study' ? h('div.btn-row', {}, h('button.btn', { type: 'button', 'data-log': 'register-assign', onclick: () => this.area.go('assignments', { recordings: [...r.added] }) }, 'Assign them…')) : null);
     this._setJob(null);
     await this.reload();
   }
