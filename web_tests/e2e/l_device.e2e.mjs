@@ -215,8 +215,16 @@ export const tests = [
         await page.click('[data-log="close"]');
         await clickDialogButton(page, 'Close and finish later');
         await waitForRoute(page, 'home');
+        // closing the question keeps them (the default, for a personal device)
         await page.click('[data-log="sign-out"]');
-        await page.waitForSelector('.dialog');
+        await page.waitForSelector('.dialog.device-sign-out');
+        await page.keyboard.press('Escape');
+        await waitForRoute(page, 'signin');
+        assert.equal(await idbCount(page), 1);
+        await signIn(page, 'A01');
+        await waitForRoute(page, 'home');
+        await page.click('[data-log="sign-out"]');
+        await page.waitForSelector('.dialog.device-sign-out');
         assert.match(await page.textContent('.dialog'), /1 recording is kept on this device for you/);
         await t.screenshot(page, 'device_sign_out');
         await clickDialogButton(page, 'Remove them');

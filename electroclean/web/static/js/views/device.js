@@ -5,7 +5,7 @@
 // file names or links.
 
 import { h, clear } from '../ui/dom.js';
-import { ask, showDialog } from '../ui/dialog.js';
+import { showDialog } from '../ui/dialog.js';
 import { logger } from '../log/logger.js';
 import { local } from '../util.js';
 import { formatBytes } from '../data/links.js';
@@ -246,11 +246,13 @@ export async function offerRemovalAtSignOut(app) {
   const kept = await store.list().catch(() => []);
   if (!kept.length) return;
   const s = summarise(kept);
-  const keep = await ask('Recordings on this device',
-    `${s.count} ${s.count === 1 ? 'recording is' : 'recordings are'} kept on this device for you (${formatBytes(s.bytes)}).\n\n`
-    + 'On your own device you can keep them, to open them again without downloading. On a computer that others use, remove them.',
-    { yes: 'Keep them', no: 'Remove them' });
-  if (keep) return;
+  // Keeping is the default, also when the dialog is closed with Esc or a click outside it.
+  const body = h('div', {},
+    h('p.dialog-text', {}, `${s.count} ${s.count === 1 ? 'recording is' : 'recordings are'} kept on this device for you (${formatBytes(s.bytes)}).`),
+    h('p.dialog-text', {}, 'On your own device you can keep them, to open them again without downloading. On a computer that others use, remove them.'));
+  const choice = await showDialog({ title: 'Recordings on this device', body, className: 'device-sign-out', cancelValue: 'keep',
+    buttons: [{ label: 'Remove them', value: 'remove' }, { label: 'Keep them', value: 'keep', kind: 'primary' }] });
+  if (choice !== 'remove') return;
   const r = await store.removeMany(kept);
   logger.event('device_removed', { reason: 'sign_out', count: r.count, size_bytes: r.bytes });
 }
