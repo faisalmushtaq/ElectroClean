@@ -24,8 +24,9 @@ original lacked, then seven ElectroTag columns:
     1-based row number in the original events file (``n/a`` for artifacts),
     so the original table can be rebuilt exactly.
 ``confidence``
-    How sure the annotator was of the artifact: ``definite``, ``probable`` or
-    ``possible``; ``n/a`` when no confidence was given, and on original rows.
+    How confident the annotator was of the artifact, on a 5-point scale: an
+    integer from ``1`` (not at all confident) to ``5`` (completely confident);
+    ``n/a`` when it was not rated, and on original rows.
 ``annotation_note``
     The annotator's short note on the artifact (``n/a`` when there is none,
     and on original rows).
@@ -49,6 +50,8 @@ from typing import Any
 
 from electrotag.app.annotations.labels import LabelCatalogue
 from electrotag.app.annotations.model import (
+    CONFIDENCE_ANCHORS,
+    CONFIDENCE_LEVELS,
     MAX_NOTE_CHARS,
     AnnotationDocument,
     AnnotationError,
@@ -140,7 +143,7 @@ def build_events_table(
         out[index["event_source"]] = ARTIFACT_SOURCE
         out[index["annotation_id"]] = ann.annotation_id
         out[index["annotator_id"]] = doc.annotator_id
-        out[index["confidence"]] = ann.confidence or NA
+        out[index["confidence"]] = NA if ann.confidence is None else str(ann.confidence)
         out[index["annotation_note"]] = ann.note or NA
         keyed.append(((ann.onset(timing), 1, j), out))
 
@@ -190,11 +193,21 @@ def annotations_from_events_tsv(
                 onset_sample=sample,
                 duration_samples=timing.duration_to_samples(duration),
                 channels=decode_channels(row[idx["channels"]]),
-                confidence=_optional_cell(row, idx, "confidence"),
+                confidence=_confidence_cell(row, idx, n),
                 note=_optional_cell(row, idx, "annotation_note"),
             )
         )
     return out
+
+
+def _confidence_cell(row: list[str], idx: dict[str, int], line: int) -> int | None:
+    """The rating of the ``confidence`` column (None when the column is missing or the cell is n/a)."""
+    text = _optional_cell(row, idx, "confidence")
+    if not text:
+        return None
+    if text not in {str(lv) for lv in CONFIDENCE_LEVELS}:
+        raise AnnotationError(f"Line {line}: confidence {text!r} is not a whole number from 1 to 5")
+    return int(text)
 
 
 def _optional_cell(row: list[str], idx: dict[str, int], column: str) -> str:
@@ -329,22 +342,18 @@ def build_events_sidecar(
     out["confidence"] = {
         "LongName": "Confidence of the artifact annotation",
         "Description": (
-            f"How sure the annotator was of the artifact, on rows with event_source '{ARTIFACT_SOURCE}' (n/a on "
-            "original rows). n/a on an artifact row means that no confidence was given. "
+            "How confident the annotator was that the artifact annotation is right, on an ordinal 5-point Likert "
+            f"scale, on rows with event_source '{ARTIFACT_SOURCE}' (n/a on original rows). n/a on an artifact row "
+            "means that the annotation was not rated. "
             + (
-                "In this study every new annotation started as 'definite' and the annotator changed it when unsure "
-                "(annotation.confidence 'every_mark'), so a confidence was given for every annotation made."
+                "In this study annotators were asked to rate each new annotation (annotation.confidence "
+                "'every_mark'); no annotation started with a rating, so n/a marks one left unrated."
                 if confidence_mode == "every_mark"
-                else "In this study a confidence was optional (annotation.confidence 'optional'): annotators gave one "
-                "only when they wished, so the annotations with a confidence are a self-selected subset and n/a "
-                "means that the annotator gave none."
+                else "In this study a rating was optional (annotation.confidence 'optional'): annotators rated an "
+                "annotation only when they wished, so the rated annotations are a self-selected subset."
             )
         ),
-        "Levels": {
-            "definite": "The annotator was sure this is an artifact of this type.",
-            "probable": "The annotator thought it is probably an artifact of this type.",
-            "possible": "The annotator thought it is possibly an artifact of this type.",
-        },
+        "Levels": {str(k): v for k, v in CONFIDENCE_ANCHORS.items()},
     }
     out["annotation_note"] = {
         "LongName": "Annotator's note",

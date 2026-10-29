@@ -21,11 +21,11 @@ from typing import Any
 
 from electrotag import __version__
 from electrotag.app.annotations.model import (
-    CONFIDENCE_LEVELS,
     AnnotationError,
     ArtifactAnnotation,
     RecordingInfo,
     check_note,
+    is_confidence,
     normalise_channels,
     validate_annotation,
 )
@@ -76,14 +76,13 @@ def _number(value: Any, what: str, *, minimum: float | None = None) -> float:
     return float(value)
 
 
-def confidence_and_note(a: dict[str, Any], where: str, code: str = "invalid_annotation") -> tuple[str, str]:
-    """An annotation's ``confidence`` (one of CONFIDENCE_LEVELS, or none: missing, null or "") and ``note``
+def confidence_and_note(a: dict[str, Any], where: str,
+                        code: str = "invalid_annotation") -> tuple[int | None, str]:
+    """An annotation's ``confidence`` (a whole number from 1 to 5, or none: missing or null) and ``note``
     (text of at most 200 characters on one line, or none), checked."""
     confidence = a.get("confidence")
-    if confidence in (None, ""):
-        confidence = ""
-    elif confidence not in CONFIDENCE_LEVELS:
-        raise ApiError(422, code, f"{where}: confidence must be {', '.join(CONFIDENCE_LEVELS)} or none")
+    if confidence is not None and not is_confidence(confidence):
+        raise ApiError(422, code, f"{where}: confidence must be a whole number from 1 to 5, or none")
     try:
         note = check_note(a.get("note"))
     except AnnotationError as exc:
@@ -137,7 +136,7 @@ def parse_annotations(items: Any, info: RecordingInfo, catalogue: Any, min_sampl
 def annotation_dict(a: ArtifactAnnotation) -> dict[str, Any]:
     return {"annotation_id": a.annotation_id, "label": a.label, "onset_sample": a.onset_sample,
             "duration_samples": a.duration_samples, "channels": list(a.channels),
-            "created_at": a.created_at, "modified_at": a.modified_at, "confidence": a.confidence or None,
+            "created_at": a.created_at, "modified_at": a.modified_at, "confidence": a.confidence,
             "note": a.note}
 
 

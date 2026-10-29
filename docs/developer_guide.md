@@ -63,8 +63,8 @@ electrotag/
         session/           session.py, transaction.py, register.py, failures.py, selection.py,
                            autosave.py, interaction_log.py (the per-visit JSON Lines format)
     reliability/           config.py, data.py, intervals.py, statistics.py,
-                           timeresolved.py, matching.py, confidence.py (each annotator's confidence and
-                           the definite-confidence sensitivity analysis), analysis.py, report.py, cli.py
+                           timeresolved.py, matching.py, confidence.py (each annotator's ratings, agreement
+                           without low-confidence marks, and calibration), analysis.py, report.py, cli.py
     training/              reference.py, consensus.py, assessment.py, quiz.py, admin.py, cli.py,
                            programme.py (the three stages and their unlocking), guided.py (the
                            checks of guided steps), review.py (the disagreements flagged in a

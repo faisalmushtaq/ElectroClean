@@ -114,32 +114,37 @@ COLUMN_TITLES: dict[str, tuple[str, str]] = {
     "path": ("File", ""),
     "status": ("Status", ""),
     "annotator": ("Annotator", ""),
-    "confidence_setting": ("Confidence setting", "optional: given only when the annotator wished; every_mark: every "
-                          "new mark started as definite"),
+    "confidence_setting": ("Confidence setting", "optional: ratings given only when the annotator wished; "
+                           "every_mark: annotators were asked to rate each new mark"),
     "n_recordings": ("Recordings", ""),
     "n_annotations": ("Annotations", ""),
-    "n_confidence_given": ("Confidence given", "Annotations with a confidence"),
-    "share_confidence_given": ("Share given", "Share of the annotations with a confidence"),
-    "n_definite": ("Definite", ""),
-    "n_probable": ("Probable", ""),
-    "n_possible": ("Possible", ""),
-    "n_not_given": ("Not given", "Annotations without a confidence"),
-    "share_definite": ("Share definite", "Of the annotations with a confidence"),
-    "share_probable": ("Share probable", "Of the annotations with a confidence"),
-    "share_possible": ("Share possible", "Of the annotations with a confidence"),
+    "n_rated": ("Rated", "Annotations with a confidence rating"),
+    "share_rated": ("Share rated", "Share of the annotations with a confidence rating"),
+    "n_rated_1": ("1", "Not at all confident"),
+    "n_rated_2": ("2", "Slightly confident"),
+    "n_rated_3": ("3", "Moderately confident"),
+    "n_rated_4": ("4", "Very confident"),
+    "n_rated_5": ("5", "Completely confident"),
+    "n_not_rated": ("Not rated", "Annotations without a confidence rating"),
+    "median_confidence": ("Median", "Median rating of the rated annotations (1 to 5)"),
     "n_with_note": ("With a note", "Annotations that carry a note (notes take part in no statistic)"),
     "rater_1": ("Annotator 1", ""),
     "rater_2": ("Annotator 2", ""),
     "n_marks_all": ("Marks, all", "Events of both annotators"),
-    "n_marks_without_doubtful": ("Marks, without doubtful", "Events of both annotators, leaving out those given "
-                                 "probable or possible"),
+    "n_marks_without_low_confidence": ("Marks, without low confidence", "Events of both annotators, leaving "
+                                       "out those rated 1 or 2"),
     "positive_agreement_all": ("Positive agreement, all", "Sample by sample, all recordings pooled"),
-    "positive_agreement_without_doubtful": ("Positive agreement, without doubtful", "Leaving out marks given "
-                                            "probable or possible"),
+    "positive_agreement_without_low_confidence": ("Positive agreement, without low confidence", "Leaving out "
+                                                  "marks rated 1 or 2"),
     "cohen_kappa_all": ("Kappa, all", "Cohen's kappa sample by sample, all recordings pooled"),
-    "cohen_kappa_without_doubtful": ("Kappa, without doubtful", "Leaving out marks given probable or possible"),
+    "cohen_kappa_without_low_confidence": ("Kappa, without low confidence", "Leaving out marks rated 1 or 2"),
     "f1_all": ("F1, all", "Event F1 at the main threshold"),
-    "f1_without_doubtful": ("F1, without doubtful", "Leaving out marks given probable or possible"),
+    "f1_without_low_confidence": ("F1, without low confidence", "Leaving out marks rated 1 or 2"),
+    "confidence": ("Confidence", "Rating from 1 (not at all confident) to 5 (completely confident)"),
+    "anchor": ("Meaning", ""),
+    "n_marks": ("Marks", ""),
+    "n_matched": ("Found by another", "Marks matched by a mark of the same type from another annotator"),
+    "share_matched": ("Share found by another", "Of the marks with this rating"),
 }
 NOWRAP = {"category", "pair", "recording", "reference", "compared", "label_rater_1", "label_rater_2",
           "channel_mode", "annotator", "path"}
@@ -495,7 +500,7 @@ summary { cursor: pointer; font-size: 14px; line-height: 20px; color: var(--seco
 
 
 def _confidence_section(result: Any, add: Callable[[str], None]) -> None:
-    """Section 5: how sure the annotators said they were, and agreement without the marks they doubted."""
+    """Section 5: the annotators' confidence ratings, agreement without low-confidence marks, and calibration."""
     from electrotag.reliability.confidence import confidence_given, explanation
 
     add("<h2>5. Confidence of the annotations</h2>")
@@ -504,24 +509,30 @@ def _confidence_section(result: Any, add: Callable[[str], None]) -> None:
         "take part in none of the statistics.</p>")
     by = result.tables.get("confidence_by_annotator", pd.DataFrame())
     if not by.empty:
-        add(_table(by, caption="For each annotator, all recordings together: how many annotations had a confidence "
-                   "given, how those were spread over definite, probable and possible, and how many carry a note. "
-                   "An annotator who rarely leaves the default may differ in habit rather than in doubt."))
+        add(_table(by, caption="For each annotator, all recordings together: how many annotations were rated, how "
+                   "many had each rating from 1 (not at all confident) to 5 (completely confident), the median "
+                   "rating, and how many carry a note. Annotators use a scale differently, so compare an "
+                   "annotator's ratings with their own rather than with another's."))
     if not confidence_given(result.dataset, result.config):
         return
     sens = result.tables.get("confidence_sensitivity", pd.DataFrame())
+    cfg = result.config
     if sens.empty:
         add("<p class='muted'>No annotator pair to compare.</p>")
-        return
-    cfg = result.config
-    shown = sens[(sens.channel_mode == "time_only") & (sens.category == ANY_ARTIFACT)]
-    add(_table(shown if not shown.empty else sens.head(40), caption="Agreement of each pair of annotators for all "
-               "marks and again without the marks given probable or possible: positive agreement and Cohen's kappa "
-               "sample by sample and event F1 at the main threshold "
-               f"({html.escape(f'{cfg.primary_iou_threshold:g}')}), for any artifact, time only, all recordings "
-               "pooled. "
-               "Higher agreement without the doubtful marks means that much of the disagreement lies in marks the "
-               "annotators themselves were unsure of. confidence_sensitivity.tsv has every category and mode."))
+    else:
+        shown = sens[(sens.channel_mode == "time_only") & (sens.category == ANY_ARTIFACT)]
+        add(_table(shown if not shown.empty else sens.head(40), caption="Agreement of each pair of annotators for "
+                   "all marks and again without the marks of low confidence (rated 1 or 2; unrated marks are kept): "
+                   "positive agreement and Cohen's kappa sample by sample and event F1 at the main threshold "
+                   f"({html.escape(f'{cfg.primary_iou_threshold:g}')}), for any artifact, time only, all recordings "
+                   "pooled. Higher agreement without them means that much of the disagreement lies in marks the "
+                   "annotators themselves were unsure of. confidence_sensitivity.tsv has every category and mode."))
+    cal = result.tables.get("confidence_calibration", pd.DataFrame())
+    if not cal.empty:
+        add(_table(cal, caption="Calibration: for each annotator and rating, the share of their marks that at least "
+                   "one other annotator also found (a mark of the same type matching it, time only, at the main "
+                   "threshold). If the share rises with the rating, the ratings tell which marks others agree with. "
+                   "Small numbers of marks make a share unreliable."))
 
 
 def build_html_report(result: Any) -> str:

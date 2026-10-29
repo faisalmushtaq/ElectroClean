@@ -27,7 +27,7 @@ import { escapeHtml, local, newId, nowLocalIso, session } from '../util.js';
 import { sha256Hex } from '../data/sha256.js';
 import { coveredS, fromDraft } from '../viewer/coverage.js';
 import { ADJECTIVES, ANIMALS } from '../games/words.js';
-import { CONFIDENCE_LEVELS, noteProblem } from '../annotate/confidence.js';
+import { isConfidence, noteProblem } from '../annotate/confidence.js';
 
 const STATE_KEY = 'electrotag.demo.v1';
 const TOKEN_KEY = 'electrotag.demo.token';
@@ -665,9 +665,9 @@ export class DemoBackend {
     }
   }
 
-  /** As service.py: a confidence is definite, probable, possible or none, and a note one line of at most 200 characters. */
+  /** As service.py: a confidence is a whole number from 1 to 5 or none, and a note one line of at most 200 characters. */
   _checkConfidenceAndNote(a, fail) {
-    if (a.confidence && !CONFIDENCE_LEVELS.includes(a.confidence)) fail(`confidence must be ${CONFIDENCE_LEVELS.join(', ')} or none`);
+    if (a.confidence !== undefined && a.confidence !== null && !isConfidence(a.confidence)) fail('confidence must be a whole number from 1 to 5, or none');
     const problem = noteProblem(a.note);
     if (problem) fail(problem);
   }
@@ -1172,7 +1172,7 @@ export class DemoBackend {
           onset: a.onset_sample / sf, duration: a.duration_samples / sf, onset_sample: a.onset_sample,
           duration_samples: a.duration_samples, end_sample: a.onset_sample + a.duration_samples, channels: [...a.channels],
           scope: a.channels.length ? 'channels' : 'whole_montage', created_at: a.created_at, modified_at: a.modified_at,
-          confidence: a.confidence || null, note: a.note || '',
+          confidence: a.confidence ?? null, note: a.note || '',
         })),
       };
     });

@@ -501,7 +501,7 @@ export class EegViewer {
       const sel = this.selected.has(a.annotation_id);
       const xa = clamp(this.sampleToX(a.onset_sample), x0, x1);
       const xb = clamp(this.sampleToX(end(a)), x0, x1);
-      // probable and possible marks are filled more lightly (confidence.js)
+      // marks rated 1 or 2 are filled more lightly (confidence.js)
       ctx.fillStyle = rgba(colour, (sel ? 0.30 : a.channels.length ? 0.24 : 0.16) * confidenceFill(a));
       for (const [ya, yb] of this._rowSpans(a.channels)) ctx.fillRect(xa, ya, Math.max(1, xb - xa), yb - ya);
     }

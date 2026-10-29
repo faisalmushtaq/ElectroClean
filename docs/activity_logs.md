@@ -262,11 +262,20 @@ type has `auto_merged` and `merged_away`. `undo`, `redo`,
 `annotations_merged` and `annotations_reset` carry `added`, `removed` and
 `changed`.
 
-**Confidence and notes.** `confidence_set`, when the annotator gives an
-annotation a confidence or clears it (with D, the menu or the Annotations
-list's Confidence button), carries `annotations` (each with `id`, `label`,
-`confidence`, the new level or null, and `before`), `description`, `n_total`
-and `via` (`shortcut:Confidence` for D). `note_set`, when a note is added,
+**Confidence and notes.** `confidence_set`, when the annotator rates an
+annotation from 1 to 5 or clears its rating (with D and a digit, the menu or
+the numbers below the Annotations list), carries `annotations` (each with `id`,
+`label`, `confidence`, the new rating or null, and `before`), `description`,
+`n_total` and `via` (`shortcut:Confidence 3` for D then 3).
+`confidence_prompt`, when a request for a rating ends, says how it was opened
+(`trigger`: `key` for D, `new_mark` after a new mark in an every-mark study,
+`rate_them` when stepping through the unrated marks before Save and Finish),
+how it ended (`outcome`: `rated`, `cleared`, `cancelled` with Esc, `later` with
+the bar's Later, `timeout`, `other_input` when another key was pressed, or
+`replaced` by a newer prompt), `n_annotations` and, when rated, `confidence`.
+`confidence_check`, before Save and Finish in an every-mark study, gives
+`n_unrated`, `n_annotations` and `choice` (`rate` for Rate them, `save` for
+Save anyway, or `cancel`). `note_set`, when a note is added,
 changed or removed (from the menu, the list or Edit times…), carries
 `annotations` (each with `id`, `label`, `change`: `added`, `changed` or
 `removed`, `note_length` and `previous_length`), `description`, `n_total` and

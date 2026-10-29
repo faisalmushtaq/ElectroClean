@@ -127,7 +127,7 @@ def validate_session_confidence(session: dict[str, Any], doc: AnnotationDocument
         raise ValidationError("session.json does not record the study's confidence setting")
     if block.get("setting") != (doc.confidence_mode or "optional"):
         raise ValidationError("session.json records a different confidence setting")
-    if block.get("n_given") != sum(1 for a in doc.annotations if a.confidence):
+    if block.get("n_given") != sum(1 for a in doc.annotations if a.confidence is not None):
         raise ValidationError("session.json counts the confidence ratings given differently")
 
 

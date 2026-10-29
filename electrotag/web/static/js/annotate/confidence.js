@@ -1,41 +1,41 @@
-// How sure the annotator is of each annotation, and the short note an annotation may carry: the
+// How confident the annotator is of each annotation, and the short note an annotation may carry: the
 // rules shared by the annotation store (store.js), the annotation view (workspace.js) and the EEG
 // viewer, as in electrotag/app/annotations/model.py.
 //
-// A confidence is 'definite', 'probable' or 'possible', or none ('' : not given). The study's setting
-// annotation.confidence is 'optional' (the default: a new mark has none, and the annotator may give
-// one) or 'every_mark' (every new mark starts as definite). A note is one line of at most 200
-// characters; it is research content, so the interaction log records only its length.
+// A confidence is a rating on a 5-point Likert scale, a whole number from 1 (not at all confident) to
+// 5 (completely confident), or none (not rated). No mark ever starts with a rating. The study's
+// setting annotation.confidence is 'optional' (the default: the annotator rates a mark when they
+// wish) or 'every_mark' (the annotator is asked to rate each new mark, and Save and Finish lists the
+// marks left unrated). A note is one line of at most 200 characters; it is research content, so the
+// interaction log records only its length.
 
-export const CONFIDENCE_LEVELS = ['definite', 'probable', 'possible'];
+export const CONFIDENCE_LEVELS = [1, 2, 3, 4, 5];
 export const MAX_NOTE_CHARS = 200;
 
-/** Names as the annotator reads them. */
-export const CONFIDENCE_TEXT = { '': 'Not given', definite: 'Definite', probable: 'Probable', possible: 'Possible' };
+/** The anchors of the scale, as the annotator reads them. */
+export const CONFIDENCE_ANCHORS = {
+  1: 'Not at all confident',
+  2: 'Slightly confident',
+  3: 'Moderately confident',
+  4: 'Very confident',
+  5: 'Completely confident',
+};
 
-/** The study's setting from GET /me (the first design's 'off' and 'on' read as the two modes). */
+/** True for a rating of the scale: a whole number from 1 to 5. */
+export const isConfidence = (v) => Number.isInteger(v) && v >= 1 && v <= 5;
+
+/** A rating as text: "3/5", or '' when not rated. */
+export const confidenceText = (v) => (isConfidence(v) ? `${v}/5` : '');
+
+/** The study's setting from GET /me ('off' and 'on', from the first design, read as the two modes). */
 export function confidenceMode(value) {
   return value === 'every_mark' || value === 'on' ? 'every_mark' : 'optional';
 }
 
-/** The confidence of a new annotation in a mode. */
-export const defaultConfidence = (mode) => (confidenceMode(mode) === 'every_mark' ? 'definite' : '');
-
-/** One press of D: not given, definite, probable, possible and round again ('every_mark' skips not given). */
-export function nextConfidence(current, mode) {
-  const order = confidenceMode(mode) === 'every_mark' ? CONFIDENCE_LEVELS : ['', ...CONFIDENCE_LEVELS];
-  const i = order.indexOf(current || '');
-  return order[(i + 1) % order.length];
-}
-
-/** The levels offered in a menu, in order (with "Not given" in an optional study). */
-export const confidenceChoices = (mode) => (confidenceMode(mode) === 'every_mark' ? CONFIDENCE_LEVELS : ['', ...CONFIDENCE_LEVELS]);
-
-/** The lowest confidence given ('' when none was given): what a merged annotation keeps. */
+/** The lowest rating given (null when none was rated): what a merged annotation keeps. */
 export function lowerConfidence(levels) {
-  let worst = -1;
-  for (const lv of levels) worst = Math.max(worst, CONFIDENCE_LEVELS.indexOf(lv || ''));
-  return worst < 0 ? '' : CONFIDENCE_LEVELS[worst];
+  const given = levels.filter(isConfidence);
+  return given.length ? Math.min(...given) : null;
 }
 
 /** What is wrong with a note ('' when it can be kept). */
@@ -63,12 +63,12 @@ export function joinNotes(notes) {
   return text.length <= MAX_NOTE_CHARS ? text : `${text.slice(0, MAX_NOTE_CHARS - 1).trimEnd()}…`;
 }
 
-/** How strongly an annotation is filled on the EEG: lighter for probable and possible, as usual otherwise. */
+/** How strongly an annotation is filled on the EEG: lighter for ratings 1 and 2, as usual otherwise. */
 export function confidenceFill(a) {
-  return a.confidence === 'probable' ? 0.6 : a.confidence === 'possible' ? 0.35 : 1;
+  return a.confidence === 1 || a.confidence === 2 ? 0.5 : 1;
 }
 
-/** What the tag above the EEG adds: the word for probable and possible, nothing otherwise (calm, never a warning). */
+/** What the tag above the EEG adds: " · 3/5" for a rated mark, nothing for an unrated one. */
 export function confidenceTagText(a) {
-  return a.confidence === 'probable' || a.confidence === 'possible' ? ` · ${a.confidence}` : '';
+  return isConfidence(a.confidence) ? ` · ${a.confidence}/5` : '';
 }

@@ -54,7 +54,7 @@ class Event:
     stop: int
     channels: frozenset[str]
     whole_montage: bool
-    confidence: str = ""  # listed with the event in the matched and unmatched tables, never used to match
+    confidence: int | None = None  # listed with the event in the matched and unmatched tables, never used to match
     note: str = ""
 
 

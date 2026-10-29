@@ -120,7 +120,7 @@ to your computer.
 
 | File | Contents |
 |---|---|
-| `…_events.tsv` | The recording's original events, unchanged, plus one row per artifact with `onset`, `duration`, `trial_type` (HED-SCORE term), `sample`, `channels` (JSON list; `[]` means the whole montage), `artifact_code` (fixed code, 100-136), columns identifying the source, annotation and annotator, and the annotator's `confidence` (definite, probable or possible) and `annotation_note`, `n/a` when not given. The `value` column keeps only the dataset's own marker codes, so they can never clash with artifact codes. |
+| `…_events.tsv` | The recording's original events, unchanged, plus one row per artifact with `onset`, `duration`, `trial_type` (HED-SCORE term), `sample`, `channels` (JSON list; `[]` means the whole montage), `artifact_code` (fixed code, 100-136), columns identifying the source, annotation and annotator, and the annotator's `confidence` (a rating from 1, not at all confident, to 5, completely confident) and `annotation_note`, `n/a` when not given. The `value` column keeps only the dataset's own marker codes, so they can never clash with artifact codes. |
 | `…_events.json` | BIDS sidecar describing every column, the artifact codes and their HED tags. |
 | `…_annotations.json` | The canonical, lossless record of the annotations, used by the agreement and training tools. |
 | `…_time_viewed.txt` | One number: seconds spent annotating, measured on a monotonic clock while the recording was open. |

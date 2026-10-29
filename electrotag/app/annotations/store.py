@@ -16,8 +16,8 @@ channels), the two become one annotation spanning both. The older annotation
 keeps its identifier. The merge is part of the same undo step as the change
 that caused it. Annotations of the same type that only touch, or that cover
 different channels, stay separate. The merged annotation takes the lowest
-confidence of those merged (definite, then probable, then possible; one without a
-confidence adds none) and their notes, each different note once, oldest first,
+confidence rating of those merged (one without a rating adds none) and their
+notes, each different note once, oldest first,
 joined with "; " (and shortened to 200 characters, ending with "…", if longer).
 """
 
@@ -28,11 +28,11 @@ from dataclasses import dataclass
 
 from electrotag.app.annotations.labels import LabelCatalogue
 from electrotag.app.annotations.model import (
-    CONFIDENCE_LEVELS,
     AnnotationError,
     ArtifactAnnotation,
     RecordingInfo,
     check_note,
+    is_confidence,
     join_notes,
     lower_confidence,
     normalise_channels,
@@ -65,13 +65,8 @@ class AnnotationStore:
         max_history: int = 2000,
         initial: Iterable[ArtifactAnnotation] = (),
         auto_merge: bool = True,
-        default_confidence: str = "",
     ) -> None:
-        if default_confidence and default_confidence not in CONFIDENCE_LEVELS:
-            raise AnnotationError(f"Unknown confidence {default_confidence!r}")
         self.recording = recording
-        #: The confidence of a new annotation: "" (none given) or "definite" (the study's "every_mark" setting).
-        self.default_confidence = default_confidence
         self.catalogue = catalogue
         self.min_duration_samples = int(min_duration_samples)
         self.auto_merge = bool(auto_merge)
@@ -254,10 +249,10 @@ class AnnotationStore:
         channels: Iterable[str] | None = (),
         *,
         annotation_id: str | None = None,
-        confidence: str | None = None,
+        confidence: int | None = None,
         note: str = "",
     ) -> ArtifactAnnotation:
-        """Add an annotation; its confidence is the store's default unless one is given."""
+        """Add an annotation (with no confidence rating unless one is given: no mark starts with one)."""
         stamp = now_local_iso()
         ann = self._check(
             ArtifactAnnotation(
@@ -268,7 +263,7 @@ class AnnotationStore:
                 channels=self._channels(channels),
                 created_at=stamp,
                 modified_at=stamp,
-                confidence=self.default_confidence if confidence is None else confidence,
+                confidence=confidence,
                 note=check_note(note),
             )
         )
@@ -301,11 +296,11 @@ class AnnotationStore:
         onset_sample: int | None = None,
         duration_samples: int | None = None,
         channels: Iterable[str] | None = None,
-        confidence: str | None = None,
+        confidence: int | None = None,
         note: str | None = None,
         description: str | None = None,
     ) -> ArtifactAnnotation:
-        """Change an annotation (``None`` leaves a field as it is; a confidence of "" removes it)."""
+        """Change an annotation (``None`` leaves a field as it is; a confidence of 0 removes the rating)."""
         current = self.get(annotation_id)
         changes: dict[str, object] = {}
         if label is not None and label != current.label:
@@ -318,8 +313,12 @@ class AnnotationStore:
             new_channels = self._channels(channels)
             if new_channels != current.channels:
                 changes["channels"] = new_channels
-        if confidence is not None and confidence != current.confidence:
-            changes["confidence"] = confidence
+        if confidence is not None:
+            rating = None if confidence == 0 and not isinstance(confidence, bool) else confidence
+            if rating is not None and not is_confidence(rating):
+                raise AnnotationError(f"Confidence must be a whole number from 1 to 5, not {confidence!r}")
+            if rating != current.confidence:
+                changes["confidence"] = rating
         if note is not None and check_note(note) != current.note:
             changes["note"] = check_note(note)
         if not changes:
@@ -358,12 +357,15 @@ class AnnotationStore:
             what = f"relabel as {label}" if len(changed) == 1 else f"relabel {len(changed)} annotations as {label}"
             self._commit("update", what, items, tuple(changed))
 
-    def set_confidence(self, annotation_id: str, confidence: str) -> ArtifactAnnotation:
-        """Give an annotation a confidence (one of CONFIDENCE_LEVELS), or remove it with ""."""
-        return self.update(annotation_id, confidence=confidence, description=confidence_description(confidence))
+    def set_confidence(self, annotation_id: str, confidence: int | None) -> ArtifactAnnotation:
+        """Rate an annotation from 1 to 5, or remove its rating with None."""
+        return self.update(annotation_id, confidence=0 if confidence is None else confidence,
+                           description=confidence_description(confidence))
 
-    def set_confidence_many(self, annotation_ids: Iterable[str], confidence: str) -> None:
-        """Give several annotations one confidence as one undoable step."""
+    def set_confidence_many(self, annotation_ids: Iterable[str], confidence: int | None) -> None:
+        """Give several annotations one rating (or None) as one undoable step."""
+        if confidence is not None and not is_confidence(confidence):
+            raise AnnotationError(f"Confidence must be a whole number from 1 to 5, not {confidence!r}")
         ids = tuple(dict.fromkeys(annotation_ids))
         items = dict(self._items)
         changed = []
@@ -466,6 +468,6 @@ class AnnotationStore:
         ]
 
 
-def confidence_description(confidence: str) -> str:
+def confidence_description(confidence: int | None) -> str:
     """How a change of confidence is described in the undo history."""
-    return f"set confidence {confidence}" if confidence else "remove confidence"
+    return f"set confidence {confidence}" if confidence else "clear confidence"

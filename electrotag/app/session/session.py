@@ -27,7 +27,12 @@ from typing import Any
 
 from electrotag import APP_NAME, __version__
 from electrotag.app.annotations.labels import LabelCatalogue
-from electrotag.app.annotations.model import CONFIDENCE_LEVELS, AnnotationDocument, ArtifactAnnotation
+from electrotag.app.annotations.model import (
+    CONFIDENCE_ANCHORS,
+    CONFIDENCE_LEVELS,
+    AnnotationDocument,
+    ArtifactAnnotation,
+)
 from electrotag.app.annotations.store import AnnotationStore
 from electrotag.app.annotations.timing import TIME_CONVENTIONS
 from electrotag.app.common import new_session_id, normalise_annotator_id, now_local_iso, validate_mode
@@ -140,7 +145,6 @@ class AnnotationSession:
             catalogue,
             min_duration_samples=settings.min_duration_samples,
             initial=initial_annotations or (),
-            default_confidence="definite" if settings.confidence == "every_mark" else "",
         )
         self.autosave_enabled = autosave_enabled
         self.autosave_path = autosave_path(
@@ -610,15 +614,16 @@ class AnnotationSession:
 
 
 def confidence_summary(doc: AnnotationDocument) -> dict[str, Any]:
-    """The ``annotations.confidence`` block of the session file: the study's setting and how often each
-    confidence was given."""
-    by_level = {lv: sum(1 for a in doc.annotations if a.confidence == lv) for lv in CONFIDENCE_LEVELS}
+    """The ``annotations.confidence`` block of the session file: the study's setting and how many marks had
+    each rating of the 5-point scale."""
+    by_level = {str(lv): sum(1 for a in doc.annotations if a.confidence == lv) for lv in CONFIDENCE_LEVELS}
     return {
         "setting": doc.confidence_mode or "optional",
-        "meaning": "optional: annotators gave a confidence only when they wished (new annotations had none); "
-                   "every_mark: every new annotation started as definite and annotators changed it when unsure.",
+        "scale": {str(k): v for k, v in CONFIDENCE_ANCHORS.items()},
+        "meaning": "optional: annotators rated a mark (1 to 5) only when they wished; every_mark: annotators were "
+                   "asked to rate each new mark, which started without a rating.",
         "n_given": sum(by_level.values()),
-        "n_not_given": sum(1 for a in doc.annotations if not a.confidence),
+        "n_not_given": sum(1 for a in doc.annotations if a.confidence is None),
         "by_level": by_level,
     }
 

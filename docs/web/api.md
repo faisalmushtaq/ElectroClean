@@ -41,7 +41,7 @@ Annotation = {
   "channels": ["Fp1", "Fp2"],         // [] means the whole montage
   "created_at": "2026-10-28T10:15:02.120+00:00",
   "modified_at": "2026-10-28T10:15:09.004+00:00",
-  "confidence": "probable",           // optional: "definite", "probable", "possible", or null / left out (not given)
+  "confidence": 3,                    // optional: a whole number from 1 to 5, or null / left out (not rated)
   "note": "could be an eye movement"  // optional: one line of at most 200 characters ("" or left out: none)
 }
 
@@ -67,7 +67,7 @@ Draft = {"annotations": [Annotation], "view": {"start_s": 12.0, "duration_s": 10
 ```
 
 An annotation's `confidence` and `note` are checked wherever annotations are sent: a confidence
-other than the three levels or none, or a note that is not text, spans lines, is just `n/a` or is
+other than a whole number from 1 to 5 or none (a string, a fraction, 0 or `true` included), or a note that is not text, spans lines, is just `n/a` or is
 longer than 200 characters, is refused with 422 (`invalid_annotation` when saving, `invalid_draft`
 for a draft). Answers that return saved annotations (a revision's `annotations`) give both,
 `confidence` null and `note` "" when there is none.
@@ -145,8 +145,9 @@ administrator has written one. The three settings for long sessions in
 `annotation` are described in the [administrator guide](../administrator_guide.md): minutes of work before a
 break reminder and minutes without input before the clock pauses itself (0 turns
 either off), and whether Save and Finish first lists the parts not yet viewed.
-`annotation.confidence` says what a new annotation's confidence is: none (`"optional"`, the
-default) or definite (`"every_mark"`); annotators can give or change it in either.
+`annotation.confidence` says whether annotators rate their confidence in a mark (1 to 5) when they wish
+(`"optional"`, the default) or are asked to rate each new mark (`"every_mark"`); no mark starts with a
+rating in either.
 `annotation.allow_revisions` says whether a finished study recording may be
 opened again and revised (see "Revisions" below), `annotation.allow_reviews`
 and `annotation.show_reviews_to_annotators` whether administrators may review

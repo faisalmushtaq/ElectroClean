@@ -676,9 +676,23 @@ ul.unviewed-list { font-variant-numeric: tabular-nums lining-nums; margin-bottom
 .ann-table td.label span:last-child, .ann-table td.label .label-text { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 /* Confidence and notes: quiet, in the secondary text colour (never the warning or bad-channel greys). */
 .ann-table td.label .conf-mark { flex: none; margin-left: -4px; color: var(--text-secondary); font: var(--t-12); }
-.ann-table td.label .conf-mark.definite .ico, .ann-table td.label .note-mark .ico { width: 12px; height: 12px; vertical-align: 0; }
+.ann-table td.label .note-mark .ico { width: 12px; height: 12px; vertical-align: 0; }
 .ann-table td.label .note-mark { flex: none; display: inline-flex; margin-left: -4px; color: var(--text-secondary); }
-.btn-grid .btn.span-2 { grid-column: span 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The confidence control below the table: 1 to 5 with one press, and Clear; the whole width of the grid. */
+.conf-row { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 4px; }
+.conf-row .conf-caption { flex: 1 1 100%; font: var(--t-12); }
+.conf-seg { flex: 1 1 auto; }
+.conf-seg .seg { flex: 1 1 0; min-width: 32px; padding: 0 8px; font-variant-numeric: tabular-nums lining-nums; }
+/* The prompt after D or a new mark: a small bar over the top of the EEG, in the panel's calm colours. */
+.conf-prompt {
+  position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 5; display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius); max-width: calc(100% - 16px);
+}
+.conf-prompt-label { font: var(--t-14); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.conf-prompt .seg { min-width: 32px; font-variant-numeric: tabular-nums lining-nums; }
+@media (pointer: coarse) {
+  .conf-seg .seg, .conf-prompt .seg { min-width: 40px; height: 40px; }
+}
 .note-dialog .field, .form .field[name="note"] { width: 100%; }
 .note-count { margin: 0 0 12px; }
 .note-count.error { color: var(--destructive); }

@@ -314,28 +314,34 @@ label of several annotations at once, and merge annotations of one type.
 
 ## Confidence and notes
 
-When you are unsure of a mark, you can say how sure you are of it. Each annotation can have a
-confidence of definite, probable or possible. Press D to give the selected annotation the next
-level, or the annotation you made last when nothing is selected; press it again for the level after
-that. Right-click the annotation (press and hold it on an iPad) and choose Set confidence… to pick a
-level directly, or select it in the Annotations list and press the Confidence button below the list,
-which steps to the next level with one press or tap. Undo takes back a change of confidence like any
+You can rate how confident you are that a mark is right, on a scale from 1 to 5: 1 means not at all
+confident, 2 slightly confident, 3 moderately confident, 4 very confident and 5 completely
+confident. Press D and then a number from 1 to 5: the rating goes to the selected annotation, or to
+the annotation you made last when nothing is selected. 0 clears the rating and Esc cancels. While
+ElectroTag waits for the number, the line at the bottom says so ("Confidence for Eye-blink-artifact:
+press 1–5, 0 to clear, Esc to cancel"), a small bar with the numbers appears over the top of the
+EEG, and the number keys rate rather than choose a type; the wait ends after the number, another
+key or a few seconds. You can also right-click the annotation (press and hold it on an iPad), choose
+Confidence and pick a number, with its meaning beside it, or Clear; or select the annotation in the
+Annotations list and tap one of the numbers 1 to 5 below the list. Undo takes back a rating like any
 other change.
 
-What a new mark starts with depends on the study. In most studies confidence is optional: a new mark
-has none, and the mark looks exactly as it always has. Give a confidence only when you want to, and
-choose Not given in the menu, or press D until the list shows no confidence, to take it away again.
-Some studies ask for a confidence on every mark: there, every new mark starts as definite, so you
-only need to do something when you are less sure, and D steps through definite, probable and
-possible. Marks you give probable or possible are filled more lightly on the EEG and their tag names
-the level; in the Annotations list they show a short "prob." or "poss.", and definite a small tick.
+A new mark never starts with a rating, so that no rating is given without a thought. In most studies
+rating is optional: rate a mark when you want to, and leave the others as they are. Some studies ask
+for a rating on every mark: there, the question appears after each new mark, with the bar of numbers,
+and one key or tap answers it. You can carry on working without answering; the mark is then left
+unrated, and Save and Finish lists the marks without a rating ("2 marks have no confidence"), with
+Rate them, which takes you to each in turn and waits for its number, and Save anyway. A mark without
+a rating looks exactly as marks always have. The tag of a rated mark shows its rating, such as 3/5,
+marks rated 1 or 2 are filled more lightly on the EEG, and the Annotations list shows the rating with
+its meaning when you hold the pointer over it.
 
 Any annotation can also carry a short note, of up to 200 characters on one line, for example "could
 be an eye movement rather than a blink". Choose Add a note… in the annotation's menu or below the
 Annotations list, or write it in Edit times…, which shows the note beside the start and end. An
 annotation with a note has a small note sign in the list and in its tag on the EEG; hold the
 pointer over it to read the note, and choose Edit note… to change or remove it. Notes are saved
-with your annotations for the study's researchers, who use them, with the confidence levels, to
+with your annotations for the study's researchers, who use them, with the confidence ratings, to
 understand where annotators disagree. The record of how you use ElectroTag keeps only that a note
 was added, changed or removed and how long it is, never what it says.
 
@@ -446,9 +452,10 @@ artifact, tap an annotation to select it, drag its edge to make it longer or sho
 channel's name or its trace to choose that channel. Two fingers move the EEG: sideways through
 time and up and down through the channels; pinch sideways to show more or less time. Press and
 hold an annotation for its menu, the one a right-click opens on a computer, which also offers Edit
-times… to move it, Set confidence… and Add a note…; double-tap it to choose its type from the list
-of all types. The Confidence button below the Annotations list gives the selected annotation the
-next level of confidence with one tap. A second finger
+times… to move it, Confidence and Add a note…; double-tap it to choose its type from the list
+of all types. The numbers 1 to 5 below the Annotations list rate the selected annotation with one
+tap, and in a study that asks for a rating on every mark a bar of numbers appears over the EEG after
+each new mark. A second finger
 that touches the screen while you are marking cancels the mark, so a move never leaves an
 annotation behind by accident.
 
