@@ -151,6 +151,13 @@ export class HttpBackend {
   /** Sets the personal goal ({goal_per_week}) or whether to appear on the leaderboard ({leaderboard_hidden}). */
   setAchievements(body) { return this._request('POST', '/me/achievements', body || {}); }
 
+  // ------------------------------------------- problem reports and reviews
+  /** POST /problems: a problem with a recording; `problem_id` makes a second sending of the same report harmless. */
+  reportProblem(body) { return this._request('POST', '/problems', body); }
+
+  /** GET /me/reviews: the reviews of the annotator's saved work ({shown, reviews}). */
+  myReviews() { return this._request('GET', '/me/reviews'); }
+
   // ------------------------------------------------------ assignments, opening
   assignments() { return this._request('GET', '/assignments'); }
 

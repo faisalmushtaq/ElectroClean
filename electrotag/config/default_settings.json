@@ -57,6 +57,8 @@
   "annotation": {
     "min_duration_samples": 1,
     "allow_revisions": true,
+    "allow_reviews": true,
+    "show_reviews_to_annotators": true,
     "break_reminder_minutes": 50,
     "idle_pause_minutes": 3,
     "coverage_check": "warn",

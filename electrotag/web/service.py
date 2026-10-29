@@ -187,7 +187,7 @@ class WorkItem:
     mode: str
     context_id: str
     manifest: dict[str, Any]
-    status: str  # todo, in_progress, done
+    status: str  # todo, in_progress, done, unusable (its annotator reported that it cannot be annotated)
     position: int = 0
     repeat: bool = False  # a practice recording that may be annotated again
     source: str = "assignment"  # or "programme"
@@ -234,6 +234,9 @@ class StudyService:
         from electrotag.web.games import Games
 
         self.games = Games(self)
+        from electrotag.web.feedback import Feedback
+
+        self.feedback = Feedback(self)
 
     # ----------------------------------------------------------------- basics
     @property
@@ -275,7 +278,8 @@ class StudyService:
                            "quick_labels": [q for q in s.quick_labels if cat.is_permitted(q)],
                            "break_reminder_minutes": s.break_reminder_minutes,
                            "idle_pause_minutes": s.idle_pause_minutes, "coverage_check": s.coverage_check,
-                           "allow_revisions": s.allow_revisions},
+                           "allow_revisions": s.allow_revisions, "allow_reviews": s.allow_reviews,
+                           "show_reviews_to_annotators": s.show_reviews_to_annotators},
             "gamification": {"enabled": s.gamification_enabled,
                              "leaderboard": s.gamification_enabled and s.gamification_leaderboard},
             "logging": self.logging_info(),
@@ -312,6 +316,7 @@ class StudyService:
     def work_items(self, user: User) -> list[WorkItem]:
         aid = user.annotator_id
         drafts = self.store.draft_keys(aid)
+        unusable = self.feedback.unusable_keys(aid)
         entries = self.store.completion_entries(aid)
         done: dict[tuple[str, str], set[str]] = {}
         saved: dict[tuple[str, str, str], list[dict[str, str]]] = {}
@@ -334,6 +339,8 @@ class StudyService:
             seen.add(key)
             if rid in done.get((mode, ctx), set()) and not repeat:
                 status = "done"
+            elif item_key(rid, mode, ctx) in unusable:
+                status = "unusable"
             elif item_key(rid, mode, ctx) in drafts or (
                     mode == "guided" and self.store.guided_state(aid, ctx, rid) is not None):
                 status = "in_progress"
@@ -363,7 +370,7 @@ class StudyService:
             nxt = self.coach.next_item(user, set_id, items)
             if nxt is not None:
                 return nxt
-        open_items = [i for i in items if i.status != "done" and i.source == "assignment"]
+        open_items = [i for i in items if i.status not in ("done", "unusable") and i.source == "assignment"]
         if not open_items:
             return None
         started = [i for i in open_items if i.status == "in_progress"]
@@ -384,6 +391,7 @@ class StudyService:
     def assignments(self, user: User, body: dict[str, Any] | None = None) -> dict[str, Any]:
         items = self.work_items(user)
         nxt = self._next(user, items)
+        problems = self.feedback.latest_problems(user.annotator_id)
         out = []
         for i in items:
             d = i.to_dict()
@@ -392,6 +400,8 @@ class StudyService:
             d["saved"] = ({k: i.saved[k] for k in ("version", "first_saved_at", "total_elapsed_s")}
                           if i.saved is not None else None)
             d["revising"] = i.revising
+            p = problems.get(i.key)
+            d["problem"] = self.feedback.problem_out(p, mine=True) if p is not None else None
             out.append(d)
         return {"items": out,
                 "next": nxt.recording_id if nxt is not None else None,
@@ -438,13 +448,15 @@ class StudyService:
         items = self.work_items(user)
         nxt = self._next(user, items)
         revise = body.get("revise") is True
+        view_saved = body.get("view_saved") is True
         exact = self.store.manifests_by_fingerprint(sha, size)
         if exact:
-            return self._match_answer(user, items, exact, "matched", [], nxt, revise=revise)
+            return self._match_answer(user, items, exact, "matched", [], nxt, revise=revise, view_saved=view_saved)
         candidates = self._metadata_matches(body)
         if len(candidates) == 1:
             m, differences = candidates[0]
-            return self._match_answer(user, items, [m], "matched_metadata", differences, nxt, revise=revise)
+            return self._match_answer(user, items, [m], "matched_metadata", differences, nxt, revise=revise,
+                                      view_saved=view_saved)
         if len(candidates) > 1:
             return self._answer("unknown", "This file looks like several recordings of the study and cannot be told "
                                 "apart from them. Open the exact file you were given, or ask your study administrator.")
@@ -454,7 +466,7 @@ class StudyService:
     @staticmethod
     def _answer(status: str, message: str, **fields: Any) -> dict[str, Any]:
         out = {"status": status, "message": message, "recording_id": None, "mode": None, "context_id": None,
-               "manifest": None, "draft": None, "differences": [], "repeat": False, "revision": None}
+               "manifest": None, "draft": None, "differences": [], "repeat": False, "revision": None, "saved": None}
         out.update(fields)
         return out
 
@@ -493,7 +505,8 @@ class StudyService:
         return out
 
     def _match_answer(self, user: User, items: list[WorkItem], manifests: list[dict[str, Any]], status: str,
-                      differences: list[str], nxt: WorkItem | None, *, revise: bool = False) -> dict[str, Any]:
+                      differences: list[str], nxt: WorkItem | None, *, revise: bool = False,
+                      view_saved: bool = False) -> dict[str, Any]:
         keys = {(m["scope"], m["recording_id"]) for m in manifests}
         mine = [i for i in items if (self.scope_for(i.mode, i.context_id), i.recording_id) in keys]
         rid = manifests[0]["recording_id"]
@@ -501,10 +514,24 @@ class StudyService:
             return self._answer("not_assigned", f"{rid} is a recording of this study, but it is not one of yours "
                                 "at the moment. Open one of the recordings in your list, or ask your study "
                                 "administrator.", recording_id=rid)
-        open_items = [i for i in mine if i.status != "done"]
+        open_items = [i for i in mine if i.status not in ("done", "unusable")]
+        if not open_items and any(i.status == "unusable" for i in mine):
+            i = next(i for i in mine if i.status == "unusable")
+            return self._answer("unusable", f"You reported that {rid} cannot be annotated, so it is set aside. If the "
+                                "study team returns it to your list, you can annotate it then. Choose another "
+                                "recording from your list.", recording_id=rid, mode=i.mode, context_id=i.context_id)
         if not open_items:
             i = mine[0]
             revisable = next((x for x in mine if self.can_revise(x)), None)
+            viewable = next((x for x in mine if x.mode == "standard" and x.saved is not None), None)
+            if view_saved and viewable is not None:  # to read the feedback on it (docs/web/api.md, "Reviews")
+                return self._answer(status, f"Recording found: {viewable.recording_id}. Your latest saved version opens "
+                                    "to read, with the feedback on it.", recording_id=viewable.recording_id,
+                                    mode=viewable.mode, context_id=viewable.context_id,
+                                    manifest=self.public_manifest(viewable.manifest), differences=differences,
+                                    saved={"version": int((viewable.saved or {}).get("version") or 1),
+                                           "saved_at": (viewable.saved or {}).get("saved_at"),
+                                           "annotations": self.saved_annotations(user, viewable)})
             if revise and revisable is not None:
                 return self._revision_answer(user, revisable, status, differences)
             hint = (" To change your annotations, open it from your history with Open to revise."
@@ -564,11 +591,18 @@ class StudyService:
                                       "saved_at": (item.saved or {}).get("saved_at"),
                                       "annotations": self.saved_annotations(user, item)})
 
+    @staticmethod
+    def _refuse_unusable(item: WorkItem) -> None:
+        if item.status == "unusable":
+            raise ApiError(409, "unusable", f"You reported that {item.recording_id} cannot be annotated, so it is set "
+                           "aside. If the study team returns it to your list, you can annotate it then.")
+
     # ---------------------------------------------------------------- drafts
     def put_draft(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
         """``PUT /drafts/{recording_id}?mode=&context=`` with the Draft as body (``et_put_draft``:
         ``{"recording_id", "mode", "context_id", "draft": Draft}``)."""
         item = self.find_item(user, body.get("recording_id"), body.get("mode"), body.get("context_id"))
+        self._refuse_unusable(item)
         revises = None
         if item.status == "done" and not item.repeat:
             if not self.can_revise(item):
@@ -641,6 +675,7 @@ class StudyService:
         from electrotag.web.saving import WebSession
 
         item = self.find_item(user, body.get("recording_id"), body.get("mode"), body.get("context_id"))
+        self._refuse_unusable(item)
         rid = item.recording_id
         revision: dict[str, Any] | None = None
         if item.status == "done" and not item.repeat:
@@ -767,6 +802,15 @@ class StudyService:
         """``GET /me/achievements`` (and ``POST`` with ``goal_per_week`` or ``leaderboard_hidden``)."""
         return self.games.achievements(user, body or {})
 
+    # ------------------------------------------- problem reports and reviews
+    def problem_report(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        """``POST /problems``: report a problem with a recording (electrotag/web/feedback.py)."""
+        return self.feedback.problem_report(user, body)
+
+    def my_reviews(self, user: User, body: dict[str, Any] | None = None) -> dict[str, Any]:
+        """``GET /me/reviews``: the reviews of the annotator's saved work, when the study shows them."""
+        return self.feedback.my_reviews(user, body or {})
+
     # ---------------------------------------------------------------- visits
     def visit_open(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
         return self.visits.open(user, body)
@@ -862,7 +906,7 @@ class StudyService:
     #: operation in the body's ``op`` and ``quiz`` the set in its ``set_id``.
     OPERATIONS = ("me", "assignments", "match", "put_draft", "delete_draft", "submit", "training", "guided_get",
                   "guided_check", "guided_continue", "guided_show_me", "visit_open", "visit_events", "visit_close",
-                  "admin_progress", "admin", "quiz", "achievements")
+                  "admin_progress", "admin", "quiz", "achievements", "problem_report", "my_reviews")
 
     def call(self, operation: str, user: User, body: dict[str, Any] | None) -> dict[str, Any]:
         if operation not in self.OPERATIONS:

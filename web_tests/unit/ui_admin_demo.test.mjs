@@ -50,7 +50,7 @@ test('only administrators can use the admin area; ADMIN is a built-in account', 
   const b = await demo('ADMIN');
   assert.equal((await b.me()).role, 'admin');
   const o = await b.admin('overview');
-  assert.deepEqual(o.counts, { recordings: 3, annotators: 2, admins: 1, assignments: 6, done: 0, in_progress: 0, todo: 6 });
+  assert.deepEqual(o.counts, { recordings: 3, annotators: 2, admins: 1, assignments: 6, done: 0, in_progress: 0, todo: 6, unusable: 0, problems_open: 0, reviewed: 0 });
   assert.equal(o.recent[0].op, 'init');
   await assert.rejects(() => b.admin('no_such_operation'), (e) => e.status === 404);
 });

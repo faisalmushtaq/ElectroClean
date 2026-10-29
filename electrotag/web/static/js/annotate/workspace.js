@@ -33,7 +33,10 @@ import { mapLayout, projectPositions } from '../viewer/head_map.js';
 import { readElectrodes } from '../data/electrodes.js';
 import { centredStart, clampTime, parseTimeText } from './goto.js';
 
-const MODE_TEXT = { standard: 'Annotation', guided: 'Guided training', practice: 'Practice', assessment: 'Assessment', tryout: 'Try-out', review: 'Practice review' };
+const MODE_TEXT = { standard: 'Annotation', guided: 'Guided training', practice: 'Practice', assessment: 'Assessment', tryout: 'Try-out', review: 'Practice review',
+  reviewing: 'Review', feedback: 'Feedback' };
+/** Views that only show annotations (no toolbar): a practice review, an administrator's review pass, the feedback on saved work. */
+const VIEW_ONLY_KINDS = ['review', 'reviewing', 'feedback'];
 const DRAG_PX = 3;
 
 export function friendlyDuration(s) {
@@ -128,8 +131,9 @@ export class Workspace {
       notchHarmonics: Boolean(f.notch_harmonics),
     };
     this.filtersLocked = Boolean(fl.locked);
-    this.el = h('main.view.annotate', { 'data-view': 'annotate', class: s.revision && this.kind === 'annotate' ? 'revising' : null },
-      this._header(), this._revisionBar(), this.kind === 'review' ? null : this._toolbar(),
+    this.el = h('main.view.annotate', { 'data-view': 'annotate',
+      class: s.revision && this.kind === 'annotate' ? 'revising' : VIEW_ONLY_KINDS.includes(this.kind) ? 'view-only' : null },
+      this._header(), this._revisionBar(), VIEW_ONLY_KINDS.includes(this.kind) ? null : this._toolbar(),
       this.main = h('div.ws-main', {}, this.eegHost = h('div.ws-eeg'), this.side = h('aside.ws-side', { 'aria-label': 'Annotations and help' })),
       this._statusBar());
     this._sidePanel();
@@ -171,11 +175,12 @@ export class Workspace {
     const s = this.s;
     const title = h('div.ws-title', {},
       this.closeBtn = h('button.btn.quiet.back', { type: 'button', 'data-log': 'close', onclick: () => this.close() },
-        icon('arrow-left'), this.kind === 'review' ? 'Training path' : 'Close'),
+        icon('arrow-left'), this.kind === 'review' ? 'Training path' : this.kind === 'reviewing' ? 'Back' : 'Close'),
       h('div.ws-name', {}, h('h1', { title: s.recordingId }, s.recording.fileName),
         h('span.chip', { class: this.kind === 'tryout' ? 'warning' : 'active' }, MODE_TEXT[this.kind === 'annotate' ? s.mode : this.kind] || s.mode)),
       this.kind === 'tryout' ? h('span.ws-banner', {}, 'This file is not part of the study, so nothing you mark is saved.') : null);
     const actions = h('div.ws-actions');
+    this.actionsEl = actions; // a review pass and the feedback view add their own forward action (review_pass.js)
     if (!this.readOnly) {
       this.drawBtn = h('button.btn.toggle', { type: 'button', 'aria-pressed': 'true', title: 'When off, the recording can be inspected without changing annotations · Delete removes the selected annotation', onclick: () => this.setDrawing(!this.drawing) }, 'Draw/edit');
       this.deleteBtn = h('button.btn', { type: 'button', title: 'Delete the selected annotation (Delete or Backspace)', onclick: () => this.deleteSelection() }, 'Delete');
@@ -190,7 +195,7 @@ export class Workspace {
       icon('pause'), h('span.pause-label', {}, 'Pause'));
       actions.append(this.savedEl, this.pauseBtn);
     }
-    actions.append(h('button.btn.quiet', { type: 'button', title: 'Keys and mouse actions (?)', onclick: () => this.showHelp() }, 'Help'));
+    actions.append(...[this._moreButton(), h('button.btn.quiet', { type: 'button', title: 'Keys and mouse actions (?)', onclick: () => this.showHelp() }, 'Help')].filter(Boolean));
     if (this.kind === 'annotate' && s.revision) {
       // A revision: its two actions are on the banner below (_revisionBar).
     } else if (this.kind === 'annotate') {
@@ -202,6 +207,35 @@ export class Workspace {
       actions.append(h('button.btn.primary', { type: 'button', onclick: () => this.close() }, 'Back to my training path'));
     }
     return h('header.ws-header', {}, title, actions);
+  }
+
+  /** The More menu of the header (an annotated study or training recording): Report a problem with this recording… */
+  _moreButton() {
+    if (this.kind !== 'annotate') return null;
+    const b = h('button.btn.quiet.icon.ws-more', { type: 'button', 'aria-label': 'More', title: 'More: report a problem with this recording', 'aria-haspopup': 'menu', 'data-log': 'ws-more' }, icon('more'));
+    b.addEventListener('click', () => {
+      const r = b.getBoundingClientRect();
+      showMenu([{ label: 'Report a problem with this recording…', onSelect: () => this.reportProblem() }], Math.max(8, r.right - 300), r.bottom + 4, { className: 'ws-more-menu', minWidth: 300 });
+    });
+    return b;
+  }
+
+  /** Report a problem (annotate/problem.js); "cannot be annotated" closes the recording, its draft kept. */
+  async reportProblem() {
+    if (this._reporting || this.s.submitting) return;
+    this._reporting = true;
+    try {
+      const { reportProblem } = await import('./problem.js');
+      const s = this.s;
+      const item = { recording_id: s.recordingId, file_name: s.recording.fileName, mode: s.mode, context_id: s.contextId,
+        status: s.revision ? 'done' : 'in_progress' };
+      const answer = await reportProblem(this.app, item, { where: 'annotate' });
+      if (answer && answer.problem && answer.problem.outcome === 'unusable' && !this._destroyed) {
+        s.saveLocal();
+        s.finished = true; // nothing more is sent: the recording is set aside
+        this.app.leaveRecording(this, 'set aside: cannot be annotated');
+      }
+    } finally { this._reporting = false; }
   }
 
   /** The banner of a revision: which version is being revised, and its two ways out. */
@@ -1392,6 +1426,9 @@ export class Workspace {
   }
 
   // ============================================================ mouse and touch
+  /** A review pass marks stretches without an annotation by dragging across the read-only EEG. */
+  _marksRanges() { return Boolean(this.readOnly && this.review && this.review.onRange); }
+
   _pointer(type, info, e) {
     if (type === 'pointermove' || type === 'pointerleave' || type === 'pointerdown') this._noteReadout(type, e);
     if (type === 'pointermove' || type === 'pointerleave') this.pointerXY = info && info.area === 'eeg' ? { x: e.clientX, y: e.clientY } : null;
@@ -1449,12 +1486,12 @@ export class Workspace {
       if (!g || !info) return;
       const dx = Math.abs(info.x - g.x);
       if (g.kind === 'press') {
-        if (!g.moved && dx > DRAG_PX && this.editable) {
+        if (!g.moved && dx > DRAG_PX && (this.editable || this._marksRanges())) {
           g.moved = true;
           g.kind = 'draw';
           this.cancelMark(true);
           if (this.selection.length) this.select(null);
-          g.colour = this.cat.colourFor(this.currentLabel);
+          g.colour = this._marksRanges() ? this.review.rangeColour : this.cat.colourFor(this.currentLabel);
         }
       }
       if (g.kind === 'draw') {
@@ -1487,7 +1524,8 @@ export class Workspace {
       if (g.kind === 'draw') {
         this.viewer.setDragPreview(null);
         logger.noteInput('eeg_drag');
-        if (g.t1 !== undefined) this.createAnnotation(Math.min(g.t, g.t1), Math.max(g.t, g.t1));
+        if (g.t1 !== undefined && this._marksRanges()) this.review.onRange(Math.min(g.t, g.t1), Math.max(g.t, g.t1));
+        else if (g.t1 !== undefined) this.createAnnotation(Math.min(g.t, g.t1), Math.max(g.t, g.t1));
       } else if (g.kind === 'resize') {
         if (g.moved && g.range) {
           logger.noteInput('eeg_drag');
@@ -1598,6 +1636,7 @@ export class Workspace {
       case 'Escape': return handled('Escape', () => { closeMenu(); this.escape(); });
       default: break;
     }
+    if (this.review && this.review.onKey && this.review.onKey(e, k)) return; // a review pass's own keys (review_pass.js)
     if (this.review && (k === 'n' || k === 'N')) return handled('Next annotation', () => this.review.step(1));
     if (this.review && (k === 'p' || k === 'P')) return handled('Previous annotation', () => this.review.step(-1));
     if (k === 'n' || k === 'N') return handled('Next annotation', () => this.stepSelection(1));
@@ -2034,6 +2073,11 @@ export class Workspace {
     if (s.submitting) { this._waitForSave(); return false; }
     if (this.clock && this.clock.paused) this.resume('close');
     if (this.kind === 'review') { this.app.leaveRecording(this, 'review_closed'); return true; }
+    if (this.kind === 'reviewing' || this.kind === 'feedback') {
+      if (this.review && this.review.beforeClose && !(await this.review.beforeClose())) return false;
+      this.app.leaveRecording(this, `${this.kind}_closed`);
+      return true;
+    }
     if (this.kind === 'tryout') {
       if (this.store.size) {
         const c = await choose('Close the try-out?', `Nothing you marked in this file is kept.\n\nDownload my annotations: save them as a file first.`,

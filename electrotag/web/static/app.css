@@ -109,6 +109,7 @@
   --i-star: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1.5l1.9 4.3 4.6.4-3.5 3 1.1 4.6L8 11.4l-4.1 2.4 1.1-4.6-3.5-3 4.6-.4z'/%3E%3C/svg%3E");
   --i-pause: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='square'%3E%3Cpath d='M5.5 3.5v9M10.5 3.5v9'/%3E%3C/svg%3E");
   --i-skip-forward: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='square'%3E%3Cpath d='M2.5 8h8M7 4l4 4-4 4M13.5 3.5v9'/%3E%3C/svg%3E");
+  --i-more: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='black'%3E%3Ccircle cx='3.5' cy='8' r='1.25'/%3E%3Ccircle cx='8' cy='8' r='1.25'/%3E%3Ccircle cx='12.5' cy='8' r='1.25'/%3E%3C/svg%3E");
   --i-star-empty: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1' stroke-linejoin='round'%3E%3Cpath d='M8 2.6l1.6 3.7 4 .4-3 2.6.9 3.9L8 11.1l-3.5 2.1.9-3.9-3-2.6 4-.4z'/%3E%3C/svg%3E");
 }
 
@@ -180,6 +181,7 @@ kbd .ico { width: 12px; height: 12px; }
 .ico-star-empty { --i: var(--i-star-empty); }
 .ico-pause { --i: var(--i-pause); }
 .ico-skip-forward { --i: var(--i-skip-forward); }
+.ico-more { --i: var(--i-more); }
 .stars { display: inline-flex; gap: 2px; vertical-align: -2px; margin-right: 8px; color: var(--ink); }
 .stars .ico { width: 14px; height: 14px; }
 
@@ -515,6 +517,8 @@ ul.examples b { font-weight: 400; color: var(--ink); }
 }
 /* A revision of a finished recording: a banner under the header with its two actions (workspace.js, _revisionBar). */
 .view.annotate.revising { grid-template-rows: auto auto auto minmax(0, 1fr) auto; }
+/* A view that only shows annotations has no toolbar: the EEG takes the row it would have had. */
+.view.annotate.view-only { grid-template-rows: auto minmax(0, 1fr) auto; }
 .ws-revision {
   display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; min-width: 0;
   background: var(--accent-soft); border-bottom: 1px solid var(--hairline); border-left: 3px solid var(--accent);
@@ -1031,6 +1035,55 @@ table.leaderboard th:first-child, table.leaderboard td:first-child { width: 56px
   .games-counters { grid-template-columns: minmax(0, 1fr); }
 }
 /* ------------------------------------------ end of the game elements' styles */
+
+/* ------------------------------------------------------------------ problem reports and reviews */
+/* The More button of a recording's row and of the annotation view's header (views/home_feedback.js). */
+.row-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.btn.icon.row-more, .btn.icon.ws-more { padding: 0; }
+.ws-actions .btn.icon.ws-more { width: 32px; padding: 0; }
+.review-line, .problem-line { display: block; margin-top: 4px; }
+.review-line { color: var(--accent); }
+.returned-line { margin: 0 0 12px; }
+/* The report's dialog (annotate/problem.js). */
+.problem-dialog { max-width: 560px; }
+.problem-form fieldset { border: none; margin: 0 0 16px; padding: 0; }
+.problem-form legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
+.problem-option { display: flex; align-items: flex-start; gap: 8px; padding: 4px 0; cursor: pointer; }
+.problem-option input { margin-top: 4px; }
+.problem-option.disabled { color: var(--text-disabled); cursor: default; }
+.problem-option .caption.block { display: block; }
+.problem-note-label { display: flex; flex-direction: column; gap: 4px; margin-bottom: 16px; }
+.problem-note { width: 100%; resize: vertical; min-height: 64px; font: var(--t-16); }
+.problem-note-text { font-style: italic; }
+/* An administrator's review pass and the annotator's feedback (annotate/review_pass.js). */
+.view.annotate.reviewing .ws-side > .review-host { max-height: 72%; }
+.review-pass h3 { font: var(--t-14); font-weight: 600; margin: 16px 0 4px; }
+.review-list, .review-ranges, .feedback-list { list-style: none; margin: 8px 0; padding: 0; }
+.review-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 8px 4px; border-bottom: 1px solid var(--hairline); }
+.review-row.current { background: var(--accent-soft); }
+.review-row[data-status="caveat"] .review-label, .review-row[data-status="comment"] .review-label { color: var(--accent); }
+.review-item-head { display: inline-flex; align-items: center; gap: 8px; flex: 1 1 160px; min-width: 0; border: none; background: none; padding: 0;
+  font: var(--t-14); color: var(--ink); text-align: left; cursor: pointer; }
+.review-item-head .review-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.review-marks .seg { height: 28px; padding: 0 8px; font: var(--t-12); }
+.review-note { flex: 1 1 100%; height: 32px; font: var(--t-14); }
+.review-range-edit { display: flex; gap: 8px; flex: 1 1 100%; }
+.review-range-edit .review-note { flex: 1 1 auto; }
+.review-overall-label { display: flex; flex-direction: column; gap: 4px; margin-top: 16px; }
+.review-overall { width: 100%; resize: vertical; font: var(--t-14); }
+.review-keys, .review-save-msg { margin-top: 8px; }
+.feedback-row { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; padding: 8px 4px; border-bottom: 1px solid var(--hairline); cursor: pointer; }
+.feedback-row.current { background: var(--accent-soft); }
+.feedback-chip { color: var(--accent); border-color: var(--accent); }
+.feedback-note { flex: 1 1 100%; color: var(--text); }
+.feedback-overall { margin: 8px 0; }
+@media (hover: hover) { .feedback-row:hover, .review-item-head:hover .review-label { color: var(--accent); } }
+@media (pointer: coarse) {
+  .review-marks .seg { height: 40px; padding: 0 12px; font: var(--t-14); }
+  .review-note { height: 40px; font: var(--t-16); }
+  .review-overall, .problem-note { font: var(--t-16); }
+  .ws-actions .btn.icon.ws-more { width: 40px; }
+}
 
 /* ------------------------------------------- viewing tools of the annotation view (workspace.js)
    The value under the pointer in the line at the bottom, Go to time over the EEG, and the switch

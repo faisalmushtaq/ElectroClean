@@ -266,8 +266,10 @@ export const tests = [
         await waitForRoute(ipad, 'home');
         await homeTab(ipad, 'history');
         assert.ok(await ipad.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `no sideways scrolling at ${w} × ${h}`);
-        const target = await ipad.locator(HISTORY_ROWS).first().locator('button').boundingBox();
+        const target = await ipad.locator(HISTORY_ROWS).first().locator('button[data-log="open-to-revise"]').boundingBox();
         assert.ok(target.height >= 40, `a 40-pixel target at ${w} × ${h}`);
+        const more = await ipad.locator(HISTORY_ROWS).first().locator('button.row-more').boundingBox();
+        assert.ok(more.height >= 40 && more.width >= 40, `the More button is a 40-pixel target at ${w} × ${h}`);
         await t.screenshot(ipad, 'history_ipad');
         await ipad.context().close();
       }

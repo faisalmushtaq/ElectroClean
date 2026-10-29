@@ -122,6 +122,16 @@ CREATE TABLE IF NOT EXISTS annotator_records (
     record TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS study_records (
+    kind TEXT NOT NULL,
+    record_id TEXT NOT NULL,
+    annotator_id TEXT NOT NULL DEFAULT '',
+    record TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (kind, record_id)
+);
+CREATE INDEX IF NOT EXISTS study_records_by_annotator ON study_records (kind, annotator_id);
 CREATE TABLE IF NOT EXISTS study_secrets (
     name TEXT PRIMARY KEY,
     value TEXT NOT NULL,
@@ -623,6 +633,32 @@ class Accounts:
                 return old
             db.execute("INSERT OR REPLACE INTO annotator_records (annotator_id, record, updated_at) VALUES (?, ?, ?)",
                        (annotator_id, json.dumps(new), now_local_iso()))
+            return new
+
+    # ------------------------------------------- problem reports and reviews
+    def records(self, kind: str, annotator_id: str | None = None) -> list[dict[str, Any]]:
+        if annotator_id is None:
+            rows = self._all("SELECT record FROM study_records WHERE kind=?", (kind,))
+        else:
+            rows = self._all("SELECT record FROM study_records WHERE kind=? AND annotator_id=?", (kind, annotator_id))
+        return [json.loads(r["record"]) for r in rows]
+
+    def update_record(self, kind: str, record_id: str, annotator_id: str,
+                      change: Callable[[dict[str, Any] | None], dict[str, Any] | None]) -> dict[str, Any] | None:
+        with self._tx() as db:
+            row = db.execute("SELECT record FROM study_records WHERE kind=? AND record_id=?",
+                             (kind, record_id)).fetchone()
+            old = json.loads(row["record"]) if row else None
+            new = change(None if old is None else dict(old))
+            if new is None:
+                return old
+            now = now_local_iso()
+            if row:
+                db.execute("UPDATE study_records SET record=?, updated_at=? WHERE kind=? AND record_id=?",
+                           (json.dumps(new), now, kind, record_id))
+            else:
+                db.execute("INSERT INTO study_records (kind, record_id, annotator_id, record, created_at, updated_at) "
+                           "VALUES (?, ?, ?, ?, ?, ?)", (kind, record_id, annotator_id, json.dumps(new), now, now))
             return new
 
     def study_secret(self, name: str) -> str:

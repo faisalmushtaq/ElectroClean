@@ -331,7 +331,7 @@ def cmd_list(a: argparse.Namespace) -> int:
     return 0
 
 
-STATUS_TEXT = {"todo": "to do", "in_progress": "in progress", "done": "done"}
+STATUS_TEXT = {"todo": "to do", "in_progress": "in progress", "done": "done", "unusable": "set aside"}
 
 
 def cmd_progress(a: argparse.Namespace) -> int:
