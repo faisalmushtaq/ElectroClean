@@ -110,6 +110,7 @@ export const tests = [
       assert.match(await page.textContent('.progress-card [data-stat="done"]'), /^0 of 3/);
       assert.match(await page.textContent('.games-card'), /Goals and milestones/);
       await openExample(page, 0);
+      await page.waitForTimeout(600); // a screen counts as viewed after 400 ms on it
       await mark(page, 3.0, 3.4);
       await pressSave(page);
       assert.match(await page.textContent('.dialog'), /You can still revise them later from your history/);

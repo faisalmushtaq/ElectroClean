@@ -216,7 +216,12 @@ already takes a list of files and their links. The study default for channel col
 (`display.channel_colours`) has no control in the admin area yet. `electroclean-activity` does not
 yet put the time paused (`paused_s`, in the interaction log) in its tables. A Firebase invitation
 shows no expiry date, because Firebase does not give one. Keeping recordings on an iPad uses the
-faster storage from iPadOS 26 and the browser's database before it; check both on a real iPad.
+faster storage from iPadOS 26 and the browser's database before it; check both on a real iPad. Two tabs that keep the same
+recording at the same moment can both write its files; on one heavily loaded test run the first
+tab read the copy back while the second was still writing and called it incomplete (it then
+removes the copy and opens the recording from memory, so no work is lost). A per-copy Web Lock
+around writing is the natural fix, but a first attempt made WebKit refuse some reads in the tests,
+so it was taken out again before the push.
 
 **7. Housekeeping.** The project's `ruff` settings give only the line length, so a recent `ruff`
 applies many style rules the code was never written to; `ruff check --select E,F,W,B` is the useful
