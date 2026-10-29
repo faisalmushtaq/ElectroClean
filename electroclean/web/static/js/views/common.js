@@ -38,7 +38,7 @@ export function starIcons(stars, maxStars) {
 }
 
 /** The header bar. Administrators also get the way into the admin area (or, inside it, back to their recordings). */
-export function appHeader(app, { title = '', admin = false } = {}) {
+export function appHeader(app, { title = '', admin = false, tools = null } = {}) {
   const me = app.me;
   const study = me && me.study ? me.study.name : app.backend && app.backend.health ? app.backend.health.study : '';
   const switcher = app.isAdmin
@@ -50,6 +50,7 @@ export function appHeader(app, { title = '', admin = false } = {}) {
       study && !(app.backend && app.backend.isDemo) ? h('span.brand-study', {}, study) : null, title ? h('span.brand-study', {}, title) : null,
       admin ? h('span.chip.active.admin-chip', {}, 'Admin') : null,
       app.backend && app.backend.isDemo ? h('span.chip.warning', {}, 'Demonstration') : null),
+    tools,
     me ? h('div.who', {},
       switcher,
       h('span.who-name', {}, `${me.annotator_id}${me.display_name ? ` · ${me.display_name}` : ''}`),

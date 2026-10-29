@@ -3,17 +3,44 @@
 // and the demonstration (js/api/demo_admin.js) checks settings with the same rules.
 
 // ------------------------------------------------------------------ sections
-export const SECTIONS = Object.freeze([
-  { key: 'overview', route: 'admin', title: 'Overview' },
-  { key: 'annotators', route: 'admin-annotators', title: 'Annotators' },
-  { key: 'recordings', route: 'admin-recordings', title: 'Recordings' },
-  { key: 'assignments', route: 'admin-assignments', title: 'Assignments' },
-  { key: 'training', route: 'admin-training', title: 'Training' },
-  { key: 'analyses', route: 'admin-analyses', title: 'Analyses' },
-  { key: 'results', route: 'admin-results', title: 'Results' },
-  { key: 'records', route: 'admin-records', title: 'Records' },
-  { key: 'settings', route: 'admin-settings', title: 'Study settings' },
+/** The groups of the admin area's menu, each with its own sections (in the order shown). */
+export const GROUPS = Object.freeze([
+  { key: 'study', title: 'Study' },
+  { key: 'people', title: 'People' },
+  { key: 'data', title: 'Data' },
+  { key: 'config', title: 'Settings' },
 ]);
+
+export const SECTIONS = Object.freeze([
+  { key: 'overview', route: 'admin', title: 'Overview', group: 'study' },
+  { key: 'progress', route: 'admin-progress', title: 'Progress', group: 'study' },
+  { key: 'results', route: 'admin-results', title: 'Results', group: 'study' },
+  { key: 'analyses', route: 'admin-analyses', title: 'Analyses', group: 'study' },
+  { key: 'records', route: 'admin-records', title: 'Records', group: 'study' },
+  { key: 'annotators', route: 'admin-annotators', title: 'Annotators', group: 'people' },
+  { key: 'assignments', route: 'admin-assignments', title: 'Assignments', group: 'people' },
+  { key: 'training', route: 'admin-training', title: 'Training', group: 'people' },
+  { key: 'recordings', route: 'admin-recordings', title: 'Recordings', group: 'data' },
+  { key: 'settings', route: 'admin-settings', title: 'Study settings', group: 'config' },
+]);
+
+export function sectionsOf(group) {
+  return SECTIONS.filter((s) => s.group === group);
+}
+
+export function groupOf(sectionKey) {
+  const s = SECTIONS.find((x) => x.key === sectionKey);
+  return s ? s.group : null;
+}
+
+/** Which groups of the menu are folded away, read from what the browser kept ({study: true, ...}). */
+export function foldedGroups(saved) {
+  const out = {};
+  if (saved && typeof saved === 'object' && !Array.isArray(saved)) {
+    for (const g of GROUPS) if (saved[g.key] === true) out[g.key] = true;
+  }
+  return out;
+}
 
 /** True for the plain hashes of the admin area (#admin, #admin-recordings, ...). */
 export function isAdminRoute(route) {
@@ -69,6 +96,8 @@ export const AUDIT_OPS = Object.freeze({
   user_add: 'Account added',
   user_update: 'Account changed',
   user_reset_password: 'Password reset',
+  user_invite: 'Invitation link made',
+  user_invite_revoke: 'Invitation link withdrawn',
   user_remove: 'Account removed',
   assign: 'Recordings assigned',
   unassign: 'Assignment removed',
@@ -510,6 +539,187 @@ export function programmeText(p) {
   return (p.stages || []).filter((s) => s.status !== 'not_used' && s.total)
     .map((s) => `${names[s.key] || s.key} ${s.done} of ${s.total}${s.status === 'completed' ? ' (completed)' : s.status === 'locked' ? ' (locked)' : ''}`)
     .join(' · ') || 'Not started';
+}
+
+// ------------------------------------------------------------- invitations
+/** What each state of an invitation is called (UserRecord.invitation.state). */
+export const INVITE_STATES = Object.freeze({
+  none: 'Not invited', invited: 'Invited', accepted: 'Accepted', expired: 'Expired', revoked: 'Withdrawn',
+});
+
+/** 28 Oct 2026. */
+export function dateText(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso).slice(0, 10);
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+/** "Invited on 28 Oct 2026, expires on 11 Nov 2026", "Accepted on …", "Not invited". */
+export function invitationText(inv) {
+  const i = inv || {};
+  const state = i.state || 'none';
+  if (state === 'invited') {
+    return `Invited on ${dateText(i.invited_at)}${i.expires_at ? `, expires on ${dateText(i.expires_at)}` : ''}`;
+  }
+  if (state === 'accepted') return `Accepted${i.ended_at ? ` on ${dateText(i.ended_at)}` : ''}`;
+  if (state === 'expired') return `Expired on ${dateText(i.expires_at)}`;
+  if (state === 'revoked') return `Withdrawn${i.ended_at ? ` on ${dateText(i.ended_at)}` : ''}`;
+  return 'Not invited';
+}
+
+/**
+ * The private link of an invitation, made from this page's own address: the page itself with
+ * ?invite=<token>, and ?server=<address> when the study server is on another site than the page
+ * (a page that the study server serves itself finds it without). `forcedDemo` keeps ?demo=1.
+ */
+export function inviteLink(token, { pageHref, server = '', forcedDemo = false } = {}) {
+  const page = new URL(pageHref);
+  page.hash = '';
+  page.search = '';
+  const params = new URLSearchParams();
+  if (server) {
+    let other = true;
+    try { other = new URL(server).origin !== page.origin; } catch { other = true; }
+    if (other) params.set('server', server);
+  }
+  if (forcedDemo) params.set('demo', '1');
+  params.set('invite', token);
+  return `${page.href}?${params.toString()}`;
+}
+
+/** The short, friendly message of "Email the link", in UK English, for the administrator to edit. */
+export function inviteMessage({ annotatorId, name = '', study = '', link, expiresAt = null, from = '' }) {
+  const lines = [
+    `Dear ${name || annotatorId},`,
+    '',
+    `You are invited to annotate EEG recordings for ${study || 'our study'}, using ElectroClean in your web browser. This private link lets you choose your own password and sign in:`,
+    '',
+    link,
+    '',
+    `Your annotator ID is ${annotatorId}. The link works once${expiresAt ? ` and until ${dateText(expiresAt)}` : ''}; please keep it to yourself. We will send you the recordings separately, and they stay on your own computer while you work.`,
+    '',
+    'If the link does not work, reply to this message and we will send a new one.',
+    '',
+    'With thanks,',
+    from || 'The study team',
+  ];
+  return lines.join('\n');
+}
+
+/** A mailto: address that opens the person's email with the subject and message filled in. */
+export function mailtoHref(email, subject, body) {
+  return `mailto:${encodeURIComponent(String(email || '')).replace(/%40/g, '@')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+/**
+ * The lines of "Add several": ID, name and email address, separated by commas, semicolons or tabs.
+ * Every line is checked before anything is created: `rows` are the accounts to make and
+ * `problems` the lines to correct, [{line, text}], in plain words. A first line of column names is
+ * skipped.
+ */
+export function parseBulkPeople(text, { existing = [], emailRequired = false, max = 200 } = {}) {
+  const taken = new Set(existing.map((x) => String(x).toUpperCase()));
+  const rows = [];
+  const problems = [];
+  const ids = new Map();
+  const emails = new Map();
+  const lines = String(text || '').split(/\r?\n/);
+  lines.forEach((raw, i) => {
+    const line = i + 1;
+    if (!raw.trim()) return;
+    const parts = raw.split(/[,;\t]/).map((p) => p.trim());
+    if (rows.length + problems.length === 0 && /^(annotator[ _-]?)?id$/i.test(parts[0])) return; // column names
+    if (parts.length > 3) { problems.push({ line, text: `Line ${line} has more than three parts; give the ID, the name and the email address.` }); return; }
+    const [idText, name = '', emailText = ''] = parts;
+    let id;
+    let email;
+    try { id = checkAnnotatorId(idText); } catch (exc) { problems.push({ line, text: `Line ${line}: ${exc.message}` }); return; }
+    try { email = checkEmail(emailText, { required: emailRequired }); } catch (exc) { problems.push({ line, text: `Line ${line} (${id}): ${exc.message}` }); return; }
+    if (taken.has(id)) { problems.push({ line, text: `Line ${line}: ${id} already has an account in this study.` }); return; }
+    if (ids.has(id)) { problems.push({ line, text: `Line ${line}: ${id} is also on line ${ids.get(id)}.` }); return; }
+    if (email && emails.has(email.toLowerCase())) { problems.push({ line, text: `Line ${line}: ${email} is also on line ${emails.get(email.toLowerCase())}.` }); return; }
+    if (name.length > 200) { problems.push({ line, text: `Line ${line}: the name has more than 200 characters.` }); return; }
+    ids.set(id, line);
+    if (email) emails.set(email.toLowerCase(), line);
+    rows.push({ line, annotator_id: id, display_name: name, email });
+  });
+  if (rows.length + problems.length > max) problems.unshift({ line: 0, text: `At most ${max} people can be added at once; split the list.` });
+  if (!rows.length && !problems.length) problems.push({ line: 0, text: 'Paste one line for each person: their ID, then their name and email address, separated by commas.' });
+  return { rows, problems };
+}
+
+/** Comma-separated text (RFC 4180) with a header row; text that a spreadsheet would run as a formula is kept as text. */
+export function csvText(columns, rows) {
+  const cell = (v) => {
+    if (v === null || v === undefined) return '';
+    let t = typeof v === 'number' ? (Number.isInteger(v) ? String(v) : v.toFixed(4)) : String(v);
+    if (typeof v === 'string' && /^[=+\-@\t\r]/.test(t)) t = `'${t}`;
+    return /[",\r\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+  };
+  return [columns.map(cell).join(','), ...rows.map((r) => columns.map((c) => cell(r[c])).join(','))].join('\r\n') + '\r\n';
+}
+
+// ------------------------------------------------------------------ progress
+export function median(values) {
+  const v = (values || []).filter((x) => typeof x === 'number' && Number.isFinite(x)).sort((a, b) => a - b);
+  if (!v.length) return null;
+  const m = Math.floor(v.length / 2);
+  return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+}
+
+/** "12 min", "1 h 05 min", "–" for nothing: the time spent with recordings open. */
+export function minutesText(seconds) {
+  if (seconds === null || seconds === undefined || !Number.isFinite(Number(seconds))) return '–';
+  const s = Number(seconds);
+  if (s < 60) return `${Math.round(s)} s`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m} min`;
+  return `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`;
+}
+
+/** The projected finish of stats.totals.projection, in words. */
+export function projectionText(p) {
+  if (!p || p.status === 'not_enough') return 'Not enough work yet';
+  if (p.status === 'complete') return 'Every assigned recording is done';
+  return `Around ${dateText(p.date)}`;
+}
+
+/** The number to show for a value that may be missing (one decimal for fractions). */
+export function numberText(v, digits = 0) {
+  if (v === null || v === undefined || !Number.isFinite(Number(v))) return '–';
+  const n = Number(v);
+  return Number.isInteger(n) ? n.toLocaleString('en-GB') : n.toFixed(digits || 1);
+}
+
+/** Rows sorted by a value (numbers, then text; missing values last), in either direction. */
+export function sortRows(rows, value, direction = 'asc') {
+  const sign = direction === 'desc' ? -1 : 1;
+  return [...rows].map((r, i) => ({ r, i, v: value(r) })).sort((a, b) => {
+    const am = a.v === null || a.v === undefined || a.v === '';
+    const bm = b.v === null || b.v === undefined || b.v === '';
+    if (am || bm) return am && bm ? a.i - b.i : am ? 1 : -1;
+    const c = typeof a.v === 'number' && typeof b.v === 'number' ? a.v - b.v : String(a.v).localeCompare(String(b.v), 'en-GB', { numeric: true });
+    return c ? sign * c : a.i - b.i;
+  }).map((x) => x.r);
+}
+
+/** People and recordings that a quick search finds, best first: [{kind, id, text, extra, scope}]. */
+export function findMatches(query, { users = [], recordings = [] } = {}, limit = 12) {
+  const q = String(query || '').trim().toLowerCase();
+  if (!q) return [];
+  const out = [];
+  for (const u of users) {
+    const hay = `${u.annotator_id} ${u.display_name || ''} ${u.email || ''}`.toLowerCase();
+    const at = hay.indexOf(q);
+    if (at >= 0) out.push({ kind: 'person', id: u.annotator_id, text: `${u.annotator_id}${u.display_name ? ` · ${u.display_name}` : ''}`, extra: u.email || '', rank: u.annotator_id.toLowerCase() === q ? 0 : at === 0 ? 1 : 2 });
+  }
+  for (const r of recordings) {
+    const hay = `${r.recording_id} ${r.file_name || ''}`.toLowerCase();
+    const at = hay.indexOf(q);
+    if (at >= 0) out.push({ kind: 'recording', id: r.recording_id, scope: r.scope, text: r.file_name || r.recording_id, extra: r.recording_id, rank: (r.file_name || '').toLowerCase() === q ? 0 : 3 });
+  }
+  return out.sort((a, b) => a.rank - b.rank || a.text.localeCompare(b.text, 'en-GB', { numeric: true })).slice(0, limit);
 }
 
 // ------------------------------------------------------------------ files

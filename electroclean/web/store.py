@@ -40,6 +40,8 @@ STATUSES = ("active", "disabled")
 BY_COMMAND = "command"
 #: The answer of :meth:`Store.create_account` and :meth:`Store.reset_password`.
 Credentials = dict[str, Any]  # {"invite_link": str | None, "temporary_password": str | None}
+#: The answer of :meth:`Store.create_invitation`.
+Invitation = dict[str, Any]  # {"invite_token": str | None, "invite_link": str | None, "expires_at": str | None}
 
 
 @dataclass(frozen=True)
@@ -235,6 +237,30 @@ class Store(ABC):
         """The account leaves the study with its assignments, programme, drafts and guided progress; its
         results and logs stay."""
 
+    # ------------------------------------------------------------ invitations
+    def create_invitation(self, annotator_id: str, *, days: float, by: str) -> Invitation:
+        """A new private invitation for the account, replacing any earlier one (docs/web/api.md,
+        ``user_invite``): ``{"invite_token", "invite_link", "expires_at"}``, with a token the browser
+        makes a link from (the files store) or a link to choose a password (Firebase)."""
+        raise AccountProblem("not_offered", "This study cannot make invitation links.", 422)
+
+    def revoke_invitation(self, annotator_id: str) -> bool:
+        """Withdraw the account's open invitation; False if it had none."""
+        raise AccountProblem("not_offered", "This study cannot withdraw invitation links.", 422)
+
+    def invitations(self) -> dict[str, dict[str, Any]]:
+        """Each account's latest invitation (``state``: invited, accepted, expired or revoked; ``invited_at``,
+        ``expires_at``, ``ended_at``), by annotator ID. Never the token."""
+        return {}
+
+    def invitation_for_token(self, token: str) -> dict[str, Any] | None:
+        """The invitation a token belongs to, for ``POST /invite/check``; None when it is not known."""
+        return None
+
+    def accept_invitation(self, token: str, password: str) -> User:
+        """Set the password from a valid invitation and end it (``POST /invite/accept``)."""
+        raise AccountProblem("not_offered", "This study does not accept invitation links.", 404)
+
     @abstractmethod
     def assignments(self, annotator_id: str | None = None) -> list[Assignment]: ...
 
@@ -379,5 +405,6 @@ def generated_password() -> str:
     return "-".join("".join(secrets.choice(alphabet) for _ in range(4)) for _ in range(3))
 
 
-__all__ = ["BY_COMMAND", "MODES", "ROLES", "STATUSES", "AccountProblem", "Assignment", "Credentials", "ResultExists",
+__all__ = ["BY_COMMAND", "MODES", "ROLES", "STATUSES", "AccountProblem", "Assignment", "Credentials", "Invitation",
+           "ResultExists",
            "SavedResult", "Store", "StoreError", "User", "generated_password", "item_key", "settings_from_overrides"]

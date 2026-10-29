@@ -249,8 +249,43 @@ def create_app(study_dir: Path | str, *, demo: bool = False, allowed_origins: li
             login_ips.hit(client)
             raise ApiError(401, "bad_credentials", "The ID or password is not right.")
         token = await run_in_threadpool(store.db.issue_token, user)
+        return session_answer(user, token)
+
+    def session_answer(user: User, token: str) -> JSONResponse:
         return JSONResponse({"token": token, "expires_in_s": TOKEN_IDLE_S, "annotator_id": user.annotator_id,
                              "display_name": user.display_name, "role": user.role})
+
+    async def invite_guard(request: Request) -> tuple[dict[str, Any], str]:
+        """The body of an invitation request, refused while its address has failed too often."""
+        body = await body_of(request)
+        client = request.client.host if request.client else "unknown"
+        if login_ips.blocked(client):
+            raise ApiError(429, "too_many_attempts", "Too many unsuccessful attempts; wait 15 minutes and try "
+                           "again.")
+        return body, client
+
+    @app.post(f"{p}/invite/check")
+    async def invite_check(request: Request) -> JSONResponse:
+        """Whose invitation a private link is (no sign-in: the link's token is the proof)."""
+        body, client = await invite_guard(request)
+        try:
+            return JSONResponse(await run_in_threadpool(service.invite_check, body))
+        except ApiError as exc:
+            if exc.code.startswith("invite_"):
+                login_ips.hit(client)
+            raise
+
+    @app.post(f"{p}/invite/accept")
+    async def invite_accept(request: Request) -> JSONResponse:
+        """The person chooses their password with the link's token and is signed in."""
+        body, client = await invite_guard(request)
+        try:
+            user = await run_in_threadpool(service.invite_accept, body)
+        except ApiError as exc:
+            if exc.code.startswith("invite_"):
+                login_ips.hit(client)
+            raise
+        return session_answer(user, await run_in_threadpool(store.db.issue_token, user))
 
     @app.post(f"{p}/logout")
     async def logout(request: Request) -> JSONResponse:

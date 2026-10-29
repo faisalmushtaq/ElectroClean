@@ -689,6 +689,50 @@ class StudyService:
             out.append(entry)
         return {"study": self.store.name, "generated_at": now_local_iso(), "annotators": out}
 
+    # ------------------------------------------------------------ invitations
+    #: What a person is told when their invitation link cannot be used, by the reason.
+    INVITE_PROBLEMS = {
+        "unknown": (404, "This invitation link is not known to the study. It may have been replaced by a newer "
+                         "link or withdrawn. Ask the study team for a new one."),
+        "used": (409, "This invitation link has been used already. Sign in with your annotator ID and the "
+                      "password you chose, or ask the study team for a new link."),
+        "expired": (409, "This invitation link has expired. Ask the study team for a new one."),
+    }
+
+    def _invite_problem(self, reason: str) -> ApiError:
+        status, message = self.INVITE_PROBLEMS[reason]
+        return ApiError(status, f"invite_{reason}", message)
+
+    def invite_check(self, body: dict[str, Any]) -> dict[str, Any]:
+        """``POST /invite/check {token}`` (no sign-in): whose invitation this is, for the welcome card."""
+        token = body.get("token")
+        inv = self.store.invitation_for_token(token) if isinstance(token, str) else None
+        if inv is None:
+            raise self._invite_problem("unknown")
+        if inv["state"] in ("accepted", "expired"):
+            raise self._invite_problem("used" if inv["state"] == "accepted" else "expired")
+        if inv["state"] != "invited":
+            raise self._invite_problem("unknown")
+        return {"annotator_id": inv["annotator_id"], "display_name": inv.get("display_name", ""),
+                "study_name": self.store.name, "expires_at": inv["expires_at"]}
+
+    def invite_accept(self, body: dict[str, Any]) -> User:
+        """``POST /invite/accept {token, password}`` (no sign-in): the person's own password, set once."""
+        from electroclean.web.store import AccountProblem
+
+        token, password = body.get("token"), body.get("password")
+        if not isinstance(password, str) or not 8 <= len(password) <= 200:
+            raise ApiError(400, "bad_password", "Choose a password of at least 8 characters.")
+        if not isinstance(token, str):
+            raise self._invite_problem("unknown")
+        try:
+            return self.store.accept_invitation(token, password)
+        except AccountProblem as exc:
+            reason = exc.code.removeprefix("invite_")
+            if reason in self.INVITE_PROBLEMS:
+                raise self._invite_problem(reason) from exc
+            raise ApiError(exc.status, exc.code, exc.message or "The invitation could not be used.") from exc
+
     def admin(self, op: Any, user: User, body: dict[str, Any] | None = None) -> dict[str, Any]:
         """One operation of the admin area (docs/web/api.md, "Administration"; electroclean/web/admin.py)."""
         return self.administration.run(op, user, body or {})

@@ -27,6 +27,9 @@ export class AssignmentsSection {
   async show(params) {
     this.msg.clear();
     if (params.annotator) this.preselect = [String(params.annotator).toUpperCase()];
+    if (Array.isArray(params.annotators)) this.preselect = params.annotators.map((x) => String(x).toUpperCase());
+    // Recordings chosen in the Recordings section, to assign to someone.
+    if (Array.isArray(params.recordings)) this.preselectRecordings = [...params.recordings];
     await this.reload();
   }
 
@@ -69,7 +72,7 @@ export class AssignmentsSection {
       clear(recHost);
       recs = checkList(list.map((r) => ({ value: r.recording_id, text: r.file_name || r.recording_id.split('/').pop(),
         extra: [fileParts(r.recording_id).folder, r.retired ? 'retired' : ''].filter(Boolean).join(' · ') })),
-      { legend: 'Recordings', name: 'recordings', empty: mode.value === 'standard' ? 'Add recordings on the Recordings page first.' : 'This reference set has no recordings yet.' });
+      { legend: 'Recordings', name: 'recordings', selected: mode.value === 'standard' ? this.preselectRecordings || [] : [], empty: mode.value === 'standard' ? 'Add recordings on the Recordings page first.' : 'This reference set has no recordings yet.' });
       recHost.append(recs);
       recHost.hidden = all.input.checked;
     };
@@ -84,6 +87,10 @@ export class AssignmentsSection {
     context.addEventListener('change', fillRecordings);
     all.input.addEventListener('change', () => { recHost.hidden = all.input.checked; });
     fillContext();
+    if (this.preselectRecordings && this.preselectRecordings.length) {
+      this.preselectRecordings = null;
+      requestAnimationFrame(() => recHost.scrollIntoView({ block: 'nearest' }));
+    }
     const msg = messageArea();
     const go = actionButton('Assign', {
       kind: 'primary', working: 'Assigning…', msg, log: 'assign',
