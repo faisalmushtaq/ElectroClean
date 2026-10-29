@@ -58,6 +58,9 @@ test('the invitation\'s states and its friendly message', () => {
   assert.match(text, /^Dear Alex,/);
   assert.match(text, /https:\/\/x\.org\/\?invite=abc/);
   assert.match(text, /Your annotator ID is A11\. The link works once and until 11 Nov 2026/);
+  // Told before the link is used up that a phone will not do.
+  assert.match(text, /open it on the tablet \(such as an iPad\) or computer you will annotate on: annotating needs a larger screen than a phone has/);
+  assert.ok(text.indexOf('larger screen') < text.indexOf('https://x.org'), 'the screen is mentioned before the link');
   assert.match(text, /Sam$/);
   const href = m.mailtoHref('alex@example.org', 'Your invitation', text);
   assert.match(href, /^mailto:alex@example\.org\?subject=Your%20invitation&body=Dear%20Alex/);

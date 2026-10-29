@@ -335,7 +335,8 @@ export const tests = [
       assert.equal(await page.textContent('[data-stat="worked"] .caption'), 'worked in all; under a minute per recording (median)');
       // Two quick recordings: the one left takes a few seconds at this pace (progress.test.mjs checks the sums).
       assert.match(await page.textContent('[data-stat="left"]'), /Nearly done.*judged from 2 recordings/);
-      assert.match(await page.textContent('[data-stat="today"]'), /Today: no work yet in this browser, 2 recordings finished\./);
+      // Two quick saves: some work today, never "no work yet" beside the recordings finished.
+      assert.match(await page.textContent('[data-stat="today"]'), /^Today: (under a minute of work in this browser, )?2 recordings finished\.$/);
       assert.equal(await page.getAttribute('.progress-card [role="progressbar"]', 'aria-valuenow'), '2');
       // Today's time in this browser, once there is a minute of it.
       await page.evaluate(() => {

@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { isToday, median, progressSummary, roundEstimate, spanText } from '../../electrotag/web/static/js/views/progress.js';
+import { isToday, median, progressSummary, roundEstimate, spanText, todayText } from '../../electrotag/web/static/js/views/progress.js';
 
 // --------------------------------------------------------------- the progress
 
@@ -67,4 +67,14 @@ test('the progress card: this browser\'s newer draft wins, and no estimate befor
   assert.equal(none.continue, null);
   assert.equal(none.medianS, null);
   assert.equal(none.workedS, 0);
+});
+
+test('the line about today never contradicts itself', () => {
+  assert.equal(todayText(0, 0), 'no work yet in this browser');
+  // a recording finished in under a minute: some work, not "no work yet"
+  assert.equal(todayText(40, 1), 'under a minute of work in this browser, 1 recording finished');
+  // finished in another browser: nothing is claimed about this one
+  assert.equal(todayText(0, 2), '2 recordings finished');
+  assert.equal(todayText(3900, 2), '1 h 5 min of work in this browser, 2 recordings finished');
+  assert.equal(todayText(600, 0), '10 min of work in this browser');
 });

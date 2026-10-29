@@ -22,6 +22,20 @@ export function spanText(seconds) {
   return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}`;
 }
 
+/**
+ * The line about today: the time worked in this browser and the recordings finished, without
+ * contradicting each other ("under a minute" rather than "no work yet" beside a finished recording;
+ * a recording finished in another browser without a claim about this one).
+ */
+export function todayText(todayS, doneToday) {
+  const finished = doneToday ? `${doneToday} recording${doneToday === 1 ? '' : 's'} finished` : null;
+  let worked;
+  if (todayS >= 60) worked = `${spanText(todayS)} of work in this browser`;
+  else if (todayS > 0) worked = 'under a minute of work in this browser';
+  else worked = finished ? null : 'no work yet in this browser';
+  return [worked, finished].filter(Boolean).join(', ');
+}
+
 /** An estimate rounded as honestly as it deserves: to 5 minutes, or 15 beyond two hours. */
 export function roundEstimate(seconds) {
   const step = seconds > 2 * 3600 ? 900 : 300;

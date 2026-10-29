@@ -14,16 +14,21 @@ function dateText(iso) {
 
 /**
  * The welcome card, once the study has said whose invitation it is (`info`), or why it cannot be
- * used (`problem`). With `retry` the study could not be asked (no connection, a study that is slow
- * to start): the link may still be good, so the card offers to ask again and keeps the link.
+ * used (`problem`, with the study's `code`). With `retry` the study could not be asked (no
+ * connection, a study that is slow to start): the link may still be good, so the card offers to ask
+ * again and keeps the link. A link that was used already leads to the sign-in; for one that expired or
+ * is not known, the study's answer says whom to ask for a new one (signing in needs the password the
+ * link sets), and the sign-in stays for someone who chose a password with an earlier link.
  */
-export function inviteView(app, token, { info = null, problem = '', retry = false } = {}) {
+export function inviteView(app, token, { info = null, problem = '', code = '', retry = false } = {}) {
   if (!info) {
     const again = retry ? h('button.btn.primary', { type: 'button', 'data-log': 'invite-retry', onclick: (e) => { e.currentTarget.disabled = true; app.showInvite(token); } }, 'Try again') : null;
+    const used = code === 'invite_used';
     const card = h('div.card.signin-card.invite-card', { 'data-invite': retry ? 'unreachable' : 'problem' },
       h('h1', {}, retry ? 'The invitation could not be checked' : 'This link cannot be used'),
       h('div.banner', { role: 'alert' }, h('p', {}, problem || 'The invitation could not be checked. Try again in a moment.')),
-      h('div.btn-row', {}, again, h(`button.btn${retry ? '' : '.primary'}`, { type: 'button', onclick: () => app.leaveInvite() }, 'Go to sign in')));
+      h('div.btn-row', {}, again, h(`button.btn${retry || !used ? '' : '.primary'}`, { type: 'button', onclick: () => app.leaveInvite() }, 'Go to sign in')),
+      retry || used ? null : h('p.caption', {}, 'Go to sign in if you have already chosen a password with an earlier link.'));
     return signinFrame(app, card);
   }
   const pw = h('input.field', { type: 'password', id: 'invite-password', name: 'new-password', autocomplete: 'new-password', required: true, minlength: '8' });
@@ -62,6 +67,11 @@ export function inviteView(app, token, { info = null, problem = '', retry = fals
     h('div.invite-id', {}, h('span.caption', {}, 'Your annotator ID'), h('span.invite-id-value', {}, info.annotator_id),
       info.display_name ? h('span.caption', {}, info.display_name) : null),
     h('p', {}, 'You sign in with this ID and the password you choose now. The link works once', info.expires_at ? `, until ${dateText(info.expires_at)}` : '', '.'),
+    // On a phone (shown by app.css only there): told before the link is used up.
+    h('div.note.phone-note.invite-phone', { role: 'note' },
+      h('p', {}, h('b', {}, 'Annotating needs a tablet or a computer. '),
+        'You can choose your password here and then sign in on your tablet or computer with your annotator ID, ',
+        'or open this link there instead: it works once.')),
     form);
   setTimeout(() => pw.focus(), 0);
   return signinFrame(app, card);

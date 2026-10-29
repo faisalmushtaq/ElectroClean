@@ -4,7 +4,7 @@
    headings at a sturdy text cut (opsz 24) with tight tracking, figures in tabular digits so that
    columns line up. Sizes come from one scale of whole pixels, each on a whole-pixel line, and
    spacing from steps of 4 and 8 pixels, so that letters and lines fall on the screen's pixels.
-   Pages are a warm off-white with dashed column guides behind them, and the EEG is drawn on white.
+   Pages are a warm off-white with dashed column guides at their edges, and the EEG is drawn on white.
    Lines are 1-pixel hairlines; panels and tables are square. Controls are flat grey pills without
    outlines; black marks the one action that moves you forward, and a single ink blue marks links,
    selection and what is highlighted. Arrows, ticks and chevrons are drawn icons (the --i-* masks
@@ -128,16 +128,12 @@ body {
   overflow-x: hidden;
   min-height: 100vh;
 }
-/* Column guides: three columns of the page's width, drawn as faint dashed lines behind the pages
-   around the EEG. Each line is the border of a box (borders fall on whole pixels): the outer pair on
-   ::before, the inner pair on ::after, which is centred and a third as wide. */
-body[data-route="home"]::before, body[data-route="open"]::before, body[data-route="training"]::before,
-body[data-route="home"]::after, body[data-route="open"]::after, body[data-route="training"]::after {
+/* Column guides: the two edges of the page's width, drawn as faint dashed lines behind the pages
+   around the EEG, where they frame the content and cross no text. The line is the border of a box
+   (borders fall on whole pixels). */
+body[data-route="home"]::before, body[data-route="open"]::before, body[data-route="training"]::before {
   content: ""; position: fixed; top: 0; bottom: 0; left: 0; right: 0; margin: 0 auto; pointer-events: none; z-index: 0;
   width: min(1112px, calc(100% - 48px)); border-left: 1px dashed var(--guide); border-right: 1px dashed var(--guide);
-}
-body[data-route="home"]::after, body[data-route="open"]::after, body[data-route="training"]::after {
-  width: calc(min(1112px, calc(100% - 48px)) / 3);
 }
 .app-content { position: relative; z-index: 1; }
 
@@ -393,6 +389,9 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); width
 .connect summary { cursor: pointer; color: var(--accent); }
 .connect-fields .row .field { flex: 1; }
 .footnote { max-width: 440px; margin-top: 16px; }
+/* Where the annotators' guide is read: a line under the sign-in form and under the home page's greeting. */
+.signin-card .guide-link { margin: 16px 0 0; }
+.view.home .page > .guide-link { margin: -4px 0 0; }
 .montage { width: 200px; height: 200px; display: block; flex: none; }
 .montage .orbit { transform-box: view-box; transform-origin: 50% 50%; animation: montage-orbit 40s linear infinite; }
 @keyframes montage-orbit { to { transform: rotate(360deg); } }
@@ -812,9 +811,11 @@ ul.warnings { font: var(--t-14); }
 .form .caption.error { color: var(--destructive); }
 
 /* --------------------------------------------------------------------- menus */
+/* A menu may use the window's whole height (less a small margin), so that a long right-click menu fits
+   whole on a 720-pixel laptop screen; menu.js moves it up when it would run past the bottom. */
 .menu {
   position: fixed; z-index: 120; background: var(--page); border: 1px solid var(--rule); border-radius: 0;
-  padding: 4px; max-height: 72vh; overflow-y: auto; min-width: 220px;
+  padding: 4px; max-height: calc(100vh - 8px); max-height: calc(100dvh - 8px); overflow-y: auto; min-width: 220px;
 }
 .menu-item {
   display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 4px 12px; border: none; border-radius: 0;
@@ -1077,6 +1078,8 @@ table.leaderboard th:first-child, table.leaderboard td:first-child { width: 56px
 .ws-actions .btn.icon.ws-more { width: 32px; padding: 0; }
 .review-line, .problem-line { display: block; margin-top: 4px; }
 .review-line { color: var(--accent); }
+button.review-line { text-align: left; font: var(--t-14); }
+.review-line.plain { color: var(--text-secondary); }
 .returned-line { margin: 0 0 12px; }
 /* The report's dialog (annotate/problem.js). */
 .problem-dialog { max-width: 560px; }

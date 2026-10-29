@@ -16,12 +16,13 @@ export function dialogOpen() { return openCount > 0; }
 
 /**
  * Show a modal dialog. `buttons` is a list of {label, value, kind: 'primary'|'destructive'|'quiet'}.
- * Resolves with the chosen button's value, or `cancelValue` on Esc or a click outside.
+ * Resolves with the chosen button's value, or `cancelValue` on Esc or a click outside. The focus
+ * goes back to `returnFocus`, or to what had it when the dialog opened, when that is still on the page.
  */
 export function showDialog({ title, body, buttons = [{ label: 'OK', value: true, kind: 'primary' }], cancelValue = null,
-  wide = false, className = '', onOpen = null, dismissable = true, logText = null }) {
+  wide = false, className = '', onOpen = null, dismissable = true, logText = null, returnFocus = null }) {
   return new Promise((resolve) => {
-    const prev = document.activeElement;
+    const prev = returnFocus || document.activeElement;
     const content = typeof body === 'string' ? h('p.dialog-text', {}, body) : body;
     let done = false;
     const close = (value) => {
@@ -31,7 +32,7 @@ export function showDialog({ title, body, buttons = [{ label: 'OK', value: true,
       overlay.remove();
       document.removeEventListener('keydown', onKey, true);
       if (logger) logger.event('dialog_closed', { dialog: className || 'message', title, button: buttons.find((b) => b.value === value)?.label ?? null, result: typeof value === 'string' ? value : value === null ? null : String(value) });
-      if (prev && prev.focus) try { prev.focus({ preventScroll: true }); } catch { /* gone */ }
+      if (prev && prev.focus && prev.isConnected) try { prev.focus({ preventScroll: true }); } catch { /* gone */ }
       resolve(value);
     };
     const btns = buttons.map((b) => h(`button.btn${b.kind ? '.' + b.kind : ''}`, {

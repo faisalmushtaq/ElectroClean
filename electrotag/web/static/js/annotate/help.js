@@ -1,6 +1,7 @@
 // The Help tab of the annotation view: the desktop application's help, with the browser's keys.
 
 import { IS_MAC, CTRL } from '../util.js';
+import { docsUrl } from '../ui/docs.js';
 
 // The arrow keys are drawn icons (app.css), since the typeface has no arrows.
 const ARROW_NAMES = { left: 'Left arrow', right: 'Right arrow', up: 'Up arrow', down: 'Down arrow' };
@@ -154,7 +155,13 @@ you close the page you can continue later, where you left off; the recording is 
 it is saved with Save and Finish.</p>
 `;
 
+/** The last paragraph of the Help tab: where the annotators' guide is read (it opens in a new tab). */
+export const GUIDE_HTML = `
+<p class="guide-link">The <a href="${docsUrl('web/using.md')}" target="_blank" rel="noopener">annotators' guide</a>
+(it opens in a new tab) describes every part of ElectroTag in more detail.</p>
+`;
+
 /** The Help tab: on a touch screen the touch section comes first, elsewhere just before Finishing. */
 export function helpHtml(touch) {
-  return touch ? TOUCH_HELP_HTML + HELP_HTML : HELP_HTML.replace('<h3>Finishing</h3>', `${TOUCH_HELP_HTML}<h3>Finishing</h3>`);
+  return (touch ? TOUCH_HELP_HTML + HELP_HTML : HELP_HTML.replace('<h3>Finishing</h3>', `${TOUCH_HELP_HTML}<h3>Finishing</h3>`)) + GUIDE_HTML;
 }

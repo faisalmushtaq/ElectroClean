@@ -5,6 +5,33 @@ Each section below describes the changes in one version of ElectroTag;
 
 ## Unreleased
 
+The pages around the annotation view were improved after a usability review.
+The answer to a chosen file now appears just under the drop zone, scrolled into
+view and given the focus, and on a training page it is worded for training
+and Back returns to the training path. A study recording chosen on a training
+page (or a training recording chosen for study work) opens only after a
+question naming both. A connection lost before the page could load its file
+readers is reported as such, with Try again, and no longer removes a copy kept
+on the device, which is removed only when its files cannot be read as a
+recording; the readers now load as soon as someone signs in to a study.
+Menus give the focus back to the button that opened them (after Esc, Tab or a
+dialog opened from the menu) and use the window's whole height, so the
+right-click menu fits a 1280 by 720 screen. The logging notice of a study
+server and of the demonstration says that typed text, such as notes and
+passwords, is never recorded. An invitation opened on a phone says that
+annotating needs a larger screen before the link is used, the invitation email
+asks for a tablet or computer, and an expired or replaced link asks the person
+to contact the study team who invited them. A study server that answered once
+at the page's own address is reported as not answering, rather than replaced
+by the demonstration, and the sign-in page no longer shows Connecting beside
+that message. The home page's tabs and Open buttons have names for screen
+readers, its title names the page, the "Reviewed" line opens the feedback, the
+line about today no longer says "no work yet" beside a finished recording, the
+next milestone named is one the recordings assigned can reach, the list of
+milestones keeps its length at the first save, and the inner pair of column
+guides, which crossed headings, is gone. The sign-in page, the home page and
+the Help tab link to the annotators' guide.
+
 The activity analysis (`electrotag-activity` and the admin area) now counts
 confidence ratings, notes, problem reports and the feedback on reviewed work.
 Each row of `recordings.tsv` gives the ratings given and cleared, the requests

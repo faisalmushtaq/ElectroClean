@@ -49,7 +49,8 @@ MAX_ELAPSED_S = 7 * 24 * 3600.0
 MAX_VIEWED = 5000
 #: What annotators are told when the study records how they use ElectroTag (as on the desktop).
 LOGGING_NOTICE = ("This study records how you use ElectroTag (times, clicks, keys and what is on screen) for "
-                  "research. Ask your study administrator if you have questions.")
+                  "research. It never records what you type, such as notes or passwords. Ask the study team if "
+                  "you have questions.")
 
 __all__ = ["ApiError", "StudyService", "WorkItem", "annotation_dict", "parse_annotations"]
 log = logging.getLogger("electrotag.web")
@@ -876,10 +877,12 @@ class StudyService:
     #: What a person is told when their invitation link cannot be used, by the reason.
     INVITE_PROBLEMS = {
         "unknown": (404, "This invitation link is not known to the study. It may have been replaced by a newer "
-                         "link or withdrawn. Ask the study team for a new one."),
+                         "link or withdrawn. To get a new link, contact the study team who invited you, for "
+                         "example by replying to the email that brought you this one."),
         "used": (409, "This invitation link has been used already. Sign in with your annotator ID and the "
                       "password you chose, or ask the study team for a new link."),
-        "expired": (409, "This invitation link has expired. Ask the study team for a new one."),
+        "expired": (409, "This invitation link has expired. To get a new link, contact the study team who invited "
+                         "you, for example by replying to the email that brought you this one."),
     }
 
     def _invite_problem(self, reason: str) -> ApiError:

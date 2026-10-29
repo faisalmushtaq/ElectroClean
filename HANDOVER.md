@@ -250,6 +250,18 @@ the positions themselves, would change what the study stores: `electrotag/web/ma
 view could then say which file to pick, or the map use the stored positions. That is left for a
 decision by the project lead.
 
+**6c. Loose ends from the usability fixes to the pages around the annotation view (29 October).**
+An expired or replaced invitation link asks the person to contact "the study team who invited you",
+because a study has no setting that names a contact; a `contact` setting shown there (and on the
+sign-in page) would need the settings, the admin area's Settings section and `docs/web/api.md`. When
+the connection is lost before the file readers load, Try again asks for `data/recording.js` under
+another address, because Chromium remembers a module that failed to load for the life of the page;
+a module that it imports and that also failed still needs a reload of the page, which the message
+says. The readers now load just after signing in to a study (not in the demonstration), so this
+should be rare. The whole team's figure on the home page counts recordings saved, while the
+annotator's own progress also counts those set aside; whether the team's should count them too is
+a choice for the research team.
+
 **7. Housekeeping.** The project's `ruff` settings give only the line length, so a recent `ruff`
 applies many style rules the code was never written to; `ruff check --select E,F,W,B` is the useful
 subset. A shared linting configuration and a lint step in CI would help. Many code comments still

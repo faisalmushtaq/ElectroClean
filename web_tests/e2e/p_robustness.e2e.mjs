@@ -775,6 +775,9 @@ export const tests = [
       await other.goto(`${t.base}?invite=${token}`);
       await other.waitForSelector('.invite-card[data-invite="problem"]');
       assert.match(await other.innerText('.invite-card'), /expired/);
+      // whom to ask for a new link, since signing in needs the password the link would have set
+      assert.match(await other.innerText('.invite-card'), /contact the study team who invited you/);
+      assert.equal(await other.locator('.invite-card button.primary', { hasText: 'Go to sign in' }).count(), 0, 'signing in is not offered as the way forward');
       assert.equal(await other.locator('[data-log="invite-retry"]').count(), 0, 'an expired link is not tried again');
       await other.click('.invite-card button:has-text("Go to sign in")');
       await other.waitForSelector('form.signin-form');

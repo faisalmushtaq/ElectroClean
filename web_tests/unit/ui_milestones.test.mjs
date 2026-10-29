@@ -50,7 +50,11 @@ test('streaks count days in a row in this browser\'s time zone, and the current 
 });
 
 test('thoroughness counts only when the study measures what was viewed', () => {
-  assert.ok(!milestones(facts(), NOW).some((m) => m.kind === 'thorough'));
+  // Nothing saved yet: listed, not reached, so that the count of milestones does not jump at the first save.
+  assert.deepEqual(milestones(facts(), NOW).filter((m) => m.kind === 'thorough').map((m) => m.reached), [false, false, false]);
+  assert.equal(milestones(facts(), NOW).length, milestones(facts({ counters: { done: 1 }, viewed_in_full: 0 }), NOW).length);
+  // Saved recordings that reported nothing viewed: left out.
+  assert.ok(!milestones(facts({ counters: { done: 3 } }), NOW).some((m) => m.kind === 'thorough'));
   const f = facts({ viewed_in_full: 6 });
   assert.deepEqual(milestones(f, NOW).filter((m) => m.kind === 'thorough').map((m) => [m.target, m.reached]),
     [[5, true], [25, false], [100, false]]);
@@ -92,4 +96,12 @@ test('the next step and the hours worked', () => {
   assert.equal(hoursText(59), '0 min');
   assert.equal(hoursText(754), '12 min');
   assert.equal(hoursText(3 * 3600 + 5 * 60), '3 h 05 min');
+});
+
+test('the next recording milestone is one the recordings assigned can reach', () => {
+  assert.deepEqual(nextRecordingStep(1), { name: 'Ten recordings', target: 10, remaining: 9 });
+  assert.deepEqual(nextRecordingStep(1, 20), { name: 'Ten recordings', target: 10, remaining: 9 });
+  assert.equal(nextRecordingStep(1, 3), null); // three recordings assigned: ten cannot be reached
+  assert.deepEqual(nextRecordingStep(0, 3), { name: 'First recording', target: 1, remaining: 1 });
+  assert.equal(nextRecordingStep(300), null);
 });

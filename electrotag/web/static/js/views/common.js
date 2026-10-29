@@ -98,6 +98,7 @@ export function smallScreenNotice(app = null) {
     h('div.card', {}, brandMark(40),
       h('h1', {}, 'ElectroTag needs a larger screen'),
       h('p', {}, 'Annotating EEG needs room for the traces, so it works on a tablet such as an iPad, or on a laptop or desktop computer. Your work waits for you there.'),
+      me ? h('p.caption.small-screen-id', {}, `You are signed in as ${me.annotator_id}; sign in there with the same account.`) : null,
       me ? h('div.btn-row.center', {},
         h('a.btn.primary', { href: emailLinkHref(app), 'data-log': 'email-link' }, 'Email me this link'),
         app.isAdmin ? h('button.btn', { type: 'button', 'data-log': 'admin', onclick: () => app.showAdmin('admin') }, 'Open the admin area') : null,

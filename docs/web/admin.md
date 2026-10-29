@@ -116,8 +116,11 @@ A private invitation link lets one person choose their own password and sign in.
 it, a welcome card names the study and their annotator ID and asks for the new password twice;
 then they are signed in and see their recordings. When the study cannot be reached as the link
 opens, the card says that the invitation could not be checked and offers Try again, keeping the link
-for the browser tab; a link that has expired, been used or been replaced says so, with the way to
-sign in. The link works once. It stops working when it
+for the browser tab. A link that has been used says so and leads to the sign-in; one that has
+expired or been replaced says so and asks the person to contact the study team who invited them for
+a new link, for example by replying to the email that brought it. Opened on a phone, the welcome
+card says first that annotating needs a tablet or a computer, before the link is used. The link
+works once. It stops working when it
 has been used, when it expires (after 14 days unless you choose 7, 30 or 90), when you make a newer
 link for the same person, when you withdraw it, when you reset the person's password or make them an
 administrator, and when the account is switched off or removed. Administrators are given a password
@@ -129,7 +132,8 @@ stops working. The study's records note every link made and withdrawn, never the
 The Invitations tab shows where each person's link stands: not invited, invited on a date with the
 date it expires, accepted, expired or withdrawn. For a link made on this page, Copy link copies it
 and Email the link opens a short, friendly message that you can edit, with the link, the person's
-ID and the date the link expires; Open in my email then starts a new message in your own email
+ID and the date the link expires, which asks them to open it on the tablet or computer they will
+annotate on; Open in my email then starts a new message in your own email
 program, ready to send, and nothing is sent from the study itself. New link makes another link and
 Withdraw stops the open one at once. The page builds each link from its own address, so a link made
 on the study server's own page opens that page; when the application is served from another site,
