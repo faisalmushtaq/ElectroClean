@@ -37,6 +37,15 @@ Delorme, A., & Oostenveld, R. (2019). EEG-BIDS, an extension to the brain
 imaging data structure for electroencephalography. *Scientific Data*, 6, 103.
 https://doi.org/10.1038/s41597-019-0104-8
 
+Oostenveld, R., & Praamstra, P. (2001). The five percent electrode system for
+high-resolution EEG and ERP measurements. *Clinical Neurophysiology*, 112(4),
+713–719. https://doi.org/10.1016/S1388-2457(00)00527-7
+
+BIDS contributors. Brain Imaging Data Structure specification, appendix
+Coordinate systems. https://bids-specification.readthedocs.io/en/stable/appendices/coordinate-systems.html
+(CapTrak is right-anterior-superior; EEGLAB, EEGLAB-HJ, CTF, 4DBti and
+KitYokogawa are anterior-left-superior; checked 29 October 2026)
+
 ## Software
 
 Gramfort, A., Luessi, M., Larson, E., Engemann, D. A., Strohmeier, D.,

@@ -21,6 +21,25 @@ through it in the header and on the sign-in page, and it is now also the
 browser tab's icon and the icon an iPad shows when ElectroTag is added to its
 home screen, which the application did not have before.
 
+The annotation view has four new ways of looking at the EEG, after those of
+EEGNet. In Channels… and Edit channels…, Map shows the electrodes on a
+drawing of the head, placed from the recording's own BIDS electrodes.tsv when
+it is opened with the recording, otherwise from the standard 10-20, 10-10 and
+10-05 positions, or on rings in order for montages such as BioSemi's and EGI's,
+said plainly; a click or tap chooses an electrode, a box dragged with the mouse
+or the Pencil chooses several, Select all, None and Invert act on them all, the
+arrow keys and Space work too, and the electrodes are large enough for a finger
+on an iPad. The line at the bottom shows the channel, time and value in µV under
+the pointer (V, or Value under the pointer in the Recording tab; on with a
+mouse, off on an iPad). Overlay (O, in the toolbar and on an iPad under the
+EEG) draws the channels on screen on one axis in thin, light lines, so that a
+blink or a movement stands out; the names become a legend, I shows one channel
+alone and the arrow keys move between channels, and new marks apply to the
+whole montage. Go to time (G) takes seconds, m:ss or h:mm:ss and puts that time
+in the middle of the screen, and Show all (Shift+End) shows the whole recording
+as an overview and goes back. The interaction log records each of these, with
+the time gone to as a number and never the text typed.
+
 The browser version holds up better when the study answers late or fails
 once, and when people press things twice. While Save and Finish waits for its
 answer, no draft is sent and Pause, Close and Leave without changes wait, so a

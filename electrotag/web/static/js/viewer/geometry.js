@@ -133,3 +133,31 @@ export function voltsText(volts) {
   if (uv >= 1000) return `${+(uv / 1000).toPrecision(3)} mV`;
   return `${+uv.toPrecision(3)} µV`;
 }
+
+// ------------------------------------------------------------------------- the overlay
+/** In the overlay, half the plot's height stands for this many times a channel type's scaling. */
+export const OVERLAY_SPAN = 4;
+
+/**
+ * Pixels per unit of signal in the overlay, where every channel shares one axis: half the plot's
+ * height (`plotH`) shows OVERLAY_SPAN × the type's scaling (200 µV for EEG at 50 µV), larger or
+ * smaller with the amplitude (`scaleFactor`, the − and + keys). Returns {k, lim}: the gain and the
+ * clip, a pixel short of the plot's edges.
+ */
+export function overlayGain(plotH, scaling, scaleFactor = 1) {
+  const half = Math.max(1, plotH / 2);
+  return { k: (half / (OVERLAY_SPAN * (scaling || 1e-3))) * scaleFactor, lim: Math.max(1, half - 1) };
+}
+
+/** The opacity of each trace in the overlay: overlaps darken, so many traces are lighter (0.18 to 0.7). */
+export function overlayAlpha(nChannels) {
+  return Math.min(0.7, Math.max(0.18, 4 / Math.max(1, nChannels)));
+}
+
+/** The value shown by the pointer readout: "−23.4 µV" (volts in, the minus sign of print). */
+export function microvoltText(volts) {
+  const uv = volts * 1e6;
+  const a = Math.abs(uv);
+  const text = a >= 1000 ? a.toFixed(0) : a.toFixed(1);
+  return `${uv < 0 && Number(text) !== 0 ? '−' : ''}${text} µV`;
+}
