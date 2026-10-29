@@ -146,3 +146,54 @@ def build_manifests(folder: Path, scope: str = "study") -> list[dict[str, Any]]:
 
 def admin_audit(api: Api, n: int = 50) -> list[dict[str, Any]]:
     return api.admin_ok("audit", {"limit": n})["entries"]
+
+
+def race_revisions(service: Any, user: Any, bodies: list[dict[str, Any]], monkeypatch: Any, *,
+                   one_after_the_other: bool) -> list[Any]:
+    """Submit two revisions of the same version from two threads that have both passed the service's version
+    check before either starts saving (as two tabs or two devices pressing Submit at the same instant).
+    With ``one_after_the_other`` the second starts saving only once the first has finished. Returns each
+    answer or the ApiError it raised."""
+    import threading
+
+    from electroclean.web import saving
+    from electroclean.web.errors import ApiError
+
+    start, run = saving.WebSession.start, saving.run_session
+    both_checked = threading.Barrier(2, timeout=30)
+    first_done = threading.Event()
+    order: list[Any] = []
+    guard = threading.Lock()
+
+    def slow_start(self: Any) -> None:
+        both_checked.wait()
+        with guard:
+            order.append(self)
+            second = len(order) == 2
+        if second and one_after_the_other:
+            first_done.wait(60)
+        start(self)
+
+    def tracked_run(session: Any, **kw: Any) -> Any:
+        try:
+            return run(session, **kw)
+        finally:
+            if order and session is order[0]:
+                first_done.set()
+
+    monkeypatch.setattr(saving.WebSession, "start", slow_start)
+    monkeypatch.setattr(saving, "run_session", tracked_run)
+    answers: list[Any] = [None, None]
+
+    def go(i: int) -> None:
+        try:
+            answers[i] = service.call("submit", user, bodies[i])
+        except ApiError as exc:
+            answers[i] = exc
+
+    threads = [threading.Thread(target=go, args=(i,)) for i in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(120)
+    return answers

@@ -168,6 +168,37 @@ def test_two_revisions_sent_at_once_save_one_attempt(client: TestClient, recordi
     assert sorted(attempt_of(e) for e in rows) == [1, 2]
 
 
+@pytest.mark.parametrize("one_after_the_other", [False, True])
+def test_two_revisions_past_the_version_check_save_one_attempt(study: Path, recordings: Path, monkeypatch,
+                                                               one_after_the_other: bool) -> None:
+    from electroclean.web.errors import ApiError
+    from electroclean.web.store import User
+    from electroclean.web.store_files import FilesStore
+    from tests.web_helpers import race_revisions
+
+    store = FilesStore(study)
+    try:
+        service = StudyService(store)
+        service.call("submit", User("A01"), submission(recordings, SUB1, [BLINK]))
+        folder = study / "Annotated_Events" / "annotator-A01" / "sub-001" / "eeg"
+        before = checksums(folder)
+        bodies = [{**submission(recordings, SUB1, anns), "revises": 1} for anns in ([BLINK, EMG], [EMG])]
+        answers = race_revisions(service, User("A01"), bodies, monkeypatch, one_after_the_other=one_after_the_other)
+        saved = [a for a in answers if isinstance(a, dict)]
+        refused = [a for a in answers if isinstance(a, ApiError)]
+        assert len(saved) == 1 and saved[0]["attempt"] == 2 and len(refused) == 1, answers
+        # Both had passed the check of the version: the recording's lock, and the attempt number checked
+        # under it, refuse the second (busy while the first saves, already_revised once it has).
+        assert refused[0].status == 409
+        assert refused[0].code in (("already_revised",) if one_after_the_other else ("busy", "already_revised"))
+        after = checksums(folder)
+        assert {k: v for k, v in after.items() if k in before} == before and len(after) == 10
+        rows = [e for e in store.completion_entries("A01") if e["recording_id"] == SUB1]
+        assert sorted(attempt_of(e) for e in rows) == [1, 2]
+    finally:
+        store.close()
+
+
 def test_a_revision_of_someone_elses_recording_is_refused(client: TestClient, recordings: Path) -> None:
     Api(client, "A01").ok("post", "/submissions", submission(recordings, SUB1, [BLINK]))
     other = Api(client, "A02")
