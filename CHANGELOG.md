@@ -336,7 +336,9 @@ view has one black button for its forward action. Big figures stay on one
 line: the home page gives the time left as "3 h 15 min" (with "roughly" in the
 words under it) and the admin area's Progress gives the projected finish as "3
 Nov", with "around then" in its note. On a short screen the paused panel is
-more compact and scrolls from its top instead of cutting off its title.
+more compact and scrolls from its top instead of cutting off its title. The admin
+area's Overview says that its count of assignments includes every kind of
+work, training too, since Progress counts each kind apart.
 
 Wording is more consistent. Buttons say what they do from their first word:
 Choose the downloaded file (after Download the file, when a link cannot be
