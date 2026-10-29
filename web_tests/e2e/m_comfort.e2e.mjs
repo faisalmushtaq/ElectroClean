@@ -280,7 +280,8 @@ export const tests = [
       await waitForRoute(page, 'home');
 
       // The home page offers to continue, with what it knows of the draft.
-      assert.match(await page.textContent('.next-card h2'), /Continue where you left off/);
+      assert.equal(await page.textContent('.next-card h2'), 'In progress');
+      assert.match(await page.textContent('.next-card [data-log="open-next"]'), /Continue where you left off/);
       const facts = await page.textContent('.continue-facts');
       assert.match(facts, /viewed \d+ %/);
       assert.match(facts, /1 annotation\b/);

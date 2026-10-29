@@ -32,8 +32,8 @@ The record contains clicks, key presses and what is on the screen, never anythin
 ## Your recordings
 
 The first page has one black button, Open next recording, for the recording to do next. When you
-have a recording you started and did not finish, the button reads Continue where you left off
-instead, with how much of that recording you have viewed, your annotations so far, the time worked
+have a recording you started and did not finish, the card is headed In progress and the button
+reads Continue where you left off instead, with how much of that recording you have viewed, your annotations so far, the time worked
 and when the draft was last kept. Annotators in a training programme go straight to their training
 path instead (see below).
 

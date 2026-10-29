@@ -319,7 +319,10 @@ on each recording in minutes ("5 min"), as the progress card does, the
 leaderboard's own highlighted row has room at both ends, and the annotation
 list keeps Start and End whole ("23.000") in the narrower side panel of a
 1280-pixel window or an iPad. On a short screen the paused panel is
-more compact and scrolls from its top instead of cutting off its title.
+more compact and scrolls from its top instead of cutting off its title. The
+home page's card for an unfinished recording is headed In progress, so that
+Continue where you left off is said once, on its button, and the admin
+area's tables set headings of one and two lines on the same rule.
 
 ## 1.1.0
 

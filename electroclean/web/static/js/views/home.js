@@ -40,7 +40,7 @@ function continueContent(app, cont) {
     cont.elapsedS ? `${spanText(cont.elapsedS)} worked` : null,
     cont.savedAt ? `kept ${friendlyWhen(cont.savedAt)}` : null,
   ].filter(Boolean);
-  return [h('h2', {}, 'Continue where you left off'),
+  return [h('h2', {}, 'In progress'),
     h('p.next-file', {}, cont.item.file_name),
     h('p.caption.continue-facts', {}, facts.join(' · ')),
     h('div.btn-row', {}, h('button.btn.primary', { type: 'button', 'data-log': 'open-next', onclick: () => app.openAssignment(cont.item) }, 'Continue where you left off')),
