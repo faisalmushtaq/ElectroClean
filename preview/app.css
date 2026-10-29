@@ -66,6 +66,11 @@
   /* the EEG's own meanings */
   --flag-type: #6A1B9A;
   --selection-channel: #C2185B;
+  /* channels coloured by group (js/viewer/channel_colours.js; js/ui/theme.js repeats them) */
+  --group-blue: #4360E6;
+  --group-green: #4A7D23;
+  --group-violet: #74209C;
+  --group-mauve: #90609A;
   --focus: var(--accent);
   /* shape */
   --radius: 2px;
@@ -458,6 +463,21 @@ ul.examples b { font-weight: 400; color: var(--ink); }
 .step.done .step-icon { background: var(--accent); color: #FFFFFF; }
 .step.failed .step-icon { background: var(--danger-bg); color: var(--destructive); }
 .result { margin-top: 12px; }
+/* Recordings kept on this device (js/views/device.js) */
+.device-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-top: 12px; }
+.device-row label.check { margin: 0; }
+.link-panel label.check { margin: 12px 0 0; }
+.device-line { margin: 12px 0 0; }
+.device-panel table.list { margin: 12px 0; }
+.device-panel .device-confirm { flex-basis: 100%; margin: 0; }
+.device-panel label.check { margin-top: 16px; }
+/* "Open from a link" (js/views/links_panel.js), under the drop zone */
+.link-panel { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--hairline); }
+.link-panel h3 { margin-top: 0; }
+.link-panel .field.area { height: auto; min-height: 80px; padding: 8px 12px; resize: vertical; font: var(--t-14); word-break: break-all; }
+.link-status:empty { display: none; }
+.link-status { margin-top: 12px; }
+.link-status .banner .btn-row { margin: 8px 0 12px; }
 .example-card { margin-top: 16px; }
 
 /* training path: three stages in a bento row; the current stage carries an ink bar */
@@ -649,6 +669,13 @@ fieldset.viewing { border: 1px solid var(--hairline); border-radius: 0; padding:
 fieldset.viewing legend { padding: 0 4px; font: var(--t-14); color: var(--text-secondary); }
 fieldset.viewing .opt { margin: 4px 0; display: flex; flex-wrap: wrap; gap: 4px 12px; }
 fieldset.viewing label { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+/* "Colour channels by" and its legend (js/viewer/channel_colours.js) */
+fieldset.viewing .channel-colours { align-items: center; margin-top: 8px; }
+.channel-colours select.field { width: auto; height: 32px; padding-left: 8px; font: var(--t-14); }
+.channel-colours .legend-note { flex-basis: 100%; margin: 0; }
+ul.channel-legend { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 4px 12px; list-style: none; padding: 0; margin: 0; font: var(--t-14); }
+ul.channel-legend li { display: inline-flex; align-items: center; gap: 4px; }
+.legend-line { display: inline-block; width: 16px; height: 2px; flex: none; }
 table.info { border-collapse: collapse; font: var(--t-14); width: 100%; margin-bottom: 12px; }
 table.info th { text-align: left; padding: 4px 12px 4px 0; vertical-align: top; white-space: nowrap; color: var(--text-secondary); font: var(--t-14); }
 table.info td { padding: 4px 0; word-break: break-word; font-variant-numeric: tabular-nums lining-nums; }
@@ -822,6 +849,8 @@ a.btn { text-decoration: none; }
   input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; }
   .field { height: 44px; font: var(--t-16); }
   .field.area { height: auto; }
+  .link-panel .field.area { font: var(--t-16); }
+  .channel-colours select.field { height: 40px; font: var(--t-16); }
   fieldset.comfort .opt-choices label { min-height: 40px; }
 }
 

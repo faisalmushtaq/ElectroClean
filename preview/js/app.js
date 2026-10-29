@@ -20,6 +20,7 @@ import { signinView } from './views/signin.js';
 import { inviteView } from './views/invite.js';
 import { homeView } from './views/home.js';
 import { OpenView } from './views/open.js';
+import { keepOnDevice, dropBrokenCopy, afterFinishOnDevice, offerRemovalAtSignOut } from './views/device.js';
 import { appHeader, downloadFiles, smallScreenNotice } from './views/common.js';
 import { nowLocalIso, session } from './util.js';
 import { newlyReached } from './games/milestones.js';
@@ -267,6 +268,7 @@ export class App {
   async signOut() {
     if (this.ws && !(await this.ws.close())) return;
     this._resumeLog();
+    await offerRemovalAtSignOut(this);
     this.adminArea = null;
     await logger.end('sign_out');
     await this.backend.logout();
@@ -470,13 +472,16 @@ export class App {
     await this._process(recording, this.openView);
   }
 
-  async processFiles(files, view) {
+  async processFiles(files, view, source = null) {
     view.reset();
-    view.step('read', 'Reading the file…');
+    view.step('read', source && source.kind === 'device' ? 'Reading the copy kept on this device…' : 'Reading the file…');
     let recording;
     try {
       recording = await openRecordingFiles(files);
+      recording.source = source; // where the files came from, and whether to keep them (js/views/device.js)
+      recording.sourceFiles = files;
     } catch (exc) {
+      if (source && source.kind === 'device') await dropBrokenCopy(this, source.sha256);
       view.step('read', 'Reading the file', 'failed');
       view.showProblem(`This file could not be opened: ${exc.message}`, [view.chooseAgainButton()]);
       logger.event('load_failed', { kind: 'read', reason: exc.message });
@@ -497,6 +502,7 @@ export class App {
       view.showProblem(`The file could not be read to the end: ${exc.message}`, [view.chooseAgainButton()]);
       return;
     }
+    if (!(await this._checkKeptCopy(recording, fp, view))) return;
     view.step('fp', 'Checked the file', 'done');
     view.step('match', this.backend.isDemo ? 'Looking it up in the demonstration study…' : 'Asking the study whether this is one of your recordings…');
     let m;
@@ -544,6 +550,16 @@ export class App {
     }
   }
 
+  /** A copy kept on this device must still be the file it was kept as (its fingerprint). */
+  async _checkKeptCopy(recording, fp, view) {
+    const src = recording.source;
+    if (!src || src.kind !== 'device' || fp.hex === src.sha256) return true;
+    view.step('fp', 'Checking the copy kept on this device', 'failed');
+    await dropBrokenCopy(this, src.sha256);
+    view.showProblem('The copy of this recording kept on this device has changed, so it has been removed. Choose the file, or open its link again.', [view.chooseAgainButton()]);
+    return false;
+  }
+
   _position(recordingId) {
     const guided = (this.assignments.items || []).filter((i) => i.mode === 'guided');
     const i = guided.findIndex((x) => x.recording_id === recordingId);
@@ -583,6 +599,7 @@ export class App {
         }
       }
     }
+    if (!tryOut) void keepOnDevice(this, recording, match, sha);
     if (this.ws) this.ws.destroy();
     const ws = new Workspace(this, session, { kind: tryOut ? 'tryout' : 'annotate' });
     this.ws = ws;
@@ -608,6 +625,7 @@ export class App {
     this.ws = null;
     const before = this.achievements;
     await this.loadAssignments();
+    await afterFinishOnDevice(this, s.recordingId); // the save is complete and verified by now
     // Milestones that this save reached: celebrated once on the home page, never in the way of the next recording.
     const reached = before && this.achievements ? newlyReached(before, this.achievements) : [];
     if (reached.length) logMilestones(reached);
