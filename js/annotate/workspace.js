@@ -116,7 +116,7 @@ export class Workspace {
     const s = this.s;
     const study = (s.me && s.me.study) || {};
     const fl = study.filters || {};
-    const saved = fl.locked ? null : local.get(`electroclean.filters|${study.study_id || ''}`, null);
+    const saved = fl.locked ? null : local.get(`electrotag.filters|${study.study_id || ''}`, null);
     const f = saved || fl;
     s.filters = {
       highpassHz: f.highpass_enabled === false ? null : (f.highpass_hz || 1.0),
@@ -382,7 +382,7 @@ export class Workspace {
       this.viewer.setFilters(nf);
       this._updateEdgeText();
       this._refreshFixed();
-      local.set(`electroclean.filters|${study.study_id || ''}`, {
+      local.set(`electrotag.filters|${study.study_id || ''}`, {
         highpass_enabled: Boolean(nf.highpassHz), highpass_hz: hpHz, notch_enabled: Boolean(nf.notchHz), notch_hz: nf.notchHz || 50, notch_harmonics: nf.notchHarmonics,
       });
       logger.event('state', { filters: this._filtersLog(), via: logger.via() });
@@ -403,7 +403,7 @@ export class Workspace {
   _channelColourOption() {
     const s = this.s;
     const study = (s.me && s.me.study) || {};
-    const key = `electroclean.channel_colours|${study.study_id || ''}|${(s.me && s.me.annotator_id) || ''}`;
+    const key = `electrotag.channel_colours|${study.study_id || ''}|${(s.me && s.me.annotator_id) || ''}`;
     this.channelColourMode = normaliseMode(local.get(key, null) || (study.display && study.display.channel_colours));
     const select = h('select.field', { id: 'channel-colours', name: 'channel-colours', 'data-log': 'channel-colours' },
       CHANNEL_COLOUR_MODES.map((m) => h('option', { value: m }, COLOUR_MODE_TEXT[m])));
@@ -659,8 +659,8 @@ export class Workspace {
     this.pauseBtn.title = 'Start the clock again (B)';
     this.panel.hidden = false;
     this.pauseReasonEl.textContent = {
-      idle: `ElectroClean paused itself after ${minutesWords(this.settings.idlePauseMinutes * 60)} without any input.`,
-      hidden: 'ElectroClean paused itself while the page was out of sight.',
+      idle: `ElectroTag paused itself after ${minutesWords(this.settings.idlePauseMinutes * 60)} without any input.`,
+      hidden: 'ElectroTag paused itself while the page was out of sight.',
       break: 'Enjoy your break. A few minutes away from the screen help you stay sharp.',
     }[reason] || 'The clock is stopped until you resume.';
     this.pauseDraft.textContent = 'Keeping your draft…';
@@ -885,7 +885,7 @@ export class Workspace {
 
   onChannelClicked(name) {
     if (this.scope !== 'channels') {
-      this.say(`${name}: switch to 'Selected channels' to choose channels by clicking. Channels are not marked bad in ElectroClean.`);
+      this.say(`${name}: switch to 'Selected channels' to choose channels by clicking. Channels are not marked bad in ElectroTag.`);
       return;
     }
     const sel = new Set(this.selectedChannels);
@@ -1747,7 +1747,7 @@ export class Workspace {
     const choice = await choose('Close without saving?',
       'This recording has not been saved with Save and Finish, so it is not complete.\n\n' +
       `${later}: ` + (n ? `your ${n} annotation(s) and the time spent are kept` : 'the time spent so far is kept') +
-      ', and ElectroClean offers to continue the next time you open this recording.\n\n' +
+      ', and ElectroTag offers to continue the next time you open this recording.\n\n' +
       `${discard}: your annotations for this recording are deleted.`, [later, discard, stay], 0);
     if (choice === stay) return false;
     if (choice === discard && n && !(await ask('Discard annotations?', `Delete your ${n} annotation(s) for this recording?`, { yes: 'Delete them', no: 'Keep annotating', defaultYes: false, destructive: true }))) return false;
@@ -1792,7 +1792,7 @@ export class Workspace {
   downloadTryOut() {
     const s = this.s;
     const doc = {
-      schema: 'electroclean.tryout_annotations', note: 'Annotations of a file that is not part of a study (try-out mode).',
+      schema: 'electrotag.tryout_annotations', note: 'Annotations of a file that is not part of a study (try-out mode).',
       file_name: s.recording.fileName, sfreq: s.recording.sfreq, n_samples: s.recording.nSamples, ch_names: s.channels.map((c) => c.name),
       annotations: this.store.toJSON().map((a) => ({ ...a, onset: a.onset_sample / this.sf, duration: a.duration_samples / this.sf })),
     };

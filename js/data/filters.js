@@ -188,7 +188,7 @@ export function designNotch(sfreq, freqs) {
 
 /**
  * The notch frequencies the desktop uses: the base frequency and, with harmonics, its multiples,
- * each below Nyquist minus 1 Hz (electroclean.app.eeg.filtering.notch_frequencies).
+ * each below Nyquist minus 1 Hz (electrotag.app.eeg.filtering.notch_frequencies).
  * @param {number} sfreq
  * @param {number} baseHz
  * @param {boolean} harmonics

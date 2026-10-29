@@ -86,7 +86,7 @@ export const METHOD_NAMES = Object.freeze({
   adjudicated: 'adjudicated consensus',
   simulation: 'the simulation that made the recording',
 });
-/** MNE-Python's channel types that the study's channel-type patterns may give (electroclean.config.settings). */
+/** MNE-Python's channel types that the study's channel-type patterns may give (electrotag.config.settings). */
 export const CHANNEL_TYPES = Object.freeze(['eeg', 'eog', 'ecg', 'emg', 'misc', 'stim', 'resp', 'bio', 'gsr', 'temperature']);
 export const SCALING_TYPES = Object.freeze(['eeg', 'eog', 'ecg', 'emg', 'misc']);
 
@@ -123,7 +123,7 @@ export function opText(op) {
   return AUDIT_OPS[op] || String(op || '').replace(/_/g, ' ');
 }
 
-/** The competency measures of electroclean.training.assessment.METRICS, in the same order. */
+/** The competency measures of electrotag.training.assessment.METRICS, in the same order. */
 export const METRICS = Object.freeze({
   event_f1: {
     label: 'Event F1 (time only)', better: 'higher', range: [0, 1],
@@ -216,7 +216,7 @@ export function fileParts(rid) {
   return { name: parts.pop(), folder: parts.join('/') };
 }
 
-/** One phrase for where a reference came from (electroclean.training.assessment.describe_provenance). */
+/** One phrase for where a reference came from (electrotag.training.assessment.describe_provenance). */
 export function describeProvenance(prov) {
   const p = prov || {};
   let text = METHOD_NAMES[p.method] || p.method || 'method not recorded';
@@ -241,7 +241,7 @@ export function isNotOffered(exc) {
 export function problemText(exc) {
   if (!exc) return 'Something went wrong. Please try again.';
   if (isNotOffered(exc)) {
-    return 'This study does not offer this part of the admin area yet. Its server or functions may need updating to the current version of ElectroClean.';
+    return 'This study does not offer this part of the admin area yet. Its server or functions may need updating to the current version of ElectroTag.';
   }
   return exc.message || 'Something went wrong. Please try again.';
 }
@@ -323,7 +323,7 @@ export function mergeSettings(current, changes) {
 }
 
 /**
- * Problems with study settings, in plain words (the rules of electroclean.config.settings, which the
+ * Problems with study settings, in plain words (the rules of electrotag.config.settings, which the
  * study checks again). `labels` are the catalogue's label names, to check the quick labels.
  */
 export function settingsProblems(s, labels = null) {
@@ -377,7 +377,7 @@ export const toMicrovolts = (v) => Math.round(Number(v) * 1e6 * 1000) / 1000;
 export const fromMicrovolts = (uv) => Number(uv) / 1e6;
 
 // ------------------------------------------------------------------ analyses
-/** The defaults of electroclean.reliability.config.AnalysisConfig. */
+/** The defaults of electrotag.reliability.config.AnalysisConfig. */
 export function defaultAnalysisConfig() {
   return {
     resolutions_s: [0.01, 0.05, 0.1],
@@ -463,7 +463,7 @@ export function describeCriterion(c) {
 }
 
 // ------------------------------------------------------------- registration
-/** What the review table shows of an internal manifest (electroclean/web/manifest.py). */
+/** What the review table shows of an internal manifest (electrotag/web/manifest.py). */
 export function manifestSummary(m) {
   const t = m.timing || {};
   const sfreq = Number(t.sfreq ?? m.sfreq);
@@ -598,7 +598,7 @@ export function inviteMessage({ annotatorId, name = '', study = '', link, expire
   const lines = [
     `Dear ${name || annotatorId},`,
     '',
-    `You are invited to annotate EEG recordings for ${study || 'our study'}, using ElectroClean in your web browser. This private link lets you choose your own password and sign in:`,
+    `You are invited to annotate EEG recordings for ${study || 'our study'}, using ElectroTag in your web browser. This private link lets you choose your own password and sign in:`,
     '',
     link,
     '',
@@ -755,13 +755,13 @@ export function tsvText(columns, rows) {
   return [columns.join('\t'), ...rows.map((r) => columns.map((c) => cell(r[c])).join('\t'))].join('\n') + '\n';
 }
 
-/** The annotations of an ElectroClean _annotations.json, checked enough to say what is wrong in plain words. */
+/** The annotations of an ElectroTag _annotations.json, checked enough to say what is wrong in plain words. */
 export function readAnnotationDocument(text) {
   let doc;
-  try { doc = JSON.parse(text); } catch { throw new Error('This file is not an ElectroClean annotation file: it cannot be read as JSON.'); }
+  try { doc = JSON.parse(text); } catch { throw new Error('This file is not an ElectroTag annotation file: it cannot be read as JSON.'); }
   if (!doc || typeof doc !== 'object' || !Array.isArray(doc.annotations)) {
-    throw new Error('This file is not an ElectroClean annotation file (*_annotations.json): it has no list of annotations.');
+    throw new Error('This file is not an ElectroTag annotation file (*_annotations.json): it has no list of annotations.');
   }
-  if (doc.schema && doc.schema !== 'electroclean.annotations') throw new Error(`This file is a ${doc.schema} document, not ElectroClean annotations.`);
+  if (doc.schema && doc.schema !== 'electrotag.annotations') throw new Error(`This file is a ${doc.schema} document, not ElectroTag annotations.`);
   return doc;
 }

@@ -1,4 +1,4 @@
-// Study settings: the parts of electroclean_study.json that a study may change (settings_get and
+// Study settings: the parts of electrotag_study.json that a study may change (settings_get and
 // settings_update): its name, the display filters and whether they are fixed, the display, the
 // channels to hide and channel types by name pattern, how the next recording is chosen, the types
 // on the number keys, the shortest annotation, whether finished recordings may be revised, the
@@ -123,7 +123,7 @@ export class SettingsSection {
     board.input.addEventListener('change', syncGames);
     syncGames();
     // logging
-    const interactions = checkbox('Record how annotators use ElectroClean (clicks, keys and what is on the screen; never what they type)', lg.interactions !== false);
+    const interactions = checkbox('Record how annotators use ElectroTag (clicks, keys and what is on the screen; never what they type)', lg.interactions !== false);
     const pointer = numberInput({ value: lg.pointer_hz ?? 5, min: 0, max: 60, step: 1 });
     const idle = numberInput({ value: lg.idle_after_s ?? 30, min: 5, max: 3600, step: 5 });
     const notice = textArea({ value: this.data.logging_notice || '', rows: 4, placeholder: 'Shown to each annotator once after signing in, when interactions are recorded' });

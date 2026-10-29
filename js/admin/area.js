@@ -32,7 +32,7 @@ const KINDS = {
 };
 
 const CSS_HREF = new URL('../../admin.css', import.meta.url).href;
-const FOLD_KEY = 'electroclean.admin.menu';
+const FOLD_KEY = 'electrotag.admin.menu';
 
 /** The admin area's own styles, loaded once (annotators' pages never need them). */
 function loadStyles() {

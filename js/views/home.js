@@ -44,7 +44,7 @@ function continueContent(app, cont) {
     h('p.next-file', {}, cont.item.file_name),
     h('p.caption.continue-facts', {}, facts.join(' · ')),
     h('div.btn-row', {}, h('button.btn.primary', { type: 'button', 'data-log': 'open-next', onclick: () => app.openAssignment(cont.item) }, 'Continue where you left off')),
-    h('p.caption', {}, 'Choose the same file on your computer: ElectroClean shows the EEG as you left it, with your annotations.')];
+    h('p.caption', {}, 'Choose the same file on your computer: ElectroTag shows the EEG as you left it, with your annotations.')];
 }
 
 /** The progress card: done of assigned with a thin bar, the time worked, today, and the time left. */

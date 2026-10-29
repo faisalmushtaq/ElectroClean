@@ -1,6 +1,6 @@
 // EDF, EDF+ and BDF recordings read in the browser, giving the same values as MNE-Python's
 // read_raw_edf / read_raw_bdf with infer_types=False (what the desktop application uses), and
-// checked against the header the same way as the desktop (electroclean/app/io/edf.py).
+// checked against the header the same way as the desktop (electrotag/app/io/edf.py).
 // Plain ES module.
 
 import { inferChannelType, isMneEdfStim, uniqueChannelNames } from "./channels.js";

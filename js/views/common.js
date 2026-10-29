@@ -46,7 +46,7 @@ export function appHeader(app, { title = '', admin = false, tools = null } = {})
       onclick: () => (admin ? app.showHome() : app.showAdmin('admin')) }, admin ? 'My recordings' : 'Admin')
     : null;
   return h('header.app-header', {},
-    h('div.brand', {}, brandMark(26), h('span.brand-name', {}, 'ElectroClean'),
+    h('div.brand', {}, brandMark(26), h('span.brand-name', {}, 'ElectroTag'),
       study && !(app.backend && app.backend.isDemo) ? h('span.brand-study', {}, study) : null, title ? h('span.brand-study', {}, title) : null,
       admin ? h('span.chip.active.admin-chip', {}, 'Admin') : null,
       app.backend && app.backend.isDemo ? h('span.chip.warning', {}, 'Demonstration') : null),
@@ -78,7 +78,7 @@ export function studyLink(app) {
 export function emailLinkHref(app) {
   const link = studyLink(app);
   const study = app && app.me && app.me.study && app.me.study.name ? ` (${app.me.study.name})` : '';
-  return `mailto:?subject=${encodeURIComponent(`ElectroClean${study}: open on a tablet or computer`)}` +
+  return `mailto:?subject=${encodeURIComponent(`ElectroTag${study}: open on a tablet or computer`)}` +
     `&body=${encodeURIComponent(`Open this link on a tablet or a computer to annotate:\n${link}`)}`;
 }
 
@@ -91,7 +91,7 @@ export function smallScreenNotice(app = null) {
   const me = app && app.me;
   return h('div.small-screen', { role: 'note' },
     h('div.card', {}, brandMark(40),
-      h('h1', {}, 'ElectroClean needs a larger screen'),
+      h('h1', {}, 'ElectroTag needs a larger screen'),
       h('p', {}, 'Annotating EEG needs room for the traces, so it works on a tablet such as an iPad, or on a laptop or desktop computer. Your work waits for you there.'),
       me ? h('div.btn-row.center', {},
         h('a.btn.primary', { href: emailLinkHref(app), 'data-log': 'email-link' }, 'Email me this link'),

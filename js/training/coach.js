@@ -1,6 +1,6 @@
 // The coach of guided training ("Learn with the experts"): one of the experts' annotations at a
 // time, checked after every change. The checking is done by the study, which keeps the experts'
-// answers (the server or functions with electroclean/training/guided.py, the demonstration with
+// answers (the server or functions with electrotag/training/guided.py, the demonstration with
 // rules.js); the coach shows the instruction, the feedback and the stars.
 
 import { h, clear, richText } from '../ui/dom.js';

@@ -1,5 +1,5 @@
 // The annotations of one recording while they are edited: a port of the desktop application's
-// AnnotationStore (electroclean/app/annotations/store.py), so the rules are the same in both.
+// AnnotationStore (electrotag/app/annotations/store.py), so the rules are the same in both.
 //
 // Annotations are plain objects in samples:
 //   {annotation_id, label, onset_sample, duration_samples, channels: [...], created_at, modified_at}

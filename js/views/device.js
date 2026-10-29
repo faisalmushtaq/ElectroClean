@@ -26,7 +26,7 @@ export function deviceStore(app) {
 /** The annotator's choices, remembered in this browser (localStorage; defaults when it is blocked). */
 export function devicePrefs(app) {
   const store = deviceStore(app);
-  const key = `electroclean.device.${store ? store.owner : ''}`;
+  const key = `electrotag.device.${store ? store.owner : ''}`;
   const saved = local.get(key, {}) || {};
   const prefs = { ...DEFAULT_PREFS, ...saved };
   return {

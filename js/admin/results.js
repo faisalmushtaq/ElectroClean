@@ -30,7 +30,7 @@ export class ResultsSection {
       this.msg,
       card('Progress', this.note, this.table, h('div.btn-row', {}, tsv)), this.work,
       card('All results',
-          h('p', {}, 'The annotations (in ElectroClean\'s usual folders: _annotations.json, _events.tsv, _session.json for each recording and annotator), the interaction logs, the training progress and the reports, as one zip file.'),
+          h('p', {}, 'The annotations (in ElectroTag\'s usual folders: _annotations.json, _events.tsv, _session.json for each recording and annotator), the interaction logs, the training progress and the reports, as one zip file.'),
           h('div.btn-row', {}, zip), this.zipMsg));
   }
 
@@ -92,8 +92,8 @@ export class ResultsSection {
     const b = this.area.backend;
     if (b.kind === 'firebase') {
       const project = (b.health && b.health.project) || '<project>';
-      const cmd = `electroclean-web export --firebase-project ${project} --study ${b.study || '<study>'} --to results`;
-      return h('div', {}, h('p', {}, 'Export them with this command, on a computer with ElectroClean installed and the study\'s key (see the Firebase guide):'), h('pre.command', {}, cmd));
+      const cmd = `electrotag-web export --firebase-project ${project} --study ${b.study || '<study>'} --to results`;
+      return h('div', {}, h('p', {}, 'Export them with this command, on a computer with ElectroTag installed and the study\'s key (see the Firebase guide):'), h('pre.command', {}, cmd));
     }
     return h('div', {}, h('p', {}, 'On the study server they are already in the study folder, in Annotated_Events: copy that folder, for example with'),
       h('pre.command', {}, 'zip -r results.zip <study folder>/Annotated_Events'));

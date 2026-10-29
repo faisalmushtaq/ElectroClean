@@ -1,4 +1,4 @@
-// A recording's original events as the desktop records them (electroclean/app/eeg/events.py): from
+// A recording's original events as the desktop records them (electrotag/app/eeg/events.py): from
 // events.tsv (its rows kept as strings), otherwise from the EDF+/BDF+ annotations or the
 // BrainVision markers (with the codes MNE-Python gives them), otherwise from the trigger channels;
 // and the desktop's checks of their codes. Used by register.js to build manifests. Plain ES module.

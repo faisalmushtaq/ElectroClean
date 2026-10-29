@@ -21,7 +21,7 @@ export function normaliseComfort(raw) {
   };
 }
 
-const keyFor = (who) => `electroclean.comfort|${who || 'anon'}`;
+const keyFor = (who) => `electrotag.comfort|${who || 'anon'}`;
 
 /** An annotator's choices (the defaults where none are kept, or storage is not available). */
 export function loadComfort(who) {

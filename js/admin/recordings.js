@@ -1,6 +1,6 @@
 // Recordings: the study's register. A list to filter by scope and status, a page per recording
 // (notes, retire, remove), and adding recordings from this computer: the browser reads the files
-// chosen (js/data/register.js builds each recording's manifest, as electroclean-web register does
+// chosen (js/data/register.js builds each recording's manifest, as electrotag-web register does
 // with MNE-Python), shows what it found and what failed, and sends only the manifests. The EEG
 // never leaves this computer. Several recordings chosen in the list are assigned, retired, brought
 // back into use or removed together; removing deletes only a registration, and a recording with
@@ -284,7 +284,7 @@ export class RecordingsSection {
       try {
         mod = await loadRegisterModule();
       } catch {
-        throw new Error('This copy of ElectroClean cannot read recordings for the register yet. Update it, or register the recordings with the command electroclean-web register.');
+        throw new Error('This copy of ElectroTag cannot read recordings for the register yet. Update it, or register the recordings with the command electrotag-web register.');
       }
       let settings = {};
       try { settings = (await this.area.read('settings_get')).settings || {}; } catch { /* the builder's defaults */ }

@@ -13,7 +13,7 @@ import { formatHms, local } from '../util.js';
 import { spanText } from './progress.js';
 
 export const PAGE_SIZE = 25;
-const PREFS_KEY = 'electroclean.home.list';
+const PREFS_KEY = 'electrotag.home.list';
 const STATUS = { todo: ['To do', ''], in_progress: ['In progress', 'active'], done: ['Done', 'done'] };
 const MODES = { standard: 'Annotation', guided: 'Guided training', practice: 'Practice', assessment: 'Assessment' };
 export const TABS = [['todo', 'To do'], ['in_progress', 'In progress'], ['done', 'Done'], ['all', 'All'], ['history', 'History']];

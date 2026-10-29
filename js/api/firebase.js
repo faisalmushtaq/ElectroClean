@@ -84,7 +84,7 @@ export class FirebaseBackend {
     this.retryDelayMs = 1500; // before asking a read-only function a second time
     this.writesVisitStart = true; // the visit_started event is written when the visit opens
     this.sdk = sdk;
-    this.app = sdk.app.initializeApp(config, 'electroclean');
+    this.app = sdk.app.initializeApp(config, 'electrotag');
     this.auth = sdk.auth.getAuth(this.app);
     this.functions = sdk.functions.getFunctions(this.app, this.region);
     this.health = { ok: true, study: this.study, demo: false, firebase: true, project: config && config.projectId };
@@ -142,7 +142,7 @@ export class FirebaseBackend {
     }
     const user = cred.user || this.auth.currentUser;
     let claims = {};
-    try { claims = (await user.getIdTokenResult()).claims || {}; } catch { /* read from ec_me below */ }
+    try { claims = (await user.getIdTokenResult()).claims || {}; } catch { /* read from et_me below */ }
     return {
       annotator_id: claims.annotator_id || '', display_name: user.displayName || '', role: claims.role || 'annotator',
       email: user.email || String(email).trim(),
@@ -188,59 +188,59 @@ export class FirebaseBackend {
     }
   }
 
-  me() { return this._call('ec_me', {}, { retry: true }); }
+  me() { return this._call('et_me', {}, { retry: true }); }
 
-  achievements() { return this._call('ec_achievements', {}, { retry: true }); }
+  achievements() { return this._call('et_achievements', {}, { retry: true }); }
 
   /** Changes the goal or the leaderboard's visibility: not repeated after a failure, like every change. */
-  setAchievements(body) { return this._call('ec_achievements', body || {}); }
+  setAchievements(body) { return this._call('et_achievements', body || {}); }
 
-  assignments() { return this._call('ec_assignments', {}, { retry: true }); }
+  assignments() { return this._call('et_assignments', {}, { retry: true }); }
 
-  match(body) { return this._call('ec_match', body, { retry: true }); }
+  match(body) { return this._call('et_match', body, { retry: true }); }
 
   putDraft(recordingId, mode, contextId, draft) {
-    return this._call('ec_put_draft', { recording_id: recordingId, mode, context_id: contextId || '', draft });
+    return this._call('et_put_draft', { recording_id: recordingId, mode, context_id: contextId || '', draft });
   }
 
   deleteDraft(recordingId, mode, contextId) {
-    return this._call('ec_delete_draft', { recording_id: recordingId, mode, context_id: contextId || '' });
+    return this._call('et_delete_draft', { recording_id: recordingId, mode, context_id: contextId || '' });
   }
 
-  submit(body) { return this._call('ec_submit', body); }
+  submit(body) { return this._call('et_submit', body); }
 
-  training() { return this._call('ec_training', {}, { retry: true }); }
+  training() { return this._call('et_training', {}, { retry: true }); }
 
-  guided(recordingId) { return this._call('ec_guided_get', { recording_id: recordingId }, { retry: true }); }
+  guided(recordingId) { return this._call('et_guided_get', { recording_id: recordingId }, { retry: true }); }
 
-  guidedCheck(recordingId, body) { return this._call('ec_guided_check', { recording_id: recordingId, ...body }); }
+  guidedCheck(recordingId, body) { return this._call('et_guided_check', { recording_id: recordingId, ...body }); }
 
-  guidedContinue(recordingId, body) { return this._call('ec_guided_continue', { recording_id: recordingId, ...body }); }
+  guidedContinue(recordingId, body) { return this._call('et_guided_continue', { recording_id: recordingId, ...body }); }
 
-  guidedShowMe(recordingId, body) { return this._call('ec_guided_show_me', { recording_id: recordingId, ...body }); }
+  guidedShowMe(recordingId, body) { return this._call('et_guided_show_me', { recording_id: recordingId, ...body }); }
 
   /** The short-segment quiz: only "get" reads, so only it is asked again; an answer is never repeated. */
   quiz(setId, body) {
-    return this._call('ec_quiz', { set_id: setId, ...body }, { retry: Boolean(body && body.action === 'get') });
+    return this._call('et_quiz', { set_id: setId, ...body }, { retry: Boolean(body && body.action === 'get') });
   }
 
-  openVisit(body) { return this._call('ec_visit_open', body); }
+  openVisit(body) { return this._call('et_visit_open', body); }
 
   /** A callable function cannot use fetch(keepalive): the call on page hide is best effort. */
-  sendEvents(visitId, events) { return this._call('ec_visit_events', { visit_id: visitId, events }); }
+  sendEvents(visitId, events) { return this._call('et_visit_events', { visit_id: visitId, events }); }
 
-  closeVisit(visitId, reason) { return this._call('ec_visit_close', { visit_id: visitId, reason }); }
+  closeVisit(visitId, reason) { return this._call('et_visit_close', { visit_id: visitId, reason }); }
 
-  adminProgress() { return this._call('ec_admin_progress', {}, { retry: true }); }
+  adminProgress() { return this._call('et_admin_progress', {}, { retry: true }); }
 
   /**
-   * One operation of the admin area: the callable function ec_admin with {op, ...body}. Only the
+   * One operation of the admin area: the callable function et_admin with {op, ...body}. Only the
    * operations that read are asked again after a failure (isAdminRead); one that changes the study
    * is never repeated, because the first attempt may have been carried out.
    */
   admin(op, body = {}) {
     if (!ADMIN_OP.test(String(op))) return Promise.reject(new ApiError(400, 'bad_request', 'That is not an operation of the admin area.'));
-    return this._call('ec_admin', { ...(body || {}), op }, { retry: isAdminRead(op) });
+    return this._call('et_admin', { ...(body || {}), op }, { retry: isAdminRead(op) });
   }
 
   get canDownloadRecordings() { return false; }

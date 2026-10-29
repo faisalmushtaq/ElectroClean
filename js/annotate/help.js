@@ -107,7 +107,7 @@ automatically. To merge others of one type, select them in the list and press
 <h3>Pausing and breaks</h3>
 <p>Press <b>Pause</b> (or <kbd>B</kbd>) when you step away: the clock that measures your time on the
 recording stops, your draft is kept, and a panel covers the EEG until you press <b>Resume</b>.
-ElectroClean also pauses by itself after a few minutes without any input, and when the page is out
+ElectroTag also pauses by itself after a few minutes without any input, and when the page is out
 of sight for more than a few seconds (another tab or app, or a locked iPad). After a long stretch of
 work it offers a break, which you can take or put off for 15 minutes.</p>
 

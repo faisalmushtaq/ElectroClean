@@ -32,7 +32,7 @@ const VIEWS = ['signin', 'home', 'open', 'annotate', 'review', 'training', 'quiz
 /** The admin area's plain hashes (js/admin/model.js lists its sections). */
 const ADMIN_ROUTE = /^admin(-[a-z]+)?$/;
 /** The token of a private invitation link, kept for the browser tab until it is used. */
-const INVITE_KEY = 'electroclean.invite';
+const INVITE_KEY = 'electrotag.invite';
 
 /**
  * The token of an invitation link (?invite=<token>), taken out of the address at once so that it
@@ -99,7 +99,7 @@ export class App {
     const asked = (location.hash || '').replace(/^#/, '');
     if (ADMIN_ROUTE.test(asked)) this._adminReturn = asked;
     const invite = takeInvite();
-    this._render(h('main.page.loading', {}, h('p.subtitle', {}, 'Starting ElectroClean…')), 'signin');
+    this._render(h('main.page.loading', {}, h('p.subtitle', {}, 'Starting ElectroTag…')), 'signin');
     let where;
     try { where = await findBackend(); } catch { where = { kind: 'demo', source: 'none' }; }
     this.where = where;
@@ -142,7 +142,7 @@ export class App {
     try {
       this.backend = await connectServer(address, { onUnauthorized: () => this.sessionExpired() });
     } catch (exc) {
-      throw new Error(`There is no ElectroClean study at ${address}, or it does not answer. Check the address and try again.`);
+      throw new Error(`There is no ElectroTag study at ${address}, or it does not answer. Check the address and try again.`);
     }
     rememberServer(this.backend.server);
     this.where = { ...where, address: this.backend.server };
@@ -340,10 +340,10 @@ export class App {
       this._settingHash = true;
       location.hash = route;
     }
-    document.title = { signin: 'ElectroClean – sign in', home: 'ElectroClean', open: 'ElectroClean – open a recording',
-      annotate: `ElectroClean – ${this.ws ? this.ws.s.recording.fileName : 'annotate'}`, review: 'ElectroClean – practice review',
-      training: 'ElectroClean – training programme', quiz: 'ElectroClean – quiz' }[route]
-      || (ADMIN_ROUTE.test(route) ? 'ElectroClean – admin' : 'ElectroClean');
+    document.title = { signin: 'ElectroTag – sign in', home: 'ElectroTag', open: 'ElectroTag – open a recording',
+      annotate: `ElectroTag – ${this.ws ? this.ws.s.recording.fileName : 'annotate'}`, review: 'ElectroTag – practice review',
+      training: 'ElectroTag – training programme', quiz: 'ElectroTag – quiz' }[route]
+      || (ADMIN_ROUTE.test(route) ? 'ElectroTag – admin' : 'ElectroTag');
   }
 
   // The interaction log records annotating; what an administrator does in the admin area is not

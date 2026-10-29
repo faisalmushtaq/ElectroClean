@@ -1,4 +1,4 @@
-// The guided training rules: a port of electroclean/training/guided.py, used by the demonstration
+// The guided training rules: a port of electrotag/training/guided.py, used by the demonstration
 // (in a real study the server applies the Python rules and only sends the feedback).
 // Messages are the same, word for word.
 

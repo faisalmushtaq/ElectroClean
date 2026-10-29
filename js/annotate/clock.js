@@ -102,5 +102,5 @@ export function idleDue(idleMs, idleMinutes) {
 /** The working time of today, kept per annotator and day in this browser (a key of localStorage). */
 export function todayKey(who, date = new Date()) {
   const p = (n) => String(n).padStart(2, '0');
-  return `electroclean.worked|${who}|${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}`;
+  return `electrotag.worked|${who}|${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}`;
 }

@@ -4,9 +4,9 @@
 // built-in examples and any added from this computer as manifests), reference sets made from
 // someone's saved annotations or an annotation file, the audit log and the visits.
 //
-// What needs ElectroClean's Python code (the agreement and activity analyses, competency reports,
+// What needs ElectroTag's Python code (the agreement and activity analyses, competency reports,
 // consensus and adjudicated references, the example set's files and the results zip) is answered
-// with an error that says so, and how to try it with `electroclean-web demo`.
+// with an error that says so, and how to try it with `electrotag-web demo`.
 
 import { CATALOGUE, DEFAULT_ANNOTATION, DEFAULT_DISPLAY, DEFAULT_FILTERS, DEFAULT_HIDE, DEFAULT_LOGGING, DEFAULT_QUICK_LABELS, DEFAULT_SCALINGS } from './demo_catalogue.js';
 import { ApiError } from './http.js';
@@ -18,10 +18,10 @@ import {
 } from '../admin/model.js';
 
 export const ADMIN_ID = 'ADMIN';
-export const DEMO_LOGGING_NOTICE = 'This demonstration records how you use ElectroClean (clicks, keys and what is on the ' +
+export const DEMO_LOGGING_NOTICE = 'This demonstration records how you use ElectroTag (clicks, keys and what is on the ' +
   'screen, never what you type) and keeps the record in this browser only. In a real study the record ' +
   "goes to the study team, as the study's information sheet explains.";
-const MANIFEST_SCHEMA = 'electroclean.web_manifest';
+const MANIFEST_SCHEMA = 'electrotag.web_manifest';
 const MAX_MANIFEST_BYTES = 8 * 1024 * 1024;
 const LABEL_NAMES = CATALOGUE.labels.map((l) => l.label);
 const BUILT_IN_AT = '2026-10-28T09:00:00.000+00:00';
@@ -29,8 +29,8 @@ const BUILT_IN_AT = '2026-10-28T09:00:00.000+00:00';
 /** The answer to an operation the demonstration cannot run in the browser. */
 export function needsServer(what) {
   return new ApiError(501, 'needs_server', `The demonstration cannot ${what} in the browser: that needs a study server or ` +
-    'Firebase. To try it on this computer, install ElectroClean and run electroclean-web demo, then open ' +
-    'http://localhost:8000/ and sign in as ADMIN with the password electroclean.');
+    'Firebase. To try it on this computer, install ElectroTag and run electrotag-web demo, then open ' +
+    'http://localhost:8000/ and sign in as ADMIN with the password electrotag.');
 }
 
 const SERVER_ONLY = {
@@ -47,17 +47,17 @@ const INVITE_DAYS = 14;
 const INVITE_MAX_DAYS = 90;
 const DAY_MS = 86400000;
 // stats: the days of the daily completions, the days whose pace projects the finish, and the
-// fewest completions in them for a projection (electroclean/web/admin.py).
+// fewest completions in them for a projection (electrotag/web/admin.py).
 const STATS_DAYS = 30;
 const PACE_DAYS = 14;
 const PACE_MIN = 3;
-/** What a person is told when an invitation link cannot be used (electroclean/web/service.py, INVITE_PROBLEMS). */
+/** What a person is told when an invitation link cannot be used (electrotag/web/service.py, INVITE_PROBLEMS). */
 const INVITE_PROBLEMS = {
   unknown: [404, 'This invitation link is not known to the study. It may have been replaced by a newer link or withdrawn. Ask the study team for a new one.'],
   used: [409, 'This invitation link has been used already. Sign in with your annotator ID and the password you chose, or ask the study team for a new link.'],
   expired: [409, 'This invitation link has expired. Ask the study team for a new one.'],
 };
-/** Why an administrator's account is not given an invitation link (electroclean/web/admin.py, ADMIN_NOT_INVITED). */
+/** Why an administrator's account is not given an invitation link (electrotag/web/admin.py, ADMIN_NOT_INVITED). */
 const ADMIN_NOT_INVITED = 'Invitation links are for annotators: a link sent by email must not open the admin area. Give an administrator a password instead (a temporary one, or one you choose).';
 const inviteProblem = (reason) => new ApiError(INVITE_PROBLEMS[reason][0], `invite_${reason}`, INVITE_PROBLEMS[reason][1]);
 
@@ -107,7 +107,7 @@ export function makePassword() {
 }
 
 function passwordHash(password, salt) {
-  return sha256Hex(new TextEncoder().encode(`electroclean-demo:${salt}:${password}`));
+  return sha256Hex(new TextEncoder().encode(`electrotag-demo:${salt}:${password}`));
 }
 
 /** The settings blocks that a study may change, with the demonstration's values. */
@@ -125,7 +125,7 @@ export function defaultSettings() {
   };
 }
 
-/** The game elements of the home page (gamification in electroclean/config/default_settings.json). */
+/** The game elements of the home page (gamification in electrotag/config/default_settings.json). */
 export const DEFAULT_GAMIFICATION = Object.freeze({ enabled: true, leaderboard: true, leaderboard_viewed_only: false });
 
 /** Settings kept by an earlier version of the demonstration gain the blocks and keys added since. */
@@ -155,7 +155,7 @@ function displayEvents(ev, nSamples, sfreq) {
   return out.sort((a, b) => a.onset_sample - b.onset_sample);
 }
 
-/** The Manifest of docs/web/api.md from an internal one (electroclean/web/manifest.py, public_manifest). */
+/** The Manifest of docs/web/api.md from an internal one (electrotag/web/manifest.py, public_manifest). */
 export function publicManifest(m, studyScalings = {}) {
   const t = m.timing || {};
   const sfreq = Number(t.sfreq);
@@ -177,7 +177,7 @@ export function publicManifest(m, studyScalings = {}) {
 /** Why an internal manifest cannot be registered, or null (the shape, sizes and consistency). */
 export function manifestProblem(m) {
   if (!m || typeof m !== 'object') return 'it is not a recording description';
-  if (m.schema !== MANIFEST_SCHEMA) return 'it is not an ElectroClean recording description (manifest)';
+  if (m.schema !== MANIFEST_SCHEMA) return 'it is not an ElectroTag recording description (manifest)';
   if (String(m.schema_version || '').split('.')[0] !== '1') return `its version ${m.schema_version} is not supported`;
   if (typeof m.recording_id !== 'string' || !m.recording_id || m.recording_id.length > 512) return 'it has no recording ID';
   if (/(^|\/)\.\.(\/|$)|^\//.test(m.recording_id)) return 'its recording ID is not a path inside the dataset';
@@ -403,7 +403,7 @@ export class DemoAdmin {
   }
 
   // ------------------------------------------------------------- invitations
-  // Kept as the study server keeps them (electroclean/web/accounts.py): one per account, its token
+  // Kept as the study server keeps them (electrotag/web/accounts.py): one per account, its token
   // only as a SHA-256 hash with its expiry, ended when used, replaced, withdrawn or switched off.
   get _invites() {
     if (!this.s.invites || typeof this.s.invites !== 'object') this.s.invites = {};
@@ -1060,7 +1060,7 @@ export class DemoAdmin {
     };
   }
 
-  /** How far the study has got and how long the work takes (docs/web/api.md, `stats`; electroclean/web/admin.py). */
+  /** How far the study has got and how long the work takes (docs/web/api.md, `stats`; electrotag/web/admin.py). */
   op_stats(body) {
     const work = body.work || 'study';
     if (!['study', 'all'].includes(work)) throw bad("work must be 'study' (the study's own annotation) or 'all' (training too)");

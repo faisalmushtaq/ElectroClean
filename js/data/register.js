@@ -1,8 +1,8 @@
 // Registering recordings in the browser (docs/web/architecture.md, "Registering recordings in the
 // browser"). The administrator picks a dataset folder (or files) on their own computer; this module
 // finds the recordings in it as the desktop's discovery does, reads each one with the browser's
-// readers and builds the same internal manifest that electroclean.web.manifest.build_manifest builds
-// from MNE-Python's reading of the files (electroclean/app/eeg/loading.py): timing, the channels
+// readers and builds the same internal manifest that electrotag.web.manifest.build_manifest builds
+// from MNE-Python's reading of the files (electrotag/app/eeg/loading.py): timing, the channels
 // shown, hidden and their types, the BIDS sidecars, the original events, gaps, the amplitude check,
 // the fingerprints, the warnings and the notes, with the desktop's wording. Only the manifests go
 // to the study; the EEG stays on the administrator's computer. Plain ES module.
@@ -26,33 +26,33 @@ import { openRecording } from "./recording.js";
 import { sha256Blob } from "./sha256.js";
 import { decodeLatin1, extensionOf, fnmatchCase, RecordingError, timeToSample } from "./util.js";
 
-export const SCHEMA = "electroclean.web_manifest";
+export const SCHEMA = "electrotag.web_manifest";
 export const SCHEMA_VERSION = "1.0.0";
 export const SCOPE_STUDY = "study";
-/** Recording formats by extension, and their names, as electroclean/app/io/discovery.py. */
+/** Recording formats by extension, and their names, as electrotag/app/io/discovery.py. */
 export const FORMATS = Object.freeze({ ".vhdr": "brainvision", ".edf": "edf", ".bdf": "bdf" });
 export const FORMAT_NAMES = Object.freeze({ brainvision: "BrainVision", edf: "EDF", bdf: "BDF" });
-/** The columns ElectroClean adds to an events.tsv (electroclean/app/io/export.py). */
-const ELECTROCLEAN_COLUMNS = ["artifact_code", "event_source", "annotation_id", "annotator_id", "original_row"];
+/** The columns ElectroTag adds to an events.tsv (electrotag/app/io/export.py). */
+const ELECTROTAG_COLUMNS = ["artifact_code", "event_source", "annotation_id", "annotator_id", "original_row"];
 /** MNE's default names of BrainVision EOG channels. */
 const MNE_BV_EOG = ["HEOGL", "HEOGR", "VEOGb"];
-/** Channel types the channels.types setting may give (electroclean/config/settings.py). */
+/** Channel types the channels.types setting may give (electrotag/config/settings.py). */
 const CHANNEL_TYPES = ["eeg", "eog", "ecg", "emg", "misc", "stim", "resp", "bio", "gsr", "temperature"];
-/** BIDS channels.tsv types (electroclean/app/eeg/channels.py). */
+/** BIDS channels.tsv types (electrotag/app/eeg/channels.py). */
 const BIDS_TO_MNE_TYPES = Object.freeze({
   EEG: "eeg", EOG: "eog", VEOG: "eog", HEOG: "eog", ECG: "ecg", EMG: "emg", MISC: "misc", TRIG: "stim", RESP: "resp",
   GSR: "gsr", TEMP: "temperature", REF: "eeg", PPG: "bio", AUDIO: "misc", SYSCLOCK: "misc",
 }); // prettier-ignore
 
 /**
- * The blocks of electroclean/config/default_settings.json that registration uses
+ * The blocks of electrotag/config/default_settings.json that registration uses
  * (web_tests/unit/data_register.test.mjs checks they are the same).
  */
 export const DEFAULT_SETTINGS = Object.freeze({
   output: { directory_name: "Annotated_Events", directory: null },
   discovery: {
     suffixes: ["_eeg.vhdr", "_eeg.edf", "_eeg.bdf"],
-    exclude_dir_names: ["derivatives", "Annotated_Events", ".git", ".electroclean"],
+    exclude_dir_names: ["derivatives", "Annotated_Events", ".git", ".electrotag"],
     follow_symlinks: false,
   },
   filters: {
@@ -357,8 +357,8 @@ function notchFrequencies(f, sfreq) {
  * @param {object} recording an item of findDatasetRecordings().recordings
  * @param {{settings?: object, scope?: string, onProgress?: (p: {stage: string, fraction: number}) => void,
  *          catalogue?: object, worker?: boolean, version?: string}} [options]
- *   catalogue: the study's label catalogue (GET /me; default: ElectroClean's own);
- *   worker: false to read on the page; version: the study's ElectroClean version, if known
+ *   catalogue: the study's label catalogue (GET /me; default: ElectroTag's own);
+ *   worker: false to read on the page; version: the study's ElectroTag version, if known
  * @returns {Promise<{manifest: object, problems: string[]}>} problems: the checks' findings (the
  *   manifest's warnings), for the administrator to look at
  */
@@ -531,11 +531,11 @@ export async function buildManifest(recording, options = {}) {
         original = eventsFromTriggers(found, triggers, path, sfreq);
       }
     }
-    const clash = ELECTROCLEAN_COLUMNS.filter((c) => original.columns.includes(c));
+    const clash = ELECTROTAG_COLUMNS.filter((c) => original.columns.includes(c));
     if (clash.length) {
       throw new RecordingError(
-        `The recording's events.tsv already has column(s) ${clash.join(", ")}, which ElectroClean uses for its ` +
-          "own information (is it an ElectroClean output file?). Rename them in a copy of the dataset.",
+        `The recording's events.tsv already has column(s) ${clash.join(", ")}, which ElectroTag uses for its ` +
+          "own information (is it an ElectroTag output file?). Rename them in a copy of the dataset.",
         "malformed_bids_metadata",
       );
     }
@@ -685,7 +685,7 @@ export async function buildManifest(recording, options = {}) {
       schema: SCHEMA,
       schema_version: SCHEMA_VERSION,
       created_at: nowLocalIso(),
-      electroclean_version: options.version || "browser",
+      electrotag_version: options.version || "browser",
       scope,
       recording_id: path,
       relative_path: path,

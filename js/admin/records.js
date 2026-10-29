@@ -1,5 +1,5 @@
 // Records: the study's audit log (every change made in the admin area or with the
-// electroclean-web commands, newest first, in pages, filtered by person and operation) and the
+// electrotag-web commands, newest first, in pages, filtered by person and operation) and the
 // visits (each time someone used the application, with the number of interaction events logged).
 
 import { h, clear } from '../ui/dom.js';
@@ -43,10 +43,10 @@ export class RecordsSection {
       sectionHead('Records', 'Every change made to the study, and each visit of the annotators.'),
       this.msg,
       card('Audit log',
-        h('p.caption', {}, 'Changes made here and with the electroclean-web commands, newest first. The filters apply to the entries shown; show older entries to search further back.'),
+        h('p.caption', {}, 'Changes made here and with the electrotag-web commands, newest first. The filters apply to the entries shown; show older entries to search further back.'),
         h('div.row.filters', {}, this.by, this.op), this.auditNote, this.audit, h('div.btn-row', {}, this.more)),
       card('Visits',
-        h('p.caption', {}, 'Each time someone signed in and used ElectroClean. When the study records interactions, each visit has its own log in interaction_logs.'),
+        h('p.caption', {}, 'Each time someone signed in and used ElectroTag. When the study records interactions, each visit has its own log in interaction_logs.'),
         h('div.row.filters', {}, this.visitWho), this.visitNote, this.visits));
   }
 

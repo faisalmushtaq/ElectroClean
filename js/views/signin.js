@@ -57,7 +57,7 @@ export function signinView(app, { message = '', error = '' } = {}) {
   if (!b) studyLine = h('p.subtitle', {}, 'Connecting…');
   else if (b.isDemo) studyLine = h('p.subtitle', {}, 'Demonstration: everything stays in this browser.');
   else if (b.kind === 'firebase') studyLine = h('p.subtitle', {}, `Study: ${b.study || 'not named'}`);
-  else studyLine = h('p.subtitle', {}, `Study: ${(b.health && b.health.study) || 'ElectroClean study'}`, h('br'), h('span.caption', {}, b.server || 'this site'));
+  else studyLine = h('p.subtitle', {}, `Study: ${(b.health && b.health.study) || 'ElectroTag study'}`, h('br'), h('span.caption', {}, b.server || 'this site'));
 
   const demoHint = b && b.isDemo ? h('div.note.demo-hint', {},
     h('p', {}, 'Sign in as ', h('b', {}, 'A01'), ' to annotate, as ', h('b', {}, 'T01'), ' to follow the training programme, or as ',
@@ -115,7 +115,7 @@ export function signinView(app, { message = '', error = '' } = {}) {
 
 /**
  * The sign-in page around a card: on the left, an illustration of EEG with the name and what
- * ElectroClean is for; on the right, the card (the sign-in form, or the welcome of an invitation).
+ * ElectroTag is for; on the right, the card (the sign-in form, or the welcome of an invitation).
  */
 export function signinFrame(app, card) {
   const b = app.backend;
@@ -126,12 +126,12 @@ export function signinFrame(app, card) {
     h('div.signin-art-inner', {},
       h('div.signin-status', {}, brandMark(28, '#FFFFFF'), status),
       h('div', {},
-        h('p.signin-display', {}, 'ElectroClean'),
+        h('p.signin-display', {}, 'ElectroTag'),
         h('p.signin-lede', {}, 'Artifact annotation for continuous EEG. ',
           h('span.tone-soft', {}, 'Your recordings stay on this computer, and only your annotations go to the study.'))),
       h('div.signin-foot', { 'aria-hidden': 'true' },
         h('p.figure-caption', {}, 'Fig. 01 · the 10-20 montage, 19 electrodes'), montageFigure())));
   const panel = h('section.signin-panel', {}, card,
-    h('p.caption.footnote', {}, 'ElectroClean reads each recording in this browser, and the EEG stays on this computer: the study receives the recording\'s fingerprint and your annotations.'));
+    h('p.caption.footnote', {}, 'ElectroTag reads each recording in this browser, and the EEG stays on this computer: the study receives the recording\'s fingerprint and your annotations.'));
   return h('main.page.signin', { 'data-view': 'signin' }, h('div.signin-split', {}, art, panel));
 }

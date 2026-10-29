@@ -17,7 +17,7 @@ import { DEFAULT_SCALINGS } from '../api/demo_catalogue.js';
 import { CAN_CHOOSE_FOLDER, acceptFiles } from '../util.js';
 import { linkPanel } from '../views/links_panel.js';
 
-/** The answer for a segment without an artifact (electroclean.training.reference.NONE_OPTION). */
+/** The answer for a segment without an artifact (electrotag.training.reference.NONE_OPTION). */
 export const NONE_OPTION = 'No artifact / none of these';
 export const QUESTION = 'Which artifact type is the main one in the shaded segment?';
 /** The label of the shaded segment in the viewer (drawn in the accent colour). */
@@ -111,7 +111,7 @@ export function verdictText(result) {
 /**
  * "You answered 4 of 6 segments correctly (67%)." For a quiz finished before every segment was
  * answered (an incomplete result), the proportion is of the segments answered, as in
- * QuizSession.score() (electroclean/training/quiz.py).
+ * QuizSession.score() (electrotag/training/quiz.py).
  */
 export function scoreText(score) {
   const items = score.n_items ?? score.n_answered ?? 0;

@@ -1,4 +1,4 @@
-/* ElectroClean in the browser: the design system.
+/* ElectroTag in the browser: the design system.
 
    Editorial and precise. One typeface, Newsreader, sets everything: text at its own optical size,
    headings at a sturdy text cut (opsz 24) with tight tracking, figures in tabular digits so that
@@ -352,7 +352,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); width
 .page > h1 + .subtitle { margin-bottom: 32px; max-width: 760px; font: var(--t-16); }
 .demo-note { margin-top: 12px; font-style: italic; }
 
-/* sign-in: an illustration of EEG on a dark field with the name and what ElectroClean is for, and
+/* sign-in: an illustration of EEG on a dark field with the name and what ElectroTag is for, and
    the form on the warm side (js/views/signin.js, js/views/eegart.js) */
 .page.signin { max-width: none; padding: 0; }
 .signin-split { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(440px, 0.85fr); min-height: 100vh; min-height: 100dvh; }
