@@ -59,9 +59,15 @@ Manifest = {                          // what the browser needs to show a regist
 }
 
 Draft = {"annotations": [Annotation], "view": {"start_s": 12.0, "duration_s": 10.0, "first_channel": 0,
-         "n_channels": 32, "scale_factor": 1.0}, "elapsed_s": 312.4, "saved_at": "…",
+         "n_channels": 32, "scale_factor": 1.0}, "elapsed_s": 312.4,
+         "viewed": [[0.0, 64.5], [120.0, 130.0]], "saved_at": "…",
          "revises": 1}                // only in the draft of a revision: the version being revised
 ```
+
+A draft's `elapsed_s` is the time worked so far, without the time paused. `viewed` lists the
+stretches of the recording that have been on the screen, as `[start_s, end_s]` pairs in seconds
+(sorted and merged by the browser; at most 5000 pairs, each with `0 <= start_s <= end_s`, or 422
+`invalid_draft`). A draft without `viewed` counts as nothing viewed.
 
 ## Signing in
 
@@ -74,6 +80,28 @@ Draft = {"annotations": [Annotation], "view": {"start_s": 12.0, "duration_s": 10
 case-sensitive. `POST /logout` → `{}`. A request with a missing or expired
 token gets 401 `not_signed_in`; one without the header, 403 `missing_header`.
 
+A private invitation link (`user_invite` below) lets a new annotator choose
+their own password. The browser makes it from its own address with
+`?invite=<token>` (and `?server=<address>` when the page is served from
+another site than the study server), takes the token out of the address at
+once, and asks two calls that need no sign-in, because the token is the proof:
+
+`POST /invite/check` `{"token": "…"}` →
+`{"annotator_id": "A11", "display_name": "…", "study_name": "…", "expires_at": "…"}`, for the welcome card.
+
+`POST /invite/accept` `{"token": "…", "password": "…"}` → the answer of
+`POST /login`: the password is set, every earlier sign-in of the account ends,
+the invitation is used, and the person is signed in.
+
+A token that was never made, was replaced by a newer link or was withdrawn, or
+whose account is switched off or removed, is 404 `invite_unknown`; a used one
+409 `invite_used`; an expired one 409 `invite_expired`; each with a message in
+plain words that says what to do. A password of fewer than 8 characters is 400
+`bad_password`. Unsuccessful attempts count towards the limit of `POST /login`
+for the address (429 `too_many_attempts`). On Firebase these two calls do not
+exist: an invitation there is Firebase Authentication's own link to choose a
+password.
+
 `GET /me` →
 
 ```jsonc
@@ -85,6 +113,7 @@ token gets 401 `not_signed_in`; one without the header, 403 `missing_header`.
                 "notch_harmonics": false, "locked": false},
     "display": {"duration_s": 10.0, "n_channels": 32, "scalings": {"eeg": 5e-05, "…": 0.0}},
     "annotation": {"min_duration_samples": 1, "quick_labels": ["Eye-blink-artifact", "…"],
+                   "break_reminder_minutes": 50, "idle_pause_minutes": 3, "coverage_check": "warn" | "off",
                    "allow_revisions": true},
     "gamification": {"enabled": true, "leaderboard": true},
     "logging": {"interactions": true, "pointer_hz": 5, "idle_after_s": 30},
@@ -100,18 +129,22 @@ token gets 401 `not_signed_in`; one without the header, 403 `missing_header`.
 
 `quizzes` lists the short-segment quizzes the annotator may take (see "The
 short-segment quiz" below); `logging_notice` is the study's own notice when the
-administrator has written one. `annotation.allow_revisions` says whether a
-finished study recording may be opened again and revised (see "Revisions"
-below), and `gamification` whether the home page shows the game elements and
-the leaderboard (see "Achievements"; `leaderboard` is false whenever `enabled`
-is).
+administrator has written one. The three settings for long sessions in
+`annotation` are described in the [administrator guide](../administrator_guide.md): minutes of work before a
+break reminder and minutes without input before the clock pauses itself (0 turns
+either off), and whether Save and Finish first lists the parts not yet viewed.
+`annotation.allow_revisions` says whether a finished study recording may be
+opened again and revised (see "Revisions" below), and `gamification` whether
+the home page shows the game elements and the leaderboard (see
+"Achievements"; `leaderboard` is false whenever `enabled` is).
 
 ## Assignments and opening a recording
 
 `GET /assignments` →
 `{"items": [{"recording_id", "file_name", "format", "mode": "standard" | "guided" | "practice" | "assessment",
 "context_id": "" | "<reference set>", "status": "todo" | "in_progress" | "done", "duration_s",
-"n_channels", "size_bytes", "repeat": false, "saved": Saved | null, "revising": false}],
+"n_channels", "size_bytes", "repeat": false, "elapsed_s", "n_annotations", "completed_at", "draft",
+"saved": {"version", "first_saved_at", "total_elapsed_s"} | null, "revising": false}],
 "next": "<recording_id>" | null, "next_item": {"recording_id", "mode", "context_id"} | null}`. `next` is the
 recording to do next: unfinished work first, then the training programme's
 next step, then the study's selection strategy (`manual`: the assignment order;
@@ -121,16 +154,21 @@ context. A trainee's list holds the recordings of the programme's unlocked
 stages. `repeat` is true for a practice recording the programme lets the
 trainee annotate again (its `status` is then `todo`).
 
-`saved` describes what the annotator has saved of the recording, from the
-completion register, for the history on the home page:
-`Saved = {"version": 2, "saved_at": "…", "first_saved_at": "…", "n_annotations": 14, "elapsed_s": 95.2,
-"total_elapsed_s": 707.5}`. `version` is the latest attempt (1 for the first
-save, 2 for its first revision, and so on), `saved_at` when it was saved and
-`first_saved_at` when the first version was, `n_annotations` and `elapsed_s`
-belong to the latest version and `total_elapsed_s` adds up the time of every
-version (each null where the register does not have it). `saved` is null for a
-recording never saved. `revising` is true for a done recording with a revision
-under way (its draft is kept; `status` stays `done`).
+For the annotator's progress and history on the home page, a `done` item
+carries what the completion register says of its latest attempt (the highest
+attempt number, so a revision once there is one): `elapsed_s` (the time worked
+on that version, pauses left out), `n_annotations` and `completed_at`; they
+are null for other items. `saved` adds what only the history needs, for any
+item saved at least once: `version` (1 for the first save, 2 for its first
+revision, and so on), `first_saved_at`, when the first version was saved, and
+`total_elapsed_s`, the time of every version added up (null where the register
+does not have it); it is null for a recording never saved. `revising` is true
+for a `done` item with a revision under way (its draft is kept; `status` stays
+`done`). An `in_progress` item, and a `done` one being revised, carries
+`draft`, a summary of the unfinished work kept with the study:
+`{"elapsed_s", "n_annotations", "viewed_s", "saved_at"}`, where `viewed_s` is
+the seconds of the recording in the draft's `viewed` (overlaps counted once);
+`draft` is null for other items.
 
 `POST /match` `{"file_name", "size_bytes", "format", "sha256": "<hex>", "sfreq", "n_samples", "ch_names": [...], "revise": false}` →
 
@@ -328,8 +366,10 @@ when `can_continue` is true. For `find_unnamed`, a match adds `"found": {"label"
 "description", "note"}`. A check of another step than the current one gets 409
 `wrong_step` (with `current_step`); after the last step, a check only reports
 extras (`"complete": true`). When `can_continue` is true,
-`POST …/continue {"step": 3}` records the step (stars from failed checks and
-Show me) and returns the next `Step` with `"previous": {"step", "stars",
+`POST …/continue {"step": 3, "paused_s": 12.5}` records the step (stars from failed checks and
+Show me, and its time in `seconds`, less `paused_s`, the seconds the trainee was
+paused during the step, which is optional and ignored unless a number of at
+least 0) and returns the next `Step` with `"previous": {"step", "stars",
 "attempts", "failed_attempts", "used_show_me", "seconds"}`, or `{"complete": true,
 "summary": {"steps", "stars", "max_stars", "attempts", "failed_attempts", "shown", "time_s"}, "previous",
 "message"}` (409 `not_matched` if the last check of that step did not allow it).
@@ -393,7 +433,9 @@ AuditEntry = {"at": "2026-10-28T10:15:02.120+00:00", "by": "ADMIN", "op": "user_
               "summary": "Added A03 (Annotator three) as an annotator", "details": {...}}
 UserRecord = {"annotator_id": "A03", "display_name": "Annotator three", "email": "a03@example.org" | null,
               "role": "annotator" | "admin", "status": "active" | "disabled", "created_at": "…",
-              "last_seen": "…" | null, "notes": "", "assigned": 12, "done": 4, "programme": "<set_id>" | null}
+              "last_seen": "…" | null, "notes": "", "assigned": 12, "done": 4, "programme": "<set_id>" | null,
+              "invitation": {"state": "none" | "invited" | "accepted" | "expired" | "revoked",
+                             "invited_at": "…" | null, "expires_at": "…" | null, "ended_at": "…" | null}}
 RecordingRecord = {"scope": "study" | "set:<set_id>", "recording_id": "sub-001/eeg/sub-001_task-rest_eeg.vhdr",
               "file_name", "format", "sfreq", "n_samples", "duration_s", "n_channels", "size_bytes",
               "sha256", "registered_at", "registered_by", "registered_via": "browser" | "command",
@@ -427,11 +469,13 @@ study's own recordings have `"self_contained": false` and `"scope": "study"`.
 | `settings_get` | `{}` | `{"name", "settings": {"filters", "display", "channels", "selection", "logging", "annotation", "loading", "discovery", "gamification"}, "logging_notice", "logging_notice_is_default"}`: the effective values of the blocks of `electroclean_study.json` that a study may change |
 | `settings_update` | `{"name"?, "settings"?: {block: {key: value}}, "logging_notice"?}` | as `settings_get`. Each key given replaces that setting; the result is checked with ElectroClean's own settings code and refused with 400 `invalid_settings` and the reason (also for a block or key that cannot be changed). `"logging_notice": ""` goes back to ElectroClean's own notice |
 | `users_list` | `{}` | `{"users": [UserRecord]}` (disabled accounts too) |
-| `user_add` | `{"annotator_id", "display_name"?, "email"?, "role"?: "annotator", "password"?}` | `{"user": UserRecord, "invite_link": str \| null, "temporary_password": str \| null}`. On Firebase `email` is required (400 `email_required`), the Firebase Authentication user is created (or, for a person already in another study of the project, given this study) with the custom claims below, and `invite_link` lets the person choose a password when none is given. On the server a temporary password (three groups of four characters) is made when none is given. A password has 8 to 200 characters. 409 `user_exists`, 409 `email_in_use` |
+| `user_add` | `{"annotator_id", "display_name"?, "email"?, "role"?: "annotator", "password"?, "invite"?: false, "expires_days"?: 14}` | `{"user": UserRecord, "invite_link": str \| null, "temporary_password": str \| null}`, with `"invite_token", "expires_at"` when `invite` is true. On Firebase `email` is required (400 `email_required`), the Firebase Authentication user is created (or, for a person already in another study of the project, given this study) with the custom claims below, and `invite_link` lets the person choose a password when none is given. On the server a temporary password (three groups of four characters) is made when none is given; with `"invite": true` the account is made with an invitation instead (as `user_invite`), and nobody knows its first password. A password has 8 to 200 characters; a password and `invite` together are 400. 409 `user_exists`, 409 `email_in_use` |
 | `user_update` | `{"annotator_id", "display_name"?, "role"?, "status"?, "notes"?}` | `{"user": UserRecord}`; 404 `unknown_user`. Disabling ends the person's sessions at once and stops them signing in; on Firebase the role is also written into their claims. An administrator cannot demote or disable themselves (409 `self`) |
 | `user_reset_password` | `{"annotator_id"}` | `{"invite_link" \| null, "temporary_password" \| null}`: a new password link (Firebase) or a new temporary password (the server, which also ends every session of the account) |
+| `user_invite` | `{"annotator_id", "expires_days"?: 14}` | `{"invite_token": str \| null, "invite_link": str \| null, "expires_at": str \| null, "invitation": UserRecord.invitation}`. On the server a new single-use invitation: a random token (32 bytes) kept only as its SHA-256 hash with its expiry (1 to 90 days, 400 otherwise); any earlier invitation of the account stops working. The browser makes the private link from `invite_token`. On Firebase `invite_link` is Firebase Authentication's link to choose a password (the account needs an email address, 409 `no_email`) and its expiry is Firebase's own. 404 `unknown_user`; 409 `disabled` for an account that is switched off. Switching the account off or removing it ends its invitation |
+| `user_invite_revoke` | `{"annotator_id"}` | `{"invitation": UserRecord.invitation}`: the open invitation stops working at once; 409 `no_invitation` when there is none; 422 `cannot_revoke` on Firebase, where a link once made cannot be withdrawn (switch the account off instead) |
 | `user_remove` | `{"annotator_id"}` | `{}`: the account leaves the study with its assignments, programme, drafts and guided progress; its results and logs stay; not oneself (409 `self`). On Firebase the study is taken out of the person's claims, and a Firebase user who takes part in no other study is deleted |
-| `assignments_list` | `{"annotator_id"?}` | `{"items": [{"annotator_id", "recording_id", "mode", "context_id", "status", "attempts", "last_activity"}]}` (what each person is given, the training programme's recordings included) |
+| `assignments_list` | `{"annotator_id"?}` | `{"items": [{"annotator_id", "recording_id", "mode", "context_id", "status", "attempts", "last_activity", "elapsed_s", "n_annotations", "saved_at"}]}` (what each person is given, the training programme's recordings included). `attempts` counts the saves (a revision is another attempt); `elapsed_s` is the time of every saved attempt together, or of the draft while the work is in progress; `n_annotations` and `saved_at` are those of the latest saved attempt by its number (null before one) |
 | `assign` | `{"annotator_ids": [..], "recording_ids": [..] \| "all": true, "mode"?: "standard", "context_id"?}` | `{"added", "already", "retired"}`: retired recordings are skipped and counted in `retired`. 404 `unknown_user`, 404 `unknown_recording` (not registered in the scope of that mode and set), 400 `not_in_set` (a training recording outside the set), 409 `not_allowed` (the set names its allowed annotators and this person is not one) |
 | `unassign` | `{"annotator_id", "recording_id", "mode"?, "context_id"?}` | `{}`; 409 `done` for a completed item, 404 `not_assigned` |
 | `programme_set` | `{"annotator_id", "set_id": str \| null}` | `{}`; 404 `no_reference_set`, 409 `not_allowed` |
@@ -453,12 +497,35 @@ study's own recordings have `"self_contained": false` and `"scope": "study"`.
 | `quiz_item_add` | `{"set_id", "recording_id", "start_s", "end_s", "correct_label", "accepted_labels"?, "explanation"?, "context_s"?: 2.0, "item_id"?}` | `{"item": QuizItem}`. The recording must be registered in the set's scope (404 `unknown_recording`); the segment lies within it; the labels are the catalogue's, or "No artifact / none of these" when the set offers it (`quiz.include_none_option`). Without `item_id` the next free `q01`, `q02` … is used; an existing `item_id` is replaced |
 | `quiz_item_remove` | `{"set_id", "item_id"}` | `{}`; 404 `unknown_item` |
 | `progress` | `{}` | as `GET /admin/progress` |
+| `stats` | `{"work"?: "study" \| "all"}` | `Stats` (below): how far the study has got and how long the work takes, from the completion register (`elapsed_s`, `n_annotations`, `completed_at`), the drafts, the assignments, the accounts' `last_seen` and the visits. `work` `study` counts the study's own annotation (mode `standard`), `all` training too; 400 otherwise. A recording saved more than once (a revision, or a practice recording repeated) counts as one recording done, on the day of its first save, with the annotations of its latest attempt and the time of all its attempts together; `saved` per recording is the number of people who saved it |
 | `agreement` | `{"annotator_ids"?, "recording_ids"?, "modes"?: ["standard"], "config"?: {..AnalysisConfig fields..}}` | `{"summary": {"n_recordings", "n_comparable_recordings", "annotators", "config", "key_results": [..]}, "report_html": str, "tables": {"<name>.tsv": str}, "warnings": [..]}`, computed on demand with `electroclean.reliability` (the files of `electroclean-agreement`). Annotators and modes are chosen with `annotator_ids` and `modes`, not in `config`; settings it refuses give 400 `invalid_config`; 422 `not_enough` when no recording has two annotators. When the tables would exceed 12 MB, `events_matched.tsv` and `events_unmatched.tsv` are left out with a warning |
 | `activity` | `{"annotator_ids"?}` | `{"report_html": str, "tables": {"visits.tsv": str, "recordings.tsv": str}}`, with `electroclean.activity`; 422 `no_logs` when there are no interaction logs |
 | `competency` | `{"set_id", "annotator_id"}` | `{"report": {..}, "html": str}` (`competency_report`, made again and kept, and `competency_html`); 404 `not_complete` until every assessment recording is saved (also for a set without assessment recordings) |
 | `results_zip` | `{}` | `{"file_name", "base64", "size_bytes"}`: the results folder as `GET /admin/results.zip` gives it, quiz results included; 413 `too_large` (with `size_bytes`) above 25,000,000 bytes (use `electroclean-web export`) |
 | `audit` | `{"before"?: str, "limit"?: 50}` | `{"entries": [AuditEntry], "next": str \| null}`, newest first; `before` is the `next` of the page before (400 `bad_request` otherwise); `limit` 1 to 500 |
 | `visits` | `{"annotator_id"?, "limit"?: 100}` | `{"visits": [{"visit_id", "annotator_id", "mode", "context_id", "started_at", "closed_at", "n_events"}]}`, newest first; `limit` 1 to 1000 |
+
+```jsonc
+Stats = {"generated_at": "…", "work": "study", "today": "2026-10-28", "days": ["2026-09-29", …, "2026-10-28"] /* 30 */,
+         "totals": {"assigned", "done", "in_progress", "todo", "remaining", "share_done": 0.4 | null,
+                    "annotator_hours": 12.5, "median_minutes": 18.2 | null, "done_7d", "done_30d",
+                    "pace_per_day": 1.3, "pace_days": 14,
+                    "projection": {"status": "projected" | "complete" | "not_enough", "date": "2026-12-01" | null}},
+         "daily": [0, 2, …] /* completions on each of the days */,
+         "annotators": [{"annotator_id", "display_name", "role", "status", "assigned", "done", "in_progress", "todo",
+                         "share_done", "time_s", "in_progress_s", "median_s", "median_annotations",
+                         "last_active", "done_7d", "daily": [..]}],
+         "recordings": [{"scope", "recording_id", "file_name", "assigned", "done", "in_progress", "saved",
+                         "median_s", "median_annotations", "min_annotations", "max_annotations"}]}
+```
+
+The totals and the recordings count the work of active accounts; every
+account has its row. Times are the `elapsed_s` the browser measured: the time a
+recording was open and not paused. `annotator_hours` adds the time of drafts
+still in progress to that of the saved work; `time_s` is a person's saved work
+and `in_progress_s` their drafts. A day is the local date at the start of a
+time stamp. The projection divides the work remaining by the pace of the last
+14 days, and is `not_enough` with fewer than 3 completions in them.
 
 Mistakes in a body (a missing or malformed field) are 400 `bad_request` with a
 message that names the field. On Firebase, an operation that needs Firebase
@@ -619,6 +686,7 @@ The fields of each call:
 | `ec_visit_open` | the body of `POST /visits` |
 | `ec_visit_events`, `ec_visit_close` | `{"visit_id", ...the body of the request}` |
 | `ec_admin` | `{"op", ...the body of `POST /admin/{op}`}` |
+| (none) | `POST /invite/check` and `POST /invite/accept` have no function: on Firebase `user_invite` answers Firebase Authentication's `invite_link` |
 | `ec_quiz` | `{"set_id", ...the body of `POST /quiz/{set_id}`}` |
 | `ec_achievements` | none for `GET /me/achievements`; `{"goal_per_week"}` or `{"leaderboard_hidden"}` for `POST` |
 

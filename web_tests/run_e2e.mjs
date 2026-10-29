@@ -9,7 +9,7 @@
 //
 // Serves electroclean/web/static with `python -m http.server`, runs a stand-in study server
 // (GET /api/v1/health, POST /login and the few calls the sign-in needs, as docs/web/api.md) and a
-// second static server whose config.json each test can set, and (for h_study_server) the real
+// second static server whose config.json each test can set, and (for the specs that need it) the real
 // demonstration server, `electroclean-web demo`, then runs web_tests/e2e/*.e2e.mjs.
 
 import { spawn } from 'node:child_process';
@@ -121,8 +121,8 @@ function configStatic() {
 }
 
 // ------------------------------------------- the real study server (electroclean-web demo)
-// Started only when a test needs it (h_study_server, n_history_games) and the project's Python has the server's
-// packages; the test is skipped otherwise.
+// Started only when a test needs it (the *_study_server specs, and tests marked needs: 'study') and the
+// project's Python has the server's packages; the test is skipped otherwise.
 async function studyServer(python) {
   const check = spawn(python, ['-c', 'import fastapi, uvicorn, mne'], { stdio: 'ignore' });
   const usable = await new Promise((r) => check.on('exit', (code) => r(code === 0)));
@@ -163,9 +163,10 @@ async function main() {
   const browser = await playwright[browserName].launch({ headless: !headed });
   if (shotsDir) fs.mkdirSync(shotsDir, { recursive: true });
   const specs = fs.readdirSync(path.join(HERE, 'e2e')).filter((f) => f.endsWith('.e2e.mjs') && f.includes(filter)).sort();
-  // The real study server, when a file's tests need it (its name says study_server, or a test says needs: 'study').
-  const needsStudy = (f) => f.includes('study_server') || /needs: 'study'/.test(fs.readFileSync(path.join(HERE, 'e2e', f), 'utf8'));
-  const study = specs.some(needsStudy) ? await studyServer(python) : null;
+  // The real study server starts when a spec needs it: the *_study_server specs, and any spec with
+  // a test marked needs: 'study'.
+  const wantsStudy = (f) => f.includes('study_server') || /needs:\s*'study'/.test(fs.readFileSync(path.join(HERE, 'e2e', f), 'utf8'));
+  const study = specs.some(wantsStudy) ? await studyServer(python) : null;
   let failed = 0;
   for (const file of specs) {
     const mod = await import(pathToFileURL(path.join(HERE, 'e2e', file)).href);

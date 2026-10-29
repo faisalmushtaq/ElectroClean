@@ -534,6 +534,28 @@ def test_accounts_with_firebase_authentication(study: str) -> None:
     assert "oobCode" not in json.dumps(log) and "another-password" not in json.dumps(log)
 
 
+def test_invitations_and_stats_on_firebase(study: str) -> None:
+    svc = firebase_service(study)
+    email = f"a08-{study}@example.org"
+    out = admin_ok(svc, "user_add", {"annotator_id": "A08", "email": email, "invite": True})
+    assert out["temporary_password"] is None and "oobCode" in out["invite_link"] and out["invite_token"] is None
+    states = {u["annotator_id"]: u["invitation"] for u in admin_ok(svc, "users_list")["users"]}
+    assert states["A08"]["state"] == "invited" and states["A08"]["expires_at"] is None
+    again = admin_ok(svc, "user_invite", {"annotator_id": "A08"})
+    assert "oobCode" in again["invite_link"] and again["invitation"]["state"] == "invited"
+    choose_password(again["invite_link"], "an-invited-password")
+    sign_in(email, "an-invited-password")
+    # A Firebase link cannot be withdrawn; an account without an email address gets none.
+    assert admin_err(svc, "user_invite_revoke", {"annotator_id": "A08"}).code == "cannot_revoke"
+    admin_ok(svc, "user_update", {"annotator_id": "A08", "status": "disabled"})
+    assert admin_err(svc, "user_invite", {"annotator_id": "A08"}).code == "disabled"
+    log = admin_ok(svc, "audit", {"limit": 10})["entries"]
+    assert "user_invite" in {e["op"] for e in log} and "oobCode" not in json.dumps(log)
+    stats = admin_ok(svc, "stats")
+    assert len(stats["days"]) == 30 and {"assigned", "done", "projection"} <= set(stats["totals"])
+    assert "A08" in {p["annotator_id"] for p in stats["annotators"]}
+
+
 # ------------------------------------------------- sign-in, callables, rules
 def sign_in(email: str, password: str = PASSWORD) -> str:
     r = httpx.post(f"http://{AUTH}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=fake-key",

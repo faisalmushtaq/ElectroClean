@@ -1,5 +1,5 @@
 // Annotating an example recording with the keyboard and the mouse, then Save and Finish.
-import { signIn, waitForRoute, openExample, state, eegPoint, drag, annotations, clickDialogButton } from './helpers.mjs';
+import { signIn, waitForRoute, openExample, state, eegPoint, drag, annotations, clickDialogButton, pressSave } from './helpers.mjs';
 
 export const tests = [
   {
@@ -113,8 +113,7 @@ export const tests = [
       await page.keyboard.press('Delete');
       const before = (await annotations(page)).length;
       await t.screenshot(page, 'annotate_marked');
-      await page.click('.ws-actions button.primary');
-      await page.waitForSelector('.dialog');
+      await pressSave(page);
       assert.match(await page.textContent('.dialog'), new RegExp(`Save ${before} annotation\\(s\\) and finish this recording\\?`));
       await t.screenshot(page, 'save_confirm');
       await clickDialogButton(page, 'Save and Finish');

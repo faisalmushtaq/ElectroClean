@@ -10,7 +10,7 @@
 import { h, clear } from '../ui/dom.js';
 import { logger } from '../log/logger.js';
 import {
-  doneThisWeek, goalShare, hoursText, milestones, nextRecordingStep, streaks, teamShare,
+  doneThisWeek, goalShare, milestones, nextRecordingStep, streaks, teamShare,
 } from '../games/milestones.js';
 
 const SVG = 'http://www.w3.org/2000/svg';
@@ -21,37 +21,56 @@ function svgEl(tag, attrs) {
   return el;
 }
 
+/** What a milestone's badge says, for screen readers and as its title ("5 days in a row, reached"). */
+export function badgeLabel(m) {
+  const what = {
+    recordings: `${m.target} recording${m.target === 1 ? '' : 's'} saved`,
+    streak: `${m.target} days in a row`,
+    thorough: `${m.target} recordings viewed in full`,
+    team: `The team at ${Math.round(m.target * 100)} % of the study`,
+  }[m.kind] || m.name;
+  return `${what}, ${m.reached ? 'reached' : 'not yet reached'}`;
+}
+
 /**
- * A milestone's badge, drawn: a ring (solid and ink blue once reached, dashed and grey before),
- * and inside it the count for recordings and recordings viewed in full, a row of day marks for a
- * streak, or the share of the study for the team.
+ * A milestone's badge, drawn at 44 pixels so that its figures are set at the type scale's sizes. A
+ * reached badge has a solid ink-blue ring on a blue ground; one not yet reached a dashed grey ring
+ * and no ground. Inside: the count for recordings; the count over a small calendar for days in a
+ * row; a disc with the count for recordings viewed in full; and the share of the study as a pie for
+ * the team.
  */
-export function badge(m, { size = 40 } = {}) {
-  const svg = svgEl('svg', { viewBox: '0 0 40 40', width: size, height: size, 'aria-hidden': 'true' });
-  svg.classList.add('badge', `badge-${m.kind}`);
+export function badge(m) {
+  const svg = svgEl('svg', { viewBox: '0 0 44 44', width: 44, height: 44, role: 'img', 'aria-label': badgeLabel(m) });
+  const title = svgEl('title', {});
+  title.textContent = badgeLabel(m);
+  svg.append(title);
+  svg.classList.add('ms-badge', `ms-badge-${m.kind}`);
   if (m.reached) svg.classList.add('reached');
-  svg.append(svgEl('circle', { class: 'badge-ring', cx: 20, cy: 20, r: 18, pathLength: 100 }));
+  svg.append(svgEl('circle', { class: 'badge-ring', cx: 22, cy: 22, r: 20, pathLength: 100 }));
+  const text = (y, cls = '') => {
+    const t = svgEl('text', { class: `badge-text${cls}`, x: 22, y, 'text-anchor': 'middle', 'dominant-baseline': 'central' });
+    t.textContent = String(m.target);
+    return t;
+  };
   if (m.kind === 'streak') {
-    const n = m.target;
-    const w = 2;
-    const gap = n > 5 ? 1 : 2;
-    const total = n * w + (n - 1) * gap;
-    for (let i = 0; i < n; i++) svg.append(svgEl('rect', { class: 'badge-mark', x: 20 - total / 2 + i * (w + gap), y: 14, width: w, height: 12 }));
+    // the count, and under it a small calendar: a box with its top band and two rings
+    svg.append(text(16),
+      svgEl('rect', { class: 'badge-glyph', x: 16.5, y: 27.5, width: 11, height: 8 }),
+      svgEl('path', { class: 'badge-glyph', d: 'M16.5 30.5h11M19.5 25.5v3M24.5 25.5v3' }));
   } else if (m.kind === 'team') {
     const f = Math.min(1, m.target);
-    if (f >= 1) svg.append(svgEl('circle', { class: 'badge-fill', cx: 20, cy: 20, r: 11 }));
+    svg.append(svgEl('circle', { class: 'badge-track', cx: 22, cy: 22, r: 12 }));
+    if (f >= 1) svg.append(svgEl('circle', { class: 'badge-fill', cx: 22, cy: 22, r: 12 }));
     else {
       const a = 2 * Math.PI * f;
-      const x = 20 + 11 * Math.sin(a);
-      const y = 20 - 11 * Math.cos(a);
-      svg.append(svgEl('circle', { class: 'badge-track', cx: 20, cy: 20, r: 11 }),
-        svgEl('path', { class: 'badge-fill', d: `M20 20 L20 9 A11 11 0 ${f > 0.5 ? 1 : 0} 1 ${x.toFixed(2)} ${y.toFixed(2)} Z` }));
+      const x = 22 + 12 * Math.sin(a);
+      const y = 22 - 12 * Math.cos(a);
+      svg.append(svgEl('path', { class: 'badge-fill', d: `M22 22 L22 10 A12 12 0 ${f > 0.5 ? 1 : 0} 1 ${x.toFixed(2)} ${y.toFixed(2)} Z` }));
     }
+  } else if (m.kind === 'thorough') {
+    svg.append(svgEl('circle', { class: 'badge-disc', cx: 22, cy: 22, r: 15 }), text(22, ' on-disc'));
   } else {
-    if (m.kind === 'thorough') svg.append(svgEl('circle', { class: 'badge-inner', cx: 20, cy: 20, r: 13 }));
-    const t = svgEl('text', { class: 'badge-text', x: 20, y: 20, 'text-anchor': 'middle', 'dominant-baseline': 'central' });
-    t.textContent = String(m.target);
-    svg.append(t);
+    svg.append(text(22));
   }
   return svg;
 }
@@ -70,7 +89,7 @@ export function logMilestones(list) {
 
 function celebration(app, list) {
   const card = h('div.celebrate', { role: 'status', 'data-log': 'milestone-celebration' },
-    h('div.celebrate-badges', {}, list.slice(0, 3).map((m) => badge(m, { size: 48 }))),
+    h('div.celebrate-badges', {}, list.slice(0, 3).map((m) => badge(m))),
     h('div.celebrate-text', {},
       h('p.celebrate-title', {}, list.length === 1 ? `Milestone reached: ${list[0].name}` : `${list.length} milestones reached`),
       h('p.caption', {}, list.length === 1 ? list[0].text : list.map((m) => m.name).join(', ') + '.')),
@@ -132,34 +151,34 @@ function milestonesBlock(facts) {
   const item = (m) => h('li', { class: m.reached ? 'reached' : 'open', 'data-milestone': m.id }, badge(m),
     h('div', {}, h('b', {}, m.name), h('br'), h('span.caption', {}, m.text)));
   return h('div.games-milestones', {},
-    h('h3', {}, 'Milestones'),
-    got.length ? h('ul.badge-row', { 'aria-label': 'Milestones reached' }, got.map((m) => h('li', { title: `${m.name}: ${m.text}`, 'data-milestone': m.id }, badge(m))))
+    got.length ? h('ul.badge-row', { 'aria-label': 'Milestones reached' }, got.map((m) => h('li', { 'data-milestone': m.id }, badge(m))))
       : h('p.caption', {}, 'Save your first recording to reach your first milestone.'),
     got.length ? h('p.caption', {}, [next ? `Next: ${next.name}, ${next.remaining} to go.` : 'Every recording milestone is reached.',
       current > 1 ? ` You have saved recordings ${current} days running.` : ''].join('')) : null,
     h('details.games-all', {}, h('summary', {}, `All milestones (${got.length} of ${all.length} reached)`), h('ul.milestone-list', {}, all.map(item))));
 }
 
-/** The "Your progress" card: counters, goal, team, milestones (and a celebration after a save). */
+/**
+ * The "Goals and milestones" card of the side column: the milestones, the weekly goal, the team's
+ * progress and the annotations made (for interest only). The annotator's own recordings done and
+ * time worked are on the progress card at the top of the page (home.js), so they are not repeated.
+ */
 function progressCard(app, facts) {
   const c = facts.counters || {};
   const team = facts.team || {};
   const share = teamShare(team);
   const celebrate = app.celebrate && app.celebrate.length ? celebration(app, app.celebrate) : null;
   app.celebrate = null;
-  return h('section.card.games-card', { 'data-section': 'progress' },
+  return h('section.card.games-card', { 'data-section': 'milestones' },
     celebrate,
-    h('h2', {}, 'Your progress'),
-    h('dl.games-counters', {},
-      h('div', {}, h('dt', {}, 'Recordings done'), h('dd', {}, String(c.done || 0), c.assigned ? h('span.caption', {}, ` of ${c.assigned}`) : null)),
-      h('div', {}, h('dt', {}, 'Time worked'), h('dd', {}, hoursText(c.worked_s))),
-      h('div', {}, h('dt', {}, 'Annotations'), h('dd', {}, String(c.annotations || 0)))),
-    h('p.caption.games-note', {}, 'Annotations are counted for interest only: mark what you see, as many or as few as there are.'),
+    h('h2', {}, 'Goals and milestones'),
+    milestonesBlock(facts),
     goalBlock(app, facts),
     share !== null ? h('div.games-team', {},
-      h('div.games-line', {}, h('span', {}, 'The whole team'), h('span.games-figure', {}, `${team.done} of ${team.assigned} recordings · ${percent(share)}`)),
+      h('div.games-line', {}, h('span', {}, 'The whole team'), h('span.games-figure', {}, `${team.done} of ${team.assigned} · ${percent(share)}`)),
       bar(share, 'The whole team')) : null,
-    milestonesBlock(facts));
+    h('p.caption.games-note', { 'data-stat': 'annotations' },
+      `${c.annotations || 0} annotation${c.annotations === 1 ? '' : 's'} made, counted for interest only: mark what you see, as many or as few as there are.`));
 }
 
 /** The anonymised leaderboard: pseudonyms only, top ten and the annotator's own place. */

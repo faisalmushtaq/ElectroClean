@@ -24,6 +24,7 @@ import * as rules from '../training/rules.js';
 import { DEFAULT_PASS, describePassRule, practiceFeedback } from '../training/scoring.js';
 import { escapeHtml, local, newId, nowLocalIso, session } from '../util.js';
 import { sha256Hex } from '../data/sha256.js';
+import { coveredS, fromDraft } from '../viewer/coverage.js';
 import { ADJECTIVES, ANIMALS } from '../games/words.js';
 
 const STATE_KEY = 'electroclean.demo.v1';
@@ -141,6 +142,9 @@ export function exampleRecording(recordingId) {
 
 function fileNameOf(spec) { return `${spec.stem}_eeg.edf`; }
 
+/** Seconds of a recording a draft's viewed stretches cover. */
+function viewedSeconds(viewed) { return Math.round(coveredS(fromDraft(viewed, Infinity)) * 100) / 100; }
+
 const LABELS = new Map(CATALOGUE.labels.map((l) => [l.label, l]));
 
 function emptyState() {
@@ -202,6 +206,14 @@ export class DemoBackend {
     const user = saved ? this._admin.user(saved.annotator_id) : null;
     this.annotatorId = user && user.status === 'active' ? user.annotator_id : null;
     this.visits = new Map();
+    // Another tab of the demonstration (a person opening their invitation link, say) changed the
+    // state kept in this browser: carry on from it, so that this tab does not write an older copy back.
+    if (storage === local && typeof window !== 'undefined' && window.addEventListener) {
+      window.addEventListener('storage', (e) => {
+        if (e.key !== STATE_KEY || !e.newValue) return;
+        try { this.state = { ...emptyState(), ...JSON.parse(e.newValue) }; } catch { /* kept as it was */ }
+      });
+    }
   }
 
   get isDemo() { return true; }
@@ -231,12 +243,26 @@ export class DemoBackend {
         `The annotator ID or password is not right. In the demonstration, sign in as A01, T01 or ADMIN with the password ${DEMO_PASSWORD}.`);
     }
     if (user.status !== 'active') throw new ApiError(403, 'account_disabled', 'This account has been switched off. Ask the study team.');
+    return this._signInAs(user);
+  }
+
+  _signInAs(user) {
+    const aid = user.annotator_id;
     this.annotatorId = aid;
     this._admin.touch(aid);
     const token = `demo-${newId()}`;
     this.tokens.set(TOKEN_KEY, { annotator_id: aid, token });
     return { token, expires_in_s: 43200, annotator_id: aid, display_name: user.display_name, role: user.role };
   }
+
+  /** The demonstration takes private invitation links (?invite=<token>) made in its admin area, in this browser. */
+  get acceptsInvites() { return true; }
+
+  /** POST /invite/check: whose invitation a link's token is. */
+  async inviteCheck(token) { return this._admin.inviteCheck(token); }
+
+  /** POST /invite/accept: choose the password with the invitation and sign in. */
+  async inviteAccept(token, password) { return this._signInAs(this._admin.inviteAccept(token, password)); }
 
   async logout() {
     this.annotatorId = null;
@@ -418,10 +444,21 @@ export class DemoBackend {
     const aid = this._aid();
     const items = this._assignmentsFor(aid).map((a) => {
       const info = this._recordingInfo(a.rid);
+      const status = this._status(aid, a);
+      const key = this._key(aid, a.rid, a.mode, a.context_id);
+      // As the completion register says of a finished recording: its time and annotations (the latest save).
+      const sub = status === 'done' ? this._attempts(key).pop() : null;
+      const draft = status === 'in_progress' || (status === 'done' && this.state.drafts[key]) ? this.state.drafts[key] : null;
       return {
         recording_id: a.rid, file_name: info.file_name, format: info.format, mode: a.mode, context_id: a.context_id,
-        status: this._status(aid, a), duration_s: info.n_samples / info.sfreq, n_channels: info.ch_names.length,
-        size_bytes: info.size_bytes, ...this._history(aid, a),
+        status, duration_s: info.n_samples / info.sfreq, n_channels: info.ch_names.length,
+        size_bytes: info.size_bytes, repeat: false,
+        elapsed_s: sub ? Number((sub.session || {}).elapsed_s) || 0 : null,
+        n_annotations: sub ? (sub.annotations || []).length : null,
+        completed_at: sub ? sub.saved_at : null,
+        draft: draft ? { elapsed_s: Number(draft.elapsed_s) || 0, n_annotations: (draft.annotations || []).length,
+          viewed_s: viewedSeconds(draft.viewed), saved_at: draft.saved_at || null } : null,
+        ...this._history(aid, a),
       };
     });
     return { items, next: this._next(aid) };
@@ -453,10 +490,12 @@ export class DemoBackend {
     return mode === 'standard' && this.state.done[key] && this._revisionsAllowed() ? this._savedSummary(key) : null;
   }
 
-  /** The fields of GET /assignments for the history: the latest saved attempt and whether a revision is under way. */
+  /** The fields of GET /assignments that only the history needs, and whether a revision is under way. */
   _history(aid, a) {
     const key = this._key(aid, a.rid, a.mode, a.context_id);
-    return { saved: this._savedSummary(key), revising: Boolean(this.state.done[key] && this.state.drafts[key]) };
+    const sum = this._savedSummary(key);
+    return { saved: sum ? { version: sum.version, first_saved_at: sum.first_saved_at, total_elapsed_s: sum.total_elapsed_s } : null,
+      revising: Boolean(this.state.done[key] && this.state.drafts[key]) };
   }
 
   _next(aid) {
@@ -933,7 +972,7 @@ export class DemoBackend {
     };
   }
 
-  async guidedContinue(recordingId, { step }) {
+  async guidedContinue(recordingId, { step, paused_s: pausedS = 0 }) {
     const aid = this._aid();
     const setup = this._guidedSetup(recordingId);
     const st = this._guidedState(aid, recordingId);
@@ -944,7 +983,9 @@ export class DemoBackend {
     const i = st.index;
     st.matched[i] = result.candidate_id || '';
     st.stars[i] = rules.starsFor(st.failed[i] || 0, st.shown.includes(i));
-    st.seconds[i] = Math.max(0, (Date.now() - st.step_t0) / 1000);
+    // the time paused during the step (the page's pause) does not count
+    const paused = Number.isFinite(pausedS) && pausedS > 0 ? pausedS : 0;
+    st.seconds[i] = Math.max(0, (Date.now() - st.step_t0) / 1000 - paused);
     st.index += 1;
     st.step_t0 = Date.now();
     st.signature = null;

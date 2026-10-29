@@ -63,7 +63,8 @@ test('a revision in the demonstration: a new version, the earlier one kept, only
   assert.equal(one.revision, null);
   let item = (await b.assignments()).items.find((i) => i.recording_id === rid);
   assert.equal(item.status, 'done');
-  assert.deepEqual([item.saved.version, item.saved.n_annotations, item.saved.elapsed_s, item.revising], [1, 1, 30, false]);
+  assert.deepEqual([item.saved.version, item.n_annotations, item.elapsed_s, item.saved.total_elapsed_s, item.revising], [1, 1, 30, 30, false]);
+  assert.equal(item.saved.first_saved_at, item.completed_at);
 
   const body = await matchBody(b, rid);
   const done = await b.match(body);
@@ -92,7 +93,7 @@ test('a revision in the demonstration: a new version, the earlier one kept, only
   const subs = b.state.submissions.filter((s) => s.recording_id === rid);
   assert.deepEqual(subs.map((s) => [s.attempt, s.annotations.length]), [[1, 1], [2, 2]]);
   item = (await b.assignments()).items.find((i) => i.recording_id === rid);
-  assert.deepEqual([item.saved.version, item.saved.n_annotations, item.saved.total_elapsed_s, item.revising], [2, 2, 60, false]);
+  assert.deepEqual([item.saved.version, item.n_annotations, item.elapsed_s, item.saved.total_elapsed_s, item.revising], [2, 2, 30, 60, false]);
   const docs = b.resultsDocument().annotation_documents.filter((d) => d.recording.recording_id === rid);
   assert.deepEqual(docs.map((d) => d.session.context.revision ? d.session.context.revision.version : 1), [1, 2]);
 
@@ -191,7 +192,8 @@ test('the list of recordings: tabs, search, sorting and pages', () => {
     recording_id: `sub-${String(i).padStart(3, '0')}/eeg/sub-${String(i).padStart(3, '0')}_eeg.edf`,
     file_name: `sub-${String(i).padStart(3, '0')}_eeg.edf`, mode: 'standard', duration_s: 600 - i,
     status: i < 120 ? 'done' : i < 125 ? 'in_progress' : 'todo',
-    saved: i < 120 ? { version: i % 7 === 0 ? 2 : 1, saved_at: new Date(Date.UTC(2026, 9, 1) + i * 3600e3).toISOString(), n_annotations: i, elapsed_s: 60 } : null,
+    completed_at: i < 120 ? new Date(Date.UTC(2026, 9, 1) + i * 3600e3).toISOString() : null, n_annotations: i < 120 ? i : null, elapsed_s: i < 120 ? 60 : null,
+    saved: i < 120 ? { version: i % 7 === 0 ? 2 : 1, first_saved_at: null, total_elapsed_s: 60 } : null,
     revising: i === 3,
   }));
   assert.equal(visibleItems(items, { tab: 'todo' }).length, 180); // started or not
@@ -211,7 +213,7 @@ test('the list of recordings: tabs, search, sorting and pages', () => {
   assert.equal(pageOf(history, 99).page, 4);
   assert.equal(pageOf([], 3).from, 0);
   // what the history shows, read defensively
-  assert.deepEqual(savedOf({ status: 'done', saved: null, elapsed_s: 12, n_annotations: 4 }), { version: 1, saved_at: null, n_annotations: 4, elapsed_s: 12 });
+  assert.deepEqual(savedOf({ status: 'done', saved: null, elapsed_s: 12, n_annotations: 4, completed_at: 'x' }), { version: 1, saved_at: 'x', n_annotations: 4, elapsed_s: 12 });
   assert.equal(savedOf({ status: 'todo' }), null);
   assert.equal(savedOf(items[7]).version, 2);
 });

@@ -18,16 +18,20 @@ const MODES = { standard: 'Annotation', guided: 'Guided training', practice: 'Pr
 export const TABS = [['todo', 'To do'], ['in_progress', 'In progress'], ['done', 'Done'], ['all', 'All'], ['history', 'History']];
 export const SORTS = [['recent', 'Recently worked on'], ['name', 'File name'], ['length', 'Length']];
 
-/** The latest saved version of an item, read defensively (GET /assignments gives `saved` for saved items). */
+/**
+ * What the history shows of an item (GET /assignments): the latest attempt's `completed_at`,
+ * `n_annotations` and `elapsed_s`, and from `saved` its version and the time of every version
+ * together; null for an item never saved.
+ */
 export function savedOf(it) {
   const s = it && it.saved && typeof it.saved === 'object' ? it.saved : null;
   const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
   if (!s && it && it.status !== 'done') return null;
   return {
     version: (s && num(s.version)) || 1,
-    saved_at: (s && s.saved_at) || null,
-    n_annotations: s ? num(s.n_annotations) : num(it && it.n_annotations),
-    elapsed_s: (s && (num(s.total_elapsed_s) ?? num(s.elapsed_s))) ?? num(it && it.elapsed_s),
+    saved_at: (it && it.completed_at) || null,
+    n_annotations: num(it && it.n_annotations),
+    elapsed_s: (s ? num(s.total_elapsed_s) : null) ?? num(it && it.elapsed_s),
   };
 }
 
@@ -92,7 +96,6 @@ export function recordingsCard(app) {
   const st = listState(app);
   const count = (k) => visibleItems(items, { tab: k }).length;
   if (!st.tab) st.tab = count('todo') ? 'todo' : items.length ? 'history' : 'todo';
-  const done = count('done');
   const showMode = items.some((i) => i.mode !== 'standard');
 
   const body = h('div.rec-body');
@@ -183,7 +186,7 @@ export function recordingsCard(app) {
   draw();
 
   return h('section.card.recordings-card', { 'data-section': 'recordings' },
-    h('div.card-head', {}, h('h2', {}, 'Your recordings'), h('span.caption', {}, `${done} of ${items.length} done`)),
+    h('h2', {}, 'Your recordings'),
     items.length
       ? [tabs, h('div.rec-tools', {}, search, h('label.rec-sort-label', {}, h('span.caption', {}, 'Sort'), sort)), body]
       : h('p.caption', {}, 'Your study team assigns recordings to you.'),

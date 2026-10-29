@@ -18,7 +18,7 @@ from typing import Any
 from electroclean.app.common import now_local_iso
 
 #: Keys never written into an entry's details, whatever an operation passes.
-SECRET_KEYS = {"password", "temporary_password", "invite_link", "token", "base64", "document"}
+SECRET_KEYS = {"password", "temporary_password", "invite_link", "invite_token", "token", "base64", "document"}
 
 
 def _clean(value: Any, depth: int = 0) -> Any:

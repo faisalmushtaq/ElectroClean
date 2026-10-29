@@ -5,7 +5,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { signIn, waitForRoute, waitForTraces, annotations, eegPoint, drag, clickDialogButton, openExample } from './helpers.mjs';
+import { signIn, waitForRoute, waitForTraces, annotations, eegPoint, drag, clickDialogButton, openExample, pressSave } from './helpers.mjs';
 
 const PASSWORD = 'electroclean';
 
@@ -107,11 +107,11 @@ export const tests = [
       const page = await t.newPage({ width: 1440, height: 900 });
       await signIn(page, 'A01');
       await waitForRoute(page, 'home');
-      assert.match(await page.textContent('.games-card'), /Recordings done\s*0/);
+      assert.match(await page.textContent('.progress-card [data-stat="done"]'), /^0 of 3/);
+      assert.match(await page.textContent('.games-card'), /Goals and milestones/);
       await openExample(page, 0);
       await mark(page, 3.0, 3.4);
-      await page.click('.ws-actions button.primary');
-      await page.waitForSelector('.dialog');
+      await pressSave(page);
       assert.match(await page.textContent('.dialog'), /You can still revise them later from your history/);
       await clickDialogButton(page, 'Save and Finish');
       await page.waitForSelector('.dialog .dialog-title');
@@ -152,12 +152,15 @@ export const tests = [
       const subs = await page.evaluate(() => globalThis.ElectroClean.backend.state.submissions.filter((s) => s.recording_id.includes('demo01'))
         .map((s) => [s.attempt, s.annotations.length]));
       assert.deepEqual(subs, [[1, 1], [2, 2]]);
+      // What was on the screen (the coverage of the Recording tab) goes with each save, for the "viewed in full" milestones.
+      const viewed = await page.evaluate(() => globalThis.ElectroClean.backend.state.submissions.map((x) => x.session.viewed_fraction));
+      assert.ok(viewed.every((v) => typeof v === 'number' && v > 0 && v <= 1), JSON.stringify(viewed));
       await homeTab(page, 'history');
       const second = await cells(page.locator(HISTORY_ROWS).first());
       assert.match(second[0], /^sub-demo01_task-rest_eeg\.edfSaved /);
       assert.deepEqual([second[1], second[2]], ['2', '2'], second.join(' | '));
       // A revision is not a new recording: the counter stays at one.
-      assert.match(await page.textContent('.games-card'), /Recordings done\s*1/);
+      assert.match(await page.textContent('.progress-card [data-stat="done"]'), /^1 of 3/);
 
       // Opening it again and leaving without changes keeps everything as it was.
       await page.locator(HISTORY_ROWS).first().locator('button', { hasText: 'Open to revise' }).click();
@@ -222,6 +225,10 @@ export const tests = [
         assert.ok(reached.includes(id), `${id} in ${reached.join(', ')}`);
       }
       assert.ok(!reached.includes('recordings-150'));
+      // Each badge names itself, for screen readers and as a title.
+      assert.equal(await page.getAttribute('.badge-row [data-milestone="recordings-10"] svg', 'aria-label'), '10 recordings saved, reached');
+      assert.equal(await page.textContent('.badge-row [data-milestone="streak-3"] svg title'), '3 days in a row, reached');
+      assert.equal(await page.getAttribute('.milestone-list [data-milestone="recordings-150"] svg', 'aria-label'), '150 recordings saved, not yet reached');
       assert.match(await page.textContent('.games-milestones'), /Next: One hundred and fifty, 30 to go/);
 
       // The goal for the week.
@@ -275,6 +282,9 @@ export const tests = [
       await page.waitForSelector('.admin-section[data-section="settings"] .games-warning');
       assert.match(await page.textContent('.admin-section[data-section="settings"]'), /Let annotators revise recordings they have finished/);
       assert.match(await page.textContent('.games-warning'), /say so in the study's methods/);
+      // Both blocks of the merged settings: Long sessions (annotator comfort) and Game elements.
+      await page.locator('h3', { hasText: 'Long sessions' }).scrollIntoViewIfNeeded();
+      await t.screenshot(page, 'admin_settings_long_sessions');
       await page.locator('.games-warning').scrollIntoViewIfNeeded();
       await t.screenshot(page, 'games_admin_settings');
       await page.click('button[data-log="sign-out"]');
@@ -283,8 +293,7 @@ export const tests = [
       assert.equal(await page.locator('.games-card').count(), 0);
       await openExample(page, 0);
       await mark(page, 3.0, 3.4);
-      await page.click('.ws-actions button.primary');
-      await page.waitForSelector('.dialog');
+      await pressSave(page);
       assert.match(await page.textContent('.dialog'), /You will not be able to change them afterwards/);
       await clickDialogButton(page, 'Save and Finish');
       await page.waitForSelector('.dialog .dialog-title');
@@ -350,7 +359,7 @@ export const tests = [
       await waitForRoute(page, 'annotate', 30000);
       await waitForTraces(page);
       await mark(page, 3.0, 3.4);
-      await page.click('.ws-actions button.primary');
+      await pressSave(page);
       await clickDialogButton(page, 'Save and Finish');
       await page.waitForSelector('.dialog .dialog-title', { timeout: 30000 });
       await clickDialogButton(page, 'Back to my recordings');
@@ -394,7 +403,7 @@ export const tests = [
         .flatMap((f) => fs.readFileSync(path.join(logs, f), 'utf8').trim().split('\n').map((l) => JSON.parse(l).type));
       for (const k of ['revision_started', 'revision_submitted', 'milestone_reached']) assert.ok(kinds.includes(k), `no ${k} in the server's log`);
       // The game elements come from the server: one recording done, and the milestone reached.
-      assert.match(await page.textContent('.games-card'), /Recordings done\s*1/);
+      assert.match(await page.textContent('.progress-card [data-stat="done"]'), /^1 of \d+/);
     },
   },
 ];

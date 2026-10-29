@@ -40,6 +40,8 @@ STAMP_RE = re.compile(r"^[0-9T:.+\-Z ]{0,40}$")
 SHA_RE = re.compile(r"^[0-9a-f]{64}$")
 SESSION_RE = re.compile(r"^[0-9a-f]{32}$")
 MAX_ANNOTATIONS = 20000
+#: At most this many [start_s, end_s] stretches of a draft's ``viewed`` (the browser keeps fewer).
+MAX_VIEWED = 5000
 #: What annotators are told when the study records how they use ElectroClean (as on the desktop).
 LOGGING_NOTICE = ("This study records how you use ElectroClean (times, clicks, keys and what is on screen) for "
                   "research. Ask your study administrator if you have questions.")
@@ -116,6 +118,47 @@ def annotation_dict(a: ArtifactAnnotation) -> dict[str, Any]:
             "created_at": a.created_at, "modified_at": a.modified_at}
 
 
+def _float_or_none(value: Any) -> float | None:
+    try:
+        out = float(value)
+    except (TypeError, ValueError):
+        return None
+    return out if math.isfinite(out) else None
+
+
+def _int_or_none(value: Any) -> int | None:
+    out = _float_or_none(value)
+    return int(out) if out is not None else None
+
+
+def parse_viewed(value: Any) -> list[list[float]]:
+    """A draft's ``viewed``: the stretches of the recording on screen so far, as [start_s, end_s] pairs."""
+    if value is None:
+        return []
+    what = "draft.viewed must be a list of [start_s, end_s] pairs of seconds"
+    if not isinstance(value, list) or len(value) > MAX_VIEWED:
+        raise ApiError(422, "invalid_draft", what)
+    out: list[list[float]] = []
+    for pair in value:
+        if (not isinstance(pair, list) or len(pair) != 2
+                or any(isinstance(x, bool) or not isinstance(x, (int, float)) or not math.isfinite(x) for x in pair)
+                or not 0 <= pair[0] <= pair[1]):
+            raise ApiError(422, "invalid_draft", what)
+        out.append([float(pair[0]), float(pair[1])])
+    return out
+
+
+def viewed_seconds(viewed: list[list[float]]) -> float:
+    """Seconds of the recording covered by ``viewed`` (overlaps counted once)."""
+    total, end = 0.0, -math.inf
+    for a, b in sorted(viewed):
+        if b <= end:
+            continue
+        total += b - max(a, end)
+        end = b
+    return total
+
+
 def clean_json(v: Any) -> Any:
     """JSON-safe: NaN and infinity become null, numpy numbers Python numbers."""
     if isinstance(v, float):
@@ -145,7 +188,8 @@ class WorkItem:
     position: int = 0
     repeat: bool = False  # a practice recording that may be annotated again
     source: str = "assignment"  # or "programme"
-    saved: dict[str, Any] | None = None  # the latest saved attempt, for the history (games.saved_summary)
+    result: dict[str, str] | None = None  # the completion register's row of the latest attempt, when done
+    saved: dict[str, Any] | None = None  # the history's figures of every saved attempt (games.saved_summary)
     revising: bool = False  # done, with a revision under way (its draft is kept)
 
     @property
@@ -155,11 +199,16 @@ class WorkItem:
     def to_dict(self) -> dict[str, Any]:
         timing = self.manifest["timing"]
         _sha, size = fingerprint_of(self.manifest)
+        done = self.result if self.status == "done" and self.result else None
         return {
             "recording_id": self.recording_id, "file_name": self.manifest["file_name"],
             "format": self.manifest["format"], "mode": self.mode, "context_id": self.context_id,
             "status": self.status, "duration_s": float(timing["n_samples"]) / float(timing["sfreq"]),
             "n_channels": len(self.manifest["ch_names"]), "size_bytes": size, "repeat": self.repeat,
+            # what the completion register says of a finished recording (null otherwise)
+            "elapsed_s": _float_or_none(done.get("elapsed_s")) if done else None,
+            "n_annotations": _int_or_none(done.get("n_annotations")) if done else None,
+            "completed_at": (done.get("completed_at") or None) if done else None,
         }
 
 
@@ -221,6 +270,8 @@ class StudyService:
                         "scalings": dict(s.display.scalings)},
             "annotation": {"min_duration_samples": s.min_duration_samples,
                            "quick_labels": [q for q in s.quick_labels if cat.is_permitted(q)],
+                           "break_reminder_minutes": s.break_reminder_minutes,
+                           "idle_pause_minutes": s.idle_pause_minutes, "coverage_check": s.coverage_check,
                            "allow_revisions": s.allow_revisions},
             "gamification": {"enabled": s.gamification_enabled,
                              "leaderboard": s.gamification_enabled and s.gamification_leaderboard},
@@ -263,8 +314,9 @@ class StudyService:
         saved: dict[tuple[str, str, str], list[dict[str, str]]] = {}
         for e in entries:
             if e.get("status") == "completed":
-                done.setdefault((e.get("mode", "standard"), e.get("context", "")), set()).add(e["recording_id"])
-                saved.setdefault((e["recording_id"], e.get("mode", "standard"), e.get("context", "")), []).append(e)
+                mode_ctx = (e.get("mode", "standard"), e.get("context", ""))
+                done.setdefault(mode_ctx, set()).add(e["recording_id"])
+                saved.setdefault((e["recording_id"], *mode_ctx), []).append(e)
         items: list[WorkItem] = []
         seen: set[tuple[str, str, str]] = set()
 
@@ -284,7 +336,9 @@ class StudyService:
                 status = "in_progress"
             else:
                 status = "todo"
-            item = WorkItem(rid, mode, ctx, m, status, position, repeat, source)
+            # the latest attempt by its number (a revision is always the latest), whatever the clocks said
+            item = WorkItem(rid, mode, ctx, m, status, position, repeat, source,
+                            latest_entry(saved[key]) if key in saved else None)
             if key in saved:
                 from electroclean.web.games import saved_summary
 
@@ -327,10 +381,34 @@ class StudyService:
     def assignments(self, user: User, body: dict[str, Any] | None = None) -> dict[str, Any]:
         items = self.work_items(user)
         nxt = self._next(user, items)
-        return {"items": [{**i.to_dict(), "saved": i.saved, "revising": i.revising} for i in items],
+        out = []
+        for i in items:
+            d = i.to_dict()
+            d["draft"] = self._draft_summary(user, i) if i.status == "in_progress" or i.revising else None
+            # what only the history needs: the latest version's number, the first save and the time of all versions
+            d["saved"] = ({k: i.saved[k] for k in ("version", "first_saved_at", "total_elapsed_s")}
+                          if i.saved is not None else None)
+            d["revising"] = i.revising
+            out.append(d)
+        return {"items": out,
                 "next": nxt.recording_id if nxt is not None else None,
                 "next_item": ({"recording_id": nxt.recording_id, "mode": nxt.mode, "context_id": nxt.context_id}
                               if nxt is not None else None)}
+
+    def _draft_summary(self, user: User, item: WorkItem) -> dict[str, Any] | None:
+        """What the home page shows of unfinished work: its time, annotations, what was viewed, when saved."""
+        record = self.store.draft(user.annotator_id, item.key) or {}
+        d = record.get("draft") if isinstance(record.get("draft"), dict) else None
+        if d is None:
+            return None
+        try:
+            viewed = viewed_seconds(parse_viewed(d.get("viewed")))
+        except ApiError:
+            viewed = None
+        anns = d.get("annotations")
+        return {"elapsed_s": _float_or_none(d.get("elapsed_s")),
+                "n_annotations": len(anns) if isinstance(anns, list) else None,
+                "viewed_s": viewed, "saved_at": d.get("saved_at") or record.get("saved_at") or None}
 
     def find_item(self, user: User, recording_id: Any, mode: Any, context_id: Any) -> WorkItem:
         if not isinstance(recording_id, str) or not recording_id:
@@ -505,10 +583,11 @@ class StudyService:
         elapsed = draft.get("elapsed_s", 0)
         if isinstance(elapsed, bool) or not isinstance(elapsed, (int, float)) or not math.isfinite(elapsed):
             raise ApiError(422, "invalid_draft", "draft.elapsed_s must be a number of seconds")
+        viewed = parse_viewed(draft.get("viewed"))
         saved_at = now_local_iso()
         record = {"schema": "electroclean.web_draft", "recording_id": item.recording_id, "mode": item.mode,
                   "context_id": item.context_id, "annotator_id": user.annotator_id, "saved_at": saved_at,
-                  "draft": {"annotations": anns, "view": view or {}, "elapsed_s": float(elapsed),
+                  "draft": {"annotations": anns, "view": view or {}, "elapsed_s": float(elapsed), "viewed": viewed,
                             "saved_at": saved_at}}
         if revises is not None:
             record["revises"] = revises
@@ -716,6 +795,50 @@ class StudyService:
                     entry["programme"] = {"error": exc.code, "message": exc.message}
             out.append(entry)
         return {"study": self.store.name, "generated_at": now_local_iso(), "annotators": out}
+
+    # ------------------------------------------------------------ invitations
+    #: What a person is told when their invitation link cannot be used, by the reason.
+    INVITE_PROBLEMS = {
+        "unknown": (404, "This invitation link is not known to the study. It may have been replaced by a newer "
+                         "link or withdrawn. Ask the study team for a new one."),
+        "used": (409, "This invitation link has been used already. Sign in with your annotator ID and the "
+                      "password you chose, or ask the study team for a new link."),
+        "expired": (409, "This invitation link has expired. Ask the study team for a new one."),
+    }
+
+    def _invite_problem(self, reason: str) -> ApiError:
+        status, message = self.INVITE_PROBLEMS[reason]
+        return ApiError(status, f"invite_{reason}", message)
+
+    def invite_check(self, body: dict[str, Any]) -> dict[str, Any]:
+        """``POST /invite/check {token}`` (no sign-in): whose invitation this is, for the welcome card."""
+        token = body.get("token")
+        inv = self.store.invitation_for_token(token) if isinstance(token, str) else None
+        if inv is None:
+            raise self._invite_problem("unknown")
+        if inv["state"] in ("accepted", "expired"):
+            raise self._invite_problem("used" if inv["state"] == "accepted" else "expired")
+        if inv["state"] != "invited":
+            raise self._invite_problem("unknown")
+        return {"annotator_id": inv["annotator_id"], "display_name": inv.get("display_name", ""),
+                "study_name": self.store.name, "expires_at": inv["expires_at"]}
+
+    def invite_accept(self, body: dict[str, Any]) -> User:
+        """``POST /invite/accept {token, password}`` (no sign-in): the person's own password, set once."""
+        from electroclean.web.store import AccountProblem
+
+        token, password = body.get("token"), body.get("password")
+        if not isinstance(password, str) or not 8 <= len(password) <= 200:
+            raise ApiError(400, "bad_password", "Choose a password of at least 8 characters.")
+        if not isinstance(token, str):
+            raise self._invite_problem("unknown")
+        try:
+            return self.store.accept_invitation(token, password)
+        except AccountProblem as exc:
+            reason = exc.code.removeprefix("invite_")
+            if reason in self.INVITE_PROBLEMS:
+                raise self._invite_problem(reason) from exc
+            raise ApiError(exc.status, exc.code, exc.message or "The invitation could not be used.") from exc
 
     def admin(self, op: Any, user: User, body: dict[str, Any] | None = None) -> dict[str, Any]:
         """One operation of the admin area (docs/web/api.md, "Administration"; electroclean/web/admin.py)."""

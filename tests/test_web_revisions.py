@@ -80,8 +80,9 @@ def test_a_revision_is_a_new_attempt_and_keeps_the_earlier_files(client: TestCli
     # The history: the latest saved attempt of each done recording.
     item = item_of(api, SUB1)
     assert item["status"] == "done" and item["revising"] is False
-    assert item["saved"]["version"] == 1 and item["saved"]["n_annotations"] == 1
-    assert item["saved"]["elapsed_s"] == 100.0 and item["saved"]["saved_at"]
+    assert item["saved"]["version"] == 1 and item["n_annotations"] == 1 and item["saved"]["total_elapsed_s"] == 100.0
+    assert item["elapsed_s"] == 100.0 and item["completed_at"]
+    assert item["saved"]["first_saved_at"] == item["completed_at"]
     assert item_of(api, SUB2)["saved"] is None
     me = api.ok("get", "/me")
     assert me["study"]["annotation"]["allow_revisions"] is True
@@ -136,7 +137,8 @@ def test_a_revision_is_a_new_attempt_and_keeps_the_earlier_files(client: TestCli
     assert len(checksums(folder)) == 10
 
     item = item_of(api, SUB1)
-    assert item["revising"] is False and item["saved"]["version"] == 2 and item["saved"]["n_annotations"] == 2
+    assert item["revising"] is False and item["saved"]["version"] == 2 and item["n_annotations"] == 2
+    assert item["elapsed_s"] == 30.0  # the latest version's own time; total_elapsed_s adds up every version
     assert item["saved"]["total_elapsed_s"] == 130.0
     store = client.app.state.store
     latest = json.loads(store.saved_document("A01", SUB1, "standard", ""))

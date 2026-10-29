@@ -70,6 +70,19 @@ export async function annotations(page) {
   return (await state(page)).annotations;
 }
 
+/**
+ * Press Save and Finish and wait for its question. When it first lists the parts of the recording not
+ * yet viewed (the study's coverage check), choose Save anyway.
+ */
+export async function pressSave(page) {
+  await page.click('.ws-actions button.primary');
+  await page.waitForSelector('.dialog');
+  if (await page.locator('.dialog.coverage-check').count()) {
+    await clickDialogButton(page, 'Save anyway');
+    await page.waitForSelector('.dialog:not(.coverage-check)');
+  }
+}
+
 export async function clickDialogButton(page, text) {
   const b = page.locator('.dialog-buttons button', { hasText: text });
   await b.first().waitFor({ timeout: 8000 });

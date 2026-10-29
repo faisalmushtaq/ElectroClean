@@ -17,7 +17,7 @@ import path from 'node:path';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
-import { signIn, waitForRoute, waitForTraces, annotations, eegPoint, drag, clickDialogButton } from './e2e/helpers.mjs';
+import { signIn, waitForRoute, waitForTraces, annotations, eegPoint, drag, clickDialogButton, pressSave } from './e2e/helpers.mjs';
 
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
@@ -129,8 +129,7 @@ async function main() {
     await page.setInputFiles('input[data-log="file-input"]', filesFor(demo, fileName));
   }
   async function saveAndFinish(page) {
-    await page.click('.ws-actions button.primary');
-    await page.waitForSelector('.dialog');
+    await pressSave(page);
     await clickDialogButton(page, 'Save and Finish');
   }
   const coach = async (page) => (await page.textContent('.coach')).replace(/\s+/g, ' ');
@@ -162,7 +161,7 @@ async function main() {
       await clickDialogButton(page, 'Back to my recordings');
       assert.match(await page.textContent('main'), /1 of 3 done/);
       // The functions give the history and the achievements (ec_assignments' saved, ec_achievements).
-      assert.match(await page.textContent('.games-card'), /Recordings done\s*1/);
+      assert.match(await page.textContent('.progress-card [data-stat="done"]'), /^1 of 3/);
       await page.click('.rec-tabs [data-tab="history"]');
       await page.locator('.recordings-card table.history tbody tr button', { hasText: 'Open to revise' }).waitFor();
       await page.evaluate(() => globalThis.ElectroClean.flushLog());
@@ -232,6 +231,13 @@ async function main() {
       await page.waitForSelector('.secret-value', { timeout: 60000 });
       assert.match(await page.textContent('.secret-value'), /^https?:\/\//);
       await page.waitForSelector('tr[data-key="A07"]', { timeout: 60000 });
+      // Firebase's own link counts as an invitation, and Progress reads the study through the function.
+      await page.click('.admin-section[data-section="annotators"] [data-tab="invitations"]');
+      await page.waitForFunction(() => /Invited on/.test(document.querySelector('[data-panel="invitations"] tr[data-key="A07"]')?.innerText || ''), null, { timeout: 60000 });
+      await go('Progress', 'admin-progress');
+      await page.waitForSelector('.admin-section[data-section="progress"] .stat-tile', { timeout: 120000 });
+      await page.waitForSelector('.admin-section[data-section="progress"] svg.chart-svg');
+      await shot(page, 'admin_progress');
 
       // Recordings chosen on this computer: the study's own, so all three are already registered.
       await go('Recordings', 'admin-recordings');

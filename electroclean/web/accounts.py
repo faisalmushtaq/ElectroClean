@@ -1,5 +1,5 @@
-"""The files store's database: accounts, sign-in tokens, assignments, visits, guided and quiz progress,
-and the study's audit log.
+"""The files store's database: accounts, sign-in tokens, invitations, assignments, visits, guided and
+quiz progress, and the study's audit log.
 
 One SQLite file in the study folder (``server.sqlite``), used by the ElectroClean server
 (:mod:`electroclean.web.store_files`); on Firebase, accounts are Firebase Authentication users and
@@ -8,6 +8,11 @@ the rest are Firestore documents.
 Passwords are kept only as scrypt hashes (``hashlib.scrypt``, a random salt per password) and
 sign-in tokens only as SHA-256 hashes, so a copy of the database gives nobody a way in. A token
 expires after 12 hours without use and when its owner signs out.
+
+An invitation is a private link that lets a new annotator choose their own password. Its token is
+random (32 bytes) and kept only as a SHA-256 hash, with its expiry; each account has at most one
+invitation, which ends when it is used, when a newer one is made for the account, when it is
+withdrawn, and when the account is switched off or removed.
 """
 
 from __future__ import annotations
@@ -29,6 +34,8 @@ from electroclean.app.common import now_local_iso
 from electroclean.web.store import MODES, ROLES, Assignment, User
 
 TOKEN_IDLE_S = 12 * 3600
+#: How long an invitation lasts unless the administrator chooses otherwise, and the longest allowed.
+INVITE_DAYS, INVITE_MAX_DAYS = 14, 90
 ID_RE = re.compile(r"^[A-Z0-9][A-Z0-9_-]{0,31}$")
 MIN_PASSWORD = 8
 #: scrypt cost: 2^14 x 8 x 1 needs 16 MiB and about 50 ms, a sensible default for a small server.
@@ -91,6 +98,16 @@ CREATE TABLE IF NOT EXISTS quiz_state (
     updated_at TEXT NOT NULL,
     PRIMARY KEY (annotator_id, set_id)
 );
+CREATE TABLE IF NOT EXISTS invitations (
+    annotator_id TEXT PRIMARY KEY,
+    token_hash TEXT NOT NULL DEFAULT '',
+    state TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    created_by TEXT NOT NULL DEFAULT '',
+    expires_at TEXT NOT NULL,
+    expires_epoch REAL NOT NULL,
+    ended_at TEXT NOT NULL DEFAULT ''
+);
 CREATE TABLE IF NOT EXISTS audit (
     entry_id INTEGER PRIMARY KEY AUTOINCREMENT,
     at TEXT NOT NULL,
@@ -120,6 +137,14 @@ class AccountError(ValueError):
 
 class AccountExists(AccountError):
     """The ID already has an account."""
+
+
+class InvitationProblem(AccountError):
+    """An invitation cannot be used: ``reason`` is unknown, used or expired."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
 
 
 # ------------------------------------------------------------------ passwords
@@ -225,6 +250,7 @@ class Accounts:
         with self._tx() as db:
             db.execute("UPDATE users SET disabled=1 WHERE annotator_id=?", (aid,))
             db.execute("DELETE FROM tokens WHERE annotator_id=?", (aid,))
+            self._end_invitation(db, aid, "revoked")
 
     def user(self, annotator_id: str) -> User | None:
         row = self._one("SELECT * FROM users WHERE annotator_id=? AND disabled=0", (str(annotator_id).upper(),))
@@ -258,6 +284,7 @@ class Accounts:
                 db.execute(f"UPDATE users SET {key}=? WHERE annotator_id=?", (value, aid))
             if disabled:
                 db.execute("DELETE FROM tokens WHERE annotator_id=?", (aid,))
+                self._end_invitation(db, aid, "revoked")
 
     def set_password(self, annotator_id: str, password: str) -> None:
         """A new password; every sign-in of the account ends."""
@@ -274,7 +301,7 @@ class Accounts:
         """The account, its sign-ins, assignments, programme, guided progress and quiz state."""
         aid = normalise_id(annotator_id)
         with self._tx() as db:
-            for table in ("users", "tokens", "assignments", "programmes", "guided_state", "quiz_state",
+            for table in ("users", "tokens", "invitations", "assignments", "programmes", "guided_state", "quiz_state",
                           "annotator_records"):
                 db.execute(f"DELETE FROM {table} WHERE annotator_id=?", (aid,))
 
@@ -321,6 +348,95 @@ class Accounts:
     def revoke_token(self, token: str) -> None:
         with self._tx() as db:
             db.execute("DELETE FROM tokens WHERE token_hash=?", (token_hash(token),))
+
+    # ---------------------------------------------------------- invitations
+    @staticmethod
+    def _end_invitation(db: sqlite3.Connection, aid: str, state: str) -> bool:
+        """End the account's open invitation (its token stops working); False if it had none."""
+        return bool(db.execute("UPDATE invitations SET state=?, token_hash='', ended_at=? WHERE annotator_id=? AND "
+                               "state='invited'", (state, now_local_iso(), aid)).rowcount)
+
+    def create_invitation(self, annotator_id: str, *, days: float = INVITE_DAYS, by: str = "") -> tuple[str, str]:
+        """A new invitation for an active account, replacing any earlier one: (token, expiry as local time)."""
+        from datetime import datetime, timedelta
+
+        aid = normalise_id(annotator_id)
+        if not 0 < days <= INVITE_MAX_DAYS:
+            raise AccountError(f"An invitation lasts from 1 to {INVITE_MAX_DAYS} days")
+        token = secrets.token_urlsafe(32)
+        expires = time.time() + days * 86400
+        expires_iso = datetime.now().astimezone().replace(microsecond=0) + timedelta(days=days)
+        with self._tx() as db:
+            row = db.execute("SELECT disabled FROM users WHERE annotator_id=?", (aid,)).fetchone()
+            if row is None:
+                raise AccountError(f"{aid} has no account")
+            if row["disabled"]:
+                raise AccountError(f"{aid} is switched off; switch the account on before inviting them")
+            db.execute("INSERT OR REPLACE INTO invitations (annotator_id, token_hash, state, created_at, created_by, "
+                       "expires_at, expires_epoch, ended_at) VALUES (?, ?, 'invited', ?, ?, ?, ?, '')",
+                       (aid, token_hash(token), now_local_iso(), by, expires_iso.isoformat(timespec="milliseconds"),
+                        expires))
+        return token, expires_iso.isoformat(timespec="milliseconds")
+
+    def revoke_invitation(self, annotator_id: str) -> bool:
+        with self._tx() as db:
+            return self._end_invitation(db, str(annotator_id).upper(), "revoked")
+
+    def invitations(self) -> dict[str, dict[str, Any]]:
+        """Each account's latest invitation: ``state`` (invited, accepted, expired, revoked), ``invited_at``,
+        ``expires_at``, ``ended_at`` (when it was used or withdrawn) and ``by``. Never the token."""
+        now = time.time()
+        out = {}
+        for r in self._all("SELECT * FROM invitations"):
+            state = r["state"]
+            if state == "invited" and float(r["expires_epoch"]) < now:
+                state = "expired"
+            out[r["annotator_id"]] = {"state": state, "invited_at": r["created_at"], "expires_at": r["expires_at"],
+                                      "ended_at": r["ended_at"] or None, "by": r["created_by"]}
+        return out
+
+    def invitation_for_token(self, token: str) -> dict[str, Any] | None:
+        """The invitation of a token with its account (``annotator_id``, ``display_name``, ``state``,
+        ``expires_at``), or None when the token is not known (never made, replaced or withdrawn)."""
+        if not isinstance(token, str) or not 20 <= len(token) <= 200:
+            return None
+        row = self._one("SELECT i.*, u.display_name, u.disabled FROM invitations i JOIN users u ON "
+                        "u.annotator_id = i.annotator_id WHERE i.token_hash=?", (token_hash(token),))
+        if row is None or row["disabled"]:
+            return None
+        state = row["state"]
+        if state == "invited" and float(row["expires_epoch"]) < time.time():
+            state = "expired"
+        return {"annotator_id": row["annotator_id"], "display_name": row["display_name"], "state": state,
+                "expires_at": row["expires_at"]}
+
+    def accept_invitation(self, token: str, password: str) -> User:
+        """Set the account's password from a valid invitation and end the invitation, in one step.
+
+        Raises :class:`InvitationProblem` (``unknown``, ``used`` or ``expired``) or :class:`AccountError`
+        for a password that is too short."""
+        if len(password) < MIN_PASSWORD:
+            raise AccountError(f"The password must have at least {MIN_PASSWORD} characters")
+        if not isinstance(token, str) or not 20 <= len(token) <= 200:
+            raise InvitationProblem("unknown")
+        h = hash_password(password)
+        with self._tx() as db:
+            row = db.execute("SELECT i.*, u.display_name, u.role, u.disabled FROM invitations i JOIN users u ON "
+                             "u.annotator_id = i.annotator_id WHERE i.token_hash=?", (token_hash(token),)).fetchone()
+            if row is None or row["disabled"]:
+                raise InvitationProblem("unknown")
+            if row["state"] == "accepted":
+                raise InvitationProblem("used")
+            if row["state"] != "invited":
+                raise InvitationProblem("unknown")
+            if float(row["expires_epoch"]) < time.time():
+                raise InvitationProblem("expired")
+            aid = row["annotator_id"]
+            db.execute("UPDATE users SET password_hash=? WHERE annotator_id=?", (h, aid))
+            db.execute("DELETE FROM tokens WHERE annotator_id=?", (aid,))
+            db.execute("UPDATE invitations SET state='accepted', ended_at=? WHERE annotator_id=?",
+                       (now_local_iso(), aid))
+        return User(aid, row["display_name"], row["role"])
 
     # ---------------------------------------------------------- assignments
     def assign(self, annotator_id: str, recording_ids: list[str], *, mode: str = "standard",

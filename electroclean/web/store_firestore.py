@@ -66,6 +66,7 @@ from electroclean.web.store import (
     AccountProblem,
     Assignment,
     Credentials,
+    Invitation,
     ResultExists,
     SavedResult,
     Store,
@@ -524,6 +525,9 @@ class FirestoreStore(Store):
         except AuthProblem as exc:
             raise AccountProblem(exc.code, exc.message, 409 if exc.code == "email_in_use" else 400) from exc
         self.put_user(aid, display_name=display_name, role=role, uid=uid, email=email)
+        if link:
+            self.doc.collection("users").document(aid).set({"invite": {"invited_at": now_local_iso(), "by": ""}},
+                                                           merge=True)
         return {"invite_link": link, "temporary_password": None}
 
     def update_account(self, annotator_id: str, *, display_name: str | None = None, role: str | None = None,
@@ -556,6 +560,39 @@ class FirestoreStore(Store):
         if not d.get("email"):
             raise AccountProblem("no_email", f"{annotator_id} has no email address, so no link can be made")
         return {"invite_link": password_link(self.auth_app, d["email"]), "temporary_password": None}
+
+    def create_invitation(self, annotator_id: str, *, days: float, by: str) -> Invitation:
+        """A Firebase Authentication link with which the person chooses a password; its expiry is
+        Firebase's own, so none is given."""
+        from electroclean.web.firebase import password_link
+
+        ref, d = self._user_doc(annotator_id)
+        if d.get("disabled"):
+            raise AccountProblem("disabled", f"{ref.id} is switched off; switch the account on before inviting "
+                                 "them")
+        if not d.get("email"):
+            raise AccountProblem("no_email", f"{ref.id} has no email address, so no link can be made")
+        link = password_link(self.auth_app, d["email"])
+        ref.set({"invite": {"invited_at": now_local_iso(), "by": by}}, merge=True)
+        return {"invite_token": None, "invite_link": link, "expires_at": None}
+
+    def revoke_invitation(self, annotator_id: str) -> bool:
+        raise AccountProblem("cannot_revoke", "On Firebase an invitation link cannot be withdrawn once it is made. "
+                             "Switch the account off to stop the person signing in.", 422)
+
+    def invitations(self) -> dict[str, dict[str, Any]]:
+        """Invited when a link was made; accepted once the person has signed in after it."""
+        out = {}
+        for s in self.doc.collection("users").stream():
+            d = s.to_dict() or {}
+            inv = d.get("invite")
+            if not isinstance(inv, dict) or not inv.get("invited_at"):
+                continue
+            seen = str(d.get("last_seen") or "")
+            accepted = bool(seen) and seen >= str(inv["invited_at"])
+            out[s.id] = {"state": "accepted" if accepted else "invited", "invited_at": inv["invited_at"],
+                         "expires_at": None, "ended_at": seen if accepted else None, "by": inv.get("by", "")}
+        return out
 
     def remove_account(self, annotator_id: str) -> None:
         from google.cloud.firestore_v1.base_query import FieldFilter

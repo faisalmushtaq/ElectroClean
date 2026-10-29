@@ -360,8 +360,8 @@ switches revisions off (`annotation.allow_revisions`). Training recordings keep 
 because a guided or assessed recording that could be redone would change what its score means.
 
 Annotating a couple of hundred recordings is long and repetitive work, so the home page offers game
-elements: counters, a weekly goal the annotator sets, the team's progress, milestones and an
-anonymised leaderboard. They follow common principles of game design (clear goals, visible progress,
+elements beside the annotator's own progress: a weekly goal the annotator sets, the team's progress,
+milestones and an anonymised leaderboard. They follow common principles of game design (clear goals, visible progress,
 feedback at the moment something is achieved, and autonomy over taking part) and one rule of our
 own: rewards follow progress through the recordings and thoroughness, never speed and never the
 number of annotations. The annotations are the research data; a reward for marking more would push

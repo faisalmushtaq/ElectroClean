@@ -4,7 +4,7 @@
 // the server, and the interaction logs it writes.
 import fs from 'node:fs';
 import path from 'node:path';
-import { signIn, waitForRoute, waitForTraces, annotations, eegPoint, drag, clickDialogButton } from './helpers.mjs';
+import { pressSave, signIn, waitForRoute, waitForTraces, annotations, eegPoint, drag, clickDialogButton } from './helpers.mjs';
 
 const PASSWORD = 'electroclean';
 
@@ -53,8 +53,7 @@ async function openFile(t, page, fileName) {
 }
 
 async function saveAndFinish(page) {
-  await page.click('.ws-actions button.primary');
-  await page.waitForSelector('.dialog');
+  await pressSave(page);
   await clickDialogButton(page, 'Save and Finish');
 }
 

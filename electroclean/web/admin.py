@@ -15,10 +15,12 @@ import copy
 import json
 import math
 import re
+import secrets
 import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import replace
+from datetime import date, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -27,7 +29,7 @@ from electroclean.training.reference import GUIDANCE_LEVELS, NONE_OPTION, USES, 
 from electroclean.web import audit
 from electroclean.web.errors import ApiError
 from electroclean.web.manifest import SCOPE_STUDY, fingerprint_of, manifest_info, set_scope
-from electroclean.web.store import MODES, ROLES, STATUSES, AccountProblem, StoreError, User
+from electroclean.web.store import MODES, ROLES, STATUSES, AccountProblem, StoreError, User, attempt_of, latest_entry
 
 if TYPE_CHECKING:
     from electroclean.app.annotations.model import AnnotationDocument
@@ -41,13 +43,21 @@ ITEM_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 EMAIL_RE = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,190}\.[^@\s]{2,63}$")
 MAX_DOCUMENT_BYTES = 8_000_000
 QUIZ_FEEDBACK = ("immediate", "end")
+#: How long an invitation link lasts unless the administrator chooses otherwise, and the longest allowed.
+INVITE_DAYS, INVITE_MAX_DAYS = 14, 90
+#: ``stats``: the days of the daily completions, the days whose pace projects the finish, and the
+#: fewest completions in them for a projection.
+STATS_DAYS, PACE_DAYS, PACE_MIN = 30, 14, 3
+#: What ``stats`` counts: the study's own annotation, or every mode (training too).
+STATS_WORK = ("study", "all")
 
 #: Operations that only read (every other one appends an audit entry).
 READ_ONLY = ("overview", "settings_get", "users_list", "assignments_list", "recordings_list", "sets_list",
-             "set_guided_notes", "quiz_items", "progress", "agreement", "activity", "competency", "results_zip",
-             "audit", "visits")
+             "set_guided_notes", "quiz_items", "progress", "stats", "agreement", "activity", "competency",
+             "results_zip", "audit", "visits")
 OPERATIONS = READ_ONLY + (
-    "settings_update", "user_add", "user_update", "user_reset_password", "user_remove", "assign", "unassign",
+    "settings_update", "user_add", "user_update", "user_reset_password", "user_invite", "user_invite_revoke",
+    "user_remove", "assign", "unassign",
     "programme_set", "recordings_register", "recording_update", "recording_remove", "set_create", "set_update",
     "set_delete", "set_add_reference", "set_recording_update", "set_remove_recording", "set_guided_note",
     "set_example_create", "quiz_item_add", "quiz_item_remove")
@@ -123,6 +133,36 @@ def _mode_ctx(body: dict[str, Any]) -> tuple[str, str]:
     if not isinstance(ctx, str):
         raise _bad("context_id must be a reference set ID")
     return mode, (ctx if mode != "standard" else "")
+
+
+def _seconds(value: Any) -> float | None:
+    """A number of the completion register or a draft (text in the register's TSV), or None."""
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return None
+    return v if math.isfinite(v) and v >= 0 else None
+
+
+def _median(values: list[float]) -> float | None:
+    from statistics import median
+
+    return float(median(values)) if values else None
+
+
+def _day(stamp: Any) -> date | None:
+    """The local date at the start of a time stamp such as 2026-10-28T10:15:02.120+00:00."""
+    try:
+        return date.fromisoformat(str(stamp or "")[:10])
+    except ValueError:
+        return None
+
+
+def invitation_out(inv: dict[str, Any] | None) -> dict[str, Any]:
+    """A UserRecord's ``invitation``: its state (none, invited, accepted, expired, revoked) and dates."""
+    inv = inv or {}
+    return {"state": inv.get("state") or "none", "invited_at": inv.get("invited_at") or None,
+            "expires_at": inv.get("expires_at") or None, "ended_at": inv.get("ended_at") or None}
 
 
 def _plain(value: Any, what: str) -> dict[str, Any]:
@@ -284,9 +324,20 @@ class Admin:
                     and e.get("context", "") == i.context_id]
             draft = self.store.draft(person.annotator_id, i.key) or {} if i.status == "in_progress" else {}
             last = max([e.get("completed_at", "") for e in mine] + [draft.get("saved_at", "")])
+            # A revision is a later attempt: the latest attempt by its number gives the annotations and the
+            # date, and the time is that of every saved attempt together (the work the recording took).
+            latest = latest_entry(mine) if mine else {}
+            if latest:
+                times = [t for e in mine if (t := _seconds(e.get("elapsed_s"))) is not None]
+                elapsed = sum(times) if times else None
+            else:
+                elapsed = _seconds((draft.get("draft") or {}).get("elapsed_s")) if draft else None
+            n_ann = _seconds(latest.get("n_annotations")) if latest else None
             out.append({"annotator_id": person.annotator_id, "recording_id": i.recording_id, "mode": i.mode,
                         "context_id": i.context_id, "status": i.status, "attempts": len(mine),
-                        "last_activity": last or None})
+                        "last_activity": last or None, "elapsed_s": elapsed,
+                        "n_annotations": int(n_ann) if n_ann is not None else None,
+                        "saved_at": (latest.get("completed_at") or None) if latest else None})
         return out
 
     def _counts(self) -> tuple[dict[tuple[str, str], int], dict[tuple[str, str], int]]:
@@ -363,15 +414,18 @@ class Admin:
                          "feedback": feedback_of(rs)},
                 "show_full_report_to_annotator": rs.show_full_report_to_annotator}
 
-    def user_out(self, rec: dict[str, Any], entries: list[dict[str, str]] | None = None) -> dict[str, Any]:
+    def user_out(self, rec: dict[str, Any], invitations: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
         person = User(rec["annotator_id"], rec.get("display_name", ""), rec.get("role", "annotator"))
         items = self.service.work_items(person)
+        if invitations is None:
+            invitations = self.store.invitations()
         return {"annotator_id": rec["annotator_id"], "display_name": rec.get("display_name", ""),
                 "email": rec.get("email") or None, "role": rec.get("role", "annotator"),
                 "status": rec.get("status", "active"), "created_at": rec.get("created_at", ""),
                 "last_seen": rec.get("last_seen") or None, "notes": rec.get("notes", ""),
                 "assigned": len(items), "done": sum(1 for i in items if i.status == "done"),
-                "programme": self.store.programme(rec["annotator_id"])}
+                "programme": self.store.programme(rec["annotator_id"]),
+                "invitation": invitation_out(invitations.get(rec["annotator_id"]))}
 
     # ------------------------------------------------------------ overview
     def op_overview(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
@@ -444,7 +498,8 @@ class Admin:
 
     # --------------------------------------------------------------- users
     def op_users_list(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
-        return {"users": [self.user_out(r) for r in self.store.user_records()]}
+        invitations = self.store.invitations()
+        return {"users": [self.user_out(r, invitations) for r in self.store.user_records()]}
 
     def op_user_add(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
         aid = _aid(body.get("annotator_id"))
@@ -458,12 +513,56 @@ class Admin:
         password = body.get("password")
         if password is not None and (not isinstance(password, str) or not 8 <= len(password) <= 200):
             raise _bad("A password must have 8 to 200 characters")
+        invite = _bool(body, "invite") or False
+        if invite and password is not None:
+            raise _bad("Give a password or ask for an invitation link, not both")
+        days = self._invite_days(body)
+        if invite:
+            # Nobody knows this password: the person chooses their own with the invitation.
+            password = secrets.token_urlsafe(24)
         creds = self.store.create_account(aid, display_name=name, role=role, email=email, password=password)
+        inv: dict[str, Any] = {}
+        if invite:
+            inv = self.store.create_invitation(aid, days=days, by=user.annotator_id)
         kind = "an administrator" if role == "admin" else "an annotator"
-        self._audit(user, "user_add", f"Added {aid}" + (f" ({name})" if name else "") + f" as {kind}",
-                    annotator_id=aid, display_name=name, role=role, email=email or None)
-        return {"user": self.user_out(self._user_record(aid)), "invite_link": creds.get("invite_link"),
-                "temporary_password": creds.get("temporary_password")}
+        how = ""
+        if invite:
+            how = " with an invitation link" + (f" (until {inv['expires_at'][:10]})" if inv.get("expires_at") else "")
+        self._audit(user, "user_add", f"Added {aid}" + (f" ({name})" if name else "") + f" as {kind}{how}",
+                    annotator_id=aid, display_name=name, role=role, email=email or None, invited=invite,
+                    expires_at=inv.get("expires_at"))
+        out = {"user": self.user_out(self._user_record(aid)),
+               "invite_link": inv.get("invite_link") or creds.get("invite_link"),
+               "temporary_password": creds.get("temporary_password")}
+        if invite:
+            out.update(invite_token=inv.get("invite_token"), expires_at=inv.get("expires_at"))
+        return out
+
+    @staticmethod
+    def _invite_days(body: dict[str, Any]) -> float:
+        if body.get("expires_days") is None:
+            return float(INVITE_DAYS)
+        return _number(body, "expires_days", minimum=1, maximum=INVITE_MAX_DAYS)
+
+    def op_user_invite(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        aid = _aid(body.get("annotator_id"))
+        self._user_record(aid)
+        days = self._invite_days(body)
+        inv = self.store.create_invitation(aid, days=days, by=user.annotator_id)
+        until = f" (until {inv['expires_at'][:10]})" if inv.get("expires_at") else ""
+        self._audit(user, "user_invite", f"Made an invitation link for {aid}{until}; any earlier link stops working",
+                    annotator_id=aid, expires_at=inv.get("expires_at"))
+        return {"invite_token": inv.get("invite_token"), "invite_link": inv.get("invite_link"),
+                "expires_at": inv.get("expires_at"),
+                "invitation": invitation_out(self.store.invitations().get(aid))}
+
+    def op_user_invite_revoke(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        aid = _aid(body.get("annotator_id"))
+        self._user_record(aid)
+        if not self.store.revoke_invitation(aid):
+            raise ApiError(409, "no_invitation", f"{aid} has no invitation link that is still open.")
+        self._audit(user, "user_invite_revoke", f"Withdrew the invitation link of {aid}", annotator_id=aid)
+        return {"invitation": invitation_out(self.store.invitations().get(aid))}
 
     def op_user_update(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
         aid = _aid(body.get("annotator_id"))
@@ -1136,6 +1235,140 @@ class Admin:
     # ------------------------------------------------------------ analyses
     def op_progress(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
         return self.service.admin_progress(user, {})
+
+    def op_stats(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        """How far the study has got and how long the work takes (docs/web/api.md, ``stats``)."""
+        work = body.get("work") or "study"
+        if work not in STATS_WORK:
+            raise _bad("work must be 'study' (the study's own annotation) or 'all' (training too)")
+
+        def counted(mode: str) -> bool:
+            return work == "all" or mode == "standard"
+
+        today = _day(now_local_iso()) or date.today()
+        days = [today - timedelta(days=STATS_DAYS - 1 - i) for i in range(STATS_DAYS)]
+        index = {d: i for i, d in enumerate(days)}
+        entries = [e for e in self._entries() if counted(e.get("mode", "standard"))]
+        last_visit: dict[str, str] = {}
+        for v in self.store.visit_records(None, 1000):
+            aid = v.get("annotator_id", "")
+            last_visit[aid] = max(last_visit.get(aid, ""), str(v.get("started_at") or ""))
+
+        def daily(rows: list[dict[str, Any]]) -> list[int]:
+            out = [0] * STATS_DAYS
+            for e in rows:
+                d = _day(e.get("completed_at"))
+                if d in index:
+                    out[index[d]] += 1
+            return out
+
+        def since(rows: list[dict[str, Any]], n: int) -> int:
+            first = today - timedelta(days=n - 1)
+            return sum(1 for e in rows if (d := _day(e.get("completed_at"))) is not None and first <= d <= today)
+
+        # A recording saved again (a revision, or a practice recording repeated) has several attempts: it is
+        # one recording done, on the day of its first save, with the annotations of its latest attempt and
+        # the time of all its attempts together.
+        groups: dict[tuple[str, str, str, str], list[dict[str, str]]] = {}
+        for e in entries:
+            groups.setdefault((e.get("annotator_id", ""), e.get("recording_id", ""), e.get("mode", "standard"),
+                               e.get("context", "")), []).append(e)
+        works = []
+        for rows in groups.values():
+            first = min(rows, key=lambda e: (attempt_of(e), str(e.get("completed_at", ""))))
+            times = [t for e in rows if (t := _seconds(e.get("elapsed_s"))) is not None]
+            works.append({"annotator_id": first.get("annotator_id", ""), "recording_id": first.get("recording_id", ""),
+                          "mode": first.get("mode", "standard"), "context": first.get("context", ""),
+                          "completed_at": first.get("completed_at", ""), "last_at": max(str(e.get("completed_at") or "")
+                                                                                         for e in rows),
+                          "elapsed_s": sum(times) if times else None,
+                          "n_annotations": latest_entry(rows).get("n_annotations")})
+        by_person: dict[str, list[dict[str, Any]]] = {}
+        for w in works:
+            by_person.setdefault(w["annotator_id"], []).append(w)
+        recordings: dict[tuple[str, str], dict[str, Any]] = {}
+        scopes: dict[tuple[str, str], str] = {}
+
+        def scope_of(mode: str, context_id: str) -> str:
+            """Where a recording is kept, asked once for each mode and context (a reference set is read once)."""
+            if (mode, context_id) not in scopes:
+                scopes[(mode, context_id)] = self.service.scope_for(mode, context_id)
+            return scopes[(mode, context_id)]
+
+        people = []
+        totals = {"assigned": 0, "done": 0, "in_progress": 0, "todo": 0}
+        draft_s = 0.0
+        for rec in self.store.user_records():
+            aid = rec["annotator_id"]
+            person = User(aid, rec.get("display_name", ""), rec.get("role", "annotator"))
+            active = rec.get("status", "active") == "active"
+            items = [i for i in self.service.work_items(person) if counted(i.mode)]
+            mine = by_person.get(aid, [])
+            counts = {k: sum(1 for i in items if i.status == k) for k in ("done", "in_progress", "todo")}
+            in_progress_s, last = 0.0, [str(rec.get("last_seen") or ""), last_visit.get(aid, "")]
+            for i in items:
+                if i.status == "in_progress":
+                    d = self.store.draft(aid, i.key) or {}
+                    in_progress_s += _seconds((d.get("draft") or {}).get("elapsed_s")) or 0.0
+                    last.append(str(d.get("saved_at") or ""))
+                if active:
+                    key = (scope_of(i.mode, i.context_id), i.recording_id)
+                    r = recordings.setdefault(key, {"scope": key[0], "recording_id": i.recording_id,
+                                                    "file_name": i.manifest.get("file_name", ""), "assigned": 0,
+                                                    "done": 0, "in_progress": 0})
+                    r["assigned"] += 1
+                    if i.status in ("done", "in_progress"):
+                        r[i.status] += 1
+            if active:
+                totals["assigned"] += len(items)
+                for k, n in counts.items():
+                    totals[k] += n
+                draft_s += in_progress_s
+            times = [t for e in mine if (t := _seconds(e.get("elapsed_s"))) is not None]
+            n_anns = [n for e in mine if (n := _seconds(e.get("n_annotations"))) is not None]
+            last.extend(str(e.get("last_at") or "") for e in mine)
+            people.append({
+                "annotator_id": aid, "display_name": rec.get("display_name", ""), "role": rec.get("role", "annotator"),
+                "status": rec.get("status", "active"), "assigned": len(items), **counts,
+                "share_done": counts["done"] / len(items) if items else None,
+                "time_s": sum(times), "in_progress_s": in_progress_s, "median_s": _median(times),
+                "median_annotations": _median(n_anns), "last_active": max(last) or None,
+                "done_7d": since(mine, 7), "daily": daily(mine)})
+        by_recording: dict[tuple[str, str], list[dict[str, Any]]] = {}
+        for e in works:
+            key = (scope_of(e.get("mode", "standard"), e.get("context", "")), e.get("recording_id", ""))
+            by_recording.setdefault(key, []).append(e)
+        for key, r in recordings.items():
+            rows = by_recording.get(key, [])
+            times = [t for e in rows if (t := _seconds(e.get("elapsed_s"))) is not None]
+            n_anns = [n for e in rows if (n := _seconds(e.get("n_annotations"))) is not None]
+            r.update(median_s=_median(times), median_annotations=_median(n_anns),
+                     min_annotations=min(n_anns) if n_anns else None, max_annotations=max(n_anns) if n_anns else None,
+                     saved=len(rows))
+        times = [t for e in works if (t := _seconds(e.get("elapsed_s"))) is not None]
+        remaining = totals["assigned"] - totals["done"]
+        recent = since(works, PACE_DAYS)
+        pace = recent / PACE_DAYS
+        if totals["assigned"] and not remaining:
+            projection = {"status": "complete", "date": None}
+        elif remaining and recent >= PACE_MIN:
+            finish = today + timedelta(days=math.ceil(remaining / pace))
+            projection = {"status": "projected", "date": finish.isoformat()}
+        else:
+            projection = {"status": "not_enough", "date": None}
+        return {
+            "generated_at": now_local_iso(), "work": work, "today": today.isoformat(),
+            "days": [d.isoformat() for d in days],
+            "totals": {**totals, "share_done": totals["done"] / totals["assigned"] if totals["assigned"] else None,
+                       "remaining": remaining, "annotator_hours": (sum(times) + draft_s) / 3600,
+                       "median_minutes": (m / 60 if (m := _median(times)) is not None else None),
+                       "done_7d": since(works, 7), "done_30d": since(works, 30),
+                       "pace_per_day": pace, "pace_days": PACE_DAYS, "projection": projection},
+            "daily": daily(works),
+            "annotators": people,
+            "recordings": sorted(recordings.values(), key=lambda r: (r["scope"] != SCOPE_STUDY, r["scope"],
+                                                                     r["recording_id"])),
+        }
 
     def op_agreement(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
         return self.service.analyses.agreement(body)

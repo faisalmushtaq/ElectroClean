@@ -12,7 +12,7 @@
 import { ADMIN_OP, ApiError } from './http.js';
 
 /** The admin operations that only read (docs/web/api.md, "Administration"), which may be retried. */
-const ADMIN_READS = new Set(['overview', 'progress', 'audit', 'visits', 'sets_list', 'quiz_items', 'set_guided_notes']);
+const ADMIN_READS = new Set(['overview', 'progress', 'stats', 'audit', 'visits', 'sets_list', 'quiz_items', 'set_guided_notes']);
 
 export function isAdminRead(op) {
   return ADMIN_READS.has(op) || /_(list|get)$/.test(String(op));
@@ -111,6 +111,9 @@ export class FirebaseBackend {
   }
 
   get isDemo() { return false; }
+
+  /** Invitations on Firebase are Firebase Authentication's own links, not ?invite= links. */
+  get acceptsInvites() { return false; }
 
   get server() { return ''; }
 
