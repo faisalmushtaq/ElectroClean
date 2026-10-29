@@ -362,7 +362,7 @@ export function syntheticEdfBytes(specIn) {
   const put = (bytes) => { out.set(bytes, o); o += bytes.length; };
   put(ascii('0', 8));
   put(ascii('X X X X', 80));
-  put(ascii('Startdate 01-JAN-2026 X ElectroClean demonstration X', 80));
+  put(ascii('Startdate 01-JAN-2026 X ElectroTag demonstration X', 80));
   put(ascii('01.01.26', 8));
   put(ascii('10.00.00', 8));
   put(ascii(String(headerBytes), 8));

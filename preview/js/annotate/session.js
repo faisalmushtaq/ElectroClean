@@ -5,6 +5,7 @@
 
 import { AnnotationStore } from './store.js';
 import { WorkClock } from './clock.js';
+import { confidenceMode } from './confidence.js';
 import { fromDraft, toDraft, viewedFraction as coverageFraction } from '../viewer/coverage.js';
 import { local, newId, nowLocalIso } from '../util.js';
 import { DEFAULT_ANNOTATION, DEFAULT_HIDE, DEFAULT_SCALINGS } from '../api/demo_catalogue.js';
@@ -18,7 +19,7 @@ function hiddenByDefault(name) {
 /** The key of this browser's copy of a draft (also read by the home view, for what it shows of unfinished work). */
 export function localDraftKey(backend, annotatorId, recordingId, mode, contextId) {
   const where = backend.server || backend.kind;
-  return `electroclean.draft|${where}|${annotatorId || 'anon'}|${recordingId}|${mode}|${contextId || ''}`;
+  return `electrotag.draft|${where}|${annotatorId || 'anon'}|${recordingId}|${mode}|${contextId || ''}`;
 }
 
 /** This browser's copy of a draft, or null. */
@@ -79,6 +80,8 @@ export class AnnotationSession {
     this.minDuration = (study.annotation && study.annotation.min_duration_samples) || 1;
     this.quickLabels = this.catalogue.quickLabels(study.annotation && study.annotation.quick_labels);
     this.comfort = comfortSettings(study);
+    // annotation.confidence: 'optional' (a rating when the annotator wishes) or 'every_mark' (asked after each mark).
+    this.confidenceMode = confidenceMode(study.annotation && study.annotation.confidence);
     this.store = new AnnotationStore({
       chNames: this.channels.map((c) => c.name), nSamples: this.recording.nSamples, sfreq: this.recording.sfreq,
       labels: this.catalogue.labelNames, minDurationSamples: this.minDuration,

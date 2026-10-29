@@ -1,5 +1,5 @@
-// Analyses, computed by the study with ElectroClean's own code: the agreement between annotators
-// (the settings of electroclean.reliability.config.AnalysisConfig), the activity analysis and
+// Analyses, computed by the study with ElectroTag's own code: the agreement between annotators
+// (the settings of electrotag.reliability.config.AnalysisConfig), the activity analysis and
 // learning curves from the interaction logs, and competency reports. Each report is shown in a
 // sandboxed frame and offered for download with its tables. An analysis cannot be started again
 // while it runs.

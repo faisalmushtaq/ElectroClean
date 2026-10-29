@@ -11,8 +11,8 @@
 // The functions before the DeviceStore class are pure and tested in Node; the class needs a browser.
 
 /** The folder of the Origin Private File System, and the IndexedDB database, that hold the copies. */
-export const ROOT_NAME = 'electroclean-recordings';
-const DB_NAME = 'electroclean-device';
+export const ROOT_NAME = 'electrotag-recordings';
+const DB_NAME = 'electrotag-device';
 const DB_STORE = 'recordings';
 const META = 'meta.json';
 /** How long a copy without its description may stay before it counts as abandoned. */
@@ -246,7 +246,7 @@ class IdbBackend {
  * recording piece by piece as it is viewed, so a copy in use in any tab is never removed.
  */
 export function inUseLockName(sha256) {
-  return `electroclean-kept-${sha256}`;
+  return `electrotag-kept-${sha256}`;
 }
 
 function webLocks() {

@@ -53,7 +53,9 @@ export class OverviewSection {
       tile(c.assignments, 'Assigned', 'of every kind, training included (Progress counts each kind apart)'),
       tile(c.done, 'Done', c.assignments ? `${Math.round((100 * (c.done || 0)) / c.assignments)}% of the assigned` : ''),
       tile(c.in_progress, 'In progress'),
-      tile(c.todo, 'To do'));
+      tile(c.todo, 'To do'),
+      tile(c.problems_open, 'Open problems', c.unusable ? `${c.unusable} cannot be annotated` : 'reported by annotators'),
+      tile(c.reviewed, 'Reviewed', 'saved recordings with a review'));
     this.recent.update(o.recent || []);
     this.saved.update(o.last_saved || []);
   }

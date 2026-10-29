@@ -18,6 +18,7 @@ import {
 import { ApiError } from './http.js';
 import { DEMO_NOTICE } from './notice.js';
 import { DemoAdmin } from './demo_admin.js';
+import { DemoFeedback } from './demo_feedback.js';
 
 export { DEMO_NOTICE };
 import * as rules from '../training/rules.js';
@@ -26,9 +27,10 @@ import { escapeHtml, local, newId, nowLocalIso, session } from '../util.js';
 import { sha256Hex } from '../data/sha256.js';
 import { coveredS, fromDraft } from '../viewer/coverage.js';
 import { ADJECTIVES, ANIMALS } from '../games/words.js';
+import { isConfidence, noteProblem } from '../annotate/confidence.js';
 
-const STATE_KEY = 'electroclean.demo.v1';
-const TOKEN_KEY = 'electroclean.demo.token';
+const STATE_KEY = 'electrotag.demo.v1';
+const TOKEN_KEY = 'electrotag.demo.token';
 export const DEMO_PASSWORD = 'demo';
 const FIND_WINDOW_S = 10;
 
@@ -65,7 +67,7 @@ export const TRAINING_SET = Object.freeze({
 
 const STAGE_TITLES = { guided: 'Learn with the experts', practice: 'On your own', assessment: 'Competency assessment' };
 
-/** The answer for a segment without an artifact (electroclean.training.reference.NONE_OPTION). */
+/** The answer for a segment without an artifact (electrotag.training.reference.NONE_OPTION). */
 export const QUIZ_NONE_OPTION = 'No artifact / none of these';
 
 /** The demonstration's short-segment quiz: segments of the first two examples, with feedback after each answer. */
@@ -148,11 +150,11 @@ function viewedSeconds(viewed) { return Math.round(coveredS(fromDraft(viewed, In
 const LABELS = new Map(CATALOGUE.labels.map((l) => [l.label, l]));
 
 function emptyState() {
-  return { version: 1, drafts: {}, done: {}, submissions: [], guided: {}, practice: {}, quiz: {}, records: {} };
+  return { version: 1, drafts: {}, done: {}, submissions: [], guided: {}, practice: {}, quiz: {}, records: {}, problems: {}, unusable: {}, reviews: [] };
 }
 
 // ------------------------------------------------------------ game elements
-// As electroclean/web/games.py: the share of a recording seen from which it counts as viewed in full,
+// As electrotag/web/games.py: the share of a recording seen from which it counts as viewed in full,
 // the fewest people a leaderboard is shown for, how many rows it shows, and the largest weekly goal.
 const VIEWED_IN_FULL = 0.99;
 const MIN_PEOPLE = 3;
@@ -202,6 +204,7 @@ export class DemoBackend {
     this.health = { ok: true, version: 'web', study: 'Demonstration', demo: true };
     this.state = { ...emptyState(), ...(storage.get(STATE_KEY, null) || {}) };
     this._admin = new DemoAdmin(this);
+    this.feedback = new DemoFeedback(this); // problem reports and reviews (demo_feedback.js)
     const saved = tokens.get(TOKEN_KEY, null);
     const user = saved ? this._admin.user(saved.annotator_id) : null;
     this.annotatorId = user && user.status === 'active' ? user.annotator_id : null;
@@ -293,7 +296,7 @@ export class DemoBackend {
 
   _quizOptions() { return [...CATALOGUE.labels.map((l) => l.label), QUIZ_NONE_OPTION]; }
 
-  // The study server's rules (electroclean/web/quiz.py): the same answer sent again is kept once,
+  // The study server's rules (electrotag/web/quiz.py): the same answer sent again is kept once,
   // another label for an answered segment is 409 already_answered (with the kept label), and the
   // correct answers are given only when the annotator may know them.
   async quiz(setId, body = {}) {
@@ -426,6 +429,7 @@ export class DemoBackend {
   _status(aid, a) {
     const key = this._key(aid, a.rid, a.mode, a.context_id);
     if (this.state.done[key]) return 'done';
+    if (this.feedback.isUnusable(key)) return 'unusable';
     if (this.state.drafts[key]) return 'in_progress';
     if (a.mode === 'guided' && this.state.guided[`${aid}|${a.rid}`]?.index > 0) return 'in_progress';
     return 'todo';
@@ -459,6 +463,7 @@ export class DemoBackend {
         draft: draft ? { elapsed_s: Number(draft.elapsed_s) || 0, n_annotations: (draft.annotations || []).length,
           viewed_s: viewedSeconds(draft.viewed), saved_at: draft.saved_at || null } : null,
         ...this._history(aid, a),
+        problem: this.feedback.problemOf(aid, a),
       };
     });
     return { items, next: this._next(aid) };
@@ -555,7 +560,7 @@ export class DemoBackend {
         r.file_name === body.file_name && JSON.stringify(r.manifest.ch_names) === JSON.stringify(body.ch_names || []));
       if (reg) found = { reg, exact: false };
     }
-    const base = { recording_id: null, mode: 'standard', context_id: '', manifest: null, draft: null, differences: [], revision: null };
+    const base = { recording_id: null, mode: 'standard', context_id: '', manifest: null, draft: null, differences: [], revision: null, saved: null };
     if (!found) {
       return { ...base, status: 'unknown',
         message: 'This file is not one of the recordings of this study. You can still look at it and try the tools, ' +
@@ -573,9 +578,21 @@ export class DemoBackend {
         message: 'This recording belongs to a later stage of your training. Continue from your training path.' };
     }
     const key = this._key(aid, rid, mode, ctx);
+    if (this._status(aid, assignment) === 'unusable') {
+      return { ...base, status: 'unusable', recording_id: rid, mode, context_id: ctx,
+        message: `You reported that ${fileName} cannot be annotated, so it is set aside. If the study team returns it to your list, you can annotate it then. Choose another recording from your list.` };
+    }
     const repeatable = mode === 'practice' && !this._practicePassed(aid);
     let draft = this.state.drafts[key] || null;
     let revision = null;
+    if (this.state.done[key] && !repeatable && body.view_saved === true && mode === 'standard') {
+      // to read the feedback on it: the latest saved version, read only
+      const last = this._attempts(key).pop();
+      const manifest = found.spec ? { ...this._manifest(found.spec), fingerprint: found.fp } : this._admin.publicManifestOf(found.reg);
+      return { ...base, status: found.exact ? 'matched' : 'matched_metadata', recording_id: rid, mode, context_id: ctx, manifest,
+        message: `This is ${fileName}. Your latest saved version opens to read, with the feedback on it.`,
+        saved: { version: last.attempt, saved_at: last.saved_at, annotations: last.annotations.map((a) => ({ ...a, channels: [...a.channels] })) } };
+    }
     if (this.state.done[key] && !repeatable) {
       const saved = this._revisable(aid, rid, mode, ctx);
       if (!(body.revise === true && saved)) {
@@ -608,6 +625,10 @@ export class DemoBackend {
     const aid = this._aid();
     const saved_at = nowLocalIso();
     const key = this._key(aid, recordingId, mode, contextId);
+    this._refuseUnusable(key, recordingId);
+    (draft.annotations || []).forEach((a, i) => this._checkConfidenceAndNote(a, (why) => {
+      throw new ApiError(422, 'invalid_draft', `draft annotation ${i + 1}: ${why}`);
+    }));
     const record = { ...draft, saved_at };
     delete record.revises;
     if (this.state.done[key] && !(mode === 'practice' && !this._practicePassed(aid))) {
@@ -640,7 +661,15 @@ export class DemoBackend {
       if (a.onset_sample < 0 || a.duration_samples < 1 || a.onset_sample + a.duration_samples > manifest.n_samples) fail('it lies outside the recording');
       if (a.duration_samples < shortest) fail(`it is shorter than the study's shortest annotation (${shortest} samples)`);
       if (!Array.isArray(a.channels) || a.channels.some((c) => !chans.has(c))) fail('a channel is not in the recording');
+      this._checkConfidenceAndNote(a, fail);
     }
+  }
+
+  /** As service.py: a confidence is a whole number from 1 to 5 or none, and a note one line of at most 200 characters. */
+  _checkConfidenceAndNote(a, fail) {
+    if (a.confidence !== undefined && a.confidence !== null && !isConfidence(a.confidence)) fail('confidence must be a whole number from 1 to 5, or none');
+    const problem = noteProblem(a.note);
+    if (problem) fail(problem);
   }
 
   async submit(body) {
@@ -651,6 +680,7 @@ export class DemoBackend {
     const assignment = this._assignmentsFor(aid).find((a) => a.rid === rid && a.mode === body.mode);
     if (!info || !assignment) throw new ApiError(404, 'not_found', 'This recording is not one of yours.');
     const key = this._key(aid, rid, body.mode, body.context_id);
+    this._refuseUnusable(key, rid);
     let revision = null;
     if (this.state.done[key] && !(body.mode === 'practice' && !this._practicePassed(aid))) {
       if (body.revises === undefined || body.revises === null) throw new ApiError(409, 'already_done', 'This recording has already been saved.');
@@ -682,6 +712,7 @@ export class DemoBackend {
     this.state.submissions.push({
       key, annotator_id: aid, recording_id: rid, mode: body.mode, context_id: body.context_id || '', attempt, saved_at,
       annotations: body.annotations, session: body.session || {}, sha256: body.sha256 || '',
+      confidence_setting: this._admin.studyBlock().annotation.confidence,
       recording: { file_name: info.file_name, sfreq: info.sfreq, n_samples: info.n_samples, ch_names: info.ch_names, size_bytes: info.size_bytes },
       guided: body.mode === 'guided' ? this.state.guided[`${aid}|${rid}`]?.summary || null : null,
       feedback: feedback ? { passed: feedback.passed, metrics: feedback.metrics } : null,
@@ -698,6 +729,19 @@ export class DemoBackend {
       revision: revision ? { version: attempt, revises: revision.revises_version } : null,
     };
   }
+
+  // ------------------------------------------- problem reports and reviews
+  _refuseUnusable(key, rid) {
+    if (this.feedback.isUnusable(key)) {
+      throw new ApiError(409, 'unusable', `You reported that ${rid} cannot be annotated, so it is set aside. If the study team returns it to your list, you can annotate it then.`);
+    }
+  }
+
+  /** POST /problems: a problem with a recording, kept once however often it is sent (demo_feedback.js). */
+  async reportProblem(body) { return this.feedback.report(body || {}); }
+
+  /** GET /me/reviews: the reviews of this annotator's saved work, when the study shows them. */
+  async myReviews() { return this.feedback.mine(); }
 
   // ------------------------------------------------------------ achievements
   /** GET /me/achievements (docs/web/api.md, "Achievements"), from the demonstration's own state. */
@@ -1092,7 +1136,7 @@ export class DemoBackend {
     return SPECS.map((s) => ({ name: fileNameOf(s), blob: new Blob([syntheticEdfBytes(s)], { type: 'application/octet-stream' }) }));
   }
 
-  /** Everything saved in this browser, as ElectroClean annotation documents plus the logs. */
+  /** Everything saved in this browser, as ElectroTag annotation documents plus the logs. */
   resultsDocument() {
     const docs = this.state.submissions.map((s) => {
       const spec = RID.get(s.recording_id);
@@ -1101,12 +1145,13 @@ export class DemoBackend {
       const sf = rec.sfreq;
       const used = [...new Set(s.annotations.map((a) => a.label))].map((l) => LABELS.get(l)).filter(Boolean);
       return {
-        schema: 'electroclean.annotations', schema_version: '1.0.0',
+        schema: 'electrotag.annotations', schema_version: '1.0.0',
         recording: { recording_id: s.recording_id, relative_path: s.recording_id, sfreq: sf, n_samples: rec.n_samples,
           first_samp: 0, meas_date: spec ? '2026-01-01T10:00:00+00:00' : null, duration_s: rec.n_samples / sf, ch_names: [...rec.ch_names],
           fingerprint: { algorithm: 'sha256', role: 'eeg', hex: s.sha256, size_bytes: rec.size_bytes } },
         annotator: { annotator_id: s.annotator_id, display_name: this._admin.user(s.annotator_id)?.display_name || ACCOUNTS[s.annotator_id]?.display_name || '' },
         session: { session_id: `${s.annotator_id}-${s.saved_at}`, mode: s.mode, created_at: s.saved_at, app_version: 'web demonstration',
+          confidence: s.confidence_setting || 'optional',
           context: { context_id: s.context_id, attempt: s.attempt, browser_session: s.session, guided: s.guided, practice: s.feedback,
             ...(s.revision ? { revision: s.revision } : {}) } },
         time_conventions: {
@@ -1127,15 +1172,16 @@ export class DemoBackend {
           onset: a.onset_sample / sf, duration: a.duration_samples / sf, onset_sample: a.onset_sample,
           duration_samples: a.duration_samples, end_sample: a.onset_sample + a.duration_samples, channels: [...a.channels],
           scope: a.channels.length ? 'channels' : 'whole_montage', created_at: a.created_at, modified_at: a.modified_at,
+          confidence: a.confidence ?? null, note: a.note || '',
         })),
       };
     });
     return {
-      schema: 'electroclean.web_demo_results', created_at: nowLocalIso(), note: DEMO_NOTICE,
+      schema: 'electrotag.web_demo_results', created_at: nowLocalIso(), note: DEMO_NOTICE,
       annotation_documents: docs,
       interaction_logs: [...this.visits.values()].map((v) => ({ header: v.header, closed: v.closed, events: v.events })),
       quiz_results: Object.entries(this.state.quiz || {}).filter(([, s]) => Object.keys(s.answers).length).map(([key, s]) => ({
-        schema: 'electroclean.quiz_result', annotator_id: key.split('|')[0], reference_set_id: QUIZ.set_id,
+        schema: 'electrotag.quiz_result', annotator_id: key.split('|')[0], reference_set_id: QUIZ.set_id,
         // completed as on the desktop: every segment answered (a quiz finished early is incomplete)
         mode: QUIZ.feedback === 'immediate' ? 'practice' : 'assessment', finished: Boolean(s.finished),
         completed: Object.keys(s.answers).length === QUIZ.items.length, started_at: s.started_at, finished_at: s.finished_at || null,
@@ -1144,12 +1190,15 @@ export class DemoBackend {
           correct_label: (QUIZ.items.find((it) => it.item_id === item_id) || {}).correct_label || null })),
         score: s.score || quizScore(QUIZ.items, s.answers),
       })),
+      // as the results zip's problem_reports/ and reviews/ (docs/file_formats.md)
+      problem_reports: Object.values(this.state.problems || {}),
+      reviews: [...(this.state.reviews || [])],
     };
   }
 
   async downloadResults() {
     const text = JSON.stringify(this.resultsDocument(), null, 1);
-    return [{ name: 'electroclean_demo_results.json', blob: new Blob([text], { type: 'application/json' }) }];
+    return [{ name: 'electrotag_demo_results.json', blob: new Blob([text], { type: 'application/json' }) }];
   }
 
   get hasResults() { return this.state.submissions.length > 0; }

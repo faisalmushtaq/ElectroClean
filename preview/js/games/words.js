@@ -1,4 +1,4 @@
-// The words of the leaderboard's pseudonyms, the same as electroclean/web/games.py (ADJECTIVES and
+// The words of the leaderboard's pseudonyms, the same as electrotag/web/games.py (ADJECTIVES and
 // ANIMALS; web_tests/unit/ui_milestones.test.mjs checks that the two lists agree). The study server
 // and Firebase make the pseudonyms; the demonstration makes its own from these words.
 

@@ -2,7 +2,7 @@
 // recordings with their use (guided, practice, assessment) and where each reference came from;
 // adding a reference from someone's saved annotations, an annotation file, a consensus of several
 // annotators or an adjudicated consensus; the guided notes; the set's settings, its competency
-// criteria (electroclean.training.assessment.CompetencyCriteria) and its quiz items. Also the
+// criteria (electrotag.training.assessment.CompetencyCriteria) and its quiz items. Also the
 // example training set, whose simulated recordings stand in until real expert files exist.
 
 import { h, clear } from '../ui/dom.js';
@@ -226,7 +226,7 @@ export class TrainingSection {
     const use = radios(`new-use-${s.set_id}`, Object.entries(USES).map(([v, t]) => [v, t]), '');
     const kinds = [
       ['annotator', 'Someone\'s saved annotations', 'An expert annotates the recording in this study (in Annotation mode), and their saved work becomes the reference.'],
-      ['document', 'An annotation file', 'An ElectroClean _annotations.json, for example one saved in another ElectroClean study.'],
+      ['document', 'An annotation file', 'An ElectroTag _annotations.json, for example one saved in another ElectroTag study.'],
       ['consensus', 'A consensus of several annotators', 'Where enough of them agree, sample by sample, for each artifact type.'],
       ['adjudicated', 'An adjudicated consensus', 'An adjudicator\'s saved annotations, made after reviewing the experts\' disagreements.'],
     ];
@@ -399,7 +399,7 @@ export class TrainingSection {
       await this.reload(['success', criteria.criteria.length ? `Saved ${plural(criteria.criteria.length, 'criterion', 'criteria')}.` : 'Saved: results are reported without a pass or fail decision.']);
     } });
     return card('Competency criteria',
-      h('p.caption', {}, 'The research team sets the criteria for each reference set. Leave all unticked to report results without a pass or fail decision. ElectroClean suggests none: suitable thresholds depend on pilot data and on the experts\' own agreement.'),
+      h('p.caption', {}, 'The research team sets the criteria for each reference set. Leave all unticked to report results without a pass or fail decision. ElectroTag suggests none: suitable thresholds depend on pilot data and on the experts\' own agreement.'),
       h('div.criteria', {}, controls.map((c) => c.el)),
       h('div.row.wrap.sentence', {}, h('span', {}, 'An artifact category is assessed only if the reference has at least'), minRef, h('span', {}, 'events of it.')),
       h('div.btn-row', {}, save), msg);

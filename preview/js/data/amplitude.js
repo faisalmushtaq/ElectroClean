@@ -1,4 +1,4 @@
-// The desktop's check that the signal amplitude is plausible (electroclean/app/eeg/amplitude.py),
+// The desktop's check that the signal amplitude is plausible (electrotag/app/eeg/amplitude.py),
 // so that traces stored in the wrong unit (microvolts written as volts, say) can still be seen.
 // The amplitude of a channel is the 99.5th percentile of |x - median| in a few short windows
 // spread through the recording; the amplitude of a type is the median over its channels that are

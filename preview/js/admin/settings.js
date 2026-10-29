@@ -1,4 +1,4 @@
-// Study settings: the parts of electroclean_study.json that a study may change (settings_get and
+// Study settings: the parts of electrotag_study.json that a study may change (settings_get and
 // settings_update): its name, the display filters and whether they are fixed, the display, the
 // channels to hide and channel types by name pattern, how the next recording is chosen, the types
 // on the number keys, the shortest annotation, whether finished recordings may be revised, the
@@ -8,7 +8,7 @@
 
 import { h, clear } from '../ui/dom.js';
 import { CHANNEL_TYPES, SCALING_TYPES, SELECTION, deepCopy, fromMicrovolts, mergeSettings, parseNumber, settingsProblems, toMicrovolts } from './model.js';
-import { actionButton, card, checkbox, field, loading, messageArea, numberInput, sectionHead, select, textArea, textInput } from './ui.js';
+import { actionButton, card, checkbox, field, loading, messageArea, numberInput, radios, sectionHead, select, textArea, textInput } from './ui.js';
 
 /** Only what differs from the current settings, block by block and key by key. */
 function changes(current, wanted) {
@@ -114,6 +114,9 @@ export class SettingsSection {
     idlePause.name = 'idle_pause_minutes';
     const coverage = checkbox('Before Save and Finish, list the parts of the recording that have not been on the screen', (an.coverage_check ?? 'warn') !== 'off');
     const revisions = checkbox('Let annotators revise recordings they have finished', an.allow_revisions !== false);
+    const confidence = confidenceChoice(an.confidence);
+    const reviews = checkbox('Let administrators review saved recordings (Agree, Caveat or Comment on each annotation)', an.allow_reviews !== false);
+    const showReviews = checkbox('Show reviews to the annotators whose work was reviewed (off: blind reviews)', an.show_reviews_to_annotators !== false);
     // game elements
     const games = checkbox('Show goals, milestones and the team\'s progress on the home page', gm.enabled !== false);
     const board = checkbox('Show an anonymised leaderboard (pseudonyms only)', gm.leaderboard !== false);
@@ -123,7 +126,7 @@ export class SettingsSection {
     board.input.addEventListener('change', syncGames);
     syncGames();
     // logging
-    const interactions = checkbox('Record how annotators use ElectroClean (clicks, keys and what is on the screen; never what they type)', lg.interactions !== false);
+    const interactions = checkbox('Record how annotators use ElectroTag (clicks, keys and what is on the screen; never what they type)', lg.interactions !== false);
     const pointer = numberInput({ value: lg.pointer_hz ?? 5, min: 0, max: 60, step: 1 });
     const idle = numberInput({ value: lg.idle_after_s ?? 30, min: 5, max: 3600, step: 5 });
     const notice = textArea({ value: this.data.logging_notice || '', rows: 4, placeholder: 'Shown to each annotator once after signing in, when interactions are recorded' });
@@ -149,7 +152,9 @@ export class SettingsSection {
         annotation: { quick_labels: chosen, min_duration_samples: parseNumber(shortest.value, 'Shortest annotation', { min: 1, integer: true }),
           break_reminder_minutes: parseNumber(breakAfter.value, 'Break reminder after', { min: 0, max: 240 }),
           idle_pause_minutes: parseNumber(idlePause.value, 'Pause after', { min: 0, max: 60 }),
-          coverage_check: coverage.input.checked ? 'warn' : 'off', allow_revisions: revisions.input.checked },
+          coverage_check: coverage.input.checked ? 'warn' : 'off', allow_revisions: revisions.input.checked,
+          allow_reviews: reviews.input.checked, show_reviews_to_annotators: showReviews.input.checked,
+          confidence: confidence.value() },
         gamification: { enabled: games.input.checked, leaderboard: board.input.checked, leaderboard_viewed_only: boardFull.input.checked },
         logging: { interactions: interactions.input.checked, pointer_hz: parseNumber(pointer.value, 'Pointer samples per second', { min: 0, max: 60 }),
           idle_after_s: parseNumber(idle.value, 'Idle after', { min: 5, max: 3600 }) },
@@ -197,6 +202,11 @@ export class SettingsSection {
         field('Shortest annotation (samples)', shortest),
         revisions,
         h('p.caption', {}, 'A revision is saved as a new version beside the earlier ones, which are kept unchanged; analyses use the latest version.'),
+        reviews, showReviews,
+        h('p.caption', {}, 'A review is kept as a record of its own: it never changes the saved annotations, and the agreement analyses do not use it.'),
+        h('h3', {}, 'Confidence'),
+        h('p.caption', {}, 'Annotators can always rate their confidence in a mark from 1 (not at all confident) to 5 (completely confident), with D and a number, the menu or the Annotations list, and add a short note. No mark starts with a rating.'),
+        confidence,
         h('h3', {}, 'Long sessions'),
         h('p.caption', {}, 'The time worked on a recording is research data: it leaves out the time an annotator is paused.'),
         h('div.form-grid', {},
@@ -214,4 +224,15 @@ export class SettingsSection {
         field('Notice shown to annotators', notice, { hint: 'Say what is recorded and why, as the study\'s information sheet does.' })),
       h('div.btn-row.sticky-save', {}, save), msg);
   }
+}
+
+/** The two choices of annotation.confidence, each with what it does (the first design's 'off' and 'on' read as these). */
+function confidenceChoice(value) {
+  const current = value === 'every_mark' || value === 'on' ? 'every_mark' : 'optional';
+  const el = radios('confidence', [
+    ['optional', 'Optional', 'Annotators rate a mark only when they wish. Costs nothing, and records confidence when they want to say it.'],
+    ['every_mark', 'Every mark', 'After each new mark annotators are asked for a rating, answered with one key or tap; Save and Finish lists the marks left unrated.'],
+  ], current);
+  el.setAttribute('aria-label', 'Confidence');
+  return el;
 }

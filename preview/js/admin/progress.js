@@ -81,7 +81,9 @@ export class ProgressSection {
       tile(t.median_minutes === null || t.median_minutes === undefined ? '–' : numberText(t.median_minutes, 1), 'Median minutes per recording', 'Of every recording saved'),
       tile(`${t.done_7d ?? 0}`, 'Done in the last 7 days', `${t.done_30d ?? 0} in the last 30 days`),
       tile(numberText(t.pace_per_day, 1), 'Recordings a day', `The pace of the last ${t.pace_days || 14} days`),
-      tile(finish.value, 'Projected finish', finish.note, t.projection && t.projection.status === 'projected'));
+      tile(finish.value, 'Projected finish', finish.note, t.projection && t.projection.status === 'projected'),
+      tile(`${t.unusable ?? 0}`, 'Cannot be annotated', `Set aside by annotators, apart from done; ${t.problems_open ?? 0} open problem${t.problems_open === 1 ? '' : 's'}`),
+      tile(`${t.reviewed ?? 0}`, 'Reviewed', 'Saved recordings with a review'));
     const keep = this.person.value;
     clear(this.person);
     this.person.append(h('option', { value: '' }, 'The whole study'));
@@ -117,6 +119,7 @@ export class ProgressSection {
       { title: 'Done', num: true, key: 'done' },
       { title: 'In progress', num: true, key: 'in_progress' },
       { title: 'To do', num: true, key: 'todo' },
+      { title: 'Cannot be annotated', num: true, sort: (p) => p.unusable || 0, render: (p) => String(p.unusable || 0) },
       { title: 'Share done', sort: (p) => p.share_done, render: (p) => shareBar(p.share_done) },
       { title: 'Total time', num: true, sort: (p) => (p.time_s || 0) + (p.in_progress_s || 0), render: (p) => minutesText((p.time_s || 0) + (p.in_progress_s || 0)) },
       { title: 'Median time', num: true, sort: (p) => p.median_s, render: (p) => minutesText(p.median_s) },
@@ -140,7 +143,7 @@ export class ProgressSection {
   _fillPeople() { this.people.update(this._peopleRows(), { keepPage: true }); }
 
   _peopleCsv() {
-    const cols = ['annotator_id', 'display_name', 'role', 'status', 'assigned', 'done', 'in_progress', 'todo', 'share_done', 'time_min', 'in_progress_min',
+    const cols = ['annotator_id', 'display_name', 'role', 'status', 'assigned', 'done', 'in_progress', 'todo', 'unusable', 'share_done', 'time_min', 'in_progress_min',
       'median_min', 'median_annotations', 'done_last_7_days', 'last_active'];
     const rows = this.people.rows().map((p) => ({ ...p, time_min: (p.time_s || 0) / 60, in_progress_min: (p.in_progress_s || 0) / 60,
       median_min: p.median_s === null ? null : p.median_s / 60, done_last_7_days: p.done_7d }));

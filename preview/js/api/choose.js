@@ -16,7 +16,7 @@
 import { checkHealth, HttpBackend, normaliseServer } from './http.js';
 import { local } from '../util.js';
 
-const SERVER_KEY = 'electroclean.server';
+const SERVER_KEY = 'electrotag.server';
 
 function queryParams() {
   try { return new URLSearchParams(globalThis.location ? globalThis.location.search : ''); } catch { return new URLSearchParams(''); }
@@ -98,7 +98,7 @@ export function unreachableText(where, exc = null) {
   if (!where || where.kind !== 'server' || !where.address) {
     return 'The demonstration could not be started in this browser. Reload the page to try again; if it keeps happening, try another browser.';
   }
-  return `The study server at ${where.address} does not answer${exc && exc.code === 'not_electroclean' ? ' as an ElectroClean study server' : ''}. ` +
+  return `The study server at ${where.address} does not answer${exc && exc.code === 'not_electrotag' ? ' as an ElectroTag study server' : ''}. ` +
     'Check your internet connection and the address, then try again. If it keeps happening, tell your study team.';
 }
 

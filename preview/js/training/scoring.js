@@ -1,7 +1,7 @@
 // Practice scoring for the demonstration: the event matching of the desktop application's agreement
-// analysis (electroclean/reliability/matching.py) with its defaults (time only, IoU of at least 0.2,
+// analysis (electrotag/reliability/matching.py) with its defaults (time only, IoU of at least 0.2,
 // each event matched at most once, the most matches and then the largest total overlap), and the
-// pass rule of the training programme (electroclean/training/programme.py PassRule).
+// pass rule of the training programme (electrotag/training/programme.py PassRule).
 // In a real study the server scores practice recordings with the Python code.
 
 export const DEFAULT_IOU = 0.2;

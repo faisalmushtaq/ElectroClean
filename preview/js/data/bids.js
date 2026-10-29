@@ -1,5 +1,5 @@
 // BIDS file names, the sidecars that belong to a recording (with the inheritance principle), and
-// the exact reading of TSV and JSON sidecars, as the desktop does them (electroclean/app/io/bids.py
+// the exact reading of TSV and JSON sidecars, as the desktop does them (electrotag/app/io/bids.py
 // and tsv.py), for files the administrator picked in the browser (register.js). Plain ES module.
 
 import { decodeUtf8Python, parsePythonJson } from "./pyjson.js";
@@ -192,7 +192,7 @@ export async function loadJsonChain(chain) {
     if (parsed.constants.length) {
       problems.push(
         `JSON sidecar ${p.name} contains ${[...new Set(parsed.constants)].sort(pyCompare).join(", ")}, which is not valid JSON; ` +
-          "these values are written as null in ElectroClean's outputs",
+          "these values are written as null in ElectroTag's outputs",
       );
     }
     const data = parsed.value;

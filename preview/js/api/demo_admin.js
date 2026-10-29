@@ -4,9 +4,9 @@
 // built-in examples and any added from this computer as manifests), reference sets made from
 // someone's saved annotations or an annotation file, the audit log and the visits.
 //
-// What needs ElectroClean's Python code (the agreement and activity analyses, competency reports,
+// What needs ElectroTag's Python code (the agreement and activity analyses, competency reports,
 // consensus and adjudicated references, the example set's files and the results zip) is answered
-// with an error that says so, and how to try it with `electroclean-web demo`.
+// with an error that says so, and how to try it with `electrotag-web demo`.
 
 import { CATALOGUE, DEFAULT_ANNOTATION, DEFAULT_DISPLAY, DEFAULT_FILTERS, DEFAULT_HIDE, DEFAULT_LOGGING, DEFAULT_QUICK_LABELS, DEFAULT_SCALINGS } from './demo_catalogue.js';
 import { ApiError } from './http.js';
@@ -18,10 +18,10 @@ import {
 } from '../admin/model.js';
 
 export const ADMIN_ID = 'ADMIN';
-export const DEMO_LOGGING_NOTICE = 'This demonstration records how you use ElectroClean (clicks, keys and what is on the ' +
+export const DEMO_LOGGING_NOTICE = 'This demonstration records how you use ElectroTag (clicks, keys and what is on the ' +
   'screen, never what you type) and keeps the record in this browser only. In a real study the record ' +
   "goes to the study team, as the study's information sheet explains.";
-const MANIFEST_SCHEMA = 'electroclean.web_manifest';
+const MANIFEST_SCHEMA = 'electrotag.web_manifest';
 const MAX_MANIFEST_BYTES = 8 * 1024 * 1024;
 const LABEL_NAMES = CATALOGUE.labels.map((l) => l.label);
 const BUILT_IN_AT = '2026-10-28T09:00:00.000+00:00';
@@ -29,8 +29,8 @@ const BUILT_IN_AT = '2026-10-28T09:00:00.000+00:00';
 /** The answer to an operation the demonstration cannot run in the browser. */
 export function needsServer(what) {
   return new ApiError(501, 'needs_server', `The demonstration cannot ${what} in the browser: that needs a study server or ` +
-    'Firebase. To try it on this computer, install ElectroClean and run electroclean-web demo, then open ' +
-    'http://localhost:8000/ and sign in as ADMIN with the password electroclean.');
+    'Firebase. To try it on this computer, install ElectroTag and run electrotag-web demo, then open ' +
+    'http://localhost:8000/ and sign in as ADMIN with the password electrotag.');
 }
 
 const SERVER_ONLY = {
@@ -47,17 +47,17 @@ const INVITE_DAYS = 14;
 const INVITE_MAX_DAYS = 90;
 const DAY_MS = 86400000;
 // stats: the days of the daily completions, the days whose pace projects the finish, and the
-// fewest completions in them for a projection (electroclean/web/admin.py).
+// fewest completions in them for a projection (electrotag/web/admin.py).
 const STATS_DAYS = 30;
 const PACE_DAYS = 14;
 const PACE_MIN = 3;
-/** What a person is told when an invitation link cannot be used (electroclean/web/service.py, INVITE_PROBLEMS). */
+/** What a person is told when an invitation link cannot be used (electrotag/web/service.py, INVITE_PROBLEMS). */
 const INVITE_PROBLEMS = {
   unknown: [404, 'This invitation link is not known to the study. It may have been replaced by a newer link or withdrawn. Ask the study team for a new one.'],
   used: [409, 'This invitation link has been used already. Sign in with your annotator ID and the password you chose, or ask the study team for a new link.'],
   expired: [409, 'This invitation link has expired. Ask the study team for a new one.'],
 };
-/** Why an administrator's account is not given an invitation link (electroclean/web/admin.py, ADMIN_NOT_INVITED). */
+/** Why an administrator's account is not given an invitation link (electrotag/web/admin.py, ADMIN_NOT_INVITED). */
 const ADMIN_NOT_INVITED = 'Invitation links are for annotators: a link sent by email must not open the admin area. Give an administrator a password instead (a temporary one, or one you choose).';
 const inviteProblem = (reason) => new ApiError(INVITE_PROBLEMS[reason][0], `invite_${reason}`, INVITE_PROBLEMS[reason][1]);
 
@@ -107,7 +107,7 @@ export function makePassword() {
 }
 
 function passwordHash(password, salt) {
-  return sha256Hex(new TextEncoder().encode(`electroclean-demo:${salt}:${password}`));
+  return sha256Hex(new TextEncoder().encode(`electrotag-demo:${salt}:${password}`));
 }
 
 /** The settings blocks that a study may change, with the demonstration's values. */
@@ -119,19 +119,21 @@ export function defaultSettings() {
     channels: { hide: [...DEFAULT_HIDE], types: {} },
     selection: { strategy: 'manual', seed: null },
     logging: { ...DEFAULT_LOGGING },
-    annotation: { min_duration_samples: 1, ...DEFAULT_ANNOTATION, allow_revisions: true, quick_labels: [...DEFAULT_QUICK_LABELS] },
+    annotation: { min_duration_samples: 1, ...DEFAULT_ANNOTATION, allow_revisions: true, allow_reviews: true, show_reviews_to_annotators: true,
+      quick_labels: [...DEFAULT_QUICK_LABELS] },
     loading: { apply_channel_types_from_bids: true, show_bids_bad_channels: true },
     gamification: { ...DEFAULT_GAMIFICATION },
   };
 }
 
-/** The game elements of the home page (gamification in electroclean/config/default_settings.json). */
+/** The game elements of the home page (gamification in electrotag/config/default_settings.json). */
 export const DEFAULT_GAMIFICATION = Object.freeze({ enabled: true, leaderboard: true, leaderboard_viewed_only: false });
 
 /** Settings kept by an earlier version of the demonstration gain the blocks and keys added since. */
 function withNewSettings(settings) {
   if (!settings.gamification) settings.gamification = { ...DEFAULT_GAMIFICATION };
   if (settings.annotation && settings.annotation.allow_revisions === undefined) settings.annotation.allow_revisions = true;
+  for (const k of ['allow_reviews', 'show_reviews_to_annotators']) if (settings.annotation && settings.annotation[k] === undefined) settings.annotation[k] = true;
   return settings;
 }
 
@@ -155,7 +157,7 @@ function displayEvents(ev, nSamples, sfreq) {
   return out.sort((a, b) => a.onset_sample - b.onset_sample);
 }
 
-/** The Manifest of docs/web/api.md from an internal one (electroclean/web/manifest.py, public_manifest). */
+/** The Manifest of docs/web/api.md from an internal one (electrotag/web/manifest.py, public_manifest). */
 export function publicManifest(m, studyScalings = {}) {
   const t = m.timing || {};
   const sfreq = Number(t.sfreq);
@@ -177,7 +179,7 @@ export function publicManifest(m, studyScalings = {}) {
 /** Why an internal manifest cannot be registered, or null (the shape, sizes and consistency). */
 export function manifestProblem(m) {
   if (!m || typeof m !== 'object') return 'it is not a recording description';
-  if (m.schema !== MANIFEST_SCHEMA) return 'it is not an ElectroClean recording description (manifest)';
+  if (m.schema !== MANIFEST_SCHEMA) return 'it is not an ElectroTag recording description (manifest)';
   if (String(m.schema_version || '').split('.')[0] !== '1') return `its version ${m.schema_version} is not supported`;
   if (typeof m.recording_id !== 'string' || !m.recording_id || m.recording_id.length > 512) return 'it has no recording ID';
   if (/(^|\/)\.\.(\/|$)|^\//.test(m.recording_id)) return 'its recording ID is not a path inside the dataset';
@@ -314,7 +316,8 @@ export class DemoAdmin {
       // a demonstration saved before the comfort settings existed takes their defaults
       annotation: { min_duration_samples: st.annotation.min_duration_samples, quick_labels: [...st.annotation.quick_labels],
         ...Object.fromEntries(Object.entries(DEFAULT_ANNOTATION).map(([k, d]) => [k, st.annotation[k] ?? d])),
-        allow_revisions: st.annotation.allow_revisions !== false },
+        allow_revisions: st.annotation.allow_revisions !== false, allow_reviews: st.annotation.allow_reviews !== false,
+        show_reviews_to_annotators: st.annotation.show_reviews_to_annotators !== false },
       gamification: { enabled: st.gamification.enabled !== false,
         leaderboard: st.gamification.enabled !== false && st.gamification.leaderboard !== false },
       logging,
@@ -403,7 +406,7 @@ export class DemoAdmin {
   }
 
   // ------------------------------------------------------------- invitations
-  // Kept as the study server keeps them (electroclean/web/accounts.py): one per account, its token
+  // Kept as the study server keeps them (electrotag/web/accounts.py): one per account, its token
   // only as a SHA-256 hash with its expiry, ended when used, replaced, withdrawn or switched off.
   get _invites() {
     if (!this.s.invites || typeof this.s.invites !== 'object') this.s.invites = {};
@@ -555,6 +558,8 @@ export class DemoAdmin {
         done: items.filter((i) => i.status === 'done').length,
         in_progress: items.filter((i) => i.status === 'in_progress').length,
         todo: items.filter((i) => i.status === 'todo').length,
+        unusable: items.filter((i) => i.status === 'unusable').length,
+        ...this.b.feedback.counts(),
       },
       recent: [...this.s.audit].reverse().slice(0, 10),
       last_saved: [...subs].reverse().slice(0, 10).map((s) => ({ annotator_id: s.annotator_id, recording_id: s.recording_id, mode: s.mode,
@@ -742,6 +747,7 @@ export class DemoAdmin {
       throw conflict('done', `${u.annotator_id} has already finished ${body.recording_id}, so it stays with their results.`);
     }
     this.s.assignments.splice(i, 1);
+    this.b.feedback.clearMark(u.annotator_id, body.recording_id, mode, ctx); // set aside, then taken away: afresh if given back
     this._audit('unassign', `Took ${body.recording_id} away from ${u.annotator_id}`, { annotator_id: u.annotator_id, recording_id: body.recording_id, mode, context_id: ctx });
     return {};
   }
@@ -1060,7 +1066,7 @@ export class DemoAdmin {
     };
   }
 
-  /** How far the study has got and how long the work takes (docs/web/api.md, `stats`; electroclean/web/admin.py). */
+  /** How far the study has got and how long the work takes (docs/web/api.md, `stats`; electrotag/web/admin.py). */
   op_stats(body) {
     const work = body.work || 'study';
     if (!['study', 'all'].includes(work)) throw bad("work must be 'study' (the study's own annotation) or 'all' (training too)");
@@ -1095,7 +1101,7 @@ export class DemoAdmin {
     };
     const elapsedOf = (s) => s.elapsed_s;
     const items = this._items().filter((i) => counted(i.mode));
-    const totals = { assigned: 0, done: 0, in_progress: 0, todo: 0 };
+    const totals = { assigned: 0, done: 0, in_progress: 0, todo: 0, unusable: 0 };
     const recordings = new Map();
     let draftS = 0;
     const people = this.s.users.map((u) => {
@@ -1103,7 +1109,7 @@ export class DemoAdmin {
       const active = u.status === 'active';
       const mine = items.filter((i) => i.annotator_id === aid);
       const saved = subs.filter((s) => s.annotator_id === aid);
-      const counts = { done: 0, in_progress: 0, todo: 0 };
+      const counts = { done: 0, in_progress: 0, todo: 0, unusable: 0 };
       for (const i of mine) counts[i.status] = (counts[i.status] || 0) + 1;
       let inProgressS = 0;
       const last = [u.last_seen || '', ...this.s.visits.filter((v) => v.annotator_id === aid).map((v) => v.started_at || '')];
@@ -1117,16 +1123,16 @@ export class DemoAdmin {
           const key = `${scope}|${i.recording_id}`;
           if (!recordings.has(key)) {
             const rec = this.record(scope, i.recording_id);
-            recordings.set(key, { scope, recording_id: i.recording_id, file_name: rec ? rec.file_name : i.recording_id.split('/').pop(), assigned: 0, done: 0, in_progress: 0 });
+            recordings.set(key, { scope, recording_id: i.recording_id, file_name: rec ? rec.file_name : i.recording_id.split('/').pop(), assigned: 0, done: 0, in_progress: 0, unusable: 0 });
           }
           const r = recordings.get(key);
           r.assigned += 1;
-          if (i.status === 'done' || i.status === 'in_progress') r[i.status] += 1;
+          if (i.status === 'done' || i.status === 'in_progress' || i.status === 'unusable') r[i.status] += 1;
         }
       }
       if (active) {
         totals.assigned += mine.length;
-        for (const k of ['done', 'in_progress', 'todo']) totals[k] += counts[k];
+        for (const k of ['done', 'in_progress', 'todo', 'unusable']) totals[k] += counts[k];
         draftS += inProgressS;
       }
       const times = saved.map(elapsedOf).filter((t) => t !== null);
@@ -1145,7 +1151,8 @@ export class DemoAdmin {
         min_annotations: n.length ? Math.min(...n) : null, max_annotations: n.length ? Math.max(...n) : null, saved: rows.length });
     }
     const times = subs.map(elapsedOf).filter((t) => t !== null);
-    const remaining = totals.assigned - totals.done;
+    // A recording that cannot be annotated is finished for its annotator, but it is not done.
+    const remaining = totals.assigned - totals.done - totals.unusable;
     const recent = since(subs, PACE_DAYS);
     const pace = recent / PACE_DAYS;
     let projection = { status: 'not_enough', date: null };
@@ -1156,12 +1163,27 @@ export class DemoAdmin {
       generated_at: nowLocalIso(), work, today, days,
       totals: { ...totals, share_done: totals.assigned ? totals.done / totals.assigned : null, remaining,
         annotator_hours: (times.reduce((a, b) => a + b, 0) + draftS) / 3600, median_minutes: m === null ? null : m / 60,
-        done_7d: since(subs, 7), done_30d: since(subs, 30), pace_per_day: pace, pace_days: PACE_DAYS, projection },
+        done_7d: since(subs, 7), done_30d: since(subs, 30), pace_per_day: pace, pace_days: PACE_DAYS, projection, ...this.b.feedback.counts() },
       daily: daily(subs),
       annotators: people,
       recordings: [...recordings.values()].sort((a, b) => (a.scope !== 'study') - (b.scope !== 'study') || a.scope.localeCompare(b.scope) || a.recording_id.localeCompare(b.recording_id)),
     };
   }
+
+  // ----------------------------------------------- problem reports and reviews (demo_feedback.js)
+  op_problems_list(body) { return this.b.feedback.op_problems_list(body); }
+
+  op_problem_resolve(body) { return this.b.feedback.op_problem_resolve(body); }
+
+  op_problem_return(body) { return this.b.feedback.op_problem_return(body); }
+
+  op_problem_reassign(body) { return this.b.feedback.op_problem_reassign(body); }
+
+  op_saved_attempt_get(body) { return this.b.feedback.op_saved_attempt_get(body); }
+
+  op_review_save(body) { return this.b.feedback.op_review_save(body); }
+
+  op_reviews_list(body) { return this.b.feedback.op_reviews_list(body); }
 
   // ---------------------------------------------------------------- records
   op_audit(body) {

@@ -27,12 +27,14 @@ import { nowLocalIso, session } from './util.js';
 import { newlyReached } from './games/milestones.js';
 import { logMilestones } from './views/home_games.js';
 import { canRevise } from './views/home_list.js';
+import { reportFromHome, reviewsOf } from './views/home_feedback.js';
+import { ReviewPass, FeedbackPanel, attachFeedback, savedReviewMessage } from './annotate/review_pass.js';
 
 const VIEWS = ['signin', 'home', 'open', 'annotate', 'review', 'training', 'quiz'];
 /** The admin area's plain hashes (js/admin/model.js lists its sections). */
 const ADMIN_ROUTE = /^admin(-[a-z]+)?$/;
 /** The token of a private invitation link, kept for the browser tab until it is used. */
-const INVITE_KEY = 'electroclean.invite';
+const INVITE_KEY = 'electrotag.invite';
 
 /**
  * The token of an invitation link (?invite=<token>), taken out of the address at once so that it
@@ -79,6 +81,7 @@ export class App {
     this.catalogue = null;
     this.assignments = null;
     this.achievements = null; // GET /me/achievements, for the home page's game elements (null: none)
+    this.reviews = null; // GET /me/reviews: the feedback on the annotator's saved work ({shown, reviews}, or null)
     this.celebrate = null; // milestones that the last save reached, shown once on the home page
     this.adminArea = null;
     this.visitId = null;
@@ -99,7 +102,7 @@ export class App {
     const asked = (location.hash || '').replace(/^#/, '');
     if (ADMIN_ROUTE.test(asked)) this._adminReturn = asked;
     const invite = takeInvite();
-    this._render(h('main.page.loading', {}, h('p.subtitle', {}, 'Starting ElectroClean…')), 'signin');
+    this._render(h('main.page.loading', {}, h('p.subtitle', {}, 'Starting ElectroTag…')), 'signin');
     let where;
     try { where = await findBackend(); } catch { where = { kind: 'demo', source: 'none' }; }
     this.where = where;
@@ -142,7 +145,7 @@ export class App {
     try {
       this.backend = await connectServer(address, { onUnauthorized: () => this.sessionExpired() });
     } catch (exc) {
-      throw new Error(`There is no ElectroClean study at ${address}, or it does not answer. Check the address and try again.`);
+      throw new Error(`There is no ElectroTag study at ${address}, or it does not answer. Check the address and try again.`);
     }
     rememberServer(this.backend.server);
     this.where = { ...where, address: this.backend.server };
@@ -232,11 +235,26 @@ export class App {
 
   async loadAssignments() {
     const games = this.loadAchievements();
+    const reviews = this.loadReviews();
     try { this.assignments = await this.backend.assignments(); } catch (exc) {
       if (exc.status === 401) throw exc;
       this.assignments = { items: [], next: null };
     }
     await games;
+    await reviews;
+  }
+
+  /** The reviews of the annotator's saved work, when the study shows them (null otherwise, or when they cannot be read). */
+  async loadReviews() {
+    const a = this.me && this.me.study && this.me.study.annotation;
+    if (!a || a.show_reviews_to_annotators === false || this.me.programme || !this.backend.myReviews) { this.reviews = null; return null; }
+    try {
+      this.reviews = await this.backend.myReviews();
+    } catch (exc) {
+      if (exc.status === 401) throw exc;
+      this.reviews = null; // the home page works without them
+    }
+    return this.reviews;
   }
 
   /** The facts of the home page's game elements, when the study has them on (null otherwise, or when they cannot be read). */
@@ -340,10 +358,10 @@ export class App {
       this._settingHash = true;
       location.hash = route;
     }
-    document.title = { signin: 'ElectroClean – sign in', home: 'ElectroClean', open: 'ElectroClean – open a recording',
-      annotate: `ElectroClean – ${this.ws ? this.ws.s.recording.fileName : 'annotate'}`, review: 'ElectroClean – practice review',
-      training: 'ElectroClean – training programme', quiz: 'ElectroClean – quiz' }[route]
-      || (ADMIN_ROUTE.test(route) ? 'ElectroClean – admin' : 'ElectroClean');
+    document.title = { signin: 'ElectroTag – sign in', home: 'ElectroTag', open: 'ElectroTag – open a recording',
+      annotate: `ElectroTag – ${this.ws ? this.ws.s.recording.fileName : 'annotate'}`, review: 'ElectroTag – practice review',
+      training: 'ElectroTag – training programme', quiz: 'ElectroTag – quiz' }[route]
+      || (ADMIN_ROUTE.test(route) ? 'ElectroTag – admin' : 'ElectroTag');
   }
 
   // The interaction log records annotating; what an administrator does in the admin area is not
@@ -482,22 +500,135 @@ export class App {
     this.openFromComputer(item, { revise });
   }
 
-  openFromComputer(expected, { revise = false } = {}) {
+  openFromComputer(expected, { revise = false, purpose = null } = {}) {
     if (this.openView) this.openView.leave();
-    this.openView = new OpenView(this, { expected, revise: Boolean(expected && revise) });
-    this._render(this.openView.el, 'open');
+    this.openView = new OpenView(this, { expected, revise: Boolean(expected && revise), purpose });
+    this._render(this.openView.el, this.openView.route);
+  }
+
+  // ===================================================== problem reports and reviews
+  /** Report a problem with a recording from the home page (annotate/problem.js); the list is drawn again after. */
+  reportProblemFor(item) { return reportFromHome(this, item); }
+
+  /** The annotator reads the feedback on a reviewed recording: its file is opened, and the latest saved version shown read only. */
+  openFeedback(item) {
+    this.openFromComputer(item, { purpose: { kind: 'feedback', route: 'open', title: `See the feedback on ${item.file_name}`,
+      note: 'Your latest saved version opens to read, with the feedback on it beside your annotations. Nothing changes unless you open it to revise.' } });
+  }
+
+  /**
+   * An administrator reviews someone's saved recording (docs/web/admin.md, "Reviewing saved work"): the
+   * EEG file is opened from this computer and checked against the study's manifest, because the EEG
+   * never reaches the study; then the saved annotations are shown read only, with the review panel.
+   * `back` is the admin area's section (and its parameters) to return to.
+   */
+  async startReview({ annotator_id: aid, recording_id: rid, back = { route: 'admin-results', params: null } }) {
+    let target;
+    try {
+      target = await this.backend.admin('saved_attempt_get', { annotator_id: aid, recording_id: rid });
+    } catch (exc) {
+      if (exc.status !== 401) await inform('The review cannot start', exc.message);
+      return;
+    }
+    const m = target.manifest || {};
+    const goBack = () => this.showAdmin(back.route, back.params);
+    this.openFromComputer({ recording_id: rid, file_name: target.file_name, format: m.format }, { purpose: { kind: 'review', route: 'admin-review', target, back, onBack: goBack,
+      title: `Review ${target.file_name}`,
+      note: `${aid}${target.display_name ? ` (${target.display_name})` : ''} saved version ${target.attempt}. Open the recording from this computer: its fingerprint is checked against the study's copy, then the saved annotations are shown read only, ready to review.` } });
+  }
+
+  /** The file for a review is the study's copy (its fingerprint), or one the reviewer confirms is the same recording. */
+  async _openForReview(recording, fp, view) {
+    const t = view.purpose.target;
+    const m = t.manifest || {};
+    const want = m.fingerprint || {};
+    view.step('match', 'Comparing it with the study\'s copy…');
+    if (!(want.hex === fp.hex && (!want.size_bytes || Number(want.size_bytes) === Number(recording.sizeBytes)))) {
+      const same = recording.fileName === m.file_name && Number(recording.sfreq) === Number(m.sfreq) && Number(recording.nSamples) === Number(m.n_samples);
+      if (!same) {
+        view.step('match', 'Not the recording that was annotated', 'failed');
+        view.showProblem(`This file is not ${t.file_name}: its fingerprint differs from the study's copy. Choose the file that ${t.annotator_id} annotated.`, [view.chooseAgainButton()]);
+        return;
+      }
+      const go = await showDialog({ title: 'Not exactly the study\'s copy', logText: 'review fingerprint differs',
+        body: h('p.dialog-text', {}, `This file has the name, sampling rate and length of ${t.file_name}, but its fingerprint differs from the study's copy, so its contents are not exactly the same. Review with it only if you are sure it is the same recording.`),
+        buttons: [{ label: 'Choose another file', value: false }, { label: 'Review with it anyway', value: true, kind: 'primary' }], cancelValue: false });
+      if (!go || !this._stillOpen(view)) { if (this._stillOpen(view)) view.showMessage('Choose the study\'s copy of the recording.', [view.chooseAgainButton()]); return; }
+    }
+    view.step('match', `This is ${t.file_name}: version ${t.attempt} of ${t.annotator_id}`, 'done');
+    let session;
+    try {
+      session = new AnnotationSession({ backend: this.backend, recording, manifest: m, recordingId: t.recording_id, mode: 'standard', contextId: '',
+        me: this.me, catalogue: this.catalogue, sha256: fp.hex, readOnly: true });
+      session.store.reset((t.annotations || []).filter((a) => this.catalogue.has(a.label)));
+    } catch (exc) {
+      view.showProblem(exc.message, [view.chooseAgainButton()]);
+      return;
+    }
+    if (this.ws) this.ws.destroy();
+    const ws = new Workspace(this, session, { kind: 'reviewing' });
+    ws.reviewBack = view.purpose.back;
+    this.ws = ws;
+    this._render(ws.el, 'admin-review');
+    ws.mount(this.content);
+    new ReviewPass(ws, { target: t, backend: this.backend, onSaved: async (review) => { // eslint-disable-line no-new
+      await savedReviewMessage(review);
+      if (this.ws === ws) this.leaveRecording(ws, 'review saved');
+    } });
+  }
+
+  /** The annotator's read-only view of a reviewed recording, with Open to revise when the study allows it. */
+  async _openFeedbackView({ recording, match: m, sha }) {
+    const item = (this.assignments.items || []).find((i) => i.recording_id === m.recording_id && i.mode === m.mode) || { recording_id: m.recording_id, mode: m.mode, status: 'done' };
+    let session;
+    try {
+      session = new AnnotationSession({ backend: this.backend, recording, manifest: m.manifest, recordingId: m.recording_id, mode: m.mode, contextId: m.context_id,
+        me: this.me, catalogue: this.catalogue, sha256: sha, readOnly: true });
+      session.store.reset((m.saved.annotations || []).filter((a) => this.catalogue.has(a.label)));
+    } catch (exc) {
+      this.openView && this.openView.showProblem(exc.message, [this.openView.chooseAgainButton()]);
+      return;
+    }
+    if (this.ws) this.ws.destroy();
+    const ws = new Workspace(this, session, { kind: 'feedback' });
+    this.ws = ws;
+    this._render(ws.el, 'annotate');
+    ws.mount(this.content);
+    const revise = canRevise(this, item) ? () => this._reviseFromFeedback(ws, recording, sha) : null;
+    new FeedbackPanel(ws, { reviews: reviewsOf(this, item), onRevise: revise, stepper: true }); // eslint-disable-line no-new
+    ws.logOpened({ recording_id: m.recording_id, match: m.status, segment: 'feedback', version: m.saved.version });
+  }
+
+  /** From the feedback to a revision of the same file (already read here): the study is asked again with revise. */
+  async _reviseFromFeedback(ws, recording, sha) {
+    if (this._revising) return;
+    this._revising = true;
+    try {
+      const m = await this.backend.match({ file_name: recording.fileName, size_bytes: recording.sizeBytes, format: recording.format === 'synthetic' ? 'edf' : recording.format,
+        sha256: sha, sfreq: recording.sfreq, n_samples: recording.nSamples, ch_names: recording.channels.map((c) => c.name), revise: true });
+      if (this.ws !== ws) return; // the person left meanwhile
+      if (!m.revision) { ws.say(m.message || 'This recording cannot be revised now.'); return; }
+      logger.event('feedback_closed', { recording_id: ws.s.recordingId, to: 'revision' });
+      ws.destroy();
+      this.ws = null;
+      await this.openWorkspace({ recording, match: m, sha });
+    } catch (exc) {
+      if (exc.status !== 401 && this.ws === ws) ws.say(`The study could not be asked: ${exc.message}`);
+    } finally {
+      this._revising = false;
+    }
   }
 
   /** Demonstration: the built-in copy of an example recording. */
   async useExample(recordingId) {
     const recording = this.backend.exampleRecording(recordingId);
-    if (!this.openView || this.route !== 'open') this.openFromComputer(null);
+    if (!this.openView || this.route !== this.openView.route) this.openFromComputer(null);
     await this._process(recording, this.openView);
   }
 
   /** Whether `view` is still the open view on screen: work for one that was left is dropped. */
   _stillOpen(view) {
-    return this.openView === view && this.route === 'open';
+    return this.openView === view && this.route === view.route;
   }
 
   async processFiles(files, view, source = null) {
@@ -535,6 +666,7 @@ export class App {
     if (!this._stillOpen(view)) return;
     if (!(await this._checkKeptCopy(recording, fp, view))) return;
     view.step('fp', 'Checked the file', 'done');
+    if (view.purpose && view.purpose.kind === 'review') { await this._openForReview(recording, fp, view); return; }
     view.step('match', this.backend.isDemo ? 'Looking it up in the demonstration study…' : 'Asking the study whether this is one of your recordings…');
     let m;
     try {
@@ -542,6 +674,7 @@ export class App {
         file_name: recording.fileName, size_bytes: recording.sizeBytes, format: recording.format === 'synthetic' ? 'edf' : recording.format,
         sha256: fp.hex, sfreq: recording.sfreq, n_samples: recording.nSamples, ch_names: recording.channels.map((c) => c.name),
         ...(view.revise ? { revise: true } : {}),
+        ...(view.purpose && view.purpose.kind === 'feedback' ? { view_saved: true } : {}),
       });
     } catch (exc) {
       view.step('match', 'Asking the study', 'failed');
@@ -553,6 +686,16 @@ export class App {
     if (!this._stillOpen(view)) return;
     logger.event('recording_loading', { recording_id: m.recording_id, match: m.status, file_name: recording.fileName, size_bytes: recording.sizeBytes });
     const back = h('button.btn', { type: 'button', onclick: () => this.goBack() }, 'Back to my recordings');
+    if (m.saved && view.purpose && view.purpose.kind === 'feedback') {
+      view.step('match', m.message, 'done');
+      await this._openFeedbackView({ recording, match: m, sha: fp.hex });
+      return;
+    }
+    if (m.status === 'unusable') {
+      view.step('match', 'Set aside', 'done');
+      view.showMessage(m.message, [back, view.chooseAgainButton(false)], 'note');
+      return;
+    }
     if (m.status === 'matched') {
       view.step('match', m.message, 'done');
       await this.openWorkspace({ recording, match: m, sha: fp.hex });
@@ -647,6 +790,7 @@ export class App {
       await ws.coach.start();
       ws._refreshState();
     }
+    if (session.revision) attachFeedback(this, ws); // the review notes beside a revision of a reviewed recording
     ws.logOpened({ recording_id: session.recordingId, match: match.status, ...(session.revision ? { revision: session.revision.version } : {}) });
     if (session.revision) {
       logger.event('revision_started', { session_id: session.sessionId, recording_id: session.recordingId, version: session.revision.version,
@@ -720,9 +864,15 @@ export class App {
 
   async leaveRecording(ws, reason) {
     if (ws.kind === 'review') logger.event('practice_review_closed', { recording: ws.s.recordingId });
+    if (ws.kind === 'feedback') logger.event('feedback_closed', { recording_id: ws.s.recordingId, to: 'home' });
     ws.destroy();
     if (this.ws === ws) this.ws = null;
     void reason;
+    if (ws.kind === 'reviewing') {
+      const back = ws.reviewBack || { route: 'admin-results', params: null };
+      await this.showAdmin(back.route, back.params);
+      return;
+    }
     await this.loadAssignments();
     if (this.me && this.me.programme) await this.showTraining();
     else this.showHome();

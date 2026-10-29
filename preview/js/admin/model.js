@@ -21,6 +21,7 @@ export const SECTIONS = Object.freeze([
   { key: 'assignments', route: 'admin-assignments', title: 'Assignments', group: 'people' },
   { key: 'training', route: 'admin-training', title: 'Training', group: 'people' },
   { key: 'recordings', route: 'admin-recordings', title: 'Recordings', group: 'data' },
+  { key: 'problems', route: 'admin-problems', title: 'Problems', group: 'data' },
   { key: 'settings', route: 'admin-settings', title: 'Study settings', group: 'config' },
 ]);
 
@@ -59,7 +60,7 @@ export function routeForSection(key) {
 
 // --------------------------------------------------------------------- words
 export const MODES = Object.freeze({ standard: 'Annotation', guided: 'Guided training', practice: 'Practice', assessment: 'Assessment' });
-export const STATUS = Object.freeze({ todo: 'To do', in_progress: 'In progress', done: 'Done' });
+export const STATUS = Object.freeze({ todo: 'To do', in_progress: 'In progress', done: 'Done', unusable: 'Cannot be annotated' });
 export const USES = Object.freeze({
   guided: 'Guided: learn with the experts',
   practice: 'Practice: on their own, with feedback',
@@ -86,7 +87,7 @@ export const METHOD_NAMES = Object.freeze({
   adjudicated: 'adjudicated consensus',
   simulation: 'the simulation that made the recording',
 });
-/** MNE-Python's channel types that the study's channel-type patterns may give (electroclean.config.settings). */
+/** MNE-Python's channel types that the study's channel-type patterns may give (electrotag.config.settings). */
 export const CHANNEL_TYPES = Object.freeze(['eeg', 'eog', 'ecg', 'emg', 'misc', 'stim', 'resp', 'bio', 'gsr', 'temperature']);
 export const SCALING_TYPES = Object.freeze(['eeg', 'eog', 'ecg', 'emg', 'misc']);
 
@@ -123,7 +124,7 @@ export function opText(op) {
   return AUDIT_OPS[op] || String(op || '').replace(/_/g, ' ');
 }
 
-/** The competency measures of electroclean.training.assessment.METRICS, in the same order. */
+/** The competency measures of electrotag.training.assessment.METRICS, in the same order. */
 export const METRICS = Object.freeze({
   event_f1: {
     label: 'Event F1 (time only)', better: 'higher', range: [0, 1],
@@ -216,7 +217,7 @@ export function fileParts(rid) {
   return { name: parts.pop(), folder: parts.join('/') };
 }
 
-/** One phrase for where a reference came from (electroclean.training.assessment.describe_provenance). */
+/** One phrase for where a reference came from (electrotag.training.assessment.describe_provenance). */
 export function describeProvenance(prov) {
   const p = prov || {};
   let text = METHOD_NAMES[p.method] || p.method || 'method not recorded';
@@ -241,7 +242,7 @@ export function isNotOffered(exc) {
 export function problemText(exc) {
   if (!exc) return 'Something went wrong. Please try again.';
   if (isNotOffered(exc)) {
-    return 'This study does not offer this part of the admin area yet. Its server or functions may need updating to the current version of ElectroClean.';
+    return 'This study does not offer this part of the admin area yet. Its server or functions may need updating to the current version of ElectroTag.';
   }
   return exc.message || 'Something went wrong. Please try again.';
 }
@@ -323,7 +324,7 @@ export function mergeSettings(current, changes) {
 }
 
 /**
- * Problems with study settings, in plain words (the rules of electroclean.config.settings, which the
+ * Problems with study settings, in plain words (the rules of electrotag.config.settings, which the
  * study checks again). `labels` are the catalogue's label names, to check the quick labels.
  */
 export function settingsProblems(s, labels = null) {
@@ -360,11 +361,14 @@ export function settingsProblems(s, labels = null) {
   if (minutes('break_reminder_minutes', 240)) out.push('A break reminder comes after between 0 (no reminders) and 240 minutes of work.');
   if (minutes('idle_pause_minutes', 60)) out.push('The clock pauses itself after between 0 (never) and 60 minutes without input.');
   if ('coverage_check' in a && !['warn', 'off'].includes(a.coverage_check)) out.push('The check of the parts not yet viewed is either on (warn) or off.');
+  if ('confidence' in a && !['optional', 'every_mark', 'off', 'on'].includes(a.confidence)) out.push('Confidence is either optional or asked for every mark.');
   const q = a.quick_labels || [];
   if (q.length > 9) out.push('At most nine artifact types fit on the keys 1 to 9.');
   if (new Set(q).size !== q.length) out.push('An artifact type is on two number keys; give each key a different type.');
   if (labels) for (const l of q) if (!labels.includes(l)) out.push(`${l} is not one of the artifact types.`);
   if ('allow_revisions' in a && typeof a.allow_revisions !== 'boolean') out.push('Whether finished recordings may be revised is on or off.');
+  if ('allow_reviews' in a && typeof a.allow_reviews !== 'boolean') out.push('Whether saved recordings may be reviewed is on or off.');
+  if ('show_reviews_to_annotators' in a && typeof a.show_reviews_to_annotators !== 'boolean') out.push('Whether annotators see the reviews of their work is on or off.');
   const g = s.gamification || {};
   for (const k of ['enabled', 'leaderboard', 'leaderboard_viewed_only']) {
     if (k in g && typeof g[k] !== 'boolean') out.push(`gamification.${k} is on or off (true or false).`);
@@ -377,7 +381,7 @@ export const toMicrovolts = (v) => Math.round(Number(v) * 1e6 * 1000) / 1000;
 export const fromMicrovolts = (uv) => Number(uv) / 1e6;
 
 // ------------------------------------------------------------------ analyses
-/** The defaults of electroclean.reliability.config.AnalysisConfig. */
+/** The defaults of electrotag.reliability.config.AnalysisConfig. */
 export function defaultAnalysisConfig() {
   return {
     resolutions_s: [0.01, 0.05, 0.1],
@@ -463,7 +467,7 @@ export function describeCriterion(c) {
 }
 
 // ------------------------------------------------------------- registration
-/** What the review table shows of an internal manifest (electroclean/web/manifest.py). */
+/** What the review table shows of an internal manifest (electrotag/web/manifest.py). */
 export function manifestSummary(m) {
   const t = m.timing || {};
   const sfreq = Number(t.sfreq ?? m.sfreq);
@@ -528,7 +532,7 @@ export function filterAudit(entries, { by = '', op = '' } = {}) {
 
 /** Counts of one annotator's work items in the progress answer. */
 export function progressCounts(items) {
-  const c = { assigned: 0, done: 0, in_progress: 0, todo: 0 };
+  const c = { assigned: 0, done: 0, in_progress: 0, todo: 0, unusable: 0 };
   for (const i of items || []) {
     c.assigned += 1;
     if (i.status in c) c[i.status] += 1;
@@ -598,7 +602,7 @@ export function inviteMessage({ annotatorId, name = '', study = '', link, expire
   const lines = [
     `Dear ${name || annotatorId},`,
     '',
-    `You are invited to annotate EEG recordings for ${study || 'our study'}, using ElectroClean in your web browser. This private link lets you choose your own password and sign in:`,
+    `You are invited to annotate EEG recordings for ${study || 'our study'}, using ElectroTag in your web browser. This private link lets you choose your own password and sign in:`,
     '',
     link,
     '',
@@ -755,13 +759,13 @@ export function tsvText(columns, rows) {
   return [columns.join('\t'), ...rows.map((r) => columns.map((c) => cell(r[c])).join('\t'))].join('\n') + '\n';
 }
 
-/** The annotations of an ElectroClean _annotations.json, checked enough to say what is wrong in plain words. */
+/** The annotations of an ElectroTag _annotations.json, checked enough to say what is wrong in plain words. */
 export function readAnnotationDocument(text) {
   let doc;
-  try { doc = JSON.parse(text); } catch { throw new Error('This file is not an ElectroClean annotation file: it cannot be read as JSON.'); }
+  try { doc = JSON.parse(text); } catch { throw new Error('This file is not an ElectroTag annotation file: it cannot be read as JSON.'); }
   if (!doc || typeof doc !== 'object' || !Array.isArray(doc.annotations)) {
-    throw new Error('This file is not an ElectroClean annotation file (*_annotations.json): it has no list of annotations.');
+    throw new Error('This file is not an ElectroTag annotation file (*_annotations.json): it has no list of annotations.');
   }
-  if (doc.schema && doc.schema !== 'electroclean.annotations') throw new Error(`This file is a ${doc.schema} document, not ElectroClean annotations.`);
+  if (doc.schema && doc.schema !== 'electrotag.annotations') throw new Error(`This file is a ${doc.schema} document, not ElectroTag annotations.`);
   return doc;
 }

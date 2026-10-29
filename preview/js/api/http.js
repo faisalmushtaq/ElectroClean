@@ -3,11 +3,11 @@
 // The server usually runs on another site than the application (GitHub Pages), so requests carry
 // a bearer token rather than a cookie: POST /login returns it, it is kept in memory and in
 // sessionStorage (never localStorage, so it ends with the browser tab), and every request except
-// GET /health sends `Authorization: Bearer …` and `X-ElectroClean: 1`.
+// GET /health sends `Authorization: Bearer …` and `X-ElectroTag: 1`.
 
 import { session } from '../util.js';
 
-const TOKEN_KEY = 'electroclean.token';
+const TOKEN_KEY = 'electrotag.token';
 /** The names of the admin area's operations: lower-case letters and underscores (overview, user_add, ...). */
 export const ADMIN_OP = /^[a-z][a-z_]{0,40}$/;
 
@@ -48,7 +48,7 @@ export async function checkHealth(server, { timeoutMs = 6000 } = {}) {
     const res = await fetch(`${server}/api/v1/health`, { method: 'GET', cache: 'no-store', signal: ctl ? ctl.signal : undefined, credentials: 'omit' });
     const body = await readJson(res);
     if (!res.ok || !body || typeof body !== 'object' || body.ok !== true) {
-      throw new ApiError(res.status, 'not_electroclean', 'This address answers, but not as an ElectroClean study server.');
+      throw new ApiError(res.status, 'not_electrotag', 'This address answers, but not as an ElectroTag study server.');
     }
     return body;
   } finally {
@@ -85,7 +85,7 @@ export class HttpBackend {
   }
 
   async _request(method, path, body = undefined, { keepalive = false, auth = true } = {}) {
-    const headers = { 'X-ElectroClean': '1' };
+    const headers = { 'X-ElectroTag': '1' };
     if (body !== undefined) headers['Content-Type'] = 'application/json';
     if (auth && this.token) headers.Authorization = `Bearer ${this.token}`;
     let res;
@@ -151,6 +151,13 @@ export class HttpBackend {
   /** Sets the personal goal ({goal_per_week}) or whether to appear on the leaderboard ({leaderboard_hidden}). */
   setAchievements(body) { return this._request('POST', '/me/achievements', body || {}); }
 
+  // ------------------------------------------- problem reports and reviews
+  /** POST /problems: a problem with a recording; `problem_id` makes a second sending of the same report harmless. */
+  reportProblem(body) { return this._request('POST', '/problems', body); }
+
+  /** GET /me/reviews: the reviews of the annotator's saved work ({shown, reviews}). */
+  myReviews() { return this._request('GET', '/me/reviews'); }
+
   // ------------------------------------------------------ assignments, opening
   assignments() { return this._request('GET', '/assignments'); }
 
@@ -208,10 +215,10 @@ export class HttpBackend {
   get canDownloadRecordings() { return Boolean(this.health && this.health.demo); }
 
   async downloadRecordings() {
-    const headers = { 'X-ElectroClean': '1' };
+    const headers = { 'X-ElectroTag': '1' };
     if (this.token) headers.Authorization = `Bearer ${this.token}`;
     const res = await fetch(`${this.server}/demo/recordings.zip`, { headers, credentials: 'omit' });
     if (!res.ok) throw new ApiError(res.status, 'download_failed', 'The example recordings could not be downloaded.');
-    return [{ name: 'electroclean_demo_recordings.zip', blob: await res.blob() }];
+    return [{ name: 'electrotag_demo_recordings.zip', blob: await res.blob() }];
   }
 }

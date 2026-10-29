@@ -4,20 +4,25 @@ import { h } from '../ui/dom.js';
 
 const SVG = 'http://www.w3.org/2000/svg';
 
-export function brandMark(size = 28, colour = '#1E1E1E') {
+/**
+ * The ElectroTag mark: a stretch of EEG marked as an artifact, drawn as the application draws an
+ * annotation (a shaded band with its two edges), in a rounded frame. icon.svg is the same drawing.
+ * On the dark sign-in panel it is drawn in white with a lighter blue.
+ */
+export function brandMark(size = 28, ink = '#0D0D0D', accent = '#2B4392') {
   const svg = document.createElementNS(SVG, 'svg');
-  svg.setAttribute('viewBox', '0 0 32 32');
-  svg.setAttribute('width', String(size));
-  svg.setAttribute('height', String(size));
-  svg.setAttribute('aria-hidden', 'true');
+  Object.entries({ viewBox: '0 0 32 32', width: size, height: size, 'aria-hidden': 'true' }).forEach(([k, v]) => svg.setAttribute(k, String(v)));
   svg.classList.add('brand-mark');
-  // A head seen from above (a thin circle) with an EEG trace running through it, drawn in one line weight.
-  const circle = document.createElementNS(SVG, 'circle');
-  Object.entries({ cx: 16, cy: 16, r: 14.25, fill: 'none', stroke: colour, 'stroke-width': 1.5 }).forEach(([k, v]) => circle.setAttribute(k, String(v)));
-  const path = document.createElementNS(SVG, 'path');
-  path.setAttribute('d', 'M3.5 16.5h5l2.4-5.5 3.6 11.5 3.1-9 2 3.5h8.9');
-  Object.entries({ fill: 'none', stroke: colour, 'stroke-width': 1.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }).forEach(([k, v]) => path.setAttribute(k, String(v)));
-  svg.append(circle, path);
+  const part = (tag, attrs) => {
+    const el = document.createElementNS(SVG, tag);
+    Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, String(v)));
+    svg.append(el);
+  };
+  part('rect', { x: 1.75, y: 1.75, width: 28.5, height: 28.5, rx: 7, fill: 'none', stroke: ink, 'stroke-width': 1.5 });
+  part('rect', { x: 12, y: 6, width: 8.5, height: 20, fill: accent, 'fill-opacity': 0.22 });
+  part('path', { d: 'M12 6v20M20.5 6v20', stroke: accent, 'stroke-width': 1.5 });
+  part('path', { d: 'M4.5 18.5c1.2 0 1.6-2 2.6-2s1.3 2.4 2.4 2.4 1.2-1.4 2.5-1.4c1.6 0 1.8-7.5 4.2-7.5s2.6 7.5 4.3 7.5c1.2 0 1.3 1.4 2.4 1.4s1.4-2 2.5-2 1.5 1.6 2.1 1.6',
+    fill: 'none', stroke: ink, 'stroke-width': 1.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' });
   return svg;
 }
 
@@ -46,7 +51,7 @@ export function appHeader(app, { title = '', admin = false, tools = null } = {})
       onclick: () => (admin ? app.showHome() : app.showAdmin('admin')) }, admin ? 'My recordings' : 'Admin')
     : null;
   return h('header.app-header', {},
-    h('div.brand', {}, brandMark(26), h('span.brand-name', {}, 'ElectroClean'),
+    h('div.brand', {}, brandMark(26), h('span.brand-name', {}, 'ElectroTag'),
       study && !(app.backend && app.backend.isDemo) ? h('span.brand-study', {}, study) : null, title ? h('span.brand-study', {}, title) : null,
       admin ? h('span.chip.active.admin-chip', {}, 'Admin') : null,
       app.backend && app.backend.isDemo ? h('span.chip.warning', {}, 'Demonstration') : null),
@@ -78,7 +83,7 @@ export function studyLink(app) {
 export function emailLinkHref(app) {
   const link = studyLink(app);
   const study = app && app.me && app.me.study && app.me.study.name ? ` (${app.me.study.name})` : '';
-  return `mailto:?subject=${encodeURIComponent(`ElectroClean${study}: open on a tablet or computer`)}` +
+  return `mailto:?subject=${encodeURIComponent(`ElectroTag${study}: open on a tablet or computer`)}` +
     `&body=${encodeURIComponent(`Open this link on a tablet or a computer to annotate:\n${link}`)}`;
 }
 
@@ -91,7 +96,7 @@ export function smallScreenNotice(app = null) {
   const me = app && app.me;
   return h('div.small-screen', { role: 'note' },
     h('div.card', {}, brandMark(40),
-      h('h1', {}, 'ElectroClean needs a larger screen'),
+      h('h1', {}, 'ElectroTag needs a larger screen'),
       h('p', {}, 'Annotating EEG needs room for the traces, so it works on a tablet such as an iPad, or on a laptop or desktop computer. Your work waits for you there.'),
       me ? h('div.btn-row.center', {},
         h('a.btn.primary', { href: emailLinkHref(app), 'data-log': 'email-link' }, 'Email me this link'),

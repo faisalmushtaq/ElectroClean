@@ -1,5 +1,5 @@
 // The milestones of the home page, drawn from the facts of GET /me/achievements (docs/web/api.md,
-// "Achievements"; electroclean/web/games.py gives the facts).
+// "Achievements"; electrotag/web/games.py gives the facts).
 //
 // Milestones reward progress through the recordings and thoroughness, never speed and never the
 // number of annotations: a reward for marking more would push annotators to mark artifacts they do
