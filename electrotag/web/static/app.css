@@ -1174,6 +1174,18 @@ table.leaderboard th:first-child, table.leaderboard td:first-child { width: 56px
 .map-electrode.dim { opacity: 0.35; }
 .map-electrode:disabled { cursor: default; }
 .map-electrode:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; z-index: 2; }
+/* A dense cap seen whole: electrodes as dots too close for their names; the name shows over the
+   electrode under the pointer or with the keyboard's focus, and + brings every name back. */
+.channel-map-block.crowded .map-electrode { min-width: 0; width: var(--el-size); padding: 0; }
+.channel-map-block.crowded .map-electrode > span { display: none; }
+.channel-map-block.crowded .map-electrode[aria-pressed="true"] { background: var(--selection-channel); }
+.channel-map-block.crowded .map-electrode:focus-visible { z-index: 3; }
+.channel-map-block.crowded .map-electrode:focus-visible > span {
+  display: block; position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); padding: 0 6px;
+  background: var(--surface); border: 1px solid var(--rule); color: var(--ink); font-weight: 400; pointer-events: none;
+}
+@media (hover: hover) { .channel-map-block.crowded .map-electrode:hover { z-index: 3; } }
+@media (hover: hover) { .channel-map-block.crowded .map-electrode:hover > span { display: block; position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); padding: 0 6px; background: var(--surface); border: 1px solid var(--rule); color: var(--ink); font-weight: 400; pointer-events: none; } }
 .map-box { position: absolute; border: 1px solid var(--accent); background: rgba(43, 67, 146, 0.08); pointer-events: none; }
 .map-note { margin: 8px 0 0; }
 .dialog.wide:has(.channel-map-block:not([hidden])) { max-width: 760px; }

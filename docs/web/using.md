@@ -296,9 +296,12 @@ whose names say nothing about where the electrodes are, such as BioSemi's A1 to 
 E128, is arranged on rings in the order of its channels, and the map says "Positions not known:
 arranged in order". Channels that are not on the head (EOG, ECG and the like) are under it, as
 Other channels. A bad channel is grey with a dashed edge and can still be chosen. When channels are
-coloured by group, the map uses the same colours. The − and + buttons make the map smaller or
-larger; a large map scrolls in its frame. ElectroTag remembers whether you last used the list or
-the map.
+coloured by group, the map uses the same colours. The map opens with the whole head in view. On a
+dense cap, such as 128 channels with 10-05 names, the electrodes are then too close together for
+their names: each is a small dot, and its name shows when you point at it or move to it with the
+arrow keys. The + button makes the map larger, step by step, until every electrode has its name, and
+− makes it smaller again; a large map scrolls in its frame. ElectroTag remembers whether you last
+used the list or the map.
 
 Then drag across the EEG from the start of the artifact to its end. With the keyboard, point at the
 start and press M, then point at the end and press M again. You can scroll in between, which is the
@@ -375,7 +378,10 @@ the time cursor on it; a time past the end of the recording shows its end. If El
 what you typed, it says so under the field, and Esc closes the field. Show all, in the same field or
 with Shift+End, puts the whole recording on the screen to find your way around it; press it again to
 go back to the view you had. A view of the whole recording is an overview, so it does not count
-towards the parts you have viewed.
+towards the parts you have viewed, and a line at the top of the EEG says so for as long as it lasts.
+On a long recording with many channels, reading the whole of it can take a while: the EEG is drawn
+from the start as it is read, and a note over it says how much has been read so far, for example
+"Reading the EEG… 35%". Going back to your view does not wait for the rest.
 
 While the pointer is over a trace, the line at the bottom shows the channel, the time to the
 thousandth of a second and the value of the signal there in µV, as drawn: filtered as you see it,
@@ -456,7 +462,10 @@ how long you take to answer each segment.
 The Recording tab has a Comfort panel with choices of your own, kept in the browser you use and
 applied to every recording you open there. Traces can be thin, normal or thick; thick traces are
 easier to follow on a bright screen or from a little further away. Channel names can be normal or
-large, and the text of the side panel normal or larger. These choices change only how the EEG and
+large, and the text of the side panel normal or larger. Names are never drawn smaller than they can
+be read: when the rows are too short for a name each (many channels on the screen, or a small
+window), every second or third channel is named, the channels you have selected are always named,
+and pointing at a row names its channel. Page Up shows fewer channels, each with its name. These choices change only how the EEG and
 the panel look, never what is saved. ElectroTag also follows your computer's or iPad's setting
 to reduce motion, and announces its messages to screen readers.
 

@@ -5,6 +5,22 @@ Each section below describes the changes in one version of ElectroTag;
 
 ## Unreleased
 
+The EEG is easier to read on dense montages. Channel names are never drawn
+smaller than 11 pixels (13 when large): where the rows are shorter, every
+second or third channel is named, selected channels are always named and the
+row under the pointer is named too. The time axis names its unit, "time (m:ss)"
+once the screen reaches ten minutes, keeps tenths of a second on a clock, and no
+longer cuts its last label; event labels sit on a white ground over the traces
+and keep clear of the scale bars, and the overlay's scale figure moves to the
+top of its bar. Show all on a long, dense recording reads it in pieces, draws
+each as it arrives with "Reading the EEG… 35%" over the EEG, and keeps a line
+saying that the screen is an overview for as long as it lasts; going back does
+not wait for the rest. The channel map opens with the whole head in view: on a
+128-channel 10-05 cap the electrodes are dots whose names show under the
+pointer or the keyboard's focus, and + climbs to the size where every name fits
+(on a touch screen it opens at the first size with targets large enough for a
+finger, centred on the head).
+
 Movement-artifact and Chewing-artifact have new colours (#52C493 and #5A1505),
 so that the nine types of the numbered buttons stay apart for annotators with
 red-green colour blindness; the colours are the same on the type buttons, the

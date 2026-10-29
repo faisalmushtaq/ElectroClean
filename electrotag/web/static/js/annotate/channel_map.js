@@ -7,7 +7,7 @@
 
 import { h, clear } from '../ui/dom.js';
 import { logger } from '../log/logger.js';
-import { extentOf, mapScale, nearestInDirection, pointsInBox } from '../viewer/head_map.js';
+import { extentOf, mapScale, mapScales, minSpacing, nearestInDirection, pointsInBox, targetSize } from '../viewer/head_map.js';
 import { icon } from '../views/common.js';
 
 const SOURCE_TEXT = {
@@ -15,7 +15,6 @@ const SOURCE_TEXT = {
   standard: () => 'Standard positions of the 10-20, 10-10 and 10-05 names.',
   order: () => 'Positions not known: arranged in order, from the centre outwards.',
 };
-const ZOOMS = [1, 1.25, 1.5, 2, 2.5, 3];
 const coarse = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
 /**
@@ -27,7 +26,7 @@ const coarse = () => typeof matchMedia === 'function' && matchMedia('(pointer: c
 export function channelMap({ layout, fileName = null, channels, picked, colours = null, isShown = () => true, onChange = () => {} }) {
   const points = layout.points;
   const info = new Map(channels.map((c) => [c.name, c]));
-  let zoomAt = 0;
+  let zoomAt = null; // the step of size (mapScales), chosen when the map is first placed
   let disabled = false;
   let current = 0; // the electrode that takes the keyboard (roving focus)
   const buttons = points.map((p, i) => {
@@ -65,13 +64,20 @@ export function channelMap({ layout, fileName = null, channels, picked, colours 
   const none = act('None', 'none', () => bulk('none'));
   const invert = act('Invert', 'invert', () => bulk('invert'));
   const tools = h('div.map-tools', {}, all, none, invert, h('span.map-zoom', { role: 'group', 'aria-label': 'Size of the map' }, zoomOut, zoomIn));
+  // A dense cap opens with the whole head in view and the electrodes too close for their names:
+  // the note then says how to read them.
+  const crowdedNote = h('span.map-crowded-note', { hidden: true }, coarse() ? ' Press + for larger electrodes with their names.'
+    : ' Point at an electrode for its name, or press + until every name shows.');
   const note = h('p.caption.map-note', {}, `${SOURCE_TEXT[layout.source](fileName)} `,
     coarse() ? 'Tap an electrode to choose it, drag with the Pencil to choose several, and drag with a finger to move a large map.'
-      : 'Click an electrode to choose it, drag a box to choose several, or use the arrow keys and Space.');
+      : 'Click an electrode to choose it, drag a box to choose several, or use the arrow keys and Space.', crowdedNote);
   const el = h('div.channel-map-block', { 'data-source': layout.source }, tools, viewport, note);
 
   let scale = 1;
+  let fitScale = 1;
+  let scales = [1];
   let ext = extentOf(points);
+  const spacing = minSpacing(points);
   function place() {
     const w = viewport.clientWidth;
     if (!w) return;
@@ -80,13 +86,26 @@ export function channelMap({ layout, fileName = null, channels, picked, colours 
     const room = Math.max(target, Math.min(64, 7 * Math.max(...points.map((p) => p.name.length)) + 12));
     const maxH = Math.max(240, Math.min(520, Math.round(window.innerHeight * 0.5)));
     ext = extentOf(points);
-    scale = mapScale(points, { widthPx: w - 8, heightPx: maxH - 8, targetPx: room, zoom: ZOOMS[zoomAt] }).scale;
+    // The first size shows the whole head; + climbs to the size where every name fits, and beyond.
+    const s = mapScale(points, { widthPx: w - 8, heightPx: maxH - 8, targetPx: room });
+    fitScale = s.fit;
+    scales = mapScales(s.fit, s.needed);
+    // With a mouse the map opens whole; a finger needs full-sized targets, so on a touch screen it
+    // opens at the first size that gives them (the head centred, and a finger's drag moves the map).
+    const first = zoomAt === null;
+    if (first) zoomAt = coarse() ? Math.max(0, scales.findIndex((sc) => targetSize(spacing, sc, target) >= target)) : 0;
+    zoomAt = Math.min(zoomAt, scales.length - 1);
+    scale = scales[zoomAt];
+    const crowded = scale < s.needed - 1e-6;
+    const size = targetSize(spacing, scale, target, crowded ? 3 : 4);
+    el.classList.toggle('crowded', crowded);
+    crowdedNote.hidden = !crowded;
     const cw = Math.round((ext.maxX - ext.minX) * scale);
     const ch = Math.round((ext.maxY - ext.minY) * scale);
     canvas.style.width = `${cw}px`;
     canvas.style.height = `${ch}px`;
     viewport.style.height = `${Math.min(maxH, ch + 4)}px`;
-    el.style.setProperty('--el-size', `${target}px`);
+    el.style.setProperty('--el-size', `${size}px`);
     points.forEach((p, i) => {
       buttons[i].style.left = `${Math.round((p.x - ext.minX) * scale)}px`;
       buttons[i].style.top = `${Math.round((ext.maxY - p.y) * scale)}px`;
@@ -95,11 +114,15 @@ export function channelMap({ layout, fileName = null, channels, picked, colours 
     if (extraCaption) {
       const extras = points.filter((p) => p.extra);
       const top = Math.max(...extras.map((p) => p.y));
-      extraCaption.style.left = `${Math.round((Math.min(...extras.map((p) => p.x)) - ext.minX) * scale - target / 2)}px`;
-      extraCaption.style.top = `${Math.round((ext.maxY - top) * scale - target / 2 - 20)}px`;
+      extraCaption.style.left = `${Math.round((Math.min(...extras.map((p) => p.x)) - ext.minX) * scale - size / 2)}px`;
+      extraCaption.style.top = `${Math.round((ext.maxY - top) * scale - size / 2 - 20)}px`;
     }
     zoomOut.disabled = zoomAt === 0;
-    zoomIn.disabled = zoomAt === ZOOMS.length - 1;
+    zoomIn.disabled = zoomAt === scales.length - 1;
+    if (first) {
+      viewport.scrollLeft = (cw - viewport.clientWidth) / 2;
+      viewport.scrollTop = (ch - viewport.clientHeight) / 2;
+    }
   }
   function drawHead() {
     clear(head);
@@ -121,7 +144,7 @@ export function channelMap({ layout, fileName = null, channels, picked, colours 
     head.appendChild(svg);
   }
   function zoom(dir) {
-    const next = Math.max(0, Math.min(ZOOMS.length - 1, zoomAt + dir));
+    const next = Math.max(0, Math.min(scales.length - 1, zoomAt + dir));
     if (next === zoomAt) return;
     // keep the middle of what is shown in the middle
     const fx = (viewport.scrollLeft + viewport.clientWidth / 2) / Math.max(1, canvas.offsetWidth);
@@ -130,7 +153,7 @@ export function channelMap({ layout, fileName = null, channels, picked, colours 
     place();
     viewport.scrollLeft = fx * canvas.offsetWidth - viewport.clientWidth / 2;
     viewport.scrollTop = fy * canvas.offsetHeight - viewport.clientHeight / 2;
-    logger.event('channel_map', { action: 'zoom', zoom: ZOOMS[zoomAt] });
+    logger.event('channel_map', { action: 'zoom', zoom: Math.round((scale / fitScale) * 100) / 100 });
   }
   function roving() { buttons.forEach((b, i) => { b.tabIndex = i === current ? 0 : -1; }); }
   function focusAt(i) { current = i; roving(); buttons[i].focus(); buttons[i].scrollIntoView({ block: 'nearest', inline: 'nearest' }); }

@@ -2084,6 +2084,8 @@ export class Workspace {
   _viewToolsOnView(cause) {
     this._overviewView = cause === 'show_all' && this.viewer.view.durationS >= this.viewer.durationTotal - 1e-6;
     if (!this._overviewView && cause !== 'show_all') this._beforeAll = null;
+    // Show all says so over the EEG for as long as it lasts (the message below fades after a while).
+    this.viewer.setCaption(this._overviewView ? `The whole recording, as an overview · ${touchFirst() ? 'Show all' : 'Shift+End'} goes back` : null);
     const v = this.viewer;
     if (!v.overlay || v.isolated === null) return;
     const first = v.view.firstChannel;

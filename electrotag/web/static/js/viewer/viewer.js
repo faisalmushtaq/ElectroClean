@@ -15,10 +15,10 @@
 import { h } from '../ui/dom.js';
 import { clamp, hexToRgb, legibleOnWhite, rgba } from '../util.js';
 import { COLOURS, FONT } from '../ui/theme.js';
-import { CHANNEL_COUNTS, DURATIONS, OVERLAY_SPAN, decimateColumns, layoutTags, meanOf, niceStep, overlayAlpha, overlayGain, stepOption, tickLabel, voltsText } from './geometry.js';
+import { CHANNEL_COUNTS, DURATIONS, OVERLAY_SPAN, axisFormat, axisTitle, decimateColumns, layoutTags, meanOf, niceStep, overlayAlpha, overlayGain, stepOption, tickLabel, voltsText } from './geometry.js';
 import { LONG_PRESS_MS, TAP_SLOP_PX, edgePx, isDoubleTap, pinchView, twoFingers } from './touch.js';
 import { complement, mergeIntervals } from './coverage.js';
-import { namePx, traceWidths } from '../ui/comfort.js';
+import { nameEvery, namePx, traceWidths } from '../ui/comfort.js';
 import { icon } from '../views/common.js';
 import { confidenceFill, confidenceTagText } from '../annotate/confidence.js';
 
@@ -31,6 +31,9 @@ const RIGHT = 10;
 const OVERVIEW_H = 34;
 const EDGE_PX = 6;
 const CLIP = 0.75; // traces are clipped at 1.5 half-rows (MNE's clipping=1.5)
+// A read of more samples than this (samples × channels, as for Show all on a long, dense recording)
+// is made in pieces in time order: each piece is drawn as it arrives and the share read is shown.
+const PIECE_VALUES = 4e6;
 
 const end = (a) => a.onset_sample + a.duration_samples;
 const NOTE_W = 12; // the note glyph at the end of a tag
@@ -117,6 +120,10 @@ export class EegViewer {
     this.coverage = null; // merged [start_s, end_s] on screen so far, or null when not shown
     this.comfort = { trace: 'normal', names: 'normal' };
     this.stats = { traceMs: 0, readMs: 0, renders: 0 };
+    this.readProgress = null; // the share of a read in pieces done so far (0 to 1), or null
+    this.pieceValues = PIECE_VALUES; // reads larger than this come in pieces (the tests make it smaller)
+    this.caption = null; // a line at the top left of the plot, such as Show all's (setCaption)
+    this._names = { px: 12, every: 1 }; // the channel names as last drawn (_renderUnder)
     this._cache = null;
     this._token = 0;
     this._loading = false;
@@ -298,6 +305,8 @@ export class EegViewer {
   /** Review feedback over the EEG: [{onset_sample, duration_samples, outline, current}], drawn in the accent blue (_drawMarkers). */
   setMarkers(list) { this.markers = Array.isArray(list) ? list : []; this.invalidate(['over']); }
   setEdgeZonesVisible(on) { this.showEdgeZones = Boolean(on); this.invalidate(['under']); }
+  /** A line at the top left of the plot that stays while it applies (Show all says so), or null. */
+  setCaption(text) { if ((text || null) !== this.caption) { this.caption = text || null; this.invalidate(['over']); } }
   /** The parts on screen so far (merged [start_s, end_s]); null hides the coverage. Only the overview changes. */
   setCoverage(list) { this.coverage = list ? list.map((p) => [...p]) : null; this.invalidate(['overview']); }
   /** Display comfort: { trace: 'thin'|'normal'|'thick', names: 'normal'|'large' }. */
@@ -372,11 +381,13 @@ export class EegViewer {
   async _load() {
     if (this._covers()) return;
     // A read already on its way that will cover the view: wait for it rather than start another
-    // (scrolling steadily would otherwise keep cancelling the reads of a slow file).
+    // (scrolling steadily would otherwise keep cancelling the reads of a slow file). A long read in
+    // pieces (Show all) is not waited for by a view much shorter than it: that view is read at once.
     const p = this._pendingRead;
     if (p && p.filtersKey === this._filtersKey()) {
       const [n0, n1] = this._neededRange();
-      if (n0 >= p.s0 && n1 <= p.s1 && this.visibleRows().every(({ ch }) => p.channels.has(ch.index))) return;
+      const short = p.pieces > 1 && (n1 - n0) * 4 < p.s1 - p.s0;
+      if (n0 >= p.s0 && n1 <= p.s1 && !short && this.visibleRows().every(({ ch }) => p.channels.has(ch.index))) return;
     }
     const token = ++this._token;
     const sf = this.sfreq;
@@ -388,13 +399,17 @@ export class EegViewer {
     const last = Math.min(this.channels.length, this.view.firstChannel + this.view.nChannels + extra);
     const want = this.channels.slice(first, last).map((c) => c.index);
     const t = performance.now();
-    this._pendingRead = { s0, s1, channels: new Set(want), filtersKey: this._filtersKey() };
+    const pieces = Math.min(64, Math.ceil(((s1 - s0) * want.length) / this.pieceValues)) || 1;
+    this._pendingRead = { s0, s1, channels: new Set(want), filtersKey: this._filtersKey(), pieces };
     this._loading = true;
+    this.readProgress = pieces > 1 ? 0 : null;
     try {
-      const res = await this.recording.readWindow({ startSample: s0, nSamples: s1 - s0, channels: want, filters: { ...this.filters } });
-      if (token !== this._token) return;
+      const res = pieces > 1 ? await this._readInPieces(token, s0, s1, want, pieces)
+        : await this.recording.readWindow({ startSample: s0, nSamples: s1 - s0, channels: want, filters: { ...this.filters } });
+      if (!res || token !== this._token) return;
       this._pendingRead = null;
       this.loadError = null;
+      this.readProgress = null;
       this.stats.readMs = performance.now() - t;
       const rows = new Map(want.map((ci, k) => [ci, res.data[k]]));
       this._cache = { id: (this._cacheId = (this._cacheId || 0) + 1), startSample: res.startSample, nSamples: res.nSamples, rows, filtersKey: this._filtersKey() };
@@ -405,10 +420,41 @@ export class EegViewer {
       if (token === this._token) {
         this._pendingRead = null;
         this._loading = false;
+        this.readProgress = null;
         this.loadError = exc;
         this.invalidate(['traces']);
       }
     }
+  }
+
+  /**
+   * Samples [s0, s1) of the channels `want`, read in `pieces` in time order. After each piece what has
+   * been read so far becomes the cache, so that it is drawn at once, and readProgress says how much
+   * that is. Returns the whole read as readWindow does, or null when a newer read took over.
+   */
+  async _readInPieces(token, s0, s1, want, pieces) {
+    const n = s1 - s0;
+    const filtersKey = this._filtersKey();
+    const data = want.map(() => new Float32Array(n));
+    const zones = new Map();
+    let done = 0;
+    for (let k = 0; k < pieces; k++) {
+      const a = s0 + Math.round((k * n) / pieces);
+      const b = s0 + Math.round(((k + 1) * n) / pieces);
+      if (b <= a) continue;
+      const r = await this.recording.readWindow({ startSample: a, nSamples: b - a, channels: want, filters: { ...this.filters } });
+      if (token !== this._token) return null;
+      const at = r.startSample - s0;
+      r.data.forEach((d, i) => data[i].set(d.length > n - at ? d.subarray(0, n - at) : d, at));
+      for (const z of r.edgeZones || []) zones.set(`${z[0]}:${z[1]}`, z);
+      done = Math.min(n, at + r.nSamples);
+      this.readProgress = done / n;
+      this._cache = { id: (this._cacheId = (this._cacheId || 0) + 1), startSample: s0, nSamples: done,
+        rows: new Map(want.map((ci, i) => [ci, data[i].subarray(0, done)])), filtersKey };
+      this.edgeZones = [...zones.values()];
+      this.invalidate(['under', 'traces']);
+    }
+    return { startSample: s0, nSamples: n, data, edgeZones: [...zones.values()] };
   }
 
   // -------------------------------------------------------------- rendering
@@ -419,11 +465,30 @@ export class EegViewer {
     const ms = {};
     const timed = (name, fn) => { const t0 = performance.now(); fn(); ms[name] = Math.round((performance.now() - t0) * 10) / 10; };
     if (d.under) timed('under', () => this._renderUnder());
-    if (d.traces) timed('traces', () => this._renderTraces());
+    if (d.traces) timed('traces', () => { this._renderTraces(); this._drawReadProgress(); });
     if (d.over) timed('over', () => this._renderOver());
     if (d.overview) timed('overview', () => this._renderOverview());
     this.stats.layers = ms;
     this.stats.renders += 1;
+  }
+
+  /** While a long read comes in pieces: how much has been read, at the top of the plot (on the traces' layer). */
+  _drawReadProgress() {
+    if (this.readProgress === null || !this._loading) return;
+    const ctx = this.traces.getContext('2d');
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    const text = `Reading the EEG… ${Math.floor(this.readProgress * 100)}%`;
+    ctx.font = `13px ${FONT}`;
+    const w = ctx.measureText(text).width + 16;
+    const x = (this.x0 + this.x1) / 2;
+    ctx.fillStyle = COLOURS.surface;
+    ctx.fillRect(x - w / 2, this.y0 + 8, w, 22);
+    ctx.strokeStyle = COLOURS.separator;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(Math.round(x - w / 2) + 0.5, this.y0 + 8.5, Math.round(w), 21);
+    ctx.fillStyle = COLOURS.text;
+    ctx.textAlign = 'center';
+    ctx.fillText(text, x, this.y0 + 23);
   }
 
   _ctx(canvas) {
@@ -536,50 +601,94 @@ export class EegViewer {
     }
     ctx.stroke();
     ctx.setLineDash([]);
-    // channel names
-    ctx.font = `12px ${FONT}`;
+    // Channel names, never smaller than 11 pixels (13 for large names): where the rows are shorter,
+    // every second or third channel is named, and the selected channels are always named, on a
+    // white ground over their neighbours (the row under the pointer is named in _renderOver).
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
     const fontPx = namePx(this.comfort.names, this.rowH);
-    const everyNth = this.rowH < fontPx - 1 ? Math.ceil((fontPx - 1) / this.rowH) : 1;
+    const every = nameEvery(fontPx, this.rowH);
+    this._names = { px: fontPx, every };
+    const later = [];
     for (const { row, ch } of this.visibleRows()) {
-      if ((row - this.view.firstChannel) % everyNth) continue;
       const selected = this.overlay ? this.isolated === row : this.channelsActive && this.selectedChannels.has(ch.name);
+      if ((row - this.view.firstChannel) % every) { if (selected) later.push({ row, ch }); continue; }
       const hover = this.hover && this.hover.area === 'channel_names' && this.hover.row === row;
       ctx.font = `${selected ? '600 ' : ''}${fontPx}px ${FONT}`;
       ctx.fillStyle = selected ? (this.overlay ? COLOURS.accent : COLOURS.selection_channel) : ch.bad ? COLOURS.text_disabled : hover ? COLOURS.accent : this.groupColour(ch) || COLOURS.text;
-      ctx.fillText(ch.bad ? `${ch.name} (bad)` : ch.name, x0 - 8, this.rowCentre(row));
+      ctx.fillText(this._nameText(ch), x0 - 8, this.rowCentre(row));
     }
+    for (const { row, ch } of later) this._boxedName(ctx, row, ch, this.overlay ? COLOURS.accent : COLOURS.selection_channel);
     ctx.textBaseline = 'alphabetic';
     // the time axis
     ctx.fillStyle = COLOURS.surface;
     ctx.fillRect(0, y1, this.W, AXIS_H);
     ctx.strokeStyle = COLOURS.separator;
     ctx.beginPath(); ctx.moveTo(x0, y1 + 0.5); ctx.lineTo(x1, y1 + 0.5); ctx.stroke();
+    // The ticks' labels in one format, which the title names (seconds, or m:ss from ten minutes on).
+    // A label stays inside the canvas and clear of the title and of the label before it.
     ctx.fillStyle = COLOURS.text_secondary;
     ctx.font = `11px ${FONT}`;
+    const format = axisFormat(this.view.startS, this.view.durationS, step);
+    const title = axisTitle(format, this.view.startS + this.view.durationS);
+    // (the time under the pointer is written over the title, so its room is kept too)
+    this._axisTitleW = ctx.measureText(title).width;
+    let right = 8 + Math.max(this._axisTitleW, ctx.measureText(`${this.durationTotal.toFixed(3)} s`).width + 4) + 8;
     ctx.textAlign = 'center';
     for (let t = Math.ceil(this.view.startS / step) * step; t <= this.view.startS + this.view.durationS + 1e-9; t += step) {
       const x = this.tToX(t);
       ctx.fillRect(Math.round(x), y1, 1, 4);
-      ctx.fillText(tickLabel(t, step), x, y1 + 16);
+      const label = tickLabel(t, step, format);
+      const w = ctx.measureText(label).width;
+      const cx = Math.min(x, this.W - 2 - w / 2);
+      if (cx - w / 2 < right) continue;
+      ctx.fillText(label, cx, y1 + 16);
+      right = cx + w / 2 + 8;
     }
     ctx.textAlign = 'left';
-    ctx.fillText('time (s)', 8, y1 + 16);
-    // event labels, at the bottom of the plot
-    ctx.font = `10px ${FONT}`;
-    ctx.fillStyle = COLOURS.event;
+    ctx.fillText(title, 8, y1 + 16);
+  }
+
+  _nameText(ch) { return ch.bad ? `${ch.name} (bad)` : ch.name; }
+
+  /** A channel's name on a white ground over the names around it (a selected channel, the row under the pointer). */
+  _boxedName(ctx, row, ch, colour) {
+    const px = this._names.px;
+    ctx.font = `600 ${px}px ${FONT}`;
+    const text = this._nameText(ch);
+    const w = ctx.measureText(text).width;
+    const y = this.rowCentre(row);
+    ctx.fillStyle = COLOURS.surface;
+    ctx.fillRect(this.x0 - 12 - w, y - px / 2 - 2, w + 8, px + 4);
+    ctx.fillStyle = colour;
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, this.x0 - 8, y);
+    ctx.textBaseline = 'alphabetic';
+  }
+
+  /**
+   * The labels of the original events, along the foot of the plot over the traces, each on a white
+   * ground; a label that would cover a scale bar's figure goes to the left of its line, or is left out.
+   */
+  _drawEventLabels(ctx, avoid) {
+    const { x0, x1, y1 } = this;
+    ctx.font = `11px ${FONT}`;
+    ctx.textAlign = 'left';
+    const hits = (a, b) => avoid.some((r) => a < r[1] && b > r[0] && y1 - 15 < r[3] && y1 - 2 > r[2]);
     let lastRight = -Infinity;
     for (const e of this.events) {
       const x = this.sampleToX(e.onset_sample);
       if (x < x0 || x > x1) continue;
       const w = ctx.measureText(e.label).width;
-      if (x + 3 < lastRight + 4) continue;
-      ctx.fillStyle = rgba(COLOURS.surface, 0.85);
-      ctx.fillRect(x + 2, y1 - 14, w + 4, 12);
+      let left = x + 2;
+      if (hits(left, left + w + 4) || left + w + 4 > x1) left = x - 6 - w;
+      if (left < x0 || left < lastRight + 4 || hits(left, left + w + 4)) continue;
+      ctx.fillStyle = rgba(COLOURS.surface, 0.9);
+      ctx.fillRect(left, y1 - 15, w + 4, 13);
       ctx.fillStyle = COLOURS.event;
-      ctx.fillText(e.label, x + 4, y1 - 4);
-      lastRight = x + 6 + w;
+      ctx.fillText(e.label, left + 2, y1 - 5);
+      lastRight = left + w + 4;
     }
   }
 
@@ -837,8 +946,9 @@ export class EegViewer {
     }
     // scale bars, one per channel type on screen (in the overlay, one for the shared axis)
     const seen = new Set();
+    const scaleBoxes = []; // [left, right, top, bottom] of each scale bar's figure, which the event labels keep clear of
     ctx.font = `11px ${FONT}`;
-    if (this.overlay) this._renderOverlayOver(ctx);
+    if (this.overlay) scaleBoxes.push(...this._renderOverlayOver(ctx));
     for (const { row, ch } of this.overlay ? [] : this.visibleRows()) {
       if (seen.has(ch.type)) continue;
       seen.add(ch.type);
@@ -856,19 +966,39 @@ export class EegViewer {
       ctx.fillStyle = COLOURS.accent;
       ctx.textAlign = 'right';
       ctx.fillText(text, x - 8, yc + 4);
+      scaleBoxes.push([x - w - 4, x + 2, yc - hgt / 2, yc + hgt / 2]);
+    }
+    this._drawEventLabels(ctx, scaleBoxes);
+    // a caption that stays while it applies (Show all), under the overlay's
+    if (this.caption) {
+      ctx.font = `12px ${FONT}`;
+      const w = ctx.measureText(this.caption).width + 12;
+      const y = y0 + 1 + (this.overlay ? 20 : 0);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.fillRect(x0 + 1, y, w, 18);
+      ctx.fillStyle = COLOURS.text;
+      ctx.textAlign = 'left';
+      ctx.fillText(this.caption, x0 + 6, y + 13);
     }
     // where the pointer is: the time under the axis title, the channel's name in the accent colour
     if (this.hover && this.hover.area === 'eeg') {
-      ctx.fillStyle = COLOURS.surface;
-      ctx.fillRect(0, y1 + 2, x0 - 6, AXIS_H - 2);
+      const text = `${this.hover.t.toFixed(3)} s`;
       ctx.font = `600 11px ${FONT}`;
+      ctx.fillStyle = COLOURS.surface;
+      ctx.fillRect(0, y1 + 2, Math.min(x0 - 6, 12 + Math.max(ctx.measureText(text).width, this._axisTitleW || 0)), AXIS_H - 2);
       ctx.fillStyle = COLOURS.accent;
       ctx.textAlign = 'left';
-      ctx.fillText(`${this.hover.t.toFixed(3)} s`, 8, y1 + 16);
+      ctx.fillText(text, 8, y1 + 16);
       if (this.hover.row !== null) {
         const yc = this.rowCentre(this.hover.row);
         ctx.fillRect(x0 - 4, yc - 5, 2, 10);
       }
+    }
+    // Where only some channels are named, the row under the pointer is named too.
+    const hv = this.hover;
+    if (hv && hv.row !== null && (hv.area === 'eeg' || hv.area === 'channel_names') && this._names.every > 1 &&
+        (hv.row - this.view.firstChannel) % this._names.every && hv.row < this.channels.length) {
+      this._boxedName(ctx, hv.row, this.channels[hv.row], COLOURS.accent);
     }
     // the edges of the plot
     ctx.strokeStyle = COLOURS.separator;
@@ -1321,7 +1451,7 @@ export class EegViewer {
     ctx.fillText(text, x0 + 6, y0 + 14);
     // one scale bar: half the plot's height
     const first = (iso ? [{ ch: iso }] : rows)[0];
-    if (!first) return;
+    if (!first) return [];
     const scaling = this.scalings[first.ch.type] || this.scalings.misc || 1e-3;
     const yc = (y0 + y1) / 2;
     const half = this.plotH / 4;
@@ -1329,14 +1459,17 @@ export class EegViewer {
     ctx.strokeStyle = COLOURS.accent;
     ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(x, yc - half); ctx.lineTo(x, yc + half); ctx.stroke();
+    // its figure beside the bar's top end, away from the middle where the traces are densest
     ctx.font = `11px ${FONT}`;
     const label = voltsText((OVERLAY_SPAN * scaling) / this.view.scaleFactor);
     const lw = ctx.measureText(label).width + 8;
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
-    ctx.fillRect(x - lw - 4, yc - 8, lw, 16);
+    const ly = yc - half + 8;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.fillRect(x - lw - 4, ly - 8, lw, 16);
     ctx.fillStyle = COLOURS.accent;
     ctx.textAlign = 'right';
-    ctx.fillText(label, x - 8, yc + 4);
+    ctx.fillText(label, x - 8, ly + 4);
+    return [[x - lw - 4, x + 2, yc - half, yc + half]];
   }
 
   /** One channel's trace in the overlay, as a line (for the legend's highlight). */
