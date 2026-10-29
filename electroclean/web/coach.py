@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import html
+import math
 import time
 import uuid
 from typing import TYPE_CHECKING, Any
@@ -380,7 +381,12 @@ class Coach:
         failed = int(st["failed"].get(str(i), 0))
         st["matched"][str(i)] = last.get("candidate_id") or ""
         st["stars"][str(i)] = stars_for(failed, shown)
-        st["seconds"][str(i)] = round(max(0.0, time.time() - float(st["step_started"])), 3)
+        # the time paused during the step (the browser's pause) does not count
+        paused = body.get("paused_s", 0.0)
+        if isinstance(paused, bool) or not isinstance(paused, (int, float)) or not math.isfinite(paused) or paused < 0:
+            paused = 0.0
+        wall = max(0.0, time.time() - float(st["step_started"]))
+        st["seconds"][str(i)] = round(max(0.0, wall - float(paused)), 3)
         previous = {"step": i + 1, "stars": st["stars"][str(i)], "attempts": failed + (0 if shown else 1),
                     "failed_attempts": failed, "used_show_me": shown, "seconds": st["seconds"][str(i)]}
         st["index"] = i + 1

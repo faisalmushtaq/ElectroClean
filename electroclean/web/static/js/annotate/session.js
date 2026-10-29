@@ -1,14 +1,41 @@
 // One recording being annotated: the recording, the study's manifest for it, the annotation store,
-// the time spent, and the drafts of unsaved work (in this browser and on the server).
+// the time worked (a clock that stops while the annotator is paused, clock.js), the parts of the
+// recording that have been on screen, and the drafts of unsaved work (in this browser and on the
+// server).
 
 import { AnnotationStore } from './store.js';
+import { WorkClock } from './clock.js';
+import { fromDraft, toDraft } from '../viewer/coverage.js';
 import { local, newId, nowLocalIso } from '../util.js';
-import { DEFAULT_HIDE, DEFAULT_SCALINGS } from '../api/demo_catalogue.js';
+import { DEFAULT_ANNOTATION, DEFAULT_HIDE, DEFAULT_SCALINGS } from '../api/demo_catalogue.js';
 
 const REMOTE_EVERY_MS = 30000;
 
 function hiddenByDefault(name) {
   return DEFAULT_HIDE.some((p) => (p.endsWith('*') ? name.startsWith(p.slice(0, -1)) : name === p));
+}
+
+/** The key of this browser's copy of a draft (also read by the home view, for what it shows of unfinished work). */
+export function localDraftKey(backend, annotatorId, recordingId, mode, contextId) {
+  const where = backend.server || backend.kind;
+  return `electroclean.draft|${where}|${annotatorId || 'anon'}|${recordingId}|${mode}|${contextId || ''}`;
+}
+
+/** This browser's copy of a draft, or null. */
+export function localDraft(backend, annotatorId, recordingId, mode, contextId) {
+  const d = local.get(localDraftKey(backend, annotatorId, recordingId, mode, contextId), null);
+  return d && Array.isArray(d.annotations) ? d : null;
+}
+
+/** The study's comfort settings (the annotation block of GET /me), with the defaults for any left out. */
+export function comfortSettings(study) {
+  const a = (study && study.annotation) || {};
+  const num = (v, d, hi) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= hi ? v : d);
+  return {
+    breakReminderMinutes: num(a.break_reminder_minutes, DEFAULT_ANNOTATION.break_reminder_minutes, 240),
+    idlePauseMinutes: num(a.idle_pause_minutes, DEFAULT_ANNOTATION.idle_pause_minutes, 60),
+    coverageCheck: a.coverage_check === 'off' ? 'off' : 'warn',
+  };
 }
 
 /** The channels to show, in display order: the manifest's montage, or (try-out) the file's own. */
@@ -50,6 +77,7 @@ export class AnnotationSession {
     const study = (o.me && o.me.study) || {};
     this.minDuration = (study.annotation && study.annotation.min_duration_samples) || 1;
     this.quickLabels = this.catalogue.quickLabels(study.annotation && study.annotation.quick_labels);
+    this.comfort = comfortSettings(study);
     this.store = new AnnotationStore({
       chNames: this.channels.map((c) => c.name), nSamples: this.recording.nSamples, sfreq: this.recording.sfreq,
       labels: this.catalogue.labelNames, minDurationSamples: this.minDuration,
@@ -61,7 +89,9 @@ export class AnnotationSession {
     this.warnings = [...new Set([...(this.recording.warnings || []), ...((this.manifest && this.manifest.display && this.manifest.display.warnings) || [])])];
     this.startedAt = nowLocalIso();
     this.elapsedBase = 0;
-    this.openedAt = performance.now();
+    this.clock = null; // started when the recording is on screen (startClock)
+    this.viewed = []; // merged [start_s, end_s] on screen so far (coverage.js)
+    this.onSaved = null; // (where: 'browser' | 'study', at: Date) after a draft is kept
     this.view = null;
     this.filters = null;
     this.finished = false;
@@ -73,12 +103,24 @@ export class AnnotationSession {
     this.store.addListener(() => { this._dirty = true; this._scheduleLocal(); });
   }
 
-  get elapsedS() { return this.elapsedBase + (performance.now() - this.openedAt) / 1000; }
+  /** Seconds worked on the recording, earlier sessions included and pauses left out. */
+  get elapsedS() { return this.clock ? this.clock.elapsedS : this.elapsedBase; }
+
+  /** Start the working-time clock (the recording is on screen); `sinceBreakS` carries the work since the last break. */
+  startClock({ sinceBreakS = 0, now } = {}) {
+    if (!this.clock) this.clock = new WorkClock({ baseS: this.elapsedBase, sinceBreakS, ...(now ? { now } : {}) });
+    return this.clock;
+  }
 
   get localKey() {
-    const who = (this.me && this.me.annotator_id) || 'anon';
-    const where = this.backend.server || this.backend.kind;
-    return `electroclean.draft|${where}|${who}|${this.recordingId}|${this.mode}|${this.contextId}`;
+    return localDraftKey(this.backend, this.me && this.me.annotator_id, this.recordingId, this.mode, this.contextId);
+  }
+
+  /** The parts on screen so far changed (a merged list): kept in the drafts like a change of annotations. */
+  noteViewed(list) {
+    this.viewed = list;
+    this._dirty = true;
+    this._scheduleLocal();
   }
 
   get canSave() { return !this.readOnly && !this.tryOut && !this.finished; }
@@ -89,6 +131,7 @@ export class AnnotationSession {
       annotations: this.store.toJSON(),
       view: this.view ? { ...this.view } : null,
       elapsed_s: Math.round(this.elapsedS * 10) / 10,
+      viewed: toDraft(this.viewed),
       saved_at: nowLocalIso(),
     };
   }
@@ -107,7 +150,8 @@ export class AnnotationSession {
     const ok = draft.annotations.filter((a) => this.catalogue.has(a.label));
     this.store.reset(ok);
     this.elapsedBase = Number(draft.elapsed_s) || 0;
-    this.openedAt = performance.now();
+    this.clock = null;
+    this.viewed = fromDraft(draft.viewed, this.recording.durationS);
     this.resumed = true;
     this.restored = ok.length;
     this._dirty = false;
@@ -122,7 +166,7 @@ export class AnnotationSession {
 
   saveLocal() {
     if (!this.canSave) return;
-    local.set(this.localKey, this.draftPayload());
+    if (local.set(this.localKey, this.draftPayload()) && this.onSaved) this.onSaved('browser', new Date());
   }
 
   forgetLocal() {
@@ -140,6 +184,7 @@ export class AnnotationSession {
       await this.backend.putDraft(this.recordingId, this.mode, this.contextId, payload, { keepalive });
       this._dirty = false;
       this._lastRemote = performance.now();
+      if (this.onSaved) this.onSaved('study', new Date());
       return true;
     } catch {
       return false;

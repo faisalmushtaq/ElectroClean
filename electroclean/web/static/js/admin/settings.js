@@ -1,7 +1,9 @@
 // Study settings: the parts of electroclean_study.json that a study may change (settings_get and
 // settings_update): its name, the display filters and whether they are fixed, the display, the
 // channels to hide and channel types by name pattern, how the next recording is chosen, the types
-// on the number keys, the shortest annotation, and the interaction log with its notice.
+// on the number keys, the shortest annotation, the comfort of long sessions (break reminders, the
+// pause after a while without input, the check of what has been viewed before Save and Finish), and
+// the interaction log with its notice.
 
 import { h, clear } from '../ui/dom.js';
 import { CHANNEL_TYPES, SCALING_TYPES, SELECTION, deepCopy, fromMicrovolts, mergeSettings, parseNumber, settingsProblems, toMicrovolts } from './model.js';
@@ -104,6 +106,11 @@ export class SettingsSection {
       return s;
     });
     const shortest = numberInput({ value: an.min_duration_samples ?? 1, min: 1, step: 1 });
+    const breakAfter = numberInput({ value: an.break_reminder_minutes ?? 50, min: 0, max: 240, step: 1 });
+    breakAfter.name = 'break_reminder_minutes';
+    const idlePause = numberInput({ value: an.idle_pause_minutes ?? 3, min: 0, max: 60, step: 1 });
+    idlePause.name = 'idle_pause_minutes';
+    const coverage = checkbox('Before Save and Finish, list the parts of the recording that have not been on the screen', (an.coverage_check ?? 'warn') !== 'off');
     // logging
     const interactions = checkbox('Record how annotators use ElectroClean (clicks, keys and what is on the screen; never what they type)', lg.interactions !== false);
     const pointer = numberInput({ value: lg.pointer_hz ?? 5, min: 0, max: 60, step: 1 });
@@ -128,7 +135,10 @@ export class SettingsSection {
         channels: { hide: hide.value.split('\n').map((x) => x.trim()).filter(Boolean), types },
         loading: { apply_channel_types_from_bids: bidsTypes.input.checked, show_bids_bad_channels: bidsBad.input.checked },
         selection: { strategy: strategy.value, seed: strategy.value === 'seeded' ? parseNumber(seed.value, 'Seed', { min: 0, integer: true }) : (sel.seed ?? null) },
-        annotation: { quick_labels: chosen, min_duration_samples: parseNumber(shortest.value, 'Shortest annotation', { min: 1, integer: true }) },
+        annotation: { quick_labels: chosen, min_duration_samples: parseNumber(shortest.value, 'Shortest annotation', { min: 1, integer: true }),
+          break_reminder_minutes: parseNumber(breakAfter.value, 'Break reminder after', { min: 0, max: 240 }),
+          idle_pause_minutes: parseNumber(idlePause.value, 'Pause after', { min: 0, max: 60 }),
+          coverage_check: coverage.input.checked ? 'warn' : 'off' },
         logging: { interactions: interactions.input.checked, pointer_hz: parseNumber(pointer.value, 'Pointer samples per second', { min: 0, max: 60 }),
           idle_after_s: parseNumber(idle.value, 'Idle after', { min: 5, max: 3600 }) },
       };
@@ -172,7 +182,14 @@ export class SettingsSection {
       card('Annotation',
         h('p.caption', {}, 'The artifact types on the number keys 1 to 9 (the toolbar shows them in this order).'),
         h('div.key-grid', {}, keys.map((k, i) => h('label.key-row', {}, h('kbd', {}, String(i + 1)), k))),
-        field('Shortest annotation (samples)', shortest)),
+        field('Shortest annotation (samples)', shortest),
+        h('h3', {}, 'Long sessions'),
+        h('p.caption', {}, 'The time worked on a recording is research data: it leaves out the time an annotator is paused.'),
+        h('div.form-grid', {},
+          field('Break reminder after (minutes of work)', breakAfter, { hint: 'A gentle offer of a break, which the annotator can put off for 15 minutes. 0 turns reminders off.' }),
+          field('Pause after (minutes without input)', idlePause, { hint: 'The clock also pauses when the page is out of sight for more than 10 seconds. 0 turns this pause off.' })),
+        coverage,
+        h('p.caption', {}, 'The list gives the stretches of at least a second that were never on the screen, with Go to the first and Save anyway.')),
       card('Interaction log',
         interactions,
         h('div.form-grid', {}, field('Pointer samples per second over the EEG', pointer, { hint: '0 records none.' }), field('Idle after (seconds without input)', idle)),

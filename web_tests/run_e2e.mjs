@@ -9,7 +9,7 @@
 //
 // Serves electroclean/web/static with `python -m http.server`, runs a stand-in study server
 // (GET /api/v1/health, POST /login and the few calls the sign-in needs, as docs/web/api.md) and a
-// second static server whose config.json each test can set, and (for h_study_server) the real
+// second static server whose config.json each test can set, and (for the specs that need it) the real
 // demonstration server, `electroclean-web demo`, then runs web_tests/e2e/*.e2e.mjs.
 
 import { spawn } from 'node:child_process';
@@ -163,7 +163,10 @@ async function main() {
   const browser = await playwright[browserName].launch({ headless: !headed });
   if (shotsDir) fs.mkdirSync(shotsDir, { recursive: true });
   const specs = fs.readdirSync(path.join(HERE, 'e2e')).filter((f) => f.endsWith('.e2e.mjs') && f.includes(filter)).sort();
-  const study = specs.some((f) => f.includes('study_server')) ? await studyServer(python) : null;
+  // The real study server starts when a spec needs it: the *_study_server specs, and any spec with
+  // a test marked needs: 'study'.
+  const wantsStudy = (f) => f.includes('study_server') || /needs:\s*'study'/.test(fs.readFileSync(path.join(HERE, 'e2e', f), 'utf8'));
+  const study = specs.some(wantsStudy) ? await studyServer(python) : null;
   let failed = 0;
   for (const file of specs) {
     const mod = await import(pathToFileURL(path.join(HERE, 'e2e', file)).href);

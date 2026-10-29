@@ -4,7 +4,7 @@
 
 import { h, clear } from '../ui/dom.js';
 import { downloadFiles, icon } from '../views/common.js';
-import { base64ToBytes, fileParts, problemText } from './model.js';
+import { base64ToBytes, fileParts, problemText, sortRows } from './model.js';
 
 let uid = 0;
 export const nextId = (prefix = 'adm') => `${prefix}-${++uid}`;
@@ -184,23 +184,84 @@ export function radios(name, options, value = '') {
 
 // ----------------------------------------------------------------- tables
 /**
- * A table of rows with pages of `pageSize`: columns are {key, title, num, render(row) -> Node|string}.
- * Rebuild it with update(rows).
+ * A table of rows with pages of `pageSize`: columns are {key, title, num, render(row) -> Node|string,
+ * sort(row) -> value}. Rebuild it with update(rows).
+ *
+ * With `sortable`, a column with a key or a sort function is sorted by pressing its heading (again
+ * for the other direction). With `selectable` (and `rowKey`), each row has a checkbox and the
+ * heading one that ticks every row shown by the filters, on every page; selected() gives the keys
+ * ticked and onSelect(keys) hears every change.
  */
-export function dataTable(columns, rows = [], { empty = 'Nothing here yet.', pageSize = 25, rowKey = null, caption = '' } = {}) {
+export function dataTable(columns, rows = [], {
+  empty = 'Nothing here yet.', pageSize = 25, rowKey = null, caption = '', sortable = false, selectable = false, onSelect = null, sort: firstSort = null,
+} = {}) {
   const wrap = h('div.admin-table');
   let page = 0;
   let data = rows;
+  let sort = firstSort; // {index, dir}
+  const chosen = new Set();
+  const valueOf = (c) => c.sort || (c.key ? (r) => r[c.key] : null);
+  const ordered = () => {
+    const c = sort ? columns[sort.index] : null;
+    const f = c ? valueOf(c) : null;
+    return f ? sortRows(data, f, sort.dir) : data;
+  };
+  const keys = () => data.map((r) => rowKey(r));
+  const changed = () => { if (onSelect) onSelect(wrap.selected()); };
+  const heading = (c, i) => {
+    const can = sortable && c.title && valueOf(c);
+    const on = Boolean(sort && sort.index === i);
+    const th = h(`th${c.num ? '.num' : ''}`, { scope: 'col', 'aria-sort': can ? (on ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none') : null });
+    if (!can) { th.append(c.title); return th; }
+    th.append(h(`button.th-sort${on ? '.on' : ''}`, { type: 'button', 'data-col': String(i), title: `Sort by ${c.title.toLowerCase()}`,
+      onclick: () => {
+        sort = { index: i, dir: on && sort.dir === 'asc' ? 'desc' : 'asc' };
+        page = 0;
+        render();
+        const b = wrap.querySelector(`button.th-sort[data-col="${i}"]`);
+        if (b) b.focus();
+      } }, c.title, icon(on && sort.dir === 'desc' ? 'chevron-down' : 'chevron-up')));
+    return th;
+  };
   const render = () => {
     clear(wrap);
     if (!data.length) { wrap.append(h('p.caption.empty', {}, empty)); return; }
     const pages = Math.max(1, Math.ceil(data.length / pageSize));
     page = Math.min(page, pages - 1);
-    const shown = data.slice(page * pageSize, (page + 1) * pageSize);
+    const shown = ordered().slice(page * pageSize, (page + 1) * pageSize);
+    let all = null;
+    if (selectable) {
+      all = h('input', { type: 'checkbox', 'data-select-all': '', 'aria-label': `Select all ${data.length} shown` });
+      const n = keys().filter((k) => chosen.has(k)).length;
+      all.checked = n > 0 && n === data.length;
+      all.indeterminate = n > 0 && n < data.length;
+      all.addEventListener('change', () => {
+        for (const k of keys()) { if (all.checked) chosen.add(k); else chosen.delete(k); }
+        render();
+        changed();
+        const again = wrap.querySelector('input[data-select-all]');
+        if (again) again.focus();
+      });
+    }
+    const rowBox = (r) => {
+      const k = rowKey(r);
+      const box = h('input', { type: 'checkbox', 'data-select': k, 'aria-label': `Select ${k.split('|').pop()}` });
+      box.checked = chosen.has(k);
+      box.addEventListener('change', () => {
+        if (box.checked) chosen.add(k); else chosen.delete(k);
+        const n = keys().filter((x) => chosen.has(x)).length;
+        all.checked = n > 0 && n === data.length;
+        all.indeterminate = n > 0 && n < data.length;
+        box.closest('tr').classList.toggle('chosen', box.checked);
+        changed();
+      });
+      return h('td.pick', { 'data-title': '' }, box);
+    };
     const table = h('table.list.admin-list', {},
       caption ? h('caption.sr-only', {}, caption) : null,
-      h('thead', {}, h('tr', {}, columns.map((c) => h(`th${c.num ? '.num' : ''}`, { scope: 'col' }, c.title)))),
-      h('tbody', {}, shown.map((r) => h('tr', { 'data-key': rowKey ? rowKey(r) : null },
+      h('thead', {}, h('tr', {}, selectable ? h('th.pick', { scope: 'col' }, all) : null, columns.map(heading))),
+      h('tbody', {}, shown.map((r) => h(`tr${selectable && chosen.has(rowKey(r)) ? '.chosen' : ''}`, { 'data-key': rowKey ? rowKey(r) : null },
+        selectable ? rowBox(r) : null,
         columns.map((c) => h(`td${c.num ? '.num' : ''}${c.cls ? `.${c.cls}` : ''}`, { 'data-title': c.title }, c.render ? c.render(r) : String(r[c.key] ?? '')))))));
     wrap.append(h('div.table-scroll', {}, table));
     if (pages > 1) {
@@ -209,9 +270,66 @@ export function dataTable(columns, rows = [], { empty = 'Nothing here yet.', pag
       wrap.append(h('div.row.pager', {}, prev, h('span.caption', {}, `Page ${page + 1} of ${pages} · ${data.length} in all`), next));
     }
   };
-  wrap.update = (next, { keepPage = false } = {}) => { data = next || []; if (!keepPage) page = 0; render(); };
+  wrap.update = (next, { keepPage = false } = {}) => {
+    data = next || [];
+    if (!keepPage) page = 0;
+    if (selectable) {
+      const present = new Set(keys());
+      for (const k of [...chosen]) if (!present.has(k)) chosen.delete(k);
+    }
+    render();
+    if (selectable) changed();
+  };
+  /** The keys of the rows ticked, in the order shown. */
+  wrap.selected = () => (selectable ? ordered().map((r) => rowKey(r)).filter((k) => chosen.has(k)) : []);
+  wrap.selectedRows = () => (selectable ? ordered().filter((r) => chosen.has(rowKey(r))) : []);
+  wrap.clearSelection = () => { chosen.clear(); render(); changed(); };
+  /** The rows in the order shown (for downloads). */
+  wrap.rows = () => ordered();
   render();
   return wrap;
+}
+
+/** A thin bar for a share (0 to 1) with the percentage beside it. */
+export function shareBar(fraction) {
+  if (fraction === null || fraction === undefined || !Number.isFinite(Number(fraction))) return h('span.caption', {}, '–');
+  const pct = Math.round(Math.max(0, Math.min(1, Number(fraction))) * 100);
+  return h('span.share', {}, h('span.share-text.num', {}, `${pct}%`),
+    h('span.share-bar', { 'aria-hidden': 'true' }, h('span.share-fill', { style: { width: `${pct}%` } })));
+}
+
+// ------------------------------------------------------------ actions on many
+/**
+ * Run fn(item) for each item in turn (never at once, so that a slow study is not flooded and each
+ * answer is known), showing how far it has got in `progress`. Resolves with one result per item:
+ * {item, ok, value} or {item, ok: false, error}. When the study cannot be reached or the sign-in
+ * has ended, the rest are left untried ({item, ok: false, skipped: true}).
+ */
+export async function eachInTurn(items, fn, { progress = null, words = (i, n) => `${i} of ${n}…` } = {}) {
+  const results = [];
+  let stop = false;
+  for (let i = 0; i < items.length; i++) {
+    if (stop) { results.push({ item: items[i], ok: false, skipped: true }); continue; }
+    if (progress) progress.set(i / items.length, words(i + 1, items.length, items[i]));
+    try {
+      results.push({ item: items[i], ok: true, value: await fn(items[i]) });
+    } catch (exc) {
+      results.push({ item: items[i], ok: false, error: exc });
+      if (exc && (exc.status === 0 || exc.status === 401)) stop = true;
+    }
+  }
+  if (progress) progress.hide();
+  return results;
+}
+
+/** A table of what happened to each item: its name, Done or Not done, and the reason. */
+export function resultsTable(results, { name, done = () => 'Done', caption = 'What happened to each' }) {
+  const rows = results.map((r, i) => ({ ...r, i }));
+  return dataTable([
+    { title: 'Item', render: (r) => name(r.item) },
+    { title: 'Result', render: (r) => (r.ok ? chip('Done', 'done') : r.skipped ? chip('Not tried') : chip(r.kept ? 'Kept' : 'Not done', 'warning')) },
+    { title: 'Details', render: (r) => (r.ok ? done(r) : r.skipped ? 'Not tried, because the study could not be reached.' : problemText(r.error)) },
+  ], rows, { pageSize: 50, caption, rowKey: (r) => String(r.i) });
 }
 
 /** A small key/value table. */

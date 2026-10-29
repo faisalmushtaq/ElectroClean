@@ -188,6 +188,71 @@ such as the admin area's frame, so the page itself fits, and the activity
 report keeps its light colours when the computer uses a dark appearance, like
 the application.
 
+Long annotation sessions are more comfortable. Pause, at the top of the
+annotation view, or the key B, stops the clock that measures the time worked
+on a recording and covers the EEG with a calm panel until the annotator
+resumes; ElectroClean also pauses by itself after a few minutes without input
+and when the page is out of sight for more than ten seconds, and says on
+return how long the annotator was away. The time worked that is saved with
+each recording (`elapsed_s`) and kept in drafts now leaves out every pause,
+and the time a guided training step took leaves out the time paused during
+it. After a long stretch of work a gentle note offers a break or a reminder
+in 15 minutes. ElectroClean keeps track of the parts of each recording that
+have been on the screen: the overview bar shows the parts not yet viewed,
+the Recording tab and the status line say how much has been viewed, Next part
+not yet viewed (the key U, and a button under the EEG on an iPad) goes to the
+next of them, and Save and Finish first lists those of at least a second.
+What has been viewed is kept with the draft, which reopens exactly where the
+annotator left off with a short welcome back, and the header says when the
+draft was last kept. A Comfort panel in the Recording tab offers thin, normal
+or thick traces, larger channel names and larger text in the side panel,
+kept per annotator in the browser. The interaction log records pauses,
+resumes, break reminders, the check before saving and the proportion of the
+recording viewed (docs/activity_logs.md).
+
+The annotator's home page shows their own progress: recordings done of those
+assigned with a thin bar, the time worked in all and the median per recording,
+what they have done today, and, after two recordings, an estimate of the time
+left at their own pace. An unfinished recording comes first as Continue where
+you left off, with how much of it has been viewed and its annotations so far.
+`GET /assignments` gives the time worked and the number of annotations of
+finished recordings, from the completion register, and a summary of each
+draft. Study administrators set the minutes before a break reminder
+(`annotation.break_reminder_minutes`, 50), the minutes without input before
+the clock pauses itself (`annotation.idle_pause_minutes`, 3) and whether Save
+and Finish lists the parts not yet viewed (`annotation.coverage_check`,
+`"warn"` or `"off"`) in the admin area's Study settings.
+
+The admin area gives administrators more control of a running study. Its
+sections are grouped in a menu under Study, People, Data and Settings, each
+group folding away (remembered in the browser for each administrator), with
+Find in the header to go straight to a person or a recording and tabs inside
+the crowded sections. Annotators can be invited with a private link: on a study
+server the link carries a random token that the study keeps only as a SHA-256
+hash, works once, expires after 14 days unless the administrator chooses
+otherwise, and stops working when a newer link is made, when it is withdrawn
+and when the account is switched off; the person opening it sees a welcome card
+with the study and their ID, chooses a password twice and lands on their
+recordings (new calls `POST /invite/check` and `POST /invite/accept`, and the
+operations `user_invite`, `user_invite_revoke` and `user_add` with `invite`).
+On Firebase the link is Firebase Authentication's own. Each person's invitation
+shows whether they were invited, accepted or let the link expire, with Copy
+link, Email the link (an editable message opened in the administrator's own
+email program) and Withdraw, and Add several makes many accounts from pasted
+lines of ID, name and email address, checking every line before anything is
+made and giving a table of private links to copy or download. A new Progress
+section (operation `stats`) shows the recordings done of those assigned,
+annotator-hours, the median minutes per recording, completions in the last 7
+and 30 days, a projected finish date at the pace of the last 14 days, and a
+chart of the completions of each of the last 30 days for the study or one
+person, with tables of annotators and recordings that sort, filter and download
+as CSV; a person's page lists their work recording by recording with its time,
+annotations, date saved and attempts. Times are those the browser measured with
+the recording open and not paused. Recordings and accounts can be chosen in
+their lists and acted on together (assign, retire, bring back, remove; switch
+off or on, new invitation links), with a table of what happened to each;
+removing keeps every recording with results and offers to retire it instead.
+
 ## 1.1.0
 
 The first public release, with stand-alone applications for Windows (64-bit),

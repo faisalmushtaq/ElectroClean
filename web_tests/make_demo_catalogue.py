@@ -19,6 +19,9 @@ sys.path.insert(0, str(REPO))
 from electroclean.app.annotations.labels import default_catalogue  # noqa: E402
 
 
+COMFORT_KEYS = ("break_reminder_minutes", "idle_pause_minutes", "coverage_check")
+
+
 def main() -> int:
     cat = default_catalogue()
     labels = [{"label": l.label, "value": l.value, "short_code": l.short_code, "colour": l.colour,
@@ -35,7 +38,9 @@ def main() -> int:
         f"export const DEFAULT_HIDE = {json.dumps(settings['channels']['hide'])};\n\n"
         f"export const DEFAULT_FILTERS = {json.dumps(settings['filters'])};\n\n"
         f"export const DEFAULT_DISPLAY = {json.dumps({k: settings['display'][k] for k in DISPLAY_KEYS})};\n\n"
-        f"export const DEFAULT_LOGGING = {json.dumps(settings.get('logging', {}))};\n",
+        f"export const DEFAULT_LOGGING = {json.dumps(settings.get('logging', {}))};\n\n"
+        "// Pauses, break reminders and the check of what has been viewed (annotation block).\n"
+        f"export const DEFAULT_ANNOTATION = {json.dumps({k: settings['annotation'][k] for k in COMFORT_KEYS})};\n",
         encoding="utf-8")
     print(f"wrote {out.relative_to(REPO)} ({len(labels)} labels)")
     return 0

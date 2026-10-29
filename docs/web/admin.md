@@ -20,10 +20,16 @@ annotate too) and Admin to come back. The study's administrator accounts are mad
 set up (docs/web/firebase.md and docs/web/server.md), and from then on you can make more in the
 admin area itself.
 
-The admin area has nine sections, listed on the left (at the top on a narrow screen): Overview,
-Annotators, Recordings, Assignments, Training, Analyses, Results, Records and Study settings. Each
-has an address of its own, such as `#admin-recordings`, so the browser's Back and Forward buttons
-move between them and a bookmark opens the section again. Annotating needs a computer or a tablet;
+The admin area has ten sections, listed on the left (at the top on a narrow screen) in four groups:
+Study (Overview, Progress, Results, Analyses and Records), People (Annotators, Assignments and
+Training), Data (Recordings) and Settings (Study settings). Each group folds away under its heading
+and opens again with the same heading; your browser remembers which groups you folded, for each
+administrator, and the section you are in stays in the menu even when its group is folded. Each
+section has an address of its own, such as `#admin-recordings`, so the browser's Back and Forward
+buttons move between them and a bookmark opens the section again. Find, in the header, goes straight
+to a person or a recording: type part of an ID, a name, an email address or a file name, then choose
+from the list with the pointer or with the arrow keys and Enter. Crowded sections have tabs of their
+own, such as Accounts, Invitations and Add several in Annotators. Annotating needs a computer or a tablet;
 the admin area also works on a phone, for a quick look at progress or to switch an account off. On
 an iPad, recordings are added by choosing their files (their names become their IDs), since the
 iPad cannot choose a whole dataset folder with its paths; that needs a computer. Work in progress carries on while you look at another section: a folder of recordings
@@ -38,8 +44,9 @@ The demonstration that needs no server (the page published on GitHub Pages, or o
 study) has a demo administrator: sign in as ADMIN with the password demo. Everything you change is
 kept in your browser, and the annotators of the demonstration see it: an annotator you add can sign
 in with the temporary password shown, recordings you assign appear in their list, and the settings
-you choose apply when they next open a recording. Reset the demonstration, on the home page, forgets
-it all.
+you choose apply when they next open a recording. Invitation links work too, in the same browser:
+open one in another tab to see the welcome a new annotator sees. Reset the demonstration, on the
+home page, forgets it all.
 
 The demonstration cannot run what needs ElectroClean's Python code: the agreement and activity
 analyses, competency reports, consensus and adjudicated references, the example set's files and the
@@ -55,20 +62,94 @@ do. Below are the latest changes from the study's records and the latest work th
 saved. The buttons take you to the most common jobs: adding recordings, adding an annotator,
 assigning recordings and following progress.
 
+## Progress
+
+Progress shows how far the study has got and how long the work takes, in three tabs. The study tab
+gives the recordings done of those assigned, with their share; the annotator-hours spent; the
+median minutes a recording takes; the recordings completed in the last 7 and 30 days; the pace of
+the last 14 days; and a projected finish date at that pace. Until at least three recordings have
+been completed in those 14 days the projection says there is not enough work yet. Below the figures,
+a chart shows the recordings completed on each of the last 30 days, for the whole study or for one
+person; move the pointer over it, or focus it and use the arrow keys, to read each day, and open
+The numbers, day by day for the same figures as a table.
+
+The Annotators tab has a row for each person: what is assigned to them, done, in progress and still
+to do, with the share done as a thin bar; their total time and the median time of a recording; the
+median number of annotations they saved in a recording; when they were last active; and how many
+recordings they completed in the last 7 days. The Recordings tab has a row for each recording: how
+many of the people given it have saved it, the median time it took them, and the median, fewest and
+most annotations they saved. A wide spread between the fewest and the most is worth a look, since
+it can show a recording that is hard to annotate or a label that people read differently. Every
+table sorts by any of its columns (press a column's heading, and again for the other direction),
+filters by search and by role, and downloads as a CSV file. Choosing a person opens their page in
+Annotators, with their work recording by recording.
+
+The times are those measured in each annotator's browser: the time a recording was open and not
+paused, so breaks are left out. Total time and annotator-hours include work in progress (the time
+kept with each draft); the medians use saved recordings only. Count chooses the study's own
+annotation, which is the default, or all work with the training programme included.
+
 ## Annotators
 
-The Annotators section lists every account of the study with its role, whether it is active, how
-much of its work is done and when the person last signed in. Search by ID, name or email, or show
-only one role or status.
+The Annotators section has three tabs. Accounts lists every account of the study with its role,
+whether it is active, where its invitation stands, how much of its work is done and when the person
+last signed in. Search by ID, name or email, or show only one role or status, and sort by any
+column.
 
 To add someone, give their annotator ID (letters and digits, as the study's records name them; it
 cannot be changed later), their name if you like, their email address and their role. On a study
 on Firebase people sign in with their email address, so it is needed, and the study answers with an
 invitation link that lets the person choose their own password. On a study server the person signs
-in with their annotator ID; give a password of at least eight characters, or leave it empty and the
-study makes a temporary password. The link or the password is shown once, with a Copy button: pass
-it on in a separate message from the study's address, or in person. Assign recordings to the new
-person straight away from the same place.
+in with their annotator ID, and First sign-in chooses how they get in: a temporary password that
+the study makes, a private invitation link, or a password of at least eight characters that you
+choose. The link or the password is shown once, with a Copy button: pass it on in a separate message
+from the study's address, or in person. Assign recordings to the new person straight away from the
+same place.
+
+### Inviting people
+
+A private invitation link lets one person choose their own password and sign in. When they open
+it, a welcome card names the study and their annotator ID and asks for the new password twice;
+then they are signed in and see their recordings. The link works once. It stops working when it
+has been used, when it expires (after 14 days unless you choose 7, 30 or 90), when you make a newer
+link for the same person, when you withdraw it, and when the account is switched off or removed. On
+a study server the study keeps only a fingerprint of each link (a SHA-256 hash of its random token),
+so a link is shown only when it is made; if one was not copied, make a new one, and the old one
+stops working. The study's records note every link made and withdrawn, never the link itself.
+
+The Invitations tab shows where each person's link stands: not invited, invited on a date with the
+date it expires, accepted, expired or withdrawn. For a link made on this page, Copy link copies it
+and Email the link opens a short, friendly message that you can edit, with the link, the person's
+ID and the date the link expires; Open in my email then starts a new message in your own email
+program, ready to send, and nothing is sent from the study itself. New link makes another link and
+Withdraw stops the open one at once. The page builds each link from its own address, so a link made
+on the study server's own page opens that page; when the application is served from another site,
+the link also names the study server. On Firebase the link comes from Firebase Authentication,
+which decides how long it lasts; it cannot be withdrawn, but switching the account off stops the
+person signing in.
+
+### Adding several people
+
+Add several makes many accounts at once. Paste one line for each person with their annotator ID,
+their name and their email address, separated by commas (a spreadsheet's columns pasted with tabs
+work too, and a first line of column names is skipped), then choose Check the list. Every line is
+checked before anything is made: IDs that are malformed, taken already or given twice, and email
+addresses that are malformed or given twice, are listed by line, and nothing is created until they
+are corrected. When the list is right, Create makes each account as an annotator with a private
+invitation link, showing how far it has got and what happened to each person. The links then
+appear in a table, with Copy all and a download as a CSV file of the IDs, names, email addresses,
+links and their expiry dates. Keep the file safe, since each link signs a person in, and send each
+link to its person in a separate message.
+
+### Several people at once
+
+Tick people in the Accounts list (the box in the heading ticks everyone the filters show) and a bar
+of actions appears above the list: Assign recordings… takes them to Assignments with the people
+chosen, Switch off and Switch on change their accounts, and New invitation links makes a fresh link
+for each, shown in a table to copy or download as above. The actions run one person at a time with
+a line that shows how far they have got, and a table then says what happened to each, with the
+reason for anything not done. Your own account is left out of switching off and on and of new
+links.
 
 Manage opens a person's page. There you change their name, their role and the notes the study team
 keeps about them, reset their password (which shows a new invitation link or temporary password and
@@ -78,9 +159,11 @@ assignments and its training programme; its saved results and interaction logs s
 You cannot change your own role, switch off your own account or remove it: another administrator
 does that.
 
-The person's page also lists their assignments with the status of each, and chooses their training
-programme: a trainee works through the chosen reference set's guided recordings, then its practice
-recordings, then its assessment.
+The person's page also chooses their training programme (a trainee works through the chosen
+reference set's guided recordings, then its practice recordings, then its assessment) and lists
+their work: each recording given to them, with its status, the time it took, the annotations saved,
+when it was saved and how many times. The time is the time the recording was open in their browser
+and not paused. From the same page you can make a private invitation link for the person.
 
 ## Recordings
 
@@ -125,9 +208,17 @@ command line.
 ### Notes, retiring and removing
 
 Retire a recording to stop offering it for new assignments; work already assigned stays, and Bring
-back into use undoes it. Remove deletes the recording's description from the study after you
-confirm it on the page. A recording that someone has saved, or that a reference set uses, cannot be
-removed; retire it instead. Removing never touches the file on your computer.
+back into use undoes it. Remove deletes the recording's registration, its description in the study,
+after you confirm it on the page; the EEG file itself never reached the study and stays where it
+is. A recording that someone has saved, or that a reference set uses, cannot be removed, because
+research results are never deleted; retire it instead.
+
+Tick recordings in the list (the box in the heading ticks every recording the filters show) to act
+on several at once: Assign to… takes the study's recordings chosen to Assignments, Retire and Bring
+back into use change them all, and Remove… removes their registrations after you confirm. Each runs
+one recording at a time with a line that shows how far it has got, and a table then says what
+happened to each. Removing keeps every recording with saved results or a place in a reference set,
+says which were kept and why, and offers to retire them instead.
 
 ## Assignments
 
@@ -300,7 +391,15 @@ a change to apply to it.
 random among those they have not finished, in a reproducible order made from a seed and the
 annotator's ID, or in the order they were assigned. Unfinished work always comes first.
 **Annotation** chooses the artifact types on the number keys 1 to 9, in the order the toolbar shows
-them, and the shortest annotation in samples. **Interaction log** chooses whether the study records
+them, and the shortest annotation in samples. Under Long sessions it also sets three comforts for
+annotators who work for hours: after how many minutes of work since their last break they are
+offered a break (50 by default), after how many minutes without any input the working-time clock
+pauses itself (3 by default), and whether Save and Finish first lists the parts of the recording that
+have never been on the screen, with Go to the first and Save anyway (on by default). A value of 0
+turns the reminder or the pause off. The time annotators work on each recording is research data,
+and it always leaves out the time they were paused, whether they pressed Pause, stopped giving input
+or left the page out of sight for more than ten seconds; the annotators' guide describes what they
+see. **Interaction log** chooses whether the study records
 how annotators use ElectroClean (clicks, keys and what is on the screen, never what they type), how
 often the pointer is sampled over the EEG, after how many seconds without input an annotator counts
 as idle, and the notice each annotator reads once after signing in; say there what is recorded and

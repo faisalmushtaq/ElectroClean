@@ -8,13 +8,17 @@
 // under the pointer, to `onPointer`; navigation (wheel, overview, two-finger moves and pinches, and
 // the row of buttons shown on touch screens) is handled here. On a touch screen a long press is
 // passed as 'longpress' and a double tap as 'dblclick'; a second finger cancels what the first began
-// ('cancel').
+// ('cancel'). The overview also shows which parts of the recording have not been on screen yet
+// (setCoverage), and the annotator's display comfort (setComfort) sets the thickness of the traces
+// and the size of the channel names.
 
 import { h } from '../ui/dom.js';
 import { clamp, hexToRgb, legibleOnWhite, rgba } from '../util.js';
 import { COLOURS, FONT } from '../ui/theme.js';
 import { CHANNEL_COUNTS, DURATIONS, decimateColumns, layoutTags, meanOf, niceStep, stepOption, tickLabel, voltsText } from './geometry.js';
 import { LONG_PRESS_MS, TAP_SLOP_PX, edgePx, isDoubleTap, pinchView, twoFingers } from './touch.js';
+import { complement, mergeIntervals } from './coverage.js';
+import { namePx, traceWidths } from '../ui/comfort.js';
 import { icon } from '../views/common.js';
 
 const GUTTER = 92;
@@ -93,6 +97,9 @@ export class EegViewer {
     this.onPointer = null;
     this.onView = null;
     this.onWheelNav = null;
+    this.onNextUnviewed = null;
+    this.coverage = null; // merged [start_s, end_s] on screen so far, or null when not shown
+    this.comfort = { trace: 'normal', names: 'normal' };
     this.stats = { traceMs: 0, readMs: 0, renders: 0 };
     this._cache = null;
     this._token = 0;
@@ -170,7 +177,9 @@ export class EegViewer {
         btn('plus', 'Show more channels', 'more-channels', () => this.stepChannels(1, 'button'))),
       group('Size',
         btn('minus', 'Smaller traces', 'smaller', () => this.scaleBy(1 / 1.25, 'button')),
-        btn('plus', 'Larger traces', 'larger', () => this.scaleBy(1.25, 'button'))));
+        btn('plus', 'Larger traces', 'larger', () => this.scaleBy(1.25, 'button'))),
+      this.nextUnviewedGroup = group('Not yet viewed',
+        btn('skip-forward', 'Next part not yet viewed', 'next-unviewed', () => this.onNextUnviewed && this.onNextUnviewed('button'))));
   }
 
   destroy() {
@@ -270,6 +279,17 @@ export class EegViewer {
   setPrefix(map) { this.prefix = map || {}; this.invalidate(['over']); }
   setLabelColours(map) { this.labelColours = map || {}; this.invalidate(['over']); }
   setEdgeZonesVisible(on) { this.showEdgeZones = Boolean(on); this.invalidate(['under']); }
+  /** The parts on screen so far (merged [start_s, end_s]); null hides the coverage. Only the overview changes. */
+  setCoverage(list) { this.coverage = list ? list.map((p) => [...p]) : null; this.invalidate(['overview']); }
+  /** Display comfort: { trace: 'thin'|'normal'|'thick', names: 'normal'|'large' }. */
+  setComfort(c) {
+    const next = { trace: c.trace || 'normal', names: c.names || 'normal' };
+    const layers = [];
+    if (next.trace !== this.comfort.trace) layers.push('traces');
+    if (next.names !== this.comfort.names) layers.push('under');
+    this.comfort = next;
+    if (layers.length) this.invalidate(layers);
+  }
 
   /**
    * Colour channels by group (js/viewer/channel_colours.js): a Map of channel name to colour for
@@ -499,8 +519,8 @@ export class EegViewer {
     ctx.font = `12px ${FONT}`;
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
-    const fontPx = clamp(this.rowH * 0.8, 7, 12);
-    const everyNth = this.rowH < 7 ? Math.ceil(7 / this.rowH) : 1;
+    const fontPx = namePx(this.comfort.names, this.rowH);
+    const everyNth = this.rowH < fontPx - 1 ? Math.ceil((fontPx - 1) / this.rowH) : 1;
     for (const { row, ch } of this.visibleRows()) {
       if ((row - this.view.firstChannel) % everyNth) continue;
       const selected = this.channelsActive && this.selectedChannels.has(ch.name);
@@ -578,7 +598,9 @@ export class EegViewer {
     }
     const top = Math.ceil(y0 * dpr);
     const bottom = Math.floor(y1 * dpr) - 1;
-    const thick = Math.max(1, Math.round(dpr));
+    const widths = traceWidths(this.comfort.trace, dpr, rowH < 6);
+    const thick = widths.device;
+    const wide = Math.max(1, thick - Math.max(1, Math.round(dpr)) + 1); // device pixels a column spans at least
     const colX = new Int32Array(cols + 1);
     for (let col = 0; col <= cols; col++) colX[col] = Math.round((x0 + col) * dpr);
     const groups = new Map();
@@ -643,7 +665,7 @@ export class EegViewer {
         if (lo < top) lo = top;
         if (hi > bottom) hi = bottom;
         const xa = colX[col];
-        const xb = Math.max(colX[col + 1], xa + 1);
+        const xb = Math.max(colX[col + 1], xa + wide);
         for (let y = lo; y <= hi; y++) {
           const base = y * W;
           for (let x = xa; x < xb; x++) buf[base + x] = px;
@@ -661,7 +683,7 @@ export class EegViewer {
       ctx.beginPath();
       ctx.rect(x0, y0 - 1, x1 - x0, y1 - y0 + 2);
       ctx.clip();
-      ctx.lineWidth = rowH < 6 ? 0.6 : 1;
+      ctx.lineWidth = widths.css;
       ctx.lineJoin = 'round';
       for (const [colour, path] of groups) {
         ctx.strokeStyle = colour;
@@ -835,6 +857,19 @@ export class EegViewer {
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = COLOURS.surface_alt;
     ctx.fillRect(0, 0, W, H);
+    // What has not been on screen yet: white, with a thin amber line along the top.
+    if (this.coverage) {
+      const gaps = this.gaps.map(([a, b]) => [a / this.sfreq, b / this.sfreq]);
+      const ts = (t) => (t / this.durationTotal) * W;
+      for (const [a, b] of complement(mergeIntervals([...this.coverage, ...gaps]), this.durationTotal)) {
+        const xa = Math.floor(ts(a));
+        const w = Math.max(1, Math.ceil(ts(b)) - xa);
+        ctx.fillStyle = COLOURS.surface;
+        ctx.fillRect(xa, 0, w, H);
+        ctx.fillStyle = COLOURS.warning_border;
+        ctx.fillRect(xa, 0, w, 3);
+      }
+    }
     const tx = (s) => (s / this.nSamples) * W;
     for (const [a, b] of this.gaps) hatch(ctx, tx(a), 0, Math.max(1, tx(b) - tx(a)), H, COLOURS.hatch, 6);
     ctx.fillStyle = COLOURS.event;

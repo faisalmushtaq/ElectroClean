@@ -204,6 +204,29 @@ stay available from the menu and the searchable list (the / key).
 `annotation.min_duration_samples` (1 by default) is the shortest annotation
 that is accepted.
 
+### Long sessions in the browser
+
+Three settings of the browser version make long sessions easier for annotators.
+`annotation.break_reminder_minutes` (50 by default, from 0 to 240) is how many
+minutes of work since the last break pass before a gentle reminder offers a
+break; a pause of five minutes or more counts as a break. `annotation.idle_pause_minutes`
+(3 by default, from 0 to 60) is how many minutes without any input pass before
+the working-time clock pauses itself. A value of 0 turns either off.
+`annotation.coverage_check` is `"warn"` (the default), with which Save and
+Finish first lists the stretches of at least a second that have never been on
+the screen, or `"off"`.
+
+```json
+{"settings": {"annotation": {"break_reminder_minutes": 45, "idle_pause_minutes": 5, "coverage_check": "warn"}}}
+```
+
+The time worked on a recording, saved in the session file (`timing.elapsed_seconds`),
+the `_time_viewed.txt` file and the completion register (`elapsed_s`), leaves out
+every pause in the browser: those the annotator chose, those
+after the minutes without input, and the time the page was out of sight for
+more than ten seconds. The interaction log records each pause and its length
+([activity logs](activity_logs.md)).
+
 ## Which recording comes next
 
 Each annotator works on the recordings assigned to them, in the admin area or

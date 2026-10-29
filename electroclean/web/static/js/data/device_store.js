@@ -15,6 +15,8 @@ export const ROOT_NAME = 'electroclean-recordings';
 const DB_NAME = 'electroclean-device';
 const DB_STORE = 'recordings';
 const META = 'meta.json';
+/** How long a copy without its description may stay before it counts as abandoned. */
+const ABANDONED_AFTER_MS = 10 * 60 * 1000;
 
 /** A storage problem; kind 'full' when the device has no room, 'broken' for a damaged copy. */
 export class DeviceStoreError extends Error {
@@ -122,8 +124,11 @@ class OpfsBackend {
         const meta = JSON.parse(await (await (await handle.getFileHandle(META)).getFile()).text());
         if (meta && meta.sha256 === name) out.push(meta);
       } catch {
-        // a copy whose description was never written (the device filled up, or the page closed)
-        try { await dir.removeEntry(name, { recursive: true }); } catch { /* leave it */ }
+        // No description: a copy being written now (here or in another tab), or one left behind when
+        // a page closed while writing it, which is removed once it is clearly abandoned.
+        if (await abandoned(handle)) {
+          try { await dir.removeEntry(name, { recursive: true }); } catch { /* leave it */ }
+        }
       }
     }
     return out;
@@ -154,6 +159,17 @@ class OpfsBackend {
     try { dir = await this._dir(owner, false); } catch { return; }
     try { await dir.removeEntry(sha256, { recursive: true }); } catch (e) { if (e && e.name !== 'NotFoundError') throw e; }
   }
+}
+
+/** A copy's folder without a description whose files have not changed for ten minutes. */
+async function abandoned(dirHandle, now = Date.now()) {
+  let newest = 0;
+  try {
+    for await (const [, h] of dirHandle.entries()) {
+      if (h.kind === 'file') newest = Math.max(newest, (await h.getFile()).lastModified || 0);
+    }
+  } catch { return false; }
+  return newest > 0 && now - newest > ABANDONED_AFTER_MS;
 }
 
 async function writeFile(dir, name, blob) {
@@ -253,6 +269,7 @@ export class DeviceStore {
         await this._backend.remove(this.owner, sha);
         return true;
       } catch (e) {
+        this.probeProblem = `${this.kind}: ${e && e.name}: ${e && e.message}`; // for the browser tests
         if (isQuotaError(e)) return true; // it works, and is full: keeping says so when it is tried
         if (this.kind === 'opfs' && !this._fellBack) this._fallBack(); else break;
       }
@@ -265,13 +282,10 @@ export class DeviceStore {
   /** The descriptions of the kept recordings, newest first. */
   async list() {
     if (!this._backend) return [];
-    try {
-      const out = await this._backend.list(this.owner);
-      return out.sort((a, b) => String(b.keptAt).localeCompare(String(a.keptAt)));
-    } catch (e) {
-      if (this.kind === 'opfs' && !this._fellBack) return this._fallBack().list();
-      throw e;
-    }
+    // Errors while listing (a copy removed in another tab meanwhile) are not a reason to change
+    // the kind of storage: whether this browser stores anything is the probe's question (usable()).
+    const out = await this._backend.list(this.owner);
+    return out.sort((a, b) => String(b.keptAt).localeCompare(String(a.keptAt)));
   }
 
   /** The kept copy of a recording of the study, by its ID (null when there is none). */

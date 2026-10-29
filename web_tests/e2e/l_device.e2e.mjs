@@ -6,7 +6,7 @@ import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { signIn, waitForRoute, waitForTraces, clickDialogButton, eegPoint, drag } from './helpers.mjs';
+import { signIn, waitForRoute, waitForTraces, clickDialogButton, eegPoint, drag, pressSave } from './helpers.mjs';
 import { cloudService, recordEvents, sentEvents, NAME } from './l_links.e2e.mjs';
 import { demoSpecs, syntheticEdfBytes } from '../../electroclean/web/static/js/data/synthetic.js';
 
@@ -34,7 +34,7 @@ async function kept(page) {
   return page.evaluate(async () => {
     const { deviceStore } = await import('./js/views/device.js');
     const s = deviceStore(globalThis.ElectroClean);
-    return { kind: s.kind, list: await s.list() };
+    return { kind: s.kind, list: await s.list(), probe: s.probeProblem || '' };
   });
 }
 
@@ -89,7 +89,7 @@ async function openFromLink(page, url) {
 async function saveAndFinish(page) {
   await page.keyboard.press('1');
   await drag(page, await eegPoint(page, 3.0), await eegPoint(page, 3.4));
-  await page.click('.ws-actions button.primary');
+  await pressSave(page); // passes the study's check of what has been viewed
   await clickDialogButton(page, 'Save and Finish');
   await page.waitForSelector('.dialog .dialog-title');
   await clickDialogButton(page, 'Back to my recordings');
@@ -124,7 +124,7 @@ export const tests = [
         await openFromLink(page, `${cloud.base}/cors/${NAME}?rlkey=secret-key-456`);
         await waitKept(page, 1);
         const k = await kept(page);
-        assert.equal(k.kind, 'opfs', 'Chromium and Safari 26 write to the Origin Private File System from the page');
+        assert.equal(k.kind, 'opfs', `Chromium and Safari 26 write to the Origin Private File System from the page (${k.probe})`);
         assert.equal(k.list[0].fileName, NAME);
         assert.equal(k.list[0].size, bytes.length);
         assert.ok(!JSON.stringify(k.list).includes('secret-key-456') && !JSON.stringify(k.list).includes('127.0.0.1'), 'the link is not kept');
