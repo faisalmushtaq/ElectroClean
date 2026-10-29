@@ -282,7 +282,8 @@ export class DemoBackend {
       study: this._admin.studyBlock(),
       catalogue: CATALOGUE,
       programme: this._inProgramme(aid) ? { set_id: TRAINING_SET.set_id, name: this._exampleSet().name, complete: !this._trainingNext(aid) } : null,
-      quizzes: [{ set_id: QUIZ.set_id, name: QUIZ.name, n_items: QUIZ.items.length, finished: Boolean(this._quizState(aid).finished), feedback: QUIZ.feedback }],
+      quizzes: [{ set_id: QUIZ.set_id, name: QUIZ.name, n_items: QUIZ.items.length, n_answered: Object.keys(this._quizState(aid).answers || {}).length,
+        finished: Boolean(this._quizState(aid).finished), feedback: QUIZ.feedback }],
     };
   }
 

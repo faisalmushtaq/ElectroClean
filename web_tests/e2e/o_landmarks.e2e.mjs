@@ -52,6 +52,19 @@ export const tests = [
       t.assert.equal(await page.getAttribute('.picker-list', 'tabindex'), '0', 'the type list can take the keyboard focus');
       await page.keyboard.press('Escape');
 
+      // the quiz: its page for opening the recordings, then a segment with its question
+      const quiz = await t.newPage({ width: 1440, height: 900 });
+      await quiz.waitForSelector('form.signin-form');
+      await signIn(quiz, 'A01');
+      await waitForRoute(quiz, 'home');
+      await quiz.click('[data-log="quiz-example"]');
+      await waitForRoute(quiz, 'quiz');
+      await quiz.waitForSelector('[data-log="quiz-use-examples"]');
+      check(t, await structure(quiz), 'quiz, opening the recordings');
+      await quiz.click('[data-log="quiz-use-examples"]');
+      await quiz.waitForSelector('.quiz-side');
+      check(t, await structure(quiz), 'quiz segment');
+
       const admin = await t.newPage({ width: 1440, height: 900 });
       await admin.waitForSelector('form.signin-form');
       await signIn(admin, 'ADMIN');

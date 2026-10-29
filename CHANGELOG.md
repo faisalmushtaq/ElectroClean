@@ -62,6 +62,16 @@ path (`GET /me` gives `programme.complete`). The page for opening a training
 recording names its stage and says that the study team sends the training
 recordings.
 
+The short-segment quiz has a main landmark around its bar and its content, so
+that screen readers find it as they find every other page. Enter sends the
+chosen answer, the description of the chosen type appears under the list, the
+answer sent stays clear among the greyed-out others, and How the quiz works,
+above the recordings to open, explains the quiz. A quiz ended early is headed
+Quiz ended early and counts the segments answered. The quiz's entry on the home
+page and the training path says how far a stopped quiz went, with Continue the
+quiz, and a finished quiz has See my result (`GET /me` gives each quiz's
+`n_answered`).
+
 The activity analysis (`electrotag-activity` and the admin area) now counts
 confidence ratings, notes, problem reports and the feedback on reviewed work.
 Each row of `recordings.tsv` gives the ratings given and cleared, the requests

@@ -98,7 +98,7 @@ test('the demonstration\'s quiz: listed in /me, items in each annotator\'s own o
   const b = new DemoBackend({ storage: memory(), tokens: memory() });
   await b.login('A01', 'demo');
   const me = await b.me();
-  assert.deepEqual(me.quizzes, [{ set_id: 'example', name: 'Demonstration quiz', n_items: QUIZ.items.length, finished: false, feedback: 'immediate' }]);
+  assert.deepEqual(me.quizzes, [{ set_id: 'example', name: 'Demonstration quiz', n_items: QUIZ.items.length, n_answered: 0, finished: false, feedback: 'immediate' }]);
   const q = await b.quiz('example', { action: 'get' });
   assert.equal(q.feedback, 'immediate');
   assert.equal(q.finished, false);
@@ -261,4 +261,16 @@ test('Firebase: et_quiz with the set and the body; only "get" is asked a second 
     await assert.rejects(() => b.quiz('example', body), (e) => e.code === 'network');
   }
   assert.deepEqual(seen.map((s) => s.data.action), ['answer', 'finish'], 'an answer or a finish is never repeated');
+});
+
+test('the quiz card says how far a stopped quiz went, and a finished one opens on its result', async () => {
+  const b = new DemoBackend({ storage: memory(), tokens: memory() });
+  await b.login('A01', 'demo');
+  const q = await b.quiz('example', { action: 'get' });
+  await b.quiz('example', { action: 'answer', item_id: q.items[0].item_id, label: 'EMG-artifact' });
+  await b.quiz('example', { action: 'answer', item_id: q.items[1].item_id, label: 'EMG-artifact' });
+  assert.equal((await b.me()).quizzes[0].n_answered, 2, 'GET /me counts the answers of a stopped quiz');
+  await b.quiz('example', { action: 'finish' });
+  const me = await b.me();
+  assert.equal(me.quizzes[0].finished, true);
 });

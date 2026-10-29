@@ -135,7 +135,7 @@ password.
                              "colour": "#0067A5", "section": "Eye", "is_group": false,
                              "parent": "Eye-artifact" | null, "description": "…"}]},
   "programme": null | {"set_id": "example", "name": "…", "complete": false},  // in a training programme; complete when every stage is done
-  "quizzes": [{"set_id": "example", "name": "…", "n_items": 4, "finished": false, "feedback": "immediate"}]
+  "quizzes": [{"set_id": "example", "name": "…", "n_items": 4, "n_answered": 0, "finished": false, "feedback": "immediate"}]
 }
 ```
 
@@ -735,8 +735,8 @@ ElectroTag installed.
 
 A reference set with quiz items offers its quiz to the annotators allowed to
 use the set (everyone when `allowed_annotators` is empty); `GET /me` lists them
-as `"quizzes": [{"set_id", "name", "n_items", "finished": false, "feedback":
-"immediate" | "end"}]` (empty when there are none). `POST /quiz/{set_id}`
+as `"quizzes": [{"set_id", "name", "n_items", "n_answered", "finished": false, "feedback":
+"immediate" | "end"}]` (empty when there are none; `n_answered` counts the answers kept so far). `POST /quiz/{set_id}`
 (`et_quiz` with `{"set_id", "action", …}` on Firebase,
 `StudyService.quiz(user, set_id, body)`, `electrotag/web/quiz.py`) takes an
 `action`:

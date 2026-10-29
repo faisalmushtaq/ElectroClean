@@ -101,8 +101,12 @@ export const tests = [
       c = await current(page);
       const second = TRUTH.get(c.item.item_id);
       const wrong = second.correct_label === 'Movement-artifact' ? 'EMG-artifact' : 'Movement-artifact';
-      await answer(page, wrong);
+      // Enter on the chosen answer sends it; its description shows under the list
+      await page.check(`input[name="quiz-answer"][value="${wrong}"]`);
+      assert.match(await page.textContent('.quiz-chosen'), new RegExp(`^${wrong}: .+`));
+      await page.keyboard.press('Enter');
       await page.waitForSelector('.quiz-feedback.banner');
+      assert.equal(await page.locator('.quiz-option.chosen input').getAttribute('value'), wrong, 'your answer stays clear once sent');
       assert.match(await page.textContent('.quiz-feedback'), new RegExp(`Not quite: the expected answer is ${second.correct_label}\\.`));
       assert.ok(await page.isDisabled(`input[name="quiz-answer"][value="${wrong}"]`), 'answers are fixed once sent');
 
@@ -110,6 +114,9 @@ export const tests = [
       await page.click('[data-log="quiz-stop"]');
       await clickDialogButton(page, 'Stop for now');
       await waitForRoute(page, 'home');
+      // the card says how far the quiz went, and carries on from there
+      assert.match(await page.textContent('.quiz-card'), new RegExp(`You have answered 2 of ${QUIZ.items.length}\\.`));
+      assert.equal(await page.textContent('[data-log="quiz-example"]'), 'Continue the quiz');
       await page.click('[data-log="quiz-example"]');
       await waitForRoute(page, 'quiz');
       await page.waitForSelector('[data-log="quiz-file-input"]', { state: 'attached' });
@@ -135,6 +142,13 @@ export const tests = [
       await page.click('[data-log="quiz-done"]');
       await waitForRoute(page, 'home');
       assert.match(await page.textContent('.quiz-card'), /Finished/);
+      // a finished quiz can be seen again
+      assert.equal(await page.textContent('[data-log="quiz-example"]'), 'See my result');
+      await page.click('[data-log="quiz-example"]');
+      await page.waitForSelector('.quiz-score');
+      assert.match(await page.textContent('.quiz-body h2'), /You have finished this quiz/);
+      await page.click('[data-log="quiz-stop"]');
+      await waitForRoute(page, 'home');
 
       // the interaction log has the desktop's quiz events
       const events = await page.evaluate(async () => {
@@ -205,6 +219,9 @@ export const tests = [
       await clickDialogButton(page, 'End the quiz now');
       await page.waitForSelector('.quiz-score');
       const n = QUIZ.items.length;
+      // ended early: the result says so, and counts the segments answered
+      assert.equal(await page.textContent('.quiz-body h2'), 'Quiz ended early');
+      assert.equal(await page.textContent('.quiz-progress'), `1 of ${n} segments answered`);
       assert.equal(await page.textContent('.quiz-score'), `You answered 1 of 1 segment correctly (100%). ${n - 1} of the ${n} segments were not answered.`);
       const ended = await page.evaluate(async () => {
         await globalThis.ElectroTag.flushLog();

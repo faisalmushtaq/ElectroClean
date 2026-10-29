@@ -596,15 +596,18 @@ recordings the quiz needs and which one it needs now.
 Each segment is shown with a few seconds of EEG around it, read only, with the study's filters. The
 answers are listed by family, as in the annotation view, with group terms such as Eye-artifact
 marked "group: exact type unclear"; some quizzes also offer "No artifact / none of these". Choose
-one and press Submit answer. Depending on the quiz, you see straight away whether it was right, with
-a short explanation, and press Next segment; or you go on to the next segment and see your result at
-the end. Every answer is kept with the study as soon as you send it, together with the time you took
-to give it, and cannot be changed afterwards: if you answer a segment on two pages or computers, the
-first answer is kept and the page says so. ‹ Stop the quiz offers two choices: Stop for now keeps
-your answers so that you can carry on another time from where you stopped, and End the quiz now
-finishes it with the score of the segments you answered. At the end ElectroTag shows how many
-segments you answered correctly, overall and for each artifact type, and opening a finished quiz
-again shows the same result.
+one and press Submit answer (or Enter); the description of the type you chose appears under the
+list, and How the quiz works, at the top of the page for opening the recordings, sums this up.
+Depending on the quiz, you see straight away whether it was right, with a short explanation, and
+press Next segment; or you go on to the next segment and see your result at the end. Every answer is
+kept with the study as soon as you send it, together with the time you took to give it, and cannot
+be changed afterwards: if you answer a segment on two pages or computers, the first answer is kept
+and the page says so. ‹ Stop the quiz offers two choices: Stop for now keeps your answers so that
+you can carry on another time from where you stopped, and End the quiz now finishes it with the
+score of the segments you answered. At the end ElectroTag shows how many segments you answered
+correctly, overall and for each artifact type (after End the quiz now, under the heading Quiz ended
+early). The quiz's entry on your first page says how far a stopped quiz went, with Continue the
+quiz, and a finished quiz has See my result, which shows the same result again.
 
 ## The demonstration
 

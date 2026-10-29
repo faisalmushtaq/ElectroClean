@@ -74,6 +74,7 @@ class Quizzes:
                 continue
             state = self.store.quiz_state(user.annotator_id, rs.set_id) or {}
             out.append({"set_id": rs.set_id, "name": rs.name or rs.set_id, "n_items": len(rs.quiz_items),
+                        "n_answered": len(state.get("answers") or {}),
                         "finished": bool(state.get("finished")), "feedback": feedback_of(rs)})
         return out
 
