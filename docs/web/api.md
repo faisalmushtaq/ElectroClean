@@ -117,7 +117,7 @@ password.
                 "channel_colours": "off" | "region" | "side" | "type"},     // the study's default
     "annotation": {"min_duration_samples": 1, "quick_labels": ["Eye-blink-artifact", "…"],
                    "break_reminder_minutes": 50, "idle_pause_minutes": 3, "coverage_check": "warn" | "off",
-                   "allow_revisions": true},
+                   "allow_revisions": true, "allow_reviews": true, "show_reviews_to_annotators": true},
     "gamification": {"enabled": true, "leaderboard": true},
     "logging": {"interactions": true, "pointer_hz": 5, "idle_after_s": 30},
     "logging_notice": "This study records how you use ElectroTag …"   // "" when logging is off
@@ -137,7 +137,10 @@ administrator has written one. The three settings for long sessions in
 break reminder and minutes without input before the clock pauses itself (0 turns
 either off), and whether Save and Finish first lists the parts not yet viewed.
 `annotation.allow_revisions` says whether a finished study recording may be
-opened again and revised (see "Revisions" below), and `gamification` whether
+opened again and revised (see "Revisions" below), `annotation.allow_reviews`
+and `annotation.show_reviews_to_annotators` whether administrators may review
+saved work and whether the annotator sees those reviews (see "Reviews" below),
+and `gamification` whether
 the home page shows the game elements and the leaderboard (see
 "Achievements"; `leaderboard` is false whenever `enabled` is).
 
@@ -145,9 +148,10 @@ the home page shows the game elements and the leaderboard (see
 
 `GET /assignments` →
 `{"items": [{"recording_id", "file_name", "format", "mode": "standard" | "guided" | "practice" | "assessment",
-"context_id": "" | "<reference set>", "status": "todo" | "in_progress" | "done", "duration_s",
+"context_id": "" | "<reference set>", "status": "todo" | "in_progress" | "done" | "unusable", "duration_s",
 "n_channels", "size_bytes", "repeat": false, "elapsed_s", "n_annotations", "completed_at", "draft",
-"saved": {"version", "first_saved_at", "total_elapsed_s"} | null, "revising": false}],
+"saved": {"version", "first_saved_at", "total_elapsed_s"} | null, "revising": false,
+"problem": ProblemReport (the annotator's view) | null}],
 "next": "<recording_id>" | null, "next_item": {"recording_id", "mode", "context_id"} | null}`. `next` is the
 recording to do next: unfinished work first, then the training programme's
 next step, then the study's selection strategy (`manual`: the assignment order;
@@ -156,6 +160,12 @@ same until something more is completed). `next_item` says in which mode and
 context. A trainee's list holds the recordings of the programme's unlocked
 stages. `repeat` is true for a practice recording the programme lets the
 trainee annotate again (its `status` is then `todo`).
+
+`unusable` is the status of a recording its annotator reported as one that
+cannot be annotated (see "Problem reports" below): it is finished for the
+annotator, never the next recording, and kept apart from `done`. `problem` is
+the item's latest problem report as its annotator sees it (without the
+administrator's fields), or null.
 
 For the annotator's progress and history on the home page, a `done` item
 carries what the completion register says of its latest attempt (the highest
@@ -173,18 +183,19 @@ for a `done` item with a revision under way (its draft is kept; `status` stays
 the seconds of the recording in the draft's `viewed` (overlaps counted once);
 `draft` is null for other items.
 
-`POST /match` `{"file_name", "size_bytes", "format", "sha256": "<hex>", "sfreq", "n_samples", "ch_names": [...], "revise": false}` →
+`POST /match` `{"file_name", "size_bytes", "format", "sha256": "<hex>", "sfreq", "n_samples", "ch_names": [...], "revise": false, "view_saved": false}` →
 
 ```jsonc
 {
-  "status": "matched" | "matched_metadata" | "unknown" | "not_assigned" | "done",
+  "status": "matched" | "matched_metadata" | "unknown" | "not_assigned" | "done" | "unusable",
   "message": "…",                       // for the annotator; always present
   "recording_id": "…" | null, "mode": "standard", "context_id": "",
   "manifest": Manifest | null,          // present for matched and matched_metadata
   "draft": Draft | null,                // unfinished work to continue, if any
   "differences": ["…"],                 // matched_metadata: how the file differs from the study's copy
   "repeat": false,                      // a practice recording being annotated again
-  "revision": null | {"version": 2, "revises": 1, "saved_at": "…", "annotations": [Annotation]}
+  "revision": null | {"version": 2, "revises": 1, "saved_at": "…", "annotations": [Annotation]},
+  "saved": null | {"version": 1, "saved_at": "…", "annotations": [Annotation]}   // with view_saved
 }
 ```
 
@@ -194,6 +205,8 @@ number of samples and channels match one recording; the browser shows the
 differences and asks whether to continue. `unknown`: not a recording of the
 study. `not_assigned`: a study recording, but not for this annotator now.
 `done`: already completed by this annotator (in this mode and context).
+`unusable`: the annotator set this recording aside as one that cannot be
+annotated; its message says so.
 `sha256` and `size_bytes` are required (400 `bad_request` otherwise); the other
 fields are needed only for `matched_metadata`.
 
@@ -205,12 +218,18 @@ browser opens with. `draft` is then the revision's own draft, if one was kept
 for that version. Without `revise`, a finished recording answers `done`, and
 its message says that it can be opened from the history to revise it.
 
+With `"view_saved": true`, a finished study recording opens to read, with the
+feedback on it: the answer is `matched` (or `matched_metadata`) with the
+manifest and `saved`, the latest saved version's number, when it was saved and
+its annotations; nothing starts, and no draft is given or kept.
+
 `PUT /drafts/{recording_id}?mode=&context=` `Draft` → `{"saved_at": "…"}`.
 The browser sends a draft at most every 30 s while there are changes and when
 the page is hidden. `DELETE` the same path discards it. Drafts of more than
 8 MB are refused (413 `too_large`). The draft of a revision is kept like any
 other and carries `revises`; a done recording takes a draft only when it may
-be revised (409 `already_done` otherwise).
+be revised (409 `already_done` otherwise). A recording set aside as one that
+cannot be annotated takes no draft and no submission (409 `unusable`).
 
 ## Saving
 
@@ -276,6 +295,66 @@ submission of a finished recording without `revises` is still refused (409
 409 `revisions_off`. Training recordings keep their own rules (a practice
 recording may be repeated until it is passed; guided and assessment recordings
 are saved once).
+
+## Problem reports
+
+An annotator who cannot judge a recording reports it instead of saving it as
+having no artifacts. `POST /problems` (`et_problem_report` on Firebase)
+
+```jsonc
+{"problem_id": "<32 hex, made by the browser for this report>", "recording_id": "…", "mode": "standard",
+ "context_id": "", "reason": "file_wont_open" | "wrong_recording" | "bad_channels" | "too_noisy" | "other",
+ "note": "…",                       // optional, at most 300 characters
+ "outcome": "noted" | "unusable",   // carry on, or set the recording aside
+ "where": "home" | "annotate"}
+```
+
+→ `{"problem": ProblemReport, "already": false}`. The recording must be one of
+the annotator's (403 `not_assigned`, 404 `unknown_recording`); 400
+`bad_request` names a field that is wrong. `unusable` gives the assignment the
+status `unusable`: finished for the annotator, kept apart from `done`, left out
+of the agreement analyses; it is only for an unfinished study recording (409
+`already_done` for one saved, 409 `not_for_training` for a training recording).
+The same `problem_id` sent again (a second press, or a request sent again after
+an answer that came too late) is kept once and answers `"already": true`. Every
+report is audited (`problem_report`, by the annotator, with the length of the
+note and not its text).
+
+```jsonc
+ProblemReport = {"problem_id", "recording_id", "file_name", "mode", "context_id", "reason", "reason_text",
+                 "note", "outcome", "where", "reported_at", "state": "open" | "resolved",
+                 "resolution": null | "resolved" | "returned" | "reassigned", "resolution_note", "resolved_at",
+                 "returned_at",
+                 // and for administrators:
+                 "annotator_id", "display_name", "item_status", "resolved_by", "reassigned_to",
+                 "unusable_now": false}
+```
+
+## Reviews
+
+An administrator reviews an annotator's latest saved version of a study
+recording (`saved_attempt_get` and `review_save` below). A review is a record
+of its own and never changes the annotation files; a recording can have several.
+
+```jsonc
+Review = {"review_id", "annotator_id", "recording_id", "file_name", "mode": "standard", "context_id": "",
+          "attempt": 1,                       // the version reviewed
+          "reviewer_id", "reviewer_name", "reviewed_at", "overall_note",
+          "items": [{"annotation_id": "…" | null, "label": "…" | null, "onset_sample", "duration_samples",
+                     "onset_s", "offset_s", "channels": [], "status": "agree" | "caveat" | "comment", "note"}],
+          "counts": {"agree", "caveat", "comment", "missed"},
+          "summary": "2 caveats, 1 comment",
+          "output_basename", "session_id"}    // these two for administrators only
+```
+
+An item is about an annotation of the version reviewed (`annotation_id`, with
+the annotation's label, time and channels as saved) or about a stretch without
+one (`annotation_id` null, always a comment, "missed artifact?" unless a note
+is given). `GET /me/reviews` (`et_my_reviews`) →
+`{"shown": true, "reviews": [Review]}`, the reviews of the caller's work, newest
+first; when the study keeps reviews from its annotators
+(`annotation.show_reviews_to_annotators` false) `{"shown": false, "reviews": []}`.
+The agreement analyses do not use reviews.
 
 ## Achievements
 
@@ -473,7 +552,7 @@ study's own recordings have `"self_contained": false` and `"scope": "study"`.
 
 | op | body | answer |
 | --- | --- | --- |
-| `overview` | `{}` | `{"study": {"study_id", "name"}, "counts": {"recordings", "annotators", "admins", "assignments", "done", "in_progress", "todo"}, "recent": [AuditEntry], "last_saved": [{"annotator_id", "recording_id", "mode", "context_id", "at"}]}` (ten of each; `recordings` counts the study's own, the others the active accounts and their work) |
+| `overview` | `{}` | `{"study": {"study_id", "name"}, "counts": {"recordings", "annotators", "admins", "assignments", "done", "in_progress", "todo", "unusable", "problems_open", "reviewed"}, "recent": [AuditEntry], "last_saved": [{"annotator_id", "recording_id", "mode", "context_id", "at"}]}` (ten of each; `recordings` counts the study's own, the others the active accounts and their work; `problems_open` the open problem reports and `reviewed` the annotator's recordings with at least one review) |
 | `settings_get` | `{}` | `{"name", "settings": {"filters", "display", "channels", "selection", "logging", "annotation", "loading", "discovery", "gamification"}, "logging_notice", "logging_notice_is_default"}`: the effective values of the blocks of `electrotag_study.json` that a study may change |
 | `settings_update` | `{"name"?, "settings"?: {block: {key: value}}, "logging_notice"?}` | as `settings_get`. Each key given replaces that setting; the result is checked with ElectroTag's own settings code and refused with 400 `invalid_settings` and the reason (also for a block or key that cannot be changed). `"logging_notice": ""` goes back to ElectroTag's own notice |
 | `users_list` | `{}` | `{"users": [UserRecord]}` (disabled accounts too) |
@@ -506,10 +585,17 @@ study's own recordings have `"self_contained": false` and `"scope": "study"`.
 | `quiz_item_remove` | `{"set_id", "item_id"}` | `{}`; 404 `unknown_item` |
 | `progress` | `{}` | as `GET /admin/progress` |
 | `stats` | `{"work"?: "study" \| "all"}` | `Stats` (below): how far the study has got and how long the work takes, from the completion register (`elapsed_s`, `n_annotations`, `completed_at`), the drafts, the assignments, the accounts' `last_seen` and the visits. `work` `study` counts the study's own annotation (mode `standard`), `all` training too; 400 otherwise. A recording saved more than once (a revision, or a practice recording repeated) counts as one recording done, on the day of its first save, with the annotations of its latest attempt and the time of all its attempts together; `saved` per recording is the number of people who saved it |
-| `agreement` | `{"annotator_ids"?, "recording_ids"?, "modes"?: ["standard"], "config"?: {..AnalysisConfig fields..}}` | `{"summary": {"n_recordings", "n_comparable_recordings", "annotators", "config", "key_results": [..]}, "report_html": str, "tables": {"<name>.tsv": str}, "warnings": [..]}`, computed on demand with `electrotag.reliability` (the files of `electrotag-agreement`). Annotators and modes are chosen with `annotator_ids` and `modes`, not in `config`; settings it refuses give 400 `invalid_config`; 422 `not_enough` when no recording has two annotators. When the tables would exceed 12 MB, `events_matched.tsv` and `events_unmatched.tsv` are left out with a warning |
+| `agreement` | `{"annotator_ids"?, "recording_ids"?, "modes"?: ["standard"], "config"?: {..AnalysisConfig fields..}}` | `{"summary": {"n_recordings", "n_comparable_recordings", "annotators", "config", "key_results": [..], "unusable": {"recordings_left_out", "recording_ids", "assignments"}}, "report_html": str, "tables": {"<name>.tsv": str}, "warnings": [..]}`, computed on demand with `electrotag.reliability` (the files of `electrotag-agreement`). Annotators and modes are chosen with `annotator_ids` and `modes`, not in `config`; settings it refuses give 400 `invalid_config`; 422 `not_enough` when no recording has two annotators. When the tables would exceed 12 MB, `events_matched.tsv` and `events_unmatched.tsv` are left out with a warning. A study recording that any annotator set aside as one that cannot be annotated is left out for every annotator, with a warning and a paragraph at the top of the report that give the counts (`summary.unusable`) |
 | `activity` | `{"annotator_ids"?}` | `{"report_html": str, "tables": {"visits.tsv": str, "recordings.tsv": str}}`, with `electrotag.activity`; 422 `no_logs` when there are no interaction logs |
 | `competency` | `{"set_id", "annotator_id"}` | `{"report": {..}, "html": str}` (`competency_report`, made again and kept, and `competency_html`); 404 `not_complete` until every assessment recording is saved (also for a set without assessment recordings) |
-| `results_zip` | `{}` | `{"file_name", "base64", "size_bytes"}`: the results folder as `GET /admin/results.zip` gives it, quiz results included; 413 `too_large` (with `size_bytes`) above 25,000,000 bytes (use `electrotag-web export`) |
+| `results_zip` | `{}` | `{"file_name", "base64", "size_bytes"}`: the results folder as `GET /admin/results.zip` gives it, quiz results, problem reports and reviews included (docs/file_formats.md); 413 `too_large` (with `size_bytes`) above 25,000,000 bytes (use `electrotag-web export`) |
+| `problems_list` | `{"state"?: "open" \| "resolved", "reason"?, "annotator_id"?, "recording_id"?}` | `{"problems": [ProblemReport], "counts": {"open", "resolved", "unusable"}, "reasons": {code: text}}`, newest first; `counts` are of every report, and `unusable` the assignments set aside now |
+| `problem_resolve` | `{"problem_id", "note"?}` | `{"problem": ProblemReport}`; 404 `unknown_problem`, 409 `already_resolved` |
+| `problem_return` | `{"problem_id", "note"?}` | `{"problem": ProblemReport}`: the recording goes back on the annotator's to-do list (the status `unusable` is undone) and the report is resolved as `returned`; the annotator sees the note. 409 `not_unusable` when the recording is not set aside |
+| `problem_reassign` | `{"problem_id", "annotator_id", "note"?}` | `{"problem": ProblemReport, "added": 1}`: the recording is assigned to that person (the study's own annotation) and the report resolved as `reassigned`; 404 `unknown_user`, 409 `retired`, 409 `not_for_training` |
+| `saved_attempt_get` | `{"annotator_id", "recording_id"}` | `{"annotator_id", "display_name", "recording_id", "file_name", "mode", "context_id", "attempt", "saved_at", "manifest": Manifest, "annotations": [Annotation], "reviews": [Review], "allow_reviews"}`: what a review needs, the latest saved version; 404 `no_saved_annotations`; 409 `not_for_training` for another mode |
+| `review_save` | `{"review_id": "<32 hex>", "annotator_id", "recording_id", "attempt", "items": [{"annotation_id"} or {"onset_sample", "duration_samples"} with "status", "note"?], "overall_note"?}` | `{"review": Review, "already": false}`. `attempt` must be the latest (409 `not_latest`); notes at most 300 characters, the overall note 1000; 422 `unknown_annotation` for an annotation not in that version, 422 `invalid_review` for a stretch outside the recording, 400 `empty_review` with no item and no note, 409 `reviews_off` when the study takes none. The same `review_id` sent again is kept once (`"already": true`) |
+| `reviews_list` | `{"annotator_id"?, "recording_id"?}` | `{"reviews": [Review]}`, newest first |
 | `audit` | `{"before"?: str, "limit"?: 50}` | `{"entries": [AuditEntry], "next": str \| null}`, newest first; `before` is the `next` of the page before (400 `bad_request` otherwise); `limit` 1 to 500 |
 | `visits` | `{"annotator_id"?, "limit"?: 100}` | `{"visits": [{"visit_id", "annotator_id", "mode", "context_id", "started_at", "closed_at", "n_events"}]}`, newest first; `limit` 1 to 1000 |
 
@@ -518,12 +604,13 @@ Stats = {"generated_at": "…", "work": "study", "today": "2026-10-28", "days": 
          "totals": {"assigned", "done", "in_progress", "todo", "remaining", "share_done": 0.4 | null,
                     "annotator_hours": 12.5, "median_minutes": 18.2 | null, "done_7d", "done_30d",
                     "pace_per_day": 1.3, "pace_days": 14,
-                    "projection": {"status": "projected" | "complete" | "not_enough", "date": "2026-12-01" | null}},
+                    "projection": {"status": "projected" | "complete" | "not_enough", "date": "2026-12-01" | null},
+                    "unusable", "problems_open", "reviewed"},
          "daily": [0, 2, …] /* completions on each of the days */,
-         "annotators": [{"annotator_id", "display_name", "role", "status", "assigned", "done", "in_progress", "todo",
+         "annotators": [{"annotator_id", "display_name", "role", "status", "assigned", "done", "in_progress", "todo", "unusable",
                          "share_done", "time_s", "in_progress_s", "median_s", "median_annotations",
                          "last_active", "done_7d", "daily": [..]}],
-         "recordings": [{"scope", "recording_id", "file_name", "assigned", "done", "in_progress", "saved",
+         "recordings": [{"scope", "recording_id", "file_name", "assigned", "done", "in_progress", "unusable", "saved",
                          "median_s", "median_annotations", "min_annotations", "max_annotations"}]}
 ```
 
@@ -533,7 +620,9 @@ recording was open and not paused. `annotator_hours` adds the time of drafts
 still in progress to that of the saved work; `time_s` is a person's saved work
 and `in_progress_s` their drafts. A day is the local date at the start of a
 time stamp. The projection divides the work remaining by the pace of the last
-14 days, and is `not_enough` with fewer than 3 completions in them.
+14 days, and is `not_enough` with fewer than 3 completions in them. A recording
+set aside as one that cannot be annotated (`unusable`) is counted apart from
+`done` and is not part of `remaining`.
 
 Mistakes in a body (a missing or malformed field) are 400 `bad_request` with a
 message that names the field. On Firebase, an operation that needs Firebase
@@ -664,7 +753,7 @@ generation, region europe-west2) taking and returning the same JSON:
 `et_me`, `et_assignments`, `et_match`, `et_put_draft`, `et_delete_draft`,
 `et_submit`, `et_training`, `et_guided_get`, `et_guided_check`,
 `et_guided_continue`, `et_guided_show_me`, `et_visit_open`, `et_visit_events`,
-`et_visit_close`, `et_quiz`, `et_achievements` and, for administrators, `et_admin_progress` and
+`et_visit_close`, `et_quiz`, `et_achievements`, `et_problem_report`, `et_my_reviews` and, for administrators, `et_admin_progress` and
 `et_admin` (every operation of the admin area, by `op`; it has 2 GB of memory
 and up to 540 s for the analyses and the results zip). Each takes
 `{"study": "<study id>", ...the request body...}` (path parameters such as the
@@ -697,6 +786,8 @@ The fields of each call:
 | (none) | `POST /invite/check` and `POST /invite/accept` have no function: on Firebase `user_invite` answers Firebase Authentication's `invite_link` |
 | `et_quiz` | `{"set_id", ...the body of `POST /quiz/{set_id}`}` |
 | `et_achievements` | none for `GET /me/achievements`; `{"goal_per_week"}` or `{"leaderboard_hidden"}` for `POST` |
+| `et_problem_report` | the body of `POST /problems` (never repeated by the browser; the same `problem_id` is kept once) |
+| `et_my_reviews` | none (`GET /me/reviews`) |
 
 There is no `token` and no beacon on Firebase: the Firebase SDK adds the ID
 token; to send the last events when the page is hidden, call `et_visit_events`

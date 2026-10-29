@@ -5,6 +5,38 @@ Each section below describes the changes in one version of ElectroTag;
 
 ## Unreleased
 
+Annotators can report a problem with a recording instead of saving it as having
+no artifacts: from the More button beside it in their list (which works for a
+file that will not even open) or in the annotation view's header, they choose
+what is wrong (the file will not open, the wrong recording, flat, missing or
+disconnected channels, too noisy or too short to annotate, or something else),
+add a note of up to 300 characters if they wish, and either carry on or set the
+recording aside as one that cannot be annotated. A recording set aside has the
+new status `unusable`: finished for the annotator's progress, kept apart from
+done in the study's figures, and left out of the agreement analyses, whose
+report says so with the counts. Administrators find the reports in a new
+Problems section under Data, with filters and a CSV download, and resolve them
+with a note, return the recording to the annotator's to-do list (the annotator
+sees a short line saying so) or give it to someone else. Overview and Progress
+count open problems and recordings that cannot be annotated. Reports are kept
+with the results (`problem_reports/` in the results zip and the export) and in
+the audit log, and the interaction log records their reason and outcome, never
+the note.
+
+Administrators can review saved work. Review, beside a saved recording in a
+person's Work or in Results, opens it in a read-only review mode of the
+annotation view, once the file chosen on the reviewer's computer matches the
+study's fingerprint; each annotation gets Agree, Caveat or Comment with an
+optional note (keys N, P, A, C and M, or taps on an iPad), a stretch without an
+annotation is marked by dragging across the EEG ("missed artifact?"), and the
+review is saved once as its own record, never changing the annotation files.
+Annotators see "Reviewed: 2 caveats, 1 comment" in their list and history, read
+the feedback beside their annotations in the accent blue, and keep it in view
+while they revise. Two settings, `annotation.allow_reviews` and
+`annotation.show_reviews_to_annotators` (for blind reviews), are in Study
+settings. Each review goes into the results zip as a TSV and a JSON file, and
+the agreement analyses do not use reviews.
+
 ElectroClean is now called ElectroTag, a name that says what it does: people
 tag the artifacts in EEG recordings. Everything carries the new name: the
 Python package (`electrotag`), the commands (`electrotag-web`,

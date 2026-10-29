@@ -56,6 +56,8 @@ Annotated_Events/
     training_progress/<reference set>/annotator-A01.json   stars, scores and times in the programme
     interaction_logs/annotator-A01/<YYYYMMDDTHHMMSS>_<mode>.jsonl   one log per visit
     activity_reports/<date and time>/   tables and report made from the logs
+    problem_reports/problem_reports.{tsv,json}   problems annotators reported (results zip and export)
+    reviews/annotator-A01/<stem>_attempt-01_review-<time>-<id>.{tsv,json}   each review of saved work
     .electrotag/
         locks/          lock files of sessions and of the register
         staging/        saves in progress (normally empty)
@@ -204,6 +206,44 @@ A single number: seconds spent annotating, to the nearest millisecond, e.g.
 | `channel_check` | Comparison of the recording's channels with `channels.tsv` |
 | `warnings`, `notes` | Everything shown with the recording's details (for work saved from the browser, the registration's findings and the browser's own) |
 | `outputs` | Base name and file names |
+
+## Problem reports and reviews (results zip and export)
+
+Problem reports and reviews of saved work are kept by the study (in the server's
+database, or in Firestore) and written into the results when the admin area makes
+the results zip or `electrotag-web export` runs, as they stand at that moment.
+They never change the annotation files.
+
+`problem_reports/problem_reports.tsv` has a row for each report, the oldest
+first, with the columns `problem_id`, `reported_at`, `annotator_id`,
+`recording_id`, `file_name`, `mode`, `context_id`, `reason` (`file_wont_open`,
+`wrong_recording`, `bad_channels`, `too_noisy` or `other`), `note` (up to 300
+characters, `n/a` when none), `outcome` (`noted`: the annotator carried on;
+`unusable`: the recording was set aside as one that cannot be annotated),
+`where` (`home` or `annotate`), `item_status` (the assignment's status when
+the report was made), `state` (`open` or `resolved`), `resolution`
+(`resolved`, `returned` to the annotator's to-do list, or `reassigned`),
+`resolution_note`, `resolved_at`, `resolved_by`, `reassigned_to` and
+`unusable_now` (`yes` when the recording is still set aside for its
+annotator). `problem_reports.json` holds the same reports as JSON
+(`{"schema": "electrotag.problem_reports", "schema_version": 1, "reports": [...]}`).
+
+Each review has two files below `reviews/annotator-<ID>/`, named after the
+recording, the version reviewed, the time of the review and the first characters
+of its ID. The JSON file is the review's record
+(`"schema": "electrotag.review"`): `review_id`, `annotator_id`, `recording_id`,
+`attempt` (the version reviewed), `output_basename` and `session_id` of that
+version, `reviewer_id`, `reviewer_name`, `reviewed_at`, `overall_note`,
+`counts` (`agree`, `caveat`, `comment` and `missed`, the comments on stretches
+without an annotation) and `items`. Each item has `annotation_id` (null for a
+stretch without an annotation), `label`, `onset_sample`, `duration_samples`,
+`onset_s`, `offset_s`, `channels` (of the annotation as it was saved),
+`status` (`agree`, `caveat` or `comment`) and `note`. The TSV file has a row for
+each item with the columns `review_id`, `reviewed_at`, `reviewer_id`,
+`annotator_id`, `recording_id`, `attempt`, `item` (its number), `annotation_id`,
+`label`, `onset_sample`, `duration_samples`, `onset_s`, `offset_s`,
+`channels`, `status` and `note`, and a last row with `item` and `status`
+`overall` for the overall note. The agreement analyses do not read reviews.
 
 ## `completion_register.tsv`
 

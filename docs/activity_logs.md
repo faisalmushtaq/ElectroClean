@@ -42,7 +42,9 @@ field are left out, and for a search box or a name field the log only says that
 the field was edited (and, for number boxes such as the exact start and end of
 an annotation, the number chosen). Nothing at all is recorded from password
 fields. The annotator's display name is not in the logs; the annotator ID
-identifies them within the study. The computer's name is not recorded either.
+identifies them within the study. The computer's name is not recorded either. The note of a problem
+report is not recorded either, only its length; the report itself, note included,
+goes to the study team.
 
 ## Where the logs are
 
@@ -133,6 +135,20 @@ version revised, and `elapsed_s`, the time spent revising) follows its
 `revises`) records a second Submit the revision refused as already revised after the first one's
 answer never arrived: the first had most likely been saved. The time spent revising is measured
 by the session clock as for any recording.
+
+**Problem reports and feedback (browser).** An annotator may report a problem
+with a recording (docs/web/using.md, "When a recording cannot be annotated"):
+`problem_reported` (`recording_id`, `mode`, `reason`, `outcome`, `noted` or
+`unusable`, `where`, `home` or `annotate`, `already`, true when the study had
+kept that report already, and `note_length`, the number of characters of the
+note, never its text) and `problem_report_failed` (`recording_id`, `reason`,
+`outcome`, `code`). A recording set aside closes with its draft kept. The feedback
+on reviewed work (docs/web/using.md, "Reviews of your work") gives
+`feedback_shown` (`recording_id`, `reviews`, `items`, `kind`, `feedback` when read
+only or `annotate` beside a revision), `feedback_item_jumped` (`status`,
+`onset_s`, `item`) and `feedback_closed` (`to`, `home` or `revision`). An
+administrator's review pass belongs to the admin area, whose work is not part of
+the interaction log.
 
 **Milestones and goals (browser).** When the game elements are on
 (docs/web/admin.md, "Study settings"), `milestone_reached` (`milestone`, such
