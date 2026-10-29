@@ -66,7 +66,8 @@ was saved."
 
 Change what needs changing, then choose Submit the revision on the banner. Your changes are saved
 as a new version beside the earlier one, which is kept exactly as it was, and the time you spend
-revising is measured as usual. Analyses of the study use your latest version. Leave without
+revising is measured as usual. A revision may fix one place only, so Submit the revision does not
+first list the parts of the recording not yet viewed. Analyses of the study use your latest version. Leave without
 changes on the banner closes the recording and keeps every saved version as it is. A revision you
 close part-way (Close, then Close and revise later) is kept as a draft, and the history says that a
 revision is under way; Continue the revision picks it up again. You can revise a recording more
