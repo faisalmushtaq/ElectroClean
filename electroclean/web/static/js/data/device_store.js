@@ -239,6 +239,19 @@ class IdbBackend {
   }
 }
 
+/**
+ * The name of the lock that a page holds, shared, while a recording it opened from a kept copy is
+ * open (the Web Locks API, which every tab of the site shares): the browser reads the files of a
+ * recording piece by piece as it is viewed, so a copy in use in any tab is never removed.
+ */
+export function inUseLockName(sha256) {
+  return `electroclean-kept-${sha256}`;
+}
+
+function webLocks() {
+  try { return (globalThis.navigator && globalThis.navigator.locks && typeof globalThis.navigator.locks.request === 'function') ? globalThis.navigator.locks : null; } catch { return null; }
+}
+
 /** The copies of one annotator in one study. */
 export class DeviceStore {
   /** @param {{owner: string, kind?: 'opfs'|'idb'|null}} options */
@@ -331,15 +344,45 @@ export class DeviceStore {
     return got;
   }
 
+  /**
+   * Remove a copy; resolves false (and keeps it) when a recording opened from it is open in this
+   * or another tab (holdInUse), true otherwise.
+   */
   async remove(sha256) {
-    if (this._backend) await this._backend.remove(this.owner, sha256);
+    if (!this._backend) return true;
+    const locks = webLocks();
+    if (!locks) { await this._backend.remove(this.owner, sha256); return true; }
+    return locks.request(inUseLockName(sha256), { mode: 'exclusive', ifAvailable: true }, async (lock) => {
+      if (!lock) return false;
+      await this._backend.remove(this.owner, sha256);
+      return true;
+    });
   }
 
-  /** Remove several copies; resolves with their number and size. */
+  /** Remove several copies; resolves with the number and size of those removed, and the number kept because they are in use. */
   async removeMany(metas) {
     let bytes = 0;
-    for (const m of metas) { await this.remove(m.sha256); bytes += m.size || 0; }
-    return { count: metas.length, bytes };
+    let count = 0;
+    let inUse = 0;
+    for (const m of metas) {
+      if (await this.remove(m.sha256)) { count += 1; bytes += m.size || 0; } else inUse += 1;
+    }
+    return { count, bytes, inUse };
+  }
+
+  /**
+   * Mark a kept copy as in use while a recording opened from it is open: resolves, once marked,
+   * with the function that ends the mark. Where the browser has no Web Locks it marks nothing.
+   */
+  static async holdInUse(sha256) {
+    const locks = webLocks();
+    if (!locks) return () => {};
+    let release;
+    const until = new Promise((r) => { release = r; });
+    await new Promise((marked) => {
+      locks.request(inUseLockName(sha256), { mode: 'shared' }, () => { marked(); return until; }).catch(() => marked());
+    });
+    return release;
   }
 
   async removeAll() {

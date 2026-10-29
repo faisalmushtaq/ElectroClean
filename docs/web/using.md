@@ -174,7 +174,9 @@ The home page says how many recordings are kept and how much space they take, wi
 page that opens recordings has a button, Recordings on this device…; both show the kept recordings with their
 sizes and whether you have finished them, the space this site uses and how much more the browser
 allows, and the ways to free space: Remove next to each recording, Remove finished recordings, which
-says how much it frees before it does so, and Remove all. Tick Remove a recording from this device
+says how much it frees before it does so, and Remove all. A copy that a recording open in this or
+another tab or window was opened from is kept, and the panel says so: the browser reads a recording's
+files bit by bit as you view it, so close it there first. Tick Remove a recording from this device
 when I finish it to have each copy removed once Save and Finish has saved your work. Removing a copy
 never touches your annotations, drafts or results, which the study keeps. When the device is full,
 the recording still opens, from memory, and ElectroClean offers to remove the recordings you have

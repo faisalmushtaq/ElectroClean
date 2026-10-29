@@ -20,6 +20,7 @@ import { signinView } from './views/signin.js';
 import { inviteView } from './views/invite.js';
 import { homeView } from './views/home.js';
 import { OpenView } from './views/open.js';
+import { DeviceStore } from './data/device_store.js';
 import { keepOnDevice, dropBrokenCopy, afterFinishOnDevice, offerRemovalAtSignOut } from './views/device.js';
 import { appHeader, downloadFiles, smallScreenNotice } from './views/common.js';
 import { nowLocalIso, session } from './util.js';
@@ -296,6 +297,8 @@ export class App {
 
   // ===================================================================== views
   _render(el, route) {
+    // Leaving the open view stops its download from a link: a late file must not open by itself.
+    if (this.openView && this.openView.el !== el) this.openView.leave();
     if (this.quizView && this.quizView.el !== el) {
       this.quizView.destroy(); // the quiz's answers are with the study; its recordings are closed
       this.quizView = null;
@@ -461,6 +464,7 @@ export class App {
   }
 
   openFromComputer(expected, { revise = false } = {}) {
+    if (this.openView) this.openView.leave();
     this.openView = new OpenView(this, { expected, revise: Boolean(expected && revise) });
     this._render(this.openView.el, 'open');
   }
@@ -472,7 +476,13 @@ export class App {
     await this._process(recording, this.openView);
   }
 
+  /** Whether `view` is still the open view on screen: work for one that was left is dropped. */
+  _stillOpen(view) {
+    return this.openView === view && this.route === 'open';
+  }
+
   async processFiles(files, view, source = null) {
+    if (!this._stillOpen(view)) return;
     view.reset();
     view.step('read', source && source.kind === 'device' ? 'Reading the copy kept on this device…' : 'Reading the file…');
     let recording;
@@ -487,6 +497,7 @@ export class App {
       logger.event('load_failed', { kind: 'read', reason: exc.message });
       return;
     }
+    if (!this._stillOpen(view)) return; // the person went elsewhere while the file was read
     await this._process(recording, view);
   }
 
@@ -502,6 +513,7 @@ export class App {
       view.showProblem(`The file could not be read to the end: ${exc.message}`, [view.chooseAgainButton()]);
       return;
     }
+    if (!this._stillOpen(view)) return;
     if (!(await this._checkKeptCopy(recording, fp, view))) return;
     view.step('fp', 'Checked the file', 'done');
     view.step('match', this.backend.isDemo ? 'Looking it up in the demonstration study…' : 'Asking the study whether this is one of your recordings…');
@@ -517,6 +529,9 @@ export class App {
       if (exc.status !== 401) view.showProblem(`The study could not be asked: ${exc.message}`, [view.chooseAgainButton()]);
       return;
     }
+    // A late answer (a slow study) for a view that was left opens nothing: the person has moved on,
+    // perhaps to another recording, which must not be closed under them.
+    if (!this._stillOpen(view)) return;
     logger.event('recording_loading', { recording_id: m.recording_id, match: m.status, file_name: recording.fileName, size_bytes: recording.sizeBytes });
     const back = h('button.btn', { type: 'button', onclick: () => this.goBack() }, 'Back to my recordings');
     if (m.status === 'matched') {
@@ -603,6 +618,9 @@ export class App {
     if (this.ws) this.ws.destroy();
     const ws = new Workspace(this, session, { kind: tryOut ? 'tryout' : 'annotate' });
     this.ws = ws;
+    // A recording opened from a copy kept on this device reads its files as it is viewed: the copy is
+    // marked in use, so that no tab removes it until the recording is closed.
+    if (recording.source && recording.source.kind === 'device') void DeviceStore.holdInUse(sha).then((release) => ws.onDestroy(release));
     this._render(ws.el, 'annotate');
     ws.mount(this.content);
     if (session.mode === 'guided') {

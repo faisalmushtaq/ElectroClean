@@ -25,7 +25,7 @@ export function openDownload(url) {
  *   onFiles: receives the fetched files (as if they had been chosen on the computer);
  *   chooseFile: opens the ordinary file chooser (the fallback's second step);
  *   extra: shown under the field (the open view's "Keep a copy on this device").
- * @returns {{el: HTMLElement, open: (items: {role?: string, url: string}[]) => Promise<boolean>, busy: () => boolean}}
+ * @returns {{el: HTMLElement, open: (items: {role?: string, url: string}[]) => Promise<boolean>, busy: () => boolean, cancel: () => void}}
  */
 export function linkPanel({ onFiles, chooseFile, extra = null }) {
   const id = `open-links-${++panelSeq}`;
@@ -109,5 +109,5 @@ export function linkPanel({ onFiles, chooseFile, extra = null }) {
     extra,
     h('div.btn-row', {}, go, stop),
     status);
-  return { el, open, busy: () => Boolean(controller), field };
+  return { el, open, busy: () => Boolean(controller), cancel: () => { if (controller) controller.abort(); }, field };
 }
