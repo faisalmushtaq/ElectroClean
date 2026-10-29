@@ -197,6 +197,8 @@ export class EegViewer {
         btn('plus', 'Larger traces', 'larger', () => this.scaleBy(1.25, 'button'))),
       this.nextUnviewedGroup = group('Not yet viewed',
         btn('skip-forward', 'Next part not yet viewed', 'next-unviewed', () => this.onNextUnviewed && this.onNextUnviewed('button'))));
+    // Hidden until a view that keeps track of what has been viewed shows it (the annotation view, with onNextUnviewed).
+    this.nextUnviewedGroup.hidden = true;
   }
 
   destroy() {

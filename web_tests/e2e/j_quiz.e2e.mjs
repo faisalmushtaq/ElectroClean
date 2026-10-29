@@ -84,6 +84,8 @@ export const tests = [
       assert.equal(c.ghost.duration_samples, Math.round((first.end_s - first.start_s) * sf));
       assert.equal(c.view.startS, 0);
       assert.equal(c.view.nChannels, c.rows);
+      // The quiz does not keep track of what has been viewed, so its touch bar has no Next part not yet viewed.
+      assert.equal(await page.locator('.touch-group[aria-label="Not yet viewed"]').isHidden(), true);
       assert.match(await page.textContent('.quiz-side'), /Which artifact type is the main one in the shaded segment\?/);
       assert.match(await page.textContent('.quiz-side'), /Eye-artifact {2}\(group: exact type unclear\)/);
       await t.screenshot(page, 'quiz_segment');

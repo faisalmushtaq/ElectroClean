@@ -264,6 +264,15 @@ after its five output files have been written, read back and verified (the journ
 `electrotag/app/session/`). **Every change an administrator makes is written to the audit log**,
 whichever way it is made. Keep all three properties whatever else changes.
 
+**In the annotation view, a key means the same thing whatever the timing**, and nothing that loses
+work happens on a reflex. The number keys choose a type except straight after D (or in Rate them),
+where the bar beside the outlined annotation says that they rate; a request for a rating never ends
+by itself. Esc or a click beside a question keeps the work (the restore questions resolve to
+restoring), destructive answers ask a second time, and work discarded is set aside in the browser
+tab (`discardDrafts` and `bringBackDiscarded` in `js/annotate/session.js`) so that the Annotations
+tab can offer it back. The header's buttons are disabled when they cannot act and while paused, and
+take no keyboard focus from a mouse click. `web_tests/e2e/u_interaction.e2e.mjs` checks these rules.
+
 **The browser, the server and the Firebase functions share one contract**,
 [docs/web/api.md](docs/web/api.md), with the annotators' operations, the administrator's operations
 (`POST /api/v1/admin/{op}`, or the callable `et_admin`) and the quiz. A change to a request or

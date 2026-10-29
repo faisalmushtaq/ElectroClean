@@ -30,10 +30,13 @@ export function canSetAside(item) {
  * The dialog: resolves {reason, note, outcome} or null when the person cancels. `item` is the
  * recording (an item of GET /assignments, or {recording_id, file_name, mode, context_id, status}).
  */
-export async function problemDialog(item, { reason = null } = {}) {
+export async function problemDialog(item, { reason = null, where = 'home' } = {}) {
   const name = `problem-reason-${newId().slice(0, 6)}`;
-  const reasons = REASONS.map(([value, label], i) => {
-    const input = h('input', { type: 'radio', name, value, checked: reason ? value === reason : i === 0, 'data-reason': value });
+  // No reason is chosen for the annotator, and Send the report waits for one. Inside the annotation
+  // view the file has opened, so "will not open" is not offered there.
+  const offered = REASONS.filter(([value]) => !(where === 'annotate' && value === 'file_wont_open'));
+  const reasons = offered.map(([value, label]) => {
+    const input = h('input', { type: 'radio', name, value, checked: value === reason, 'data-reason': value });
     return h('label.problem-option', {}, input, h('span', {}, label));
   });
   const note = h('textarea.field.problem-note', { rows: 3, maxlength: String(MAX_NOTE), 'aria-label': 'Note for the study team (optional)',
@@ -54,12 +57,21 @@ export async function problemDialog(item, { reason = null } = {}) {
         h('span', {}, 'This recording cannot be annotated', h('span.caption.block', {}, setAside
           ? 'It is set aside: finished for your progress, and kept apart from the recordings you saved. The study team can give it back to you.'
           : 'Only an unfinished study recording can be set aside.')))));
+  const chosenReason = () => reasons.map((l) => l.querySelector('input')).find((i) => i.checked) || null;
   const ok = await showDialog({ title: 'Report a problem with this recording', body, className: 'problem-dialog', cancelValue: false,
     buttons: [{ label: 'Cancel', value: false }, { label: 'Send the report', value: true, kind: 'primary' }],
-    onOpen: ({ box }) => { const first = box.querySelector('input[type="radio"]:checked'); if (first) first.focus(); } });
+    onOpen: ({ box }) => {
+      const send = box.querySelector('button[data-value="true"]');
+      const sync = () => { send.disabled = !chosenReason(); send.title = send.disabled ? 'Choose what is wrong first' : ''; };
+      for (const l of reasons) l.querySelector('input').addEventListener('change', sync);
+      sync();
+      const first = box.querySelector('input[type="radio"]:checked') || box.querySelector('input[type="radio"]');
+      if (first) first.focus();
+    } });
   if (!ok) return null;
-  const chosen = reasons.map((l) => l.querySelector('input')).find((i) => i.checked);
-  return { reason: chosen ? chosen.value : 'other', note: note.value.slice(0, MAX_NOTE).trim(), outcome: aside.checked && setAside ? 'unusable' : 'noted' };
+  const chosen = chosenReason();
+  if (!chosen) return null;
+  return { reason: chosen.value, note: note.value.slice(0, MAX_NOTE).trim(), outcome: aside.checked && setAside ? 'unusable' : 'noted' };
 }
 
 /**
@@ -67,7 +79,7 @@ export async function problemDialog(item, { reason = null } = {}) {
  * was sent. `where`: home or annotate. The same report is sent again with the same ID on "Try again".
  */
 export async function reportProblem(app, item, { where = 'home', reason = null } = {}) {
-  const choice = await problemDialog(item, { reason });
+  const choice = await problemDialog(item, { reason, where });
   if (!choice) return null;
   const body = { problem_id: newId(), recording_id: item.recording_id, mode: item.mode || 'standard', context_id: item.context_id || '',
     reason: choice.reason, note: choice.note, outcome: choice.outcome, where };

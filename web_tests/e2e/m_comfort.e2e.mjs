@@ -98,7 +98,8 @@ export const tests = [
       // Three seconds without any input (the study's 0.05 minutes).
       await panelShown(page);
       assert.match(await page.textContent('.pause-reason'), /paused itself after 3 seconds without any input/);
-      await page.waitForFunction(() => /^You were away for \d+ s; that time is not counted\.$/.test(document.querySelector('.pause-away').textContent));
+      // The pause began when the seconds without input ran out: those still count, the time since is left out.
+      await page.waitForFunction(() => /^The \d+ s since then (is|are) not counted; the 3 seconds before the pause still count\.$/.test(document.querySelector('.pause-away').textContent));
       await page.click('[data-log="resume"]');
       await panelHidden(page);
 
@@ -236,7 +237,7 @@ export const tests = [
       assert.match(text, /You have viewed 68% of this recording\. This part has not been on the screen yet:/);
       assert.match(text, /0:28 to 0:50 \(22 s\)/);
       await t.screenshot(page, 'comfort_coverage_check');
-      await clickDialogButton(page, 'Go to the first part');
+      await clickDialogButton(page, 'Go to that part');
       assert.equal(await page.locator('.dialog').count(), 0, 'nothing is saved');
       assert.equal((await state(page)).view.startS, 27);
       await page.waitForFunction(() => globalThis.ElectroTag.ws.s.viewed.length === 2 && globalThis.ElectroTag.ws.s.viewed[0][1] === 37);
@@ -290,7 +291,7 @@ export const tests = [
       await page.click('[data-log="open-next"]');
       await waitForRoute(page, 'open');
       await page.locator('.example-card button').click();
-      await clickDialogButton(page, 'Restore and continue');
+      // Continue where you left off restores without asking.
       await waitForRoute(page, 'annotate');
       await waitForTraces(page);
       const after = (await state(page)).view;

@@ -129,6 +129,16 @@ and in the browser `kept` and, for a revision, `revises`); `load_failed`
 (`recording_id`, `kind`, `reason`); `recording_unavailable` (`recording_id`,
 `reason`).
 
+**Drafts (browser).** `draft_discarded` (`recording_id`, `n_annotations`,
+`elapsed_s`, and `revises` for a revision) records Start afresh (or Start again
+from the saved version) when a draft was offered for restoring; the work is set
+aside in the browser tab. `discarded_work_restored` (`n_annotations`,
+`elapsed_s`, `replaced`, the number of annotations it replaced) records Bring it
+back in the Annotations tab. `draft_not_sent` (`online`, whether the browser
+believed it was connected) is logged once when drafts stop reaching the study,
+and `draft_sent_again` when one reaches it again; the draft is in the browser
+meanwhile.
+
 **Revisions (browser).** An annotator may open a recording they finished and
 submit it again as a new version (docs/web/using.md, "History and revisions").
 `revision_started` (`session_id`, `recording_id`, `version`, the version a
@@ -280,9 +290,13 @@ the numbers below the Annotations list), carries `annotations` (each with `id`,
 `confidence_prompt`, when a request for a rating ends, says how it was opened
 (`trigger`: `key` for D, `new_mark` after a new mark in an every-mark study,
 `rate_them` when stepping through the unrated marks before Save and Finish),
-how it ended (`outcome`: `rated`, `cleared`, `cancelled` with Esc, `later` with
-the bar's Later, `timeout`, `other_input` when another key was pressed, or
-`replaced` by a newer prompt), `n_annotations` and, when rated, `confidence`.
+how it ended (`outcome`: `rated`, `cleared`, `cancelled` with Esc after D or in
+Rate them, `later` with the bar's Later or with Esc after a new mark,
+`other_input` when another key was pressed after D, `replaced` by a newer
+prompt, or `deleted` when the annotation went, for example with Undo),
+`n_annotations` and, when rated, `confidence`. Since 29 October 2026 a prompt
+never ends by itself; `timeout` appears in logs written before then, when it
+ended after a few seconds.
 `confidence_check`, before Save and Finish in an every-mark study, gives
 `n_unrated`, `n_annotations` and `choice` (`rate` for Rate them, `save` for
 Save anyway, or `cancel`). `note_set`, when a note is added,
@@ -497,7 +511,7 @@ assessment recordings separately.
 | `annotations_rated` | Annotations with a confidence rating among final_annotations (empty when the log does not show the ratings of annotations restored at opening). |
 | `share_rated` | annotations_rated divided by final_annotations (0 to 1). |
 | `confidence_prompts` | Requests for a rating (after D, after a new mark in an every-mark study, or with Rate them before Save and Finish). |
-| `confidence_prompts_by_outcome` | How the requests for a rating ended (rated, cleared, cancelled, later, timeout, other_input, replaced) and how often (JSON). |
+| `confidence_prompts_by_outcome` | How the requests for a rating ended (rated, cleared, cancelled, later, other_input, replaced, deleted, and timeout in older logs) and how often (JSON). |
 | `confidence_checks` | Times Save and Finish found marks without a rating in an every-mark study. |
 | `confidence_check_choices` | The choices at those checks (rate, save, cancel) and how often (JSON). |
 | `notes_written` | Notes added to annotations or changed (a count: the text of a note is never logged). |

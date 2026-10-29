@@ -142,6 +142,20 @@ export const tests = [
       await page.keyboard.press('3');
       await drag(page, await eegPoint(page, 5.0), await eegPoint(page, 6.0));
       assert.equal(await page.evaluate(() => globalThis.ElectroTag.ws.s.saveRemote({ force: true })), true);
+      // The study cannot be reached: the top says the draft is in this browser only, and the line says so once.
+      await page.route('**/api/v1/drafts/**', (r) => r.abort());
+      await drag(page, await eegPoint(page, 8.0), await eegPoint(page, 8.5));
+      assert.equal(await page.evaluate(() => globalThis.ElectroTag.ws.s.saveRemote({ force: true })), false);
+      assert.equal(await page.getAttribute('.ws-saved', 'data-saved'), 'local-only');
+      assert.match(await page.textContent('.ws-saved'), /^Draft kept in this browser only/);
+      assert.match(await page.textContent('.ws-message'), /^The study cannot be reached just now/);
+      await page.keyboard.press('Control+z'); // back to the two marks the next browser expects
+      // The connection returns: the draft goes to the study at once, and the label is as before.
+      await page.unroute('**/api/v1/drafts/**');
+      await page.evaluate(() => window.dispatchEvent(new Event('online')));
+      await page.waitForFunction(() => document.querySelector('.ws-saved').dataset.saved === 'study');
+      assert.match(await page.textContent('.ws-saved'), /^Draft saved \d\d:\d\d$/);
+      assert.match(await page.textContent('.ws-message'), /The study can be reached again/);
       await page.context().close();
 
       // A new browser has no local copy: the draft comes from the server.
@@ -150,10 +164,10 @@ export const tests = [
       assert.match(await page.locator('tr', { hasText: file }).textContent(), /In progress/);
       await page.locator('tr', { hasText: file }).locator('button', { hasText: 'Continue' }).click();
       await openFile(t, page, file);
-      await page.waitForSelector('.dialog', { timeout: 20000 });
-      assert.match(await page.textContent('.dialog'), /2 annotation\(s\)/);
-      await clickDialogButton(page, 'Restore and continue');
+      // Continue restores the draft without asking.
       await waitForRoute(page, 'annotate', 30000);
+      assert.equal(await page.locator('.dialog').count(), 0, 'no question after Continue');
+      assert.match(await page.textContent('.welcome-back'), /with 2 annotations kept/);
       const restored = (await annotations(page)).map((a) => [a.label, a.onset_sample]);
       assert.deepEqual(restored.map((r) => r[0]), ['Eye-blink-artifact', 'EMG-artifact']);
       // where they were drawn (within a pixel in WebKit, which reports the pointer in whole pixels)

@@ -69,9 +69,11 @@ export const tests = [
       await page.keyboard.press('2');
       anns = await annotations(page);
       assert.equal(anns[0].label, 'Horizontal-eye-movement-artifact');
-      // P at the first one says so.
+      // P at the first one comes round to the last, and says so; N comes back to the first.
       await page.keyboard.press('p');
-      assert.match(await page.textContent('.ws-message'), /That was the first annotation/);
+      assert.match(await page.textContent('.ws-message'), /^Back to the last annotation\. 3 of 3: /);
+      await page.keyboard.press('n');
+      assert.match(await page.textContent('.ws-message'), /^Back to the first annotation\. 1 of 3: Horizontal-eye-movement-artifact/);
 
       // 6. Undo (Ctrl+Z) brings the blink back; redo and undo again.
       await page.keyboard.press('Control+z');
@@ -114,7 +116,7 @@ export const tests = [
       const before = (await annotations(page)).length;
       await t.screenshot(page, 'annotate_marked');
       await pressSave(page);
-      assert.match(await page.textContent('.dialog'), new RegExp(`Save ${before} annotation\\(s\\) and finish this recording\\?`));
+      assert.match(await page.textContent('.dialog'), new RegExp(`Save ${before} annotations and finish this recording\\?`));
       await t.screenshot(page, 'save_confirm');
       await clickDialogButton(page, 'Save and Finish');
       await page.waitForSelector('.dialog .dialog-title');
@@ -145,14 +147,15 @@ export const tests = [
       await drag(page, await eegPoint(page, 2.0), await eegPoint(page, 2.5));
       await page.click('[data-log="close"]');
       await page.waitForSelector('.dialog');
-      assert.match(await page.textContent('.dialog'), /Close without saving\?/);
+      assert.match(await page.textContent('.dialog'), /Close this recording\?/);
+      assert.match(await page.textContent('.dialog'), /your draft is kept, with your 1 annotation and the time spent/);
       await clickDialogButton(page, 'Close and finish later');
       await waitForRoute(page, 'home');
       assert.match(await page.textContent('table.list'), /In progress/);
       await page.locator('ul.examples button').nth(1).click();
       await page.waitForSelector('.dialog');
       assert.match(await page.textContent('.dialog'), /Restore unfinished work\?/);
-      assert.match(await page.textContent('.dialog'), /1 annotation\(s\)/);
+      assert.match(await page.textContent('.dialog'), /1 annotation and \d+ s of work on sub-demo02/);
       await clickDialogButton(page, 'Restore and continue');
       await waitForRoute(page, 'annotate');
       assert.equal((await annotations(page)).length, 1);

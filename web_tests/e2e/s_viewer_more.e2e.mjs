@@ -126,8 +126,7 @@ export const tests = [
       await page.click('[data-log="open-next"]');
       await waitForRoute(page, 'open');
       await page.locator('.example-card button').click();
-      await clickDialogButton(page, 'Restore and continue');
-      await waitForRoute(page, 'annotate');
+      await waitForRoute(page, 'annotate'); // Continue where you left off restores without asking
       await waitForTraces(page);
       assert.equal(await ws(page, (w) => w.viewer.overlay), true, 'the choice is kept in this browser');
       await page.keyboard.press('o');
