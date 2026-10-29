@@ -37,8 +37,41 @@ STAGE_TITLES = {
 STAGE_TEXT = {
     "guided": "Mark each artifact the way the experts did, one at a time, with help and instant feedback.",
     "practice": "Annotate a recording by yourself, then see your score and what you missed.",
-    "assessment": "Annotate without feedback. Your result is shown when every recording is done.",
+    "assessment": "Annotate without feedback. Your result appears here when every recording is done.",
 }
+#: What the practice score measures, in plain words (the score is the event F1 of the agreement analysis).
+SCORE_EXPLAINED = ("The score is highest when you find every artifact the experts marked, with the right type, "
+                   "and make no marks they did not make; each missed artifact, extra mark or wrong type lowers it.")
+#: The assessment's result on the training path, by the competency report's status.
+ASSESSMENT_RESULTS = ("met", "not_met", "not_determined")
+
+
+def percent(value: float) -> str:
+    """78% for 0.78, rounded as the browser rounds (Math.round), so both say the same."""
+    return f"{math.floor(value * 100 + 0.5):.0f}%"
+
+
+def _plural(n: int, one: str, many: str | None = None) -> str:
+    return f"{n} {one if n == 1 else (many or one + 's')}"
+
+
+def score_sentence(counts: dict[str, Any]) -> str:
+    """What a practice score is made of, in plain words ("You found 7 of the experts' 8 artifacts and
+    made 3 marks they did not make."), from the counts of ``PassRule.evaluate``. The same words as the
+    browser's ``scoreSentence`` (js/training/scoring.js)."""
+    n_ref, n_you = int(counts.get("reference_events", 0)), int(counts.get("your_events", 0))
+    found, extra = int(counts.get("found", 0)), int(counts.get("extra", 0))
+    if n_ref == 0:
+        if n_you == 0:
+            return "The experts marked no artifacts in this recording, and neither did you."
+        return f"The experts marked no artifacts in this recording; you made {_plural(n_you, 'mark')}."
+    extra_text = "no marks they did not make" if extra == 0 else (
+        f"{_plural(extra, 'mark')} they did not make")
+    text = f"You found {found} of the experts' {_plural(n_ref, 'artifact')} and made {extra_text}."
+    other = int(counts.get("other_type", 0))
+    if other:
+        text += f" {other} of the {found} you found {'has' if other == 1 else 'have'} another type than theirs."
+    return text
 
 
 @dataclass(frozen=True)
@@ -62,15 +95,19 @@ class PassRule:
         return rule
 
     def describe(self) -> str:
-        if self.event_f1 == self.label_accuracy:
-            return f"{self.event_f1:.0%} for finding the artifacts and for their types"
-        return f"{self.event_f1:.0%} for finding the artifacts and {self.label_accuracy:.0%} for their types"
+        """The pass mark in plain words (the same as the browser's ``describePassRule``)."""
+        return (f"a score of at least {percent(self.event_f1)} and the right type for at least "
+                f"{percent(self.label_accuracy)} of the artifacts you find")
 
     def evaluate(self, feedback: dict[str, Any]) -> dict[str, Any]:
-        """Apply the rule to practice feedback (training.assessment.practice_feedback)."""
+        """Apply the rule to practice feedback (training.assessment.practice_feedback). The result
+        also counts what the score is made of (``score_sentence``)."""
         overall = feedback.get("overall", {})
         n_ref = sum(c.get("reference_events", 0) for c in feedback.get("per_category", []))
         n_you = sum(c.get("your_events", 0) for c in feedback.get("per_category", []))
+        counts = {"reference_events": int(n_ref), "your_events": int(n_you),
+                  "found": max(0, int(n_ref) - len(feedback.get("missed", []))),
+                  "extra": len(feedback.get("extra", [])), "other_type": len(feedback.get("label_differences", []))}
         f1 = _num(overall.get("event_f1"))
         acc = _num(overall.get("label_accuracy"))
         if n_ref == 0 and n_you == 0:  # a clean recording left clean is a perfect result
@@ -81,7 +118,29 @@ class PassRule:
             acc = 0.0
         f1 = 0.0 if f1 is None else f1
         passed = f1 >= self.event_f1 and acc >= self.label_accuracy
-        return {"event_f1": f1, "label_accuracy": acc, "passed": passed, "rule": self.to_dict()}
+        return {"event_f1": f1, "label_accuracy": acc, "passed": passed, "rule": self.to_dict(), **counts}
+
+
+def practice_detail(best: dict[str, Any] | None, rule: PassRule, passed: bool) -> str:
+    """The practice stage's line on the training path: the best score so far and the pass mark
+    (the same words as the browser's ``practiceDetail``)."""
+    need = f"To pass, you need {rule.describe()}."
+    if best is None:
+        return need
+    text = (f"Best score: {percent(float(best.get('event_f1') or 0.0))}, with the right type for "
+            f"{percent(float(best.get('label_accuracy') or 0.0))} of the artifacts found.")
+    if "reference_events" in best:
+        text += " " + score_sentence(best)
+    return f"{text} {'Passed.' if passed else need}"
+
+
+def practice_verdict(passed: bool, rule: PassRule, n_practice: int, unlocked: str = "") -> str:
+    """The verdict at the top of a practice review (the same words as the browser's ``practiceVerdict``)."""
+    if passed:
+        return f"Passed: you reached the pass mark, {rule.describe()}.{(' ' + unlocked) if unlocked else ''}"
+    again = ("then try this recording again from your training path" if n_practice <= 1
+             else "then go on from your training path to another practice recording")
+    return f"Not yet: you need {rule.describe()}. Look at what you missed below, {again}."
 
 
 def _num(value: Any) -> float | None:
@@ -219,6 +278,7 @@ class StageState:
     max_stars: int = 0
     seconds: float = 0.0
     detail: str = ""  # a line about results (best score, assessment result)
+    result: str = ""  # the assessment's result (ASSESSMENT_RESULTS); practice: "passed" or "not_passed"
 
     @property
     def unlocked(self) -> bool:
@@ -230,7 +290,7 @@ class StageState:
 
     def to_log(self) -> dict[str, Any]:
         return {"stage": self.key, "status": self.status, "done": self.done, "total": self.total,
-                "stars": self.stars, "max_stars": self.max_stars, "detail": self.detail}
+                "stars": self.stars, "max_stars": self.max_stars, "detail": self.detail, "result": self.result}
 
 
 @dataclass
@@ -258,9 +318,10 @@ Completed = Callable[[str, str, str], set[str]]
 
 def programme_state(layout: OutputLayout | None, rs: ReferenceSet, annotator_id: str,
                     progress: Progress | None = None, *, completed: Completed | None = None,
-                    report_text: Callable[[], str] | None = None) -> list[StageState]:
-    """The three stages for one trainee. The web server's Firestore store passes ``progress``,
-    ``completed`` and ``report_text`` (the competency result's sentence) instead of a results folder."""
+                    report: Callable[[], dict[str, Any]] | None = None) -> list[StageState]:
+    """The three stages for one trainee. The web server's stores pass ``progress``, ``completed``
+    and ``report`` (the competency report's ``status`` and ``status_text``, {} without one) instead
+    of a results folder."""
     prog = progress if progress is not None else load_progress(layout, rs, annotator_id)
 
     def completed_in(layout: OutputLayout | None, annotator_id: str, mode: str, set_id: str) -> set[str]:
@@ -296,12 +357,10 @@ def programme_state(layout: OutputLayout | None, rs: ReferenceSet, annotator_id:
         status = "completed"
     else:
         status = "in_progress" if prog.practice else "available"
-    detail = f"You need {rule.describe()}."
-    if best is not None:
-        detail = (f"Best: {best.get('event_f1', 0):.0%} found, {best.get('label_accuracy', 0):.0%} right type. "
-                  + ("Passed." if passed else f"You need {rule.describe()}."))
+    detail = practice_detail(best, rule, passed)
     out.append(StageState("practice", STAGE_TITLES["practice"], STAGE_TEXT["practice"], status, len(p_done),
-                          len(p_total), seconds=p_seconds, detail=detail))
+                          len(p_total), seconds=p_seconds, detail=detail,
+                          result="" if best is None else ("passed" if passed else "not_passed")))
     # Stage 3
     a_total = rs.assessment_recordings
     a_done = completed_in(layout, annotator_id, "assessment", rs.set_id) & set(a_total)
@@ -313,18 +372,39 @@ def programme_state(layout: OutputLayout | None, rs: ReferenceSet, annotator_id:
         status = "completed"
     else:
         status = "in_progress" if a_done else "available"
-    a_detail = ""
-    if status == "completed" and report_text is not None:
-        a_detail = report_text()
+    rep: dict[str, Any] = {}
+    if status == "completed" and report is not None:
+        rep = dict(report() or {})
     elif status == "completed" and layout is not None:
-        report = layout.root / "training" / rs.set_id / "reports" / f"annotator-{annotator_id}_competency_report.json"
+        path = layout.root / "training" / rs.set_id / "reports" / f"annotator-{annotator_id}_competency_report.json"
         try:
-            a_detail = str(json.loads(report.read_text(encoding="utf-8")).get("status_text", ""))
+            rep = dict(json.loads(path.read_text(encoding="utf-8")))
         except (OSError, ValueError):
-            a_detail = ""
+            rep = {}
+    a_result, a_detail = assessment_result(rep) if status == "completed" else ("", "")
     out.append(StageState("assessment", STAGE_TITLES["assessment"], STAGE_TEXT["assessment"], status, len(a_done),
-                          len(a_total), detail=a_detail))
+                          len(a_total), detail=a_detail, result=a_result))
     return out
+
+
+#: What the trainee does next after the assessment, by its result (the competency report's
+#: ``NEXT_STEPS``, kept here so that the training path needs no analysis code).
+ASSESSMENT_NEXT = {
+    "met": "Your study administrator will confirm what happens next.",
+    "not_met": "Please talk to your study administrator, who can go through the results with you and suggest "
+               "further practice before you take the assessment again.",
+    "not_determined": "Your study administrator will look at the results and tell you what happens next.",
+}
+
+
+def assessment_result(report: dict[str, Any]) -> tuple[str, str]:
+    """The result of a finished assessment and its line on the training path, from the competency
+    report: ``met``, ``not_met`` or ``not_determined`` (also when there is no report yet)."""
+    status = str(report.get("status") or "")
+    if status not in ("met", "not_met"):
+        status = "not_determined"
+    text = str(report.get("status_text") or "") or "Your result is not available yet."
+    return status, f"{text} {ASSESSMENT_NEXT[status]}"
 
 
 def next_step(layout: OutputLayout | None, rs: ReferenceSet, annotator_id: str, states: list[StageState],
@@ -350,15 +430,32 @@ def next_step(layout: OutputLayout | None, rs: ReferenceSet, annotator_id: str, 
             n = rs.practice_recordings.index(left[0]) + 1
             return NextStep("practice", left[0], label="Start a practice recording",
                             text=f"Next: {STAGE_TITLES['practice']}, practice recording {n} of {len(rs.practice_recordings)}.")
-        # Every practice recording was done without passing: try the best-scoring one again.
+        # Every practice recording was done without passing: the one practised longest ago comes
+        # again, so that the answers the trainee has just seen in a review are not the next test.
         prog = progress if progress is not None else load_progress(layout, rs, annotator_id)
-        tried = sorted(rs.practice_recordings,
-                       key=lambda r: max((a.get("event_f1", 0.0) for a in prog.practice.get(r, [])), default=0.0))
-        rid = tried[0] if tried else rs.practice_recordings[0]
-        return NextStep("practice", rid, repeat=True, label="Try a practice recording again",
-                        text="Not passed yet. Try a practice recording again; the review shows what you missed.")
+        rid = retry_recording(rs.practice_recordings, prog.practice)
+        if len(rs.practice_recordings) == 1:
+            return NextStep("practice", rid, repeat=True, label="Try the practice recording again",
+                            text="Not passed yet. Try the practice recording again, looking out for what "
+                                 "its review showed you.")
+        n = rs.practice_recordings.index(rid) + 1
+        return NextStep("practice", rid, repeat=True, label=f"Try practice recording {n} again",
+                        text=f"Not passed yet. Try practice recording {n} of {len(rs.practice_recordings)} again, "
+                             "the one you did longest ago.")
     a = by_key["assessment"]
     if a.unlocked and not a.finished:
         return NextStep("assessment", None, label="Start the assessment",
                         text=f"Next: {STAGE_TITLES['assessment']}.")
+    if a.status == "completed" and a.result != "met":
+        return NextStep(None, label="Training complete",
+                        text="You have done every stage of this training programme. " + ASSESSMENT_NEXT.get(
+                            a.result, ASSESSMENT_NEXT["not_determined"]))
     return NextStep(None, label="Training complete", text="You have completed every stage of this training programme.")
+
+
+def retry_recording(recordings: list[str], attempts: dict[str, list[dict[str, Any]]]) -> str:
+    """The practice recording to try again: the one practised longest ago (never tried first), so
+    that the trainee does not repeat, from memory, the answers a review has just shown."""
+    def last(rid: str) -> str:
+        return max((str(a.get("completed_at") or "") for a in attempts.get(rid, [])), default="")
+    return min(recordings, key=lambda r: (last(r), recordings.index(r)))

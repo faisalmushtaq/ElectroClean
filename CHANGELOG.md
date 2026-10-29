@@ -5,11 +5,62 @@ Each section below describes the changes in one version of ElectroTag;
 
 ## Unreleased
 
+The guided coach of the training programme now says exactly what to do with the
+controls in front of the trainee. Each step lists its actions on lines of their
+own: press the type's number (or click the numbered button next to Draw as),
+make sure Whole montage or Selected channels is chosen and click the channel
+names at the left of the EEG, then drag across the artifact. The feedback says
+how to put each problem right with the controls there are: select your
+annotation and press the right number for its type, drag the left or right edge
+one way or the other for its timing (the lines now start "Start:" and "End:"
+rather than "Almost:"), and right-click it for Edit channels… or Apply to whole
+montage, or hold Shift and click it on a channel to take that channel off; each
+fix changes the annotation already there. The server and the demonstration give
+the same words (`step_text` in `electrotag/training/guided.py` and `stepBody` in
+`js/training/rules.js`, checked against each other), and on a touch screen the
+coach turns them into taps, press and hold and the buttons on screen
+(`touchWords` in `js/training/rules.js`). Show me has a key, H; when the coach
+holds more than fits, a More below line under it scrolls on; and the Help tab of
+a training recording starts with a section on the coach, the stars and the
+practice score, with its key table no longer squeezed into half the panel. A
+guided step's time, kept as research data, now leaves out the time the recording
+was closed: it runs to the trainee's last action before closing and on again
+from reopening, on the server and in the demonstration.
+
 The example recordings' eye movements now appear where real ones would: largest
 on the horizontal EOG and at F7 and F8 with opposite signs on the two sides,
 smaller at Fp1 and Fp2 and fading further back, and the experts' reference marks
 them on Fp1, Fp2, F7, F8 and HEOG (the kept registrations of the example set and
-the example outputs in `examples/example_output` were made again).
+the example outputs in `examples/example_output` were made again). The example
+set's guided notes now tell trainees what each simulated artifact looks like and
+why it is marked on those channels; the hint to replace them with the experts'
+explanations is in the admin area's Guided notes, and the server's example set
+is called *Example training set (simulated)*.
+
+The practice result now says how the trainee did in plain words, the same from
+the study server and in the demonstration: the verdict, the score with what it
+is made of ("You found 7 of the experts' 8 artifacts and made 3 marks they did
+not make"), what the score measures and then What to look at, with the figures
+behind the score (sensitivity, precision and the rest) behind a disclosure. The
+practice result's `summary_html` gave way to `counts`, `verdict` and `summary`
+(docs/web/api.md). The pass mark reads "a score of at least 80% and the right
+type for at least 80% of the artifacts you find", and the practice stage of the
+training path gives the best score in the same words, under the chip Not passed
+yet until it is passed; practice recordings are counted as tried. The labels of
+the review on the EEG are shorter, You, Experts, Missed, Extra and "Should be
+…", so that neighbouring ones no longer run into each other. When every practice
+recording has been tried without a pass, the one practised longest ago comes
+again rather than the one just reviewed, and with a single practice recording the
+words say to try that recording again. The training path now shows each stage's
+results: a finished assessment shows its result (Criteria met, Criteria not met
+yet, or Result to come) with what happens next, and only a met result has the
+tick; a stage the programme does not use is marked Not included. Once every
+stage is done, signing in opens the home page with Open next recording, the
+training path's button is Go to my recordings, the home page counts the study's
+recordings apart from the training ones and keeps a line back to the training
+path (`GET /me` gives `programme.complete`). The page for opening a training
+recording names its stage and says that the study team sends the training
+recordings.
 
 The activity analysis (`electrotag-activity` and the admin area) now counts
 confidence ratings, notes, problem reports and the feedback on reviewed work.

@@ -66,7 +66,7 @@ def create_example_training_set(dataset_root: Path | str, study: object = None, 
         raise ReferenceSetError(f"Reference set {set_id} already exists; remove its folder to create it again")
     rs = ReferenceSet.create(
         base, set_id,
-        name="Example training set (placeholder)",
+        name="Example training set (simulated)",
         description=("Simulated recordings standing in for real expert-annotated files: two to learn with the "
                      "experts and one to practise on. Replace them with your experts' recordings."),
         created_by="ElectroTag (example)", method="single_expert", experts=[EXAMPLE_EXPERT],

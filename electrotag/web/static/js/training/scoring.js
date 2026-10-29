@@ -141,6 +141,9 @@ export function practiceFeedback(reference, mine, { iouThreshold = DEFAULT_IOU, 
   return {
     passed,
     pass_rule: describePassRule(passRule),
+    score: { event_f1: f, label_accuracy: acc },
+    counts: { reference_events: nRef, your_events: nYou, found: any.pairs.length, extra: any.unmatchedTest.length,
+      other_type: any.pairs.length - same },
     metrics: { event_f1: f, event_recall: recall, event_precision: precision, label_accuracy: acc,
       reference_events: nRef, your_events: nYou, found: any.pairs.length },
     flags,
@@ -148,8 +151,56 @@ export function practiceFeedback(reference, mine, { iouThreshold = DEFAULT_IOU, 
   };
 }
 
+/** 78% for 0.78 (as electrotag/training/programme.py percent). */
+export function percent(v) { return `${Math.round(v * 100)}%`; }
+
+const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/** What the practice score measures, in plain words (programme.py SCORE_EXPLAINED). */
+export const SCORE_EXPLAINED = 'The score is highest when you find every artifact the experts marked, with the right type, ' +
+  'and make no marks they did not make; each missed artifact, extra mark or wrong type lowers it.';
+
+/** The pass mark in plain words (programme.py PassRule.describe). */
 export function describePassRule(rule) {
-  const pc = (v) => `${Math.round(v * 100)}%`;
-  if (rule.event_f1 === rule.label_accuracy) return `${pc(rule.event_f1)} for finding the artifacts and for their types`;
-  return `${pc(rule.event_f1)} for finding the artifacts and ${pc(rule.label_accuracy)} for their types`;
+  return `a score of at least ${percent(rule.event_f1)} and the right type for at least ${percent(rule.label_accuracy)} of the artifacts you find`;
+}
+
+/** What a practice score is made of, from its counts (programme.py score_sentence). */
+export function scoreSentence(c) {
+  const nRef = c.reference_events || 0;
+  const nYou = c.your_events || 0;
+  const found = c.found || 0;
+  const extra = c.extra || 0;
+  if (!nRef) {
+    if (!nYou) return 'The experts marked no artifacts in this recording, and neither did you.';
+    return `The experts marked no artifacts in this recording; you made ${plural(nYou, 'mark')}.`;
+  }
+  const extraText = extra === 0 ? 'no marks they did not make' : `${plural(extra, 'mark')} they did not make`;
+  let text = `You found ${found} of the experts' ${plural(nRef, 'artifact')} and made ${extraText}.`;
+  const other = c.other_type || 0;
+  if (other) text += ` ${other} of the ${found} you found ${other === 1 ? 'has' : 'have'} another type than theirs.`;
+  return text;
+}
+
+/** The practice stage's line on the training path (programme.py practice_detail). */
+export function practiceDetail(best, rule, passed) {
+  const need = `To pass, you need ${describePassRule(rule)}.`;
+  if (!best) return need;
+  let text = `Best score: ${percent(best.event_f1 || 0)}, with the right type for ${percent(best.label_accuracy || 0)} of the artifacts found.`;
+  if (best.reference_events !== undefined) text += ` ${scoreSentence(best)}`;
+  return `${text} ${passed ? 'Passed.' : need}`;
+}
+
+/** The verdict at the top of a practice review (programme.py practice_verdict). */
+export function practiceVerdict(passed, rule, nPractice, unlocked = '') {
+  if (passed) return `Passed: you reached the pass mark, ${describePassRule(rule)}.${unlocked ? ` ${unlocked}` : ''}`;
+  const again = nPractice <= 1 ? 'then try this recording again from your training path'
+    : 'then go on from your training path to another practice recording';
+  return `Not yet: you need ${describePassRule(rule)}. Look at what you missed below, ${again}.`;
+}
+
+/** The practice recording to try again: the one practised longest ago (programme.py retry_recording). */
+export function retryRecording(recordings, attempts) {
+  const last = (rid) => (attempts[rid] || []).reduce((m, a) => (String(a.completed_at || '') > m ? String(a.completed_at || '') : m), '');
+  return recordings.reduce((best, r) => (last(r) < last(best) ? r : best), recordings[0]);
 }

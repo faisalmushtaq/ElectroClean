@@ -229,9 +229,12 @@ export class App {
     const back = this._adminReturn;
     this._adminReturn = null;
     if (this.isAdmin && (ADMIN_ROUTE.test(want) || !want || want === 'signin')) await this.showAdmin(ADMIN_ROUTE.test(want) ? want : back || 'admin');
-    else if (this.me.programme && (!want || want === 'signin' || want === 'training' || quiet)) await this.showTraining();
+    else if (this.inTraining() && (!want || want === 'signin' || want === 'training' || quiet)) await this.showTraining();
     else this.showHome();
   }
+
+  /** A trainee with stages still to do (once training is complete, home and its next recording come first). */
+  inTraining() { return Boolean(this.me && this.me.programme && !this.me.programme.complete); }
 
   async loadAssignments() {
     const games = this.loadAchievements();
@@ -466,6 +469,7 @@ export class App {
       this._render(h('div.view', {}, appHeader(this), h('main.page', {}, h('h1', {}, 'Training programme'), h('p.banner', {}, `The training path could not be loaded: ${exc.message}`))), 'training');
       return;
     }
+    if (this.me && this.me.programme) this.me.programme.complete = !data.next;
     logger.event('training_path_opened', { reference_set: data.set_id, stages: data.stages.map((s) => ({ key: s.key, status: s.status, done: s.done, total: s.total })),
       next_stage: data.next ? data.next.stage : null, next_recording: data.next ? data.next.recording_id : null, message });
     this._fromTraining = true;
@@ -823,7 +827,7 @@ export class App {
       await this.showTraining();
       return;
     }
-    if (this.me.programme) { this.pathMessage = 'Recording saved.'; await this.showTraining(); return; }
+    if (this.me.programme && s.contextId === this.me.programme.set_id) { this.pathMessage = 'Recording saved.'; await this.showTraining(); return; }
     const next = result.next ? (this.assignments.items || []).find((i) => i.recording_id === result.next) : null;
     const demo = this.backend.isDemo ? `\n\n${DEMO_NOTICE}` : '';
     const milestone = reached.length ? `\n\nMilestone reached: ${reached.map((m) => m.name).join(', ')}.` : '';
@@ -874,7 +878,7 @@ export class App {
       return;
     }
     await this.loadAssignments();
-    if (this.me && this.me.programme) await this.showTraining();
+    if (this.inTraining()) await this.showTraining();
     else this.showHome();
   }
 

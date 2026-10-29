@@ -136,6 +136,7 @@ annotations for the study's researchers.</p>
 <tr><td><kbd>U</kbd></td><td>the next part not yet viewed</td></tr>
 <tr><td><kbd>G</kbd></td><td>go to a time</td></tr>
 <tr><td><kbd>V</kbd> / <kbd>O</kbd> / <kbd>I</kbd></td><td>value under the pointer / overlay / one channel alone</td></tr>
+<tr><td><kbd>H</kbd></td><td>in guided training: Show me</td></tr>
 <tr><td><kbd>?</kbd></td><td>this help</td></tr>
 </table>
 
@@ -154,7 +155,34 @@ you close the page you can continue later, where you left off; the recording is 
 it is saved with Save and Finish.</p>
 `;
 
-/** The Help tab: on a touch screen the touch section comes first, elsewhere just before Finishing. */
-export function helpHtml(touch) {
-  return touch ? TOUCH_HELP_HTML + HELP_HTML : HELP_HTML.replace('<h3>Finishing</h3>', `${TOUCH_HELP_HTML}<h3>Finishing</h3>`);
+/** The help's section for the training programme (guided and practice recordings), first in their Help tab. */
+export const TRAINING_HELP_HTML = `
+<h3>Training</h3>
+<p>In <b>Learn with the experts</b> the coach above shows the experts' annotations one at a time and
+says how to mark each one: choose its type (a number key, or the numbered buttons next to Draw as),
+choose its channels (<b>Whole montage</b>, or <b>Selected channels</b> and a click on each channel
+name at the left of the EEG), then drag across the EEG. It checks your work after every change and
+says what to put right. Press <b>Continue</b> (<kbd>Enter</kbd> or <kbd>Space</kbd>) when it
+matches, or <b>Show me</b> (<kbd>H</kbd>) to have the experts' annotation placed for you. When the
+coach holds more than it shows, <b>More below</b> under it scrolls on.</p>
+<p><b>Stars</b> show how you are getting on: three for an artifact matched at the first try, two
+within three tries, and one after more tries or with Show me. They are there to show your
+progress; passing depends on the practice score below.</p>
+<p>In <b>On your own</b> you annotate a practice recording without help. After Save and Finish your
+<b>score</b> compares your annotations with the experts': it is highest when you find every artifact
+they marked, with the right type, and make no marks they did not make, and each missed artifact,
+extra mark or wrong type lowers it. To pass, the score and the share of the artifacts you found that
+have the right type must each reach the pass mark, which the review states. The review labels your
+annotations <i>You</i> and the experts' <i>Experts</i>, marks each difference on the EEG
+(<i>Missed</i>, <i>Extra</i>, <i>Should be …</i>) and lists it under What to look at, where
+<kbd>N</kbd> and <kbd>P</kbd> step through them. If you do not pass, your training path offers a
+practice recording again: another one when there are several, so that you do not repeat answers you
+have just seen.</p>
+`;
+
+/** The Help tab: on a touch screen the touch section comes first, elsewhere just before Finishing; in
+ *  training, the training section comes first of all. */
+export function helpHtml(touch, { training = false } = {}) {
+  const html = touch ? TOUCH_HELP_HTML + HELP_HTML : HELP_HTML.replace('<h3>Finishing</h3>', `${TOUCH_HELP_HTML}<h3>Finishing</h3>`);
+  return training ? TRAINING_HELP_HTML + html : html;
 }

@@ -25,7 +25,15 @@ from electrotag.training.guided import (
     extras,
     stars_for,
 )
-from electrotag.training.programme import PassRule
+from electrotag.training.programme import (
+    PassRule,
+    Progress,
+    StageState,
+    assessment_result,
+    next_step,
+    retry_recording,
+    score_sentence,
+)
 from electrotag.training.reference import (
     ReferenceSet,
     import_expert_recording,
@@ -62,11 +70,14 @@ def test_each_rule_gives_specific_feedback():
     assert ok.matched and ok.messages == ["Right type, timing and channels."]
     wrong = check_step(blink, [ann("EMG-artifact", 4.0, 0.4, ("Fp1", "Fp2", "VEOG"))], SF, tol, quick_keys=keys)
     assert wrong.problems == ["type"]
-    assert "marked this as an Eye-blink-artifact (press 1); yours is an EMG-artifact" in wrong.messages[0]
+    assert ("marked this as an Eye-blink-artifact; yours is an EMG-artifact. Click your annotation to select it, "
+            "then press 1") in wrong.messages[0]
     early = check_step(blink, [ann("Eye-blink-artifact", 3.6, 0.8, ("Fp1", "Fp2", "VEOG"))], SF, tol)
-    assert early.problems == ["start"] and "the start is 0.40 s too early" in early.messages[0]
+    assert early.problems == ["start"]
+    assert early.messages[0].startswith("Start: 0.40 s too early. Drag the left edge")
     late_end = check_step(blink, [ann("Eye-blink-artifact", 4.0, 0.9, ("Fp1", "Fp2", "VEOG"))], SF, tol)
-    assert late_end.problems == ["end"] and "the end is 0.50 s too late" in late_end.messages[0]
+    assert late_end.problems == ["end"]
+    assert late_end.messages[0] == "End: 0.50 s too late. Drag the right edge of your annotation to the left."
     whole = check_step(blink, [ann("Eye-blink-artifact", 4.0, 0.4)], SF, tol)
     assert whole.problems == ["scope"] and "on Fp1, Fp2 and VEOG only" in whole.messages[0]
     missing = check_step(blink, [ann("Eye-blink-artifact", 4.0, 0.4, ("Fp1", "Fp2"))], SF, tol)
@@ -117,9 +128,44 @@ def test_pass_rule():
     assert not rule.evaluate(fb)["passed"]
     clean = {"overall": {"event_f1": float("nan"), "label_accuracy": float("nan")}, "per_category": []}
     assert rule.evaluate(clean)["passed"]  # a clean recording left clean
-    assert "80%" in rule.describe()
+    assert rule.describe() == "a score of at least 80% and the right type for at least 80% of the artifacts you find"
     with pytest.raises(ValueError):
         PassRule.from_dict({"event_f1": 2})
+
+
+def test_the_score_is_explained_by_what_it_is_made_of():
+    """7 of 8 found and 3 extra marks: the score (78%) and the counts in one plain sentence."""
+    fb = {"overall": {"event_f1": 14 / 18, "label_accuracy": 1.0},
+          "per_category": [{"reference_events": 8, "your_events": 10}],
+          "missed": [{}], "extra": [{}, {}, {}], "label_differences": []}
+    v = PassRule().evaluate(fb)
+    assert (v["reference_events"], v["your_events"], v["found"], v["extra"], v["other_type"]) == (8, 10, 7, 3, 0)
+    assert not v["passed"]
+    assert score_sentence(v) == "You found 7 of the experts' 8 artifacts and made 3 marks they did not make."
+
+
+def test_a_practice_recording_tried_again_is_the_one_practised_longest_ago():
+    at = [{"completed_at": "2026-01-03T10:00:00"}]
+    assert retry_recording(["a", "b"], {"a": at, "b": [{"completed_at": "2026-01-01T10:00:00"}]}) == "b"
+    assert retry_recording(["a", "b"], {"a": at}) == "b"  # never tried comes first
+    assert retry_recording(["a"], {"a": at}) == "a"
+
+
+def test_a_finished_assessment_shows_its_result(example):
+    _root, rs = example
+    assert assessment_result({"status": "met", "status_text": "Meets the competency criteria."}) == (
+        "met", "Meets the competency criteria. Your study administrator will confirm what happens next.")
+    status, text = assessment_result({"status": "not_met", "status_text": "Does not yet meet the competency criteria."})
+    assert status == "not_met" and "talk to your study administrator" in text
+    assert assessment_result({})[0] == "not_determined"  # no report yet: no pass is shown
+    done = [StageState(k, k, "", "completed") for k in ("guided", "practice")]
+    prog = Progress(Path("unused.json"), "T01", rs.set_id)
+    failed = next_step(None, rs, "T01", done + [StageState("assessment", "", "", "completed", result="not_met")], prog,
+                       completed=lambda *_: set())
+    assert failed.stage is None and "talk to your study administrator" in failed.text
+    passed = next_step(None, rs, "T01", done + [StageState("assessment", "", "", "completed", result="met")], prog,
+                       completed=lambda *_: set())
+    assert passed.text == "You have completed every stage of this training programme."
 
 
 # ------------------------------------------------------------------ the example set
@@ -128,12 +174,17 @@ def test_example_set_is_self_contained_and_never_a_study_recording(example):
     assert rs.self_contained and (rs.directory / "recordings").is_dir()
     assert len(rs.guided_recordings) == 2 and len(rs.practice_recordings) == 1
     assert [rs.guidance_for(r) for r in rs.guided_recordings] == ["show", "find"]
-    assert "placeholder" in rs.name.lower()
+    assert "simulated" in rs.name.lower() and "placeholder" not in rs.name.lower()  # the name reaches trainees
+    assert "Placeholder" in rs.provenance["notes"]  # the set notes, for the study team
     reloaded = ReferenceSet.load(rs.directory)
     notes = reloaded.guided["notes"]
     first = reloaded.reference_document(reloaded.guided_recordings[0])
     assert all(a.annotation_id in notes for a in first.annotations)
-    assert "Placeholder note (simulated data)" in next(iter(notes.values()))
+    # trainees read what the artifact looks like; the authoring hint for the study team is in the admin area
+    assert all(n.startswith("Simulated example. ") and "Replace" not in n for n in notes.values())
+    horizontal = next(a for a in first.annotations if a.label == "Horizontal-eye-movement-artifact")
+    assert set(horizontal.channels) == {"Fp1", "Fp2", "F7", "F8", "HEOG"}  # where the eye movement really shows
+    assert "F7 and F8" in notes[horizontal.annotation_id]
     found = {r.recording_id for r in discover_recordings(rs.recordings_root())}
     assert set(rs.recordings) == found
     assert not any("example" in r.recording_id for r in discover_recordings(root))  # never study work

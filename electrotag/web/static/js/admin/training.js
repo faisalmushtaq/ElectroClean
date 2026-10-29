@@ -192,7 +192,9 @@ export class TrainingSection {
       h('fieldset.admin-fieldset', {}, h('legend', {}, 'Used for'), use), guidanceField,
       h('div.btn-row', {}, save),
       h('h3', {}, 'Guided notes'),
-      h('p.caption', {}, 'The note shown with each of the experts\' annotations while a trainee is guided through the recording.'),
+      h('p.caption', {}, 'The note shown with each of the experts\' annotations while a trainee is guided through the recording: ' +
+        'what the artifact looks like here and why it is marked on these channels. The example set\'s notes describe only the ' +
+        'simulation; replace them with your experts\' explanations when you use real recordings.'),
       h('div.btn-row', {}, notesBtn), notesHost,
       h('h3', {}, 'Remove'), removeHost));
     host.querySelector('h3').tabIndex = -1;

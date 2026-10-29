@@ -218,13 +218,16 @@ export const tests = [
       await saveAndFinish(page);
       await waitForRoute(page, 'review', 30000);
       const review = (await page.textContent('.review')).replace(/\s+/g, ' ');
-      assert.match(review, /Not yet: you need 80% for finding the artifacts and for their types/);
-      assert.match(review, /You found 0 of 15 reference artifacts/);
+      // the same plain words as the demonstration, with the statistics behind a disclosure
+      assert.match(review, /Not yet: you need a score of at least 80% and the right type for at least 80% of the artifacts you find\. Look at what you missed below, then try this recording again from your training path\./);
+      assert.match(review, /Your score: 0%\. You found 0 of the experts' 15 artifacts and made 1 mark they did not make\./);
+      assert.doesNotMatch(await page.locator('.review').innerText(), /sensitivity|Feedback:/);
       await page.keyboard.press('n');
       assert.match((await page.evaluate(() => globalThis.ElectroTag.debugState())).selection[0], /^(ref|you)-/);
       await page.locator('.ws-actions button.primary').click();
       await waitForRoute(page, 'training');
-      assert.match(await page.locator('[data-stage="practice"]').textContent(), /In progress/);
+      assert.match(await page.locator('[data-stage="practice"]').textContent(), /Not passed yet/);
+      assert.match(await page.locator('[data-stage="practice"]').textContent(), /Best score: 0%, with the right type for 0% of the artifacts found\. You found 0 of the experts' 15 artifacts/);
 
       // Saved as the desktop application saves training work, with the trainee's progress.
       const events = path.join(t.study.dir, 'study', 'Annotated_Events', 'training', 'example');

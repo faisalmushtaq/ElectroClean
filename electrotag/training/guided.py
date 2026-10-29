@@ -107,6 +107,19 @@ def list_words(items: list[str]) -> str:
     return ", ".join(items[:-1]) + " and " + items[-1]
 
 
+def _channels_fix(missing: list[str], extra: list[str]) -> str:
+    """How to put an annotation's channels right with the controls there are (Shift+click on a
+    channel inside an annotation takes it off; Edit channels… adds and takes off)."""
+    if missing:
+        if extra:
+            return (f"Right-click your annotation, choose Edit channels…, tick {list_words(missing)} and untick "
+                    f"{list_words(extra)}.")
+        return f"Right-click your annotation, choose Edit channels… and tick {list_words(missing)}."
+    them = "it" if len(extra) == 1 else "them"
+    return (f"Hold Shift and click your annotation on {list_words(extra)} to take {them} off (or right-click it and "
+            "choose Edit channels…).")
+
+
 @dataclass
 class Check:
     """The result of checking the trainee's work against one step."""
@@ -122,9 +135,61 @@ class Check:
                 "deltas": dict(self.deltas)}
 
 
-def _key_hint(label: str, quick_keys: dict[str, int] | None) -> str:
+def _change_type_hint(label: str, quick_keys: dict[str, int] | None) -> str:
+    """How to change a selected annotation to ``label`` (a number key, or the type finder)."""
     key = (quick_keys or {}).get(label)
-    return f" (press {key})" if key else " (press / and type its name)"
+    return f"press {key} to change its type" if key else f"press / and choose {label}"
+
+
+def choose_type_text(label: str, quick_keys: dict[str, int] | None) -> str:
+    """The first step of marking ``label``: its number key or button, or the type finder."""
+    key = (quick_keys or {}).get(label)
+    if key:
+        return f"Press **{key}** (or click **{key}** next to Draw as) to choose {label}."
+    return f"Press **/**, type {label} and press **Enter** to choose it."
+
+
+SCOPE_EITHER = ("Decide which channels it affects. For all of them, choose **Whole montage** in the toolbar; for "
+                "some, choose **Selected channels** and click their names at the left of the EEG (**C** switches "
+                "between the two).")
+
+
+def scope_text(channels: list[str] | tuple[str, ...]) -> str:
+    """The second step of marking an annotation on the whole montage or on ``channels``."""
+    if not channels:
+        return "Make sure **Whole montage** is chosen in the toolbar (click it, or press **C** to switch)."
+    return (f"Make sure **Selected channels** is chosen in the toolbar (click it, or press **C** to switch), then "
+            f"click the channel names {list_words(list(channels))} at the left of the EEG. Only "
+            f"{'this one' if len(channels) == 1 else 'these'} should be chosen: click a name again to take it off.")
+
+
+def step_text(guidance: str, label: str | None, channels: list[str] | tuple[str, ...],
+              quick_keys: dict[str, int] | None) -> str:
+    """What to do for a step, one line per action (``**`` marks a key or a control to look for).
+
+    The words are those of the browser's ``stepBody`` (js/training/rules.js)."""
+    if guidance == "show" and label:
+        return "\n".join([
+            "The experts' annotation is outlined with a dashed line. To mark it:",
+            "1. " + choose_type_text(label, quick_keys),
+            "2. " + scope_text(channels),
+            "3. Drag across the EEG from the start of the outline to its end (or point at the start and press **M**, "
+            "then at the end and press **M** again).",
+        ])
+    if guidance == "find" and label:
+        return "\n".join([
+            f"There is {article(label)} {label} somewhere on this screen. Find it, then mark it:",
+            "1. " + choose_type_text(label, quick_keys),
+            "2. " + SCOPE_EITHER,
+            "3. Drag across the EEG from where it starts to where it ends.",
+        ])
+    return "\n".join([
+        "Move on to the next artifact (the **right arrow** key, with **Shift** for a whole screen), then mark it:",
+        "1. Choose its type: press its number (the numbers next to Draw as), or press **/** and type its name.",
+        "2. " + SCOPE_EITHER,
+        "3. Drag across the EEG from where it starts to where it ends. The feedback tells you how close you are "
+        "to the experts.",
+    ])
 
 
 def check_step(
@@ -152,8 +217,9 @@ def check_step(
     if not tol.accepts(target.label, cand.label):
         problems.append("type")
         messages.append(
-            f"Type: the experts marked this as {article(target.label)} {target.label}"
-            f"{_key_hint(target.label, quick_keys)}; yours is {article(cand.label)} {cand.label}."
+            f"Type: the experts marked this as {article(target.label)} {target.label}; yours is "
+            f"{article(cand.label)} {cand.label}. Click your annotation to select it, then "
+            f"{_change_type_hint(target.label, quick_keys)}."
         )
     window = tol.window_s(target.duration_samples / sfreq)
     d_start = (cand.onset_sample - target.onset_sample) / sfreq
@@ -162,23 +228,24 @@ def check_step(
                   iou=round(iou(cand, target), 4))
     if abs(d_start) > window:
         problems.append("start")
-        when = "early" if d_start < 0 else "late"
-        messages.append(f"Almost: the start is {abs(d_start):.2f} s too {when}. Drag the left edge to move it.")
+        when, way = ("early", "right") if d_start < 0 else ("late", "left")
+        messages.append(f"Start: {abs(d_start):.2f} s too {when}. Drag the left edge of your annotation to the {way}.")
     if abs(d_end) > window:
         problems.append("end")
-        when = "early" if d_end < 0 else "late"
-        messages.append(f"Almost: the end is {abs(d_end):.2f} s too {when}. Drag the right edge to move it.")
+        when, way = ("early", "right") if d_end < 0 else ("late", "left")
+        messages.append(f"End: {abs(d_end):.2f} s too {when}. Drag the right edge of your annotation to the {way}.")
     if target.is_global and not cand.is_global:
         problems.append("scope")
         messages.append(
-            "Channels: the experts marked this on the whole montage. Right-click it and choose "
-            "Apply to whole montage, or switch to Whole montage (C) and mark it again."
+            "Channels: the experts marked this on the whole montage. Right-click your annotation and choose "
+            "Apply to whole montage."
         )
     elif not target.is_global and cand.is_global:
         problems.append("scope")
+        names = list_words(list(target.channels))
         messages.append(
-            f"Channels: the experts marked this on {list_words(list(target.channels))} only. Right-click it and "
-            "choose Edit channels…, or choose those channels (Selected channels, C) and mark it again."
+            f"Channels: the experts marked this on {names} only. Right-click your annotation, choose Edit "
+            f"channels…, then choose Only these channels and tick {names}."
         )
     elif not target.is_global:
         jac = channel_jaccard(cand, target)
@@ -194,7 +261,7 @@ def check_step(
                 parts.append(f"{list_words(extra)} {'is' if len(extra) == 1 else 'are'} not part of it")
             messages.append(
                 f"Channels: the experts marked this on {list_words(list(target.channels))}; "
-                + "; ".join(parts) + ". Shift+click a channel inside the annotation to add or remove it."
+                + "; ".join(parts) + ". " + _channels_fix(missing, extra)
             )
     if problems:
         return Check(False, cand.annotation_id, problems, messages, deltas)
@@ -241,9 +308,46 @@ def describe_target(target: ArtifactAnnotation, sfreq: float) -> str:
     return (f"{target.label}, {target.onset_sample / sfreq:.2f}–{target.end_sample / sfreq:.2f} s, {where}")
 
 
+#: What the example set's simulated artifacts look like and why the experts marked them where they did
+#: (true by construction of electrotag/synthetic.py and js/data/synthetic.js). ``{where}`` is the
+#: channels marked, ``{duration}`` the length.
+EXAMPLE_NOTES = {
+    "Eye-blink-artifact": (
+        "A blink: the eyelid sliding over the eye changes the eye's electrical field, which the electrodes "
+        "nearest the eyes pick up most. It shows as one smooth deflection of {duration} on {where}, and more "
+        "weakly on F3, Fz and F4 behind them."),
+    "Horizontal-eye-movement-artifact": (
+        "A look to the side: the eye's electrical field swings sideways, so the two sides of the head change "
+        "in opposite directions. It is largest on the horizontal EOG and at F7 and F8, beside the eyes, "
+        "smaller at Fp1 and Fp2 above them, and fades further back. It lasts {duration}; mark it on {where}."),
+    "Slow-eye-movement-artifact": (
+        "A slow eye movement, as when drowsy: slow waves of opposite sign on the two sides of the head over "
+        "{duration}, largest on the horizontal EOG and at F7 and F8, smaller at Fp1 and Fp2. Mark it on "
+        "{where}."),
+    "EMG-artifact": (
+        "Muscle activity: fast, irregular activity that starts and stops abruptly, on {where} (over the jaw "
+        "and temple muscles) for {duration}."),
+    "Chewing-artifact": (
+        "Chewing: bursts of fast muscle activity on {where}, over the jaw muscles, that repeat about one and a "
+        "half times a second for {duration}."),
+    "Electrode-pops-artifact": (
+        "An electrode pop: a sudden jump on {where} alone that dies away within a fraction of a second. No "
+        "neighbouring channel shows it, which tells it apart from brain activity."),
+    "Movement-artifact": (
+        "Movement: a large, slow shift on every channel at once for {duration}, so it is marked on the whole "
+        "montage."),
+    "ECG-artifact": (
+        "The heartbeat: sharp spikes on {where} at the rate of the beats on the ECG channel, for {duration}."),
+}
+
+
 def example_note(label: str, duration_s: float, channels: tuple[str, ...]) -> str:
-    """A placeholder note that is true by construction for a simulated artifact."""
-    kind = " ".join(w if w.isupper() else w.lower() for w in label.replace("-artifact", "").split("-"))  # EMG stays EMG
+    """The note of a simulated artifact in the example set, for trainees: what it looks like and where
+    it is marked (the authoring hint for the study team is in the admin area)."""
     where = "every channel" if not channels else list_words(list(channels))
-    return (f"Placeholder note (simulated data): this is a simulated {kind} artifact on {where}, lasting "
-            f"{duration_s:.2f} s. Replace it with your experts' explanation.")
+    duration = f"{duration_s:.2f} s"
+    text = EXAMPLE_NOTES.get(label)
+    if text is None:
+        kind = " ".join(w if w.isupper() else w.lower() for w in label.replace("-artifact", "").split("-"))
+        text = article(kind).capitalize() + " " + kind + " artifact on {where}, lasting {duration}."
+    return "Simulated example. " + text.format(where=where, duration=duration)

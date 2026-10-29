@@ -175,7 +175,13 @@ for the experts to annotate them in the study and for the admin area to turn the
 annotations into references, or a consensus of them (the Training section of
 [docs/web/admin.md](docs/web/admin.md)); the [administrator guide](docs/administrator_guide.md)
 ("Real expert files") describes the same with `electrotag-admin` in a folder. Once the real set
-works, remove the example set.
+works, remove the example set. Its guided notes tell trainees what each simulated artifact looks like
+and why it is marked on those channels; real sets need the experts' own explanations, written in the
+admin area's Guided notes. The words trainees read about their practice score and the training path
+are built twice, in `electrotag/training/programme.py` for the study and in
+`js/training/scoring.js` for the demonstration, and `web_tests/practice_parity.py` keeps them the
+same. Real study recordings can still be opened before training is complete; making a passed
+assessment a condition for study work belongs to the planned five-stage training path.
 
 **2. Versions and releases.** `__version__` is still `1.1.0`, and the *Unreleased* section of
 [CHANGELOG.md](CHANGELOG.md) describes everything since. With the desktop applications gone there is

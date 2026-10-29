@@ -6,8 +6,9 @@
 import { h, clear, richText } from '../ui/dom.js';
 import { inform } from '../ui/dialog.js';
 import { logger } from '../log/logger.js';
-import { overlaps, stepBody, STARS_FIRST } from './rules.js';
-import { starIcons } from '../views/common.js';
+import { overlaps, stepBody, touchWords, STARS_FIRST } from './rules.js';
+import { touchFirst } from '../util.js';
+import { icon, starIcons } from '../views/common.js';
 import { DEMO_NOTICE } from '../api/notice.js';
 
 export function minutesText(seconds) {
@@ -58,15 +59,35 @@ export class GuidedCoach {
     this.description = h('p.caption.coach-description');
     this.note = h('p.note.coach-note');
     this.starsEl = h('p.caption.coach-stars');
-    this.showMeBtn = h('button.btn.quiet', { type: 'button', title: "Place the experts' annotation for you (this step then earns one star)", onclick: () => this.showMe() }, 'Show me');
-    this.continueBtn = h('button.btn.primary', { type: 'button', title: 'Go on to the next artifact (Enter or Space)', disabled: true, onclick: () => this.continue() }, 'Continue');
-    // The buttons never take the keyboard focus, so Space and Enter stay the view's own keys.
+    this.showMeBtn = h('button.btn.quiet', { type: 'button', title: "Place the experts' annotation for you (H; this step then earns one star)", 'aria-keyshortcuts': 'H', onclick: () => this.showMe() }, 'Show me');
+    this.continueBtn = h('button.btn.primary', { type: 'button', title: 'Go on to the next artifact (Enter or Space)', 'aria-keyshortcuts': 'Enter Space', disabled: true, onclick: () => this.continue() }, 'Continue');
+    // The buttons never take the keyboard focus, so Space and Enter stay the view's own keys; the keys
+    // reach both (H for Show me, Enter or Space for Continue).
     for (const b of [this.showMeBtn, this.continueBtn]) { b.tabIndex = -1; b.addEventListener('mousedown', (e) => e.preventDefault()); }
+    this.scroller = h('div.coach-scroll', { onscroll: () => this._updateMore() }, this.header, this.progress, this.title, this.feedback, this.body,
+      this.description, this.note, this.starsEl, this.backend.isDemo ? h('p.caption.demo-note', {}, DEMO_NOTICE) : null);
+    // When the panel holds more than it shows, a line under it says so and scrolls on when clicked.
+    this.more = h('button.btn.quiet.small.coach-more', { type: 'button', hidden: true, 'data-log': 'coach-more',
+      onclick: () => this.scroller.scrollBy({ top: this.scroller.clientHeight * 0.8 }) }, icon('arrow-down'), 'More below');
+    this.more.tabIndex = -1;
+    this.more.addEventListener('mousedown', (e) => e.preventDefault());
     this.el = h('section.coach.card', { 'aria-label': 'Learn with the experts' },
-      h('div.coach-scroll', {}, this.header, this.progress, this.title, this.feedback, this.body, this.description, this.note, this.starsEl,
-        this.backend.isDemo ? h('p.caption.demo-note', {}, DEMO_NOTICE) : null),
-      h('div.coach-buttons', {}, this.showMeBtn, this.continueBtn));
+      this.scroller, this.more, h('div.coach-buttons', {}, this.showMeBtn, this.continueBtn));
+    if (typeof ResizeObserver === 'function') {
+      this._ro = new ResizeObserver(() => this._updateMore());
+      this._ro.observe(this.scroller);
+    }
   }
+
+  /** Show "More below" while part of the panel is out of sight under it. */
+  _updateMore() {
+    const s = this.scroller;
+    if (!s) return;
+    this.more.hidden = !(s.scrollHeight - s.scrollTop - s.clientHeight > 4);
+  }
+
+  /** Whether H means Show me now (a step is shown, and nothing is waiting for the study). */
+  canShowMe() { return !this.complete && Boolean(this.step) && !this.acting && this.ws.editable; }
 
   async start() {
     this.ws.coachHost.appendChild(this.el);
@@ -95,7 +116,7 @@ export class GuidedCoach {
     }
   }
 
-  destroy() { clearTimeout(this._timer); this.el.remove(); }
+  destroy() { clearTimeout(this._timer); if (this._ro) this._ro.disconnect(); this.el.remove(); }
 
   // ------------------------------------------------------------------ steps
   _startStep(step) {
@@ -110,7 +131,7 @@ export class GuidedCoach {
     this.header.textContent = `Recording ${rec} of ${recs}  ·  Step ${step.step} of ${this.nSteps}`;
     this._progress(this.stars.length);
     this.title.textContent = step.instruction;
-    clear(this.body).appendChild(richText(stepBody(this.guidance, step.label, step.ghost ? step.ghost.channels : [], this.quickKeys)));
+    clear(this.body).appendChild(richText(this._words(step.text || stepBody(this.guidance, step.label, step.ghost ? step.ghost.channels : [], this.quickKeys))));
     const named = this.guidance !== 'find_unnamed';
     this.description.textContent = named ? step.description || '' : '';
     this.description.hidden = !this.description.textContent;
@@ -133,6 +154,8 @@ export class GuidedCoach {
         target_channels: step.ghost.channels } : {}),
     });
     this.ws._refreshState();
+    this.scroller.scrollTop = 0;
+    this._updateMore();
     this.check({ initial: true }); // the trainee may already have marked it (working ahead)
   }
 
@@ -208,16 +231,20 @@ export class GuidedCoach {
     }
     this.flashed = false;
     if (r.problems.length === 1 && r.problems[0] === 'missing') { this._feedback('', ''); return; }
-    const box = h('div', {}, h('b', {}, 'Not quite yet:'), h('ul', {}, r.messages.map((m) => h('li', {}, m))));
+    const box = h('div', {}, h('b', {}, 'Not quite yet:'), h('ul', {}, r.messages.map((m) => h('li', {}, this._words(m)))));
     this._feedback(box, 'banner');
   }
 
+  /** The words for this screen: taps and press and hold on a touch screen (rules.js touchWords). */
+  _words(text) { return touchFirst() ? touchWords(text) : text; }
+
   _feedback(content, role) {
     clear(this.feedback);
-    if (!content) { this.feedback.hidden = true; return; }
+    if (!content) { this.feedback.hidden = true; this._updateMore(); return; }
     this.feedback.hidden = false;
     this.feedback.className = `coach-feedback ${role}`;
-    this.feedback.appendChild(typeof content === 'string' ? richText(content) : content);
+    this.feedback.appendChild(typeof content === 'string' ? richText(this._words(content)) : content);
+    this._updateMore();
   }
 
   _stars() {
@@ -333,6 +360,7 @@ export class GuidedCoach {
     this.ws.viewer.setGhost(null);
     logger.event('guided_recording_completed', { recording: this.rid, ...s });
     this.ws._refreshState();
+    this._updateMore();
   }
 
   _showCompleteCheck(r) {

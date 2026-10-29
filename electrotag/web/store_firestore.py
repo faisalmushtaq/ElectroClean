@@ -858,9 +858,12 @@ class FirestoreStore(Store):
                         "status_text": report.get("status_text", ""), "generated_at": now_local_iso()}, stored)
         return report
 
-    def report_text(self, set_id: str, annotator_id: str) -> str:
+    def report_result(self, set_id: str, annotator_id: str) -> dict[str, str]:
         snap = self.doc.collection("reports").document(f"{set_id}_{annotator_id}").get()
-        return str((snap.to_dict() or {}).get("status_text", "")) if snap.exists else ""
+        if not snap.exists:
+            return {}
+        d = snap.to_dict() or {}
+        return {"status": str(d.get("status", "")), "status_text": str(d.get("status_text", ""))}
 
     def reports(self) -> list[tuple[str, str, dict[str, str]]]:
         out = []

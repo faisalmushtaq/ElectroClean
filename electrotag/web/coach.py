@@ -24,15 +24,22 @@ from electrotag.training.guided import (
     STARS_FIRST,
     Step,
     Tolerance,
-    article,
     build_steps,
     check_step,
     extras,
-    list_words,
     overlaps,
     stars_for,
+    step_text,
 )
-from electrotag.training.programme import PassRule, Progress, StageState, next_step, programme_state
+from electrotag.training.programme import (
+    PassRule,
+    Progress,
+    StageState,
+    next_step,
+    practice_verdict,
+    programme_state,
+    score_sentence,
+)
 from electrotag.training.reference import ReferenceSet, ReferenceSetError
 from electrotag.training.review import flag_text, review_flags
 from electrotag.web.errors import ApiError
@@ -83,7 +90,7 @@ class Coach:
     def _states(self, rs: ReferenceSet, aid: str, prog: Progress | None = None) -> tuple[list[StageState], Progress]:
         prog = prog if prog is not None else self.store.progress(rs, aid)
         states = programme_state(None, rs, aid, prog, completed=self.store.completed,
-                                 report_text=lambda: self.store.report_text(rs.set_id, aid))
+                                 report=lambda: self.store.report_result(rs.set_id, aid))
         return states, prog
 
     def _next_step(self, rs: ReferenceSet, aid: str, states: list[StageState], prog: Progress) -> Any:
@@ -135,6 +142,11 @@ class Coach:
         if item.mode in states and not states[item.mode].unlocked:
             raise self._api(403, "locked", f"{states[item.mode].title} is not unlocked yet")
 
+    def programme_complete(self, user: User, rs: ReferenceSet) -> bool:
+        """Whether the trainee has done every stage (``complete`` of ``programme`` in ``GET /me``)."""
+        states, prog = self._states(rs, user.annotator_id)
+        return self._next_step(rs, user.annotator_id, states, prog).stage is None
+
     def programme_view(self, user: User) -> dict[str, Any]:
         set_id = self.store.programme(user.annotator_id)
         if not set_id:
@@ -151,7 +163,7 @@ class Coach:
                 "key": s.key, "title": s.title, "description": s.description, "status": s.status,
                 "done": s.done, "total": s.total, "stars": s.stars, "max_stars": s.max_stars,
                 "best_score": (round(float(best.get("event_f1", 0.0)), 4) if (s.key == "practice" and best) else None),
-                "time_s": round(float(s.seconds), 1), "detail": s.detail,
+                "time_s": round(float(s.seconds), 1), "detail": s.detail, "result": s.result or None,
             })
         next_view = None
         if nxt.stage is not None:
@@ -188,8 +200,9 @@ class Coach:
     def _state(self, user: User, rs: ReferenceSet, rid: str) -> dict[str, Any]:
         st = self.store.guided_state(user.annotator_id, rs.set_id, rid)
         if st is None:
+            now = time.time()
             st = {"index": 0, "matched": {}, "failed": {}, "shown": [], "stars": {}, "seconds": {},
-                  "step_started": time.time(), "signature": None, "last": None, "complete": False,
+                  "step_started": now, "last_active": now, "signature": None, "last": None, "complete": False,
                   "summary": None, "started_at": now_local_iso()}
         return st
 
@@ -225,23 +238,14 @@ class Coach:
         guidance = rs.guidance_for(rid)
         t = steps[i].target
         cat = self.store.catalogue
-        key = self._quick_keys().get(t.label)
-        key_text = f"press {key}" if key else "press / and type its name"
-        where = ("the whole montage (Whole montage, or C)" if t.is_global
-                 else f"{list_words(list(t.channels))} (Selected channels, then click the channel names)")
         if guidance == "show":
             instruction = f"Mark this {t.label}"
-            text = (f"The experts' annotation is outlined with a dashed line. Choose its type ({key_text}), choose "
-                    f"{where}, and drag across it from start to end (or press M at the start and at the end).")
         elif guidance == "find":
             instruction = f"Find the {t.label} on this screen"
-            text = (f"There is {article(t.label)} {t.label} somewhere on this screen. Choose its type ({key_text}), "
-                    "decide which channels it affects, and mark it.")
         else:
             instruction = "Find the next artifact"
-            text = ("Scroll on from here. Mark the next artifact you see, choose its type and channels, and the "
-                    "feedback tells you how close you are to the experts.")
         named = guidance in ("show", "find")
+        text = step_text(guidance, t.label if named else None, list(t.channels), self._quick_keys())
         timing = m["timing"]
         sfreq, n_samples = float(timing["sfreq"]), int(timing["n_samples"])
         return {
@@ -287,6 +291,21 @@ class Coach:
                             current_step=st["index"] + 1)
         return st["index"]
 
+    @staticmethod
+    def _active(st: dict[str, Any]) -> None:
+        """The trainee did something on the current step (a check, Show me): the step's time runs to here."""
+        st["last_active"] = time.time()
+
+    @staticmethod
+    def _resume_clock(st: dict[str, Any]) -> None:
+        """The recording is opened again: the current step's time carries on from the trainee's last action
+        on it, so the time the recording was closed (or the page away) is not counted."""
+        now = time.time()
+        started = float(st.get("step_started") or now)
+        last = float(st.get("last_active") or started)
+        st["step_started"] = now - max(0.0, min(last, now) - started)
+        st["last_active"] = now
+
     def guided_view(self, user: User, rid: str) -> dict[str, Any]:
         rs, item = self._guided(user, rid)
         steps = self._steps(rs, rid)
@@ -296,6 +315,9 @@ class Coach:
             st["complete"] = True
             st["summary"] = self._summary(st, 0, rs.guidance_for(rid))
         if self.store.guided_state(user.annotator_id, rs.set_id, rid) is None:
+            self._save(user, rs, rid, st)
+        elif not st["complete"]:
+            self._resume_clock(st)
             self._save(user, rs, rid, st)
         matched = self._matched(st)
         completed = [{"step": i + 1, "stars": int(st["stars"].get(str(i), 0)), "annotation_id": matched[i]}
@@ -317,7 +339,7 @@ class Coach:
                            f"one (select it and press Delete) or press {UNDO_HINT}.")
             else:
                 out.append(f"Nothing is marked at {a:.2f}–{b:.2f} s in the experts' annotations: delete this "
-                           f"{extra.label} (select it and press Delete) or press {UNDO_HINT}.")
+                           f"{extra.label} (it is selected; press Delete) or press {UNDO_HINT}.")
         return out
 
     def guided_check(self, user: User, rid: str, body: dict[str, Any]) -> dict[str, Any]:
@@ -341,6 +363,7 @@ class Coach:
         if sig != st["signature"] and result.candidate_id is not None and not result.matched:
             st["failed"][str(i)] = int(st["failed"].get(str(i), 0)) + 1
         st["signature"] = sig
+        self._active(st)
         can = bool(result.matched and not ext)
         shown = i in {int(x) for x in st["shown"]}
         st["last"] = {"step": i + 1, "can_continue": can, "candidate_id": result.candidate_id}
@@ -390,7 +413,7 @@ class Coach:
         previous = {"step": i + 1, "stars": st["stars"][str(i)], "attempts": failed + (0 if shown else 1),
                     "failed_attempts": failed, "used_show_me": shown, "seconds": st["seconds"][str(i)]}
         st["index"] = i + 1
-        st["step_started"] = time.time()
+        st["step_started"] = st["last_active"] = time.time()
         st["last"] = None
         if st["index"] >= len(steps):
             st["complete"] = True
@@ -419,6 +442,7 @@ class Coach:
                       and (a.annotation_id == candidate or a.label == t.label)]
         if i not in st["shown"]:
             st["shown"].append(i)
+        self._active(st)
         st["last"] = None
         self._save(user, rs, rid, st)
         now = now_local_iso()
@@ -450,7 +474,8 @@ class Coach:
                 for j in [k for k in matched if k >= i]:
                     for key in ("matched", "stars", "seconds"):
                         st[key].pop(str(j), None)
-                st.update(index=i, complete=False, summary=None, last=None, signature=None, step_started=time.time())
+                st.update(index=i, complete=False, summary=None, last=None, signature=None, step_started=time.time(),
+                          last_active=time.time())
                 self._save(user, rs, rid, st)
                 raise self._api(422, "guided_incomplete",
                                 f"Step {i + 1} ({step.target.label}) no longer matches the experts' annotation: "
@@ -476,7 +501,7 @@ class Coach:
     # ------------------------------------------------------------ practice
     def practice_result(self, user: User, rs: ReferenceSet, rid: str, mine: Any, elapsed_s: float,
                         sfreq: float) -> dict[str, Any]:
-        from electrotag.training.assessment import feedback_html, practice_feedback
+        from electrotag.training.assessment import practice_feedback
         from electrotag.web.service import annotation_dict, clean_json
 
         ref = rs.reference_document(rid)
@@ -488,13 +513,7 @@ class Coach:
         except OSError:
             pass
         in_programme = self.store.programme(user.annotator_id) == rs.set_id
-        unlock = " The assessment is unlocked." if (in_programme and rs.assessment_recordings) else ""
-        if verdict["passed"]:
-            verdict_html = (f"<p class='ec-pass'><b>Passed:</b> you reached the pass mark "
-                            f"({html.escape(rule.describe())}).{unlock}</p>")
-        else:
-            verdict_html = (f"<p class='ec-not-yet'><b>Not yet:</b> you need {html.escape(rule.describe())}. Review "
-                            "what you missed, then try the next practice recording or this one again.</p>")
+        unlocked = "The assessment is unlocked." if (in_programme and rs.assessment_recordings) else ""
         flags = []
         reference: list[dict[str, Any]] = []
         if rs.practice_review:
@@ -514,12 +533,16 @@ class Coach:
                     "onset_s": f["onset_s"], "offset_s": f["offset_s"], "text": flag_text(f),
                 })
             reference = [annotation_dict(a) for a in ref.annotations]
+        counts = {k: int(verdict[k]) for k in ("reference_events", "your_events", "found", "extra", "other_type")}
         return clean_json({
             "passed": bool(verdict["passed"]), "pass_rule": rule.describe(), "rule": rule.to_dict(),
             "score": {"event_f1": verdict["event_f1"], "label_accuracy": verdict["label_accuracy"]},
+            "counts": counts,
+            # the plain words of the review, the same as the demonstration's (js/training/scoring.js)
+            "verdict": practice_verdict(bool(verdict["passed"]), rule, len(rs.practice_recordings), unlocked),
+            "summary": score_sentence(counts),
             "metrics": dict(fb.get("overall", {})), "per_category": list(fb.get("per_category", [])),
-            "summary_html": feedback_html(fb) + verdict_html, "review": bool(rs.practice_review),
-            "flags": flags, "reference": reference,
+            "review": bool(rs.practice_review), "flags": flags, "reference": reference,
         })
 
     # ---------------------------------------------------------- assessment

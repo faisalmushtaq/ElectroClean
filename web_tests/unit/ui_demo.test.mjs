@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 
 import { DemoBackend, exampleRecording, TRAINING_SET } from '../../electrotag/web/static/js/api/demo.js';
 import { truthAnnotations, demoSpecs } from '../../electrotag/web/static/js/data/synthetic.js';
+import { stageChip } from '../../electrotag/web/static/js/training/path.js';
 
 const memory = () => {
   const m = new Map();
@@ -99,7 +100,7 @@ test('guided training: a wrong attempt is explained, Show me places the answer, 
   const c1 = await b.guidedCheck(rid, { step: 1, annotations: [wrong] });
   assert.equal(c1.matched, false);
   assert.ok(c1.problems.includes('type'));
-  assert.ok(c1.messages.some((t) => t.startsWith('Type: the experts marked this as an Eye-blink-artifact (press 1)')));
+  assert.ok(c1.messages.some((t) => t.startsWith('Type: the experts marked this as an Eye-blink-artifact; yours is')));
   assert.ok(!c1.problems.includes('start')); // 0.16 s late is within the 0.2 s tolerance
   await assert.rejects(() => b.guidedContinue(rid, { step: 1 }), (e) => e.status === 409);
   const right = { ...wrong, label: 'Eye-blink-artifact', onset_sample: target.onset_sample };
@@ -165,8 +166,46 @@ test('practice is scored with MISSED, EXTRA and TYPE flags', async () => {
   const kinds = r.feedback.flags.map((f) => f.kind).sort();
   assert.deepEqual(kinds, ['EXTRA', 'MISSED', 'MISSED', 'TYPE']);
   assert.equal(r.feedback.reference.length, truth.length);
-  assert.equal(typeof r.feedback.summary_html, 'string');
+  // the plain words of the review, as the server's (coach.py practice_result)
+  assert.deepEqual(r.feedback.counts, { reference_events: truth.length, your_events: 7, found: 6, extra: 1, other_type: 1 });
+  assert.equal(r.feedback.summary, `You found 6 of the experts' ${truth.length} artifacts and made 1 mark they did not make. 1 of the 6 you found has another type than theirs.`);
+  assert.match(r.feedback.verdict, /^Not yet: you need a score of at least 80% .* then try this recording again from your training path\.$/);
   const t = await b.training();
   assert.equal(t.stages[0].status, 'completed');
   assert.equal(t.stages[1].status, r.feedback.passed ? 'completed' : 'in_progress');
+  assert.equal(t.stages[1].result, 'not_passed');
+  assert.match(t.stages[1].detail, /^Best score: \d+%, with the right type for \d+% of the artifacts found\. You found 6 of/);
+  // one practice recording: it is the one tried again, and the words say so
+  assert.equal(t.next.recording_id, rid);
+  assert.equal(t.next.label, 'Try the practice recording again');
+  assert.equal(t.complete, false);
+  assert.equal((await b.me()).programme.complete, false);
+});
+
+test("a guided step's time leaves out the time the recording was closed (as coach.py)", async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: 1_000_000_000 });
+  const b = await signedIn('T01');
+  const rid = TRAINING_SET.guided[0].rid;
+  const g = await b.guided(rid); // opened: step 1 starts
+  const target = g.current.ghost;
+  const right = { annotation_id: 'r'.repeat(32), label: 'Eye-blink-artifact', onset_sample: target.onset_sample,
+    duration_samples: target.duration_samples, channels: target.channels };
+  t.mock.timers.tick(20_000); // 20 s, then a first try
+  await b.guidedCheck(rid, { step: 1, annotations: [{ ...right, label: 'EMG-artifact' }] });
+  t.mock.timers.tick(600_000); // closed for ten minutes
+  await b.guided(rid); // opened again
+  t.mock.timers.tick(5_000);
+  await b.guidedCheck(rid, { step: 1, annotations: [right] });
+  t.mock.timers.tick(2_000);
+  await b.guidedContinue(rid, { step: 1 });
+  assert.equal(b.state.guided[`T01|${rid}`].seconds[0], 27);
+});
+
+test('the training path shows results, not only progress: a failed assessment has no tick', () => {
+  assert.deepEqual(stageChip({ key: 'practice', status: 'in_progress', result: 'not_passed' }), ['Not passed yet', 'active']);
+  assert.deepEqual(stageChip({ key: 'practice', status: 'completed', result: 'passed' }), ['Completed', 'done']);
+  assert.deepEqual(stageChip({ key: 'assessment', status: 'completed', result: 'met' }), ['Criteria met', 'done']);
+  assert.deepEqual(stageChip({ key: 'assessment', status: 'completed', result: 'not_met' }), ['Criteria not met yet', '']);
+  assert.deepEqual(stageChip({ key: 'assessment', status: 'completed', result: 'not_determined' }), ['Result to come', '']);
+  assert.deepEqual(stageChip({ key: 'assessment', status: 'not_used' }), ['Not included', '']);
 });

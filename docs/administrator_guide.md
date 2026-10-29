@@ -428,12 +428,17 @@ see.
 **The example training set.** Until your experts' files are ready, the example
 training set (in the admin area, or `electrotag-web create-example-set`, or
 `electrotag-admin create-example-set` in a folder) is a set called *Example
-training set (placeholder)* with three simulated recordings: two for guided
+training set (simulated)* with three simulated recordings: two for guided
 learning and one for practice. Its reference is the simulation's ground truth,
-known exactly because the artifacts were simulated, and each guided step has a
-placeholder note that describes only what was simulated. Use it to try the
-programme and to show annotators how it works until the experts' material is
-ready.
+known exactly because the artifacts were simulated, and its set notes say that
+it stands in for real expert files. Each guided step has a note for the
+trainee that describes what the simulated artifact looks like and why it is
+marked on those channels: a horizontal eye movement, for example, is marked on
+the horizontal EOG, F7 and F8 and on Fp1 and Fp2, where the simulation puts it
+as a real one would appear. Replace the notes with your experts' explanations
+when you use real recordings (the admin area's Guided notes). Use the set to
+try the programme and to show annotators how it works until the experts'
+material is ready.
 
 **Real expert files.** Each expert annotates the recordings in standard mode,
 and their annotations become references as described above. In a folder,

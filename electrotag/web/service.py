@@ -324,7 +324,8 @@ class StudyService:
         if set_id:
             try:
                 rs = self.store.reference_set(set_id)
-                prog = {"set_id": rs.set_id, "name": rs.name or rs.set_id}
+                prog = {"set_id": rs.set_id, "name": rs.name or rs.set_id,
+                        "complete": self.coach.programme_complete(user, rs)}
             except ReferenceSetError:
                 prog = None
         return {"annotator_id": user.annotator_id, "display_name": user.display_name, "role": user.role,

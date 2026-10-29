@@ -54,9 +54,10 @@ def flag_text(f: dict[str, Any]) -> str:
 
 
 def flag_prefix(f: dict[str, Any]) -> str:
+    """The flag's prefix before the label on the EEG (as the browser's review.js)."""
     if f["kind"] == FLAG_MISSED:
-        return "MISSED · REF: "
+        return "Missed: "
     if f["kind"] == FLAG_EXTRA:
-        return "EXTRA · YOU: "
+        return "Extra: "
     should = f["should_be"].replace("-artifact", "")
-    return f"TYPE: should be {should} · YOU: "
+    return f"Should be {should}: "

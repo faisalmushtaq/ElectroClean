@@ -353,8 +353,8 @@ class Store(ABC):
         """Produce and keep the competency report (as ``competency_report``) and return it."""
 
     @abstractmethod
-    def report_text(self, set_id: str, annotator_id: str) -> str:
-        """The one-sentence result of the trainee's competency report, if there is one."""
+    def report_result(self, set_id: str, annotator_id: str) -> dict[str, str]:
+        """The result of the trainee's competency report, ``{"status", "status_text"}``, or {} without one."""
 
     @abstractmethod
     def saved_files(self, annotator_id: str, recording_id: str, mode: str, context_id: str) -> dict[str, bytes]:
