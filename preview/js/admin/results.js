@@ -3,9 +3,9 @@
 // large to send through the page.
 
 import { h, clear } from '../ui/dom.js';
-import { MODES, STATUS, bytesText, programmeText, progressCounts, tsvText, whenText } from './model.js';
+import { MODES, STATUS, bytesText, csvText, programmeText, progressCounts, whenText } from './model.js';
 import { actionButton, card, chip, dataTable, downloadBase64, downloadText, messageArea, recordingName, sectionHead } from './ui.js';
-import { reviewButton, reviewCount } from './reviews.js';
+import { allReviewsCard, reviewButton, reviewCount } from './reviews.js';
 
 export class ResultsSection {
   constructor(area) {
@@ -22,15 +22,17 @@ export class ResultsSection {
       { title: 'Training', render: (r) => (r.programme ? h('span', {}, h('span.caption.block', {}, r.programme.name || r.programme.set_id || ''), programmeText(r.programme)) : '–') },
       { title: 'Last seen', render: (r) => whenText(r.last_seen) },
       { title: '', cls: 'actions', render: (r) => h('button.btn.small', { type: 'button', onclick: () => this._showWork(r) }, 'Work') },
-    ], [], { empty: 'Nobody is in the study yet.', pageSize: 25, caption: 'Progress' });
+    ], [], { empty: 'Nobody is in the study yet.', pageSize: 25, caption: 'Each person\'s work' });
     this.work = h('div.admin-stack');
-    const tsv = h('button.btn', { type: 'button', onclick: () => this._downloadTable() }, 'Download the table (TSV)');
+    const csv = h('button.btn', { type: 'button', 'data-log': 'results-csv', onclick: () => this._downloadTable() }, 'Download the table (CSV)');
+    this.reviews = allReviewsCard();
     this.zipMsg = messageArea();
     const zip = actionButton('Download all results (zip)', { kind: 'primary', working: 'Preparing the zip…', msg: this.zipMsg, log: 'results-zip', onClick: () => this._zip() });
     this.el = h('section.admin-section', { 'data-section': 'results' },
       sectionHead('Results', 'Who has done what, and every saved result of the study.'),
       this.msg,
-      card('Progress', this.note, this.table, h('div.btn-row', {}, tsv)), this.work,
+      card('Each person\'s work', h('p.caption', {}, 'Each person\'s recordings and training, with Work to see them one by one and review what was saved. Progress has the figures, times and the pace.'),
+        this.note, this.table, h('div.btn-row', {}, csv)), this.work, this.reviews,
       card('All results',
           h('p', {}, 'The annotations (in ElectroTag\'s usual folders: _annotations.json, _events.tsv, _session.json for each recording and annotator), the interaction logs, the training progress and the reports, as one zip file.'),
           h('div.btn-row', {}, zip), this.zipMsg));
@@ -43,6 +45,7 @@ export class ResultsSection {
       const p = await this.area.read('progress');
       this.rows = (p.annotators || []).map((a) => ({ ...a, c: progressCounts(a.items) }));
       this.note.textContent = p.generated_at ? `As of ${whenText(p.generated_at)}.` : '';
+      this.area.read('reviews_list', {}).then((r) => this.reviews.update(r.reviews || [])).catch(() => this.reviews.update([]));
     } catch (exc) {
       this.note.textContent = '';
       this.msg.problem(exc);
@@ -72,7 +75,7 @@ export class ResultsSection {
   _downloadTable() {
     const rows = this.rows.map((r) => ({ annotator_id: r.annotator_id, display_name: r.display_name || '', role: r.role, assigned: r.c.assigned,
       done: r.c.done, in_progress: r.c.in_progress, todo: r.c.todo, unusable: r.c.unusable, training: r.programme ? programmeText(r.programme) : '', last_seen: r.last_seen || '' }));
-    downloadText('progress.tsv', tsvText(['annotator_id', 'display_name', 'role', 'assigned', 'done', 'in_progress', 'todo', 'unusable', 'training', 'last_seen'], rows), 'text/tab-separated-values');
+    downloadText('results_people.csv', csvText(['annotator_id', 'display_name', 'role', 'assigned', 'done', 'in_progress', 'todo', 'unusable', 'training', 'last_seen'], rows), 'text/csv;charset=utf-8');
   }
 
   async _zip() {
@@ -83,7 +86,8 @@ export class ResultsSection {
     } catch (exc) {
       if (exc.code === 'too_large' || exc.status === 413) { this.zipMsg.show('note', 'The results are too large to send through the page.', this._exportHelp()); return; }
       if (exc.code === 'needs_server' && this.area.isDemo) {
-        this.zipMsg.show('note', exc.message, h('div.btn-row', {}, h('button.btn', { type: 'button', onclick: () => this.area.app.downloadResults() }, 'Download the demonstration\'s results (JSON)')));
+        this.zipMsg.show('note', exc.message, h('p', {}, 'The demonstration gives its results as one JSON file instead.'),
+          h('div.btn-row', {}, h('button.btn', { type: 'button', onclick: () => this.area.app.downloadResults() }, 'Download the demonstration\'s results (JSON)')));
         return;
       }
       throw exc;

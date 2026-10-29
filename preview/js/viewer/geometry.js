@@ -7,17 +7,37 @@ export function niceStep(durationS, widthPx, minPx = 70) {
   return steps[steps.length - 1];
 }
 
-/** "12", "12.5", "1:05:00" style tick labels (seconds below a minute shown as seconds). */
-export function tickLabel(t, step) {
-  if (step >= 60 || t >= 600) {
-    const s = Math.round(t);
-    const h = Math.floor(s / 3600);
-    const m = Math.floor((s % 3600) / 60);
-    const ss = String(s % 60).padStart(2, '0');
-    return h ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
-  }
+/**
+ * How the time axis writes its times on one screen: 'clock' (m:ss, or h:mm:ss past an hour) once
+ * the ticks are a minute or more apart or the screen reaches ten minutes, and 's' (seconds)
+ * otherwise. One format for the whole axis, so that its title can name the unit.
+ */
+export function axisFormat(startS, durationS, step) {
+  return step >= 60 || startS + durationS >= 600 ? 'clock' : 's';
+}
+
+/** The axis's title for a format: "time (s)", "time (m:ss)" or, past an hour, "time (h:mm:ss)". */
+export function axisTitle(format, endS) {
+  if (format !== 'clock') return 'time (s)';
+  return endS >= 3600 ? 'time (h:mm:ss)' : 'time (m:ss)';
+}
+
+/**
+ * "12", "12.5", "1:05", "15:00.5" or "1:02:05" tick labels: seconds, or a clock (the format of
+ * axisFormat; by default a clock from ten minutes on), with the decimals the step needs.
+ */
+export function tickLabel(t, step, format = step >= 60 || t >= 600 ? 'clock' : 's') {
   const digits = step < 0.1 ? 2 : step < 1 ? 1 : 0;
-  return t.toFixed(digits);
+  if (format !== 'clock') return t.toFixed(digits);
+  // Whole units of the last digit shown, so that 59.96 s at tenths is 1:00.0 and never 0:60.0.
+  const per = 10 ** digits;
+  const units = Math.round(t * per);
+  const secUnits = units % (60 * per);
+  const minutes = Math.floor(units / (60 * per));
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  const sec = (secUnits / per).toFixed(digits).padStart(digits ? 3 + digits : 2, '0');
+  return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
 }
 
 /**

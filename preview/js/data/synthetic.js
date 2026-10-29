@@ -17,7 +17,12 @@ const TYPES = { HEOG: 'eog', VEOG: 'eog', ECG: 'ecg' };
 export const channelType = (name) => TYPES[name] || (/^(EXG|STATUS|STI)/i.test(name) ? 'misc' : 'eeg');
 
 const BLINK = ['Fp1', 'Fp2', 'VEOG'];
-const SIDES = ['F7', 'F8', 'HEOG'];
+// A horizontal (or slow) eye movement as the electrodes see it (µV at the peak), as
+// electrotag/synthetic.py: largest on the horizontal EOG and at the outer corners of the eyes (F7,
+// F8), smaller at Fp1 and Fp2, smaller still further back, with opposite signs on the two sides.
+// The experts' reference marks the channels where it is clear.
+export const EYE_MOVEMENT_GAINS_UV = Object.freeze({ HEOG: 160, F7: 75, F8: -75, Fp1: 35, Fp2: -35, T7: 15, T8: -15, F3: 12, F4: -12 });
+const SIDES = ['Fp1', 'Fp2', 'F7', 'F8', 'HEOG'];
 
 /** The three example recordings of the demonstration (two for guided learning, one for practice). */
 export function demoSpecs() {
@@ -132,11 +137,10 @@ function artifactValue(art, name, t, ci, s, seed, sfreq) {
     }
     case 'Horizontal-eye-movement-artifact':
     case 'Slow-eye-movement-artifact': {
-      if (!on) return 0;
-      const sign = name === 'F8' ? -1 : 1;
-      const amp = name === 'HEOG' ? 160 : 75;
+      const gain = EYE_MOVEMENT_GAINS_UV[name] || 0;
+      if (!gain) return 0;
       const shape = art.label.startsWith('Slow') ? Math.sin(Math.PI * x) : Math.min(1, x * 8, (1 - x) * 8);
-      return sign * amp * UV * shape;
+      return gain * UV * shape;
     }
     case 'EMG-artifact':
       return on ? 28 * UV * noise(seed + 101, ci, s) * Math.min(1, x * 10, (1 - x) * 10) : 0;
@@ -327,13 +331,40 @@ export function truthAnnotations(specIn) {
   })).sort((x, y) => x.onset_sample - y.onset_sample);
 }
 
-/** A placeholder note that is true by construction (the same words as the desktop example set). */
+/** What the example set's simulated artifacts look like and where they are marked: the same words
+ *  as electrotag/training/guided.py EXAMPLE_NOTES ({where} the channels, {duration} the length). */
+export const EXAMPLE_NOTES = Object.freeze({
+  'Eye-blink-artifact': "A blink: the eyelid sliding over the eye changes the eye's electrical field, which the electrodes " +
+    'nearest the eyes pick up most. It shows as one smooth deflection of {duration} on {where}, and more ' +
+    'weakly on F3, Fz and F4 behind them.',
+  'Horizontal-eye-movement-artifact': "A look to the side: the eye's electrical field swings sideways, so the two sides of the head change " +
+    'in opposite directions. It is largest on the horizontal EOG and at F7 and F8, beside the eyes, ' +
+    'smaller at Fp1 and Fp2 above them, and fades further back. It lasts {duration}; mark it on {where}.',
+  'Slow-eye-movement-artifact': 'A slow eye movement, as when drowsy: slow waves of opposite sign on the two sides of the head over ' +
+    '{duration}, largest on the horizontal EOG and at F7 and F8, smaller at Fp1 and Fp2. Mark it on ' +
+    '{where}.',
+  'EMG-artifact': 'Muscle activity: fast, irregular activity that starts and stops abruptly, on {where} (over the jaw ' +
+    'and temple muscles) for {duration}.',
+  'Chewing-artifact': 'Chewing: bursts of fast muscle activity on {where}, over the jaw muscles, that repeat about one and a ' +
+    'half times a second for {duration}.',
+  'Electrode-pops-artifact': 'An electrode pop: a sudden jump on {where} alone that dies away within a fraction of a second. No ' +
+    'neighbouring channel shows it, which tells it apart from brain activity.',
+  'Movement-artifact': 'Movement: a large, slow shift on every channel at once for {duration}, so it is marked on the whole ' +
+    'montage.',
+  'ECG-artifact': 'The heartbeat: sharp spikes on {where} at the rate of the beats on the ECG channel, for {duration}.',
+});
+
+/** The note of a simulated artifact in the example set, for trainees (the same words as guided.py example_note). */
 export function exampleNote(label, durationS, channels) {
-  const kind = label.replace(/-artifact$/, '').split('-').map((w) => (w === w.toUpperCase() ? w : w.toLowerCase())).join(' ');
   const where = !channels.length ? 'every channel'
     : channels.length === 1 ? channels[0] : channels.slice(0, -1).join(', ') + ' and ' + channels[channels.length - 1];
-  return `Placeholder note (simulated data): this is a simulated ${kind} artifact on ${where}, lasting ` +
-    `${durationS.toFixed(2)} s. Replace it with your experts' explanation.`;
+  const duration = `${durationS.toFixed(2)} s`;
+  let text = EXAMPLE_NOTES[label];
+  if (!text) {
+    const kind = label.replace(/-artifact$/, '').split('-').map((w) => (w === w.toUpperCase() ? w : w.toLowerCase())).join(' ');
+    text = `${/^[AEIOU]/i.test(kind) ? 'An' : 'A'} ${kind} artifact on {where}, lasting {duration}.`;
+  }
+  return `Simulated example. ${text.replace('{where}', where).replace('{duration}', duration)}`;
 }
 
 // --------------------------------------------------------------------- EDF

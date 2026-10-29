@@ -92,3 +92,31 @@ export async function readElectrodes(files, recordingName) {
     return null;
   }
 }
+
+/**
+ * Every electrodes.tsv and coordsystem.json that came with a recording (js/views/open.js): those
+ * picked, fetched or kept with it (`source.sidecars`), and those still arriving from beside a link
+ * (`source.laterSidecars`, a promise of File objects). Never rejects.
+ * @param {{sidecars?: File[], laterSidecars?: Promise<File[]>} | null} source recording.source
+ * @returns {Promise<File[]>}
+ */
+export async function sidecarsOf(source) {
+  if (!source) return [];
+  const now = Array.isArray(source.sidecars) ? source.sidecars : [];
+  let later = [];
+  if (source.laterSidecars) {
+    try { later = (await source.laterSidecars) || []; } catch { later = []; }
+  }
+  return [...now, ...later];
+}
+
+/**
+ * The electrode files to keep with a copy of a recording on this device (js/views/device.js): the
+ * electrodes.tsv that belongs to it and its coordsystem.json, so that the copy opens again with the
+ * same positions. Others picked with it (a whole dataset's folder) are not kept.
+ * @returns {File[]}
+ */
+export function electrodeFilesToKeep(files, recordingName) {
+  const picked = pickElectrodeFiles(files, recordingName);
+  return picked ? [picked.electrodes, picked.coordsystem].filter(Boolean) : [];
+}

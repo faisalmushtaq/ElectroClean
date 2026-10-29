@@ -23,11 +23,22 @@ export function reviewLine(app, it) {
   return `Reviewed: ${latest.summary}${list.length > 1 ? ` (${list.length} reviews)` : ''}`;
 }
 
+/** True when the feedback on a recording can be opened (See the feedback…): it was reviewed and is finished. */
+export function canSeeFeedback(app, it) {
+  return reviewsOf(app, it).length > 0 && it.status === 'done';
+}
+
 /** The line under the file name: the review, or what became of a report. */
 export function feedbackCaption(app, it) {
   const parts = [];
   const r = reviewLine(app, it);
-  if (r) parts.push(h('span.caption.block.review-line', { 'data-review': it.recording_id }, r));
+  // The line opens the feedback when it can be read (a finished recording); otherwise it is plain text.
+  if (r) {
+    parts.push(canSeeFeedback(app, it)
+      ? h('button.link.caption.block.review-line', { type: 'button', 'data-review': it.recording_id, 'data-log': 'review-line',
+        title: 'See the feedback', onclick: () => app.openFeedback(it) }, r)
+      : h('span.caption.block.review-line.plain', { 'data-review': it.recording_id }, r));
+  }
   const p = it.problem;
   if (it.status === 'unusable') parts.push(h('span.caption.block.problem-line', {}, `Set aside: ${String(p && p.reason_text ? p.reason_text : 'cannot be annotated').toLowerCase()}`));
   else if (p && p.state === 'open') parts.push(h('span.caption.block.problem-line', {}, 'Problem reported to the study team'));
@@ -43,8 +54,8 @@ export function moreButton(app, it) {
   b.addEventListener('click', () => {
     const r = b.getBoundingClientRect();
     const items = [{ label: 'Report a problem with this recording…', onSelect: () => app.reportProblemFor(it, 'home') }];
-    if (reviewsOf(app, it).length && it.status === 'done') items.push({ label: 'See the feedback…', onSelect: () => app.openFeedback(it) });
-    showMenu(items, r.left, r.bottom + 4, { className: 'row-menu' });
+    if (canSeeFeedback(app, it)) items.push({ label: 'See the feedback…', onSelect: () => app.openFeedback(it) });
+    showMenu(items, r.left, r.bottom + 4, { className: 'row-menu', opener: b });
   });
   return b;
 }
@@ -61,13 +72,26 @@ export function returnedLine(app) {
   return h('p.note.returned-line', { role: 'status', 'data-log': 'returned-line' }, text);
 }
 
+/**
+ * After the list is drawn again, the focus goes back to the row's More button, or to the list's tab
+ * when the row moved to another tab, so that the next Tab carries on in the list.
+ */
+function refocusRow(it) {
+  const esc = (v) => (globalThis.CSS && CSS.escape ? CSS.escape(v) : String(v).replace(/["\\]/g, '\\$&'));
+  const target = document.querySelector(`.row-more[data-more="${esc(it.recording_id)}"]`) || document.querySelector('.rec-tabs [aria-selected="true"]');
+  if (target) target.focus({ preventScroll: true });
+}
+
 /** Send a report from the home page, then show the list again with what changed. */
 export async function reportFromHome(app, it) {
   if (app._reportingProblem) return null; // pressed again while the first report is under way
   app._reportingProblem = true;
   try {
     const answer = await reportProblem(app, it, { where: 'home' });
-    if (answer && app.route === 'home' && !app.ws) await app.reloadHome();
+    if (answer && app.route === 'home' && !app.ws) {
+      await app.reloadHome();
+      refocusRow(it);
+    }
     return answer;
   } finally {
     app._reportingProblem = false;

@@ -2,6 +2,7 @@
 // them), then follow its fingerprint and the study's answer.
 
 import { electrodeSidecars } from '../data/electrodes.js';
+import { fetchNeighbourElectrodes } from '../data/fetch_links.js';
 import { h, clear } from '../ui/dom.js';
 import { appHeader, icon } from './common.js';
 import { CAN_CHOOSE_FOLDER, acceptFiles } from '../util.js';
@@ -13,6 +14,16 @@ const FORMAT_HINT = {
   bdf: 'Choose the .bdf file.',
   brainvision: 'Choose the .vhdr, .vmrk and .eeg files together, or the folder that holds them.',
 };
+
+const TRAINING_STAGES = { guided: 'Learn with the experts', practice: 'On your own', assessment: 'Competency assessment' };
+
+/** For a training recording: which stage it is for, and where the file comes from. */
+function trainingNote(expected) {
+  const stage = expected && TRAINING_STAGES[expected.mode];
+  if (!stage) return null;
+  return h('p.note.training-note', {}, `This recording is for your training: ${stage}. Your study team sends you the training ` +
+    'recordings; choose this one from where you saved them.');
+}
 
 /** Pick the files of one recording from a folder's files (the expected one, if it is there). */
 export function filesForRecording(files, expectedName = null) {
@@ -31,6 +42,13 @@ export function filesForRecording(files, expectedName = null) {
   return heads.length ? null : [];
 }
 
+/** Scroll an element into view (at once when the person prefers reduced motion), and focus it if asked. */
+function reveal(el, { focus = false } = {}) {
+  const still = globalThis.matchMedia && globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  try { el.scrollIntoView({ block: 'nearest', behavior: still ? 'auto' : 'smooth' }); } catch { /* not on the page */ }
+  if (focus) try { el.focus({ preventScroll: true }); } catch { /* not focusable */ }
+}
+
 export class OpenView {
   constructor(app, { expected = null, revise = false, purpose = null } = {}) {
     this.app = app;
@@ -41,6 +59,8 @@ export class OpenView {
     this.route = (purpose && purpose.route) || 'open';
     /** Opening a finished recording again to revise it (POST /match with revise). */
     this.revise = Boolean(revise);
+    /** Opening a recording of the training programme (guided, practice or assessment): the outcome is worded for training. */
+    this.training = Boolean(expected && expected.mode && expected.mode !== 'standard');
     const b = app.backend;
     const fileInput = h('input', { type: 'file', multiple: true, accept: acceptFiles('.edf,.bdf,.rec,.vhdr,.vmrk,.eeg'), hidden: true, 'data-log': 'file-input',
       onchange: () => { if (fileInput.files.length) this.handle([...fileInput.files]); fileInput.value = ''; } });
@@ -66,6 +86,8 @@ export class OpenView {
     this.links = this.linkSection();
     this.steps = h('ol.steps', { hidden: true, 'aria-live': 'polite' });
     this.result = h('div.result');
+    // The outcome of choosing a file (its steps and the study's answer) sits under the drop zone and
+    // the keep box, above "Open from a link", so that it appears where the person is looking.
     const name = expected ? expected.file_name : null;
     const format = expected ? expected.format : null;
     let example = null;
@@ -83,17 +105,26 @@ export class OpenView {
         h('h1', {}, purpose && purpose.title ? purpose.title : name ? `${this.revise ? 'Revise' : 'Open'} ${name}` : 'Open a recording from your computer'),
         this.revise ? h('p.note', {}, 'You finished this recording before. It opens with your latest saved annotations; submitting the revision saves a new version and keeps the earlier ones.') : null,
         purpose && purpose.note ? h('p.note', {}, purpose.note) : null,
+        trainingNote(expected),
         h('p.subtitle', {}, 'The recording is read here, in your browser, and is never uploaded. Only its fingerprint (a checksum of the file) is sent to the study, to recognise it.'),
         h('p', {}, FORMAT_HINT[format] || 'Choose an EDF or BDF file, or the .vhdr, .vmrk and .eeg files of a BrainVision recording (or their folder).'),
-        h('section.card', {}, this.drop, this.device.el, this.links.el, this.steps, this.result),
+        h('section.card', {}, this.drop, this.device.el, this.steps, this.result, this.links.el),
         example));
     if (expected) this.openKeptCopy(expected.recording_id);
   }
 
-  /** "Open from a link" (js/views/links_panel.js): the fetched files take the same path as chosen ones. */
+  /**
+   * "Open from a link" (js/views/links_panel.js): the fetched files take the same path as chosen ones.
+   * Without an electrodes.tsv among them, the page looks for one beside the recording's address while
+   * the recording opens (js/data/fetch_links.js); the channel map takes its positions if it arrives.
+   */
   linkSection() {
     const keep = keepLinkCheck(this.app);
-    return linkPanel({ onFiles: (files) => this.handle(files, false, { kind: 'link', keep: Boolean(keep && keep.box.checked) }),
+    return linkPanel({
+      onFiles: (files, info) => {
+        const later = electrodeSidecars(files).length || !info || !info.links ? null : fetchNeighbourElectrodes(info.links);
+        this.handle(files, false, { kind: 'link', keep: Boolean(keep && keep.box.checked), ...(later ? { laterSidecars: later } : {}) });
+      },
       chooseFile: () => this.fileInput.click(), extra: keep ? keep.el : null });
   }
 
@@ -114,7 +145,8 @@ export class OpenView {
     if (this.app.openView !== this || this.app.route !== this.route) return; // a file that arrived after the view was left
     source = source || { kind: 'chosen', keep: Boolean(this.device.box && this.device.box.checked) };
     clear(this.result);
-    // A BIDS electrodes.tsv picked with the recording gives the channel map its positions (js/data/electrodes.js).
+    // A BIDS electrodes.tsv picked with the recording (or fetched or kept with it) gives the channel map
+    // its positions (js/data/electrodes.js).
     const sidecars = electrodeSidecars(files);
     if (sidecars.length) { source = { ...source, sidecars }; files = [...files].filter((f) => !sidecars.includes(f)); }
     let chosen = files;
@@ -133,8 +165,10 @@ export class OpenView {
   reset() {
     clear(this.steps);
     clear(this.result);
+    const first = this.steps.hidden;
     this.steps.hidden = false;
     this._steps = {};
+    if (first) reveal(this.steps);
   }
 
   step(key, text, state = 'working', fraction = null) {
@@ -151,13 +185,25 @@ export class OpenView {
   }
 
   showProblem(text, buttons = []) {
-    clear(this.result);
-    this.result.append(h('div.banner', { role: 'alert' }, h('p', {}, text), buttons.length ? h('div.btn-row', {}, buttons) : null));
+    this._show(h('div.banner', { role: 'alert', tabindex: '-1' }, h('p', {}, text), buttons.length ? h('div.btn-row', {}, buttons) : null));
   }
 
   showMessage(text, buttons = [], kind = 'note') {
+    this._show(h(`div.${kind}`, { role: 'status', tabindex: '-1' }, h('p', {}, text), buttons.length ? h('div.btn-row', {}, buttons) : null));
+  }
+
+  /** The study's answer or a problem: shown under the steps, scrolled into view and given the focus. */
+  _show(box) {
     clear(this.result);
-    this.result.append(h(`div.${kind}`, { role: 'status' }, h('p', {}, text), buttons.length ? h('div.btn-row', {}, buttons) : null));
+    this.result.append(box);
+    reveal(box, { focus: true });
+  }
+
+  /** Back to where the person came from: their training path on a training page, their recordings otherwise. */
+  backButton() {
+    const toPath = this.app.me && this.app.me.programme && this.app._fromTraining;
+    return h('button.btn', { type: 'button', 'data-log': 'open-back', onclick: () => (this.purpose && this.purpose.onBack ? this.purpose.onBack() : this.app.goBack()) },
+      toPath ? 'Back to my training path' : 'Back to my recordings');
   }
 
   chooseAgainButton(primary = true) {

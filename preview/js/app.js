@@ -11,7 +11,7 @@ import { findBackend, connectServer, connectFirebase, makeDemo, rememberServer, 
 import { DEMO_NOTICE } from './api/notice.js';
 import { logger } from './log/logger.js';
 import { AnnotationSession } from './annotate/session.js';
-import { Workspace, friendlyDuration } from './annotate/workspace.js';
+import { Workspace, friendlyDuration, plural } from './annotate/workspace.js';
 import { GuidedCoach, minutesText } from './training/coach.js';
 import { PracticeReview, reviewAnnotations } from './training/review.js';
 import { trainingPath } from './training/path.js';
@@ -56,12 +56,46 @@ function takeInvite() {
   return typeof token === 'string' && /^[A-Za-z0-9_-]{20,200}$/.test(token) ? token : null;
 }
 
-// The file readers are loaded when the first recording is opened (the demonstration may not need them).
+// The file readers are loaded when the first recording is opened (the demonstration may not need
+// them), or just after signing in to a study, so that a connection lost later does not stop a file
+// from being read.
 let recordingModule = null;
-async function openRecordingFiles(files) {
-  if (!recordingModule) recordingModule = await import('./data/recording.js');
-  return recordingModule.openRecording(files);
+let readerFailures = 0;
+async function loadReaders() {
+  if (recordingModule) return recordingModule;
+  // Chromium remembers a module that failed to load for the page's life, so a later attempt asks for
+  // it under another address (the module itself is the same file).
+  const url = readerFailures ? `./data/recording.js?attempt=${readerFailures}` : './data/recording.js';
+  try {
+    recordingModule = await import(url);
+  } catch (exc) {
+    readerFailures += 1;
+    throw exc;
+  }
+  return recordingModule;
 }
+async function openRecordingFiles(files) {
+  return (await loadReaders()).openRecording(files);
+}
+
+/** Reading errors that mean the files themselves cannot be read as a recording (data/util.js, RecordingError). */
+const FORMAT_ERRORS = new Set(['corrupt_recording', 'unsupported_format', 'missing_companion', 'no_files', 'malformed_bids_metadata']);
+
+/** True for an error in the files' format, the only reason a copy kept on this device is removed. */
+function isFormatError(exc) {
+  return Boolean(exc && exc.name === 'RecordingError' && FORMAT_ERRORS.has(exc.kind));
+}
+
+/** True when an error most probably comes from a lost connection (a part of the page that could not be loaded). */
+function isConnectionError(exc, online = globalThis.navigator ? globalThis.navigator.onLine !== false : true) {
+  if (!exc || isFormatError(exc)) return false;
+  if (!online) return true;
+  return exc.name === 'TypeError' && /fetch|import|module|network|load/i.test(String(exc.message || ''));
+}
+
+const CONNECTION_TEXT = 'This page could not load the part of ElectroTag that reads recordings, most probably because the ' +
+  'internet connection was lost. Check your connection, then press Try again; if it still fails, reload the page.';
+const TRAINING_MODES = { guided: 'a guided training recording', practice: 'a practice recording', assessment: 'a recording of your competency assessment' };
 
 function friendlyTime(iso) {
   if (!iso) return 'earlier';
@@ -169,16 +203,18 @@ export class App {
     this._render(h('main.page.loading', {}, h('p.subtitle', {}, 'Checking your invitation…')), 'signin');
     let info = null;
     let problem = '';
+    let code = '';
     let retry = false;
     try {
       info = await this.backend.inviteCheck(token);
     } catch (exc) {
       problem = exc.message;
+      code = exc.code || '';
       if (exc.code && /^invite_/.test(exc.code)) session.remove(INVITE_KEY);
       else retry = true; // the study could not answer: the link may be good, so it is kept to ask again
     }
     if (this.route !== 'signin') return; // the person went on while the study answered
-    this._render(inviteView(this, token, { info, problem, retry }), 'signin');
+    this._render(inviteView(this, token, { info, problem, code, retry }), 'signin');
   }
 
   /** Set the password with the invitation and sign in (POST /invite/accept). */
@@ -224,14 +260,18 @@ export class App {
         buttons: [{ label: 'Continue', value: true, kind: 'primary' }], cancelValue: true, className: 'logging-notice' });
     }
     await this.loadAssignments();
+    if (!this.backend.isDemo) void loadReaders().catch(() => {}); // tried again when a file is opened
     const want = (location.hash || '').replace(/^#/, '');
     // Administrators start in the admin area (or where a reload left them); they can still annotate.
     const back = this._adminReturn;
     this._adminReturn = null;
     if (this.isAdmin && (ADMIN_ROUTE.test(want) || !want || want === 'signin')) await this.showAdmin(ADMIN_ROUTE.test(want) ? want : back || 'admin');
-    else if (this.me.programme && (!want || want === 'signin' || want === 'training' || quiet)) await this.showTraining();
+    else if (this.inTraining() && (!want || want === 'signin' || want === 'training' || quiet)) await this.showTraining();
     else this.showHome();
   }
+
+  /** A trainee with stages still to do (once training is complete, home and its next recording come first). */
+  inTraining() { return Boolean(this.me && this.me.programme && !this.me.programme.complete); }
 
   async loadAssignments() {
     const games = this.loadAchievements();
@@ -358,7 +398,7 @@ export class App {
       this._settingHash = true;
       location.hash = route;
     }
-    document.title = { signin: 'ElectroTag – sign in', home: 'ElectroTag', open: 'ElectroTag – open a recording',
+    document.title = { signin: 'ElectroTag – sign in', home: 'ElectroTag – your recordings', open: 'ElectroTag – open a recording',
       annotate: `ElectroTag – ${this.ws ? this.ws.s.recording.fileName : 'annotate'}`, review: 'ElectroTag – practice review',
       training: 'ElectroTag – training programme', quiz: 'ElectroTag – quiz' }[route]
       || (ADMIN_ROUTE.test(route) ? 'ElectroTag – admin' : 'ElectroTag');
@@ -466,6 +506,7 @@ export class App {
       this._render(h('div.view', {}, appHeader(this), h('main.page', {}, h('h1', {}, 'Training programme'), h('p.banner', {}, `The training path could not be loaded: ${exc.message}`))), 'training');
       return;
     }
+    if (this.me && this.me.programme) this.me.programme.complete = !data.next;
     logger.event('training_path_opened', { reference_set: data.set_id, stages: data.stages.map((s) => ({ key: s.key, status: s.status, done: s.done, total: s.total })),
       next_stage: data.next ? data.next.stage : null, next_recording: data.next ? data.next.recording_id : null, message });
     this._fromTraining = true;
@@ -498,6 +539,8 @@ export class App {
   /** Open an assigned recording; with `revise`, a finished one, to revise it (docs/web/using.md, "History and revisions"). */
   openAssignment(item, { revise = false } = {}) {
     this.openFromComputer(item, { revise });
+    // Continue (where you left off, or the revision): the unfinished work is restored without asking.
+    if (this.openView && item && (item.status === 'in_progress' || (revise && item.revising))) this.openView.resume = true;
   }
 
   openFromComputer(expected, { revise = false, purpose = null } = {}) {
@@ -641,10 +684,18 @@ export class App {
       recording.source = source; // where the files came from, and whether to keep them (js/views/device.js)
       recording.sourceFiles = files;
     } catch (exc) {
-      if (source && source.kind === 'device') await dropBrokenCopy(this, source.sha256);
-      view.step('read', 'Reading the file', 'failed');
-      view.showProblem(`This file could not be opened: ${exc.message}`, [view.chooseAgainButton()]);
       logger.event('load_failed', { kind: 'read', reason: exc.message });
+      // A copy kept on this device is removed only when its files cannot be read as a recording.
+      if (source && source.kind === 'device' && isFormatError(exc)) await dropBrokenCopy(this, source.sha256);
+      if (!this._stillOpen(view)) return;
+      view.step('read', 'Reading the file', 'failed');
+      if (isConnectionError(exc)) {
+        // Nothing is wrong with the file: the same files are read again once the connection is back.
+        view.showProblem(CONNECTION_TEXT, [h('button.btn.primary', { type: 'button', 'data-log': 'read-again', onclick: () => this.processFiles(files, view, source) }, 'Try again'),
+          view.chooseAgainButton(false)]);
+        return;
+      }
+      view.showProblem(`This file could not be opened: ${exc.message}`, [view.chooseAgainButton()]);
       return;
     }
     if (!this._stillOpen(view)) return; // the person went elsewhere while the file was read
@@ -678,14 +729,18 @@ export class App {
       });
     } catch (exc) {
       view.step('match', 'Asking the study', 'failed');
-      if (exc.status !== 401) view.showProblem(`The study could not be asked: ${exc.message}`, [view.chooseAgainButton()]);
+      if (exc.status !== 401 && this._stillOpen(view)) {
+        // Asking is a read: the person may ask again with the file already read and checked.
+        view.showProblem(`The study could not be reached to check this file: ${exc.message}. Check your internet connection, then press Try again.`,
+          [h('button.btn.primary', { type: 'button', 'data-log': 'match-again', onclick: () => this._process(recording, view) }, 'Try again'), view.chooseAgainButton(false)]);
+      }
       return;
     }
     // A late answer (a slow study) for a view that was left opens nothing: the person has moved on,
     // perhaps to another recording, which must not be closed under them.
     if (!this._stillOpen(view)) return;
     logger.event('recording_loading', { recording_id: m.recording_id, match: m.status, file_name: recording.fileName, size_bytes: recording.sizeBytes });
-    const back = h('button.btn', { type: 'button', onclick: () => this.goBack() }, 'Back to my recordings');
+    const back = view.backButton();
     if (m.saved && view.purpose && view.purpose.kind === 'feedback') {
       view.step('match', m.message, 'done');
       await this._openFeedbackView({ recording, match: m, sha: fp.hex });
@@ -698,9 +753,11 @@ export class App {
     }
     if (m.status === 'matched') {
       view.step('match', m.message, 'done');
+      if (!(await this._confirmOther(view, m))) return;
       await this.openWorkspace({ recording, match: m, sha: fp.hex });
     } else if (m.status === 'matched_metadata') {
       view.step('match', m.message, 'done');
+      if (!(await this._confirmOther(view, m))) return;
       const body = h('div', {}, h('p.dialog-text', {}, m.message), h('ul', {}, (m.differences || []).map((d) => h('li', {}, d))),
         h('p.dialog-text', {}, 'You can open it anyway: your annotations are saved with this file\'s fingerprint, so the study team can check it. Or choose the study\'s copy of the file.'));
       const go = await showDialog({ title: 'Not exactly the study\'s copy', body, logText: m.message,
@@ -709,11 +766,11 @@ export class App {
       else view.showMessage('Choose the study\'s copy of the recording.', [view.chooseAgainButton()]);
     } else if (m.status === 'unknown') {
       view.step('match', 'Not a recording of this study', 'failed');
-      view.showMessage(m.message, [view.chooseAgainButton(),
+      view.showMessage(view.training ? this._notTheTrainingFile(view) : m.message, [view.chooseAgainButton(),
         h('button.btn', { type: 'button', onclick: () => this.openWorkspace({ recording, match: m, sha: fp.hex, tryOut: true }) }, 'Look at it without saving')], 'banner');
     } else if (m.status === 'not_assigned') {
       view.step('match', 'Not one of your recordings now', 'failed');
-      view.showMessage(m.message, [view.chooseAgainButton(false), back], 'banner');
+      view.showMessage(view.training ? this._notTheTrainingFile(view, m.recording_id) : m.message, [view.chooseAgainButton(false), back], 'banner');
     } else if (m.status === 'done') {
       view.step('match', 'Already finished', 'done');
       // A finished study recording can be revised from here too, when the study allows it.
@@ -725,6 +782,36 @@ export class App {
     } else {
       view.step('match', m.message || m.status, 'failed');
     }
+  }
+
+  /** What a training page says of a file that is not the recording its step needs. */
+  _notTheTrainingFile(view, rid = null) {
+    const want = view.expected.file_name || view.expected.recording_id;
+    return `This step of your training needs ${want}, and ${rid ? `the file you chose is ${rid}, another recording of the study` : 'this file is not that recording'}. ` +
+      `Choose ${want}: your study team sent it to you with your training recordings.`;
+  }
+
+  /**
+   * The page asked for one recording and the file is another of the person's recordings: asked first
+   * when it would change what kind of work is done (a study recording chosen on a training page, or the
+   * other way round) or which training step is done. Two study recordings need no question.
+   */
+  async _confirmOther(view, m) {
+    const exp = view.expected;
+    if (!exp || view.purpose || view.revise) return true;
+    const modeOf = (x) => x || 'standard';
+    if (m.recording_id === exp.recording_id && modeOf(m.mode) === modeOf(exp.mode)) return true;
+    if (modeOf(m.mode) === 'standard' && modeOf(exp.mode) === 'standard') return true;
+    const what = (mode) => TRAINING_MODES[modeOf(mode)] || 'one of your study recordings, which counts as real work';
+    const want = exp.file_name || exp.recording_id;
+    const go = await showDialog({ title: 'A different recording', logText: `chose ${m.recording_id} (${modeOf(m.mode)}) for ${exp.recording_id} (${modeOf(exp.mode)})`,
+      className: 'other-recording',
+      body: h('div', {}, h('p.dialog-text', {}, `You chose ${m.recording_id}, ${what(m.mode)}. This page is for ${want}, ${what(exp.mode)}.`),
+        h('p.dialog-text', {}, `Choose ${want} for this page, or open ${m.recording_id} anyway.`)),
+      buttons: [{ label: 'Open it anyway', value: true }, { label: 'Choose another file', value: false, kind: 'primary' }], cancelValue: false });
+    if (go && this._stillOpen(view)) return true;
+    if (this._stillOpen(view)) view.showMessage(`Choose ${want}.`, [view.chooseAgainButton()]);
+    return false;
   }
 
   /** A copy kept on this device must still be the file it was kept as (its fingerprint). */
@@ -758,21 +845,16 @@ export class App {
     if (!tryOut) {
       const draft = session.pickDraft(match.draft);
       if (draft) {
-        const n = draft.annotations.length;
-        const rev = session.revision;
-        const yes = rev
-          ? await ask('Continue your revision?',
-            `${n} annotation(s) and ${friendlyDuration(draft.elapsed_s || 0)} of revising ${session.recordingId}, saved automatically ${friendlyTime(draft.saved_at)}.\n\n` +
-            `Continue the revision, or start again from version ${rev.revises} as it was saved?`,
-            { yes: 'Continue the revision', no: `Start again from version ${rev.revises}` })
-          : await ask('Restore unfinished work?',
-            `${n} annotation(s) and ${friendlyDuration(draft.elapsed_s || 0)} of work on ${session.recordingId}, saved automatically ${friendlyTime(draft.saved_at)}.\n\nRestore it and continue?`,
-            { yes: 'Restore and continue', no: 'Start afresh' });
+        const resume = Boolean(this.openView && this.openView.resume);
+        const yes = resume || await this._askRestore(session, draft);
         if (yes) {
           const view = session.restore(draft);
           if (view) session.view = view;
         } else {
-          await session.discardDrafts();
+          // Set aside in this tab, so that it can still be brought back (the Annotations tab offers it).
+          logger.event('draft_discarded', { recording_id: session.recordingId, n_annotations: draft.annotations.length,
+            elapsed_s: Math.round((Number(draft.elapsed_s) || 0) * 10) / 10, ...(session.revision ? { revises: session.revision.revises } : {}) });
+          await session.discardDrafts({ draft });
         }
       }
     }
@@ -795,6 +877,30 @@ export class App {
     if (session.revision) {
       logger.event('revision_started', { session_id: session.sessionId, recording_id: session.recordingId, version: session.revision.version,
         revises: session.revision.revises, revises_saved_at: session.revision.saved_at || null, annotations_loaded: session.store.size, resumed: session.resumed });
+    }
+  }
+
+  /**
+   * Restore unfinished work, or start afresh? Esc or a click beside the question keeps the work (it
+   * restores), and starting afresh asks a second time, as Discard and close does. True to restore.
+   */
+  async _askRestore(session, draft) {
+    const n = draft.annotations.length;
+    const rev = session.revision;
+    const what = `${plural(n, 'annotation')} and ${friendlyDuration(draft.elapsed_s || 0)} of ${rev ? 'revising' : 'work on'} ${session.recording.fileName}, kept automatically ${friendlyTime(draft.saved_at)}.`;
+    const afresh = rev ? `Start again from version ${rev.revises}` : 'Start afresh';
+    const keep = rev ? 'Continue the revision' : 'Restore and continue';
+    const body = h('div', {}, h('p.dialog-text', {}, what),
+      h('p.dialog-text', {}, rev ? `Continue the revision, or start again from version ${rev.revises} as it was saved?` : 'Restore it and continue?'));
+    for (;;) {
+      const choice = await showDialog({ title: rev ? 'Continue your revision?' : 'Restore unfinished work?', body, className: 'restore-question', logText: what,
+        buttons: [{ label: afresh, value: 'afresh' }, { label: keep, value: 'restore', kind: 'primary' }], cancelValue: 'restore' });
+      if (choice !== 'afresh') return true;
+      const sure = await ask(rev ? 'Discard your changes?' : 'Delete your unfinished work?',
+        `${rev ? `Your changes in this revision (${plural(n, 'annotation')}, ${friendlyDuration(draft.elapsed_s || 0)})` : `Your ${plural(n, 'annotation')} and ${friendlyDuration(draft.elapsed_s || 0)} of work`} ` +
+        `are deleted from your draft. Until you close this tab, the Annotations tab offers to bring them back.`,
+        { yes: rev ? 'Discard them' : 'Delete them', no: 'Keep them', defaultYes: false, destructive: true });
+      if (sure) return false;
     }
   }
 
@@ -823,7 +929,7 @@ export class App {
       await this.showTraining();
       return;
     }
-    if (this.me.programme) { this.pathMessage = 'Recording saved.'; await this.showTraining(); return; }
+    if (this.me.programme && s.contextId === this.me.programme.set_id) { this.pathMessage = 'Recording saved.'; await this.showTraining(); return; }
     const next = result.next ? (this.assignments.items || []).find((i) => i.recording_id === result.next) : null;
     const demo = this.backend.isDemo ? `\n\n${DEMO_NOTICE}` : '';
     const milestone = reached.length ? `\n\nMilestone reached: ${reached.map((m) => m.name).join(', ')}.` : '';
@@ -874,7 +980,7 @@ export class App {
       return;
     }
     await this.loadAssignments();
-    if (this.me && this.me.programme) await this.showTraining();
+    if (this.inTraining()) await this.showTraining();
     else this.showHome();
   }
 

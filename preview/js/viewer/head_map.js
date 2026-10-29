@@ -288,6 +288,34 @@ export function mapScale(points, { widthPx, heightPx, targetPx, zoom = 1 }) {
   return { scale: Math.max(fit, needed) * zoom, fit, needed };
 }
 
+/** The map's steps of size when the targets fit at once: multiples of the size that fits the frame. */
+export const MAP_ZOOMS = Object.freeze([1, 1.25, 1.5, 2, 2.5, 3]);
+
+/**
+ * The sizes the map can take, smallest first, in pixels per head unit (from mapScale's `fit` and
+ * `needed`). The first always shows the whole head in its frame. When the targets would overlap at
+ * that size (a dense cap, such as 128 channels with 10-05 names), the sizes climb in even steps of
+ * at most 1.5 times to `needed`, where every target fits with its name, and on to twice that;
+ * otherwise they are the multiples of MAP_ZOOMS.
+ */
+export function mapScales(fit, needed) {
+  if (!(needed > fit * 1.05)) return MAP_ZOOMS.map((z) => fit * z);
+  const steps = Math.max(1, Math.ceil(Math.log(needed / fit) / Math.log(1.5)));
+  const out = [];
+  for (let i = 0; i <= steps; i++) out.push(i === steps ? needed : fit * (needed / fit) ** (i / steps));
+  out.push(needed * 1.5, needed * 2);
+  return out;
+}
+
+/**
+ * The size in pixels of the electrodes' targets at `scale`: `targetPx` where neighbours `spacing`
+ * head units apart keep a gap of `gap` pixels, otherwise what fits between them, never under 8.
+ */
+export function targetSize(spacing, scale, targetPx, gap = 4) {
+  if (!Number.isFinite(spacing) || spacing * scale - gap >= targetPx) return targetPx;
+  return Math.max(8, Math.min(targetPx, Math.floor(spacing * scale - gap)));
+}
+
 /**
  * The point to move to from `from` (an index) for an arrow key: dir 'left' | 'right' | 'up' | 'down'
  * (up is towards the nose). The nearest point within 60 degrees of that direction, nearer ones

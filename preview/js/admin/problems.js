@@ -4,7 +4,7 @@
 // "cannot be annotated"), or give it to someone else. Reports are never deleted.
 
 import { h, clear } from '../ui/dom.js';
-import { MODES, whenText } from './model.js';
+import { MODES, STATUS, whenText } from './model.js';
 import { actionButton, card, chip, dataTable, downloadText, field, messageArea, recordingName, sectionHead, select, textInput } from './ui.js';
 
 export const REASON_TEXT = Object.freeze({
@@ -15,6 +15,17 @@ export const REASON_TEXT = Object.freeze({
   other: 'Something else',
 });
 const RESOLUTION_TEXT = Object.freeze({ resolved: 'Resolved', returned: 'Returned to the annotator', reassigned: 'Given to someone else' });
+/** How a report was settled: "Given to A06" names the person. */
+export function resolutionText(r) {
+  if (r.resolution === 'reassigned' && r.reassigned_to) return `Given to ${r.reassigned_to}`;
+  return RESOLUTION_TEXT[r.resolution] || 'Resolved';
+}
+
+/** "to do", "in progress": an assignment's status inside a sentence. */
+export function statusWords(status) {
+  return status ? (STATUS[status] || String(status).replace(/_/g, ' ')).toLowerCase() : 'assigned';
+}
+
 export const CSV_COLUMNS = ['problem_id', 'reported_at', 'annotator_id', 'recording_id', 'file_name', 'mode', 'reason', 'note', 'outcome', 'where',
   'item_status', 'state', 'resolution', 'resolution_note', 'resolved_at', 'resolved_by', 'reassigned_to', 'unusable_now'];
 
@@ -51,10 +62,10 @@ export class ProblemsSection {
       { title: 'Recording', sort: (r) => r.recording_id, render: (r) => h('span', {}, recordingName(r.recording_id, r.file_name), r.mode !== 'standard' ? h('span.caption.block', {}, MODES[r.mode] || r.mode) : null) },
       { title: 'Reason', sort: (r) => r.reason, render: (r) => h('span', {}, r.reason_text || REASON_TEXT[r.reason] || r.reason, r.note ? h('span.caption.block.problem-note-text', {}, `“${r.note}”`) : null) },
       { title: 'Outcome', sort: (r) => r.outcome, render: (r) => (r.outcome === 'unusable' ? chip(r.unusable_now ? 'Cannot be annotated' : 'Was set aside') : 'Carried on') },
-      { title: 'State', sort: (r) => r.state, render: (r) => (r.state === 'open' ? chip('Open', 'active') : h('span', {}, chip(RESOLUTION_TEXT[r.resolution] || 'Resolved', 'done'), r.resolution_note ? h('span.caption.block', {}, r.resolution_note) : null)) },
+      { title: 'State', sort: (r) => r.state, render: (r) => (r.state === 'open' ? chip('Open', 'active') : h('span', {}, chip(resolutionText(r), 'done'), r.resolution_note ? h('span.caption.block', {}, r.resolution_note) : null)) },
       { title: '', cls: 'actions', render: (r) => (r.state === 'open' ? h('button.btn.small', { type: 'button', 'data-log': 'problem-open', onclick: () => this._showDetail(r) }, 'Deal with it…') : null) },
     ], [], { empty: 'No reports match.', pageSize: 25, sortable: true, caption: 'Problem reports', rowKey: (r) => r.problem_id });
-    const csv = h('button.btn', { type: 'button', 'data-log': 'problems-csv', onclick: () => this._download() }, 'Download as CSV');
+    const csv = h('button.btn', { type: 'button', 'data-log': 'problems-csv', onclick: () => this._download() }, 'Download the table (CSV)');
     this.el = h('section.admin-section', { 'data-section': 'problems' },
       sectionHead('Problems', 'Problems annotators reported with recordings: a file that will not open, the wrong recording, flat or missing channels, or one too noisy or too short to annotate.'),
       this.msg, this.tiles, this.detail,
@@ -100,9 +111,12 @@ export class ProblemsSection {
     const msg = messageArea();
     const note = textInput({ placeholder: 'For example: replaced the file', maxlength: 300 });
     const people = select([['', 'Choose a person…']], '');
-    this.area.read('users_list').then((u) => {
+    // Those who have the recording already are shown, and cannot be chosen: giving it to them changes nothing.
+    Promise.all([this.area.read('users_list'), this.area.read('assignments_list').catch(() => ({ items: [] }))]).then(([u, a]) => {
+      const have = new Set((a.items || []).filter((i) => i.recording_id === r.recording_id && (i.mode || 'standard') === 'standard').map((i) => i.annotator_id));
       for (const x of (u.users || []).filter((p) => p.status === 'active' && p.role === 'annotator' && p.annotator_id !== r.annotator_id)) {
-        people.append(h('option', { value: x.annotator_id }, `${x.annotator_id}${x.display_name ? ` (${x.display_name})` : ''}`));
+        const has = have.has(x.annotator_id);
+        people.append(h('option', { value: x.annotator_id, disabled: has, 'data-has': has ? '' : null }, `${x.annotator_id}${x.display_name ? ` (${x.display_name})` : ''}${has ? ': has it already' : ''}`));
       }
     }).catch(() => {});
     const done = async (text) => {
@@ -117,12 +131,13 @@ export class ProblemsSection {
     const give = actionButton('Give it to this person', { working: 'Assigning…', msg, log: 'problem-reassign',
       onClick: async () => {
         if (!people.value) { msg.show('note', 'Choose the person to give the recording to.'); return; }
-        await this.area.write('problem_reassign', { problem_id: r.problem_id, annotator_id: people.value, note: note.value });
-        await done(`${r.file_name} is assigned to ${people.value}, and the report is resolved.`);
+        const to = people.value;
+        await this.area.write('problem_reassign', { problem_id: r.problem_id, annotator_id: to, note: note.value });
+        await done(`${r.file_name} is given to ${to}, and the report is resolved.`);
       } });
     const close = h('button.btn.quiet', { type: 'button', onclick: () => clear(this.detail) }, 'Close');
     this.detail.append(card(`${r.annotator_id}'s report on ${r.file_name}`,
-      h('p', {}, `${r.reason_text || REASON_TEXT[r.reason]}${r.note ? `: “${r.note}”` : '.'} Reported ${whenText(r.reported_at)} from ${r.where === 'annotate' ? 'the annotation view' : 'the home page'}, when the recording was ${String(r.item_status || '').replace('_', ' ') || 'assigned'}.`),
+      h('p', {}, `${r.reason_text || REASON_TEXT[r.reason]}${r.note ? `: “${r.note}”` : '.'} Reported ${whenText(r.reported_at)} from ${r.where === 'annotate' ? 'the annotation view' : 'the home page'}, when the recording was ${statusWords(r.item_status)}.`),
       h('p.caption', {}, r.outcome === 'unusable' ? (r.unusable_now ? `${r.annotator_id} set it aside as one that cannot be annotated.` : 'It was set aside, and is no longer.') : `${r.annotator_id} carried on with it.`),
       field('Note (kept with the report)', note, { hint: 'The annotator sees this note when the recording is returned to their list.' }),
       h('div.btn-row', {}, resolve, back),

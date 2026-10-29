@@ -4,7 +4,7 @@
    headings at a sturdy text cut (opsz 24) with tight tracking, figures in tabular digits so that
    columns line up. Sizes come from one scale of whole pixels, each on a whole-pixel line, and
    spacing from steps of 4 and 8 pixels, so that letters and lines fall on the screen's pixels.
-   Pages are a warm off-white with dashed column guides behind them, and the EEG is drawn on white.
+   Pages are a warm off-white with dashed column guides at their edges, and the EEG is drawn on white.
    Lines are 1-pixel hairlines; panels and tables are square. Controls are flat grey pills without
    outlines; black marks the one action that moves you forward, and a single ink blue marks links,
    selection and what is highlighted. Arrows, ticks and chevrons are drawn icons (the --i-* masks
@@ -108,6 +108,7 @@
   --i-close: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='square'%3E%3Cpath d='M4.5 4.5l7 7M11.5 4.5l-7 7'/%3E%3C/svg%3E");
   --i-star: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1.5l1.9 4.3 4.6.4-3.5 3 1.1 4.6L8 11.4l-4.1 2.4 1.1-4.6-3.5-3 4.6-.4z'/%3E%3C/svg%3E");
   --i-pause: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='square'%3E%3Cpath d='M5.5 3.5v9M10.5 3.5v9'/%3E%3C/svg%3E");
+  --i-play: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linejoin='round'%3E%3Cpath d='M5 3.5v9l7-4.5z'/%3E%3C/svg%3E");
   --i-skip-forward: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='square'%3E%3Cpath d='M2.5 8h8M7 4l4 4-4 4M13.5 3.5v9'/%3E%3C/svg%3E");
   --i-note: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linejoin='round'%3E%3Cpath d='M3.5 2.5h6l3 3v8h-9z'/%3E%3Cpath d='M9.5 2.5v3h3M5.5 8.5h5M5.5 11h3.5'/%3E%3C/svg%3E");
   --i-more: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='black'%3E%3Ccircle cx='3.5' cy='8' r='1.25'/%3E%3Ccircle cx='8' cy='8' r='1.25'/%3E%3Ccircle cx='12.5' cy='8' r='1.25'/%3E%3C/svg%3E");
@@ -128,16 +129,12 @@ body {
   overflow-x: hidden;
   min-height: 100vh;
 }
-/* Column guides: three columns of the page's width, drawn as faint dashed lines behind the pages
-   around the EEG. Each line is the border of a box (borders fall on whole pixels): the outer pair on
-   ::before, the inner pair on ::after, which is centred and a third as wide. */
-body[data-route="home"]::before, body[data-route="open"]::before, body[data-route="training"]::before,
-body[data-route="home"]::after, body[data-route="open"]::after, body[data-route="training"]::after {
+/* Column guides: the two edges of the page's width, drawn as faint dashed lines behind the pages
+   around the EEG, where they frame the content and cross no text. The line is the border of a box
+   (borders fall on whole pixels). */
+body[data-route="home"]::before, body[data-route="open"]::before, body[data-route="training"]::before {
   content: ""; position: fixed; top: 0; bottom: 0; left: 0; right: 0; margin: 0 auto; pointer-events: none; z-index: 0;
   width: min(1112px, calc(100% - 48px)); border-left: 1px dashed var(--guide); border-right: 1px dashed var(--guide);
-}
-body[data-route="home"]::after, body[data-route="open"]::after, body[data-route="training"]::after {
-  width: calc(min(1112px, calc(100% - 48px)) / 3);
 }
 .app-content { position: relative; z-index: 1; }
 
@@ -181,6 +178,7 @@ kbd .ico { width: 12px; height: 12px; }
 .ico-star { --i: var(--i-star); }
 .ico-star-empty { --i: var(--i-star-empty); }
 .ico-pause { --i: var(--i-pause); }
+.ico-play { --i: var(--i-play); }
 .ico-skip-forward { --i: var(--i-skip-forward); }
 .ico-note { --i: var(--i-note); }
 .ico-more { --i: var(--i-more); }
@@ -285,8 +283,9 @@ details[open] > summary::before { transform: rotate(90deg); }
   transition: border-color var(--fast) var(--ease);
 }
 @media (hover: hover) { .field:hover { border-bottom-color: var(--ink); } }
+/* A field with the focus takes the same 2-pixel ring as a button, and its underline turns blue. */
 .field:focus { outline: none; border-bottom-color: var(--accent); }
-.field:focus-visible { outline: none; }
+.field:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .field::placeholder { color: var(--text-tertiary); }
 select.field {
   -webkit-appearance: none; appearance: none; padding-right: 36px; cursor: pointer;
@@ -393,6 +392,9 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); width
 .connect summary { cursor: pointer; color: var(--accent); }
 .connect-fields .row .field { flex: 1; }
 .footnote { max-width: 440px; margin-top: 16px; }
+/* Where the annotators' guide is read: a line under the sign-in form and under the home page's greeting. */
+.signin-card .guide-link { margin: 16px 0 0; }
+.view.home .page > .guide-link { margin: -4px 0 0; }
 .montage { width: 200px; height: 200px; display: block; flex: none; }
 .montage .orbit { transform-box: view-box; transform-origin: 50% 50%; animation: montage-orbit 40s linear infinite; }
 @keyframes montage-orbit { to { transform: rotate(360deg); } }
@@ -500,8 +502,13 @@ ul.examples b { font-weight: 400; color: var(--ink); }
 .training .btn.primary.wide { width: auto; min-width: 264px; }
 
 /* ------------------------------------------------------------ annotation view */
+/* The view fills the window. The EEG and the side panel keep a minimum height (--main-min): in a
+   short window (a laptop with the browser's zoom at 150%, say) the view scrolls instead of drawing one
+   part over another. The side panel's width (--side-w) narrows on smaller screens. */
 .view.annotate {
-  display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; height: 100vh; height: 100dvh; overflow: hidden; background: var(--page);
+  --main-min: 360px; --side-w: 400px;
+  display: grid; grid-template-rows: min-content min-content minmax(var(--main-min), 1fr) min-content; height: 100vh; height: 100dvh;
+  overflow-x: hidden; overflow-y: auto; background: var(--page);
 }
 .ws-header {
   display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 48px; padding: 0 12px;
@@ -518,9 +525,9 @@ ul.examples b { font-weight: 400; color: var(--ink); }
   border-radius: 0; padding: 2px 8px; font: var(--t-14);
 }
 /* A revision of a finished recording: a banner under the header with its two actions (workspace.js, _revisionBar). */
-.view.annotate.revising { grid-template-rows: auto auto auto minmax(0, 1fr) auto; }
+.view.annotate.revising { grid-template-rows: min-content min-content min-content minmax(var(--main-min), 1fr) min-content; }
 /* A view that only shows annotations has no toolbar: the EEG takes the row it would have had. */
-.view.annotate.view-only { grid-template-rows: auto minmax(0, 1fr) auto; }
+.view.annotate.view-only { grid-template-rows: min-content minmax(var(--main-min), 1fr) min-content; }
 .ws-revision {
   display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; min-width: 0;
   background: var(--accent-soft); border-bottom: 1px solid var(--hairline); border-left: 3px solid var(--accent);
@@ -531,15 +538,20 @@ ul.examples b { font-weight: 400; color: var(--ink); }
 .ws-actions { display: flex; align-items: center; gap: 4px; flex: none; }
 .ws-actions .btn, .ws-header .btn { height: 32px; padding: 0 14px; font: var(--t-14); }
 .ws-header .btn.quiet.back { margin: 0 4px 0 0; padding: 0; }
+/* The toolbar wraps onto a second line when the window is too narrow for one, so that every type
+   button keeps its code beside its number (one line is 48 pixels high, as before). */
 .ws-toolbar {
-  display: flex; align-items: center; gap: 4px; height: 48px; padding: 0 12px; background: var(--page); border-bottom: 1px solid var(--hairline);
-  overflow: hidden; white-space: nowrap; min-width: 0;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 4px; min-height: 48px; padding: 8px 12px; background: var(--page);
+  border-bottom: 1px solid var(--hairline); white-space: nowrap; min-width: 0;
 }
 .ws-caption { color: var(--text-secondary); min-width: 60px; font: var(--t-14); }
 .ws-toolbar.changing .ws-caption { color: var(--accent); font-weight: 600; }
+/* Draw/edit off (view only): the caption says so and the type buttons step back. */
+.ws-toolbar.view-only .ws-caption { color: var(--ink); font-weight: 600; }
+.ws-toolbar.view-only .chips, .ws-toolbar.view-only .type-menu { opacity: 0.45; }
 .ws-toolbar .btn { height: 32px; padding: 0 12px; font: var(--t-14); }
 .ws-toolbar .btn.quiet { padding: 0 4px; }
-.chips { display: flex; gap: 2px; flex: none; }
+.chips { display: contents; } /* the type buttons wrap one by one with the rest of the toolbar */
 .chip-btn {
   display: inline-flex; align-items: center; gap: 4px; height: 32px; padding: 0 8px; border: none; border-radius: var(--pill);
   background: var(--fill); color: var(--ink); font: var(--t-14); cursor: pointer;
@@ -551,7 +563,6 @@ ul.examples b { font-weight: 400; color: var(--ink); }
 .chip-btn[aria-pressed="true"] { background: var(--chip-colour); color: var(--chip-text); }
 .chip-btn[aria-pressed="true"] .chip-key { color: inherit; }
 .chip-btn[aria-pressed="true"] .swatch { outline: 1px solid rgba(255, 255, 255, 0.85); }
-.ws-toolbar.compact .chip-code { display: none; }
 .type-menu { max-width: 192px; justify-content: flex-start; }
 .type-menu .type-name { overflow: hidden; text-overflow: ellipsis; }
 .type-menu .chev { color: var(--text-secondary); margin-left: auto; display: inline-flex; }
@@ -569,24 +580,34 @@ ul.examples b { font-weight: 400; color: var(--ink); }
 .ws-main { position: relative; display: flex; min-height: 0; min-width: 0; }
 .ws-eeg { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 8px 0 8px 8px; }
 .ws-side {
-  width: 400px; flex: none; display: flex; flex-direction: column; gap: 8px; padding: 8px; overflow: hidden; min-height: 0;
+  width: var(--side-w, 400px); flex: none; display: flex; flex-direction: column; gap: 8px; padding: 8px; overflow: hidden; min-height: 0;
 }
 .coach-host, .review-host { display: flex; flex-direction: column; min-height: 0; flex: 0 1 auto; max-height: 60%; }
 .coach-host:empty, .review-host:empty { display: none; }
+/* The line at the bottom: what happened and what to do next on the left, on up to two lines so that
+   an instruction is read to its end, and on the right how much has been viewed, the number of
+   annotations and the filters, one above the other. Its height stays the same whatever it says, so
+   that the EEG never moves. */
 .ws-status {
-  display: flex; justify-content: space-between; gap: 12px; padding: 0 12px; background: var(--page); border-top: 1px solid var(--hairline);
-  font: var(--t-12); color: var(--text-secondary); white-space: nowrap; min-width: 0; height: 28px; align-items: center;
-  font-variant-numeric: tabular-nums lining-nums;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; column-gap: 16px;
+  height: 40px; padding: 4px 12px; background: var(--page); border-top: 1px solid var(--hairline);
+  font: var(--t-12); color: var(--text-secondary); min-width: 0; font-variant-numeric: tabular-nums lining-nums;
 }
-.ws-status-left { overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+.ws-status-left {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; min-width: 0;
+}
 .ws-status-left .ws-message { color: var(--ink); }
-.ws-status-right { overflow: hidden; text-overflow: ellipsis; white-space: pre; flex: none; max-width: 55%; }
+.ws-status-right { display: flex; flex-direction: column; align-items: flex-end; min-width: 0; max-width: 40vw; white-space: nowrap; }
+.ws-status-right > * { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.ws-status-counts { display: flex; gap: 12px; }
 .ws-status-right .ws-viewed { color: var(--ink); }
 
 /* Long sessions (js/annotate/workspace.js): the time the draft was last kept, Pause, the paused panel
    over the EEG and the side panel, the break reminder, and how much of the recording has been viewed. */
 .ws-saved { font: var(--t-14); color: var(--text-secondary); white-space: nowrap; margin: 0 8px 0 4px; font-variant-numeric: tabular-nums lining-nums; }
 .ws-saved:empty { display: none; }
+/* The study has stopped receiving drafts (no connection): a calm warning, the draft still kept in this browser. */
+.ws-saved[data-saved="local-only"] { color: var(--warning-text); background: var(--warning-bg); padding: 2px 8px; }
 /* Pressed, it reads Resume in the grey of a pressed control: the panel's own Resume is the forward action. */
 .btn.pause-btn[aria-pressed="true"] { background: var(--fill-pressed); color: var(--ink); }
 .pause-panel {
@@ -610,8 +631,9 @@ ul.examples b { font-weight: 400; color: var(--ink); }
   .pause-card .btn-row { margin-top: 16px; }
 }
 .view.annotate.paused .ws-toolbar { opacity: 0.4; }
+/* The break reminder sits at the foot of the side panel, so that it never hides the EEG. */
 .break-reminder {
-  position: absolute; top: 16px; right: 16px; z-index: 10; width: min(400px, calc(100% - 48px)); margin: 0; font: var(--t-14);
+  position: absolute; bottom: 8px; right: 8px; z-index: 10; width: calc(var(--side-w, 400px) - 16px); margin: 0; font: var(--t-14);
 }
 .break-reminder p { margin: 0; }
 .break-reminder .btn-row { margin-top: 12px; }
@@ -621,6 +643,8 @@ ul.examples b { font-weight: 400; color: var(--ink); }
 .coverage-block .btn-row { margin-top: 8px; }
 .clock-note { margin: -4px 0 0; }
 .welcome-back { font: var(--t-14); margin-bottom: 12px; }
+.discarded-work { font: var(--t-14); margin-bottom: 12px; }
+.discarded-work p { margin: 0 0 8px; }
 fieldset.comfort .opt { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 4px 12px; align-items: center; }
 fieldset.comfort .opt-name { color: var(--text-secondary); }
 fieldset.comfort .opt-choices { display: flex; flex-wrap: wrap; gap: 4px 16px; }
@@ -630,6 +654,7 @@ ul.unviewed-list { font-variant-numeric: tabular-nums lining-nums; margin-bottom
 .ws-side.large-text .tab-panel, .ws-side.large-text .tab-panel .caption, .ws-side.large-text .ann-table, .ws-side.large-text .ann-table th,
 .ws-side.large-text table.info, .ws-side.large-text table.info th, .ws-side.large-text .help-text, .ws-side.large-text .coach-scroll,
 .ws-side.large-text .coach-header, .ws-side.large-text .welcome-back, .ws-side.large-text fieldset.viewing legend { font: var(--t-16); }
+.ws-side.large-text .ann-table .ann-details { font: var(--t-14); }
 
 /* the viewer */
 .viewer { flex: 1; display: flex; flex-direction: column; min-height: 0; background: var(--surface); border: 1px solid var(--hairline); border-radius: 0; overflow: hidden; }
@@ -659,25 +684,40 @@ ul.unviewed-list { font-variant-numeric: tabular-nums lining-nums; margin-bottom
 .tab-panel { padding: 16px; overflow: auto; flex: 1; min-height: 0; font: var(--t-14); }
 .count { margin-bottom: 8px; }
 .table-wrap { max-height: 320px; overflow: auto; border: 1px solid var(--hairline); border-radius: 0; background: var(--surface); }
-.tab-panel[data-panel="annotations"] { display: flex; flex-direction: column; }
-.tab-panel[data-panel="annotations"] .table-wrap { max-height: none; flex: 0 1 auto; min-height: 60px; }
+.tab-panel[data-panel="annotations"] { display: flex; flex-direction: column; container: ann-panel / inline-size; }
+.ann-body { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+/* The list keeps room for three or four rows (rows of three lines too); the tab scrolls to its buttons. */
+.ann-body > .table-wrap { max-height: none; flex: 0 1 auto; min-height: 232px; }
+/* A wide, short panel (below the EEG on an iPad held upright): the buttons beside the list, so that
+   the list keeps the panel's whole height. */
+@container ann-panel (min-width: 600px) {
+  .ann-body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; grid-template-rows: auto minmax(0, 1fr); column-gap: 16px; }
+  .ann-body > .count { grid-column: 1 / -1; }
+  .ann-body > .table-wrap { grid-column: 1; grid-row: 2; align-self: start; max-height: 100%; min-height: 0; }
+  .ann-body > .btn-grid, .ann-body > .btn-row { grid-column: 2; grid-row: 2; align-self: start; margin-top: 0; }
+}
 .ann-table { width: 100%; border-collapse: collapse; font: var(--t-14); table-layout: fixed; }
 .ann-table th {
   position: sticky; top: 0; background: var(--page); text-align: left; color: var(--text-secondary); padding: 6px 8px;
   font: var(--t-14); border-bottom: 1px solid var(--rule); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.ann-table th:nth-child(1) { width: 34%; }
-.ann-table th:nth-child(2) { width: 12%; }
-.ann-table th:nth-child(3), .ann-table th:nth-child(4) { width: 15%; }
-.ann-table td { padding: 6px 8px; border-bottom: 1px solid var(--hairline); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
-.ann-table td.num, .ann-table th.num { text-align: right; font-variant-numeric: tabular-nums lining-nums; }
-.ann-table td.code { color: var(--text-secondary); font-variant-numeric: tabular-nums lining-nums; }
-.ann-table td.label { display: flex; align-items: center; gap: 8px; }
-.ann-table td.label span:last-child, .ann-table td.label .label-text { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* Each row has two lines, so that the label has the whole width of the panel and is read in full:
+   the label (wrapping at its hyphens only when even that is too narrow, so that nothing is ever cut
+   short), then the channels, the rating, the note sign and, on the right, the start and end. The
+   code of the type is in the row's title. */
+.ann-table th .th-time { float: right; }
+.ann-table td { padding: 4px 8px; border-bottom: 1px solid var(--hairline); cursor: pointer; }
+.ann-table .ann-name { display: flex; align-items: baseline; gap: 8px; }
+.ann-table .label-text { min-width: 0; overflow-wrap: anywhere; }
+.ann-table .ann-details {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; padding-left: 18px;
+  color: var(--text-secondary); font: var(--t-12); font-variant-numeric: tabular-nums lining-nums;
+}
+.ann-table .ann-details .chans { min-width: 0; overflow-wrap: anywhere; }
+.ann-table .ann-time { margin-left: auto; white-space: nowrap; }
 /* Confidence and notes: quiet, in the secondary text colour (never the warning or bad-channel greys). */
-.ann-table td.label .conf-mark { flex: none; margin-left: -4px; color: var(--text-secondary); font: var(--t-12); }
-.ann-table td.label .note-mark .ico { width: 12px; height: 12px; vertical-align: 0; }
-.ann-table td.label .note-mark { flex: none; display: inline-flex; margin-left: -4px; color: var(--text-secondary); }
+.ann-table .note-mark .ico { width: 12px; height: 12px; display: block; }
+.ann-table .note-mark { display: inline-flex; align-self: center; }
 /* The confidence control below the table: 1 to 5 with one press, and Clear; the whole width of the grid. */
 .conf-row { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 4px; }
 .conf-row .conf-caption { flex: 1 1 100%; font: var(--t-12); }
@@ -706,6 +746,7 @@ fieldset.viewing { border: 1px solid var(--hairline); border-radius: 0; padding:
 fieldset.viewing legend { padding: 0 4px; font: var(--t-14); color: var(--text-secondary); }
 fieldset.viewing .opt { margin: 4px 0; display: flex; flex-wrap: wrap; gap: 4px 12px; }
 fieldset.viewing label { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+fieldset.viewing .opt.sub { padding-left: 24px; }
 /* "Colour channels by" and its legend (js/viewer/channel_colours.js) */
 fieldset.viewing .channel-colours { align-items: center; margin-top: 8px; }
 .channel-colours select.field { width: auto; height: 32px; padding-left: 8px; font: var(--t-14); }
@@ -720,7 +761,9 @@ ul.warnings { font: var(--t-14); }
 .help-text { font: var(--t-14); }
 .help-text h3:first-child { margin-top: 0; }
 .help-text table.keys td { padding: 4px 12px 4px 0; vertical-align: top; }
-.help-text table.keys td:first-child { white-space: nowrap; }
+/* the keys take the room they need and their explanation the rest, in a narrow panel too */
+.help-text table.keys td:first-child { width: 1%; }
+.help-text table.keys td:first-child kbd { white-space: nowrap; }
 
 /* the coach and the practice review */
 .coach { display: flex; flex-direction: column; padding: 0; min-height: 0; max-height: 100%; border-top: 2px solid var(--accent) !important; }
@@ -731,18 +774,21 @@ ul.warnings { font: var(--t-14); }
 .coach-feedback.banner { background: var(--warning-bg); border-left-color: var(--warning-bar); color: var(--warning-text); }
 .coach-feedback.success { background: var(--success-bg); border-left-color: var(--success-bar); color: var(--accent-hover); }
 .coach-feedback ul { margin: 4px 0 0; padding-left: 20px; }
-.coach-body { color: var(--text-secondary); }
+.coach-body { color: var(--text-secondary); white-space: pre-line; }
 .coach-note { font: var(--t-14); }
+.coach-more { align-self: flex-start; margin: 0 16px 4px; }
 .coach-buttons { display: flex; justify-content: space-between; padding: 8px 16px 16px; border-top: 1px solid var(--hairline); }
 .coach-buttons .btn { height: 32px; padding: 0 14px; font: var(--t-14); }
 .review { overflow-y: auto; min-height: 0; padding: 16px; border-top: 2px solid var(--ink) !important; font: var(--t-14); }
 .review h2 { font: var(--t-20); letter-spacing: -0.02em; font-variation-settings: var(--display); }
-.review .verdict { font-weight: 600; }
+.review .verdict b { font-weight: 600; }
 .review .verdict.passed { color: var(--accent); }
 .review .verdict.not-yet { color: var(--warning-text); }
-.review .summary table { border-collapse: collapse; font: var(--t-14); margin: 8px 0 12px; }
-.review .summary th { text-align: left; font-weight: 400; padding: 2px 16px 2px 0; color: var(--text-secondary); }
-.review .summary td { font-weight: 600; font-variant-numeric: tabular-nums lining-nums; text-align: right; }
+.review .review-score { font: var(--t-16); color: var(--ink); }
+.review-details { margin: 12px 0; }
+.review-figures { border-collapse: collapse; font: var(--t-14); margin: 8px 0; }
+.review-figures th { text-align: left; font-weight: 400; padding: 2px 16px 2px 0; color: var(--text-secondary); }
+.review-figures td { font-weight: 600; font-variant-numeric: tabular-nums lining-nums; text-align: right; }
 .flag-list { max-height: 180px; overflow-y: auto; padding-left: 24px; font: var(--t-14); }
 .flag-list li { padding: 4px; cursor: pointer; border-radius: 0; }
 .flag-list li.current { background: var(--hover); outline: 1px solid var(--hairline); }
@@ -797,9 +843,11 @@ ul.warnings { font: var(--t-14); }
 .form .caption.error { color: var(--destructive); }
 
 /* --------------------------------------------------------------------- menus */
+/* A menu may use the window's whole height (less a small margin), so that a long right-click menu fits
+   whole on a 720-pixel laptop screen; menu.js moves it up when it would run past the bottom. */
 .menu {
   position: fixed; z-index: 120; background: var(--page); border: 1px solid var(--rule); border-radius: 0;
-  padding: 4px; max-height: 72vh; overflow-y: auto; min-width: 220px;
+  padding: 4px; max-height: calc(100vh - 8px); max-height: calc(100dvh - 8px); overflow-y: auto; min-width: 220px;
 }
 .menu-item {
   display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 4px 12px; border: none; border-radius: 0;
@@ -834,38 +882,47 @@ a.btn { text-decoration: none; }
 .phone-note { display: none; margin: 16px 0; }
 .phone-note p { margin: 0; }
 @media (max-width: 699px), (max-height: 479px) {
-  body:not([data-route="signin"]):not([data-route^="admin"]) .app-content { display: none; }
-  body:not([data-route="signin"]):not([data-route^="admin"]) .small-screen { display: flex; }
+  body:not([data-route="signin"]):not([data-route^="admin"]):not(.small-screen-ok) .app-content { display: none; }
+  body:not([data-route="signin"]):not([data-route^="admin"]):not(.small-screen-ok) .small-screen { display: flex; }
   .phone-note { display: block; }
 }
-/* A tablet held upright (or a narrow window): the EEG takes the width, with the coach and the side
-   panel below it, side by side, and the toolbars wrap onto a second line when they need one. */
+/* On a computer the notice may be a window made small, or the page made large with the browser's
+   zoom: the person can carry on in it (common.js, smallScreenNotice). A phone keeps the notice. */
+.small-screen .continue-small { display: none; }
+@media (pointer: fine) {
+  .small-screen button.continue-small { display: inline-flex; }
+  .small-screen p.continue-small { display: block; }
+}
+/* A narrow window or a tablet: the header wraps onto a second line when it needs one. */
 @media (max-width: 1024px) {
   .view.annotate .ws-header { height: auto; min-height: 48px; flex-wrap: wrap; padding: 8px 12px; row-gap: 8px; }
-  .view.annotate .ws-toolbar { flex-wrap: wrap; height: auto; padding: 8px 12px; row-gap: 8px; }
+}
+/* A tablet held upright, or a narrow window: the EEG takes the width, with the coach and the side
+   panel below it, side by side. A wide but short window (a laptop with the browser's zoom at 150%)
+   keeps the panel beside the EEG. */
+@media (max-width: 1024px) and (orientation: portrait), (max-width: 799px) {
+  .view.annotate { --main-min: 576px; }
   .view.annotate .ws-main { flex-direction: column; }
   .view.annotate .ws-eeg { flex: 1 1 auto; min-height: 320px; padding: 8px 8px 0; }
   .view.annotate .ws-side { width: auto; height: 38%; min-height: 240px; flex: none; flex-direction: row; padding: 8px; }
   .view.annotate .ws-side > .coach-host, .view.annotate .ws-side > .review-host { flex: 1 1 0; max-height: none; min-width: 0; }
   .view.annotate .ws-side > .side-tabs { flex: 1 1 0; min-width: 0; min-height: 0; }
-  .view.annotate .ws-status { height: auto; min-height: 28px; flex-wrap: wrap; row-gap: 0; padding: 4px 12px; }
-  .view.annotate .ws-status-left { flex: 1 1 100%; }
-  .view.annotate .ws-status-right { max-width: none; white-space: normal; }
+  .view.annotate .break-reminder { right: 16px; bottom: 16px; width: min(400px, calc(100% - 32px)); }
+  /* The line at the bottom: the message across the width on two lines, the figures under it. */
+  .view.annotate .ws-status { grid-template-columns: minmax(0, 1fr) auto; height: auto; row-gap: 2px; }
+  .view.annotate .ws-status-left { grid-column: 1 / -1; min-height: 32px; }
+  .view.annotate .ws-status-right { grid-column: 2; flex-direction: row; flex-wrap: wrap; justify-content: flex-end; column-gap: 12px; max-width: none; }
+  .view.annotate .ws-readout { grid-column: 1; grid-row: 2; }
   .view.quiz .quiz-main { flex-direction: column; }
   .view.quiz .quiz-eeg { flex: 1 1 auto; min-height: 320px; padding: 8px 8px 0; }
   .view.quiz .quiz-side { width: auto; height: 42%; flex: none; border-left: none; border-top: 1px solid var(--hairline); }
 }
 @media (max-width: 1440px) {
-  .ws-side { width: 360px; }
-  .ann-table .code { display: none; }
-  /* Start and End keep their whole figures (23.000); the label and the channels give way first. */
-  .ann-table th:nth-child(1) { width: 34%; }
-  .ann-table th:nth-child(3), .ann-table th:nth-child(4) { width: 22%; }
-  .ann-table td.num, .ann-table th.num { padding-left: 4px; }
+  .view.annotate { --side-w: 360px; }
 }
 @media (max-width: 1100px) {
   .home-grid { grid-template-columns: minmax(0, 1fr); }
-  .ws-side { width: 320px; }
+  .view.annotate { --side-w: 320px; }
   .ws-actions .btn { padding: 0 10px; }
   .stages { grid-template-columns: minmax(0, 1fr); }
 }
@@ -882,7 +939,7 @@ a.btn { text-decoration: none; }
   .menu-item { min-height: 44px; }
   .picker-item { padding: 10px 12px; }
   .quiz-option { padding: 8px; }
-  .ann-table td { padding: 10px 8px; }
+  .ann-table td { padding: 6px 8px; }
   .channel-chip { padding: 8px; }
   .flag-list li { padding: 8px 4px; }
   input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; }
@@ -891,6 +948,9 @@ a.btn { text-decoration: none; }
   .link-panel .field.area { font: var(--t-16); }
   .channel-colours select.field { height: 40px; font: var(--t-16); }
   fieldset.comfort .opt-choices label { min-height: 40px; }
+  /* Every choice of the Recording tab is a 40-pixel row to tap, as the comfort choices are. */
+  fieldset.viewing .opt label, .tab-panel label.check { min-height: 40px; }
+  fieldset.viewing .opt, .tab-panel label.check { margin-top: 0; margin-bottom: 0; }
   /* Text buttons too: 40 pixels to tap, and a link inside a sentence reaches as far without moving its line. */
   .btn.quiet { height: 40px; }
   button.link { display: inline-block; padding: 10px 0; margin: -10px 0; }
@@ -915,7 +975,8 @@ ul.quiz-list li, ul.quiz-files li {
   display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--hairline);
 }
 ul.quiz-files .file { word-break: break-all; }
-.view.quiz { display: grid; grid-template-rows: auto auto minmax(0, 1fr); height: 100vh; height: 100dvh; overflow: hidden; background: var(--page); }
+.view.quiz { display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100vh; height: 100dvh; overflow: hidden; background: var(--page); }
+.quiz-frame { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; }
 .quiz-bar {
   display: flex; align-items: center; gap: 12px; height: 48px; padding: 0 12px; background: var(--page); border-bottom: 1px solid var(--hairline); min-width: 0;
 }
@@ -939,6 +1000,13 @@ ul.quiz-files .file { word-break: break-all; }
 @media (hover: hover) { .quiz-option:hover { background: var(--hover); } }
 .quiz-option.group span:last-child { font-style: italic; }
 .quiz-option input:disabled ~ span { opacity: 0.6; }
+/* once an answer is sent, yours stays clear among the others */
+.quiz-option.chosen { background: var(--accent-soft); }
+.quiz-option.chosen input:disabled ~ span { opacity: 1; color: var(--ink); }
+.quiz-chosen { margin: 0; min-height: 2.6em; }
+.quiz-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+.quiz-help { margin: 0 0 16px; padding: 12px 16px; }
+.quiz-help summary { cursor: pointer; font: var(--t-16); color: var(--ink); }
 .swatch.none { border: 1px solid var(--border); background: var(--surface); }
 .quiz-feedback:empty { display: none; }
 .quiz-feedback { margin: 0; font: var(--t-14); }
@@ -1067,6 +1135,8 @@ table.leaderboard th:first-child, table.leaderboard td:first-child { width: 56px
 .ws-actions .btn.icon.ws-more { width: 32px; padding: 0; }
 .review-line, .problem-line { display: block; margin-top: 4px; }
 .review-line { color: var(--accent); }
+button.review-line { text-align: left; font: var(--t-14); }
+.review-line.plain { color: var(--text-secondary); }
 .returned-line { margin: 0 0 12px; }
 /* The report's dialog (annotate/problem.js). */
 .problem-dialog { max-width: 560px; }
@@ -1085,6 +1155,7 @@ table.leaderboard th:first-child, table.leaderboard td:first-child { width: 56px
 .review-list, .review-ranges, .feedback-list { list-style: none; margin: 8px 0; padding: 0; }
 .review-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 8px 4px; border-bottom: 1px solid var(--hairline); }
 .review-row.current { background: var(--accent-soft); }
+.review-theirs { flex: 1 1 100%; margin: 0; }
 .review-row[data-status="caveat"] .review-label, .review-row[data-status="comment"] .review-label { color: var(--accent); }
 .review-item-head { display: inline-flex; align-items: center; gap: 8px; flex: 1 1 160px; min-width: 0; border: none; background: none; padding: 0;
   font: var(--t-14); color: var(--ink); text-align: left; cursor: pointer; }
@@ -1163,7 +1234,26 @@ table.leaderboard th:first-child, table.leaderboard td:first-child { width: 56px
 .map-electrode.bad[aria-pressed="true"] { color: var(--selection-channel); border-color: var(--selection-channel); }
 .map-electrode.dim { opacity: 0.35; }
 .map-electrode:disabled { cursor: default; }
+/* The EEG in the Tab order (annotate/workspace.js): its focus ring inside its edge, where nothing clips it. */
+.ws-eeg canvas.layer.top:focus-visible { outline-offset: -2px; }
+/* A mark started with M or [ and waiting for its end (workspace.js _showPendingMark), at the foot of the EEG. */
+.mark-pending {
+  position: absolute; left: 104px; bottom: 72px; z-index: 6; margin: 0; max-width: calc(100% - 128px); padding: 4px 12px;
+  background: var(--page); border: 1px solid var(--rule); font: var(--t-14); color: var(--ink); font-variant-numeric: tabular-nums lining-nums;
+}
 .map-electrode:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; z-index: 2; }
+/* A dense cap seen whole: electrodes as dots too close for their names; the name shows over the
+   electrode under the pointer or with the keyboard's focus, and + brings every name back. */
+.channel-map-block.crowded .map-electrode { min-width: 0; width: var(--el-size); padding: 0; }
+.channel-map-block.crowded .map-electrode > span { display: none; }
+.channel-map-block.crowded .map-electrode[aria-pressed="true"] { background: var(--selection-channel); }
+.channel-map-block.crowded .map-electrode:focus-visible { z-index: 3; }
+.channel-map-block.crowded .map-electrode:focus-visible > span {
+  display: block; position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); padding: 0 6px;
+  background: var(--surface); border: 1px solid var(--rule); color: var(--ink); font-weight: 400; pointer-events: none;
+}
+@media (hover: hover) { .channel-map-block.crowded .map-electrode:hover { z-index: 3; } }
+@media (hover: hover) { .channel-map-block.crowded .map-electrode:hover > span { display: block; position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); padding: 0 6px; background: var(--surface); border: 1px solid var(--rule); color: var(--ink); font-weight: 400; pointer-events: none; } }
 .map-box { position: absolute; border: 1px solid var(--accent); background: rgba(43, 67, 146, 0.08); pointer-events: none; }
 .map-note { margin: 8px 0 0; }
 .dialog.wide:has(.channel-map-block:not([hidden])) { max-width: 760px; }

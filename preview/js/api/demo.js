@@ -22,8 +22,8 @@ import { DemoFeedback } from './demo_feedback.js';
 
 export { DEMO_NOTICE };
 import * as rules from '../training/rules.js';
-import { DEFAULT_PASS, describePassRule, practiceFeedback } from '../training/scoring.js';
-import { escapeHtml, local, newId, nowLocalIso, session } from '../util.js';
+import { DEFAULT_PASS, practiceDetail, practiceFeedback, practiceVerdict, retryRecording, scoreSentence } from '../training/scoring.js';
+import { local, newId, nowLocalIso, session } from '../util.js';
 import { sha256Hex } from '../data/sha256.js';
 import { coveredS, fromDraft } from '../viewer/coverage.js';
 import { ADJECTIVES, ANIMALS } from '../games/words.js';
@@ -87,7 +87,7 @@ export const QUIZ = Object.freeze({
     ['q05', 'demo-01', 14.0, 14.5, 'Electrode-pops-artifact', [],
       'A sudden jump on C3 alone that dies away within a fraction of a second: an electrode pop.'],
     ['q06', 'demo-02', 40.0, 44.0, 'Slow-eye-movement-artifact', ['Eye-movement-artifact', 'Eye-artifact'],
-      'Slow waves of opposite sign on F7 and F8, largest on HEOG, over four seconds: a slow eye movement.'],
+      'Slow waves of opposite sign on the two sides of the head over four seconds, largest on HEOG and at F7 and F8, smaller at Fp1 and Fp2: a slow eye movement.'],
     ['q07', 'demo-01', 50.0, 52.0, QUIZ_NONE_OPTION, [],
       'Only the background EEG: there is no artifact in this segment.'],
   ].map(([item_id, spec, start_s, end_s, correct_label, accepted_labels, explanation]) => Object.freeze({
@@ -281,8 +281,9 @@ export class DemoBackend {
       annotator_id: aid, display_name: acc.display_name, role: acc.role,
       study: this._admin.studyBlock(),
       catalogue: CATALOGUE,
-      programme: this._inProgramme(aid) ? { set_id: TRAINING_SET.set_id, name: this._exampleSet().name } : null,
-      quizzes: [{ set_id: QUIZ.set_id, name: QUIZ.name, n_items: QUIZ.items.length, finished: Boolean(this._quizState(aid).finished), feedback: QUIZ.feedback }],
+      programme: this._inProgramme(aid) ? { set_id: TRAINING_SET.set_id, name: this._exampleSet().name, complete: !this._trainingNext(aid) } : null,
+      quizzes: [{ set_id: QUIZ.set_id, name: QUIZ.name, n_items: QUIZ.items.length, n_answered: Object.keys(this._quizState(aid).answers || {}).length,
+        finished: Boolean(this._quizState(aid).finished), feedback: QUIZ.feedback }],
     };
   }
 
@@ -701,10 +702,14 @@ export class DemoBackend {
     if (body.mode === 'guided') this._checkGuidedComplete(aid, rid, body.annotations);
     if (body.mode === 'practice') {
       feedback = practiceFeedback(truthAnnotations(spec), body.annotations, { passRule: this._passRule() });
-      feedback.summary_html = summaryHtml(feedback);
+      // the plain words of the review, as the server's (electrotag/web/coach.py practice_result)
+      feedback.verdict = practiceVerdict(feedback.passed, this._passRule(), TRAINING_SET.practice.length);
+      feedback.summary = scoreSentence(feedback.counts);
       feedback.demo_notice = DEMO_NOTICE;
       const list = this.state.practice[`${aid}|${rid}`] || [];
-      list.push({ event_f1: feedback.metrics.event_f1, label_accuracy: feedback.metrics.label_accuracy, passed: feedback.passed, at: nowLocalIso() });
+      const at = nowLocalIso();
+      list.push({ event_f1: feedback.metrics.event_f1, label_accuracy: feedback.metrics.label_accuracy, passed: feedback.passed, at,
+        completed_at: at, ...feedback.counts });
       this.state.practice[`${aid}|${rid}`] = list;
     }
     const attempt = this.state.submissions.filter((s) => s.key === key).length + 1;
@@ -867,8 +872,16 @@ export class DemoBackend {
         return { stage: 'practice', recording_id: p[pi], label: 'Start a practice recording',
           text: `Next: ${STAGE_TITLES.practice}, practice recording ${pi + 1} of ${p.length}.` };
       }
-      return { stage: 'practice', recording_id: p[0], label: 'Try a practice recording again', repeat: true,
-        text: 'Not passed yet. Try a practice recording again; the review shows what you missed.' };
+      // as programme.py next_step: the one practised longest ago comes again
+      const attempts = Object.fromEntries(p.map((rid) => [rid, this.state.practice[`${aid}|${rid}`] || []]));
+      const rid = retryRecording(p, attempts);
+      if (p.length === 1) {
+        return { stage: 'practice', recording_id: rid, label: 'Try the practice recording again', repeat: true,
+          text: 'Not passed yet. Try the practice recording again, looking out for what its review showed you.' };
+      }
+      const n = p.indexOf(rid) + 1;
+      return { stage: 'practice', recording_id: rid, label: `Try practice recording ${n} again`, repeat: true,
+        text: `Not passed yet. Try practice recording ${n} of ${p.length} again, the one you did longest ago.` };
     }
     return null;
   }
@@ -887,6 +900,9 @@ export class DemoBackend {
     const gStatus = gDone.length === TRAINING_SET.guided.length ? 'completed' : (gDone.length || started) ? 'in_progress' : 'available';
     const attempts = TRAINING_SET.practice.flatMap((rid) => this.state.practice[`${aid}|${rid}`] || []);
     const passed = attempts.some((r) => r.passed);
+    // the best attempt, as Progress.best_practice: a pass first, then the score, then the type
+    const better = (a, b) => (Number(a.passed) - Number(b.passed)) || (a.event_f1 - b.event_f1) || (a.label_accuracy - b.label_accuracy);
+    const best = attempts.length ? attempts.reduce((b, a) => (better(a, b) > 0 ? a : b)) : null;
     const pStatus = gStatus !== 'completed' ? 'locked' : passed ? 'completed' : attempts.length ? 'in_progress' : 'available';
     const pDone = TRAINING_SET.practice.filter((rid) => this.state.done[this._key(aid, rid, 'practice', ctx)]);
     const sum = (k) => summaries.reduce((a, s) => a + (s[k] || 0), 0);
@@ -898,13 +914,13 @@ export class DemoBackend {
         { key: 'guided', title: STAGE_TITLES.guided, status: gStatus, done: gDone.length, total: TRAINING_SET.guided.length,
           stars: sum('stars'), max_stars: sum('max_stars'), best_score: null, time_s: sum('time_s') },
         { key: 'practice', title: STAGE_TITLES.practice, status: pStatus, done: pDone.length, total: TRAINING_SET.practice.length,
-          stars: 0, max_stars: 0, best_score: attempts.length ? Math.max(...attempts.map((r) => r.event_f1)) : null,
-          best_label_accuracy: attempts.length ? Math.max(...attempts.map((r) => r.label_accuracy)) : null,
-          pass_rule: describePassRule(this._passRule()), time_s: practiceTime },
+          stars: 0, max_stars: 0, best_score: best ? best.event_f1 : null, time_s: practiceTime,
+          detail: practiceDetail(best, this._passRule(), passed), result: best ? (passed ? 'passed' : 'not_passed') : null },
         { key: 'assessment', title: STAGE_TITLES.assessment, status: 'not_used', done: 0, total: 0, stars: 0, max_stars: 0,
-          best_score: null, time_s: 0 },
+          best_score: null, time_s: 0, detail: '', result: null },
       ],
       next: this._trainingNext(aid),
+      complete: !this._trainingNext(aid),
     };
   }
 
@@ -923,7 +939,8 @@ export class DemoBackend {
   _guidedState(aid, rid) {
     const k = `${aid}|${rid}`;
     if (!this.state.guided[k]) {
-      this.state.guided[k] = { index: 0, matched: {}, failed: {}, shown: [], stars: {}, seconds: {}, step_t0: Date.now(),
+      const now = Date.now();
+      this.state.guided[k] = { index: 0, matched: {}, failed: {}, shown: [], stars: {}, seconds: {}, step_t0: now, last_active: now,
         signature: null, last: null, complete: false, summary: null };
     }
     return this.state.guided[k];
@@ -950,6 +967,7 @@ export class DemoBackend {
     return {
       step: i + 1,
       instruction: rules.instruction(t.label, guidance),
+      text: rules.stepBody(guidance, named ? t.label : null, [...t.channels], this._quickKeys()),
       label: named ? t.label : null,
       description: named ? (LABELS.get(t.label)?.description || '') : '',
       note: named ? (steps[i].note || null) : null,
@@ -961,7 +979,16 @@ export class DemoBackend {
   async guided(recordingId) {
     const aid = this._aid();
     const setup = this._guidedSetup(recordingId);
+    const reopened = Boolean(this.state.guided[`${aid}|${recordingId}`]);
     const st = this._guidedState(aid, recordingId);
+    // As coach.py: opened again, the step's time carries on from the trainee's last action on it, so
+    // the time the recording was closed is not counted.
+    if (reopened && !st.complete) {
+      const now = Date.now();
+      const last = Math.min(now, st.last_active ?? st.step_t0);
+      st.step_t0 = now - Math.max(0, last - st.step_t0);
+      st.last_active = now;
+    }
     this._save();
     const completed = Object.keys(st.matched).map(Number).sort((a, b) => a - b)
       .map((i) => ({ step: i + 1, stars: st.stars[i], annotation_id: st.matched[i] }));
@@ -1005,6 +1032,7 @@ export class DemoBackend {
     }
     st.signature = signature;
     st.last = annotations;
+    st.last_active = Date.now();
     this._save();
     const ok = result.matched && !extra.length;
     return {
@@ -1032,7 +1060,7 @@ export class DemoBackend {
     const paused = Number.isFinite(pausedS) && pausedS > 0 ? pausedS : 0;
     st.seconds[i] = Math.max(0, (Date.now() - st.step_t0) / 1000 - paused);
     st.index += 1;
-    st.step_t0 = Date.now();
+    st.step_t0 = st.last_active = Date.now();
     st.signature = null;
     if (st.index >= setup.steps.length) {
       const n = setup.steps.length;
@@ -1056,6 +1084,7 @@ export class DemoBackend {
     const st = this._guidedState(aid, recordingId);
     if (Number(step) !== st.index + 1 || st.complete) throw new ApiError(409, 'wrong_step', 'This step has changed. The coach is showing the current one.');
     if (!st.shown.includes(st.index)) st.shown.push(st.index);
+    st.last_active = Date.now();
     this._save();
     const t = setup.steps[st.index].target;
     const stamp = nowLocalIso();
@@ -1215,16 +1244,3 @@ export class DemoBackend {
   }
 }
 
-function summaryHtml(fb) {
-  const pc = (v) => (v === null || v === undefined || Number.isNaN(v) ? '–' : `${Math.round(v * 100)}%`);
-  const m = fb.metrics;
-  const missed = fb.flags.filter((f) => f.kind === 'MISSED').length;
-  const extra = fb.flags.filter((f) => f.kind === 'EXTRA').length;
-  const type = fb.flags.filter((f) => f.kind === 'TYPE').length;
-  return `<p>You found <b>${m.found}</b> of the experts' <b>${m.reference_events}</b> artifacts ` +
-    `(${escapeHtml(pc(m.reference_events ? m.found / m.reference_events : NaN))} of them) and marked <b>${m.your_events}</b>.</p>` +
-    '<table><tr><th>Finding the artifacts (F1)</th><td>' + escapeHtml(pc(m.event_f1)) + '</td></tr>' +
-    '<tr><th>Right type, of those found</th><td>' + escapeHtml(pc(m.label_accuracy)) + '</td></tr>' +
-    `<tr><th>Missed</th><td>${missed}</td></tr><tr><th>Extra</th><td>${extra}</td></tr>` +
-    `<tr><th>Another type</th><td>${type}</td></tr></table>`;
-}

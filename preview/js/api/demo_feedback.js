@@ -201,6 +201,10 @@ export class DemoFeedback {
     const before = this.b._admin.standardAssignments(to).length;
     this.b._admin.op_assign({ annotator_ids: [to], recording_ids: [rec.recording_id] });
     const added = this.b._admin.standardAssignments(to).length - before;
+    if (!added) {
+      // Nothing was given: the report stays open, so that the recording does not look dealt with.
+      throw new ApiError(409, 'already_assigned', `${to} already has ${rec.recording_id}, so giving it to them changes nothing and the report stays open. Choose someone who does not have it yet.`);
+    }
     this._resolve(rec, 'reassigned', text, { reassigned_to: to });
     this.b._admin._audit('problem_reassign', `Gave ${rec.recording_id} to ${to} after ${rec.annotator_id}'s report`, { problem_id: rec.problem_id, to, added, note: text });
     return { problem: this.problemOut(rec), added };

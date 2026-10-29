@@ -144,12 +144,26 @@ export function quizCard(app, { onOpen = null } = {}) {
   return h('section.card.quiz-card', { 'data-log': 'quiz-card' },
     h('h2', {}, quizzes.length === 1 ? 'Short-segment quiz' : 'Short-segment quizzes'),
     h('p.caption', {}, 'Short pieces of EEG: choose the main artifact type in each. It tests recognising the types only, not marking them.'),
-    h('ul.quiz-list', {}, quizzes.map((q) => h('li', { 'data-set': q.set_id },
-      h('div', {}, h('b', {}, q.name || q.set_id), h('br'),
-        h('span.caption', {}, `${q.n_items} segment${q.n_items === 1 ? '' : 's'}` + (feedbackText(q.feedback) ? `; ${feedbackText(q.feedback)}` : ''))),
-      q.finished
-        ? h('span.chip.done', {}, 'Finished')
-        : h('button.btn.small', { type: 'button', 'data-log': `quiz-${q.set_id}`, onclick: () => open(q) }, 'Take the quiz')))));
+    h('ul.quiz-list', {}, quizzes.map((q) => {
+      const answered = q.finished ? 0 : Number(q.n_answered) || 0;
+      return h('li', { 'data-set': q.set_id },
+        h('div', {}, h('b', {}, q.name || q.set_id), h('br'),
+          h('span.caption', {}, `${q.n_items} segment${q.n_items === 1 ? '' : 's'}` + (feedbackText(q.feedback) ? `; ${feedbackText(q.feedback)}` : '')),
+          answered ? [h('br'), h('span.caption.quiz-answered', {}, `You have answered ${answered} of ${q.n_items}.`)] : null),
+        // a finished quiz opens on its result; a started one carries on where it stopped
+        h('div.quiz-actions', {}, q.finished ? h('span.chip.done', {}, 'Finished') : null,
+          h('button.btn.small', { type: 'button', 'data-log': `quiz-${q.set_id}`, onclick: () => open(q) },
+            q.finished ? 'See my result' : answered ? 'Continue the quiz' : 'Take the quiz')));
+    })));
+}
+
+/** Keep the card's count of answers (GET /me's quizzes) in step with this page's. */
+function noteAnswered(app, setId, n, finished = false) {
+  for (const q of (app.me && app.me.quizzes) || []) {
+    if (q.set_id !== setId) continue;
+    q.n_answered = n;
+    if (finished) q.finished = true;
+  }
 }
 
 // --------------------------------------------------------------------- the view
@@ -192,9 +206,10 @@ export class QuizView {
     this.title = h('h1', {}, 'Quiz');
     this.stopBtn = h('button.btn.quiet', { type: 'button', 'data-log': 'quiz-stop', onclick: () => this.stop() }, icon('arrow-left'), 'Stop the quiz');
     this.body = h('div.quiz-body');
+    // one main landmark holds the quiz's bar and whatever it shows (the pages, or a segment and its question)
     this.el = h('div.view.quiz', { 'data-view': 'quiz' }, appHeader(app),
-      h('div.quiz-bar', {}, this.stopBtn, h('div.quiz-heading', {}, this.title, this.progress)),
-      this.body);
+      h('main.quiz-frame', {}, h('div.quiz-bar', {}, this.stopBtn, h('div.quiz-heading', {}, this.title, this.progress)),
+        this.body));
   }
 
   get mode() { return quizMode(this.data && this.data.feedback); }
@@ -211,7 +226,7 @@ export class QuizView {
   }
 
   _page(...children) {
-    return h('main.page.narrow.quiz-page', {}, ...children);
+    return h('div.page.narrow.quiz-page', {}, ...children);
   }
 
   async start() {
@@ -314,11 +329,25 @@ export class QuizView {
     this._set(this._page(
       h('h2', {}, `Open ${m ? m.file_name : item.recording_id}`),
       h('p.subtitle', {}, 'The segments of this quiz come from recordings of the study. Open your copy of each one from your computer: it is read here, in your browser, and never uploaded. Its fingerprint is checked against the study\'s copy.'),
+      this._howItWorks(),
       problems.length ? h('div.banner', { role: 'alert' }, problems.map((p) => h('p', {}, p))) : null,
       h('section.card', {}, h('h2', {}, needed.length === 1 ? 'The recording of this quiz' : 'The recordings of this quiz'),
         h('p.caption', {}, 'For a BrainVision recording choose its .vhdr, .vmrk and .eeg files together, or the folder that holds them. A folder may hold all of them.'),
         list, drop, this._linkPanel(item, fileInput), this.steps),
       example));
+  }
+
+  /** What the quiz asks and how to answer (the quiz's help, above the recordings to open). */
+  _howItWorks() {
+    return h('details.card.quiz-help', { 'data-log': 'quiz-help' }, h('summary', {}, 'How the quiz works'),
+      h('p', {}, 'Each segment shows a few seconds of EEG with the part to judge shaded. Choose the main artifact type in the ' +
+        'shaded part from the list on the right, then press Submit answer (or Enter). The description of the type you choose ' +
+        'appears under the list; the types are grouped by family as in the annotation view, and a group term in italics is for ' +
+        'an artifact whose exact type is unclear.'),
+      h('p', {}, this.immediate ? 'After each answer you see whether it was right, with the experts\' explanation.'
+        : 'Your result is shown at the end, when every segment is answered.'),
+      h('p', {}, 'Stop the quiz keeps your answers with the study, so you can carry on another time, or ends the quiz with the ' +
+        'score of the segments you answered.'));
   }
 
   /** "Open from a link" (js/views/links_panel.js) for the recording needed now. */
@@ -432,7 +461,10 @@ export class QuizView {
     const seg = segmentRecording(rec, s0, s1);
     this.progress.textContent = `Segment ${i + 1} of ${this.items.length}`;
     const groups = groupOptions(item.options || [], this.catalogue);
-    const form = h('form.quiz-options', { 'aria-label': 'Answers', onsubmit: (e) => { e.preventDefault(); this.submit(); } },
+    const form = h('form.quiz-options', { 'aria-label': 'Answers', onsubmit: (e) => { e.preventDefault(); this.submit(); },
+      // Enter on a chosen answer sends it (a form of radio buttons alone has no submit of its own)
+      onkeydown: (e) => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); this.submit(); } },
+      onchange: () => this._describeChosen() },
       groups.map((g) => h('fieldset.quiz-group', {},
         h('legend', {}, g.heading),
         g.options.map((opt) => h(`label.quiz-option${opt.group ? '.group' : ''}`, { title: opt.description || opt.value },
@@ -440,12 +472,15 @@ export class QuizView {
           opt.colour ? h('span.swatch', { style: { background: opt.colour } }) : h('span.swatch.none'),
           h('span', {}, opt.text))))));
     this.form = form;
+    this.optionDescriptions = new Map(groups.flatMap((g) => g.options.map((o) => [o.value, o.description || ''])));
+    this.chosenNote = h('p.caption.quiz-chosen', { 'aria-live': 'polite' }, 'Choose the type you see most in the shaded part; its description appears here.');
     this.feedback = h('div.quiz-feedback', { 'aria-live': 'polite' });
     this.submitBtn = h('button.btn.primary.wide', { type: 'button', 'data-log': 'quiz-submit', onclick: () => this.submit() }, 'Submit answer');
     const host = h('div.quiz-eeg');
     const side = h('aside.quiz-side', { 'aria-label': 'Question' },
       h('p.quiz-question', {}, h('b', {}, QUESTION)),
       h('div.quiz-scroll', {}, form),
+      this.chosenNote,
       this.feedback,
       this.submitBtn);
     this._set(h('div.quiz-main', {}, host, side));
@@ -467,6 +502,14 @@ export class QuizView {
     this.current = { index: i, item };
     this.shownAt = performance.now();
     logger.event('quiz_item_shown', { item_id: item.item_id, index: i + 1, n_items: this.items.length, quiz_mode: this.mode, set_id: this.setId });
+  }
+
+  /** The chosen answer's description under the list (the same text as its tooltip). */
+  _describeChosen() {
+    const label = this._chosen();
+    if (!label || !this.chosenNote) return;
+    const d = this.optionDescriptions.get(label);
+    this.chosenNote.textContent = d ? `${label}: ${d}` : label;
   }
 
   _chosen() {
@@ -519,6 +562,7 @@ export class QuizView {
     if (this.closed) return;
     const correct = res && typeof res.correct === 'boolean' ? res.correct : null;
     this.answered[item.item_id] = { label, correct };
+    noteAnswered(this.app, this.setId, Object.keys(this.answered).length);
     // The study counts more answers than this page knows of (some were given on another page):
     // the next step loads the quiz again rather than offer those segments a second time.
     this.stale = Number.isInteger(res && res.n_answered) && res.n_answered > Object.keys(this.answered).length;
@@ -527,7 +571,10 @@ export class QuizView {
       this.feedback.className = `quiz-feedback ${correct ? 'success' : 'banner'}`;
       clear(this.feedback);
       this.feedback.append(h('b', {}, verdictText(res)), res.explanation ? ` ${res.explanation}` : '');
-      for (const input of this.form.querySelectorAll('input')) input.disabled = true;
+      for (const input of this.form.querySelectorAll('input')) {
+        input.disabled = true;
+        if (input.checked) input.closest('label').classList.add('chosen'); // your answer stays clear
+      }
       const last = nextIndex(this.items, this.answered) >= this.items.length;
       this.submitBtn.disabled = false;
       this.submitBtn.textContent = last ? 'See my result' : 'Next segment';
@@ -548,6 +595,7 @@ export class QuizView {
       this.data = { ...this.data, ...data, recordings: { ...(this.data.recordings || {}), ...(data.recordings || {}) } };
       this.items = data.items || this.items;
       this.answered = { ...(data.answered || {}) };
+      noteAnswered(this.app, this.setId, Object.keys(this.answered).length);
       if (data.finished) this._showFinished();
       else this.next();
       if (note) {
@@ -574,7 +622,8 @@ export class QuizView {
   async finish() {
     if (this.busy || this.closed) return;
     this.busy = true;
-    this.progress.textContent = `${this.items.length} of ${this.items.length} segments answered`;
+    const answered = Object.keys(this.answered).length;
+    this.progress.textContent = `${answered} of ${this.items.length} segments answered`;
     this._set(this._page(h('p.subtitle', {}, 'Saving your answers…')));
     let res;
     try {
@@ -592,9 +641,9 @@ export class QuizView {
     logger.event('quiz_finished', { n_items: score.n_items, n_correct: score.n_correct, proportion_correct: score.proportion_correct ?? null,
       quiz_mode: this.mode, set_id: this.setId });
     this._closeRecordings();
-    const mine = (this.app.me && this.app.me.quizzes) || [];
-    for (const q of mine) if (q.set_id === this.setId) q.finished = true;
-    this._showScore(score);
+    noteAnswered(this.app, this.setId, answered, true);
+    // ended before every segment was answered: the result says so, and is of the segments answered
+    this._showScore(score, { heading: answered < this.items.length ? 'Quiz ended early' : 'Quiz complete' });
   }
 
   _showScore(score, { heading = 'Quiz complete' } = {}) {
@@ -613,7 +662,7 @@ export class QuizView {
 
   _showFinished() {
     this._closeRecordings();
-    for (const q of (this.app.me && this.app.me.quizzes) || []) if (q.set_id === this.setId) q.finished = true;
+    noteAnswered(this.app, this.setId, Object.keys(this.answered).length, true);
     if (this.data && this.data.score && typeof this.data.score === 'object') {
       // the study gives the score of a finished quiz
       this.progress.textContent = '';
