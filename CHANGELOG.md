@@ -314,7 +314,11 @@ has a line of its own instead of a cut-off box. On a touch screen, text
 buttons such as Back and Download my results, the Manage link and the
 Whole montage and Selected channels switch are at least 40 pixels tall, and
 the pressed Pause button (Resume) is grey, leaving the black Resume on the
-paused panel as the one forward action.
+paused panel as the one forward action. The History tab gives the time worked
+on each recording in minutes ("5 min"), as the progress card does, the
+leaderboard's own highlighted row has room at both ends, and the annotation
+list keeps Start and End whole ("23.000") in the narrower side panel of a
+1280-pixel window or an iPad.
 
 ## 1.1.0
 

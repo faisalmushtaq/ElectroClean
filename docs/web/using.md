@@ -56,7 +56,8 @@ tab and the order you chose are remembered in this browser.
 ## History and revisions
 
 The History tab lists every recording you have saved, the most recent first, with when it was
-saved, its version, the number of annotations in it and the time you spent on it. When you spot a
+saved, its version, the number of annotations in it and the time you worked on it (for example "5 min",
+as the progress card counts it). When you spot a
 problem in a recording you have already finished, choose Open to revise beside it (or in the Done
 tab), then open the same file from your computer as you did the first time. Opening a finished
 recording with Open a recording from your computer offers Open to revise as well. The recording opens with

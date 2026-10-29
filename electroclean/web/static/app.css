@@ -822,8 +822,10 @@ a.btn { text-decoration: none; }
 @media (max-width: 1440px) {
   .ws-side { width: 360px; }
   .ann-table .code { display: none; }
-  .ann-table th:nth-child(1) { width: 38%; }
-  .ann-table th:nth-child(3), .ann-table th:nth-child(4) { width: 18%; }
+  /* Start and End keep their whole figures (23.000); the label and the channels give way first. */
+  .ann-table th:nth-child(1) { width: 34%; }
+  .ann-table th:nth-child(3), .ann-table th:nth-child(4) { width: 22%; }
+  .ann-table td.num, .ann-table th.num { padding-left: 4px; }
 }
 @media (max-width: 1100px) {
   .home-grid { grid-template-columns: minmax(0, 1fr); }
@@ -1011,6 +1013,9 @@ ul.milestone-list li.open b { font-weight: 400; color: var(--text-secondary); }
   .celebrate { animation: none; }
 }
 table.leaderboard tr.you td { background: var(--accent-soft); color: var(--ink); }
+/* Room at both ends, so that the highlighted row of the person's own place does not end at its figures. */
+table.leaderboard th:first-child, table.leaderboard td:first-child { padding-left: 8px; }
+table.leaderboard th:last-child, table.leaderboard td:last-child { padding-right: 8px; }
 table.leaderboard tr.gap td { padding: 4px 0; border-bottom: none; }
 table.leaderboard th:first-child, table.leaderboard td:first-child { width: 56px; }
 .leaderboard-card label.check { margin-top: 16px; }
