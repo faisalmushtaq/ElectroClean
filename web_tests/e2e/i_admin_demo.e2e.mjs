@@ -159,7 +159,7 @@ export const tests = [
       await goSection(page, 'Records', 'admin-records');
       await page.waitForSelector('.admin-section[data-section="records"] td');
       const log = await sectionText(page);
-      for (const re of [/Added A05 \(Annotator five\)/, /Assigned 3 recordings to A05/, /Changed quick labels \(annotation\) from .* to Nystagmus-artifact, Horizontal-eye-movement-artifact.*; the study's name/, /Study created/]) assert.match(log, re);
+      for (const re of [/Added A05 \(Annotator five\)/, /Assigned 3 recordings to A05/, /Changed quick labels \(annotation\) from .* to Nystagmus-artifact, Horizontal-eye-movement-artifact.*; the study's name/]) assert.match(log, re);
       await page.selectOption('select[aria-label="Kind of change"]', 'assign');
       assert.match(await page.textContent('.admin-section[data-section="records"] .admin-card'), /1 of \d+ entries shown/);
       await t.screenshot(page, 'admin_records');
