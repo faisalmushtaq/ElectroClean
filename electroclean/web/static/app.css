@@ -243,7 +243,8 @@ kbd .ico { width: 12px; height: 12px; }
 .btn.small { height: 32px; padding: 0 14px; font: var(--t-14); gap: 6px; }
 .btn.small.primary::after { width: 14px; height: 14px; }
 .btn.wide { width: 100%; height: 48px; font: var(--t-16); }
-.btn.toggle[aria-pressed="true"] { background: var(--ink); color: #FFFFFF; }
+/* A switch that is on is tinted in the accent, so that black stays for the one forward action. */
+.btn.toggle[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
 /* A round button holding one icon: 40 pixels with a 16-pixel icon, or 24 with 12. */
 .btn.icon { width: 40px; padding: 0; }
 .btn.icon.small { width: 32px; height: 32px; }
@@ -554,7 +555,7 @@ ul.examples b { font-weight: 400; color: var(--ink); }
   font: var(--t-14); cursor: pointer; transition: background-color var(--fast) var(--ease), color var(--fast) var(--ease);
 }
 @media (hover: hover) { .seg:hover:not(:disabled):not([aria-pressed="true"]) { background: var(--fill-hover); } }
-.seg[aria-pressed="true"] { background: var(--ink); color: #FFFFFF; }
+.seg[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
 .seg:disabled, .chip-btn:disabled { color: var(--text-disabled); cursor: default; }
 .ws-chansummary { color: var(--text-secondary); font: var(--t-14); overflow: hidden; text-overflow: ellipsis; min-width: 96px; max-width: 180px; }
 .ws-chansummary.warning { color: var(--destructive); font-weight: 600; }

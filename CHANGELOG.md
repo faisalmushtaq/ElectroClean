@@ -326,7 +326,9 @@ area's tables set headings of one and two lines on the same rule. Percentages
 are written one way throughout ("74%"), as the admin area, the quiz and the
 training path already wrote them, where the new views had "74 %". The
 Recording tab gives the time worked as the paused panel does ("3 min 05 s"
-rather than "00:03:05").
+rather than "00:03:05"). Switches that are on, such as Draw/edit and Whole
+montage, are tinted in the ink-blue accent instead of black, so that the
+annotation view has one black button, Save and Finish.
 
 ## 1.1.0
 
