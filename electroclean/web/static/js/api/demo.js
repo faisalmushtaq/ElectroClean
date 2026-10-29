@@ -750,8 +750,8 @@ export class DemoBackend {
       save_times: [...mine.values()].flat().map((s) => s.saved_at).sort(),
       viewed_in_full: withCoverage.length ? withCoverage.filter((c) => c.viewed_fraction >= VIEWED_IN_FULL).length : null,
       goal: { per_week: record.goal_per_week ?? null },
-      // As the leaderboard: with fewer people, one's own figures would tell the others' (games.py).
-      team: team.people >= MIN_PEOPLE ? { done: team.done, assigned: team.assigned, people: team.people } : { done: null, assigned: null, people: team.people },
+      // Left out when exactly one other person has recordings: the team's figures less one's own would be theirs (games.py).
+      team: team.people - (team.withWork.has(aid) ? 1 : 0) === 1 ? { done: null, assigned: null, people: team.people } : { done: team.done, assigned: team.assigned, people: team.people },
       leaderboard: g.leaderboard !== false
         ? leaderboardOf(aid, team, { hiddenMe: record.leaderboard_hidden === true, byFull: g.leaderboard_viewed_only === true }) : null,
     };
@@ -792,7 +792,7 @@ export class DemoBackend {
     const full = {};
     let done = 0;
     let assigned = 0;
-    let withWork = 0;
+    const withWork = new Set();
     const records = this.state.records || {};
     for (const id of ids) {
       const given = this._admin.standardAssignments(id).filter((a) => a.mode === 'standard' && this._recordingInfo(a.rid));
@@ -801,10 +801,10 @@ export class DemoBackend {
       full[id] = [...mine.values()].filter((list) => (this._viewed(list) || 0) >= VIEWED_IN_FULL).length;
       assigned += given.length;
       done += given.filter((a) => this.state.done[this._key(id, a.rid, 'standard', '')]).length;
-      if (given.length) withWork += 1;
+      if (given.length) withWork.add(id);
     }
     const hidden = new Set(ids.filter((id) => (records[id] || {}).leaderboard_hidden === true));
-    return { ids, names, completed, full, hidden, done, assigned, people: withWork };
+    return { ids, names, completed, full, hidden, done, assigned, people: withWork.size, withWork };
   }
 
   // ---------------------------------------------------------------- training

@@ -187,6 +187,10 @@ def test_a_team_of_two_does_not_show_its_progress(service: StudyService, recordi
         service.store.remove_account(aid)
     # A01 knows their own count, so the team's would tell them what A02 has done.
     assert board(service, "A01")["team"] == {"done": None, "assigned": None, "people": 2}
+    service.store.remove_account("A02")
+    # Alone, A01 sees their own figures; T01, given no study recordings, would see A01's.
+    assert board(service, "A01")["team"] == {"done": 1, "assigned": 3, "people": 1}
+    assert board(service, "T01")["team"] == {"done": None, "assigned": None, "people": 1}
 
 
 def test_times_cannot_go_negative_or_absurd(service: StudyService, recordings: Path, study: Path) -> None:
