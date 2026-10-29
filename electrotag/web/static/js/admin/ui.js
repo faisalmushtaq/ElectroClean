@@ -4,10 +4,17 @@
 
 import { h, clear } from '../ui/dom.js';
 import { downloadFiles, icon } from '../views/common.js';
+import { docsUrl } from '../ui/docs.js';
 import { base64ToBytes, fileParts, problemText, sortRows } from './model.js';
 
 let uid = 0;
 export const nextId = (prefix = 'adm') => `${prefix}-${++uid}`;
+
+/** Append children to an element, passing over null and false (the DOM's own append writes them as text). */
+export function put(el, ...children) {
+  for (const c of children.flat(Infinity)) if (c !== null && c !== undefined && c !== false) el.append(c);
+  return el;
+}
 
 // ------------------------------------------------------------------ messages
 /** A place for the answer to an action: show(kind, text) with kind error, success, note or banner. */
@@ -60,8 +67,21 @@ export function actionButton(label, { kind = '', working = '', msg = null, onCli
 }
 
 // -------------------------------------------------------------------- layout
+/** The heading of a guide's section as GitHub links to it: lower case, spaces as hyphens, no punctuation. */
+export function guideAnchor(heading) {
+  return String(heading).toLowerCase().replace(/[^a-z0-9 -]/g, '').trim().replace(/ /g, '-');
+}
+
+/** A link to a guide, opened in a new tab: docsLink('Help', 'web/admin.md', 'progress'). */
+export function docsLink(text, path, anchor = '', { title = null } = {}) {
+  return h('a.docs-link', { href: docsUrl(path, anchor), target: '_blank', rel: 'noopener', title }, text);
+}
+
+/** A section's heading and introduction, with Help: its part of the administrators' guide (docs/web/admin.md). */
 export function sectionHead(title, intro = '') {
-  return h('div.admin-head', {}, h('h1', { tabindex: '-1' }, title), intro ? h('p.subtitle', {}, intro) : null);
+  const help = docsLink('Help', 'web/admin.md', guideAnchor(title), { title: `The guide to ${title} (opens in a new tab)` });
+  help.setAttribute('data-help', guideAnchor(title));
+  return h('div.admin-head', {}, h('div.admin-head-row', {}, h('h1', { tabindex: '-1' }, title), help), intro ? h('p.subtitle', {}, intro) : null);
 }
 
 export function card(title, ...children) {
@@ -142,7 +162,7 @@ export function checkList(items, { selected = [], legend = '', empty = 'Nothing 
     input.checked = chosen.has(it.value);
     const row = h('label.check-item', { title: it.hint || null }, input,
       h('span.check-text', {}, h('span', {}, it.text), it.extra ? h('span.caption.block', {}, it.extra) : null));
-    boxes.push({ input, row, text: `${it.value} ${it.text} ${it.extra || ''}`.toLowerCase() });
+    boxes.push({ input, row, notInAll: Boolean(it.notInAll), text: `${it.value} ${it.text} ${it.extra || ''}`.toLowerCase() });
     list.append(row);
   }
   const filter = items.length > 12 ? h('input.field.small', { type: 'search', placeholder: 'Filter the list', 'aria-label': `Filter ${legend || 'the list'}` }) : null;
@@ -152,7 +172,8 @@ export function checkList(items, { selected = [], legend = '', empty = 'Nothing 
       for (const b of boxes) b.row.hidden = Boolean(q) && !b.text.includes(q);
     });
   }
-  const setAll = (on) => { for (const b of boxes) if (!b.row.hidden) b.input.checked = on; el.dispatchEvent(new Event('change')); };
+  // All leaves out the items marked notInAll (switched-off accounts and administrators), which are ticked one by one.
+  const setAll = (on) => { for (const b of boxes) if (!b.row.hidden && !(on && b.notInAll)) b.input.checked = on; el.dispatchEvent(new Event('change')); };
   const count = h('span.caption');
   const update = () => { count.textContent = `${boxes.filter((b) => b.input.checked).length} of ${boxes.length} chosen`; };
   list.addEventListener('change', update);
@@ -270,6 +291,8 @@ export function dataTable(columns, rows = [], {
       wrap.append(h('div.row.pager', {}, prev, h('span.caption', {}, `Page ${page + 1} of ${pages} · ${data.length} in all`), next));
     }
   };
+  /** The words shown when there are no rows (they may depend on why there are none). */
+  wrap.setEmpty = (text) => { empty = text; };
   wrap.update = (next, { keepPage = false } = {}) => {
     data = next || [];
     if (!keepPage) page = 0;

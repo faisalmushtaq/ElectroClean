@@ -7,6 +7,7 @@ written to ``analysis_settings.json`` next to the results.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -24,6 +25,7 @@ examples:
   electrotag-agreement /data/MyStudy/Annotated_Events --out pilot_agreement \\
       --resolutions 0.05 0.1 --iou-thresholds 0 0.2 0.5 --categories EMG-artifact Eye-blink-artifact
   electrotag-agreement A01_folder A02_folder --reference A01
+  electrotag-agreement /data/MyStudy/Annotated_Events --config agreement_settings.json
 
 exit status: 0 when the analysis ran, 2 for a mistake in the command (for example an unknown
 category or annotator, or a results folder that already holds results), and
@@ -63,8 +65,9 @@ def build_parser(prog: str = "electrotag-agreement") -> argparse.ArgumentParser:
                      help="Allow --out to be a folder that already holds results, which are then replaced")
     out.add_argument("--no-html", action="store_true", help="Write the tables only, without the HTML report")
     out.add_argument("--config", type=Path,
-                     help="JSON file with analysis settings (see analysis_settings.json of an earlier analysis); "
-                     "command-line options override it")
+                     help="JSON file with analysis settings: the analysis_settings.json of an earlier analysis, The "
+                     "settings used (JSON) of the admin area's agreement report, or the settings alone; it repeats "
+                     "that analysis, and command-line options override it")
     sel = p.add_argument_group("what to analyse")
     sel.add_argument("--annotators", nargs="+", metavar="ID", help="Only these annotators (default: all found)")
     sel.add_argument("--categories", nargs="+", metavar="LABEL",
@@ -73,6 +76,13 @@ def build_parser(prog: str = "electrotag-agreement") -> argparse.ArgumentParser:
                      help="Compare every annotator with this one only, for example an expert (default: every pair)")
     sel.add_argument("--modes", nargs="+", choices=("standard", "practice", "assessment"),
                      help=f"Session modes to include (default: {' '.join(_D.modes)})")
+    sel.add_argument("--recordings", nargs="+", metavar="ID",
+                     help="Only these recordings, by recording ID such as sub-001/eeg/sub-001_task-rest_eeg.vhdr "
+                     "(default: all found)")
+    sel.add_argument("--exclude-recordings", nargs="+", metavar="ID",
+                     help="Leave out the research annotation of these recordings, as the admin area leaves out the "
+                     "recordings an annotator set aside as ones that cannot be annotated (their practice and "
+                     "assessment sessions stay)")
     tr = p.add_argument_group("time-resolved agreement")
     tr.add_argument("--resolutions", type=float, nargs="+", metavar="SECONDS",
                     help=f"Bin widths in seconds, besides the exact (sample-by-sample) comparison "
@@ -111,8 +121,32 @@ def build_parser(prog: str = "electrotag-agreement") -> argparse.ArgumentParser:
     return p
 
 
+def read_settings_file(path: Path) -> tuple[dict, dict]:
+    """The analysis settings of a --config file, and the recordings it chooses.
+
+    The file is the settings alone (an AnalysisConfig), or a file that holds them under "config":
+    an earlier analysis's analysis_settings.json, or the admin area's agreement_settings.json, whose
+    "recording_ids" and "exclude_recording_ids" choose the recordings. Returns (settings,
+    {"recordings": [...] or None, "exclude": [...]}).
+    """
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8-sig"))
+    except FileNotFoundError as exc:
+        raise ValueError(f"The settings file {path} does not exist") from exc
+    except ValueError as exc:
+        raise ValueError(f"The settings file {path} is not JSON: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ValueError(f"The settings file {path} does not hold analysis settings")
+    chosen = {"recordings": None, "exclude": []}
+    if isinstance(data.get("config"), dict):
+        chosen["recordings"] = data.get("recording_ids") or None
+        chosen["exclude"] = list(data.get("exclude_recording_ids") or [])
+        data = data["config"]
+    return AnalysisConfig.from_dict(data).to_dict(), chosen
+
+
 def config_from_args(args: argparse.Namespace) -> AnalysisConfig:
-    data = AnalysisConfig.load(args.config).to_dict() if args.config else AnalysisConfig().to_dict()
+    data = read_settings_file(args.config)[0] if args.config else AnalysisConfig().to_dict()
     mapping = {
         "resolutions": "resolutions_s",
         "min_bin_coverage": "min_bin_coverage",
@@ -154,12 +188,27 @@ def main(argv: list[str] | None = None, prog: str = "electrotag-agreement") -> i
         print(f"error: {out} already holds the results of an earlier analysis. Choose another folder with --out, "
               "or add --overwrite to replace them.", file=sys.stderr)
         return 2
+    from electrotag.reliability.data import collect_annotation_files, select_annotation_files
+
     try:
         cfg = config_from_args(args)
-        result = run_analysis(args.inputs, cfg, strict=True)
+        chosen = read_settings_file(args.config)[1] if args.config else {"recordings": None, "exclude": []}
+        recordings = args.recordings if args.recordings is not None else chosen["recordings"]
+        exclude = args.exclude_recordings if args.exclude_recordings is not None else chosen["exclude"]
+        inputs = args.inputs
+        if recordings is not None or exclude:
+            inputs = select_annotation_files(collect_annotation_files(args.inputs), recordings=recordings,
+                                             exclude=exclude)
+            if not inputs:
+                raise ValueError("No annotation files of the recordings chosen were found in "
+                                 + ", ".join(str(p) for p in args.inputs))
+        result = run_analysis(inputs, cfg, strict=True)
     except (ValueError, FileNotFoundError, AnnotationError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
+    # The recordings chosen, so that --config analysis_settings.json repeats this analysis exactly.
+    result.settings_record["recording_ids"] = list(recordings) if recordings is not None else None
+    result.settings_record["exclude_recording_ids"] = list(exclude)
     paths = write_outputs(result, out, html=not args.no_html)
     print(f"Analysed {len(result.dataset.groups)} recording(s) from {len(result.dataset.annotators)} annotator(s); "
           f"{result.settings_record.get('n_comparable_recordings', 0)} recording(s) had annotators to compare.")

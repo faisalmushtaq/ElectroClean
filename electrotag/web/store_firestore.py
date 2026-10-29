@@ -520,7 +520,7 @@ class FirestoreStore(Store):
             raise AccountProblem("email_required", "On Firebase each person signs in with their email address: "
                                  "give it", 400)
         if self.doc.collection("users").document(aid).get().exists:
-            raise AccountProblem("user_exists", f"{aid} already has an account in this study")
+            raise AccountProblem("user_exists", f"{aid} already has an account in this study.")
         if any((u.get("email") or "").lower() == email.lower() for u in self.user_records()):
             raise AccountProblem("email_in_use", f"{email} already signs in to this study under another ID")
         try:

@@ -4,7 +4,7 @@
 
     DIR/
         electrotag_study.json      the study's settings (so DIR can be used as a study folder)
-        Annotated_Events/            as written by the desktop application
+        Annotated_Events/            ElectroTag's results layout
             completion_register.tsv, session_log.jsonl, annotator-<ID>/..., training/...
             training/<set>/quiz/annotator-<ID>_quiz_<mode>_<session>.json
             training_progress/<set>/annotator-<ID>.json
@@ -15,7 +15,7 @@
 The result files are exactly those the desktop application's code wrote when each recording was
 saved (kept in Firestore since); the completion register is updated with ElectroTag's own
 register code, so ``electrotag-agreement DIR/Annotated_Events`` and ``electrotag-activity
-DIR/Annotated_Events`` work as for a desktop study. Exporting again adds what is new; a file that
+DIR/Annotated_Events`` work on it directly. Exporting again adds what is new; a file that
 already exists with different contents is never replaced.
 """
 
@@ -143,8 +143,9 @@ MAX_RESULTS_ZIP = 25_000_000
 
 
 def results_zip_file(store: Any) -> Path:
-    """A zip of the study's results folder (results, interaction logs, training progress, reports and quiz
-    results), in a temporary file the caller deletes."""
+    """A zip of the study's results folder (results, interaction logs, training progress, reports, quiz results,
+    problem reports and reviews) with the study's settings, audit log and manifests under ``study/`` and a
+    README, in a temporary file the caller deletes."""
     import tempfile
     import zipfile
 
@@ -172,10 +173,48 @@ def results_zip_file(store: Any) -> Path:
                     zf.write(path, f"{base}/{rel.as_posix()}")
             for rel, data in sorted(extra.items()):  # the problem reports and reviews (the files store keeps them)
                 zf.writestr(f"{base}/{rel}", data)
-            zf.writestr(f"{base}/README.txt", f"Results of the ElectroTag study {store.name}, downloaded "
-                        f"{now_local_iso()}.\nAnalyse them with electrotag-agreement and electrotag-activity, as "
-                        "for the desktop application.\n")
+            for rel, data in study_record_files(store).items():
+                zf.writestr(rel, data)
+            zf.writestr("README.txt", results_readme(store.name, base, now_local_iso()))
     return Path(tmp.name)
+
+
+def study_record_files(store: Any) -> dict[str, bytes]:
+    """The study's own records for the results zip: its settings, its audit log and its recordings' manifests."""
+    entries: list[dict[str, Any]] = []
+    before = None
+    while True:
+        page, before = store.audit_page(before, 500)
+        entries.extend(page)
+        if not before or not page:
+            break
+    audit_text = "".join(json.dumps(e, ensure_ascii=False, sort_keys=True) + "\n" for e in reversed(entries))
+    manifests = sorted(store.manifests(), key=lambda m: (str(m.get("scope", "")), str(m.get("recording_id", ""))))
+    settings = {"study_id": store.study_id, "name": store.name, "settings": store.settings_overrides}
+    dump = lambda obj: (json.dumps(obj, ensure_ascii=False, indent=2) + "\n").encode("utf-8")  # noqa: E731
+    return {
+        f"study/{STUDY_CONFIG_FILENAME}": dump(settings),
+        "study/audit_log.jsonl": audit_text.encode("utf-8"),
+        "study/manifests.json": dump({"manifests": manifests}),
+    }
+
+
+def results_readme(study_name: str, base: str, when: str) -> str:
+    """What the results zip holds, and how to analyse it."""
+    return (
+        f"Results of the ElectroTag study {study_name}, downloaded {when}.\n\n"
+        f"{base}/ holds the saved annotations of each annotator (an _annotations.json, _events.tsv, _events.json\n"
+        "and _session.json for each recording), the completion register, the interaction logs, the training\n"
+        "progress and competency reports, the quiz results, the problem reports and the reviews.\n\n"
+        f"study/{STUDY_CONFIG_FILENAME} holds the study's settings, study/audit_log.jsonl every change an\n"
+        "administrator made (oldest first, one JSON object a line), and study/manifests.json the description\n"
+        "of each registered recording (its fingerprint, timing, channels and events). The EEG files\n"
+        "themselves never reached the study.\n\n"
+        "Analyse the results with ElectroTag's commands, for example:\n"
+        f"  electrotag-agreement {base} --config agreement_settings.json\n"
+        f"  electrotag-activity {base}\n"
+        "where agreement_settings.json is The settings used (JSON) of an agreement report in the admin area.\n"
+    )
 
 
 def _visit_id_of(path: Path) -> str:

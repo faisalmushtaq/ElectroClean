@@ -11,13 +11,14 @@
 
 import { h, clear } from '../ui/dom.js';
 import { reviewButton, reviewCount, reviewsCard } from './reviews.js';
+import { setAsideButton } from './assignments.js';
 import { icon } from '../views/common.js';
 import {
   INVITE_STATES, MODES, ROLES, STATUS, checkAnnotatorId, checkEmail, csvText, dateText, invitationText, inviteLink, inviteMessage, mailtoHref,
-  minutesText, parseBulkPeople, plural, whenText,
+  minutesText, parseBulkPeople, plural, setLabel, unassignQuestion, whenText,
 } from './model.js';
 import {
-  actionButton, card, chip, confirmInline, copyButton, copyText, dataTable, eachInTurn, oneAtATime, field, infoTable, loading, messageArea, nextId, progressLine,
+  actionButton, put, card, chip, confirmInline, copyButton, copyText, dataTable, eachInTurn, oneAtATime, field, infoTable, loading, messageArea, nextId, progressLine,
   recordingName, resultsTable, secretBox, sectionHead, select, tabBar, textArea, textInput,
 } from './ui.js';
 
@@ -119,17 +120,19 @@ export class AnnotatorsSection {
         u.status === 'disabled' ? chip('Switched off', 'warning') : null, u.programme ? h('span.caption.block', {}, `Programme: ${u.programme}`) : null) },
       { title: 'Invitation', sort: (u) => (u.invitation && u.invitation.state) || 'none', render: (u) => this._stateChip(u) },
       { title: 'Done', num: true, sort: (u) => u.done ?? 0, render: (u) => `${u.done ?? 0} of ${u.assigned ?? 0}` },
-      { title: 'Last seen', sort: (u) => u.last_seen, render: (u) => whenText(u.last_seen) },
+      { title: 'Last seen', cls: 'when', sort: (u) => u.last_seen, render: (u) => whenText(u.last_seen) },
       { title: '', cls: 'actions', render: (u) => h('button.btn.small', { type: 'button', 'data-manage': u.annotator_id, onclick: () => this.openDetail(u.annotator_id) }, 'Manage') },
     ], [], { empty: 'No accounts match.', rowKey: (u) => u.annotator_id, caption: 'Accounts', sortable: true, selectable: true, onSelect: (keys) => this._bulkBar(keys) });
-    return h('div.admin-grid.wide-first', { role: 'tabpanel', 'data-panel': 'accounts' },
-      card('Accounts', h('div.row.filters', {}, search, role, status), this.tableNote, this.bulkBar, this.table, this.bulkResult, this.accountsMail),
+    // The table has the whole width; adding an account is a card of its own below it. The bar of actions on
+    // the people ticked follows the table and stays at the foot of the window while the table is in view.
+    return h('div.admin-stack', { role: 'tabpanel', 'data-panel': 'accounts' },
+      card('Accounts', h('div.row.filters', {}, search, role, status), this.tableNote, this.table, this.bulkBar, this.bulkResult, this.accountsMail),
       this._addCard());
   }
 
   _stateChip(u) {
     const inv = u.invitation || { state: 'none' };
-    if (inv.state === 'none') return h('span.caption', {}, INVITE_STATES.none);
+    if (inv.state === 'none') return h('span.caption', {}, u.last_seen ? 'Signs in with a password' : INVITE_STATES.none);
     return h('span', {}, chip(INVITE_STATES[inv.state] || inv.state, STATE_KIND[inv.state] || ''), h('span.caption.block', {}, invitationText(inv)));
   }
 
@@ -149,10 +152,11 @@ export class AnnotatorsSection {
     const others = keys.filter((k) => k !== self);
     const msg = messageArea();
     const progress = progressLine();
-    const run = (label, op, body, done, log) => actionButton(label, { kind: 'small', working: 'Working…', msg, log, onClick: async () => {
+    const run = (label, op, body, done, log, ask = null) => actionButton(label, { kind: 'small', working: 'Working…', msg, log, onClick: async () => {
       clear(this.bulkResult);
       const ids = others;
       if (!ids.length) throw new Error('Choose someone other than yourself: your own account is changed by another administrator.');
+      if (ask && !(await ask(ids))) return;
       await oneAtATime(this, async () => {
         const results = await eachInTurn(ids, (aid) => this.area.write(op, { annotator_id: aid, ...body }), { progress, words: (i, n, aid) => `${label}: ${aid} (${i} of ${n})…` });
         this._showResults(results, done, op === 'user_invite');
@@ -162,12 +166,16 @@ export class AnnotatorsSection {
     } });
     const days = select(DAYS, '14');
     days.id = nextId('bulk-days');
+    // Switching off signs people out at once, so it is asked first.
+    const offHost = h('span.inline-confirm');
+    offHost.append(run('Switch off', 'user_update', { status: 'disabled' }, (r) => (r.value && r.value.changed === false ? 'Switched off already: nothing changed.' : 'Switched off: they can no longer sign in; their work is kept.'), 'bulk-switch-off',
+      (ids) => confirmInline(offHost, { text: `Switch off ${plural(ids.length, 'account')}? ${ids.length === 1 ? 'The person is' : 'They are'} signed out at once and cannot sign in until switched on again; their work is kept.`, yes: 'Switch off', no: 'Keep them on' })));
     this.bulkBar.append(
       h('p', {}, h('b', {}, `${plural(keys.length, 'person', 'people')} chosen`), keys.includes(self) ? h('span.caption', {}, ' (your own account is left out of switching off and on and of new links)') : null),
       h('div.btn-row', {},
         h('button.btn.small', { type: 'button', 'data-log': 'bulk-assign', onclick: () => this.area.go('assignments', { annotators: keys }) }, 'Assign recordings…'),
-        run('Switch off', 'user_update', { status: 'disabled' }, () => 'Switched off: they can no longer sign in; their work is kept.', 'bulk-switch-off'),
-        run('Switch on', 'user_update', { status: 'active' }, () => 'Switched on: they can sign in again.', 'bulk-switch-on'),
+        offHost,
+        run('Switch on', 'user_update', { status: 'active' }, (r) => (r.value && r.value.changed === false ? 'Switched on already: nothing changed.' : 'Switched on: they can sign in again.'), 'bulk-switch-on'),
         h('span.bulk-group', {},
           run('New invitation links', 'user_invite', this.area.isFirebase ? {} : { get expires_days() { return Number(days.value); } }, () => 'A new link, below.', 'bulk-invite'),
           this.area.isFirebase ? null : [h('label.form-label.inline', { for: days.id }, 'lasting'), days]),
@@ -188,7 +196,7 @@ export class AnnotatorsSection {
         if (link) made.push({ annotator_id: aid, display_name: u.display_name || '', email: u.email || '', link, expires_at: r.value.expires_at || '' });
       }
     }
-    this.bulkResult.append(h('h3', {}, `Done for ${results.filter((r) => r.ok).length} of ${plural(results.length, 'person', 'people')}`),
+    put(this.bulkResult, h('h3', {}, `Done for ${results.filter((r) => r.ok).length} of ${plural(results.length, 'person', 'people')}`),
       resultsTable(results, { name: (aid) => aid, done, title: 'Person' }), made.length ? this._linksTable(made) : null);
   }
 
@@ -224,14 +232,31 @@ export class AnnotatorsSection {
     const password = textInput({ type: 'password', placeholder: 'at least 8 characters', autocomplete: 'new-password' });
     const passwordField = field('Password', password);
     passwordField.hidden = true;
-    how.addEventListener('change', () => { passwordField.hidden = how.value !== 'chosen'; });
+    const HOW_HINT = {
+      temporary: 'The study makes a password for you to pass on; the person signs in with it.',
+      invite: 'An invitation link lets the person choose their own password, once.',
+      chosen: 'You choose the password and pass it on; it has at least 8 characters.',
+    };
+    const howField = field('First sign-in', how, { hint: HOW_HINT.temporary });
+    const howHint = howField.querySelector('.caption');
+    // An administrator is given a password: an invitation link travels by email and must not open the admin area.
+    const syncHow = () => {
+      const invite = [...how.options].find((o) => o.value === 'invite');
+      invite.disabled = role.value === 'admin';
+      if (invite.disabled && how.value === 'invite') how.value = 'temporary';
+      passwordField.hidden = how.value !== 'chosen';
+      howHint.textContent = HOW_HINT[how.value] + (role.value === 'admin' ? ' Administrators are given a password rather than an invitation link.' : '');
+    };
+    how.addEventListener('change', syncHow);
+    role.addEventListener('change', syncHow);
+    syncHow();
     const msg = messageArea();
-    const result = h('div.admin-result');
+    // Every password or link made here stays listed until the page is left: shown once, so never replaced by the next Add.
+    const result = h('div.admin-stack.admin-result.made-here');
     const submit = actionButton('Add the account', {
       kind: 'primary', working: 'Adding…', msg, log: 'user-add',
       onClick: async () => {
         msg.clear();
-        clear(result);
         const body = { annotator_id: checkAnnotatorId(id.value), display_name: name.value.trim(), email: checkEmail(email.value, { required: fb }), role: role.value };
         if (!fb && how.value === 'chosen') {
           if (password.value.length < 8) throw new Error('A password has at least 8 characters, or choose a temporary password or an invitation link.');
@@ -241,19 +266,20 @@ export class AnnotatorsSection {
         const r = await this.area.write('user_add', body);
         const who = r.user ? r.user.annotator_id : body.annotator_id;
         this._remember(who, r);
-        result.append(this._secret(who, r, body.email) || h('p.success', { role: 'status' }, `${who} can now sign in with the password you chose.`),
-          h('div.btn-row', {}, h('button.btn.small', { type: 'button', onclick: () => this.area.go('assignments', { annotator: who }) }, `Assign recordings to ${who}…`)));
+        result.prepend(put(h('div.made-one', { 'data-made': who }), this._secret(who, r, body.email) || h('p.success', { role: 'status' }, `${who} can now sign in with the password you chose.`),
+          h('div.btn-row', {}, h('button.btn.small', { type: 'button', onclick: () => this.area.go('assignments', { annotator: who }) }, `Assign recordings to ${who}…`))));
         for (const f of [id, name, email, password]) f.value = '';
         await this.reload();
       },
     });
-    const form = h('form.admin-form', { onsubmit: (e) => { e.preventDefault(); submit.click(); } },
-      field('Annotator ID', id, { hint: 'Letters and digits, as in the study\'s records. It cannot be changed later.' }),
+    // The form is as wide as the list above it, so its fields sit side by side.
+    const form = h('form.admin-form', { onsubmit: (e) => { e.preventDefault(); submit.click(); } }, h('div.form-grid.add-account', {},
+      field('Annotator ID', id, { hint: 'Up to 32 letters, digits, hyphens or underscores, as in the study\'s records. It cannot be changed later.' }),
       field('Name', name),
       field('Email address', email, { hint: fb ? 'They sign in with it, and the invitation link lets them choose a password.' : 'Needed to email them their invitation link.' }),
       field('Role', role, { hint: 'Administrators see this admin area; they can annotate too.' }),
-      fb ? null : field('First sign-in', how, { hint: 'An invitation link lets the person choose their own password.' }),
-      fb ? null : passwordField,
+      fb ? null : howField,
+      fb ? null : passwordField),
       h('div.btn-row', {}, submit), msg, result);
     return card('Add an account', form);
   }
@@ -308,6 +334,8 @@ export class AnnotatorsSection {
       const host = h('span.inline-confirm');
       const make = h('button.btn.small', { type: 'button', 'data-invite': u.annotator_id, onclick: async () => {
         if (inv.state === 'invited' && !fb && !(await confirmInline(host, { text: `Make a new link for ${u.annotator_id}? The link sent before stops working.`, yes: 'Make a new link', no: 'Keep it', destructive: false }))) return;
+        // Someone who already signs in needs no invitation: ask, since a link lets them choose a new password.
+        if (inv.state === 'none' && u.last_seen && !(await confirmInline(host, { text: `${u.annotator_id} already signs in with a password. Make a link anyway? It lets them choose a new password; the present one works until they do.`, yes: 'Make a link', no: 'Cancel', destructive: false }))) return;
         await this._invite(u.annotator_id);
       } }, inv.state === 'none' ? 'Make a link' : 'New link');
       host.append(make);
@@ -430,7 +458,7 @@ export class AnnotatorsSection {
           if (link) made.push({ annotator_id: r.item.annotator_id, display_name: r.item.display_name, email: r.item.email || '', link, expires_at: r.value.expires_at || '' });
         }
         clear(result);
-        result.append(h('h3', {}, `Created ${results.filter((r) => r.ok).length} of ${plural(results.length, 'account')}`),
+        put(result, h('h3', {}, `Created ${results.filter((r) => r.ok).length} of ${plural(results.length, 'account')}`),
           resultsTable(results, { name: (r) => r.annotator_id, done: () => 'Account created with an invitation link', title: 'Person' }), made.length ? this._linksTable(made) : null,
           h('div.btn-row', {}, h('button.btn.small', { type: 'button', onclick: () => this.area.go('assignments', { annotators: made.map((m) => m.annotator_id) }) }, 'Assign recordings to them…')));
         if (results.every((r) => r.ok)) text.value = '';
@@ -535,7 +563,7 @@ export class AnnotatorsSection {
     removeHost.append(remove);
 
     // training programme
-    const prog = select([['', 'Not in a training programme'], ...this.sets.map((s) => [s.set_id, `${s.name || s.set_id} (${s.set_id})`])], u.programme || '');
+    const prog = select([['', 'Not in a training programme'], ...this.sets.map((s) => [s.set_id, setLabel(s)])], u.programme || '');
     const progSave = actionButton('Save programme', {
       working: 'Saving…', msg, log: 'programme-set',
       onClick: async () => {
@@ -555,7 +583,7 @@ export class AnnotatorsSection {
       { title: 'Attempts', num: true, sort: (i) => i.attempts ?? 0, render: (i) => String(i.attempts ?? 0) },
       { title: 'Reviews', num: true, render: (i) => reviewCount(this._reviews, u.annotator_id, i) },
       { title: '', cls: 'actions', render: (i) => (i.status === 'done' ? reviewButton(this.area, u.annotator_id, i, { route: 'admin-annotators', params: { annotator: u.annotator_id } })
-        : this._unassignButton(u.annotator_id, i, msg)) },
+        : i.status === 'unusable' ? setAsideButton(this.area, u.annotator_id) : this._unassignButton(u.annotator_id, i, msg)) },
     ], [], { empty: 'Nothing is assigned to this person.', pageSize: 15, sortable: true, caption: `Work of ${u.annotator_id}` });
     const itemsNote = loading();
     const reviewsHost = h('div.admin-stack');
@@ -601,7 +629,7 @@ export class AnnotatorsSection {
   _unassignButton(aid, item, msg) {
     const host = h('span.inline-confirm');
     const b = h('button.btn.small', { type: 'button', onclick: async () => {
-      if (!(await confirmInline(host, { text: `Take ${item.recording_id.split('/').pop()} away from ${aid}?`, yes: 'Unassign', no: 'Keep' }))) return;
+      if (!(await confirmInline(host, { text: unassignQuestion(item, aid), yes: 'Unassign', no: 'Keep' }))) return;
       try {
         await this.area.write('unassign', { annotator_id: aid, recording_id: item.recording_id, mode: item.mode, context_id: item.context_id || '' });
         await this.reload(['success', `${item.recording_id} is no longer assigned to ${aid}.`]);

@@ -90,6 +90,8 @@ export const METHOD_NAMES = Object.freeze({
 /** MNE-Python's channel types that the study's channel-type patterns may give (electrotag.config.settings). */
 export const CHANNEL_TYPES = Object.freeze(['eeg', 'eog', 'ecg', 'emg', 'misc', 'stim', 'resp', 'bio', 'gsr', 'temperature']);
 export const SCALING_TYPES = Object.freeze(['eeg', 'eog', 'ecg', 'emg', 'misc']);
+/** The study's starting choice of channel colours (display.channel_colours; js/viewer/channel_colours.js). */
+export const CHANNEL_COLOUR_CHOICES = Object.freeze([['off', 'None: every trace in ink'], ['region', 'By region of the head'], ['side', 'By side of the head'], ['type', 'By channel type']]);
 
 /** What each audited operation did, for the records' filter and table. */
 export const AUDIT_OPS = Object.freeze({
@@ -118,10 +120,30 @@ export const AUDIT_OPS = Object.freeze({
   quiz_item_remove: 'Quiz item removed',
   register: 'Recordings registered (command)',
   init: 'Study created (command)',
+  problem_report: 'Problem reported',
+  problem_resolve: 'Problem resolved',
+  problem_return: 'Recording returned to its annotator',
+  problem_reassign: 'Recording given to someone else',
+  review_save: 'Review saved',
 });
 
 export function opText(op) {
-  return AUDIT_OPS[op] || String(op || '').replace(/_/g, ' ');
+  const t = AUDIT_OPS[op] || String(op || '').replace(/_/g, ' ');
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+function settingValueText(v) {
+  if (typeof v === 'boolean') return v ? 'on' : 'off';
+  if (v === null || v === undefined || v === '' || (Array.isArray(v) && !v.length) || (typeof v === 'object' && !Object.keys(v).length)) return 'nothing';
+  if (Array.isArray(v)) return v.join(', ');
+  if (typeof v === 'object') return Object.entries(v).map(([k, x]) => `${k} ${x}`).join(', ');
+  return String(v);
+}
+
+/** A setting's change in words for the audit log (electrotag/web/admin.py setting_change_text). */
+export function settingChangeText(key, old, value) {
+  const [block, ...rest] = String(key).split('.');
+  return `${rest.join('.').replace(/_/g, ' ')} (${block}) from ${settingValueText(old)} to ${settingValueText(value)}`;
 }
 
 /** The competency measures of electrotag.training.assessment.METRICS, in the same order. */
@@ -336,6 +358,7 @@ export function settingsProblems(s, labels = null) {
   const d = s.display || {};
   if ('duration_s' in d && !(Number(d.duration_s) > 0 && Number(d.duration_s) <= 600)) out.push('The screen shows between 1 and 600 seconds.');
   if ('n_channels' in d && !(Number.isInteger(Number(d.n_channels)) && Number(d.n_channels) >= 1)) out.push('The screen shows at least one channel.');
+  if ('channel_colours' in d && !CHANNEL_COLOUR_CHOICES.some(([v]) => v === d.channel_colours)) out.push('Channel colours are none, by region, by side or by type.');
   for (const [type, v] of Object.entries(d.scalings || {})) {
     if (!(Number(v) > 0)) out.push(`The display scale for ${type.toUpperCase()} must be a positive number.`);
   }
@@ -405,6 +428,44 @@ export function defaultAnalysisConfig() {
   };
 }
 
+/** The agreement answer's summary as a few rows of plain words ([label, text]); the key results are in the report. */
+export function agreementSummaryRows(summary) {
+  const s = summary || {};
+  const rows = [];
+  if (s.n_recordings !== undefined && s.n_recordings !== null) rows.push(['Recordings analysed', String(s.n_recordings)]);
+  if (s.n_comparable_recordings !== undefined && s.n_comparable_recordings !== null) rows.push(['Recordings with two or more annotators to compare', String(s.n_comparable_recordings)]);
+  if (Array.isArray(s.annotators)) rows.push(['Annotators', s.annotators.join(', ') || '–']);
+  const u = s.unusable || {};
+  if (u.recordings_left_out) rows.push(['Left out (set aside as ones that cannot be annotated)', `${u.recordings_left_out}: ${(u.recording_ids || []).map((r) => String(r).split('/').pop()).join(', ')}`]);
+  return rows;
+}
+
+/** The command that repeats the admin area's agreement analysis on the results zip's folder. */
+export const AGREEMENT_COMMAND = 'electrotag-agreement Annotated_Events --config agreement_settings.json';
+
+/**
+ * The Settings used (JSON) of an agreement report, in the form electrotag-agreement --config reads:
+ * the settings under "config", the recordings chosen and those left out because they were set aside.
+ * The study sends it (settings_file); an older study's answer is completed from the request.
+ */
+export function agreementSettingsFile(answer, request = {}) {
+  const r = answer || {};
+  if (r.settings_file && r.settings_file.config) return { command: AGREEMENT_COMMAND, ...r.settings_file };
+  const s = r.summary || {};
+  const config = { ...(s.config || request.config || {}) };
+  if (!s.config) {
+    config.annotators = request.annotator_ids || null;
+    config.modes = request.modes || ['standard'];
+  }
+  return { config, recording_ids: request.recording_ids || null, exclude_recording_ids: (s.unusable && s.unusable.recording_ids) || [], command: AGREEMENT_COMMAND };
+}
+
+/** A reference set as a choice shows it: "Pilot set · pilot", or the identifier alone. */
+export function setLabel(s) {
+  const name = String((s && s.name) || '').trim();
+  return name && name !== s.set_id ? `${name} · ${s.set_id}` : String((s && s.set_id) || '');
+}
+
 export const MATCH_CRITERIA = Object.freeze({
   iou: 'Overlap (IoU)',
   tolerance: 'Onset and offset tolerance',
@@ -460,6 +521,17 @@ export function criteriaFromRows(rows, minReferenceEvents, categories = null) {
   return { criteria: out, min_reference_events: n, categories: categories && categories.length ? [...categories] : null };
 }
 
+/** Disagreements of a consensus shorter than this (seconds) are boundary differences, listed apart. */
+export const SLIVER_S = 0.1;
+
+/** A consensus's disagreements: those worth adjudicating, and the slivers where boundaries differ a little. */
+export function splitSlivers(rows, minS = SLIVER_S) {
+  const main = [];
+  const slivers = [];
+  for (const d of rows || []) ((Number(d.offset_s) - Number(d.onset_s)) < minS ? slivers : main).push(d);
+  return { main, slivers };
+}
+
 /** "Event F1 (time only) ≥ 0.8 (overall)". */
 export function describeCriterion(c) {
   const meta = METRICS[c.metric] || { label: c.metric, better: 'higher' };
@@ -480,6 +552,44 @@ export function manifestSummary(m) {
     sfreq, durationS: sfreq > 0 ? n / sfreq : 0, warnings, notes: (m.notes || []).map(String),
     sha256: fp.sha256 || fp.hex || '', sizeBytes: Number(fp.size ?? fp.size_bytes ?? 0),
   };
+}
+
+/** A recording format as people write it: EDF, BDF, BrainVision. */
+export function formatName(format) {
+  const f = String(format || '').toLowerCase();
+  return { edf: 'EDF', bdf: 'BDF', brainvision: 'BrainVision', vhdr: 'BrainVision', rec: 'EDF' }[f] || String(format || '');
+}
+
+/** Why a file could not be read, without its name again (the list names it already). */
+export function failureText(path, reason) {
+  const name = String(path || '').split('/').pop();
+  let t = String(reason || 'not readable');
+  if (name) {
+    t = t.split(`${name}: `).join('');
+    if (t.startsWith(`${name} is `)) t = `It is ${t.slice(name.length + 4)}`;
+  }
+  return t;
+}
+
+/**
+ * Recordings found that are byte-identical to another (the same fingerprint and size) under another
+ * ID: a registered recording of the same place, or one found earlier in the same batch. Gives a Map
+ * of recording ID -> the ID of the recording it copies.
+ */
+export function duplicatesOf(manifests, registered = []) {
+  const key = (sha, size) => `${String(sha || '').toLowerCase()}|${Number(size) || 0}`;
+  const known = new Map();
+  for (const r of registered) if (r.sha256) known.set(key(r.sha256, r.size_bytes), r.recording_id);
+  const out = new Map();
+  for (const m of manifests) {
+    const sm = manifestSummary(m);
+    if (!sm.sha256) continue;
+    const k = key(sm.sha256, sm.sizeBytes);
+    const other = known.get(k);
+    if (other && other !== sm.recordingId) out.set(sm.recordingId, other);
+    else if (!other) known.set(k, sm.recordingId);
+  }
+  return out;
 }
 
 /** Manifests in groups small enough for one request each (the study refuses very large requests). */
@@ -523,6 +633,15 @@ export function progressText(p) {
   const stage = p.stage === 'fingerprint' || p.stage === 'hash' ? 'Checking' : 'Reading';
   const count = Number.isFinite(done) && Number.isFinite(total) ? ` ${Math.min(done + (p.stage === 'done' ? 0 : 1), total)} of ${total}` : '';
   return { text: p.message || `${stage}${count}${name ? `: ${name}` : '…'}`, fraction: fraction === null ? null : Math.max(0, Math.min(1, fraction)) };
+}
+
+/** The question before Unassign, saying what happens to work already started. */
+export function unassignQuestion(item, aid) {
+  const name = String(item.recording_id || '').split('/').pop();
+  if (item.status === 'in_progress') {
+    return `Take ${name} away from ${aid}? They have started it: their unsaved work stays with the study and comes back if the recording is assigned to them again.`;
+  }
+  return `Take ${name} away from ${aid}?`;
 }
 
 // ---------------------------------------------------------------- records
@@ -689,6 +808,7 @@ export function minutesText(seconds) {
 
 /** The projected finish of stats.totals.projection, in words. */
 export function projectionText(p) {
+  if (p && p.status === 'not_enough' && p.reason === 'too_early') return 'After three days of work';
   if (!p || p.status === 'not_enough') return 'Not enough work yet';
   if (p.status === 'complete') return 'Every assigned recording is done';
   return `Around ${dateText(p.date)}`;
@@ -699,12 +819,13 @@ export function projectionText(p) {
  * with the year only when it is not this year's) and a note that keeps the "around".
  */
 export function projectionFigure(p, paceDays = 14, now = new Date()) {
+  if (p && p.status === 'not_enough' && p.reason === 'too_early') return { value: projectionText(p), note: 'The first days say too little about the pace' };
   if (!p || p.status !== 'projected') return { value: projectionText(p), note: '' };
   const d = new Date(p.date);
   if (Number.isNaN(d.getTime())) return { value: projectionText(p), note: `At the pace of the last ${paceDays} days` };
   const sameYear = d.getFullYear() === now.getFullYear();
   const value = d.toLocaleDateString('en-GB', sameYear ? { day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: 'numeric' });
-  return { value, note: `Around then, at the pace of the last ${paceDays} days` };
+  return { value, note: `Around then, at the pace of the last ${paceDays === 1 ? 'day' : `${paceDays} days`}` };
 }
 
 /** The number to show for a value that may be missing (one decimal for fractions). */

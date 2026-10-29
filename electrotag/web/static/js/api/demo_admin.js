@@ -14,7 +14,7 @@ import { sha256Hex } from '../data/sha256.js';
 import { newId, nowLocalIso } from '../util.js';
 import {
   checkAnnotatorId, checkEmail, checkSetId, criteriaFromRows, criteriaRows, deepCopy, describeProvenance, mergeSettings,
-  METRICS, plural, settingsProblems,
+  METRICS, plural, settingChangeText, settingsProblems,
 } from '../admin/model.js';
 
 export const ADMIN_ID = 'ADMIN';
@@ -37,7 +37,7 @@ const SERVER_ONLY = {
   agreement: 'run the agreement analysis',
   activity: 'run the activity analysis',
   competency: 'write competency reports',
-  results_zip: 'put every result into one zip file (Download the demonstration\'s results gives them as one JSON file)',
+  results_zip: 'put every result into one zip file',
   set_example_create: 'create the example training set (it already has one: the Demonstration training set)',
 };
 
@@ -51,6 +51,8 @@ const DAY_MS = 86400000;
 const STATS_DAYS = 30;
 const PACE_DAYS = 14;
 const PACE_MIN = 3;
+/** The fewest days since the first completion before the pace projects a finish (admin.py PACE_MIN_DAYS). */
+const PACE_MIN_DAYS = 3;
 /** What a person is told when an invitation link cannot be used (electrotag/web/service.py, INVITE_PROBLEMS). */
 const INVITE_PROBLEMS = {
   unknown: [404, 'This invitation link is not known to the study. It may have been replaced by a newer link or withdrawn. To get a new link, contact the study team who invited you, for example by replying to the email that brought you this one.'],
@@ -582,21 +584,26 @@ export class DemoAdmin {
       const next = mergeSettings(this.s.settings, body.settings);
       const problems = settingsProblems(next, LABEL_NAMES);
       if (problems.length) throw bad(problems[0], 'invalid_settings');
+      for (const [block, values] of Object.entries(body.settings)) {
+        for (const [key, value] of Object.entries(values || {})) {
+          const old = (this.s.settings[block] || {})[key];
+          if (JSON.stringify(old) !== JSON.stringify(value)) changed.push(settingChangeText(`${block}.${key}`, old, value));
+        }
+      }
       this.s.settings = next;
-      changed.push(...Object.keys(body.settings));
     }
     if (body.name !== undefined) {
       const name = String(body.name).trim();
       if (!name) throw bad('The study needs a name.', 'invalid_settings');
       if (name.length > 120) throw bad('The study name has at most 120 characters.', 'invalid_settings');
       this.s.name = name;
-      changed.push('name');
+      changed.push('the study\'s name');
     }
     if (body.logging_notice !== undefined) {
       this.s.logging_notice = String(body.logging_notice).slice(0, 4000);
-      changed.push('logging notice');
+      changed.push('the logging notice');
     }
-    if (changed.length) this._audit('settings_update', `Changed the study settings (${changed.join(', ')})`, { changed });
+    if (changed.length) this._audit('settings_update', `Changed ${changed.join('; ')}`, { changed });
     return this.op_settings_get();
   }
 
@@ -671,10 +678,11 @@ export class DemoAdmin {
       if (body.status === 'disabled') this._endInvitation(u.annotator_id, 'revoked');
       changes.push(body.status === 'disabled' ? 'switched off' : 'switched on');
     }
-    if (body.display_name !== undefined) { u.display_name = String(body.display_name).trim(); changes.push('name'); }
-    if (body.notes !== undefined) { u.notes = String(body.notes).slice(0, 4000); changes.push('notes'); }
+    if (body.display_name !== undefined && String(body.display_name).trim() !== (u.display_name || '')) { u.display_name = String(body.display_name).trim(); changes.push('name'); }
+    if (body.notes !== undefined && String(body.notes).slice(0, 4000) !== (u.notes || '')) { u.notes = String(body.notes).slice(0, 4000); changes.push('notes'); }
+    // Nothing to change (an account switched off already, say): nothing is audited.
     if (changes.length) this._audit('user_update', `Changed ${u.annotator_id} (${changes.join(', ')})`, { annotator_id: u.annotator_id, changes });
-    return { user: this._userRecord(u, this._items(u.annotator_id)) };
+    return { user: this._userRecord(u, this._items(u.annotator_id)), changed: changes.length > 0 };
   }
 
   op_user_reset_password(body) {
@@ -730,7 +738,7 @@ export class DemoAdmin {
         else { this.s.assignments.push({ annotator_id: aid, recording_id: rid, mode, context_id: '', at: nowLocalIso() }); added += 1; }
       }
     }
-    if (added) this._audit('assign', `Assigned ${plural(rids.length, 'recording')} to ${ids.join(', ')} (${added} new)`, { annotator_ids: ids, recording_ids: rids, mode });
+    if (added) this._audit('assign', `Assigned ${plural(rids.length, 'recording')} to ${ids.join(', ')} (Annotation): ${added} new`, { annotator_ids: ids, recording_ids: rids, mode });
     return { added, already };
   }
 
@@ -745,6 +753,9 @@ export class DemoAdmin {
     }
     if (this.b._status(u.annotator_id, { rid: body.recording_id, mode, context_id: ctx }) === 'done') {
       throw conflict('done', `${u.annotator_id} has already finished ${body.recording_id}, so it stays with their results.`);
+    }
+    if (this.b.feedback.isUnusable(this.b._key(u.annotator_id, body.recording_id, mode, ctx))) {
+      throw conflict('set_aside', `${u.annotator_id} set ${body.recording_id} aside as a recording that cannot be annotated, so it stays with their work. Deal with their report in Problems: return the recording to ${u.annotator_id}'s list, or give it to someone else.`);
     }
     this.s.assignments.splice(i, 1);
     this.b.feedback.clearMark(u.annotator_id, body.recording_id, mode, ctx); // set aside, then taken away: afresh if given back
@@ -780,6 +791,8 @@ export class DemoAdmin {
     if (!Array.isArray(body.manifests) || !body.manifests.length) throw bad('There are no recordings to add.');
     const out = { added: [], replaced: [], skipped: [] };
     const who = this.b.annotatorId;
+    // A byte-identical copy of a registered recording is skipped unless the administrator confirms it (admin.py).
+    const prints = new Map();
     for (const m of body.manifests) {
       const rid = m && typeof m.recording_id === 'string' ? m.recording_id : '(no ID)';
       const problem = manifestProblem(m);
@@ -788,6 +801,16 @@ export class DemoAdmin {
       const old = this.record(scope, rid);
       if (old && old.builtin) { out.skipped.push({ recording_id: rid, reason: 'It is one of the demonstration\'s built-in examples.' }); continue; }
       if (old && !body.replace) { out.skipped.push({ recording_id: rid, reason: 'It is registered already (choose Replace to update its description).' }); continue; }
+      const print = `${String(fp.sha256).toLowerCase()}|${Number(fp.size)}`;
+      if (body.allow_duplicates !== true) {
+        const same = prints.get(print) || (this.s.recordings.find((r) => r.scope === scope && r.recording_id !== rid
+          && `${String(r.sha256).toLowerCase()}|${Number(r.size_bytes)}` === print) || {}).recording_id;
+        if (same) {
+          out.skipped.push({ recording_id: rid, duplicate_of: same, reason: `The same file as ${same} (the same fingerprint), so it would be annotated twice under two IDs. Add it only if that is intended.` });
+          continue;
+        }
+      }
+      if (!prints.has(print)) prints.set(print, rid);
       const hasResults = this.b.state.submissions.some((s) => s.recording_id === rid);
       if (old && hasResults && String(old.sha256).toLowerCase() !== String(fp.sha256).toLowerCase()) {
         out.skipped.push({ recording_id: rid, reason: 'Someone has saved results for it, and this file is a different one (its fingerprint differs).' });
@@ -1153,17 +1176,22 @@ export class DemoAdmin {
     const times = subs.map(elapsedOf).filter((t) => t !== null);
     // A recording that cannot be annotated is finished for its annotator, but it is not done.
     const remaining = totals.assigned - totals.done - totals.unusable;
-    const recent = since(subs, PACE_DAYS);
-    const pace = recent / PACE_DAYS;
+    // The pace of the last 14 days, or of the days since the first completion in a younger study.
+    const savedDays = subs.map((s) => dayOf(s.saved_at)).filter((d) => d && d <= today).sort();
+    const history = savedDays.length ? Math.round((Date.parse(`${today}T12:00:00`) - Date.parse(`${savedDays[0]}T12:00:00`)) / 86400000) + 1 : 0;
+    const paceDays = Math.max(1, Math.min(PACE_DAYS, history));
+    const recent = since(subs, paceDays);
+    const pace = recent / paceDays;
     let projection = { status: 'not_enough', date: null };
     if (totals.assigned && !remaining) projection = { status: 'complete', date: null };
+    else if (remaining && recent >= PACE_MIN && history < PACE_MIN_DAYS) projection = { status: 'not_enough', date: null, reason: 'too_early' };
     else if (remaining && recent >= PACE_MIN) projection = { status: 'projected', date: addDays(today, Math.ceil(remaining / pace)) };
     const m = medianOf(times);
     return {
       generated_at: nowLocalIso(), work, today, days,
       totals: { ...totals, share_done: totals.assigned ? totals.done / totals.assigned : null, remaining,
         annotator_hours: (times.reduce((a, b) => a + b, 0) + draftS) / 3600, median_minutes: m === null ? null : m / 60,
-        done_7d: since(subs, 7), done_30d: since(subs, 30), pace_per_day: pace, pace_days: PACE_DAYS, projection, ...this.b.feedback.counts() },
+        done_7d: since(subs, 7), done_30d: since(subs, 30), pace_per_day: pace, pace_days: paceDays, projection, ...this.b.feedback.counts() },
       daily: daily(subs),
       annotators: people,
       recordings: [...recordings.values()].sort((a, b) => (a.scope !== 'study') - (b.scope !== 'study') || a.scope.localeCompare(b.scope) || a.recording_id.localeCompare(b.recording_id)),

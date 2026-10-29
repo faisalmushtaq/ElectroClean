@@ -38,7 +38,22 @@ The admin area of the browser application ([web/admin.md](web/admin.md)) runs
 the same analysis on the study's saved results, for the annotators, recordings
 and settings chosen there, and offers the report and the tables to download.
 For a study on Firebase, `electrotag web export` writes the results into an
-`Annotated_Events` folder for the command. From Python:
+`Annotated_Events` folder for the command.
+
+The admin area leaves out the research annotation of every recording that an
+annotator set aside as one that cannot be annotated. Its report offers The
+settings used (JSON), `agreement_settings.json`, which names those recordings
+beside the settings, and `--config` reads it, so that
+
+```bash
+electrotag agreement Annotated_Events --config agreement_settings.json
+```
+
+run on the results zip analyses the same recordings and gives the same numbers.
+`--config` also reads the `analysis_settings.json` of an earlier analysis, which
+records the recordings chosen as well. `--recordings` keeps only the recordings
+named, and `--exclude-recordings` leaves out the research annotation of those
+named while their practice and assessment sessions stay. From Python:
 
 ```python
 from electrotag.reliability import AnalysisConfig, run_analysis, write_outputs

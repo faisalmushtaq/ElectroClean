@@ -60,6 +60,41 @@ def collect_annotation_files(paths: Iterable[Path | str]) -> list[Path]:
     return sorted(set(out))
 
 
+def select_annotation_files(
+    files: Iterable[Path], *, recordings: Iterable[str] | None = None, exclude: Iterable[str] | None = None
+) -> list[Path]:
+    """The files of the recordings chosen, leaving out the research annotation of the recordings in ``exclude``.
+
+    ``recordings`` keeps only those recordings (None keeps every one). ``exclude`` leaves out the
+    research annotation (mode ``standard``) of its recordings: the admin area puts there the
+    recordings an annotator set aside as ones that cannot be annotated, and their practice and
+    assessment sessions stay. The agreement analysis of the admin area and ``electrotag-agreement
+    --exclude-recordings`` both choose their files here, so that they analyse the same recordings.
+    A file that cannot be read is kept, for the analysis to report.
+    """
+    import json
+
+    wanted = set(recordings) if recordings is not None else None
+    leave_out = set(exclude or ())
+    if wanted is None and not leave_out:
+        return list(files)
+    out = []
+    for p in files:
+        try:
+            doc = json.loads(Path(p).read_text(encoding="utf-8"))
+            rid = doc["recording"]["recording_id"]
+            mode = str((doc.get("session") or {}).get("mode") or "standard")
+        except (OSError, ValueError, KeyError, TypeError):
+            out.append(p)
+            continue
+        if wanted is not None and rid not in wanted:
+            continue
+        if rid in leave_out and mode == "standard":
+            continue
+        out.append(p)
+    return out
+
+
 def build_dataset(
     documents: Iterable[tuple[str, AnnotationDocument]], config: AnalysisConfig, *, files: list[dict[str, str]] | None = None
 ) -> AgreementDataset:

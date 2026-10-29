@@ -419,7 +419,7 @@ report is regenerated from the same inputs.
 | File | Contents |
 |---|---|
 | `agreement_report.html` | Readable report with figures |
-| `analysis_settings.json` | Every setting, the label catalogue, input files with SHA-256, warnings |
+| `analysis_settings.json` | Every setting, the label catalogue, input files with SHA-256, warnings, and the recordings chosen (`recording_ids`) and left out (`exclude_recording_ids`); `--config` reads it to repeat the analysis |
 | `descriptives_recordings.tsv` | Recordings, durations, annotators |
 | `descriptives_annotations_by_annotator.tsv` | Counts and durations per recording, annotator and category |
 | `timeresolved_pairwise.tsv` | 2×2 tables and pairwise statistics per recording (and pooled), category, channel mode and representation |

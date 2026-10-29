@@ -20,9 +20,13 @@ annotate too) and Admin to come back. The study's administrator accounts are mad
 set up (docs/web/firebase.md and docs/web/server.md), and from then on you can make more in the
 admin area itself.
 
-The admin area has ten sections, listed on the left (at the top on a narrow screen) in four groups:
+The admin area has eleven sections, listed on the left (at the top on a narrow screen) in four groups:
 Study (Overview, Progress, Results, Analyses and Records), People (Annotators, Assignments and
-Training), Data (Recordings) and Settings (Study settings). Each group folds away under its heading
+Training), Data (Recordings and Problems) and Settings (Study settings). Help, beside each section's
+heading, opens that section of this guide in a new tab, and the analyses' settings link to the
+parts of the [reliability guide](../reliability_guide.md) that explain them; the guides are read on
+GitHub, wherever the application is served from. The first press of Tab offers Skip to the section,
+which goes past the header and the menu to the section's heading. Each group folds away under its heading
 and opens again with the same heading; your browser remembers which groups you folded, for each
 administrator, and the section you are in stays in the menu even when its group is folded. Each
 section has an address of its own, such as `#admin-recordings`, so the browser's Back and Forward
@@ -62,15 +66,20 @@ and administrators there are, and how much of the assigned work is done, in prog
 do. Below are the latest changes from the study's records and the latest work that annotators
 saved. The buttons take you to the most common jobs: adding recordings, adding an annotator,
 assigning recordings and following progress. Two further figures count the open problem reports (with the
-recordings that cannot be annotated) and the saved recordings that have been reviewed.
+recordings that cannot be annotated) and the saved recordings that have been reviewed. Each figure
+opens the section behind it: Open problems opens Problems, Reviewed the list of reviews in Results,
+and so on.
 
 ## Progress
 
 Progress shows how far the study has got and how long the work takes, in three tabs. The study tab
 gives the recordings done of those assigned, with their share; the annotator-hours spent; the
 median minutes a recording takes; the recordings completed in the last 7 and 30 days; the pace of
-the last 14 days; and a projected finish date at that pace. Until at least three recordings have
-been completed in those 14 days the projection says there is not enough work yet. Below the figures,
+the last 14 days; and a projected finish date at that pace. In a study younger than 14 days the pace
+is that of the days since the first recording was completed, so that a team in its first week is
+not shown as slower than it is; the projection waits until three days have passed since then (After
+three days of work), because a single day says too little about the pace, and until at least three
+recordings have been completed in those days it says there is not enough work yet. Below the figures,
 a chart shows the recordings completed on each of the last 30 days, for the whole study or for one
 person; move the pointer over it, or focus it and use the arrow keys, to read each day, and open
 The numbers, day by day for the same figures as a table. Two more figures count the recordings that annotators
@@ -100,15 +109,19 @@ whether it is active, where its invitation stands, how much of its work is done 
 last signed in. Search by ID, name or email, or show only one role or status, and sort by any
 column.
 
-To add someone, give their annotator ID (letters and digits, as the study's records name them; it
-cannot be changed later), their name if you like, their email address and their role. On a study
+To add someone, use Add an account below the list: give their annotator ID (up to 32 letters, digits,
+hyphens or underscores, as the study's records name them; it cannot be changed later), their name if
+you like, their email address and their role. On a study
 on Firebase people sign in with their email address, so it is needed, and the study answers with an
 invitation link that lets the person choose their own password. On a study server the person signs
 in with their annotator ID, and First sign-in chooses how they get in: a temporary password that
 the study makes, a private invitation link, or a password of at least eight characters that you
-choose. The link or the password is shown once, with a Copy button: pass it on in a separate message
-from the study's address, or in person. Assign recordings to the new person straight away from the
-same place.
+choose; the line under First sign-in says what the choice does. An administrator is always given a
+password, so the invitation link is not offered for one. The link or the password is shown once, with
+a Copy button: pass it on in a separate message from the study's address, or in person. Each one made
+stays listed under the form, the newest first, until you leave the page, so adding the next person
+(or a mistake in the next form) never hides it. Assign recordings to the new person straight away
+from the same place.
 
 ### Inviting people
 
@@ -130,7 +143,9 @@ so a link is shown only when it is made; if one was not copied, make a new one, 
 stops working. The study's records note every link made and withdrawn, never the link itself.
 
 The Invitations tab shows where each person's link stands: not invited, invited on a date with the
-date it expires, accepted, expired or withdrawn. For a link made on this page, Copy link copies it
+date it expires, accepted, expired or withdrawn. Someone who was never invited but has signed in
+shows Signs in with a password, and Make a link asks first for them, since a link lets them choose a
+new password (the present one keeps working until they do). For a link made on this page, Copy link copies it
 and Email the link opens a short, friendly message that you can edit, with the link, the person's
 ID and the date the link expires, which asks them to open it on the tablet or computer they will
 annotate on; Open in my email then starts a new message in your own email
@@ -157,8 +172,10 @@ link to its person in a separate message.
 ### Several people at once
 
 Tick people in the Accounts list (the box in the heading ticks everyone the filters show) and a bar
-of actions appears above the list: Assign recordings… takes them to Assignments with the people
-chosen, Switch off and Switch on change their accounts, and New invitation links makes a fresh link
+of actions appears under the list, staying at the foot of the window while the list is in view:
+Assign recordings… takes them to Assignments with the people chosen, Switch off (which asks first,
+since it signs people out at once) and Switch on change their accounts, saying for anyone already
+in that state that nothing changed, and New invitation links makes a fresh link
 for each, lasting as long as the list beside it says, shown in a table to copy or download as above. The actions run one person at a time with
 a line that shows how far they have got, and a table then says what happened to each, with the
 reason for anything not done. Your own account is left out of switching off and on and of new
@@ -206,10 +223,18 @@ example `sub-001/eeg/sub-001_task-rest_eeg.vhdr`, just as `electrotag-web regist
 recordings. Choose the same folder for every batch, so that the same recording always has the same
 ID.
 
+A file that is byte for byte the same as another (the same fingerprint) under another ID, whether a
+recording registered already or another file in the same batch, is marked same file as, with the
+other recording's ID. Each copy would be assigned and annotated as a recording of its own, which
+inflates the counts and the agreement, so copies are skipped unless you tick Add the copies too; the
+study checks this as well, whichever way the recordings are sent.
+
 When the files have been read, a table shows what was found: each recording's ID, format, number of
 channels and length, with anything the checks noticed (an unusual amplitude, for example), and the
 files that could not be read with the reason. Choose where the recordings go, the study or one of
-the reference sets, then Add. Only the descriptions are sent, in small groups. The answer lists the
+the reference sets, then Add; its button counts the recordings that will be added, leaving out those
+registered already (unless Replace is ticked) and copies. Assign them…, afterwards, opens
+Assignments with the new recordings chosen. Only the descriptions are sent, in small groups. The answer lists the
 recordings added, replaced and skipped, with the reason for each skipped one. A recording that is
 registered already is skipped unless you tick Replace; even then, a recording that someone has
 saved results for is replaced only by the very same file (the same fingerprint), so results always
@@ -225,20 +250,23 @@ command line.
 
 Retire a recording to stop offering it for new assignments; work already assigned stays, and Bring
 back into use undoes it. Remove deletes the recording's registration, its description in the study,
-after you confirm it on the page; the EEG file itself never reached the study and stays where it
-is. A recording that someone has saved, or that a reference set uses, cannot be removed, because
+after you confirm it on the page; the question says how many people it is assigned to, since those
+assignments go with it (work in progress is kept by the study and comes back if the recording is
+added and assigned again), and suggests retiring it to keep them. The EEG file itself never reached
+the study and stays where it is. A recording that someone has saved, or that a reference set uses, cannot be removed, because
 research results are never deleted; retire it instead.
 
 Tick recordings in the list (the box in the heading ticks every recording the filters show) to act
 on several at once: Assign to… takes the study's recordings chosen to Assignments, Retire and Bring
 back into use change them all, and Remove… removes their registrations after you confirm. Each runs
 one recording at a time with a line that shows how far it has got, and a table then says what
-happened to each. As for people, one action runs at a time and closing the page meanwhile asks first. Removing keeps every recording with saved results or a place in a reference set,
+happened to each. As for people, the bar of actions stays at the foot of the window while the list is in view, one action runs at a time and closing the page meanwhile asks first. Removing keeps every recording with saved results or a place in a reference set,
 says which were kept and why, and offers to retire them instead.
 
 ## Assignments
 
-Assign recordings chooses one or more annotators, one or more recordings (or every recording of the
+Assign recordings chooses one or more annotators (All ticks the active annotators; switched-off
+accounts and administrators are ticked one by one), one or more recordings (or every recording of the
 study, leaving out retired ones), and the mode: Annotation for the study's own work, or a training
 mode (guided, practice or assessment) with the reference set the recordings come from. The answer
 says how many assignments were new and how many existed already. Annotators see their recordings in
@@ -246,7 +274,11 @@ the order the study's selection setting gives (Study settings).
 
 Every assignment lists all of them with the annotator, the recording, the mode, the status and the
 last activity, filtered by person, mode, status or recording. Unassign takes an unfinished
-recording away from someone after you confirm it; finished work stays with their results. Trainees'
+recording away from someone after you confirm it; when they have started it, the question says that
+their unsaved work stays with the study and comes back if the recording is assigned to them again.
+Finished work stays with their results. A recording that its annotator set aside as one that cannot
+be annotated has See the report instead, since it is settled through the problem report (Problems):
+returned to their list, or given to someone else. Trainees'
 recordings come from their training programme, which you change on their page in Annotators.
 
 ## Training
@@ -280,8 +312,10 @@ combines their saved annotations, sample by sample and type by type: where enoug
 artifact of a type, the consensus has it. Needed to agree is that number (empty means more than half
 of them); Merge gaps joins stretches of the same type separated by less than that many seconds;
 Shortest artifact leaves out shorter pieces. Afterwards the page lists every stretch where the
-experts disagreed, with who marked it and what the consensus kept, for adjudication; Download the
-table (TSV) saves the list.
+experts disagreed, with who marked it and what the consensus kept, for adjudication; differences
+shorter than 0.1 s, where the experts' boundaries differ a little, are listed apart under their own
+heading, so that the stretches worth adjudicating come first. Download the table (TSV) saves every
+row.
 
 **An adjudicated consensus.** After reviewing the disagreements, an adjudicator annotates the
 recording in the study; their saved annotations become the reference, recorded with the experts
@@ -352,7 +386,22 @@ end, or both) with the overlap thresholds and the main threshold, the tolerances
 may match several, the channel overlap needed when channels are compared, which channels to leave
 out, and when a category has too few annotations for the figures. The defaults are starting points:
 choose the settings for your study before you look at its results, report them, and keep The
-settings used (JSON) with the report. The reliability guide explains each measure.
+settings used (JSON) with the report. Each setting links to the part of the reliability guide that
+explains it.
+
+Above the report, a few lines give the recordings analysed, those with two or more annotators to
+compare, the annotators and the recordings left out because they were set aside; the key results
+are in the report. Besides the tables of the command (the reliability guide lists them), the report
+offers `annotation_notes.tsv`, every annotation that carries a note with its annotator, place,
+confidence and note, which is always sent, and the confidence tables (`confidence_by_annotator.tsv`,
+`confidence_sensitivity.tsv` and `confidence_calibration.tsv`) that the reliability guide's
+"Confidence of the annotations" explains. On a large study the tables of every matched and unmatched
+event (`events_matched.tsv` and `events_unmatched.tsv`) can be too large to send through the page;
+the warning then says so. The settings used (JSON) is the file that `electrotag-agreement --config`
+reads, with the recordings left out named in it, so the command shown under the downloads,
+`electrotag-agreement Annotated_Events --config agreement_settings.json`, run on the results zip
+with the file beside its `Annotated_Events` folder, repeats the analysis with the same recordings
+and gives the same numbers, those large tables included.
 
 The **activity analysis and learning curves** summarise the interaction logs: time spent, clicks
 and keys, confidence ratings and notes on the annotations saved (counts only, never the text of a
@@ -361,16 +410,23 @@ faster with practice, for everyone or for the annotators ticked.
 
 A **competency report** compares a trainee's assessment recordings with a reference set's
 references and criteria, once every assessment recording is saved, and shows whether the criteria
-are met; download it as HTML, and its data as JSON.
+are met; download it as HTML, and its data as JSON. The trainee list offers first the people whose
+training programme is the set chosen. When the report cannot be made yet, the message says what is
+missing and where to look.
 
 ## Results
 
-Progress lists each person with their work done, in progress and to do (and any that cannot be annotated), their training programme's
-stages and when they were last seen; Work shows their recordings one by one, and Download the table
-(TSV) saves the list. Download all results (zip) gives every result of the study in one file: the
-annotations in ElectroTag's usual folders (an `_annotations.json`, `_events.tsv`,
-`_events.json` and `_session.json` for each recording and annotator), the interaction logs, the
-training progress and the reports. When the results are too large to send through the page, the
+Each person's work lists each person with their work done, in progress and to do (and any that
+cannot be annotated), their training programme's stages and when they were last seen; Work shows
+their recordings one by one, and Download the table (CSV) saves the list. Reviews lists every review
+of saved work, newest first, filtered by annotator, reviewer or mark; open one to read its marks and
+notes. Download all results (zip) gives every result of the study in one file: the annotations in
+ElectroTag's usual folders (an `_annotations.json`, `_events.tsv`, `_events.json` and
+`_session.json` for each recording and annotator), the interaction logs, the training progress, the
+reports, the problem reports and the reviews, under `Annotated_Events/`; the study's settings
+(`study/electrotag_study.json`), its audit log (`study/audit_log.jsonl`, one change a line, oldest
+first) and its recordings' manifests (`study/manifests.json`); and a `README.txt` that says what is
+where and how to analyse it. When the results are too large to send through the page, the
 page gives the command to use instead: on a study server the results are already in the study
 folder's `Annotated_Events`, and on Firebase `electrotag-web export` writes them into the same
 folders (docs/web/firebase.md).
@@ -383,10 +439,12 @@ the person) or in Results (Work beside the person). Open the recording from this
 annotators do: the EEG never reaches the study, so the browser checks the file's fingerprint
 against the study's copy and refuses another recording. The recording opens in the annotation view
 in a read-only review mode, with the annotations of the latest saved version drawn as they were
-saved.
+saved; the status line names the annotator whose work it is and the version, and you as the
+reviewer.
 
-The side panel lists those annotations, each with Agree, Caveat and Comment and an optional note
-of up to 300 characters. N and P move from one annotation to the next, A agrees, C adds a caveat, M
+The side panel lists those annotations, each with what the annotator recorded with it (their
+confidence from 1 to 5 and their note, where they gave them), and Agree, Caveat and Comment with an
+optional note of up to 300 characters. N and P move from one annotation to the next, A agrees, C adds a caveat, M
 a comment, Delete clears the mark and Enter goes to the note; on an iPad the marks are buttons to
 tap. To point out an artifact that was not annotated, drag across the EEG over the stretch: it is
 listed under Stretches without an annotation with the comment "missed artifact?", which you can
@@ -396,7 +454,8 @@ button is pressed; Back leaves without saving, after asking when something is ma
 A review is a record of its own, with the reviewer, the time, the version reviewed and each item
 (an annotation's ID, or a stretch's start and length, with its mark and note). It never changes the
 annotation files, and a recording can have several reviews, by different people or over time. The
-person's page lists their reviews, Progress counts the reviewed recordings, every review is in the
+person's page lists their reviews, each of which opens to show its marks and notes, Results lists
+every review of the study with filters, Progress counts the reviewed recordings, every review is in the
 audit log, and the results zip holds a TSV and a JSON file for each. The agreement analyses do not
 use reviews. Two settings in Study settings govern them (see below).
 
@@ -411,10 +470,13 @@ Overview, Progress and Results, and is left out of the agreement analyses, whose
 many recordings were left out and why.
 
 Problems, under Data, lists the reports, the open ones first, with filters for open or resolved,
-the reason, the person and the recording, and Download as CSV. Deal with it… beside an open report
-resolves it with a note (for example "replaced the file"), returns the recording to the annotator's
-to-do list, which undoes Cannot be annotated and shows the annotator a short line with your note
-on their home page, or gives it to someone else, who is assigned the recording. Overview and
+the reason, the person and the recording, and Download the table (CSV). Deal with it… beside an
+open report resolves it with a note (for example "replaced the file"), returns the recording to the
+annotator's to-do list, which undoes Cannot be annotated and shows the annotator a short line with
+your note on their home page, or gives it to someone else, who is assigned the recording. The list of
+people to give it to marks those who have it already, who cannot be chosen; the study refuses it too,
+and the report stays open, since nothing would change. A report given to someone shows Given to and
+their ID. Overview and
 Progress count the open reports and the recordings that cannot be annotated. Reports are kept with
 the results (the results zip holds them in `problem_reports/`), are in the audit log and are never
 deleted.
@@ -424,11 +486,15 @@ deleted.
 The audit log records every change made to the study, in the admin area and with the
 `electrotag-web` commands: when, by whom, what was done, and the details. It shows the newest
 first; Show older entries goes further back, and the filters show one person's changes or one kind
-of change among the entries shown.
+of change among the entries shown, problem reports and reviews included. A change of the study
+settings is written in words with the value before and after, for example "allow reviews
+(annotation) from on to off", and a change that changes nothing (switching off an account that is
+off already) is not recorded.
 
 Visits lists each time someone signed in and used ElectroTag, newest first, with the mode, when
 the visit ended and how many interaction events it logged. When the study records interactions,
-each visit has its own log among the results (`interaction_logs`).
+each visit has its own log among the results (`interaction_logs`). An administrator's visit is
+marked as such: what they do in the admin area is never logged, only the annotating they do.
 
 ## Study settings
 
@@ -439,9 +505,11 @@ high-pass filter and the notch filter at the mains frequency (50 Hz in the UK an
 North America), with or without its harmonics. They change only what is shown, never the
 recordings. Tick Fix these filters for every annotator for a reliability study, so that everyone
 sees the same traces. **The display** chooses how many seconds and channels fill the screen at
-first, and the starting amplitude of each channel type in microvolts (the scale bar shows twice the
-value); annotators can still change the amplitude, and a recording whose amplitudes are implausible
-is shown at a scale of its own, with a warning.
+first, the starting choice of channel colours (none, by region of the head, by side or by channel
+type, in a palette checked for colour-blind readers; `display.channel_colours`), and the starting
+amplitude of each channel type in microvolts (the scale bar shows twice the value); annotators can
+still change the colours and the amplitude for themselves, and a recording whose amplitudes are
+implausible is shown at a scale of its own, with a warning.
 
 **Channels** lists the channels to hide (headset housekeeping channels, for example; `*` stands for
 any characters), the channel types to give by name pattern (EXG1 to EXG8 as EOG, for example), and
@@ -504,8 +572,11 @@ often the pointer is sampled over the EEG, after how many seconds without input 
 as idle, and the notice each annotator reads once after signing in; say there what is recorded and
 why, as the study's information sheet does.
 
-Save the settings checks them first and says in plain words what to correct, for example a type
-given to two number keys.
+Save the settings, in the bar that stays at the foot of the window, checks them first and says in
+plain words, in that bar, what to correct (for example a type given to two number keys), with the
+field concerned marked and focused. The bar says Unsaved changes while there are any; leaving the
+section with unsaved changes asks first (Leave without saving, or Stay here), and so does closing or
+reloading the page.
 
 ## When something goes wrong
 

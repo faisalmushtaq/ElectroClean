@@ -208,7 +208,7 @@ export const tests = [
       assert.equal(await page.isChecked(`${section} input[name="confidence"][value="optional"]`), true, 'optional by default');
       await page.check(`${section} input[name="confidence"][value="every_mark"]`);
       await page.click('[data-log="settings-save"]');
-      await page.waitForFunction((s) => /The settings are saved/.test(document.querySelector(`${s} > .admin-msg`)?.textContent || ''), section);
+      await page.waitForFunction((s) => /The settings are saved/.test(document.querySelector(`${s} .sticky-save .admin-msg`)?.textContent || ''), section);
       await page.locator(`${section} h3`, { hasText: 'Confidence' }).scrollIntoViewIfNeeded();
       await t.screenshot(page, 'likert_admin_settings');
       assert.equal(await page.evaluate(async () => (await globalThis.ElectroTag.backend.me()).study.annotation.confidence), 'every_mark');

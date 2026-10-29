@@ -2,10 +2,19 @@
 // them) in a mode and context, see the status of every assignment, and take one away.
 
 import { h, clear } from '../ui/dom.js';
-import { MODES, STATUS, fileParts, plural, whenText } from './model.js';
+import { MODES, STATUS, fileParts, plural, setLabel, unassignQuestion, whenText } from './model.js';
 import {
   actionButton, card, checkbox, checkList, chip, confirmInline, dataTable, field, messageArea, recordingName, sectionHead, select, textInput,
 } from './ui.js';
+
+/**
+ * In place of Unassign for a recording its annotator set aside as one that cannot be annotated: that
+ * is settled through their problem report (return it to them, or give it to someone else).
+ */
+export function setAsideButton(area, aid) {
+  return h('button.btn.small.quiet', { type: 'button', 'data-log': 'set-aside-problems', title: 'Set aside as one that cannot be annotated: deal with it in Problems',
+    onclick: () => area.go('problems', { annotator: aid }) }, 'See the report');
+}
 
 export class AssignmentsSection {
   constructor(area) {
@@ -56,7 +65,8 @@ export class AssignmentsSection {
   // ---------------------------------------------------------------- assign
   _buildAssign() {
     clear(this.assignHost);
-    const people = checkList(this.users.map((u) => ({ value: u.annotator_id, text: u.annotator_id,
+    // All ticks the active annotators: switched-off accounts and administrators are ticked one by one.
+    const people = checkList(this.users.map((u) => ({ value: u.annotator_id, text: u.annotator_id, notInAll: u.status === 'disabled' || u.role === 'admin',
       extra: [u.display_name, u.status === 'disabled' ? 'switched off' : '', u.role === 'admin' ? 'administrator' : ''].filter(Boolean).join(' · ') })),
     { selected: this.preselect, legend: 'Annotators', name: 'annotators', empty: 'Add accounts on the Annotators page first.' });
     this.preselect = [];
@@ -79,7 +89,7 @@ export class AssignmentsSection {
     const fillContext = () => {
       clear(context);
       if (mode.value === 'standard') context.append(h('option', { value: '' }, '–'));
-      else for (const s of this.sets) context.append(h('option', { value: s.set_id }, `${s.name || s.set_id} (${s.set_id})`));
+      else for (const s of this.sets) context.append(h('option', { value: s.set_id }, setLabel(s)));
       contextField.hidden = mode.value === 'standard';
       fillRecordings();
     };
@@ -133,7 +143,7 @@ export class AssignmentsSection {
       { title: 'Mode', render: (i) => (MODES[i.mode] || i.mode) + (i.context_id ? ` (${i.context_id})` : '') },
       { title: 'Status', render: (i) => chip(STATUS[i.status] || i.status, i.status === 'done' ? 'done' : i.status === 'in_progress' ? 'active' : '') },
       { title: 'Last activity', render: (i) => whenText(i.last_activity, { never: '–' }) },
-      { title: '', cls: 'actions', render: (i) => (i.status === 'done' ? null : this._unassign(i)) },
+      { title: '', cls: 'actions', render: (i) => (i.status === 'done' ? null : i.status === 'unusable' ? setAsideButton(this.area, i.annotator_id) : this._unassign(i)) },
     ], [], { empty: 'Nothing is assigned yet.', pageSize: 25, caption: 'Assignments' });
     this.summary = h('p.caption', { role: 'status' });
     this.tableCard = card('Every assignment', h('div.row.filters', {}, person, mode, status, search), this.summary, this.table);
@@ -160,7 +170,7 @@ export class AssignmentsSection {
   _unassign(item) {
     const host = h('span.inline-confirm');
     host.append(h('button.btn.small', { type: 'button', onclick: async () => {
-      if (!(await confirmInline(host, { text: `Take this recording away from ${item.annotator_id}?`, yes: 'Unassign', no: 'Keep' }))) return;
+      if (!(await confirmInline(host, { text: unassignQuestion(item, item.annotator_id), yes: 'Unassign', no: 'Keep' }))) return;
       try {
         await this.area.write('unassign', { annotator_id: item.annotator_id, recording_id: item.recording_id, mode: item.mode, context_id: item.context_id || '' });
         await this.reload();

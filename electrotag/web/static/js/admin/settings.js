@@ -5,10 +5,27 @@
 // comfort of long sessions (break reminders, the pause after a while without input, the check of what
 // has been viewed before Save and Finish), the game elements of the home page, and the interaction
 // log with its notice.
+//
+// The answer to Save appears in the bar that stays at the foot of the window, with the field to
+// correct focused; the bar says when there are unsaved changes, and leaving the section or the
+// page with unsaved changes asks first.
 
 import { h, clear } from '../ui/dom.js';
-import { CHANNEL_TYPES, SCALING_TYPES, SELECTION, deepCopy, fromMicrovolts, mergeSettings, parseNumber, settingsProblems, toMicrovolts } from './model.js';
-import { actionButton, card, checkbox, field, loading, messageArea, numberInput, radios, sectionHead, select, textArea, textInput } from './ui.js';
+import { CHANNEL_COLOUR_CHOICES, CHANNEL_TYPES, SCALING_TYPES, SELECTION, deepCopy, fromMicrovolts, mergeSettings, parseNumber, settingsProblems, toMicrovolts } from './model.js';
+import { actionButton, card, checkbox, confirmInline, field, loading, messageArea, numberInput, radios, sectionHead, select, textArea, textInput } from './ui.js';
+
+/** A number from a field, or an error that names the field and knows which control to focus. */
+function numberOf(control, what, limits) {
+  try {
+    return parseNumber(control.value, what, limits);
+  } catch (exc) {
+    exc.field = control;
+    throw exc;
+  }
+}
+
+// Closing or reloading the page with unsaved settings asks first.
+const askBeforeLeaving = (e) => { e.preventDefault(); e.returnValue = ''; };
 
 /** Only what differs from the current settings, block by block and key by key. */
 function changes(current, wanted) {
@@ -25,14 +42,47 @@ export class SettingsSection {
   constructor(area) {
     this.area = area;
     this.data = null;
+    this.dirty = false;
     this.msg = messageArea();
     this.form = h('div.admin-stack');
+    // Any edit in the form counts as an unsaved change until Save.
+    for (const type of ['input', 'change']) this.form.addEventListener(type, (e) => { if (!e.target.closest('.sticky-save')) this._setDirty(true); });
     this.el = h('section.admin-section', { 'data-section': 'settings' },
       sectionHead('Study settings', 'What every annotator of the study sees and uses. Changes apply when an annotator next opens a recording.'),
       this.msg, this.form);
   }
 
+  /** True while the form holds changes that are not saved (AdminArea asks before leaving the section). */
+  unsaved() { return this.dirty; }
+
+  _setDirty(on) {
+    this.dirty = Boolean(on);
+    if (this.dirtyNote) this.dirtyNote.hidden = !this.dirty;
+    if (typeof window !== 'undefined') {
+      if (this.dirty) window.addEventListener('beforeunload', askBeforeLeaving);
+      else window.removeEventListener('beforeunload', askBeforeLeaving);
+    }
+  }
+
+  /** Ask, in the bar at the foot of the window, before leaving with unsaved changes; `go` leaves. */
+  async askLeave(go) {
+    if (!this.leaveHost) { go(); return; }
+    if (this._asking) return; // the question is on the page already
+    this._asking = true;
+    let yes;
+    try {
+      yes = await confirmInline(this.leaveHost, { text: 'The study settings have changes that are not saved. Leave without saving them?', yes: 'Leave without saving', no: 'Stay here' });
+    } finally {
+      this._asking = false;
+    }
+    if (!yes) return;
+    this._setDirty(false);
+    go();
+  }
+
   async show() {
+    // Coming back to the section with unsaved changes (the question was answered with Stay) keeps them.
+    if (this.dirty && this.form.childElementCount) return;
     this.msg.clear();
     clear(this.form);
     this.form.append(loading());
@@ -70,6 +120,7 @@ export class SettingsSection {
     const locked = checkbox('Fix these filters for every annotator (recommended for reliability studies)', Boolean(f.locked));
     // display
     const seconds = numberInput({ value: d.duration_s ?? 10, min: 1, max: 600, step: 1 });
+    const colours = select(CHANNEL_COLOUR_CHOICES, d.channel_colours || 'off');
     const nch = numberInput({ value: d.n_channels ?? 32, min: 1, step: 1 });
     const scal = Object.fromEntries(SCALING_TYPES.map((t) => [t, numberInput({ value: (d.scalings || {})[t] !== undefined ? toMicrovolts(d.scalings[t]) : '', min: 0, step: 'any' })]));
     // channels
@@ -80,7 +131,7 @@ export class SettingsSection {
       p.setAttribute('aria-label', 'Channel name pattern');
       const t = select(CHANNEL_TYPES.map((x) => [x, x.toUpperCase()]), type);
       t.setAttribute('aria-label', 'Channel type');
-      const row = h('div.row.pattern-row', {}, p, t, h('button.btn.small.quiet.destructive-text', { type: 'button', onclick: () => row.remove() }, 'Remove'));
+      const row = h('div.row.pattern-row', {}, p, t, h('button.btn.small.quiet.destructive-text', { type: 'button', onclick: () => { row.remove(); this._setDirty(true); } }, 'Remove'));
       row.read = () => [p.value.trim(), t.value];
       typesHost.append(row);
     };
@@ -140,24 +191,25 @@ export class SettingsSection {
       }
       const chosen = keys.map((k) => k.value).filter(Boolean);
       const wanted = {
-        filters: { highpass_enabled: hp.input.checked, highpass_hz: parseNumber(hpHz.value, 'High-pass frequency', { min: 0.01, max: 39 }),
+        filters: { highpass_enabled: hp.input.checked, highpass_hz: numberOf(hpHz, 'High-pass frequency', { min: 0.01, max: 39 }),
           notch_enabled: notch.input.checked, notch_hz: Number(notchHz.value), notch_harmonics: harmonics.input.checked, locked: locked.input.checked },
-        display: { duration_s: parseNumber(seconds.value, 'Seconds on the screen', { min: 1, max: 600 }),
-          n_channels: parseNumber(nch.value, 'Channels on the screen', { min: 1, integer: true }),
+        display: { duration_s: numberOf(seconds, 'Seconds on the screen', { min: 1, max: 600 }),
+          n_channels: numberOf(nch, 'Channels on the screen', { min: 1, integer: true }),
+          channel_colours: colours.value,
           scalings: Object.fromEntries(SCALING_TYPES.filter((t) => String(scal[t].value).trim() !== '')
-            .map((t) => [t, fromMicrovolts(parseNumber(scal[t].value, `Scale for ${t.toUpperCase()}`, { min: 0.001 }))])) },
+            .map((t) => [t, fromMicrovolts(numberOf(scal[t], `Scale for ${t.toUpperCase()}`, { min: 0.001 }))])) },
         channels: { hide: hide.value.split('\n').map((x) => x.trim()).filter(Boolean), types },
         loading: { apply_channel_types_from_bids: bidsTypes.input.checked, show_bids_bad_channels: bidsBad.input.checked },
-        selection: { strategy: strategy.value, seed: strategy.value === 'seeded' ? parseNumber(seed.value, 'Seed', { min: 0, integer: true }) : (sel.seed ?? null) },
-        annotation: { quick_labels: chosen, min_duration_samples: parseNumber(shortest.value, 'Shortest annotation', { min: 1, integer: true }),
-          break_reminder_minutes: parseNumber(breakAfter.value, 'Break reminder after', { min: 0, max: 240 }),
-          idle_pause_minutes: parseNumber(idlePause.value, 'Pause after', { min: 0, max: 60 }),
+        selection: { strategy: strategy.value, seed: strategy.value === 'seeded' ? numberOf(seed, 'Seed', { min: 0, integer: true }) : (sel.seed ?? null) },
+        annotation: { quick_labels: chosen, min_duration_samples: numberOf(shortest, 'Shortest annotation', { min: 1, integer: true }),
+          break_reminder_minutes: numberOf(breakAfter, 'Break reminder after', { min: 0, max: 240 }),
+          idle_pause_minutes: numberOf(idlePause, 'Pause after', { min: 0, max: 60 }),
           coverage_check: coverage.input.checked ? 'warn' : 'off', allow_revisions: revisions.input.checked,
           allow_reviews: reviews.input.checked, show_reviews_to_annotators: showReviews.input.checked,
           confidence: confidence.value() },
         gamification: { enabled: games.input.checked, leaderboard: board.input.checked, leaderboard_viewed_only: boardFull.input.checked },
-        logging: { interactions: interactions.input.checked, pointer_hz: parseNumber(pointer.value, 'Pointer samples per second', { min: 0, max: 60 }),
-          idle_after_s: parseNumber(idle.value, 'Idle after', { min: 5, max: 3600 }) },
+        logging: { interactions: interactions.input.checked, pointer_hz: numberOf(pointer, 'Pointer samples per second', { min: 0, max: 60 }),
+          idle_after_s: numberOf(idle, 'Idle after', { min: 5, max: 3600 }) },
       };
       const problems = settingsProblems(mergeSettings(st, wanted), labels.map((l) => l.label));
       if (problems.length) throw new Error(problems[0]);
@@ -165,15 +217,25 @@ export class SettingsSection {
     };
     const save = actionButton('Save the settings', { kind: 'primary', working: 'Saving…', msg, log: 'settings-save', onClick: async () => {
       msg.clear();
+      for (const el of this.form.querySelectorAll('[aria-invalid="true"]')) el.removeAttribute('aria-invalid');
       const body = {};
-      const diff = changes(st, read());
+      let wanted;
+      try {
+        wanted = read();
+      } catch (exc) {
+        // The field to correct is marked and focused, and the message is in the bar beside Save.
+        if (exc.field) { exc.field.setAttribute('aria-invalid', 'true'); exc.field.focus(); }
+        throw exc;
+      }
+      const diff = changes(st, wanted);
       if (Object.keys(diff).length) body.settings = diff;
       if (name.value.trim() !== (this.data.name || '')) body.name = name.value.trim();
       if (notice.value !== (this.data.logging_notice || '')) body.logging_notice = notice.value;
-      if (!Object.keys(body).length) { msg.show('note', 'Nothing has changed.'); return; }
+      if (!Object.keys(body).length) { this._setDirty(false); msg.show('note', 'Nothing has changed.'); return; }
       this.data = await this.area.write('settings_update', body);
+      this._setDirty(false);
       this._build();
-      this.msg.show('success', 'The settings are saved. Annotators see them the next time they open a recording or sign in.');
+      this.saveMsg.show('success', 'The settings are saved. Annotators see them the next time they open a recording or sign in.');
       if (this.area.app.refreshMe) this.area.app.refreshMe().catch(() => {});
     } });
 
@@ -183,7 +245,8 @@ export class SettingsSection {
         h('p.caption', {}, 'Zero-phase filters for display only: the recordings are never changed.'),
         h('div.row.controls', {}, hp, hpHz, h('span', {}, 'Hz')), h('div.row.controls', {}, notch, notchHz, harmonics), locked),
       card('The display',
-        h('div.form-grid', {}, field('Seconds on the screen', seconds), field('Channels on the screen', nch)),
+        h('div.form-grid', {}, field('Seconds on the screen', seconds), field('Channels on the screen', nch),
+          field('Channel colours at first', colours, { hint: 'Colours the traces by region, side or type, in a palette checked for colour-blind readers; each annotator can change it for themselves.' })),
         h('h3', {}, 'Starting amplitude of each channel type (µV; the scale bar shows twice the value)'),
         h('div.form-grid.narrow', {}, SCALING_TYPES.map((t) => field(t.toUpperCase(), scal[t]))),
         h('p.caption', {}, 'A recording whose amplitudes are unusual is shown with a scale of its own, and says so.')),
@@ -222,7 +285,15 @@ export class SettingsSection {
         interactions,
         h('div.form-grid', {}, field('Pointer samples per second over the EEG', pointer, { hint: '0 records none.' }), field('Idle after (seconds without input)', idle)),
         field('Notice shown to annotators', notice, { hint: 'Say what is recorded and why, as the study\'s information sheet does.' })),
-      h('div.btn-row.sticky-save', {}, save), msg);
+      this._saveBar(save, msg));
+  }
+
+  /** The bar at the foot of the window: Save, whether anything is unsaved, and the answer to Save. */
+  _saveBar(save, msg) {
+    this.saveMsg = msg;
+    this.dirtyNote = h('span.caption.unsaved-note', { role: 'status', hidden: !this.dirty }, 'Unsaved changes');
+    this.leaveHost = h('div.leave-host');
+    return h('div.sticky-save', {}, h('div.btn-row', {}, save, this.dirtyNote), msg, this.leaveHost);
   }
 }
 

@@ -32,6 +32,52 @@ milestones keeps its length at the first save, and the inner pair of column
 guides, which crossed headings, is gone. The sign-in page, the home page and
 the Help tab link to the annotators' guide.
 
+The admin area was tidied after a hands-on review. The agreement report's
+summary gives the recordings analysed, those with annotators to compare, the
+annotators and the recordings left out in plain words, where it showed
+"[object Object]" and code names. The settings used (JSON) is now the file that
+`electrotag-agreement --config` reads, naming the recordings set aside as ones
+that cannot be annotated, and the page shows the command
+(`electrotag-agreement Annotated_Events --config agreement_settings.json`)
+that repeats the analysis on the results zip with the same recordings and the
+same numbers; `--config` also reads an earlier `analysis_settings.json`, and
+the command gains `--recordings` and `--exclude-recordings`. A small
+`annotation_notes.tsv` with the annotators' notes is always sent, even when the
+tables of every matched and unmatched event are too large. Progress measures the
+pace of a study younger than 14 days over the days since its first completion,
+and waits three days before projecting a finish. Registering a file that is byte
+for byte a recording registered already, under another ID, is flagged and
+skipped unless confirmed, in the page and by the study. Unassign is no longer
+offered for a recording set aside as one that cannot be annotated (the study
+refuses it too, and the problem report is the place to settle it), and its
+question says that work already started is kept. Giving a reported recording to
+someone who has it already is refused and leaves the report open; the list of
+people marks those who have it, and a resolved report says to whom it was
+given. Each section has Help, which opens its part of the administrators' guide
+on GitHub, and the analysis settings link to the reliability guide. Saved
+reviews can be read: each opens to show its marks and notes, and Results lists
+every review of the study with filters. The review mode names the annotator
+whose work is reviewed and shows their confidence and note beside each
+annotation. The results zip holds the study's settings, its audit log and its
+recordings' manifests, with a README that describes it correctly. Study settings
+sets the starting channel colours, shows the answer to Save (and Unsaved
+changes) in the bar at the foot of the window with the field to correct focused,
+and asks before unsaved changes are left behind. Smaller changes: no stray
+"null" after a table of results; Remove says what goes with a recording; the bar
+of actions on many stays in sight and Switch off asks first; the audit log
+names every kind of change, writes settings changes in words with the value
+before and after, says Annotation rather than "standard", and records nothing
+for a change that changes nothing; passwords and links made one by one stay on
+the page; All in Assignments leaves out switched-off accounts and
+administrators; the figures of Overview and Progress fill their rows without a
+grey block and open the section behind them; the Accounts list has the page's
+width; the formats, the reading errors and the count of recordings to add are
+clearer, and Assign them… carries the new recordings; reference sets are named
+once and the competency report offers the set's trainees first; download
+buttons say Download the table (CSV); people who sign in with a password are no
+longer shown as not invited; a consensus lists its boundary slivers apart; and
+Skip to the section is the first Tab stop.
+
 The activity analysis (`electrotag-activity` and the admin area) now counts
 confidence ratings, notes, problem reports and the feedback on reviewed work.
 Each row of `recordings.tsv` gives the ratings given and cleared, the requests

@@ -28,6 +28,20 @@ export const MISSED_NOTE = 'missed artifact?';
 
 const span = (on, dur, sf) => `${(on / sf).toFixed(2)}–${((on + dur) / sf).toFixed(2)} s`;
 
+/** What the annotator recorded with an annotation: their confidence (1 to 5) and note, in words, or ''. */
+export function annotatorSays(a) {
+  const parts = [];
+  if (Number.isInteger(a.confidence) && a.confidence >= 1 && a.confidence <= 5) parts.push(`confidence ${a.confidence} of 5`);
+  if (a.note) parts.push(`“${String(a.note).trim()}”`);
+  return parts.join(' · ');
+}
+
+/** The status line's fixed part while reviewing: whose work it is, and who reviews it. */
+export function reviewStatusText(target, me) {
+  const who = `${target.annotator_id}${target.display_name ? ` (${target.display_name})` : ''}`;
+  return `Reviewing the work of ${who}, version ${target.attempt}   |   Reviewer: ${me ? me.annotator_id : ''}`;
+}
+
 /** The body of review_save from the marks: items in the order of the annotations, then the stretches. */
 export function reviewBody({ reviewId, target, marks, ranges, overall }) {
   const items = [];
@@ -85,7 +99,7 @@ export class ReviewPass {
     this.ws.actionsEl.append(this.saveBtn);
     const earlier = (t.reviews || []).length;
     this.el = h('section.review.card.review-pass', { 'aria-label': 'Review' },
-      h('h2', {}, `Review of ${t.annotator_id}`),
+      h('h2', {}, `Review of ${t.annotator_id}${t.display_name ? ` (${t.display_name})` : ''}`),
       h('p.caption', {}, `Version ${t.attempt}${when ? `, saved ${when}` : ''}. Your review is kept as a record of its own and never changes these annotations.${earlier ? ` Reviewed ${earlier} time${earlier === 1 ? '' : 's'} before.` : ''}`),
       this.progress, this.list,
       h('h3', {}, 'Stretches without an annotation'),
@@ -96,6 +110,9 @@ export class ReviewPass {
       this.saveMsg);
     this.ws.reviewHost.append(this.el);
     this.ws.hintEl.textContent = 'N / P  next, previous  ·  A agree  ·  C caveat  ·  M comment  ·  drag: a stretch without an annotation';
+    // The status line names the annotator whose work is reviewed (the reviewer is signed in).
+    this.ws._fixedText = reviewStatusText(t, this.ws.s.me);
+    if (this.ws._refreshFixed) this.ws._refreshFixed();
   }
 
   _row(a, i) {
@@ -113,7 +130,10 @@ export class ReviewPass {
     note.addEventListener('focus', () => this.go(i, { quiet: true }));
     const head = h('button.review-item-head', { type: 'button', onclick: () => this.go(i) },
       h('span.swatch', { style: { background: l.colour } }), h('span.review-label', {}, a.label), h('span.caption', {}, span(a.onset_sample, a.duration_samples, this.sf)));
-    const li = h('li.review-row', { 'data-id': a.annotation_id }, head, h('div.segmented.review-marks', { role: 'group', 'aria-label': `Mark ${a.label}` }, buttons), note);
+    // The annotator's own doubt: their confidence in the mark and their note, as they saved them.
+    const says = annotatorSays(a);
+    const theirs = says ? h('p.caption.review-theirs', {}, `${this.target.annotator_id}: ${says}`) : null;
+    const li = h('li.review-row', { 'data-id': a.annotation_id }, head, theirs, h('div.segmented.review-marks', { role: 'group', 'aria-label': `Mark ${a.label}` }, buttons), note);
     return { li, buttons, note, a };
   }
 
