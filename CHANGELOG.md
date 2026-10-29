@@ -5,6 +5,14 @@ Each section below describes the changes in one version of ElectroTag;
 
 ## Unreleased
 
+The browser's EEG library has a folder of its own, `js/eeg/`: the readers of
+EDF, BDF and BrainVision recordings, the display filters, the fingerprints,
+registration and the synthetic recordings moved there from `js/data/`, which
+keeps the application's links and copies kept on the device. A guide in the
+folder says what each module reproduces of MNE-Python and which tests check
+it, and a unit test keeps the folder free of imports from the rest of the
+application. Registration now takes the label catalogue from its caller.
+
 The pages around the annotation view were improved after a usability review.
 The answer to a chosen file now appears just under the drop zone, scrolled into
 view and given the focus, and on a training page it is worded for training

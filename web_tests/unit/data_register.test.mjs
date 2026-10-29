@@ -1,4 +1,4 @@
-// Registration in the browser (js/data/register.js): the manifests built from the datasets of
+// Registration in the browser (js/eeg/register.js): the manifests built from the datasets of
 // scripts/make_web_fixtures.py must equal, field by field, those the desktop's loader builds for the
 // same files and settings (web_tests/register_parity.py runs electrotag.web.registration.collect).
 //
@@ -21,7 +21,8 @@ import {
   DEFAULT_SETTINGS,
   findDatasetRecordings,
   registrationSettings,
-} from "../../electrotag/web/static/js/data/register.js";
+} from "../../electrotag/web/static/js/eeg/register.js";
+import { CATALOGUE } from "../../electrotag/web/static/js/api/demo_catalogue.js";
 import { ensureFixtures, FIXTURES, ROOT } from "./_fixtures.mjs";
 
 const manifest = ensureFixtures();
@@ -142,7 +143,7 @@ JOBS.forEach((job, k) => {
     const ctx = { rootParent: `${dirname(py.root)}/` };
     const files = await datasetFiles(job.dataset);
     const stages = new Set();
-    const out = await buildManifests(files, { settings: job.settings, scope: job.scope, worker: false, onProgress: (p) => stages.add(p.stage) });
+    const out = await buildManifests(files, { settings: job.settings, scope: job.scope, catalogue: CATALOGUE, worker: false, onProgress: (p) => stages.add(p.stage) });
     assert.deepEqual(out.manifests.map((m) => m.recording_id), py.manifests.map((m) => m.recording_id), "the same recordings");
     const diffs = [];
     out.manifests.forEach((m, i) => differences(m, py.manifests[i], m.recording_id, ctx, diffs));
@@ -165,7 +166,7 @@ const KNOWN_REFUSALS = new Map();
 test("the study server accepts every manifest the browser builds, and keeps it as it is", { skip: skipPython, timeout: 300000 }, async (t) => {
   const built = [];
   for (const job of JOBS) {
-    const out = await buildManifests(await datasetFiles(job.dataset), { settings: job.settings, scope: job.scope, worker: false });
+    const out = await buildManifests(await datasetFiles(job.dataset), { settings: job.settings, scope: job.scope, catalogue: CATALOGUE, worker: false });
     built.push({ job, manifests: out.manifests });
   }
   const input = built.map(({ job, manifests }) => ({ manifests, scope: job.scope || "study", suffixes: registrationSettings(job.settings).suffixes }));
@@ -249,7 +250,7 @@ test("files chosen one by one: recording IDs are their names", async () => {
     "sub-02_task-rest_events.tsv",
   ]);
   // buildManifest also takes a recording given as its own files
-  const { manifest: m, problems } = await buildManifest({ recordingId: r.recordingId, files: r.files }, { worker: false });
+  const { manifest: m, problems } = await buildManifest({ recordingId: r.recordingId, files: r.files }, { catalogue: CATALOGUE, worker: false });
   assert.equal(m.recording_id, "sub-02_task-rest_eeg.edf");
   assert.equal(m.files.channels_tsv, "sub-02_task-rest_channels.tsv");
   assert.deepEqual(problems, m.warnings);
@@ -259,7 +260,7 @@ test("files chosen one by one: recording IDs are their names", async () => {
 
 test("a BrainVision recording whose companions are missing is refused in the desktop's words", async () => {
   const files = (await datasetFiles("bids_bv")).filter((f) => !f.name.endsWith(".eeg"));
-  const out = await buildManifests(files, { worker: false });
+  const out = await buildManifests(files, { catalogue: CATALOGUE, worker: false });
   assert.equal(out.manifests.length, 0);
   assert.deepEqual(out.failures[0], {
     path: "sub-01/eeg/sub-01_task-rest_eeg.vhdr",
@@ -276,10 +277,15 @@ test("the default settings are those of default_settings.json", () => {
   assert.deepEqual(s.hide, defaults.channels.hide);
 });
 
+test("registration asks for the label catalogue, which the application gives", async () => {
+  await assert.rejects(buildManifests(await datasetFiles("edf_mix"), { worker: false }), /options\.catalogue/);
+});
+
 test("registration can be stopped between recordings", async () => {
   const controller = new AbortController();
   const files = await datasetFiles("edf_mix");
   const out = await buildManifests(files, {
+    catalogue: CATALOGUE,
     worker: false,
     signal: controller.signal,
     onProgress: (p) => {

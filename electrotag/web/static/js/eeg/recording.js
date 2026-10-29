@@ -2,7 +2,7 @@
 // (docs/web/architecture.md, "The Recording interface"). The files stay on the annotator's computer
 // and are read in pieces with Blob.slice. The reading runs in a Web Worker when the browser allows
 // one and on the page otherwise; either way the page stays responsive, because every read is
-// asynchronous and the work is done a piece at a time. Plain ES module; nothing outside js/data/.
+// asynchronous and the work is done a piece at a time. Plain ES module; nothing outside js/eeg/.
 
 import { Engine } from "./engine.js";
 import { findRecordings } from "./files.js";

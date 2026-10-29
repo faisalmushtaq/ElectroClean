@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { signIn, waitForRoute, waitForTraces, clickDialogButton, eegPoint, drag, pressSave } from './helpers.mjs';
 import { cloudService, recordEvents, sentEvents, NAME } from './l_links.e2e.mjs';
-import { demoSpecs, syntheticEdfBytes } from '../../electrotag/web/static/js/data/synthetic.js';
+import { demoSpecs, syntheticEdfBytes } from '../../electrotag/web/static/js/eeg/synthetic.js';
 
 const require = createRequire(import.meta.url);
 

@@ -541,7 +541,7 @@ next call whichever instance answers it.
 
 The EEG never reaches the study: an administrator adds recordings by choosing
 them on their own computer, the browser reads them and builds each
-recording's manifest (`js/data/register.js`), and only the manifests are sent
+recording's manifest (`js/eeg/register.js`), and only the manifests are sent
 (`recordings_register`). The `electrotag web register` command remains for
 registering from the command line.
 

@@ -10,7 +10,7 @@
 
 import { CATALOGUE, DEFAULT_ANNOTATION, DEFAULT_DISPLAY, DEFAULT_FILTERS, DEFAULT_HIDE, DEFAULT_LOGGING, DEFAULT_QUICK_LABELS, DEFAULT_SCALINGS } from './demo_catalogue.js';
 import { ApiError } from './http.js';
-import { sha256Hex } from '../data/sha256.js';
+import { sha256Hex } from '../eeg/sha256.js';
 import { newId, nowLocalIso } from '../util.js';
 import {
   checkAnnotatorId, checkEmail, checkSetId, criteriaFromRows, criteriaRows, deepCopy, describeProvenance, mergeSettings,

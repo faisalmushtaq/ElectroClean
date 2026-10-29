@@ -176,7 +176,7 @@ def test_inconsistent_channels_and_bad_json_are_warnings(dataset, catalogue, set
     lr.close()
 
 
-# Python 3.13's words for these, which the browser reproduces (js/data/pyjson.js); Python 3.12 has
+# Python 3.13's words for these, which the browser reproduces (js/eeg/pyjson.js); Python 3.12 has
 # others for a trailing comma, so the same sidecar must give the same manifest on both.
 SIDECAR_JSON_ERRORS = [
     ('{"a": 1,}', "Illegal trailing comma before end of object: line 1 column 8 (char 7)"),

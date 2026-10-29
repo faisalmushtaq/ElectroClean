@@ -262,7 +262,7 @@ entity cannot be guessed and is not tried). Dropbox and OneDrive share one file 
 nothing beside them can be found. Recordings a study knows only by their manifest still need the
 annotator to pick the `electrodes.tsv` with the recording. Letting the manifest name it, or carry
 the positions themselves, would change what the study stores: `electrotag/web/manifest.py` and
-`js/data/register.js` would both build the new field (checked by `web_tests/register_parity.py`),
+`js/eeg/register.js` would both build the new field (checked by `web_tests/register_parity.py`),
 `manifest_check.py` would have to keep it, and `docs/web/api.md` would describe it; the open
 view could then say which file to pick, or the map use the stored positions. That is left for a
 decision by the project lead.
@@ -271,7 +271,7 @@ decision by the project lead.
 An expired or replaced invitation link asks the person to contact "the study team who invited you",
 because a study has no setting that names a contact; a `contact` setting shown there (and on the
 sign-in page) would need the settings, the admin area's Settings section and `docs/web/api.md`. When
-the connection is lost before the file readers load, Try again asks for `data/recording.js` under
+the connection is lost before the file readers load, Try again asks for `eeg/recording.js` under
 another address, because Chromium remembers a module that failed to load for the life of the page;
 a module that it imports and that also failed still needs a reload of the page, which the message
 says. The readers now load just after signing in to a study (not in the demonstration), so this
@@ -319,7 +319,7 @@ Firebase function in `electrotag/web/firebase/functions/main.py`, the browser's 
 the contract itself. The end-to-end tests against the real server and the emulators are what catch
 a mismatch.
 
-**Registration happens in two places.** The browser's `js/data/register.js` must build the same
+**Registration happens in two places.** The browser's `js/eeg/register.js` must build the same
 manifest as Python's `electrotag.web.manifest.build_manifest` for the same files and settings, and
 the server checks every manifest it receives (`electrotag/web/manifest_check.py`) before storing
 it. The parity tests compare the two field by field; change both together.

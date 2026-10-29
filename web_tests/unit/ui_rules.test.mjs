@@ -7,7 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import * as rules from '../../electrotag/web/static/js/training/rules.js';
-import { demoSpecs, exampleNote } from '../../electrotag/web/static/js/data/synthetic.js';
+import { demoSpecs, exampleNote } from '../../electrotag/web/static/js/eeg/synthetic.js';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SF = 250;

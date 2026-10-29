@@ -7,7 +7,7 @@ The input is {"checks": [...], "steps": [...], "notes": [...]}. Each check is {"
 docs/web/api.md), answered by {"matched", "candidate_id", "problems", "messages"}; each step is
 {"guidance", "label", "channels", "quick_keys"}, answered by the step's text (step_text); each note is
 {"label", "duration_s", "channels"}, answered by the example set's note (example_note). So
-web_tests/unit/ui_rules.test.mjs can check that js/training/rules.js and js/data/synthetic.js give the
+web_tests/unit/ui_rules.test.mjs can check that js/training/rules.js and js/eeg/synthetic.js give the
 same words. A plain list is read as the checks alone (and answered with a list).
 """
 

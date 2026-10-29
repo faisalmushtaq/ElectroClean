@@ -23,7 +23,7 @@ import { pickType, chooseChannels, editTimes, editNote } from './dialogs.js';
 import { CONFIDENCE_ANCHORS, CONFIDENCE_LEVELS, isConfidence } from './confidence.js';
 import { AnnotationError, endSample } from './store.js';
 import { helpHtml, KEY_HINT, REVIEW_HINT, TOUCH_HINT, TOUCH_REVIEW_HINT, TOUCH_VIEW_HINT } from './help.js';
-import { edgeHalfWidthS } from '../data/synthetic.js';
+import { edgeHalfWidthS } from '../eeg/synthetic.js';
 import { logger, keyName } from '../log/logger.js';
 import { channelsText, clamp, formatHms, local, readableTextColour, UNDO_HINT, CTRL, debounce, touchFirst } from '../util.js';
 import { isTyping } from '../ui/dom.js';
@@ -35,7 +35,7 @@ import * as cov from '../viewer/coverage.js';
 import { NAME_SIZES, PANEL_TEXT, TRACE_WIDTHS, loadComfort, saveComfort } from '../ui/comfort.js';
 import { microvoltText } from '../viewer/geometry.js';
 import { mapLayout, projectPositions } from '../viewer/head_map.js';
-import { readElectrodes, sidecarsOf } from '../data/electrodes.js';
+import { readElectrodes, sidecarsOf } from '../eeg/electrodes.js';
 import { centredStart, clampTime, parseTimeText } from './goto.js';
 
 const MODE_TEXT = { standard: 'Annotation', guided: 'Guided training', practice: 'Practice', assessment: 'Assessment', tryout: 'Try-out', review: 'Practice review',
@@ -2465,7 +2465,7 @@ export class Workspace {
   // ------------------------------------------------------------------------- the channel map
   /**
    * The recording's own electrode positions, when an electrodes.tsv came with it: picked with it, kept
-   * with its copy on this device, or fetched with or beside its link (js/data/electrodes.js). The
+   * with its copy on this device, or fetched with or beside its link (js/eeg/electrodes.js). The
    * interaction log notes which positions the map uses (electrode_positions), never a file's name.
    */
   async _loadElectrodes() {

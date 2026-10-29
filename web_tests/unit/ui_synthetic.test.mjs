@@ -1,10 +1,10 @@
-// The demonstration's recordings (js/data/synthetic.js): the EDF writer, and reading the file
-// back with the application's readers (js/data/recording.js).
+// The demonstration's recordings (js/eeg/synthetic.js): the EDF writer, and reading the file
+// back with the application's readers (js/eeg/recording.js).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { demoSpecs, makeSyntheticRecording, syntheticEdfBytes, truthAnnotations, sha256Hex, edgeHalfWidthS } from '../../electrotag/web/static/js/data/synthetic.js';
-import { openRecording } from '../../electrotag/web/static/js/data/recording.js';
+import { demoSpecs, makeSyntheticRecording, syntheticEdfBytes, truthAnnotations, sha256Hex, edgeHalfWidthS } from '../../electrotag/web/static/js/eeg/synthetic.js';
+import { openRecording } from '../../electrotag/web/static/js/eeg/recording.js';
 
 const [spec1, , spec3] = demoSpecs();
 

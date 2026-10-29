@@ -16,7 +16,7 @@ async function logged(page) {
 
 async function openSynthetic(page, channels, id, { sidecars = null, sfreq = 256, durationS = 20 } = {}) {
   await page.evaluate(async ([channels, id, sidecars, sfreq, durationS]) => {
-    const { makeSyntheticRecording } = await import(new URL('js/data/synthetic.js', location.href).href);
+    const { makeSyntheticRecording } = await import(new URL('js/eeg/synthetic.js', location.href).href);
     const recording = makeSyntheticRecording({ id, stem: `sub-${id}_task-rest_eeg`, sfreq, durationS, seed: 3, channels, artifacts: [] });
     if (sidecars) recording.source = { kind: 'chosen', sidecars: sidecars.map(([name, text]) => new File([text], name)) };
     await globalThis.ElectroTag.openWorkspace({ recording, match: { status: 'unknown' }, sha: '', tryOut: true });

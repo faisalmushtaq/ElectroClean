@@ -10,8 +10,8 @@ import {
   formatG,
   formatVolts,
   niceScale,
-} from "../../electrotag/web/static/js/data/amplitude.js";
-import { openRecording } from "../../electrotag/web/static/js/data/recording.js";
+} from "../../electrotag/web/static/js/eeg/amplitude.js";
+import { openRecording } from "../../electrotag/web/static/js/eeg/recording.js";
 import { ensureFixtures, expected, fixtureFiles } from "./_fixtures.mjs";
 
 const manifest = ensureFixtures();

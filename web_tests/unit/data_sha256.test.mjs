@@ -6,7 +6,7 @@ import { createHash } from "node:crypto";
 import { openAsBlob } from "node:fs";
 import test from "node:test";
 
-import { Sha256, sha256Blob, sha256Hex } from "../../electrotag/web/static/js/data/sha256.js";
+import { Sha256, sha256Blob, sha256Hex } from "../../electrotag/web/static/js/eeg/sha256.js";
 import { ensureFixtures, fixturePath, expected } from "./_fixtures.mjs";
 
 const enc = (s) => new TextEncoder().encode(s);

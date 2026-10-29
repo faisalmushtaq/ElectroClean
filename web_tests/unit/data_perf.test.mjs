@@ -8,8 +8,8 @@ import { existsSync, openAsBlob, readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
-import { openRecording } from "../../electrotag/web/static/js/data/recording.js";
-import { sha256Blob } from "../../electrotag/web/static/js/data/sha256.js";
+import { openRecording } from "../../electrotag/web/static/js/eeg/recording.js";
+import { sha256Blob } from "../../electrotag/web/static/js/eeg/sha256.js";
 import { FIXTURES, ensureFixtures } from "./_fixtures.mjs";
 
 function perfInfo() {

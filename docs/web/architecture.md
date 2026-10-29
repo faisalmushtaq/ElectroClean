@@ -102,13 +102,17 @@ electrotag/web/static/          the browser application (plain ES modules, no bu
                                   study on Firebase), demo.js and demo_admin.js (the demonstration,
                                   in the browser), choose.js (which of them), demo_catalogue.js,
                                   notice.js
-    js/data/                      reading recordings: recording.js, worker.js, engine.js, files.js,
-                                  edf.js, brainvision.js, channels.js, filters.js, fft.js, pool.js,
-                                  filterworker.js, sha256.js, hashworker.js, amplitude.js, util.js,
-                                  synthetic.js; links.js and fetch_links.js (recordings opened from
-                                  a link), device_store.js (copies kept on the device), electrodes.js (a
-                                  BIDS electrodes.tsv picked, kept or fetched with a recording); registering them: register.js, bids.js, events.js,
-                                  mnewarn.js, pyfmt.js, pyjson.js
+    js/eeg/                       the EEG library, which never imports the application (its own
+                                  README.md): reading recordings (recording.js, worker.js,
+                                  engine.js, files.js, edf.js, brainvision.js, channels.js,
+                                  electrodes.js, events.js, util.js), the display filters
+                                  (filters.js, fft.js, pool.js, filterworker.js), the amplitude
+                                  check (amplitude.js), fingerprints (sha256.js, hashworker.js),
+                                  registering recordings (register.js, bids.js, mnewarn.js,
+                                  pyfmt.js, pyjson.js) and synthetic recordings (synthetic.js)
+    js/data/                      the application's own handling of recordings: links.js and
+                                  fetch_links.js (recordings opened from a link), device_store.js
+                                  (copies kept on the device)
     js/viewer/                    drawing the EEG, axes, overview, navigation; touch.js for two
                                   fingers, long presses and double taps on a touch screen;
                                   coverage.js for the parts of a recording viewed so far;
@@ -143,9 +147,9 @@ docs/web/api.md                   the HTTP API (the contract between browser and
 
 ## The Recording interface (browser)
 
-`js/data/recording.js` exports `openRecording(files: File[]) -> Promise<Recording>`
+`js/eeg/recording.js` exports `openRecording(files: File[]) -> Promise<Recording>`
 (one file for EDF and BDF; the .vhdr, .vmrk and .eeg for BrainVision, picked
-together or as a folder). `js/data/synthetic.js` exports
+together or as a folder). `js/eeg/synthetic.js` exports
 `makeSyntheticRecording(spec) -> Recording` with the same interface, for the
 demonstration and for tests.
 
@@ -220,9 +224,11 @@ recordings among picked files (for a folder holding several), and errors are
 
 ## Reading recordings in the browser
 
-The modules in `js/data/` read EDF, EDF+, BDF and BrainVision recordings
+The modules in `js/eeg/` read EDF, EDF+, BDF and BrainVision recordings
 without any library or build step. Each is a plain ES module that imports only
-its neighbours in the folder, so the same files run from GitHub Pages, from the
+its neighbours in the folder (a unit test, `web_tests/unit/eeg_imports.test.mjs`,
+keeps it that way, and `js/eeg/README.md` describes each module and how its
+parity with MNE-Python is checked), so the same files run from GitHub Pages, from the
 study server and inside a claude.ai Artifact. `recording.js` holds
 `openRecording` and the `Recording` object and decides where the reading
 happens; `worker.js` is the reading worker and `engine.js` does the work
@@ -234,7 +240,7 @@ channels; `filters.js` and `fft.js` are the display filters, `pool.js` and
 `hashworker.js` compute fingerprints; `amplitude.js` is the plausibility check
 of the amplitude; `util.js` holds small helpers.
 
-`links.js` turns a share link into the address its file is fetched from
+In `js/data/`, `links.js` turns a share link into the address its file is fetched from
 (Dropbox's `www.dropbox.com/scl/fi/…` and `/s/…` links become
 `dl.dropboxusercontent.com/…?dl=1`, which answers any web page with
 `Access-Control-Allow-Origin: *`; a OneDrive link becomes
@@ -419,8 +425,8 @@ code and MNE-Python.
 
 `node --test "web_tests/unit/*.test.mjs"` runs the unit tests (Node.js 22, no
 packages to install; the quotes let Node expand the pattern itself). The
-`data_*.test.mjs` files compare the readers, the filters, the amplitude check
-and the fingerprints with MNE-Python and `hashlib` on recordings written by
+`data_*.test.mjs` files compare the modules of `js/eeg/` (the readers, the
+filters, the amplitude check and the fingerprints) with MNE-Python and `hashlib` on recordings written by
 `python scripts/make_web_fixtures.py` into `web_tests/fixtures/` (not
 committed); the tests run the script themselves when the recordings are
 missing or out of date, with the repository's `.venv` (or the interpreter
@@ -497,7 +503,7 @@ it always was.
 
 ## Registering recordings in the browser
 
-The admin area adds recordings without uploading them: `js/data/register.js`
+The admin area adds recordings without uploading them: `js/eeg/register.js`
 builds, in the browser, the same internal manifest that
 `electrotag.web.manifest.build_manifest` builds from MNE-Python's reading of
 the files, and only the manifests go to the study (`recordings_register`).
@@ -548,11 +554,11 @@ Everything else is computed as `register_recording` computes it, with the
 Python loader's wording for every message. The companions a BrainVision header
 names must be among the picked files. The BIDS sidecars come from the dataset
 root down to the recording's folder with the inheritance principle
-(`js/data/bids.js`, a port of `electrotag/app/io/bids.py`), TSV files are
+(`js/eeg/bids.js`, a port of `electrotag/app/io/bids.py`), TSV files are
 read exactly as strings, and JSON sidecars are read as Python reads them
-(`js/data/pyjson.js`): NaN and Infinity become null and are reported, and a
+(`js/eeg/pyjson.js`): NaN and Infinity become null and are reported, and a
 file that cannot be read is reported with Python's own error message. The
-original events (`js/data/events.js`) come from `events.tsv` when there is one
+original events (`js/eeg/events.js`) come from `events.tsv` when there is one
 (compared with the file's markers), otherwise from the EDF+ and BDF+
 annotations or the BrainVision markers with the codes MNE gives them, otherwise
 from the trigger channels, including channels that only channels.tsv or the
@@ -564,12 +570,12 @@ hidden and marked bad, the notes, the gaps, the discontinuities, the filters
 skipped and the amplitude check (on the display copy with the study's filters,
 through `Recording.checkAmplitude` with the manifest's types) follow. The
 warnings MNE gives while reading, which the Python loader keeps as "MNE: ...",
-are worked out from the headers (`js/data/mnewarn.js`): duplicate channel
+are worked out from the headers (`js/eeg/mnewarn.js`): duplicate channel
 names, empty ranges, differing or contradictory filter settings, unreadable
 patient fields and dates, a record length of 0, unrecognised BrainVision header
 lines (twice, as MNE reads the line twice), missing `DataPoints`, channels at
 the origin of the coordinates, the amplifier's filter table and the montage,
-and annotations clipped at the end. `js/data/pyfmt.js` writes numbers and text
+and annotations clipped at the end. `js/eeg/pyfmt.js` writes numbers and text
 as Python does (`repr` of floats, formats rounded half to even, `repr` of
 strings and lists).
 

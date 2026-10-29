@@ -30,9 +30,11 @@ bash scripts/test_web_firebase.sh                         # the application with
 ```
 
 The unit tests compare the browser's readers, filters, amplitude check and
-fingerprints with MNE-Python and `hashlib` on recordings that
+fingerprints (the EEG library in `js/eeg/`, whose README says which test checks
+which module) with MNE-Python and `hashlib` on recordings that
 `scripts/make_web_fixtures.py` writes into `web_tests/fixtures/` (not
-committed). `run_e2e.mjs` drives the application in Chromium against the
+committed), and `eeg_imports.test.mjs` keeps that library free of imports from
+the rest of the application. `run_e2e.mjs` drives the application in Chromium against the
 demonstration, a stand-in server and the real `electrotag web demo`, with
 recordings opened from disk and the results checked in the study folder; it
 needs Playwright with Chromium (`npm install --no-save playwright@1.63.0` and

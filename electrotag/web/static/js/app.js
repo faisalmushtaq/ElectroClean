@@ -65,7 +65,7 @@ async function loadReaders() {
   if (recordingModule) return recordingModule;
   // Chromium remembers a module that failed to load for the page's life, so a later attempt asks for
   // it under another address (the module itself is the same file).
-  const url = readerFailures ? `./data/recording.js?attempt=${readerFailures}` : './data/recording.js';
+  const url = readerFailures ? `./eeg/recording.js?attempt=${readerFailures}` : './eeg/recording.js';
   try {
     recordingModule = await import(url);
   } catch (exc) {
@@ -78,7 +78,7 @@ async function openRecordingFiles(files) {
   return (await loadReaders()).openRecording(files);
 }
 
-/** Reading errors that mean the files themselves cannot be read as a recording (data/util.js, RecordingError). */
+/** Reading errors that mean the files themselves cannot be read as a recording (eeg/util.js, RecordingError). */
 const FORMAT_ERRORS = new Set(['corrupt_recording', 'unsupported_format', 'missing_companion', 'no_files', 'malformed_bids_metadata']);
 
 /** True for an error in the files' format, the only reason a copy kept on this device is removed. */

@@ -169,7 +169,7 @@ function noteAnswered(app, setId, n, finished = false) {
 // --------------------------------------------------------------------- the view
 let recordingModule = null;
 async function openRecordingFiles(files, options) {
-  if (!recordingModule) recordingModule = await import('../data/recording.js');
+  if (!recordingModule) recordingModule = await import('../eeg/recording.js');
   return recordingModule.openRecording(files, options);
 }
 
