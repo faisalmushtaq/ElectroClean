@@ -267,8 +267,15 @@ forward, with an arrow, and what is pressed; a single ink
 blue (#2B4392) marks links, selection, focus and the one figure worth
 noticing, such as the work done on the admin overview. Messages are tinted
 blocks with a 3-pixel bar in their colour. The colours of the 29 artifact types
-are unchanged, because they belong to the label catalogue and were chosen to
-stay distinguishable.
+belong to the label catalogue and are presentation only, so changing one
+leaves annotation files compatible. On review
+in October 2026, two were changed so that the nine types of the numbered buttons
+stay at least 8 apart under simulated red-green colour blindness, measured as the
+channel palettes are: Movement-artifact became a mint green (#52C493, from a
+yellow green that was 1.5 from EMG's orange) and Chewing-artifact a darker brown
+(#5A1505, 4.1 from ECG's red before). `web_tests/unit/ui_type_colours.test.mjs`
+keeps the nine apart. Every type button also shows its short name beside its
+number, so that colour is never the only way to tell the types apart there.
 
 The sign-in page shows an illustration drawn for ElectroTag: many EEG-like
 traces across a dark field, warm at the top and cool below, like a long exposure of a
@@ -587,6 +594,33 @@ for example to measure agreement before any feedback, or switch reviews off
 person judged another's work rather than an annotation of the recording. A report and a review
 each carry an ID the browser makes, so a button pressed twice or a request sent again after a late
 answer keeps one record.
+
+## The annotation view on small, zoomed and large screens (29 October 2026)
+
+A usability review on laptops, with the browser's zoom and on iPads found the annotation view
+squeezed in ways that cost information. The toolbar used to hide the type buttons' short names when
+it ran out of room, which happened on most laptops, leaving a number and a colour; it now wraps onto
+a second line, because a wrong type goes straight into the agreement data, and 40 pixels of EEG are
+the cheaper loss. The line at the bottom had spent a third of its width on fixed text (the
+annotator, the mode and the filters) and cut short the instructions it exists to give; the message
+now has two lines and priority, the annotator and the mode moved to the Recording tab and the
+header, where they already were, and the line keeps a fixed height so that the EEG never moves when
+a message comes.
+
+The view used to fill the window exactly, so a short window (a laptop at 150% zoom) drew the line at
+the bottom over the side panel and hid the panel's list. The EEG and the panel now keep a minimum
+height and the view scrolls below it, and the panel goes under the EEG only on a tablet held
+upright or a narrow window, so that a wide, short window keeps it beside the EEG. A window made
+small by zooming in to 200% shows the notice meant for phones; on a computer (a fine pointer) it now
+offers to continue in the window, while a phone keeps the notice alone.
+
+Channel names were shrunk to 7 pixels to give every row a name; they now stay at 11 pixels or more
+and every second or third row is named, with the selected channels and the row under the pointer
+always named, since a name too small to read is no name. The channel map opened at the size where
+every electrode's name fits, which on a 128-channel 10-05 cap was a drawing three times wider than
+its frame showing seven electrodes; it now opens with the whole head, the names under the pointer,
+and + climbs to the full size. Show all reads a long, dense recording in pieces so that the EEG
+appears as it is read with the share read so far, instead of a blank plot for many seconds.
 
 ## Decisions still open
 

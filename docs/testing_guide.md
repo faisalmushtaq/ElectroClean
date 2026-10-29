@@ -41,7 +41,11 @@ WebKit, the engine of Safari on iPads and Macs (`npx playwright install --with-d
 webkit`); `k_ipad.e2e.mjs` checks the application as an iPad: touch on the EEG
 (in Chromium, which can put several fingers on the screen at once), the layouts
 upright and on its side, a phone's notice and the file pickers. `t_annotation_list.e2e.mjs` checks
-that the Annotations list shows every label in full at the common screen sizes. `o_landmarks.e2e.mjs` keeps
+that the Annotations list shows every label in full at the common screen sizes, and `g_layout.e2e.mjs`
+that the annotation view keeps its type buttons whole, its instructions whole and every part clear
+of the others at the common laptop sizes and with the browser's zoom at 150% and 200%.
+`ui_type_colours.test.mjs` keeps the colours of the nine numbered types apart under simulated
+red-green colour blindness. `o_landmarks.e2e.mjs` keeps
 the structure that screen readers navigate by: one main landmark on every page, all text inside a
 landmark or a dialog, and a heading for every table column. The two Firebase scripts run the functions
 and the application on Google's Firebase Emulator Suite, with a project ID that

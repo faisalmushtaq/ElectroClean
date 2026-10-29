@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { electrodeCore, extentOf, fitSphere, mapLayout, mapScale, minSpacing, nearestInDirection, pointsInBox, projectPositions,
+import { electrodeCore, extentOf, fitSphere, mapLayout, mapScale, mapScales, MAP_ZOOMS, minSpacing, targetSize, nearestInDirection, pointsInBox, projectPositions,
   ringLayout, standardPosition } from '../../electrotag/web/static/js/viewer/head_map.js';
 import { coordinateSystemOf, electrodeFilesToKeep, electrodeSidecars, parseElectrodesTsv, pickElectrodeFiles, readElectrodes, sidecarsOf } from '../../electrotag/web/static/js/data/electrodes.js';
 import { centredStart, clampTime, parseTimeText } from '../../electrotag/web/static/js/annotate/goto.js';
@@ -211,4 +211,30 @@ test('the overlay\'s shared axis, its opacity, and the readout\'s figures', () =
   assert.equal(microvoltText(5e-6), '5.0 µV');
   assert.equal(microvoltText(-0.01e-6), '0.0 µV', 'no minus sign on a zero');
   assert.equal(microvoltText(1234.4e-6), '1234 µV');
+});
+
+test('the map of a dense cap opens whole, and + climbs in even steps to the size where every name fits', () => {
+  // 126 names of the 10-05 system (the 10-10 names, then the 5% rows, as on a 128-channel cap) and two EOG channels
+  const names = ('Fp1 Fpz Fp2 AF9 AF7 AF5 AF3 AF1 AFz AF2 AF4 AF6 AF8 AF10 F9 F7 F5 F3 F1 Fz F2 F4 F6 F8 F10 FT9 FT7 FC5 FC3 FC1 FCz FC2 ' +
+    'FC4 FC6 FT8 FT10 T9 T7 C5 C3 C1 Cz C2 C4 C6 T8 T10 TP9 TP7 CP5 CP3 CP1 CPz CP2 CP4 CP6 TP8 TP10 P9 P7 P5 P3 P1 Pz P2 P4 P6 P8 P10 ' +
+    'PO9 PO7 PO5 PO3 PO1 POz PO2 PO4 PO6 PO8 PO10 O1 Oz O2 Iz M1 M2 A1 A2 I1 I2 AFp9h AFp7h AFp5h AFp3h AFp1h AFp2h AFp4h AFp6h AFp8h ' +
+    'AFp10h AFF9h AFF7h AFF5h AFF3h AFF1h AFF2h AFF4h AFF6h AFF8h AFF10h FFT9h FFT7h FFC5h FFC3h FFC1h FFC2h FFC4h FFC6h FFT8h FFT10h ' +
+    'FTT9h FTT7h FCC5h FCC3h FCC1h FCC2h').split(' ');
+  assert.equal(names.length, 126);
+  const pts = mapLayout([...names, 'HEOG', 'VEOG'].map((name) => ({ name, type: name.endsWith('EOG') ? 'eog' : 'eeg' }))).points;
+  const s = mapScale(pts, { widthPx: 700, heightPx: 440, targetPx: 40 });
+  assert.ok(s.needed > 2 * s.fit, 'the names would overlap at the size that fits the frame');
+  const ladder = mapScales(s.fit, s.needed);
+  assert.equal(ladder[0], s.fit, 'the first size shows the whole head');
+  assert.ok(ladder.includes(s.needed), 'one size gives every name its room');
+  for (let i = 1; i < ladder.length; i++) assert.ok(ladder[i] > ladder[i - 1] && ladder[i] / ladder[i - 1] <= 1.5 + 1e-9, `step ${i}`);
+  // at the whole size the targets shrink to what fits between neighbours, never under 8 pixels
+  const spacing = minSpacing(pts);
+  const small = targetSize(spacing, s.fit, 28, 3);
+  assert.ok(small >= 8 && small < 28 && (small <= spacing * s.fit - 3 || small === 8));
+  assert.equal(targetSize(spacing, s.needed, 28), 28);
+  // a montage whose names fit at once keeps the old steps
+  const demo = mapLayout(DEMO_CHANNELS.map((name) => ({ name, type: channelType(name) }))).points;
+  const d = mapScale(demo, { widthPx: 700, heightPx: 440, targetPx: 28 });
+  assert.deepEqual(mapScales(d.fit, d.needed), MAP_ZOOMS.map((z) => d.fit * z));
 });

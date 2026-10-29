@@ -46,6 +46,9 @@ async function mapState(page) {
 }
 const el = (m, name) => m.els.find((e) => e.name === name);
 
+/** 126 names of the 10-05 system, as on a 128-channel cap (the 10-10 names, then the 5% rows), with two EOG channels. */
+const CAP_128 = [...('Fp1 Fpz Fp2 AF9 AF7 AF5 AF3 AF1 AFz AF2 AF4 AF6 AF8 AF10 F9 F7 F5 F3 F1 Fz F2 F4 F6 F8 F10 FT9 FT7 FC5 FC3 FC1 FCz FC2 FC4 FC6 FT8 FT10 T9 T7 C5 C3 C1 Cz C2 C4 C6 T8 T10 TP9 TP7 CP5 CP3 CP1 CPz CP2 CP4 CP6 TP8 TP10 P9 P7 P5 P3 P1 Pz P2 P4 P6 P8 P10 PO9 PO7 PO5 PO3 PO1 POz PO2 PO4 PO6 PO8 PO10 O1 Oz O2 Iz M1 M2 A1 A2 I1 I2 AFp9h AFp7h AFp5h AFp3h AFp1h AFp2h AFp4h AFp6h AFp8h AFp10h AFF9h AFF7h AFF5h AFF3h AFF1h AFF2h AFF4h AFF6h AFF8h AFF10h FFT9h FFT7h FFC5h FFC3h FFC1h FFC2h FFC4h FFC6h FFT8h FFT10h FTT9h FTT7h FCC5h FCC3h FCC1h FCC2h').split(' '), 'HEOG', 'VEOG'];
+
 export const tests = [
   {
     name: 'the value under the pointer: on with a mouse, V and the Recording tab switch it, no trace redraws while the pointer moves',
@@ -312,6 +315,67 @@ export const tests = [
       assert.match(m.note, /Positions from sub-tsv_electrodes\.tsv/);
       assert.ok(el(m, 'Fp1').y < el(m, 'Cz').y && el(m, 'T7').x < el(m, 'Cz').x);
       await page.keyboard.press('Escape');
+    },
+  },
+  {
+    name: 'a 128-channel cap: names of at least 11 pixels and the row under the pointer named; the map opens whole; Show all shows how much it has read',
+    async run(t) {
+      const { assert } = t;
+      const page = await t.newPage({ width: 1440, height: 900 });
+      await signIn(page, 'A01');
+      await waitForRoute(page, 'home');
+      await openSynthetic(page, CAP_128, 'cap128', { sfreq: 128, durationS: 120 });
+      await ws(page, (w) => w.viewer.setView({ nChannels: 128 }));
+      await page.waitForFunction(() => globalThis.ElectroTag.ws.viewer._covers());
+      // The names: never under 11 pixels; rows too short name every few channels, and the row under the pointer is named too.
+      const names = await ws(page, (w) => { w.viewer._render(); return { ...w.viewer._names, rowH: w.viewer.rowH }; });
+      assert.ok(names.px >= 11 && names.every > 1, `names of ${names.px} px, every ${names.every} on rows of ${names.rowH.toFixed(1)} px`);
+      await ws(page, (w) => { w._boxed = []; const f = w.viewer._boxedName.bind(w.viewer); w.viewer._boxedName = (ctx, row, ch, c) => { w._boxed.push(ch.name); f(ctx, row, ch, c); }; });
+      const p = await eegPoint(page, 3, CAP_128[1]); // Fpz, the second row: not among the rows named
+      await page.mouse.move(p.x, p.y);
+      await page.waitForFunction(() => globalThis.ElectroTag.ws._boxed.includes('Fpz'));
+      await t.screenshot(page, 'cap128_names');
+      // The map: the whole head in its frame first, every electrode a dot with its name under the pointer; + until every name shows.
+      await openChooser(page);
+      await page.click('[data-log="channel-view-map"]');
+      const first = await page.evaluate(() => {
+        const vp = document.querySelector('.map-viewport'); const c = document.querySelector('.map-canvas');
+        return { crowded: document.querySelector('.channel-map-block').classList.contains('crowded'), whole: c.offsetWidth <= vp.clientWidth && c.offsetHeight <= vp.clientHeight,
+          smaller: document.querySelector('[data-log="channel-map-smaller"]').disabled, note: document.querySelector('.map-note').textContent };
+      });
+      assert.ok(first.crowded && first.whole && first.smaller, 'the map opens with the whole head in view');
+      assert.match(first.note, /Point at an electrode for its name/);
+      await page.hover('.map-electrode[data-name="AF7"]');
+      assert.equal(await page.isVisible('.map-electrode[data-name="AF7"] > span'), true, 'the name under the pointer');
+      await t.screenshot(page, 'cap128_map');
+      for (let i = 0; i < 12 && await page.evaluate(() => document.querySelector('.channel-map-block').classList.contains('crowded')); i++) await page.click('[data-log="channel-map-larger"]');
+      assert.equal(await page.isVisible('.map-electrode[data-name="FFC1h"] > span'), true, 'every name at the larger size');
+      await page.keyboard.press('Escape');
+      // Show all: read in pieces, drawn as they come, with the share read over the EEG and a caption while it lasts.
+      await ws(page, (w) => {
+        w.viewer.pieceValues = 1e5;
+        w.viewer.setFilters({ highpassHz: null, notchHz: null, notchHarmonics: false }); // unfiltered, so that the samples can be compared exactly
+        const rec = w.viewer.recording; const read = rec.readWindow.bind(rec);
+        w._progress = [];
+        rec.readWindow = async (req) => { await new Promise((r) => setTimeout(r, 30)); const res = await read(req); w._progress.push(w.viewer.readProgress); return res; };
+      });
+      await page.keyboard.press('Shift+End');
+      await page.waitForFunction(() => { const v = globalThis.ElectroTag.ws.viewer; return v.readProgress > 0.2 && v.readProgress < 0.8; });
+      const mid = await ws(page, (w) => ({ caption: w.viewer.caption, partial: w.viewer._cache.nSamples < w.viewer.nSamples }));
+      assert.match(mid.caption, /The whole recording, as an overview · Shift\+End goes back/);
+      assert.ok(mid.partial, 'what has been read is drawn before the rest');
+      await t.screenshot(page, 'cap128_show_all_reading');
+      await page.waitForFunction(() => globalThis.ElectroTag.ws.viewer.readProgress === null && globalThis.ElectroTag.ws.viewer._covers(), null, { timeout: 60000 });
+      const done = await ws(page, async (w) => {
+        const v = w.viewer; const c = v._cache; const ch = v.channels[5].index;
+        const direct = await v.recording.readWindow({ startSample: 7000, nSamples: 4, channels: [ch], filters: { ...v.filters } });
+        return { pieces: w._progress.length, whole: c.nSamples === v.nSamples, same: Array.from(c.rows.get(ch).subarray(7000, 7004)).every((x, i) => x === direct.data[0][i]) };
+      });
+      assert.ok(done.pieces > 3 && done.whole, `read in ${done.pieces} pieces`);
+      assert.ok(done.same, 'the pieces together are the samples a single read gives');
+      // Back: the caption goes with the overview.
+      await page.keyboard.press('Shift+End');
+      assert.equal(await ws(page, (w) => w.viewer.caption), null);
     },
   },
   {

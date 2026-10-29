@@ -165,8 +165,25 @@ export const tests = [
         else assert.ok(fit.beside, `${label}: the panels beside the EEG`);
         assert.ok(fit.plotH >= 300 && fit.plotW >= 600, `${label}: room for the EEG (${fit.plotW} × ${fit.plotH})`);
         assert.ok(await page.isVisible('.viewer-touchbar'), `${label}: the touch buttons`);
+        // The line at the bottom gives the hint in full, and the figures on its right are never cut short.
+        const status = await page.evaluate(() => {
+          const cut = (el) => el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1;
+          return { left: cut(document.querySelector('.ws-status-left')), right: [...document.querySelectorAll('.ws-status-right > *')].filter(cut).map((e) => e.textContent) };
+        });
+        assert.equal(status.left, false, `${label}: the hint in the line at the bottom is shown in full`);
+        assert.deepEqual(status.right, [], `${label}: the figures at the bottom are shown in full`);
         if (width === 820) await t.screenshot(page, 'ipad_upright');
-        if (width === 1180) await t.screenshot(page, 'ipad_on_its_side');
+        if (width === 1180) {
+          await t.screenshot(page, 'ipad_on_its_side');
+          // Every choice of the Recording tab is a row of at least 40 pixels to tap, the notch's frequencies set in under it.
+          await page.tap('.tab[data-tab="recording"]');
+          const rows = await page.evaluate(() => [...document.querySelectorAll('.tab-panel[data-panel="recording"] input[type="radio"], .tab-panel[data-panel="recording"] input[type="checkbox"]')]
+            .map((i) => ({ id: i.id || i.dataset.comfort, h: i.closest('label').getBoundingClientRect().height, x: i.getBoundingClientRect().left })));
+          for (const r of rows) assert.ok(r.h >= 40, `${label}: ${r.id} is ${r.h} pixels high`);
+          const x = (id) => rows.find((r) => r.id === id).x;
+          assert.ok(x('notch-50') > x('notch-on') + 8 && x('notch-60') === x('notch-50'), 'the 50 and 60 Hz choices are set in under the notch filter');
+          await t.screenshot(page, 'ipad_recording_tab');
+        }
         await page.context().close();
       }
       // A phone: the sign-in works, then a calm notice instead of the views.
@@ -175,6 +192,7 @@ export const tests = [
       await waitForRoute(phone, 'home');
       assert.ok(await phone.isVisible('.small-screen'));
       assert.match(await phone.textContent('.small-screen'), /needs a larger screen/);
+      assert.equal(await phone.isVisible('[data-log="continue-small-screen"]'), false, 'a phone is not offered to carry on');
       await phone.context().close();
     },
   },

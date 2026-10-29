@@ -283,8 +283,9 @@ details[open] > summary::before { transform: rotate(90deg); }
   transition: border-color var(--fast) var(--ease);
 }
 @media (hover: hover) { .field:hover { border-bottom-color: var(--ink); } }
+/* A field with the focus takes the same 2-pixel ring as a button, and its underline turns blue. */
 .field:focus { outline: none; border-bottom-color: var(--accent); }
-.field:focus-visible { outline: none; }
+.field:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .field::placeholder { color: var(--text-tertiary); }
 select.field {
   -webkit-appearance: none; appearance: none; padding-right: 36px; cursor: pointer;
@@ -501,8 +502,13 @@ ul.examples b { font-weight: 400; color: var(--ink); }
 .training .btn.primary.wide { width: auto; min-width: 264px; }
 
 /* ------------------------------------------------------------ annotation view */
+/* The view fills the window. The EEG and the side panel keep a minimum height (--main-min): in a
+   short window (a laptop with the browser's zoom at 150%, say) the view scrolls instead of drawing one
+   part over another. The side panel's width (--side-w) narrows on smaller screens. */
 .view.annotate {
-  display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; height: 100vh; height: 100dvh; overflow: hidden; background: var(--page);
+  --main-min: 360px; --side-w: 400px;
+  display: grid; grid-template-rows: min-content min-content minmax(var(--main-min), 1fr) min-content; height: 100vh; height: 100dvh;
+  overflow-x: hidden; overflow-y: auto; background: var(--page);
 }
 .ws-header {
   display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 48px; padding: 0 12px;
@@ -519,9 +525,9 @@ ul.examples b { font-weight: 400; color: var(--ink); }
   border-radius: 0; padding: 2px 8px; font: var(--t-14);
 }
 /* A revision of a finished recording: a banner under the header with its two actions (workspace.js, _revisionBar). */
-.view.annotate.revising { grid-template-rows: auto auto auto minmax(0, 1fr) auto; }
+.view.annotate.revising { grid-template-rows: min-content min-content min-content minmax(var(--main-min), 1fr) min-content; }
 /* A view that only shows annotations has no toolbar: the EEG takes the row it would have had. */
-.view.annotate.view-only { grid-template-rows: auto minmax(0, 1fr) auto; }
+.view.annotate.view-only { grid-template-rows: min-content minmax(var(--main-min), 1fr) min-content; }
 .ws-revision {
   display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; min-width: 0;
   background: var(--accent-soft); border-bottom: 1px solid var(--hairline); border-left: 3px solid var(--accent);
@@ -532,9 +538,11 @@ ul.examples b { font-weight: 400; color: var(--ink); }
 .ws-actions { display: flex; align-items: center; gap: 4px; flex: none; }
 .ws-actions .btn, .ws-header .btn { height: 32px; padding: 0 14px; font: var(--t-14); }
 .ws-header .btn.quiet.back { margin: 0 4px 0 0; padding: 0; }
+/* The toolbar wraps onto a second line when the window is too narrow for one, so that every type
+   button keeps its code beside its number (one line is 48 pixels high, as before). */
 .ws-toolbar {
-  display: flex; align-items: center; gap: 4px; height: 48px; padding: 0 12px; background: var(--page); border-bottom: 1px solid var(--hairline);
-  overflow: hidden; white-space: nowrap; min-width: 0;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 4px; min-height: 48px; padding: 8px 12px; background: var(--page);
+  border-bottom: 1px solid var(--hairline); white-space: nowrap; min-width: 0;
 }
 .ws-caption { color: var(--text-secondary); min-width: 60px; font: var(--t-14); }
 .ws-toolbar.changing .ws-caption { color: var(--accent); font-weight: 600; }
@@ -543,7 +551,7 @@ ul.examples b { font-weight: 400; color: var(--ink); }
 .ws-toolbar.view-only .chips, .ws-toolbar.view-only .type-menu { opacity: 0.45; }
 .ws-toolbar .btn { height: 32px; padding: 0 12px; font: var(--t-14); }
 .ws-toolbar .btn.quiet { padding: 0 4px; }
-.chips { display: flex; gap: 2px; flex: none; }
+.chips { display: contents; } /* the type buttons wrap one by one with the rest of the toolbar */
 .chip-btn {
   display: inline-flex; align-items: center; gap: 4px; height: 32px; padding: 0 8px; border: none; border-radius: var(--pill);
   background: var(--fill); color: var(--ink); font: var(--t-14); cursor: pointer;
@@ -555,7 +563,6 @@ ul.examples b { font-weight: 400; color: var(--ink); }
 .chip-btn[aria-pressed="true"] { background: var(--chip-colour); color: var(--chip-text); }
 .chip-btn[aria-pressed="true"] .chip-key { color: inherit; }
 .chip-btn[aria-pressed="true"] .swatch { outline: 1px solid rgba(255, 255, 255, 0.85); }
-.ws-toolbar.compact .chip-code { display: none; }
 .type-menu { max-width: 192px; justify-content: flex-start; }
 .type-menu .type-name { overflow: hidden; text-overflow: ellipsis; }
 .type-menu .chev { color: var(--text-secondary); margin-left: auto; display: inline-flex; }
@@ -573,18 +580,26 @@ ul.examples b { font-weight: 400; color: var(--ink); }
 .ws-main { position: relative; display: flex; min-height: 0; min-width: 0; }
 .ws-eeg { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 8px 0 8px 8px; }
 .ws-side {
-  width: 400px; flex: none; display: flex; flex-direction: column; gap: 8px; padding: 8px; overflow: hidden; min-height: 0;
+  width: var(--side-w, 400px); flex: none; display: flex; flex-direction: column; gap: 8px; padding: 8px; overflow: hidden; min-height: 0;
 }
 .coach-host, .review-host { display: flex; flex-direction: column; min-height: 0; flex: 0 1 auto; max-height: 60%; }
 .coach-host:empty, .review-host:empty { display: none; }
+/* The line at the bottom: what happened and what to do next on the left, on up to two lines so that
+   an instruction is read to its end, and on the right how much has been viewed, the number of
+   annotations and the filters, one above the other. Its height stays the same whatever it says, so
+   that the EEG never moves. */
 .ws-status {
-  display: flex; justify-content: space-between; gap: 12px; padding: 0 12px; background: var(--page); border-top: 1px solid var(--hairline);
-  font: var(--t-12); color: var(--text-secondary); white-space: nowrap; min-width: 0; height: 28px; align-items: center;
-  font-variant-numeric: tabular-nums lining-nums;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; column-gap: 16px;
+  height: 40px; padding: 4px 12px; background: var(--page); border-top: 1px solid var(--hairline);
+  font: var(--t-12); color: var(--text-secondary); min-width: 0; font-variant-numeric: tabular-nums lining-nums;
 }
-.ws-status-left { overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+.ws-status-left {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; min-width: 0;
+}
 .ws-status-left .ws-message { color: var(--ink); }
-.ws-status-right { overflow: hidden; text-overflow: ellipsis; white-space: pre; flex: none; max-width: 55%; }
+.ws-status-right { display: flex; flex-direction: column; align-items: flex-end; min-width: 0; max-width: 40vw; white-space: nowrap; }
+.ws-status-right > * { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.ws-status-counts { display: flex; gap: 12px; }
 .ws-status-right .ws-viewed { color: var(--ink); }
 
 /* Long sessions (js/annotate/workspace.js): the time the draft was last kept, Pause, the paused panel
@@ -616,8 +631,9 @@ ul.examples b { font-weight: 400; color: var(--ink); }
   .pause-card .btn-row { margin-top: 16px; }
 }
 .view.annotate.paused .ws-toolbar { opacity: 0.4; }
+/* The break reminder sits at the foot of the side panel, so that it never hides the EEG. */
 .break-reminder {
-  position: absolute; top: 16px; right: 16px; z-index: 10; width: min(400px, calc(100% - 48px)); margin: 0; font: var(--t-14);
+  position: absolute; bottom: 8px; right: 8px; z-index: 10; width: calc(var(--side-w, 400px) - 16px); margin: 0; font: var(--t-14);
 }
 .break-reminder p { margin: 0; }
 .break-reminder .btn-row { margin-top: 12px; }
@@ -670,7 +686,8 @@ ul.unviewed-list { font-variant-numeric: tabular-nums lining-nums; margin-bottom
 .table-wrap { max-height: 320px; overflow: auto; border: 1px solid var(--hairline); border-radius: 0; background: var(--surface); }
 .tab-panel[data-panel="annotations"] { display: flex; flex-direction: column; container: ann-panel / inline-size; }
 .ann-body { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
-.ann-body > .table-wrap { max-height: none; flex: 0 1 auto; min-height: 60px; }
+/* The list keeps room for three or four rows (rows of three lines too); the tab scrolls to its buttons. */
+.ann-body > .table-wrap { max-height: none; flex: 0 1 auto; min-height: 232px; }
 /* A wide, short panel (below the EEG on an iPad held upright): the buttons beside the list, so that
    the list keeps the panel's whole height. */
 @container ann-panel (min-width: 600px) {
@@ -729,6 +746,7 @@ fieldset.viewing { border: 1px solid var(--hairline); border-radius: 0; padding:
 fieldset.viewing legend { padding: 0 4px; font: var(--t-14); color: var(--text-secondary); }
 fieldset.viewing .opt { margin: 4px 0; display: flex; flex-wrap: wrap; gap: 4px 12px; }
 fieldset.viewing label { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+fieldset.viewing .opt.sub { padding-left: 24px; }
 /* "Colour channels by" and its legend (js/viewer/channel_colours.js) */
 fieldset.viewing .channel-colours { align-items: center; margin-top: 8px; }
 .channel-colours select.field { width: auto; height: 32px; padding-left: 8px; font: var(--t-14); }
@@ -859,33 +877,47 @@ a.btn { text-decoration: none; }
 .phone-note { display: none; margin: 16px 0; }
 .phone-note p { margin: 0; }
 @media (max-width: 699px), (max-height: 479px) {
-  body:not([data-route="signin"]):not([data-route^="admin"]) .app-content { display: none; }
-  body:not([data-route="signin"]):not([data-route^="admin"]) .small-screen { display: flex; }
+  body:not([data-route="signin"]):not([data-route^="admin"]):not(.small-screen-ok) .app-content { display: none; }
+  body:not([data-route="signin"]):not([data-route^="admin"]):not(.small-screen-ok) .small-screen { display: flex; }
   .phone-note { display: block; }
 }
-/* A tablet held upright (or a narrow window): the EEG takes the width, with the coach and the side
-   panel below it, side by side, and the toolbars wrap onto a second line when they need one. */
+/* On a computer the notice may be a window made small, or the page made large with the browser's
+   zoom: the person can carry on in it (common.js, smallScreenNotice). A phone keeps the notice. */
+.small-screen .continue-small { display: none; }
+@media (pointer: fine) {
+  .small-screen button.continue-small { display: inline-flex; }
+  .small-screen p.continue-small { display: block; }
+}
+/* A narrow window or a tablet: the header wraps onto a second line when it needs one. */
 @media (max-width: 1024px) {
   .view.annotate .ws-header { height: auto; min-height: 48px; flex-wrap: wrap; padding: 8px 12px; row-gap: 8px; }
-  .view.annotate .ws-toolbar { flex-wrap: wrap; height: auto; padding: 8px 12px; row-gap: 8px; }
+}
+/* A tablet held upright, or a narrow window: the EEG takes the width, with the coach and the side
+   panel below it, side by side. A wide but short window (a laptop with the browser's zoom at 150%)
+   keeps the panel beside the EEG. */
+@media (max-width: 1024px) and (orientation: portrait), (max-width: 799px) {
+  .view.annotate { --main-min: 576px; }
   .view.annotate .ws-main { flex-direction: column; }
   .view.annotate .ws-eeg { flex: 1 1 auto; min-height: 320px; padding: 8px 8px 0; }
   .view.annotate .ws-side { width: auto; height: 38%; min-height: 240px; flex: none; flex-direction: row; padding: 8px; }
   .view.annotate .ws-side > .coach-host, .view.annotate .ws-side > .review-host { flex: 1 1 0; max-height: none; min-width: 0; }
   .view.annotate .ws-side > .side-tabs { flex: 1 1 0; min-width: 0; min-height: 0; }
-  .view.annotate .ws-status { height: auto; min-height: 28px; flex-wrap: wrap; row-gap: 0; padding: 4px 12px; }
-  .view.annotate .ws-status-left { flex: 1 1 100%; }
-  .view.annotate .ws-status-right { max-width: none; white-space: normal; }
+  .view.annotate .break-reminder { right: 16px; bottom: 16px; width: min(400px, calc(100% - 32px)); }
+  /* The line at the bottom: the message across the width on two lines, the figures under it. */
+  .view.annotate .ws-status { grid-template-columns: minmax(0, 1fr) auto; height: auto; row-gap: 2px; }
+  .view.annotate .ws-status-left { grid-column: 1 / -1; min-height: 32px; }
+  .view.annotate .ws-status-right { grid-column: 2; flex-direction: row; flex-wrap: wrap; justify-content: flex-end; column-gap: 12px; max-width: none; }
+  .view.annotate .ws-readout { grid-column: 1; grid-row: 2; }
   .view.quiz .quiz-main { flex-direction: column; }
   .view.quiz .quiz-eeg { flex: 1 1 auto; min-height: 320px; padding: 8px 8px 0; }
   .view.quiz .quiz-side { width: auto; height: 42%; flex: none; border-left: none; border-top: 1px solid var(--hairline); }
 }
 @media (max-width: 1440px) {
-  .ws-side { width: 360px; }
+  .view.annotate { --side-w: 360px; }
 }
 @media (max-width: 1100px) {
   .home-grid { grid-template-columns: minmax(0, 1fr); }
-  .ws-side { width: 320px; }
+  .view.annotate { --side-w: 320px; }
   .ws-actions .btn { padding: 0 10px; }
   .stages { grid-template-columns: minmax(0, 1fr); }
 }
@@ -911,6 +943,9 @@ a.btn { text-decoration: none; }
   .link-panel .field.area { font: var(--t-16); }
   .channel-colours select.field { height: 40px; font: var(--t-16); }
   fieldset.comfort .opt-choices label { min-height: 40px; }
+  /* Every choice of the Recording tab is a 40-pixel row to tap, as the comfort choices are. */
+  fieldset.viewing .opt label, .tab-panel label.check { min-height: 40px; }
+  fieldset.viewing .opt, .tab-panel label.check { margin-top: 0; margin-bottom: 0; }
   /* Text buttons too: 40 pixels to tap, and a link inside a sentence reaches as far without moving its line. */
   .btn.quiet { height: 40px; }
   button.link { display: inline-block; padding: 10px 0; margin: -10px 0; }
@@ -1194,6 +1229,18 @@ button.review-line { text-align: left; font: var(--t-14); }
   background: var(--page); border: 1px solid var(--rule); font: var(--t-14); color: var(--ink); font-variant-numeric: tabular-nums lining-nums;
 }
 .map-electrode:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; z-index: 2; }
+/* A dense cap seen whole: electrodes as dots too close for their names; the name shows over the
+   electrode under the pointer or with the keyboard's focus, and + brings every name back. */
+.channel-map-block.crowded .map-electrode { min-width: 0; width: var(--el-size); padding: 0; }
+.channel-map-block.crowded .map-electrode > span { display: none; }
+.channel-map-block.crowded .map-electrode[aria-pressed="true"] { background: var(--selection-channel); }
+.channel-map-block.crowded .map-electrode:focus-visible { z-index: 3; }
+.channel-map-block.crowded .map-electrode:focus-visible > span {
+  display: block; position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); padding: 0 6px;
+  background: var(--surface); border: 1px solid var(--rule); color: var(--ink); font-weight: 400; pointer-events: none;
+}
+@media (hover: hover) { .channel-map-block.crowded .map-electrode:hover { z-index: 3; } }
+@media (hover: hover) { .channel-map-block.crowded .map-electrode:hover > span { display: block; position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); padding: 0 6px; background: var(--surface); border: 1px solid var(--rule); color: var(--ink); font-weight: 400; pointer-events: none; } }
 .map-box { position: absolute; border: 1px solid var(--accent); background: rgba(43, 67, 146, 0.08); pointer-events: none; }
 .map-note { margin: 8px 0 0; }
 .dialog.wide:has(.channel-map-block:not([hidden])) { max-width: 760px; }

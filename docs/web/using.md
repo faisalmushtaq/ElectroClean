@@ -290,12 +290,15 @@ and Redo are greyed out when they have nothing to act on: Delete until an annota
 Undo and Redo when there is no change to take back or make again. Draw/edit is on while you
 annotate; pressed, it switches to view only, in which nothing can be drawn or changed by accident,
 and the second row reads "View only" until you press it again. The second chooses what you mark next: the numbered type buttons and the menu of all
-types after "Draw as", then Whole montage or Selected channels, and Overlay. On the right, the Annotations tab
+types after "Draw as", then Whole montage or Selected channels, and Overlay. Each type button shows
+its number and a short name (1 Blink, 2 HEM, 3 EMG and so on); when the window is too narrow for one
+line, the toolbar continues on a second. On the right, the Annotations tab
 lists everything you have marked, the Recording tab shows the time you have worked, how much of the
 recording you have viewed, the viewing options, your comfort choices and details of the recording,
-and the Help tab lists every key. The line at the bottom reminds you of the main keys, shows what
-each action did, and on the right says how much of the recording you have viewed and how many
-annotations you have made.
+and the Help tab lists every key. The line at the bottom reminds you of the main keys and shows what
+each action did and what to do next, on two lines when it needs them, so that an instruction is
+always read to its end. On its right it says how much of the recording you have viewed and how many
+annotations you have made, with the display filters below.
 
 ## Marking an artifact
 
@@ -331,10 +334,13 @@ whose names say nothing about where the electrodes are, such as BioSemi's A1 to 
 E128, is arranged on rings in the order of its channels, and the map says "Positions not known:
 arranged in order". Channels that are not on the head (EOG, ECG and the like) are under it, as
 Other channels. A bad channel is grey with a dashed edge and can still be chosen. When channels are
-coloured by group, the map uses the same colours. The − and + buttons make the map smaller or
-larger; a large map scrolls in its frame. ElectroTag remembers whether you last used the list or
-the map. When Edit channels… opens on an annotation of the whole montage, choosing a channel, in
-the list or on the map, switches it to "Only these channels" by itself.
+coloured by group, the map uses the same colours. The map opens with the whole head in view. On a
+dense cap, such as 128 channels with 10-05 names, the electrodes are then too close together for
+their names: each is a small dot, and its name shows when you point at it or move to it with the
+arrow keys. The + button makes the map larger, step by step, until every electrode has its name, and
+− makes it smaller again; a large map scrolls in its frame. ElectroTag remembers whether you last
+used the list or the map. When Edit channels… opens on an annotation of the whole montage,
+choosing a channel, in the list or on the map, switches it to "Only these channels" by itself.
 
 Then drag across the EEG from the start of the artifact to its end. A drag that starts inside
 another annotation draws a new one as well. With the keyboard, point at the start and press M, then
@@ -435,7 +441,10 @@ the time cursor on it; a time past the end of the recording shows its end. If El
 what you typed, it says so under the field, and Esc closes the field. Show all, in the same field or
 with Shift+End, puts the whole recording on the screen to find your way around it; press it again to
 go back to the view you had. A view of the whole recording is an overview, so it does not count
-towards the parts you have viewed.
+towards the parts you have viewed, and a line at the top of the EEG says so for as long as it lasts.
+On a long recording with many channels, reading the whole of it can take a while: the EEG is drawn
+from the start as it is read, and a note over it says how much has been read so far, for example
+"Reading the EEG… 35%". Going back to your view does not wait for the rest.
 
 While the pointer is over a trace, the line at the bottom shows the channel, the time to the
 thousandth of a second and the value of the signal there in µV, as drawn: filtered as you see it,
@@ -503,7 +512,7 @@ was hidden. When you come back, the panel says how long you were away and that t
 counted.
 
 After a long stretch of work without a break (50 minutes unless your study chose otherwise), a small
-note in the corner of the EEG suggests a break. Take a break pauses straight away; Remind me in 15
+note at the foot of the side panel suggests a break, where it covers none of the EEG. Take a break pauses straight away; Remind me in 15
 minutes puts the note away for another quarter of an hour of work. The note never stops you working,
 and any pause of five minutes or more counts as a break. The time since your last break carries over
 from one recording to the next.
@@ -517,7 +526,10 @@ how long you take to answer each segment.
 The Recording tab has a Comfort panel with choices of your own, kept in the browser you use and
 applied to every recording you open there. Traces can be thin, normal or thick; thick traces are
 easier to follow on a bright screen or from a little further away. Channel names can be normal or
-large, and the text of the side panel normal or larger. These choices change only how the EEG and
+large, and the text of the side panel normal or larger. Names are never drawn smaller than they can
+be read: when the rows are too short for a name each (many channels on the screen, or a small
+window), every second or third channel is named, the channels you have selected are always named,
+and pointing at a row names its channel. Page Up shows fewer channels, each with its name. These choices change only how the EEG and
 the panel look, never what is saved. ElectroTag also follows your computer's or iPad's setting
 to reduce motion, and announces its messages to screen readers.
 
@@ -545,7 +557,9 @@ computer. The numbered type buttons, Whole montage and Selected channels, Delete
 the toolbars as on a computer, and a keyboard attached to the iPad works with every key described
 here. In Channels…, Map works by touch: tap an electrode to choose it, drag with the Pencil to
 choose several in a box, and drag with a finger to move a map larger than its frame; on an iPad the
-electrodes are large enough for a finger, so a dense montage makes a larger map. Held upright, the iPad shows the EEG across its width with the side panel (and the coach in
+electrodes are large enough for a finger, so a dense montage opens as a larger map, centred on the
+head. In the Recording tab every choice is a row large enough for a finger, and the 50 and 60 Hz
+choices are set in under the notch filter they belong to. Held upright, the iPad shows the EEG across its width with the side panel (and the coach in
 training) below it, and the Annotations tab puts its buttons beside the list so that several rows
 stay in view; on its side, the panel is beside the EEG as on a computer.
 
@@ -603,6 +617,14 @@ Email me this link, which starts an email to yourself with the address of the pa
 study) to open later on a tablet or computer, and Sign out, and it names the account you are signed
 in with. Your work waits for you on the larger screen. An invitation link opened on a phone says this
 before you choose a password, while the link is still unused.
+
+On a computer the same notice appears when the browser window is very small, which is often because
+the page has been made larger with the browser's zoom (at 200% on a laptop, for example). The
+notice then says that Ctrl and minus (⌘ and minus on a Mac) makes room again, and offers Continue in
+this window, which brings the views back for as long as the tab is open. In a short window the
+annotation view keeps the EEG and the side panel at a usable height and scrolls down to the rest,
+rather than drawing one part over another; at 150% on a laptop, the side panel stays beside the
+EEG.
 
 ## The training programme
 

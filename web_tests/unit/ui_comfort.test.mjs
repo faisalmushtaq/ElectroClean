@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { BREAK_MIN_S, SNOOZE_S, WorkClock, idleDue, todayKey } from '../../electrotag/web/static/js/annotate/clock.js';
-import { DEFAULT_COMFORT, namePx, normaliseComfort, traceWidths } from '../../electrotag/web/static/js/ui/comfort.js';
+import { DEFAULT_COMFORT, MIN_NAME_PX, nameEvery, namePx, normaliseComfort, traceWidths } from '../../electrotag/web/static/js/ui/comfort.js';
 
 /** A clock whose time (milliseconds) the test moves by hand. */
 function fakeClock(o = {}) {
@@ -105,4 +105,18 @@ test('display comfort: unknown choices fall back, traces and names in whole pixe
   }
   assert.equal(namePx('normal', 40), 12);
   assert.equal(namePx('large', 40), 15);
+});
+
+test('channel names are never drawn below 11 pixels (13 when large): short rows name every second or third channel', () => {
+  for (const rowH of [2, 4, 5.5, 8.9, 12, 20]) {
+    assert.ok(namePx('normal', rowH) >= MIN_NAME_PX.normal && namePx('normal', rowH) <= 12);
+    assert.ok(namePx('large', rowH) >= MIN_NAME_PX.large && namePx('large', rowH) <= 15);
+    // the names drawn are at least a name's height apart
+    const every = nameEvery(namePx('normal', rowH), rowH);
+    assert.ok(every * rowH >= namePx('normal', rowH) - 1, `rows of ${rowH} px: every ${every}`);
+  }
+  assert.equal(nameEvery(12, 20), 1, 'rows tall enough: every channel is named');
+  assert.equal(nameEvery(11, 8.9), 2, '22 channels on a short screen: every second');
+  assert.equal(nameEvery(11, 5), 2);
+  assert.equal(nameEvery(11, 3), 4, '128 channels on a laptop: every fourth');
 });

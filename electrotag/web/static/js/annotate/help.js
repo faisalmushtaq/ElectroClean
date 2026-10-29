@@ -63,7 +63,10 @@ export const HELP_HTML = `
 that reaches many channels, such as a blink, stands out as a dark band. Point at a name on the left
 to see that channel on top, or click it (or press <kbd>I</kbd>) to see it alone. In the overlay new
 marks apply to the whole montage; for channel-specific marks, go back to the normal view
-(<kbd>O</kbd>). Show all is for finding your way: the parts it shows do not count as viewed.</p>
+(<kbd>O</kbd>). Show all is for finding your way: the parts it shows do not count as viewed. On a long
+recording the EEG is drawn as it is read, with how much has been read so far shown over it.</p>
+<p>When the rows are too short for every channel's name, every second or third channel is named;
+point at a row to see its name, or show fewer channels (${PAGE}).</p>
 <p>On the overview bar, the parts of the recording that have not been on the screen yet are white
 with a thin grey line above them; the Recording tab and the status line say how much you have viewed.</p>
 <p>Vertical dashed lines labelled in teal are the <b>original experimental events</b>.
