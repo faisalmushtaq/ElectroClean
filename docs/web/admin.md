@@ -28,7 +28,8 @@ administrator, and the section you are in stays in the menu even when its group 
 section has an address of its own, such as `#admin-recordings`, so the browser's Back and Forward
 buttons move between them and a bookmark opens the section again. Find, in the header, goes straight
 to a person or a recording: type part of an ID, a name, an email address or a file name, then choose
-from the list with the pointer or with the arrow keys and Enter. Crowded sections have tabs of their
+from the list with the pointer or with the arrow keys and Enter (on an iPad held upright, Find has
+a line of its own under the header). Crowded sections have tabs of their
 own, such as Accounts, Invitations and Add several in Annotators. Annotating needs a computer or a tablet;
 the admin area also works on a phone, for a quick look at progress or to switch an account off. On
 an iPad, recordings are added by choosing their files (their names become their IDs), since the
@@ -146,7 +147,7 @@ link to its person in a separate message.
 Tick people in the Accounts list (the box in the heading ticks everyone the filters show) and a bar
 of actions appears above the list: Assign recordings… takes them to Assignments with the people
 chosen, Switch off and Switch on change their accounts, and New invitation links makes a fresh link
-for each, shown in a table to copy or download as above. The actions run one person at a time with
+for each, lasting as long as the list beside it says, shown in a table to copy or download as above. The actions run one person at a time with
 a line that shows how far they have got, and a table then says what happened to each, with the
 reason for anything not done. Your own account is left out of switching off and on and of new
 links.

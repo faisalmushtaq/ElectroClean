@@ -305,7 +305,16 @@ in the words under it) and the admin area's Progress gives the projected
 finish as "3 Nov", with "around then" in its note. Buttons say what they do
 from their first word: Choose the downloaded file (after Download the file,
 when a link cannot be read) and Go to the first part (in the check before Save
-and Finish). Recordings on this device closes with a plain Close button.
+and Finish). Recordings on this device closes with a plain Close button. In the admin
+area, the length of new invitation links stands beside New invitation links
+with the word "lasting", Add several sets it on one line as Invitations does,
+the tables of what happened name their first column Person or Recording, Find
+suggests what to type when nothing matches, and on an iPad held upright Find
+has a line of its own instead of a cut-off box. On a touch screen, text
+buttons such as Back and Download my results, the Manage link and the
+Whole montage and Selected channels switch are at least 40 pixels tall, and
+the pressed Pause button (Resume) is grey, leaving the black Resume on the
+paused panel as the one forward action.
 
 ## 1.1.0
 

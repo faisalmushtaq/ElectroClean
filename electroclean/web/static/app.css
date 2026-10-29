@@ -580,7 +580,8 @@ ul.examples b { font-weight: 400; color: var(--ink); }
    over the EEG and the side panel, the break reminder, and how much of the recording has been viewed. */
 .ws-saved { font: var(--t-14); color: var(--text-secondary); white-space: nowrap; margin: 0 8px 0 4px; font-variant-numeric: tabular-nums lining-nums; }
 .ws-saved:empty { display: none; }
-.btn.pause-btn[aria-pressed="true"] { background: var(--ink); color: #FFFFFF; }
+/* Pressed, it reads Resume in the grey of a pressed control: the panel's own Resume is the forward action. */
+.btn.pause-btn[aria-pressed="true"] { background: var(--fill-pressed); color: var(--ink); }
 .pause-panel {
   position: absolute; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center;
   padding: 24px; background: var(--page); overflow: auto;
@@ -606,7 +607,7 @@ ul.examples b { font-weight: 400; color: var(--ink); }
 .coverage-block .btn-row { margin-top: 8px; }
 .clock-note { margin: -4px 0 0; }
 .welcome-back { font: var(--t-14); margin-bottom: 12px; }
-fieldset.comfort .opt { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 4px 12px; align-items: baseline; }
+fieldset.comfort .opt { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 4px 12px; align-items: center; }
 fieldset.comfort .opt-name { color: var(--text-secondary); }
 fieldset.comfort .opt-choices { display: flex; flex-wrap: wrap; gap: 4px 16px; }
 fieldset.comfort .caption { margin: 8px 0 0; }
@@ -838,7 +839,7 @@ a.btn { text-decoration: none; }
   .channel-groups-row .btn.small { height: 40px; }
   .btn.icon.small { width: 40px; height: 40px; }
   .chip-btn { height: 40px; padding: 0 10px; }
-  .seg { height: 36px; padding: 0 12px; }
+  .seg { height: 40px; padding: 0 12px; }
   .tab { padding: 14px 0 13px; }
   .menu-item { min-height: 44px; }
   .picker-item { padding: 10px 12px; }
@@ -852,6 +853,9 @@ a.btn { text-decoration: none; }
   .link-panel .field.area { font: var(--t-16); }
   .channel-colours select.field { height: 40px; font: var(--t-16); }
   fieldset.comfort .opt-choices label { min-height: 40px; }
+  /* Text buttons too: 40 pixels to tap, and a link inside a sentence reaches as far without moving its line. */
+  .btn.quiet { height: 40px; }
+  button.link { display: inline-block; padding: 10px 0; margin: -10px 0; }
 }
 
 /* Pages come in gently: a short fade of the main column (opacity only, so that text is never

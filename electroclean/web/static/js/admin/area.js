@@ -164,7 +164,7 @@ export class AdminArea {
       matches = findMatches(q, d);
       clear(list);
       if (!q.trim()) { close(); return; }
-      if (!matches.length) list.append(h('li.admin-find-none', { role: 'option', 'aria-disabled': 'true', id: 'admin-find-none' }, 'Nothing matches.'));
+      if (!matches.length) list.append(h('li.admin-find-none', { role: 'option', 'aria-disabled': 'true', id: 'admin-find-none' }, 'Nothing matches. Try an annotator ID, a name or part of a file name.'));
       matches.forEach((m, i) => list.append(h('li.admin-find-item', { role: 'option', id: `admin-find-${i}`, 'aria-selected': 'false',
         onmousedown: (e) => { e.preventDefault(); choose(m); } },
       h('span.caption', {}, m.kind === 'person' ? 'Person' : 'Recording'), h('span.admin-find-text', {}, m.text), m.extra && m.extra !== m.text ? h('span.caption.block', {}, m.extra) : null)));

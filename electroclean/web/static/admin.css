@@ -50,7 +50,7 @@
 .admin-find-none { padding: 8px 12px; color: var(--text-secondary); font: var(--t-14); }
 .admin-body { padding: 24px 32px 64px 16px; min-width: 0; }
 .admin-main { min-width: 0; }
-.admin-demo-note { margin-bottom: 16px; }
+.admin-demo-note { margin-bottom: 24px; }
 
 .admin-section { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
 .admin-section .card + .card { margin-top: 0; }
@@ -217,6 +217,9 @@ table.admin-list tr.chosen td { background: var(--band); }
 .bulk-bar .btn-row { margin-top: 8px; }
 .bulk-bar select.field { width: auto; height: 32px; font: var(--t-14); flex: 0 1 140px; }
 .bulk-sep { width: 1px; align-self: stretch; background: var(--rule); margin: 0 4px; }
+/* New invitation links with how long they last, kept together on one line. */
+.bulk-group { display: inline-flex; align-items: center; gap: 8px; }
+.bulk-group .form-label.inline { color: var(--text-secondary); font: var(--t-14); }
 .bulk-result:empty { display: none; }
 .bulk-result h3 { margin: 16px 0 0; }
 .links-made { margin-top: 12px; }
@@ -224,6 +227,7 @@ table.admin-list tr.chosen td { background: var(--band); }
 .secret-value.link-value { display: block; font: 12px/16px var(--font-code); padding: 4px 8px; }
 .invite-actions { justify-content: flex-end; }
 .row.inline-form.invite-days .field { flex: 0 1 200px; }
+.several-out:not(:empty) { margin-top: 16px; }
 .links-made .admin-table { color: var(--text); }
 table.admin-list td.when { white-space: nowrap; }
 .mail-form .field.area { min-height: 240px; }
@@ -309,6 +313,9 @@ th.num .th-sort { flex-direction: row-reverse; }
   .admin-nav-link { padding: 8px; border-left: none; border-bottom: 1px solid transparent; font: var(--t-14); gap: 8px; }
   .admin-nav-link[aria-current="page"] { border-bottom-color: var(--ink); }
   .admin-body { padding: 24px 16px 48px; }
+  /* An iPad upright: Find takes a line of its own under the brand, whole rather than cut short. */
+  .view.admin .app-header { position: static; height: auto; min-height: 56px; flex-wrap: wrap; padding: 8px 16px; row-gap: 8px; }
+  .view.admin .admin-find { order: 3; flex: 1 1 100%; }
 }
 @media (max-width: 640px) {
   .view.admin .app-header { position: static; height: auto; min-height: 56px; flex-wrap: wrap; padding: 8px 16px; row-gap: 4px; }

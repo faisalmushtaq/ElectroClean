@@ -16,7 +16,7 @@ import {
   minutesText, parseBulkPeople, plural, whenText,
 } from './model.js';
 import {
-  actionButton, card, chip, confirmInline, copyButton, copyText, dataTable, eachInTurn, field, infoTable, loading, messageArea, progressLine,
+  actionButton, card, chip, confirmInline, copyButton, copyText, dataTable, eachInTurn, field, infoTable, loading, messageArea, nextId, progressLine,
   recordingName, resultsTable, secretBox, sectionHead, select, tabBar, textArea, textInput,
 } from './ui.js';
 
@@ -158,7 +158,7 @@ export class AnnotatorsSection {
       await this.reload();
     } });
     const days = select(DAYS, '14');
-    days.setAttribute('aria-label', 'The new links last');
+    days.id = nextId('bulk-days');
     this.bulkBar.append(
       h('p', {}, h('b', {}, `${plural(keys.length, 'person', 'people')} chosen`), keys.includes(self) ? h('span.caption', {}, ' (your own account is left out of switching off and on and of new links)') : null),
       h('div.btn-row', {},
@@ -166,8 +166,9 @@ export class AnnotatorsSection {
         run('Switch off', 'user_update', { status: 'disabled' }, () => 'Switched off: they can no longer sign in; their work is kept.', 'bulk-switch-off'),
         run('Switch on', 'user_update', { status: 'active' }, () => 'Switched on: they can sign in again.', 'bulk-switch-on'),
         h('span.bulk-sep', { 'aria-hidden': 'true' }),
-        run('New invitation links', 'user_invite', this.area.isFirebase ? {} : { get expires_days() { return Number(days.value); } }, () => 'A new link, below.', 'bulk-invite'),
-        this.area.isFirebase ? null : days,
+        h('span.bulk-group', {},
+          run('New invitation links', 'user_invite', this.area.isFirebase ? {} : { get expires_days() { return Number(days.value); } }, () => 'A new link, below.', 'bulk-invite'),
+          this.area.isFirebase ? null : [h('label.form-label.inline', { for: days.id }, 'lasting'), days]),
         h('button.btn.small.quiet', { type: 'button', onclick: () => this.table.clearSelection() }, 'Clear the choice')),
       progress, msg);
   }
@@ -186,7 +187,7 @@ export class AnnotatorsSection {
       }
     }
     this.bulkResult.append(h('h3', {}, `Done for ${results.filter((r) => r.ok).length} of ${plural(results.length, 'person', 'people')}`),
-      resultsTable(results, { name: (aid) => aid, done }), made.length ? this._linksTable(made) : null);
+      resultsTable(results, { name: (aid) => aid, done, title: 'Person' }), made.length ? this._linksTable(made) : null);
   }
 
   /** The private links of new invitations, with Copy all and a CSV download (shown only now). */
@@ -376,10 +377,11 @@ export class AnnotatorsSection {
     text.setAttribute('aria-label', 'One person on each line: ID, name, email address');
     text.dataset.log = 'several-text';
     const days = select(DAYS, '14');
+    days.id = nextId('several-days');
     const msg = messageArea();
     const progress = progressLine();
-    const preview = h('div.admin-stack');
-    const result = h('div.admin-stack');
+    const preview = h('div.admin-stack.several-out');
+    const result = h('div.admin-stack.several-out');
     this.severalMail = h('div.admin-stack');
     let checked = null;
     const create = h('button.btn.primary', { type: 'button', 'data-log': 'several-create', hidden: true }, 'Create the accounts');
@@ -427,7 +429,7 @@ export class AnnotatorsSection {
         }
         clear(result);
         result.append(h('h3', {}, `Created ${results.filter((r) => r.ok).length} of ${plural(results.length, 'account')}`),
-          resultsTable(results, { name: (r) => r.annotator_id, done: () => 'Account created with an invitation link' }), made.length ? this._linksTable(made) : null,
+          resultsTable(results, { name: (r) => r.annotator_id, done: () => 'Account created with an invitation link', title: 'Person' }), made.length ? this._linksTable(made) : null,
           h('div.btn-row', {}, h('button.btn.small', { type: 'button', onclick: () => this.area.go('assignments', { annotators: made.map((m) => m.annotator_id) }) }, 'Assign recordings to them…')));
         if (results.every((r) => r.ok)) text.value = '';
         await this.reload();
@@ -442,7 +444,7 @@ export class AnnotatorsSection {
         h('p', {}, 'Paste one line for each person: their annotator ID, their name and their email address, separated by commas (a spreadsheet\'s columns pasted with tabs work too). Every line is checked before any account is made; then each person gets an account as an annotator and a private invitation link.'),
         fb ? h('p.caption', {}, 'On Firebase each person signs in with their email address, so every line needs one.') : null,
         field('People', text, { wide: true }),
-        fb ? null : field('The links last', days),
+        fb ? null : h('div.row.inline-form.invite-days', {}, h('label.form-label.inline', { for: days.id }, 'The links last'), days),
         h('div.btn-row', {}, check, create), progress, msg, preview, result, this.severalMail));
   }
 
