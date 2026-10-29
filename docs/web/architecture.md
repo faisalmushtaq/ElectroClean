@@ -107,7 +107,7 @@ electrotag/web/static/          the browser application (plain ES modules, no bu
                                   filterworker.js, sha256.js, hashworker.js, amplitude.js, util.js,
                                   synthetic.js; links.js and fetch_links.js (recordings opened from
                                   a link), device_store.js (copies kept on the device), electrodes.js (a
-                                  BIDS electrodes.tsv picked with a recording); registering them: register.js, bids.js, events.js,
+                                  BIDS electrodes.tsv picked, kept or fetched with a recording); registering them: register.js, bids.js, events.js,
                                   mnewarn.js, pyfmt.js, pyjson.js
     js/viewer/                    drawing the EEG, axes, overview, navigation; touch.js for two
                                   fingers, long presses and double taps on a touch screen;

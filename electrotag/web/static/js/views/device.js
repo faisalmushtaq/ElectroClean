@@ -9,6 +9,7 @@ import { showDialog } from '../ui/dialog.js';
 import { logger } from '../log/logger.js';
 import { local } from '../util.js';
 import { formatBytes } from '../data/links.js';
+import { electrodeFilesToKeep, sidecarsOf } from '../data/electrodes.js';
 import { DeviceStore, DeviceStoreError, ownerKey, finishedState, finishedToRemove, summarise } from '../data/device_store.js';
 
 const DEFAULT_PREFS = Object.freeze({ keepLinks: true, keepChosen: false, removeWhenFinished: false });
@@ -78,25 +79,29 @@ export function deviceRow(app, onChange = null) {
 
 /**
  * Keep the files of a recording that has just opened, when the annotator asked for it (in the
- * background: the recording is already open from memory). A full device is told once, with the
- * offer to remove finished recordings.
+ * background: the recording is already open from memory), with its electrodes.tsv and
+ * coordsystem.json when they came with it, so that the copy opens again with the same positions on
+ * the channel map. A full device is told once, with the offer to remove finished recordings.
  */
 export async function keepOnDevice(app, recording, match, sha) {
   const src = recording && recording.source;
   const store = deviceStore(app);
   if (!src || !src.keep || !store || !store.available || !recording.sourceFiles || !/^[0-9a-f]{64}$/.test(sha || '')) return;
   if (!(await store.usable())) return;
+  const names = new Set(recording.sourceFiles.map((f) => f.name));
+  const electrodes = electrodeFilesToKeep(await sidecarsOf(src), recording.fileName).filter((f) => !names.has(f.name));
+  const files = [...recording.sourceFiles, ...electrodes];
   try {
     const first = (await store.list()).length === 0;
-    const meta = await store.keep({ sha256: sha, recordingId: match.recording_id, fileName: recording.fileName, files: recording.sourceFiles });
-    logger.event('device_kept', { files: meta.files.length, size_bytes: meta.size, source: src.kind, store: store.kind });
+    const meta = await store.keep({ sha256: sha, recordingId: match.recording_id, fileName: recording.fileName, files });
+    logger.event('device_kept', { files: meta.files.length, size_bytes: meta.size, source: src.kind, store: store.kind, electrodes: electrodes.length > 0 });
     if (first) {
       const granted = await DeviceStore.persist();
       logger.event('device_persist', { granted });
     }
   } catch (e) {
     if (e instanceof DeviceStoreError && e.kind === 'full') {
-      const size = recording.sourceFiles.reduce((a, f) => a + f.size, 0);
+      const size = files.reduce((a, f) => a + f.size, 0);
       logger.event('device_full', { size_bytes: size });
       await offerRoomDialog(app, size);
     } else {

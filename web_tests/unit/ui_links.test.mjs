@@ -197,3 +197,100 @@ test('stopping a download says so', async () => {
     signal: ac.signal, fetchImpl: async (_u, init) => { if (init.signal.aborted) throw new DOMException('aborted', 'AbortError'); return new Response('x'); },
   }), (e) => e.kind === 'aborted');
 });
+
+// ------------------------------------------------------------ electrode positions beside a recording
+const { neighbourElectrodeLinks, fetchNeighbourElectrodes, isElectrodeSidecarName, SIDECAR_MAX_BYTES } =
+  await import('../../electrotag/web/static/js/data/fetch_links.js');
+
+const TSV = 'name\tx\ty\tz\nFp1\t-30\t-85\t-5\nCz\t0\t0\t100\n';
+
+test('the electrodes.tsv beside a recording at a plain web address: BIDS names, most specific first', () => {
+  const at = (u) => neighbourElectrodeLinks([directLink(u)]);
+  const one = at('https://data.example.org/study/sub-01/eeg/sub-01_ses-2_task-rest_acq-hd_run-1_eeg.edf?token=t1#x');
+  assert.deepEqual(one.map((c) => c.electrodesName), ['sub-01_ses-2_acq-hd_electrodes.tsv', 'sub-01_ses-2_electrodes.tsv', 'sub-01_electrodes.tsv']);
+  assert.equal(one[0].electrodes, 'https://data.example.org/study/sub-01/eeg/sub-01_ses-2_acq-hd_electrodes.tsv?token=t1', 'the same address and query, without the fragment');
+  assert.equal(one[2].coordsystem, 'https://data.example.org/study/sub-01/eeg/sub-01_coordsystem.json?token=t1');
+  assert.equal(one[2].coordsystemName, 'sub-01_coordsystem.json');
+  // a BrainVision recording: its header's address; names with spaces stay encoded
+  const bv = neighbourElectrodeLinks([directLink('https://x.example/a%20b/sub-x1_task-y_eeg.eeg'), directLink('https://x.example/a%20b/sub-x1_task-y_eeg.vhdr')]);
+  assert.deepEqual(bv.map((c) => c.electrodes), ['https://x.example/a%20b/sub-x1_electrodes.tsv']);
+  // no BIDS name, a share link of one file, an address without a file name: nothing to look for
+  assert.deepEqual(at('https://x.example/recording.edf'), []);
+  assert.deepEqual(at('https://www.dropbox.com/scl/fi/abc/sub-01_task-rest_eeg.edf?rlkey=k'), []);
+  assert.deepEqual(at('https://x.example/download?id=sub-01_eeg.edf'), []);
+  assert.deepEqual(neighbourElectrodeLinks([]), []);
+});
+
+test('electrodes.tsv and coordsystem.json are told by their names', () => {
+  for (const n of ['electrodes.tsv', 'sub-01_electrodes.tsv', 'sub-01_space-CapTrak_electrodes.TSV', 'sub-01_coordsystem.json']) assert.ok(isElectrodeSidecarName(n), n);
+  for (const n of ['sub-01_channels.tsv', 'myelectrodes.tsv', 'sub-01_eeg.edf', '', null]) assert.ok(!isElectrodeSidecarName(n), String(n));
+});
+
+test('the electrodes.tsv beside a link is fetched as the recording was, with its coordsystem.json', async () => {
+  const asked = [];
+  const files = await fetchNeighbourElectrodes([directLink('https://x.example/d/sub-07_ses-1_task-rest_eeg.edf?k=1')], {
+    fetchImpl: async (url, init) => {
+      asked.push({ url, init });
+      if (url.includes('sub-07_ses-1_electrodes')) return new Response('missing', { status: 404 });
+      if (url.includes('sub-07_electrodes.tsv')) return new Response(TSV, { status: 200 });
+      if (url.includes('sub-07_coordsystem.json')) return new Response('{"EEGCoordinateSystem": "CapTrak"}', { status: 200 });
+      return new Response('?', { status: 500 });
+    },
+  });
+  assert.deepEqual(files.map((f) => f.name), ['sub-07_electrodes.tsv', 'sub-07_coordsystem.json']);
+  assert.equal(await files[0].text(), TSV);
+  assert.deepEqual(asked.map((a) => a.url.replace('https://x.example/d/', '')), ['sub-07_ses-1_electrodes.tsv?k=1', 'sub-07_electrodes.tsv?k=1', 'sub-07_coordsystem.json?k=1']);
+  for (const a of asked) {
+    assert.equal(a.init.credentials, 'omit');
+    assert.equal(a.init.referrerPolicy, 'no-referrer');
+    assert.equal(a.init.headers, undefined);
+  }
+  // without a coordsystem.json the positions still come
+  const alone = await fetchNeighbourElectrodes([directLink('https://x.example/sub-07_task-rest_eeg.bdf')], {
+    fetchImpl: async (url) => (url.endsWith('_electrodes.tsv') ? new Response(TSV) : new Response('no', { status: 404 })) });
+  assert.deepEqual(alone.map((f) => f.name), ['sub-07_electrodes.tsv']);
+});
+
+test('the electrodes.tsv beside a link is optional: every failure leaves standard positions, quietly and once', async () => {
+  const link = [directLink('https://x.example/sub-01_task-rest_eeg.edf')];
+  let calls = 0;
+  const count = (fn) => async (...a) => { calls += 1; return fn(...a); };
+  const cases = [
+    async () => { throw new TypeError('Failed to fetch'); }, // refused (no CORS) or offline
+    async () => new Response('no', { status: 403 }),
+    async () => new Response('<html></html>', { status: 200, headers: { 'Content-Type': 'text/html' } }), // a sign-in page
+    async () => new Response('not a table at all', { status: 200 }), // no name, x and y columns
+    async () => new Response('0       ', { status: 200 }), // the recording itself, served at every address
+    async () => new Response('x', { status: 200, headers: { 'Content-Length': String(SIDECAR_MAX_BYTES + 1) } }),
+  ];
+  for (const fn of cases) {
+    calls = 0;
+    assert.deepEqual(await fetchNeighbourElectrodes(link, { fetchImpl: count(fn) }), []);
+    assert.equal(calls, 1, 'each candidate is asked once, never again');
+  }
+  // a service that never answers: the wait is bounded
+  const t0 = Date.now();
+  const never = (_u, init) => new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError'))));
+  assert.deepEqual(await fetchNeighbourElectrodes(link, { fetchImpl: never, timeoutMs: 50 }), []);
+  assert.ok(Date.now() - t0 < 2000);
+  // nothing beside a Dropbox link is asked for at all
+  calls = 0;
+  assert.deepEqual(await fetchNeighbourElectrodes([directLink('https://www.dropbox.com/s/a/sub-01_eeg.edf')], { fetchImpl: count(cases[0]) }), []);
+  assert.equal(calls, 0);
+});
+
+test('a pasted link to the recording\'s electrodes.tsv is optional; the recording\'s own links are not', async () => {
+  const fetchImpl = async (url) => (url.includes('electrodes') ? new Response('gone', { status: 404 }) : new Response('x', { status: 200 }));
+  const r = await fetchLinkedFiles([{ url: 'https://x.example/sub-01_eeg.edf' }, { url: 'https://x.example/sub-01_electrodes.tsv', optional: true }], { fetchImpl });
+  assert.deepEqual(r.files.map((f) => f.name), ['sub-01_eeg.edf']);
+  const both = await fetchLinkedFiles([{ url: 'https://x.example/sub-01_eeg.edf' }, { url: 'https://x.example/sub-01_electrodes.tsv', optional: true }],
+    { fetchImpl: async () => new Response(TSV) });
+  assert.deepEqual(both.files.map((f) => f.name), ['sub-01_eeg.edf', 'sub-01_electrodes.tsv']);
+  await assert.rejects(fetchLinkedFiles([{ url: 'https://x.example/sub-01_eeg.edf' }, { url: 'https://x.example/sub-01_electrodes.tsv' }], { fetchImpl }),
+    (e) => e.kind === 'not_found' && e.index === 1);
+  // stopping the download stops it, optional files too
+  const ac = new AbortController();
+  ac.abort();
+  await assert.rejects(fetchLinkedFiles([{ url: 'https://x.example/sub-01_electrodes.tsv', optional: true }], {
+    signal: ac.signal, fetchImpl: async () => { throw new DOMException('aborted', 'AbortError'); } }), (e) => e.kind === 'aborted');
+});

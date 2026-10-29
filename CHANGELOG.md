@@ -132,6 +132,17 @@ in the middle of the screen, and Show all (Shift+End) shows the whole recording
 as an overview and goes back. The interaction log records each of these, with
 the time gone to as a number and never the text typed.
 
+The channel map uses the recording's own BIDS electrodes.tsv in more cases. A
+copy of a recording kept on the device keeps its electrodes.tsv and
+coordsystem.json, so that it opens again with the same positions. A recording
+opened from a link takes them from links of their own pasted after the
+recording's (for Dropbox and OneDrive), and, at a plain web address, from
+beside the recording, where ElectroTag asks once for their BIDS names while the
+recording opens and uses the standard positions when they are not there or do
+not arrive within a few seconds. The interaction log's new `electrode_positions`
+event says whether the map used the file or the standard positions, and how
+the recording was opened, never the file's name or the link.
+
 The browser version holds up better when the study answers late or fails
 once, and when people press things twice. While Save and Finish waits for its
 answer, no draft is sent and Pause, Close and Leave without changes wait, so a

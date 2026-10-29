@@ -7,7 +7,7 @@
 
 import { h, clear } from '../ui/dom.js';
 import { logger } from '../log/logger.js';
-import { fetchLinkedFiles, LinkError } from '../data/fetch_links.js';
+import { fetchLinkedFiles, isElectrodeSidecarName, LinkError } from '../data/fetch_links.js';
 import { formatBytes, parseLinks, SERVICE_NAMES } from '../data/links.js';
 import { IS_IOS } from '../util.js';
 
@@ -20,9 +20,11 @@ export function openDownload(url) {
 
 /**
  * The panel.
- * @param {{onFiles: (files: File[], info: {service: string, bytes: number}) => void,
+ * @param {{onFiles: (files: File[], info: {service: string, bytes: number, links: object[]}) => void,
  *          chooseFile: () => void, extra?: Node | null, multiple?: string}} options
- *   onFiles: receives the fetched files (as if they had been chosen on the computer);
+ *   onFiles: receives the fetched files (as if they had been chosen on the computer), and the
+ *     converted links, held in memory only, so that the open view can look beside them for the
+ *     recording's electrodes.tsv (js/data/fetch_links.js);
  *   chooseFile: opens the ordinary file chooser (the fallback's second step);
  *   extra: shown under the field (the open view's "Keep a copy on this device").
  * @returns {{el: HTMLElement, open: (items: {role?: string, url: string}[]) => Promise<boolean>, busy: () => boolean, cancel: () => void}}
@@ -76,7 +78,7 @@ export function linkPanel({ onFiles, chooseFile, extra = null }) {
       logger.event('link_fetched', { service, files: r.files.length, size_bytes: r.bytes });
       clear(status);
       status.append(h('p.caption', {}, `Downloaded from ${SERVICE_NAMES[service] === SERVICE_NAMES.web ? 'the link' : SERVICE_NAMES[service]}: ${formatBytes(r.bytes)}.`));
-      onFiles(r.files, { service, bytes: r.bytes });
+      onFiles(r.files, { service, bytes: r.bytes, links: r.links });
       return true;
     } catch (e) {
       if (!(e instanceof LinkError)) throw e;
@@ -96,14 +98,20 @@ export function linkPanel({ onFiles, chooseFile, extra = null }) {
     if (!parsed.length) { problem('Paste the link to the file first.', []); field.focus(); return; }
     const bad = parsed.find((p) => p.problem);
     if (bad) { problem(bad.problem.message, []); return; }
-    if (parsed.length > 3) { problem('Paste the links of one recording: one file, or the three files of a BrainVision recording.', []); return; }
-    void open(parsed.map((p) => ({ role: '', url: p.text })));
+    // The recording's electrodes.tsv and coordsystem.json may come too, on lines of their own: optional,
+    // so that one that cannot be fetched leaves the map with standard positions and opens the recording.
+    const optional = (p) => isElectrodeSidecarName(p.link.name);
+    if (parsed.filter((p) => !optional(p)).length > 3 || parsed.filter(optional).length > 2) {
+      problem('Paste the links of one recording: one file, or the three files of a BrainVision recording, and if you have them its electrodes.tsv and coordsystem.json.', []);
+      return;
+    }
+    void open(parsed.map((p) => ({ role: '', url: p.text, ...(optional(p) ? { optional: true } : {}) })));
   }
 
   const el = h('div.link-panel', { role: 'group', 'aria-labelledby': `${id}-title` },
     h('h3', { id: `${id}-title` }, 'Open from a link'),
-    h('p.caption', { id: `${id}-help` }, 'Paste a share link from Dropbox, OneDrive or another service, one per line (a BrainVision recording has three files). '
-      + 'The file comes straight from that service to this browser and is never sent to the study.'),
+    h('p.caption', { id: `${id}-help` }, 'Paste a share link from Dropbox, OneDrive or another service, one per line (a BrainVision recording has three files; '
+      + 'its electrodes.tsv may come too). The file comes straight from that service to this browser and is never sent to the study.'),
     h('label.form-label', { for: id }, 'Links to the recording\'s files'),
     field,
     extra,

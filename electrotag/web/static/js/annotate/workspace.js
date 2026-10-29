@@ -35,7 +35,7 @@ import * as cov from '../viewer/coverage.js';
 import { NAME_SIZES, PANEL_TEXT, TRACE_WIDTHS, loadComfort, saveComfort } from '../ui/comfort.js';
 import { microvoltText } from '../viewer/geometry.js';
 import { mapLayout, projectPositions } from '../viewer/head_map.js';
-import { readElectrodes } from '../data/electrodes.js';
+import { readElectrodes, sidecarsOf } from '../data/electrodes.js';
 import { centredStart, clampTime, parseTimeText } from './goto.js';
 
 const MODE_TEXT = { standard: 'Annotation', guided: 'Guided training', practice: 'Practice', assessment: 'Assessment', tryout: 'Try-out', review: 'Practice review',
@@ -2185,14 +2185,20 @@ export class Workspace {
   }
 
   // ------------------------------------------------------------------------- the channel map
-  /** The recording's own electrode positions, when an electrodes.tsv was picked with it (js/data/electrodes.js). */
+  /**
+   * The recording's own electrode positions, when an electrodes.tsv came with it: picked with it, kept
+   * with its copy on this device, or fetched with or beside its link (js/data/electrodes.js). The
+   * interaction log notes which positions the map uses (electrode_positions), never a file's name.
+   */
   async _loadElectrodes() {
     const src = this.s.recording.source;
-    const files = src && src.sidecars;
-    if (!files || !files.length) return;
-    const got = await readElectrodes(files, this.s.recording.fileName);
-    if (!got || this._destroyed) return;
-    this.electrodes = { positions: projectPositions(got.positions, got.system), fileName: got.fileName, system: got.system };
+    const files = await sidecarsOf(src);
+    const got = files.length ? await readElectrodes(files, this.s.recording.fileName) : null;
+    if (this._destroyed) return;
+    if (got) this.electrodes = { positions: projectPositions(got.positions, got.system), fileName: got.fileName, system: got.system };
+    const layout = mapLayout(this.s.channels, this.electrodes ? this.electrodes.positions : null);
+    logger.event('electrode_positions', { source: layout.source, opened_from: (src && src.kind) || 'other',
+      ...(layout.source === 'file' ? { n_placed: layout.points.filter((p) => !p.extra).length, coordinate_system: String(got.system || '').slice(0, 40) } : {}) });
   }
 
   /** What the channel chooser's map needs: where each channel goes, the group colours, and where the choice of view is kept. */
