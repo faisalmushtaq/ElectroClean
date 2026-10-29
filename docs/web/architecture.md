@@ -105,14 +105,18 @@ electrotag/web/static/          the browser application (plain ES modules, no bu
                                   edf.js, brainvision.js, channels.js, filters.js, fft.js, pool.js,
                                   filterworker.js, sha256.js, hashworker.js, amplitude.js, util.js,
                                   synthetic.js; links.js and fetch_links.js (recordings opened from
-                                  a link), device_store.js (copies kept on the device); registering them: register.js, bids.js, events.js,
+                                  a link), device_store.js (copies kept on the device), electrodes.js (a
+                                  BIDS electrodes.tsv picked with a recording); registering them: register.js, bids.js, events.js,
                                   mnewarn.js, pyfmt.js, pyjson.js
     js/viewer/                    drawing the EEG, axes, overview, navigation; touch.js for two
                                   fingers, long presses and double taps on a touch screen;
-                                  coverage.js for the parts of a recording viewed so far
+                                  coverage.js for the parts of a recording viewed so far;
+                                  head_map.js for where electrodes go on the channel map
     js/annotate/                  the annotation view (workspace.js), the annotation store, the
-                                  dialogs, the help, the session with its drafts, and clock.js,
-                                  the working-time clock that stops while the annotator is paused
+                                  dialogs, the help, the session with its drafts, clock.js,
+                                  the working-time clock that stops while the annotator is paused,
+                                  channel_map.js, the channel chooser's map, and goto.js, the
+                                  times typed into Go to time
     js/training/                  the training path, the coach, the practice review, the
                                   demonstration's guided rules and practice scoring, and the
                                   short-segment quiz (quiz.js)

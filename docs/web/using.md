@@ -205,7 +205,7 @@ screen; click it to go anywhere.
 
 Two rows of controls sit above the EEG. The first has Draw/edit, Delete, Undo, Redo, the time your
 draft was last kept (for example "Draft saved 14:02"), Pause, Help and Save and Finish. The second chooses what you mark next: the numbered type buttons and the menu of all
-types after "Draw as", then Whole montage or Selected channels. On the right, the Annotations tab
+types after "Draw as", then Whole montage or Selected channels, and Overlay. On the right, the Annotations tab
 lists everything you have marked, the Recording tab shows the time you have worked, how much of the
 recording you have viewed, the viewing options, your comfort choices and details of the recording,
 and the Help tab lists every key. The line at the bottom reminds you of the main keys, shows what
@@ -231,11 +231,32 @@ and sides of a montage named by the 10-20 or 10-10 system, the banks of numbered
 montages (BioSemi's A1 to A32, B1 to B32 and so on, or EGI's E1 to E128 in blocks of 32), and the
 types of channel when there are several. Show chosen only lists just the channels ticked.
 
+Map, at the top of the list, shows the channels as electrodes on a drawing of the head, seen from
+above with the nose at the top, each a small circle with its name. Click an electrode to choose it
+or take it back, or drag a box round several to choose them all (a box round electrodes that are
+all chosen takes them back). Select all, None and Invert act on every electrode, or on those your
+search finds; the search and the group buttons work as in the list, and the two always show the same
+choice. With the keyboard, the arrow keys move from an electrode to its neighbour in that direction
+and Space or Enter chooses it. The electrodes go where the recording's own BIDS electrodes.tsv puts
+them, when you open the recording together with that file (choose its folder, or the file with the
+recording's files); otherwise at the standard places of their 10-20, 10-10 or 10-05 names. A montage
+whose names say nothing about where the electrodes are, such as BioSemi's A1 to D32 or EGI's E1 to
+E128, is arranged on rings in the order of its channels, and the map says "Positions not known:
+arranged in order". Channels that are not on the head (EOG, ECG and the like) are under it, as
+Other channels. A bad channel is grey with a dashed edge and can still be chosen. When channels are
+coloured by group, the map uses the same colours. The − and + buttons make the map smaller or
+larger; a large map scrolls in its frame. ElectroTag remembers whether you last used the list or
+the map.
+
 Then drag across the EEG from the start of the artifact to its end. With the keyboard, point at the
 start and press M, then point at the end and press M again. You can scroll in between, which is the
 easy way to mark an artifact longer than the screen. The keys [ and ] mark the start and the end
 separately, and Esc cancels a started mark. You can also draw first and choose the type afterwards:
 click the new annotation and press a number, or double-click it to choose any type.
+
+In the overlay (below), every mark applies to the whole montage, since the channels share one axis
+and a drag cannot say which of them it means; the toolbar says "all channels in the overlay", and
+Selected channels waits until you press O for the normal view again.
 
 ## Changing annotations
 
@@ -259,6 +280,31 @@ and ↓ scroll through the channels. Home and End show less or more time, Page U
 fewer or more channels, and − and + make the traces smaller or larger. The mouse wheel or a
 trackpad scrolls through time, and with Shift through the channels. On a Mac keyboard without
 Home, End and Page keys, use fn with the arrow keys.
+
+To go to a particular time, press G and type it: seconds (12.5), minutes and seconds (1:05) or
+hours, minutes and seconds (1:02:05), then Enter. The time comes to the middle of the screen, with
+the time cursor on it; a time past the end of the recording shows its end. If ElectroTag cannot read
+what you typed, it says so under the field, and Esc closes the field. Show all, in the same field or
+with Shift+End, puts the whole recording on the screen to find your way around it; press it again to
+go back to the view you had. A view of the whole recording is an overview, so it does not count
+towards the parts you have viewed.
+
+While the pointer is over a trace, the line at the bottom shows the channel, the time to the
+thousandth of a second and the value of the signal there in µV, as drawn: filtered as you see it,
+measured from the trace's centre line (its average over the screen), with positive values upwards.
+V switches it off and on, and so does Value under the pointer in the Recording tab. It is on with a
+mouse; on an iPad it starts off, and when switched on it follows your finger or Pencil while it
+draws.
+
+Overlay, in the toolbar, or the key O, draws all the channels on screen on one shared axis in thin,
+light lines, in the channels' group colours when channels are coloured. An artifact that reaches
+many channels at once, such as a blink or a movement, then stands out as a dark band, and one that
+stays on a single channel stands apart from the rest. The time axis, your annotations, the events and
+the overview bar stay as they are, and a scale bar on the right gives the size of half the axis. The
+channel names on the left become a legend: point at one to see that channel drawn on top, and click
+it, or press I, to see it alone; the arrow keys ↑ and ↓ then move to the previous and next channel,
+and I or a click on the name again shows them all. Use Page Up and Page Down to overlay fewer or more
+channels. ElectroTag remembers whether you last used the overlay, in this browser.
 
 The Recording tab holds the viewing options: the 1 Hz high-pass filter and the notch filter for
 mains interference (50 Hz in the UK and Europe, 60 Hz in North America). They change only what you
@@ -340,10 +386,14 @@ annotation behind by accident.
 
 Under the EEG a row of buttons does what the keys do on a computer: back and forward a screen or a
 little, more or less time, earlier and later channels, more or fewer of them, and larger or smaller
-traces, and the last of them shows the next part not yet viewed. Pause is at the top, as on a
+traces, and one shows the next part not yet viewed. The View buttons switch the overlay on and off,
+show one channel alone (with buttons for the previous and next channel), open Go to time and Show
+all. Pause is at the top, as on a
 computer. The numbered type buttons, Whole montage and Selected channels, Delete, Undo and Redo are in
 the toolbars as on a computer, and a keyboard attached to the iPad works with every key described
-here. Held upright, the iPad shows the EEG across its width with the side panel (and the coach in
+here. In Channels…, Map works by touch: tap an electrode to choose it, drag with the Pencil to
+choose several in a box, and drag with a finger to move a map larger than its frame; on an iPad the
+electrodes are large enough for a finger, so a dense montage makes a larger map. Held upright, the iPad shows the EEG across its width with the side panel (and the coach in
 training) below it; on its side, the panel is beside the EEG as on a computer.
 
 To open a recording, choose Choose a file…, which opens the iPad's file picker (the Files app, with

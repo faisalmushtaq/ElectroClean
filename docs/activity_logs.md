@@ -41,7 +41,10 @@ Characters typed into text fields are never recorded: key presses in a text
 field are left out, and for a search box or a name field the log only says that
 the field was edited (and, for number boxes such as the exact start and end of
 an annotation, the number chosen). Nothing at all is recorded from password
-fields. The annotator's display name is not in the logs; the annotator ID
+fields. Go to time, in the annotation view, is a text field like the others:
+what is typed into it is never recorded, only the time the view went to, as a
+number in seconds (`go_to_time`, below), which is navigation data of the same
+kind as the times in `view` events. The annotator's display name is not in the logs; the annotator ID
 identifies them within the study. The computer's name is not recorded either.
 
 ## Where the logs are
@@ -107,7 +110,8 @@ recording's `_session.json`, `mode`,
 `duration_s`, `sfreq`, `n_samples`, `n_channels_shown`, `n_channels_hidden`,
 `format`, `filters` and `filter_settings`, `original_events`, `resumed`,
 `annotations_restored`, `window_px`, and in the browser `comfort`, the
-annotator's display choices, and for work that is saved `elapsed_restored_s`, the
+annotator's display choices, `overlay` and `value_readout` (whether the recording opened in the
+overlay and with the value under the pointer shown), and for work that is saved `elapsed_restored_s`, the
 time worked before when a draft was restored, `viewed_fraction`, and `revision`, the
 version a revision will save); `viewer_ready` (the viewer is on screen and
 the clock starts); `autosave` (`n_annotations`, when a draft is sent to the study); `recording_finished`
@@ -170,7 +174,8 @@ settled for a quarter of a second, whether by keys, wheel, overview bar, the
 buttons under the EEG on a touch screen, or two fingers on it: `t_start` and `duration` (the time shown, in
 seconds), `ch_start` and `n_channels` (the channels shown), `first_channel` and
 `last_channel`, `scale_factor` (the amplitude scale, 1 at the start) and
-`butterfly`. `status_message` (`text` shown in the status line).
+`butterfly`, which in the browser is true while the overlay draws the channels on screen on one
+shared axis. `status_message` (`text` shown in the status line).
 `window_activated` and `window_deactivated` (`top_window`, `title`; in the
 browser, when the page gains or loses the focus).
 `app_state` (`state`: `active`, `inactive`, `hidden` or `suspended`).
@@ -192,6 +197,29 @@ and `via`). `coverage_check`, before Save and Finish (`viewed_fraction`, `n_unvi
 `unviewed_s`, and `choice`: `save` for Save anyway, `goto` for Go to the first part, or `cancel`). A
 change of the annotator's display comfort is a `state` event with `comfort` (`trace`, `names`
 and `panel`).
+
+**Viewing tools (in the browser).** Switching the overlay on or off is a `state` event with
+`overlay` (true or false) and `via` (`key` for O, `button` for the toolbar or the touch button);
+showing one channel alone is a `state` event with `isolated_channel` (its name, or null when all the
+channels are shown again) and `via` (`key`, `button`, or `view` when moving the channels on screen
+took the channel shown alone with it). The value under the pointer is a `state` event with
+`value_readout` (true or false) and `via`; the values it shows are not logged, since the `pointer`
+events already say where the pointer was. `go_to_time` records each use of Go to time: `valid`
+(false when what was typed could not be read as a time), and for a jump `t_s`, the time the view
+went to, in seconds, `clamped`, true when the time typed lay outside the recording and the start or
+end was used instead, and `via` (`key` for G, `button` for the touch button). `show_all` records
+Show all (`on`: true when the whole recording came on the screen, with its `duration_s`, false when
+the view went back; and `via`); a view of the whole recording opened this way does not count as
+viewed.
+
+**The channel map (in the browser).** In the channel chooser, `channel_chooser_view` (`view`:
+`list` or `map`) records a switch between the list and the map, and `channel_map` each change made
+on the map: `action` (`toggle` for a click or tap on one electrode, with its `channel` and whether
+it is now `chosen`; `box` for a box dragged with the mouse or the Pencil, with `chosen` and the
+`pointer`; `all`, `none` and `invert` for the buttons; `zoom`, with the new `zoom`), `n_changed`,
+the number of channels whose choice changed, and `n_chosen`, the number chosen afterwards. A box or
+a button names no channels, only their number; the channels finally chosen are in the `state`
+event (`selected_channels`) or the `annotation_channels_changed` event that follows OK.
 
 **Dialogs.** `dialog_shown` (`dialog` class, `title`; for messages also the
 `text`, `informative` text and the `buttons` offered) and `dialog_closed`
