@@ -101,12 +101,24 @@ export function signinView(app, { message = '', error = '' } = {}) {
     h('div.btn-row', {}, h('button.btn.small', { type: 'button', onclick: () => location.reload() }, 'Try again'),
       h('button.btn.small', { type: 'button', onclick: () => app.useDemo() }, 'Try the demonstration instead'))) : null;
 
+  // On a phone (the gate in app.css shows it): annotating needs a larger screen, the admin area does not.
+  const phone = h('div.note.phone-note', { role: 'note' },
+    h('p', {}, h('b', {}, 'Annotating needs a tablet or a computer. '),
+      'A phone has no room for the EEG traces. Administrators can sign in here to check the study\'s progress.'));
   const card = h('div.card.signin-card', {},
-    h('h1', {}, 'Sign in'), studyLine,
+    h('h1', {}, 'Sign in'), studyLine, phone,
     message ? h('p.success', { role: 'status' }, message) : null,
     problem, b ? form : null, demoHint, connect);
-  // The page: on the left, an illustration of EEG with the name and what ElectroClean is for; on
-  // the right, the form.
+  setTimeout(() => (b ? idField : null)?.focus(), 0);
+  return signinFrame(app, card);
+}
+
+/**
+ * The sign-in page around a card: on the left, an illustration of EEG with the name and what
+ * ElectroClean is for; on the right, the card (the sign-in form, or the welcome of an invitation).
+ */
+export function signinFrame(app, card) {
+  const b = app.backend;
   const status = !b ? h('span.chip', {}, 'Connecting')
     : b.isDemo ? h('span.chip', {}, 'Demonstration')
       : h('span.chip', {}, b.kind === 'firebase' ? 'Study on Firebase' : 'Study server');
@@ -121,7 +133,5 @@ export function signinView(app, { message = '', error = '' } = {}) {
         h('p.figure-caption', {}, 'Fig. 01 · the 10-20 montage, 19 electrodes'), montageFigure())));
   const panel = h('section.signin-panel', {}, card,
     h('p.caption.footnote', {}, 'ElectroClean reads each recording in this browser, and the EEG stays on this computer: the study receives the recording\'s fingerprint and your annotations.'));
-  const view = h('main.page.signin', { 'data-view': 'signin' }, h('div.signin-split', {}, art, panel));
-  setTimeout(() => (b ? idField : null)?.focus(), 0);
-  return view;
+  return h('main.page.signin', { 'data-view': 'signin' }, h('div.signin-split', {}, art, panel));
 }

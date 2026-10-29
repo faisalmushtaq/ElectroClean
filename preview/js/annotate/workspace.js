@@ -3,6 +3,13 @@
 // undo and redo, the annotations list, the recording panel, the help and the status line), and
 // Save and Finish. Every change goes through the annotation store (store.js); the behaviour and
 // messages follow those of the former desktop application's annotation window.
+//
+// For long sessions it also has a Pause (the button or B; by itself after a while without input or
+// with the page out of sight), during which the working-time clock (clock.js) stops and a calm panel
+// covers the EEG; a gentle break reminder; a record of the parts of the recording that have been on
+// screen (coverage.js), shown on the overview bar, with Next part not yet viewed (U) and a check
+// before Save and Finish; a line that welcomes the annotator back to a restored draft; the time the
+// draft was last kept; and each annotator's display comfort (ui/comfort.js).
 
 import { h, clear } from '../ui/dom.js';
 import { showDialog, ask, inform, choose, dialogOpen } from '../ui/dialog.js';
@@ -17,6 +24,9 @@ import { channelsText, clamp, formatHms, local, readableTextColour, UNDO_HINT, C
 import { isTyping } from '../ui/dom.js';
 import { displayCode } from '../catalogue.js';
 import { icon } from '../views/common.js';
+import { BREAK_MIN_S, HIDDEN_PAUSE_MS, SNOOZE_S, idleDue, todayKey } from './clock.js';
+import * as cov from '../viewer/coverage.js';
+import { NAME_SIZES, PANEL_TEXT, TRACE_WIDTHS, loadComfort, saveComfort } from '../ui/comfort.js';
 
 const MODE_TEXT = { standard: 'Annotation', guided: 'Guided training', practice: 'Practice', assessment: 'Assessment', tryout: 'Try-out', review: 'Practice review' };
 const DRAG_PX = 3;
@@ -27,6 +37,26 @@ export function friendlyDuration(s) {
   const m = Math.floor(s / 60);
   if (m < 60) return `${m} min ${String(s % 60).padStart(2, '0')} s`;
   return `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`;
+}
+
+/** A time in the recording as a person reads it: "2:05" or "1:02:05". */
+export function clockText(t) {
+  const s = Math.max(0, Math.floor(t));
+  const hh = Math.floor(s / 3600);
+  const mm = Math.floor((s % 3600) / 60);
+  const ss = String(s % 60).padStart(2, '0');
+  return hh ? `${hh}:${String(mm).padStart(2, '0')}:${ss}` : `${mm}:${ss}`;
+}
+
+const timeOfDay = (d) => d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+/** A length of time in words, to the minute: "50 minutes", "1 hour 5 minutes" (seconds under a minute). */
+export function minutesWords(seconds) {
+  const s = Math.max(0, Math.round(seconds));
+  if (s < 60) return `${s} second${s === 1 ? '' : 's'}`;
+  const m = Math.round(s / 60);
+  const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+  return m < 60 ? plural(m, 'minute') : `${plural(Math.floor(m / 60), 'hour')}${m % 60 ? ` ${plural(m % 60, 'minute')}` : ''}`;
 }
 
 function annSummary(a, sf) {
@@ -65,8 +95,20 @@ export class Workspace {
     this._prev = new Map(this.store.annotations().map((a) => [a.annotation_id, a]));
     this._msgTimer = null;
     this._listeners = [];
+    // Pauses, breaks and coverage belong to work that is saved: not to a try-out or a practice review.
+    this.timed = this.kind === 'annotate' && session.canSave;
+    this.settings = session.comfort;
+    this.comfort = loadComfort(session.me && session.me.annotator_id);
+    this.hiddenPauseMs = HIDDEN_PAUSE_MS;
+    this._lastInput = performance.now();
+    this._hiddenAt = null;
+    this._breakShown = false;
+    this._saved = { browser: null, study: null };
     this._build();
   }
+
+  /** The working-time clock (session.js), once the recording is on screen. */
+  get clock() { return this.s.clock; }
 
   // ===================================================================== building
   _build() {
@@ -81,11 +123,12 @@ export class Workspace {
       notchHarmonics: Boolean(f.notch_harmonics),
     };
     this.filtersLocked = Boolean(fl.locked);
-    this.el = h('div.view.annotate', { 'data-view': 'annotate' },
-      this._header(), this.kind === 'review' ? null : this._toolbar(),
-      h('div.ws-main', {}, this.eegHost = h('div.ws-eeg'), this.side = h('aside.ws-side', { 'aria-label': 'Annotations and help' })),
+    this.el = h('main.view.annotate', { 'data-view': 'annotate', class: s.revision && this.kind === 'annotate' ? 'revising' : null },
+      this._header(), this._revisionBar(), this.kind === 'review' ? null : this._toolbar(),
+      this.main = h('div.ws-main', {}, this.eegHost = h('div.ws-eeg'), this.side = h('aside.ws-side', { 'aria-label': 'Annotations and help' })),
       this._statusBar());
     this._sidePanel();
+    if (this.timed) this.main.append(this._pausePanel());
     const display = study.display || {};
     const view = s.view || { duration_s: display.duration_s || 10, n_channels: display.n_channels || 32 };
     this.viewer = new EegViewer(this.eegHost, {
@@ -97,8 +140,19 @@ export class Workspace {
         nChannels: s.view.n_channels || 32, scaleFactor: s.view.scale_factor || 1 }, 'restore');
     }
     this._syncViewState();
-    this.viewer.onView = (v, cause) => { this._syncViewState(); this._logView(); if (cause !== 'restore') this._afterViewChange(); };
+    this.viewer.onView = (v, cause) => {
+      this._syncViewState(); this._logView();
+      if (this.timed) this._noteViewDwell();
+      if (cause !== 'restore') this._afterViewChange();
+    };
     this.viewer.onPointer = (type, info, e) => this._pointer(type, info, e);
+    this.viewer.setComfort(this.comfort);
+    if (this.timed) {
+      this.viewer.setCoverage(s.viewed);
+      this.viewer.onNextUnviewed = (via) => { logger.noteInput(`button:Next part not yet viewed`); this.nextUnviewed(via); };
+    } else {
+      this.viewer.nextUnviewedGroup.hidden = true;
+    }
     this.viewer.setAnnotations(this.store.annotations());
     this._storeListener = (change) => this._onStore(change);
     this.store.addListener(this._storeListener);
@@ -121,8 +175,17 @@ export class Workspace {
       this.redoBtn = h('button.btn', { type: 'button', onclick: () => this.redo() }, 'Redo');
       actions.append(this.drawBtn, this.deleteBtn, this.undoBtn, this.redoBtn, h('span.sep'));
     }
+    if (this.timed) {
+      this.savedEl = h('span.ws-saved', { 'data-saved': 'none' });
+      this.pauseBtn = h('button.btn.pause-btn', { type: 'button', 'data-log': 'pause', 'aria-pressed': 'false',
+        title: 'Stop the clock while you are away (B). Your draft is kept.', onclick: () => (this.clock && this.clock.paused ? this.resume('button') : this.pause('button')) },
+      icon('pause'), h('span.pause-label', {}, 'Pause'));
+      actions.append(this.savedEl, this.pauseBtn);
+    }
     actions.append(h('button.btn.quiet', { type: 'button', title: 'Keys and mouse actions (?)', onclick: () => this.showHelp() }, 'Help'));
-    if (this.kind === 'annotate') {
+    if (this.kind === 'annotate' && s.revision) {
+      // A revision: its two actions are on the banner below (_revisionBar).
+    } else if (this.kind === 'annotate') {
       this.saveBtn = h('button.btn.primary', { type: 'button', title: 'Validate and save your annotations, then mark this recording complete', onclick: () => this.saveAndFinish() }, 'Save and Finish');
       actions.append(this.saveBtn);
     } else if (this.kind === 'tryout') {
@@ -131,6 +194,39 @@ export class Workspace {
       actions.append(h('button.btn.primary', { type: 'button', onclick: () => this.close() }, 'Back to my training path'));
     }
     return h('header.ws-header', {}, title, actions);
+  }
+
+  /** The banner of a revision: which version is being revised, and its two ways out. */
+  _revisionBar() {
+    const r = this.s.revision;
+    if (this.kind !== 'annotate' || !r) return null;
+    this.saveBtn = h('button.btn.small.primary', { type: 'button', 'data-log': 'submit-revision',
+      title: `Validate and save your changes as version ${r.version}; version ${r.revises} is kept as it was`, onclick: () => this.saveAndFinish() }, 'Submit the revision');
+    const leave = h('button.btn.small', { type: 'button', 'data-log': 'leave-revision', onclick: () => this.leaveRevision() }, 'Leave without changes');
+    return h('div.ws-revision', { role: 'status' },
+      h('p', {}, h('b', {}, `Revising version ${r.revises}. `),
+        `Submitting saves your changes as version ${r.version}; version ${r.revises} stays as it was saved.`),
+      h('div.ws-revision-actions', {}, leave, this.saveBtn));
+  }
+
+  /** Leave a revision: the saved versions stay as they are and the revision's draft is deleted. */
+  async leaveRevision() {
+    const s = this.s;
+    if (this._leaving) return false; // pressed again while the first press is still under way
+    this._leaving = true;
+    try { return await this._leaveRevision(s); } finally { this._leaving = false; }
+  }
+
+  async _leaveRevision(s) {
+    if (s.changedSinceSaved && !(await ask('Leave without changes?',
+      `Your changes in this revision are discarded. Version ${s.revision.revises} stays as it was saved.`,
+      { yes: 'Leave without changes', no: 'Keep revising', defaultYes: false, destructive: true }))) return false;
+    await s.discardDrafts();
+    logger.event('revision_left', { session_id: s.sessionId, revises: s.revision.revises, changed: s.changedSinceSaved,
+      elapsed_s: Math.round(s.elapsedS * 1000) / 1000 });
+    s.finished = true;
+    this.app.leaveRecording(this, 'revision left without changes');
+    return true;
   }
 
   _toolbar() {
@@ -177,13 +273,15 @@ export class Workspace {
     const who = s.me ? `${s.me.annotator_id}${s.me.display_name ? ` (${s.me.display_name})` : ''}` : '';
     const touch = touchFirst();
     this.hintEl = h('span.ws-hint', {}, this.kind === 'review' ? (touch ? TOUCH_REVIEW_HINT : REVIEW_HINT)
-      : this.readOnly ? (touch ? TOUCH_VIEW_HINT : 'N / P  next, previous annotation') : (touch ? TOUCH_HINT : KEY_HINT));
+      : this.readOnly ? (touch ? TOUCH_VIEW_HINT : 'N / P  next, previous annotation')
+        : touch ? TOUCH_HINT : this.timed ? KEY_HINT : KEY_HINT.replace('  ·  B pause', '')); // a try-out has no Pause
     this.msgEl = h('span.ws-message', { role: 'status', 'aria-live': 'polite' });
     this.fixedEl = h('span.ws-fixed');
     this.countEl = h('span.ws-fixed');
+    this.viewedEl = h('span.ws-fixed.ws-viewed', { title: 'How much of the recording has been on the screen' });
     this._fixedText = `Annotator: ${who}   |   Mode: ${MODE_TEXT[this.kind === 'annotate' ? s.mode : this.kind] || s.mode}`;
     return h('footer.ws-status', {}, h('div.ws-status-left', {}, this.hintEl, this.msgEl),
-      h('div.ws-status-right', {}, this.fixedEl, this.countEl));
+      h('div.ws-status-right', {}, this.timed ? this.viewedEl : null, this.countEl, this.fixedEl));
   }
 
   _sidePanel() {
@@ -255,7 +353,9 @@ export class Workspace {
     ];
     this.edgeRow = h('td');
     const table = h('table.info', {}, rows.map(([k, v]) => h('tr', {}, h('th', {}, k), h('td', {}, v))), h('tr', {}, h('th', {}, 'Filter edge zones'), this.edgeRow));
-    p.append(this.clockLabel, h('label.check', {}, zones, ' Show filter edge zones'), opts, table);
+    p.append(this.clockLabel);
+    if (this.timed) p.append(h('p.caption.clock-note', {}, 'Time while you are paused is not counted.'), this._coverageBlock());
+    p.append(h('label.check', {}, zones, ' Show filter edge zones'), opts, this._comfortOptions(), table);
     if (s.warnings.length) p.append(h('h4', {}, 'Checks and warnings'), h('ul.warnings', {}, s.warnings.map((w) => h('li', {}, w))));
     p.append(h('p.caption', {}, 'Filters change only what you see. The recording files are never modified. Zero-phase filters can make sharp transients appear to start slightly earlier; mark the artifact where the underlying event begins.'));
     this._updateEdgeText();
@@ -295,6 +395,45 @@ export class Workspace {
       h('div.opt', {}, h('label', {}, harm, ' Also remove harmonics (100, 150 Hz … or 120, 180 Hz …)')));
   }
 
+  _coverageBlock() {
+    this.coverageText = h('p.heading.coverage-text');
+    this.coverageBar = h('div.progress-bar');
+    this.nextUnviewedBtn = h('button.btn.small', { type: 'button', 'data-log': 'next-unviewed', title: 'Show the next part of the recording that has not been on the screen (U)',
+      onclick: () => this.nextUnviewed('button') }, icon('skip-forward'), 'Next part not yet viewed');
+    return h('div.coverage-block', {},
+      this.coverageText,
+      h('div.progress', { role: 'presentation' }, this.coverageBar),
+      h('p.caption', {}, 'On the overview bar under the EEG, the parts not yet on the screen are white with an amber line above them.'),
+      h('div.btn-row', {}, this.nextUnviewedBtn));
+  }
+
+  /** Display comfort for long sessions: this annotator's choices, kept in this browser. */
+  _comfortOptions() {
+    const who = this.s.me && this.s.me.annotator_id;
+    const group = (legend, name, options, key) => h('div.opt', { role: 'radiogroup', 'aria-label': legend },
+      h('span.opt-name', {}, legend),
+      h('span.opt-choices', {}, Object.entries(options).map(([value, label]) => {
+        const r = h('input', { type: 'radio', name: `comfort-${name}`, value, checked: this.comfort[key] === value, 'data-comfort': `${key}:${value}` });
+        r.addEventListener('change', () => {
+          if (!r.checked) return;
+          this.comfort = { ...this.comfort, [key]: value };
+          saveComfort(who, this.comfort);
+          this.viewer.setComfort(this.comfort);
+          this._applyPanelComfort();
+          logger.event('state', { comfort: { ...this.comfort }, via: logger.via() });
+        });
+        return h('label', {}, r, ` ${label}`);
+      })));
+    return h('fieldset.viewing.comfort', {},
+      h('legend', {}, 'Comfort'),
+      group('Traces', 'trace', TRACE_WIDTHS, 'trace'),
+      group('Channel names', 'names', NAME_SIZES, 'names'),
+      group('Text in this panel', 'panel', PANEL_TEXT, 'panel'),
+      h('p.caption', {}, 'Your own choices, kept in this browser. They change only how the EEG and this panel look.'));
+  }
+
+  _applyPanelComfort() { this.side.classList.toggle('large-text', this.comfort.panel === 'large'); }
+
   _updateEdgeText() {
     const hw = edgeHalfWidthS(this.s.filters);
     if (this.edgeRow) this.edgeRow.textContent = hw ? `±${hw.toFixed(2)} s at edges and discontinuities` : 'none (no filters)';
@@ -321,14 +460,57 @@ export class Workspace {
     this._listeners.push(() => document.removeEventListener('keydown', onKey));
     logger.eegAt = (x, y) => this.viewer.logInfo(x, y);
     logger.setContext({ recording: this.s.recordingId, window_no: this.windowNo });
+    // The clock starts with the recording on screen; the work since the last break carries over
+    // from the recording before, unless that was closed long enough ago to count as a break.
+    const carry = this.app.sinceBreak;
+    this.s.startClock({ sinceBreakS: carry && Date.now() - carry.at < BREAK_MIN_S * 1000 ? carry.s : 0 });
+    this._tallied = this.s.elapsedS;
+    this._applyPanelComfort();
+    if (this.timed) {
+      this.s.onSaved = (where, at) => this._showSaved(where, at);
+      const input = () => { this._lastInput = performance.now(); };
+      for (const type of ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart']) {
+        document.addEventListener(type, input, { capture: true, passive: true });
+        this._listeners.push(() => document.removeEventListener(type, input, { capture: true, passive: true }));
+      }
+      this._refreshCoverage();
+      this._noteViewDwell();
+    }
     this._clock = setInterval(() => this._tick(), 1000);
     this._tick();
     requestAnimationFrame(() => this._fitToolbar());
-    const hidden = () => {
-      if (document.visibilityState === 'hidden' && this.s.canSave) { this.s.saveLocal(); this.s.saveRemote({ force: true, keepalive: true }); }
-    };
-    document.addEventListener('visibilitychange', hidden);
-    this._listeners.push(() => document.removeEventListener('visibilitychange', hidden));
+    const visibility = () => this._visibility();
+    document.addEventListener('visibilitychange', visibility);
+    this._listeners.push(() => document.removeEventListener('visibilitychange', visibility));
+    if (this.s.resumed && this.timed) this._welcomeBack();
+  }
+
+  _visibility() {
+    const s = this.s;
+    if (document.visibilityState === 'hidden') {
+      if (s.canSave) { s.saveLocal(); s.saveRemote({ force: true, keepalive: true }); }
+      if (this.clock && this.clock.paused) this._hiddenWhilePaused = true;
+      // Out of sight for more than a few seconds (another tab or app, the iPad locked): a pause
+      // from the moment the page was hidden.
+      if (this.timed && this.clock && !this.clock.paused) {
+        this._hiddenAt = this.clock.now();
+        clearTimeout(this._hiddenTimer);
+        this._hiddenTimer = setTimeout(() => {
+          if (document.visibilityState === 'hidden' && this._hiddenAt !== null) this.pause('hidden', { at: this._hiddenAt });
+        }, this.hiddenPauseMs);
+      }
+      return;
+    }
+    clearTimeout(this._hiddenTimer);
+    // Timers wait while a page is hidden, so a return after a long absence is checked here too.
+    if (this.timed && this.clock && this._hiddenAt !== null && !this.clock.paused && this.clock.now() - this._hiddenAt >= this.hiddenPauseMs) {
+      this.pause('hidden', { at: this._hiddenAt });
+    }
+    this._hiddenAt = null;
+    this._lastInput = performance.now();
+    // Back from elsewhere while paused: the panel says how long the annotator was away.
+    if (this.clock && this.clock.paused) this._refreshPausePanel(Boolean(this._hiddenWhilePaused));
+    this._hiddenWhilePaused = false;
   }
 
   /** The view is on screen: log recording_opened with its fields (docs/activity_logs.md). */
@@ -338,13 +520,24 @@ export class Workspace {
       session_id: s.sessionId, mode: s.mode, duration_s: s.recording.durationS, sfreq: s.recording.sfreq, n_samples: s.recording.nSamples,
       n_channels_shown: s.channels.length, n_channels_hidden: s.recording.channels.length - s.channels.length, format: s.recording.format,
       filters: this.filtersText(), filter_settings: this._filtersLog(), original_events: s.events.length, resumed: s.resumed,
-      annotations_restored: s.restored, window_px: [window.innerWidth, window.innerHeight], ...extra,
+      annotations_restored: s.restored, window_px: [window.innerWidth, window.innerHeight],
+      ...(this.timed ? { elapsed_restored_s: Math.round(s.elapsedBase * 1000) / 1000, viewed_fraction: this._viewedFraction() } : {}),
+      comfort: { ...this.comfort }, ...extra,
     });
     logger.event('viewer_ready', {});
   }
 
   destroy() {
     clearInterval(this._clock);
+    clearTimeout(this._hiddenTimer);
+    clearInterval(this._pauseTimer);
+    this._noteViewDwell.cancel();
+    if (this.clock) {
+      if (this.clock.paused) this.resume('close', { quiet: true });
+      this._tally(true);
+      this.app.sinceBreak = { s: this.clock.sinceBreakS, at: Date.now() };
+    }
+    this.s.onSaved = null;
     this._listeners.forEach((f) => f());
     this.store.removeListener(this._storeListener);
     if (this._ro) this._ro.disconnect();
@@ -358,19 +551,242 @@ export class Workspace {
 
   _tick() {
     const t = formatHms(this.s.elapsedS);
-    if (this.clockLabel) this.clockLabel.textContent = `Time on this recording: ${t}`;
-    if (this.s.canSave && !this.s.finished) {
+    if (this.clockLabel) this.clockLabel.textContent = `Time worked on this recording: ${t}`;
+    const c = this.clock;
+    if (this.timed && c) {
+      // (while paused, the panel's own timer counts the pause)
+      if (!c.paused && document.visibilityState !== 'hidden') {
+        if (idleDue(performance.now() - this._lastInput, this.settings.idlePauseMinutes)) this.pause('idle');
+        else if (!this._breakShown && c.breakDue(this.settings.breakReminderMinutes * 60)) this._showBreakReminder();
+      }
+      this._tally();
+    }
+    if (this.s.canSave && !this.s.finished && !(c && c.paused)) {
       this.s.saveRemote().then((sent) => { if (sent) logger.event('autosave', { n_annotations: this.store.size }); });
     }
   }
 
+  /** Today's working time in this browser (the home page shows it), added every few seconds. */
+  _tally(now = false) {
+    if (!this.timed || !this.clock) return;
+    const e = this.s.elapsedS;
+    const d = e - this._tallied;
+    if (d < 0) { this._tallied = e; return; }
+    if (!now && d < 15) return;
+    this._tallied = e;
+    const key = todayKey((this.s.me && this.s.me.annotator_id) || 'anon');
+    local.set(key, Math.round(((Number(local.get(key, 0)) || 0) + d) * 10) / 10);
+  }
+
+  // ======================================================== pause and resume
+  _pausePanel() {
+    this.pauseTitle = h('h2.pause-title', { id: `pause-title-${this.windowNo}` }, 'Paused');
+    this.pauseReasonEl = h('p.pause-reason');
+    this.pauseWorked = h('p.pause-worked');
+    this.pauseAway = h('p.pause-away');
+    this.pauseDraft = h('p.caption.pause-draft');
+    this.resumeBtn = h('button.btn.primary.resume', { type: 'button', 'data-log': 'resume', onclick: () => this.resume('button') }, 'Resume');
+    this.panel = h('div.pause-panel', { hidden: true, role: 'region', 'aria-labelledby': this.pauseTitle.id, 'data-log': 'pause-panel' },
+      h('div.pause-card', {}, this.pauseTitle, this.pauseReasonEl, this.pauseWorked, this.pauseAway, this.pauseDraft,
+        h('div.btn-row', {}, this.resumeBtn),
+        touchFirst() ? null : h('p.caption.pause-key', {}, 'or press B')));
+    return this.panel;
+  }
+
+  /** Stop the clock and cover the EEG. reason: button, key, idle, hidden or break; `at` starts the pause earlier. */
+  pause(reason, { at } = {}) {
+    const c = this.clock;
+    if (!this.timed || !c || c.paused || this.s.finished) return false;
+    const idleS = (performance.now() - this._lastInput) / 1000;
+    const p = c.pause(reason, at === undefined ? c.now() : at);
+    // Nothing half-done stays behind the panel: a drag, a started mark, an open menu.
+    if (this.gesture) { this.gesture = null; this.viewer.setDragPreview(null); this.viewer.setAnnotations(this.store.annotations()); }
+    this.cancelMark(true);
+    closeMenu();
+    this._hideBreakReminder(null);
+    for (const el of [this.toolbar, this.eegHost, this.side]) if (el) el.inert = true;
+    this.el.classList.add('paused');
+    this.pauseBtn.setAttribute('aria-pressed', 'true');
+    this.pauseBtn.querySelector('.pause-label').textContent = 'Resume';
+    this.pauseBtn.title = 'Start the clock again (B)';
+    this.panel.hidden = false;
+    this.pauseReasonEl.textContent = {
+      idle: `ElectroClean paused itself after ${minutesWords(this.settings.idlePauseMinutes * 60)} without any input.`,
+      hidden: 'ElectroClean paused itself while the page was out of sight.',
+      break: 'Enjoy your break. A few minutes away from the screen help you stay sharp.',
+    }[reason] || 'The clock is stopped until you resume.';
+    this.pauseDraft.textContent = 'Keeping your draft…';
+    this._returned = false;
+    this._refreshPausePanel();
+    // The time paused counts up on the panel, second by second from the start of the pause.
+    clearInterval(this._pauseTimer);
+    this._pauseTimer = setInterval(() => this._refreshPausePanel(), 1000);
+    logger.event('pause', { reason, elapsed_s: Math.round(p.elapsedS * 1000) / 1000,
+      ...(reason === 'idle' ? { idle_s: Math.round(idleS * 10) / 10 } : {}),
+      ...(reason === 'hidden' ? { hidden_s: Math.round((c.now() - p.at) / 100) / 10 } : {}) });
+    this.say('Paused: the clock is stopped and your draft is kept.');
+    const s = this.s;
+    s.saveLocal();
+    s.saveRemote({ force: true, keepalive: reason === 'hidden' }).then((sent) => {
+      if (!this.panel.hidden) {
+        this.pauseDraft.textContent = sent || s.tryOut ? 'Your draft is saved, in this browser and with the study.' : 'Your draft is saved in this browser.';
+      }
+    });
+    if (document.visibilityState !== 'hidden') this.resumeBtn.focus({ preventScroll: true });
+    return true;
+  }
+
+  /** Start the clock again. via: button, key, save or close (`quiet`: the view is closing). */
+  resume(via, { quiet = false } = {}) {
+    const c = this.clock;
+    if (!c || !c.paused) return false;
+    const r = c.resume();
+    clearInterval(this._pauseTimer);
+    this.panel.hidden = true;
+    for (const el of [this.toolbar, this.eegHost, this.side]) if (el) el.inert = false;
+    this.el.classList.remove('paused');
+    this.pauseBtn.setAttribute('aria-pressed', 'false');
+    this.pauseBtn.querySelector('.pause-label').textContent = 'Pause';
+    this.pauseBtn.title = 'Stop the clock while you are away (B). Your draft is kept.';
+    this._lastInput = performance.now();
+    if (r.isBreak) this._breakShown = false;
+    logger.event('resume', { reason: r.reason, paused_s: Math.round(r.pausedS * 1000) / 1000, via, counts_as_break: r.isBreak,
+      elapsed_s: Math.round(this.s.elapsedS * 1000) / 1000 });
+    if (this.coach) this.coach.addPaused(r.pausedS);
+    if (quiet) return true;
+    this.viewer.over.focus({ preventScroll: true });
+    this.say(`Welcome back. The ${friendlyDuration(r.pausedS)} you were paused were not counted.`);
+    this._noteViewDwell();
+    return true;
+  }
+
+  _refreshPausePanel(returned = false) {
+    const c = this.clock;
+    if (!c || !c.paused) return;
+    if (returned) this._returned = true;
+    this.pauseWorked.textContent = `Time worked on this recording: ${friendlyDuration(this.s.elapsedS)}.`;
+    const away = c.pausedForS;
+    const was = this._returned || c.pauseReason === 'hidden' || c.pauseReason === 'idle' ? 'You were away for' : 'Paused for';
+    this.pauseAway.textContent = away >= 1 ? `${was} ${friendlyDuration(away)}; that time is not counted.` : 'The time you are paused is not counted.';
+  }
+
+  // ============================================================ break reminders
+  _showBreakReminder() {
+    this._breakShown = true;
+    const worked = this.clock.sinceBreakS;
+    const later = h('button.btn.small', { type: 'button', 'data-log': 'break-later', onclick: () => this._hideBreakReminder('remind_later') }, 'Remind me in 15 minutes');
+    const take = h('button.btn.small', { type: 'button', 'data-log': 'break-take', onclick: () => this._hideBreakReminder('take_break') }, 'Take a break');
+    this.breakEl = h('div.break-reminder.note', { role: 'status', 'aria-live': 'polite', 'data-log': 'break-reminder' },
+      h('p', {}, `You have worked for ${minutesWords(worked)} since your last break. A few minutes away from the screen help you stay sharp.`),
+      h('div.btn-row', {}, take, later));
+    this.eegHost.append(this.breakEl);
+    logger.event('break_reminder', { worked_s: Math.round(worked), interval_s: this.settings.breakReminderMinutes * 60 });
+  }
+
+  /** choice: take_break, remind_later, or null (the reminder is no longer needed: a pause began). */
+  _hideBreakReminder(choice) {
+    if (!this.breakEl) return;
+    this.breakEl.remove();
+    this.breakEl = null;
+    logger.event('break_reminder_closed', { choice: choice || 'paused' });
+    if (choice === 'remind_later') {
+      this.clock.snooze(SNOOZE_S);
+      this._breakShown = false;
+      this.say('A reminder comes again in 15 minutes of work.');
+    } else if (choice === 'take_break') {
+      this.pause('break');
+    } else {
+      this._breakShown = false;
+    }
+    if (choice) this.viewer.over.focus({ preventScroll: true });
+  }
+
+  // =================================================================== coverage
+  /** The stretches of the recording without recorded data, in seconds: nothing to look at. */
+  _noData() { return (this.s.gaps || []).map(([a, b]) => [a / this.sf, b / this.sf]); }
+
+  _viewedFraction() {
+    return Math.round(cov.viewedFraction(this.s.viewed, this.s.recording.durationS, this._noData()) * 10000) / 10000;
+  }
+
+  _unviewed() { return cov.unviewed(this.s.viewed, this.s.recording.durationS, { noData: this._noData() }); }
+
+  /** A view that has stayed on screen for a moment counts as seen (not while paused or out of sight). */
+  _noteViewDwell = debounce(() => this._recordViewed(), cov.DWELL_MS);
+
+  _recordViewed() {
+    if (!this.timed || !this.clock || this.clock.paused || document.visibilityState === 'hidden') return;
+    if (!this.viewer._covers()) { this._noteViewDwell(); return; } // still reading the EEG
+    const v = this.viewer.view;
+    const before = this.s.viewed;
+    const next = cov.addInterval(before, v.startS, v.startS + v.durationS, this.s.recording.durationS);
+    if (next === before || cov.coveredS(next) - cov.coveredS(before) < 1e-6) return;
+    this.s.noteViewed(next);
+    this.viewer.setCoverage(next);
+    this._refreshCoverage();
+  }
+
+  _refreshCoverage() {
+    if (!this.timed) return;
+    const f = cov.viewedFraction(this.s.viewed, this.s.recording.durationS, this._noData());
+    const text = `Viewed ${cov.percentText(f)}`;
+    this.viewedEl.textContent = `${text}   |   `;
+    this.coverageText.textContent = `${text} of the recording`;
+    this.coverageBar.style.width = `${Math.floor(f * 100)}%`;
+  }
+
+  /** Show the next stretch that has not been on screen (U, or the button). */
+  nextUnviewed(via = 'key') {
+    if (!this.timed || (this.clock && this.clock.paused)) return;
+    const gaps = this._unviewed();
+    if (!gaps.length) { this.say('Every part of the recording has been on the screen.'); return; }
+    const v = this.viewer.view;
+    const end = v.startS + v.durationS;
+    const g = cov.nextUnviewed(gaps, end);
+    // A stretch that runs on past the screen continues from the screen's end.
+    const from = g[0] < end && g[1] > end && g[0] >= v.startS - 1e-6 ? end : g[0];
+    const startS = cov.viewStartFor([from, g[1]], v.durationS);
+    this.viewer.setView({ startS }, 'unviewed');
+    const left = gaps.length;
+    this.say(`Not yet viewed: ${clockText(from)} to ${clockText(g[1])}. ${left === 1 ? 'This is the last such part.' : `${left} parts are left to look at.`}`);
+    logger.event('next_unviewed', { from_s: Math.round(from * 1000) / 1000, to_s: Math.round(g[1] * 1000) / 1000, n_unviewed: left, via });
+  }
+
+  // ================================================================ drafts kept
+  _showSaved(where, at) {
+    this._saved[where] = at;
+    if (!this.savedEl) return;
+    const latest = [this._saved.browser, this._saved.study].filter(Boolean).sort((a, b) => b - a)[0];
+    this.savedEl.textContent = `Draft saved ${timeOfDay(latest)}`;
+    this.savedEl.dataset.saved = where;
+    const t = (d) => d.toLocaleTimeString('en-GB');
+    this.savedEl.title = 'Your work is kept as a draft while you annotate, so nothing is lost if the page closes. ' +
+      `Last kept ${this._saved.browser ? `in this browser at ${t(this._saved.browser)}` : ''}` +
+      `${this._saved.browser && this._saved.study ? ' and ' : ''}${this._saved.study ? `with the study at ${t(this._saved.study)}` : ''}.`;
+  }
+
+  /** A restored draft: where the annotator was, what was kept and the time so far. */
+  _welcomeBack() {
+    const s = this.s;
+    const v = this.viewer.view;
+    const ch = s.channels;
+    const last = Math.min(ch.length, v.firstChannel + v.nChannels) - 1;
+    const where = `${clockText(v.startS)}${ch.length > v.nChannels ? `, channels ${ch[v.firstChannel].name} to ${ch[last].name}` : ''}`;
+    const n = this.store.size;
+    const text = `Welcome back. You were at ${where}, with ${n} annotation${n === 1 ? '' : 's'} kept and ${friendlyDuration(s.elapsedBase)} worked so far.`;
+    this.welcomeEl = h('p.note.welcome-back', { 'data-log': 'welcome-back' }, text);
+    this.tabPanels.annotations.prepend(this.welcomeEl);
+    this.say(text, 20000);
+    setTimeout(() => { if (this.welcomeEl) { this.welcomeEl.remove(); this.welcomeEl = null; } }, 60000);
+  }
+
   // ================================================================== messages
-  say(msg) {
+  say(msg, ms = 10000) {
     this.msgEl.textContent = msg;
     this.hintEl.hidden = Boolean(msg);
     logger.status(msg);
     clearTimeout(this._msgTimer);
-    this._msgTimer = setTimeout(() => { this.msgEl.textContent = ''; this.hintEl.hidden = false; }, 10000);
+    this._msgTimer = setTimeout(() => { this.msgEl.textContent = ''; this.hintEl.hidden = false; }, ms);
   }
 
   // ===================================================================== state
@@ -529,7 +945,7 @@ export class Workspace {
     const n = anns.length;
     const nCh = anns.filter((a) => a.channels.length).length;
     this.countLabel.textContent = `${n} annotation(s): ${n - nCh} whole montage, ${nCh} channel-specific`;
-    this.countEl.textContent = `   |   Annotations: ${n}`;
+    this.countEl.textContent = `Annotations: ${n}   |   `;
   }
 
   _rowClick(e, index, anns) {
@@ -613,6 +1029,7 @@ export class Workspace {
     this.viewer.setSelection(this.selection);
     this._refreshList();
     this._refreshState();
+    if (this.welcomeEl && act !== 'reset') { this.welcomeEl.remove(); this.welcomeEl = null; }
     if (this.coach) this.coach.scheduleCheck();
   }
 
@@ -1070,6 +1487,18 @@ export class Workspace {
     if (dialogOpen() || isTyping(e.target) || !this.el.isConnected) return;
     const mod = e.ctrlKey || e.metaKey;
     const k = e.key;
+    const pauseKey = !mod && !e.altKey && (k === 'b' || k === 'B' || k === 'Pause');
+    if (this.clock && this.clock.paused) {
+      // While paused only B (or the Resume button, which has the focus) goes on.
+      if (pauseKey) { e.preventDefault(); logger.shortcut(keyName(e), 'Resume'); this.resume('key'); }
+      return;
+    }
+    if (pauseKey && this.timed) {
+      e.preventDefault();
+      logger.shortcut(keyName(e), 'Pause');
+      this.pause('key');
+      return;
+    }
     // Arrow keys on an option button or tab belong to that control.
     if (/^Arrow/.test(k) && e.target instanceof HTMLElement && e.target.matches('input, [role="tab"]')) return;
     const handled = (action, fn) => {
@@ -1108,6 +1537,7 @@ export class Workspace {
     if (this.review && (k === 'p' || k === 'P')) return handled('Previous annotation', () => this.review.step(-1));
     if (k === 'n' || k === 'N') return handled('Next annotation', () => this.stepSelection(1));
     if (k === 'p' || k === 'P') return handled('Previous annotation', () => this.stepSelection(-1));
+    if ((k === 'u' || k === 'U') && this.timed) return handled('Next part not yet viewed', () => this.nextUnviewed('key'));
     if (this.readOnly) return;
     const digit = /^[1-9]$/.test(k) ? Number(k) : null;
     if (digit && digit <= this.quick.length) {
@@ -1126,10 +1556,18 @@ export class Workspace {
   async saveAndFinish() {
     const s = this.s;
     if (!s.canSave) return false;
+    if (this.clock && this.clock.paused) this.resume('save');
     if (this.coach && !this.coach.canSave()) return false;
+    // A revision starts with nothing viewed and may fix one place only, so it is not asked to view everything again.
+    if (this.timed && this.settings.coverageCheck === 'warn' && s.mode !== 'guided' && !s.revision && !(await this._coverageCheck())) return false;
     const counts = s.countsByLabel();
     let ok;
-    if (!counts.size) {
+    if (s.revision) {
+      const summary = counts.size ? [...counts].map(([l, n]) => `  ${l}: ${n}`).join('\n') : '  No artifacts marked';
+      ok = await this._askSave(`Submit the revision with ${this.store.size} annotation(s)?`, summary,
+        `It is saved as version ${s.revision.version}. Version ${s.revision.revises} is kept as it was, and analyses use the latest version.`,
+        'Submit the revision');
+    } else if (!counts.size) {
       ok = await ask('Save and Finish', 'You have not marked any artifacts in this recording.\n\nSave it as reviewed with no artifacts found, and finish?',
         { yes: 'Save with no artifacts', no: 'Keep annotating', defaultYes: false });
     } else {
@@ -1146,6 +1584,13 @@ export class Workspace {
     } catch (exc) {
       this.saveBtn.disabled = false;
       this.saveBtn.textContent = oldText;
+      if (exc.status === 409 && (exc.code === 'already_revised' || exc.code === 'revisions_off')) {
+        await inform('Not saved', `${exc.message}\n\nYour changes in this window were not saved.`);
+        s.finished = true;
+        s.forgetLocal();
+        this.app.leaveRecording(this, 'revision refused');
+        return false;
+      }
       if (exc.status === 409 && exc.code === 'already_done') {
         await inform('Already saved', `${exc.message}\n\nThis recording was saved before, so there is nothing more to do here.`);
         s.finished = true;
@@ -1158,22 +1603,58 @@ export class Workspace {
       if (exc.status === 422 && this.coach) this.coach.refresh();
       return false;
     }
+    const c = this.clock;
     logger.event('recording_finished', { session_id: s.sessionId, n_annotations: this.store.size,
-      counts_by_label: Object.fromEntries(counts), elapsed_s: Math.round(s.elapsedS * 1000) / 1000 });
+      counts_by_label: Object.fromEntries(counts), elapsed_s: Math.round(s.elapsedS * 1000) / 1000,
+      ...(this.timed ? { viewed_fraction: this._viewedFraction() } : {}),
+      ...(c ? { paused_s: Math.round(c.pausedTotalS * 1000) / 1000, n_pauses: c.nPauses } : {}),
+      ...(s.revision ? { version: s.revision.version } : {}) });
+    if (s.revision) {
+      logger.event('revision_submitted', { session_id: s.sessionId, version: (result.revision && result.revision.version) || s.revision.version,
+        revises: s.revision.revises, n_annotations: this.store.size, changed: s.changedSinceSaved, elapsed_s: Math.round(s.elapsedS * 1000) / 1000 });
+    }
     this.app.afterSave(this, result);
     return true;
   }
 
-  _askSave(question, summary) {
+  /** Before Save and Finish: the stretches never on screen, with Go to the first and Save anyway. True to go on saving. */
+  async _coverageCheck() {
+    const gaps = this._unviewed();
+    if (!gaps.length) return true;
+    const total = gaps.reduce((t, [a, b]) => t + (b - a), 0);
+    const shown = gaps.slice(0, 6);
+    const pc = cov.percentText(cov.viewedFraction(this.s.viewed, this.s.recording.durationS, this._noData()));
+    const body = h('div', {},
+      h('p.dialog-text', {}, `You have viewed ${pc} of this recording. ${gaps.length === 1 ? 'This part has' : 'These parts have'} not been on the screen yet:`),
+      h('ul.unviewed-list', {}, shown.map(([a, b]) => h('li', {}, `${clockText(a)} to ${clockText(b)} (${friendlyDuration(b - a)})`))),
+      gaps.length > shown.length ? h('p.dialog-text', {}, `and ${gaps.length - shown.length} more, ${friendlyDuration(total)} in all.`) : null,
+      h('p.dialog-text', {}, 'Look at them before you save, or save now if you have reviewed them another way.'));
+    const choice = await showDialog({ title: 'Parts not yet viewed', body, className: 'coverage-check', logText: `${gaps.length} unviewed part(s), ${Math.round(total)} s`,
+      buttons: [{ label: 'Save anyway', value: 'save' }, { label: 'Go to the first', value: 'goto', kind: 'primary' }], cancelValue: 'cancel' });
+    logger.event('coverage_check', { viewed_fraction: this._viewedFraction(), n_unviewed: gaps.length, unviewed_s: Math.round(total * 10) / 10, choice });
+    if (choice === 'goto') {
+      this.viewer.setView({ startS: cov.viewStartFor(gaps[0], this.viewer.view.durationS) }, 'unviewed');
+      this.say(`Not yet viewed: ${clockText(gaps[0][0])} to ${clockText(gaps[0][1])}. Press U (or Next part not yet viewed) for the next one.`);
+      this.viewer.over.focus({ preventScroll: true });
+    }
+    return choice === 'save';
+  }
+
+  _askSave(question, summary, after = null, label = 'Save and Finish') {
+    const allow = this.s.me && this.s.me.study && this.s.me.study.annotation && this.s.me.study.annotation.allow_revisions;
+    const note = after || (allow && this.s.mode === 'standard'
+      ? 'You can still revise them later from your history; each revision is saved as a new version.'
+      : 'You will not be able to change them afterwards.');
     const body = h('div', {}, h('p.dialog-text', {}, question),
-      h('pre.dialog-summary', {}, summary), h('p.dialog-text', {}, 'You will not be able to change them afterwards.'));
-    return showDialog({ title: 'Save and Finish', body, logText: question,
-      buttons: [{ label: 'Keep annotating', value: false }, { label: 'Save and Finish', value: true, kind: 'primary' }], cancelValue: false }).then(Boolean);
+      h('pre.dialog-summary', {}, summary), h('p.dialog-text', {}, note));
+    return showDialog({ title: label, body, logText: question,
+      buttons: [{ label: 'Keep annotating', value: false }, { label, value: true, kind: 'primary' }], cancelValue: false }).then(Boolean);
   }
 
   /** Close (the Close button, or leaving the page's view): unfinished work is kept for later or discarded, as the annotator chooses. */
   async close() {
     const s = this.s;
+    if (this.clock && this.clock.paused) this.resume('close');
     if (this.kind === 'review') { this.app.leaveRecording(this, 'review_closed'); return true; }
     if (this.kind === 'tryout') {
       if (this.store.size) {
@@ -1186,6 +1667,7 @@ export class Workspace {
       return true;
     }
     if (s.finished) { this.app.leaveRecording(this, 'finished'); return true; }
+    if (s.revision) return this._closeRevision();
     const n = this.store.size;
     const later = 'Close and finish later';
     const discard = 'Discard and close';
@@ -1207,6 +1689,31 @@ export class Workspace {
       logger.event('closed_without_saving', { n_annotations: n, kept: false });
       this.app.leaveRecording(this, 'viewer closed without Save and Finish');
     }
+    return true;
+  }
+
+  /** Close during a revision: keep the changes to continue later, or leave without them. */
+  async _closeRevision() {
+    const s = this.s;
+    if (!s.changedSinceSaved) return this.leaveRevision();
+    const later = 'Close and revise later';
+    const leave = 'Leave without changes';
+    const stay = 'Keep revising';
+    const choice = await choose('Close the revision?',
+      `Version ${s.revision.revises} stays as it was saved until you submit the revision.\n\n` +
+      `${later}: your changes and the time spent are kept, and you can continue from your history.\n\n` +
+      `${leave}: your changes in this revision are discarded.`, [later, leave, stay], 0);
+    if (choice === stay) return false;
+    if (choice === leave) {
+      await s.discardDrafts();
+      logger.event('revision_left', { session_id: s.sessionId, revises: s.revision.revises, changed: true, elapsed_s: Math.round(s.elapsedS * 1000) / 1000 });
+      this.app.leaveRecording(this, 'revision left without changes');
+      return true;
+    }
+    s.saveLocal();
+    await s.saveRemote({ force: true });
+    logger.event('closed_without_saving', { n_annotations: this.store.size, kept: true, revises: s.revision.revises });
+    this.app.leaveRecording(this, 'closed to revise later');
     return true;
   }
 

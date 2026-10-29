@@ -1,26 +1,91 @@
-// The home view: the annotator's recordings, with one primary action (Open next recording).
+// The home view: the annotator's recordings, with one primary action (Continue where you left off,
+// or Open next recording), and their own progress: done of assigned, the time worked, today's work
+// and an estimate of the time left at their own pace (progress.js).
 
 import { h } from '../ui/dom.js';
 import { appHeader } from './common.js';
 import { ask } from '../ui/dialog.js';
-import { formatHms } from '../util.js';
+import { formatHms, local } from '../util.js';
 import { quizCard } from '../training/quiz.js';
+import { recordingsCard } from './home_list.js';
+import { gameCards } from './home_games.js';
+import { localDraft } from '../annotate/session.js';
+import { todayKey } from '../annotate/clock.js';
+import { percentText } from '../viewer/coverage.js';
+import { MIN_FOR_ESTIMATE, progressSummary, roundEstimate, spanText } from './progress.js';
 
-const STATUS = { todo: ['To do', ''], in_progress: ['In progress', 'active'], done: ['Done', 'done'] };
-const MODES = { standard: 'Annotation', guided: 'Guided training', practice: 'Practice', assessment: 'Assessment' };
+function friendlyWhen(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  return d.toDateString() === new Date().toDateString() ? `today at ${time}` : `on ${d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}`;
+}
+
+/** The annotator's progress (progress.js), from the assignments, this browser's drafts and today's time. */
+function annotatorProgress(app, items, next) {
+  const b = app.backend;
+  const who = app.me && app.me.annotator_id;
+  return progressSummary(items, { next, todayS: Number(local.get(todayKey(who || 'anon'), 0)) || 0,
+    drafts: (i) => (b ? localDraft(b, who, i.recording_id, i.mode, i.context_id) : null) });
+}
+
+/** The first card's content for an unfinished recording: Continue where you left off, with what is known of it. */
+function continueContent(app, cont) {
+  const facts = [
+    `${formatHms(cont.item.duration_s)} · ${cont.item.n_channels} channels`,
+    cont.viewedFraction !== null ? `viewed ${percentText(cont.viewedFraction)}` : null,
+    cont.nAnnotations !== null ? `${cont.nAnnotations} annotation${cont.nAnnotations === 1 ? '' : 's'}` : null,
+    cont.elapsedS ? `${spanText(cont.elapsedS)} worked` : null,
+    cont.savedAt ? `kept ${friendlyWhen(cont.savedAt)}` : null,
+  ].filter(Boolean);
+  return [h('h2', {}, 'Continue where you left off'),
+    h('p.next-file', {}, cont.item.file_name),
+    h('p.caption.continue-facts', {}, facts.join(' · ')),
+    h('div.btn-row', {}, h('button.btn.primary', { type: 'button', 'data-log': 'open-next', onclick: () => app.openAssignment(cont.item) }, 'Continue where you left off')),
+    h('p.caption', {}, 'Choose the same file on your computer: ElectroClean shows the EEG as you left it, with your annotations.')];
+}
+
+/** The progress card: done of assigned with a thin bar, the time worked, today, and the time left. */
+function progressCard(p) {
+  const pc = p.total ? Math.round((p.done / p.total) * 100) : 0;
+  const capitalised = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+  const stat = (value, caption, name) => h('div.stat', { 'data-stat': name }, h('p.stat-value', {}, value), h('p.caption', {}, caption));
+  const left = !p.left ? 'Nothing left to do'
+    : p.remainingS === null ? 'Not estimated yet'
+      : p.remainingS < 60 ? 'Nearly done' : `About ${spanText(roundEstimate(p.remainingS))}`;
+  const leftCaption = !p.left ? 'You have finished every recording.'
+    : p.remainingS === null ? `An estimate of the time left appears after your first ${MIN_FOR_ESTIMATE} recordings.`
+      : `left at your pace so far, judged from ${p.basedOn} recordings. Recordings differ, so take it as a guide.`;
+  const today = [p.todayS >= 60 ? `${spanText(p.todayS)} of work in this browser` : 'no work yet in this browser',
+    p.doneToday ? `${p.doneToday} recording${p.doneToday === 1 ? '' : 's'} finished` : null].filter(Boolean).join(', ');
+  return h('section.card.progress-card', { 'aria-label': 'Your progress' },
+    h('div.card-head', {}, h('h2', {}, 'Your progress'), h('span.caption', {}, `${pc} % done`)),
+    h('div.progress', { role: 'progressbar', 'aria-label': 'Recordings done', 'aria-valuemin': '0', 'aria-valuemax': String(p.total), 'aria-valuenow': String(p.done) },
+      h('div.progress-bar', { style: { width: `${pc}%` } })),
+    h('div.stats', {},
+      stat(`${p.done} of ${p.total}`, 'recordings done', 'done'),
+      stat(p.workedS > 0 ? capitalised(spanText(p.workedS)) : 'None yet', p.medianS ? `worked in all; ${spanText(p.medianS)} per recording (median)` : 'worked in all, pauses not counted', 'worked'),
+      stat(left, leftCaption, 'left')),
+    h('p.caption.today', { 'data-stat': 'today' }, `Today: ${today}.`));
+}
+
 
 export function homeView(app) {
   const items = (app.assignments && app.assignments.items) || [];
   const nextId = app.assignments && app.assignments.next;
   const next = items.find((i) => i.recording_id === nextId) || null;
-  const done = items.filter((i) => i.status === 'done').length;
   const programme = app.me && app.me.programme;
   const b = app.backend;
+  const p = annotatorProgress(app, items, next);
+  const cont = p.continue;
 
   const nextCard = h('section.card.next-card', {},
     programme
       ? [h('h2', {}, 'Training programme'), h('p.subtitle', {}, `${programme.name}. Your training path shows each stage and what to do next.`),
         h('div.btn-row', {}, h('button.btn.primary', { type: 'button', onclick: () => app.go('training') }, 'Go to my training path'))]
+      : cont
+        ? continueContent(app, cont)
       : next
         ? [h('h2', {}, 'Next recording'),
           h('p.next-file', {}, next.file_name),
@@ -31,21 +96,8 @@ export function homeView(app) {
         : [h('h2', {}, items.length ? 'All done' : 'Nothing to do yet'),
           h('p.success', {}, items.length ? `You have finished all ${items.length} of your recordings. Thank you.` : 'No recordings are assigned to you at the moment.')]);
 
-  const rows = items.map((it) => {
-    const [text, cls] = STATUS[it.status] || [it.status, ''];
-    return h('tr', { 'data-id': it.recording_id, 'data-log-text': it.file_name },
-      h('td', {}, h('span.file', { title: it.recording_id }, it.file_name)),
-      h('td', {}, MODES[it.mode] || it.mode),
-      h('td.num', {}, formatHms(it.duration_s)),
-      h('td.num', {}, String(it.n_channels)),
-      h('td', {}, h(`span.chip${cls ? `.${cls}` : ''}`, {}, text)),
-      h('td.actions', {}, it.status === 'done' ? null : h('button.btn.small', { type: 'button', onclick: () => app.openAssignment(it) }, it.status === 'in_progress' ? 'Continue' : 'Open')));
-  });
-  const list = h('section.card', {},
-    h('div.card-head', {}, h('h2', {}, 'Your recordings'), h('span.caption', {}, `${done} of ${items.length} done`)),
-    items.length ? h('table.list', {}, h('thead', {}, h('tr', {}, h('th', {}, 'File'), h('th', {}, 'Mode'), h('th.num', {}, 'Length'), h('th.num', {}, 'Channels'), h('th', {}, 'Status'), h('th', {}))), h('tbody', {}, rows))
-      : h('p.caption', {}, 'Your study team assigns recordings to you.'),
-    h('div.btn-row', {}, h('button.btn.quiet', { type: 'button', onclick: () => app.openFromComputer(null) }, 'Open a recording from your computer…')));
+  // The list of recordings, with its tabs, history, search and pages (home_list.js).
+  const list = recordingsCard(app);
 
   let demo = null;
   if (b && b.isDemo) {
@@ -74,5 +126,13 @@ export function homeView(app) {
   return h('div.view.home', { 'data-view': 'home' }, appHeader(app),
     h('main.page', {},
       h('h1', {}, `Hello${app.me && app.me.display_name ? `, ${app.me.display_name}` : ''}`),
-      h('div.home-grid', {}, h('div.col', {}, nextCard, list, quizCard(app)), demo ? h('div.col', {}, demo) : null)));
+      h('div.home-grid', {},
+        h('div.col', {}, nextCard, !programme && items.length ? progressCard(p) : null, list, quizCard(app)),
+        sideColumn([...gameCards(app), demo]))));
+}
+
+/** The right-hand column: the game cards (home_games.js) and the demonstration's card, when there are any. */
+function sideColumn(cards) {
+  const list = cards.filter(Boolean);
+  return list.length ? h('div.col.side-col', {}, list) : null;
 }

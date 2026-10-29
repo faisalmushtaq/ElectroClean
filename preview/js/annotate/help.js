@@ -8,7 +8,7 @@ const arrow = (dir) => `<kbd aria-label="${ARROW_NAMES[dir]}"><span class="ico i
 const HOME_END = IS_MAC ? `<kbd>fn</kbd>+${arrow('left')} / <kbd>fn</kbd>+${arrow('right')}` : '<kbd>Home</kbd> / <kbd>End</kbd>';
 const PAGE = IS_MAC ? `<kbd>fn</kbd>+${arrow('up')} / <kbd>fn</kbd>+${arrow('down')}` : '<kbd>Page Up</kbd> / <kbd>Page Down</kbd>';
 
-export const KEY_HINT = 'Drag to mark  ·  1–9 type  ·  M start, M end  ·  / find a type  ·  N / P next, previous  ·  ? help';
+export const KEY_HINT = 'Drag to mark  ·  1–9 type  ·  M start, M end  ·  / find a type  ·  N / P next, previous  ·  B pause  ·  ? help';
 export const REVIEW_HINT = 'N / P  next, previous item to look at  ·  arrow keys scroll  ·  ? help';
 /** The same hints for a touch screen (an iPad without a keyboard). */
 export const TOUCH_HINT = 'Drag to mark  ·  tap a numbered type  ·  two fingers move, pinch for more or less time  ·  press and hold an annotation for its menu';
@@ -27,7 +27,8 @@ trace to choose that channel.</li>
 <li><b>Press and hold</b> an annotation for its menu (the common types, Edit times…, Edit
 channels…, Delete), and <b>double-tap</b> it to choose its type from the list.</li>
 <li>The buttons under the EEG move through time and the channels and change how much is shown,
-as the keys do on a computer. A keyboard attached to the iPad works as on a computer.</li>
+as the keys do on a computer; the last of them shows the next part not yet viewed. Pause, at the
+top, stops the clock. A keyboard attached to the iPad works as on a computer.</li>
 </ul>
 `;
 
@@ -42,7 +43,10 @@ export const HELP_HTML = `
 <tr><td>Wheel or trackpad</td><td>scroll through time (Shift+wheel: through the channels)</td></tr>
 <tr><td>Click empty EEG</td><td>place a time cursor showing the exact time</td></tr>
 <tr><td>Overview bar</td><td>(bottom) shows where you are; click it to jump</td></tr>
+<tr><td><kbd>U</kbd></td><td>the next part not yet viewed</td></tr>
 </table>
+<p>On the overview bar, the parts of the recording that have not been on the screen yet are white
+with an amber line above them; the Recording tab and the status line say how much you have viewed.</p>
 <p>Vertical dashed lines labelled in teal are the <b>original experimental events</b>.
 They cannot be edited. Hatched grey zones mark where the display filters may
 distort the signal (recording edges and discontinuities) and where the recording has no data.</p>
@@ -95,13 +99,24 @@ automatically. To merge others of one type, select them in the list and press
 <tr><td><kbd>Esc</kbd></td><td>cancel a started mark, or end the selection</td></tr>
 <tr><td><kbd>Delete</kbd></td><td>delete the selected annotation</td></tr>
 <tr><td><kbd>${CTRL}+Z</kbd> / <kbd>${CTRL}+Y</kbd></td><td>undo / redo</td></tr>
+<tr><td><kbd>B</kbd></td><td>pause, and resume</td></tr>
+<tr><td><kbd>U</kbd></td><td>the next part not yet viewed</td></tr>
 <tr><td><kbd>?</kbd></td><td>this help</td></tr>
 </table>
 
+<h3>Pausing and breaks</h3>
+<p>Press <b>Pause</b> (or <kbd>B</kbd>) when you step away: the clock that measures your time on the
+recording stops, your draft is kept, and a panel covers the EEG until you press <b>Resume</b>.
+ElectroClean also pauses by itself after a few minutes without any input, and when the page is out
+of sight for more than a few seconds (another tab or app, or a locked iPad). After a long stretch of
+work it offers a break, which you can take or put off for 15 minutes.</p>
+
 <h3>Finishing</h3>
-<p>Press <b>Save and Finish</b> when you have reviewed the whole recording. Your work is kept
-as a draft while you annotate (in this browser and with the study), so if you close the page
-you can continue later; the recording is complete only once it is saved with Save and Finish.</p>
+<p>Press <b>Save and Finish</b> when you have reviewed the whole recording; if some parts have
+not been on the screen, it lists them first and offers to take you to them. Your work is kept as a
+draft while you annotate (in this browser and with the study, as the time at the top says), so if
+you close the page you can continue later, where you left off; the recording is complete only once
+it is saved with Save and Finish.</p>
 `;
 
 /** The Help tab: on a touch screen the touch section comes first, elsewhere just before Finishing. */
