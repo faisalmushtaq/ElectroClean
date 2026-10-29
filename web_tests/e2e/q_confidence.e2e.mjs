@@ -39,6 +39,22 @@ const labelCell = (page) => page.locator('.ann-table tbody tr').first().locator(
 const statusText = (page) => page.evaluate(() => globalThis.ElectroTag.ws.msgEl.textContent);
 const promptShown = (page) => page.isVisible('.conf-prompt');
 
+/** The prompt's bar sits beside the annotations it asks about (outlined), off their stretch and below the band of their tags. */
+async function barBesideMark(page, assert) {
+  const r = await page.evaluate(() => {
+    const ws = globalThis.ElectroTag.ws;
+    const v = ws.viewer;
+    const over = v.over.getBoundingClientRect();
+    const bar = document.querySelector('.conf-prompt').getBoundingClientRect();
+    const a = ws.store.get(ws._prompt.ids[0]);
+    return { bar: [bar.left, bar.right, bar.top], mark: [over.left + v.sampleToX(a.onset_sample), over.left + v.sampleToX(a.onset_sample + a.duration_samples)],
+      top: over.top + v.y0, outlined: (v.markers || []).some((m) => m.outline && m.onset_sample === a.onset_sample) };
+  });
+  assert.ok(r.bar[0] >= r.mark[1] || r.bar[1] <= r.mark[0], `the bar ${r.bar} is beside the mark ${r.mark}`);
+  assert.ok(r.bar[2] >= r.top, `the bar (top ${r.bar[2]}) is below the band of tags (${r.top})`);
+  assert.ok(r.outlined, 'the mark asked about is outlined');
+}
+
 /** The middle of the first annotation, in client coordinates. */
 async function middleOfFirst(page) {
   const a = (await annotations(page))[0];
@@ -94,8 +110,9 @@ export const tests = [
 
       // D, then a digit: the newest annotation is rated, and the digit does not choose a type.
       await page.keyboard.press('d');
-      assert.equal(await statusText(page), 'Confidence for Eye-blink-artifact: press 1–5, 0 to clear, Esc to cancel');
+      assert.equal(await statusText(page), 'Confidence for Eye-blink-artifact: press 1–5, 0 to clear, Esc to cancel.');
       assert.equal(await promptShown(page), true);
+      await barBesideMark(page, assert);
       await page.keyboard.press('3');
       assert.equal(await firstRating(page), 3);
       assert.equal((await state(page)).currentLabel, type, 'the digit rated the mark and did not change the type');
@@ -116,9 +133,14 @@ export const tests = [
       await page.keyboard.press('Escape');
       assert.equal(await firstRating(page), null);
       assert.equal(await promptShown(page), false, 'Esc cancels');
-      // The prompt ends by itself: a digit afterwards chooses a type again.
+      // The prompt never ends by itself: after a while a digit still rates (the bar says so) ...
       await page.keyboard.press('d');
-      await page.waitForSelector('.conf-prompt', { state: 'hidden', timeout: 6000 });
+      await page.waitForTimeout(3500);
+      assert.equal(await promptShown(page), true, 'the prompt waits');
+      // ... and another key ends it and does what it does: a digit afterwards chooses a type again.
+      await page.keyboard.press('ArrowRight');
+      assert.equal(await promptShown(page), false);
+      await page.keyboard.press('ArrowLeft');
       await page.keyboard.press('4');
       assert.equal(await firstRating(page), null);
       assert.notEqual((await state(page)).currentLabel, type, 'after the prompt, 4 chose a type');
@@ -174,7 +196,7 @@ export const tests = [
       assert.deepEqual(conf.slice(0, 3).map((e) => [e.annotations[0].confidence, e.annotations[0].before]), [[3, null], [2, 3], [null, 2]]);
       assert.equal(conf[0].via, 'shortcut:Confidence 3');
       const prompts = ev.filter((e) => e.type === 'confidence_prompt').map((e) => [e.trigger, e.outcome]);
-      assert.deepEqual(prompts.slice(0, 5), [['key', 'rated'], ['key', 'rated'], ['key', 'cleared'], ['key', 'cancelled'], ['key', 'timeout']]);
+      assert.deepEqual(prompts.slice(0, 5), [['key', 'rated'], ['key', 'rated'], ['key', 'cleared'], ['key', 'cancelled'], ['key', 'other_input']]);
       const notes = ev.filter((e) => e.type === 'note_set');
       assert.deepEqual(notes.map((e) => [e.annotations[0].change, e.annotations[0].note_length]), [['added', NOTE.length], ['changed', NOTE.length + 1]]);
       assert.ok(!JSON.stringify(ev).includes('eye movement rather'), 'the note text is never logged');
@@ -217,28 +239,43 @@ export const tests = [
       await signIn(page, 'A01');
       await waitForRoute(page, 'home');
       await openExample(page, 1);
-      // A new mark has no rating either; the prompt asks for one, and one key answers it.
+      // A new mark has no rating either; the bar asks for one beside it and waits. The number keys keep
+      // choosing the type (a habit of drawing, then pressing the next type, never gives a rating);
+      // D and a number, or a click on the bar, rate it.
       await drag(page, await eegPoint(page, 2.0), await eegPoint(page, 2.5));
       assert.equal(await firstRating(page), null, 'no default rating');
       assert.equal(await promptShown(page), true);
-      assert.match(await statusText(page), /^Confidence for .+: press 1–5, 0 to clear, Esc to cancel$/);
+      assert.match(await statusText(page), /^Confidence for .+: press D and then 1–5, or click a number on the bar\. Later or Esc leaves it unrated\.$/);
+      await barBesideMark(page, assert);
       await t.screenshot(page, 'likert_prompt');
+      const before = (await state(page)).currentLabel;
+      await page.keyboard.press('3');
+      assert.deepEqual(await ratings(page), [null], '3 chose the type, and did not rate');
+      assert.equal((await state(page)).currentLabel, (await page.evaluate(() => globalThis.ElectroTag.ws.quick[2])));
+      assert.notEqual((await state(page)).currentLabel, before);
+      await page.waitForTimeout(3500);
+      assert.equal(await promptShown(page), true, 'the bar waits for an answer');
+      await page.keyboard.press('d');
       await page.keyboard.press('5');
       assert.deepEqual(await ratings(page), [5]);
-      // Carrying on leaves a mark unrated: another key, or simply waiting.
+      assert.equal(await promptShown(page), false);
+      // Carrying on leaves a mark unrated: Later (or Esc), or the next mark.
       await drag(page, await eegPoint(page, 4.0), await eegPoint(page, 4.5));
       assert.equal(await promptShown(page), true);
       await page.keyboard.press('ArrowRight');
-      assert.equal(await promptShown(page), false, 'another key ends the prompt and does what it does');
+      assert.equal(await promptShown(page), true, 'moving through the recording keeps the bar');
       await page.keyboard.press('ArrowLeft');
+      await page.click('[data-log="confidence-prompt-later"]');
+      assert.equal(await promptShown(page), false);
       await drag(page, await eegPoint(page, 6.0), await eegPoint(page, 6.5));
-      await page.waitForSelector('.conf-prompt', { state: 'hidden', timeout: 6000 });
+      await page.keyboard.press('Escape');
+      assert.equal(await promptShown(page), false, 'Esc puts the bar away');
       assert.deepEqual(await ratings(page), [5, null, null]);
 
       // Save and Finish lists them; Rate them steps through them, one key each.
       await pressSave(page);
       await page.waitForSelector('.dialog.confidence-check');
-      assert.match(await page.textContent('.dialog.confidence-check'), /2 marks have no confidence/);
+      assert.match(await page.textContent('.dialog.confidence-check'), /2 annotations have no confidence/);
       await t.screenshot(page, 'likert_save_check');
       await clickDialogButton(page, 'Rate them');
       await page.waitForSelector('.conf-prompt:not([hidden])');
@@ -250,7 +287,7 @@ export const tests = [
       await page.waitForSelector('.conf-prompt:not([hidden])');
       await page.keyboard.press('4');
       assert.deepEqual(await ratings(page), [5, 2, 4]);
-      assert.match(await statusText(page), /Every mark has a confidence now/);
+      assert.match(await statusText(page), /Every annotation has a confidence now/);
       await pressSave(page);
       await clickDialogButton(page, 'Save and Finish');
       await page.waitForSelector('.dialog .dialog-title', { timeout: 20000 });
@@ -259,7 +296,7 @@ export const tests = [
       assert.deepEqual(saved.annotations.map((a) => a.confidence), [5, 2, 4]);
       const ev = await events(page);
       const prompts = ev.filter((e) => e.type === 'confidence_prompt').map((e) => [e.trigger, e.outcome]);
-      assert.deepEqual(prompts, [['new_mark', 'rated'], ['new_mark', 'other_input'], ['new_mark', 'timeout'],
+      assert.deepEqual(prompts, [['new_mark', 'replaced'], ['key', 'rated'], ['new_mark', 'later'], ['new_mark', 'later'],
         ['rate_them', 'rated'], ['rate_them', 'rated']]);
       assert.deepEqual(ev.filter((e) => e.type === 'confidence_check').map((e) => [e.n_unrated, e.choice]), [[2, 'rate']]);
     },

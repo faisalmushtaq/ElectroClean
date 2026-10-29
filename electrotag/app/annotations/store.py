@@ -391,14 +391,21 @@ class AnnotationStore:
         return self.update(annotation_id, channels=list(channels), description="change channels")
 
     def toggle_channel(self, annotation_id: str, ch_name: str) -> ArtifactAnnotation:
+        """Add a channel to an annotation or take it out (as store.js): taking one out of a
+        whole-montage annotation leaves every other channel, and the last channel cannot be taken out."""
         current = self.get(annotation_id)
         if ch_name not in self.recording.ch_names:
             raise AnnotationError(f"Unknown channel {ch_name}")
-        chans = set(current.channels)
+        chans = set(self.recording.ch_names if current.is_global else current.channels)
         if ch_name in chans:
             chans.remove(ch_name)
         else:
             chans.add(ch_name)
+        if not chans:
+            raise AnnotationError(
+                "An annotation needs at least one channel: delete it, or apply it to the whole montage.")
+        if len(chans) == len(self.recording.ch_names):
+            chans = set()  # every channel again: the whole montage, as it was
         return self.update(annotation_id, channels=chans, description=f"toggle channel {ch_name}")
 
     def delete(self, annotation_id: str) -> None:

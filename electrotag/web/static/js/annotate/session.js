@@ -6,11 +6,13 @@
 import { AnnotationStore } from './store.js';
 import { WorkClock } from './clock.js';
 import { confidenceMode } from './confidence.js';
-import { fromDraft, toDraft, viewedFraction as coverageFraction } from '../viewer/coverage.js';
-import { local, newId, nowLocalIso } from '../util.js';
+import { addInterval, fromDraft, toDraft, viewedFraction as coverageFraction } from '../viewer/coverage.js';
+import { local, newId, nowLocalIso, session as tabStorage } from '../util.js';
 import { DEFAULT_ANNOTATION, DEFAULT_HIDE, DEFAULT_SCALINGS } from '../api/demo_catalogue.js';
 
 const REMOTE_EVERY_MS = 30000;
+/** After a draft that did not reach the study, the next try comes this much later (or at once when the connection returns). */
+const RETRY_MS = 5000;
 
 function hiddenByDefault(name) {
   return DEFAULT_HIDE.some((p) => (p.endsWith('*') ? name.startsWith(p.slice(0, -1)) : name === p));
@@ -20,6 +22,29 @@ function hiddenByDefault(name) {
 export function localDraftKey(backend, annotatorId, recordingId, mode, contextId) {
   const where = backend.server || backend.kind;
   return `electrotag.draft|${where}|${annotatorId || 'anon'}|${recordingId}|${mode}|${contextId || ''}`;
+}
+
+// Work discarded in this tab (Start afresh, Discard and close, Start again from the saved version, Leave
+// without changes) is set aside until the tab is closed, so that it can be brought back: in the tab's
+// sessionStorage, or in memory where that cannot be written.
+const DISCARDED = 'electrotag.discarded|';
+const discardedInMemory = new Map();
+
+/** The work set aside under a draft's key in this tab, or null. */
+export function discardedWork(key) {
+  const d = tabStorage.get(DISCARDED + key, null) || discardedInMemory.get(key) || null;
+  return d && Array.isArray(d.annotations) ? d : null;
+}
+
+function keepDiscarded(key, draft) {
+  const d = { ...draft, discarded_at: nowLocalIso() };
+  tabStorage.set(DISCARDED + key, d); // survives a reload of the tab
+  discardedInMemory.set(key, d); // and where the tab's storage is blocked
+}
+
+function forgetDiscarded(key) {
+  tabStorage.remove(DISCARDED + key);
+  discardedInMemory.delete(key);
 }
 
 /** This browser's copy of a draft, or null. */
@@ -46,7 +71,7 @@ export function displayChannels(recording, manifest) {
     const bad = new Set(manifest.bad_channels || []);
     const types = manifest.channel_types || {};
     const missing = manifest.ch_names.filter((n) => !byName.has(n));
-    if (missing.length) throw new Error(`The file does not have the channel(s) ${missing.slice(0, 5).join(', ')} that the study expects.`);
+    if (missing.length) throw new Error(`The file does not have the ${missing.length === 1 ? 'channel' : 'channels'} ${missing.slice(0, 5).join(', ')} that the study expects.`);
     return manifest.ch_names.map((n) => {
       const c = byName.get(n);
       return { name: n, index: c.index, type: types[n] || c.type || 'eeg', bad: bad.has(n) };
@@ -95,7 +120,7 @@ export class AnnotationSession {
     this.elapsedBase = 0;
     this.clock = null; // started when the recording is on screen (startClock)
     this.viewed = []; // merged [start_s, end_s] on screen so far (coverage.js)
-    this.onSaved = null; // (where: 'browser' | 'study', at: Date) after a draft is kept
+    this.onSaved = null; // (where: 'browser' | 'study' | 'study_failed', at: Date) after a draft is kept, or not received by the study
     this.view = null;
     this.filters = null;
     this.finished = false;
@@ -104,6 +129,7 @@ export class AnnotationSession {
     this._dirty = false;
     this._lastRemote = performance.now();
     this._remoteBusy = false;
+    this.remoteFailing = false; // the last draft sent did not reach the study
     this.submitting = false; // Save and Finish is waiting for the study's answer: no draft is sent meanwhile
     // A revision opens with the annotations of the latest saved version (docs/web/using.md, "History and revisions").
     this.revision = o.revision && Number.isInteger(o.revision.revises) ? { ...o.revision } : null;
@@ -203,19 +229,58 @@ export class AnnotationSession {
       await this.backend.putDraft(this.recordingId, this.mode, this.contextId, payload, { keepalive });
       this._dirty = false;
       this._lastRemote = performance.now();
+      this.remoteFailing = false;
       if (this.onSaved) this.onSaved('study', new Date());
       return true;
     } catch {
+      // The study did not get it (no connection, or it failed once): the browser's copy is kept, and the
+      // draft goes again with the next change, the next tick after 30 s, or when the connection returns.
+      // A draft replaces the one before, so sending it again is harmless.
+      this._lastRemote = performance.now() - REMOTE_EVERY_MS + RETRY_MS;
+      this.remoteFailing = true;
+      if (this.onSaved) this.onSaved('study_failed', new Date());
       return false;
     } finally {
       this._remoteBusy = false;
     }
   }
 
-  async discardDrafts() {
-    this.forgetLocal();
+  /**
+   * Delete the drafts in this browser and with the study. The work they held (`draft`, the one offered
+   * to restore, or else what is open now) is set aside in this tab first, so that it can be brought back
+   * (bringBackDiscarded); nothing is set aside when there was nothing to lose.
+   */
+  async discardDrafts({ draft = null } = {}) {
     if (this.tryOut) return;
+    const work = draft || this.draftPayload();
+    const worth = draft ? draft.annotations.length || (draft.elapsed_s || 0) > 5
+      : this.revision ? this.changedSinceSaved : this.store.size > 0;
+    if (worth) keepDiscarded(this.localKey, work);
+    this.forgetLocal();
     try { await this.backend.deleteDraft(this.recordingId, this.mode, this.contextId); } catch { /* nothing to delete */ }
+  }
+
+  /** The work set aside in this tab for this recording (discardDrafts), or null. */
+  get discarded() { return this.tryOut || !this.canSave ? null : discardedWork(this.localKey); }
+
+  /**
+   * Bring back the work set aside: its annotations replace those open now as one step that Undo takes
+   * back, and its time worked and the parts it had viewed are added to this session's.
+   */
+  bringBackDiscarded() {
+    const d = this.discarded;
+    if (!d) return null;
+    const ok = d.annotations.filter((a) => this.catalogue.has(a.label));
+    this.store.replaceAll(ok, 'bring back the work set aside');
+    const extra = Number(d.elapsed_s) || 0;
+    if (this.clock) this.clock.baseS += extra; else this.elapsedBase += extra;
+    const before = fromDraft(d.viewed, this.recording.durationS);
+    let viewed = this.viewed;
+    for (const [a, b] of before) viewed = addInterval(viewed, a, b, this.recording.durationS);
+    this.noteViewed(viewed);
+    forgetDiscarded(this.localKey);
+    this.saveLocal();
+    return { n: ok.length, elapsedS: extra };
   }
 
   // ----------------------------------------------------------------- saving
@@ -264,6 +329,7 @@ export class AnnotationSession {
     }
     this.finished = true;
     this.forgetLocal();
+    forgetDiscarded(this.localKey); // saved: nothing set aside is offered for it again
     return result;
   }
 

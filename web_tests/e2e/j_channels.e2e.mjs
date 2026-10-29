@@ -143,17 +143,17 @@ export const tests = [
       await clickDialogButton(page, 'Cancel');
       assert.deepEqual(await page.evaluate(() => [...globalThis.ElectroTag.ws.selectedChannels]), [], 'Cancel changes nothing');
 
-      // Whole montage, as for an annotation's channels: the groups wait until "Only these channels"
+      // Whole montage, as for an annotation's channels: a group button chooses "Only these channels" by itself
       const pending = page.evaluate(async () => {
         const { chooseChannels } = await import(new URL('js/annotate/dialogs.js', location.href).href);
         globalThis.__chosen = await chooseChannels({ title: 'Channels affected', channels: globalThis.ElectroTag.ws.s.channels, chosen: [], allowWholeMontage: true, wholeMontage: true });
       });
       await page.waitForSelector('.dialog .channel-chooser');
       c = await chooser(page);
-      assert.equal(c.count, 'The annotation applies to every channel.');
-      assert.ok(await page.isDisabled('.channel-groups-row button[data-log="channel-group-Left"]'));
-      await page.check('#scope-some');
+      assert.equal(c.count, 'The annotation applies to every channel. Choose a channel to apply it to only some.');
+      assert.equal(await page.isDisabled('.channel-groups-row button[data-log="channel-group-Left"]'), false);
       await group(page, 'Left');
+      assert.equal(await page.isChecked('#scope-some'), true);
       await clickDialogButton(page, 'OK');
       await pending;
       assert.deepEqual(await page.evaluate(() => globalThis.__chosen), { wholeMontage: false, channels: ['Fp1', 'F7', 'F3', 'T7', 'C3', 'P7', 'P3', 'O1'] });
@@ -178,7 +178,7 @@ export const tests = [
       assert.equal(c.many, false);
       assert.deepEqual(c.rows, []);
       assert.equal(c.placeholder, 'Filter by name');
-      assert.deepEqual(c.buttons, ['Select all shown', 'Clear']);
+      assert.deepEqual(c.buttons, ['Select all', 'Clear all'], 'the same buttons as in a large montage');
       assert.equal(c.count, '0 of 4 channels chosen');
       await page.fill('.dialog input[type="search"]', 'z');
       assert.deepEqual((await chooser(page)).shown, ['Cz', 'Pz', 'Oz']);

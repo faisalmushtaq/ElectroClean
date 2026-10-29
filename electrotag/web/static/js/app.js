@@ -11,7 +11,7 @@ import { findBackend, connectServer, connectFirebase, makeDemo, rememberServer, 
 import { DEMO_NOTICE } from './api/notice.js';
 import { logger } from './log/logger.js';
 import { AnnotationSession } from './annotate/session.js';
-import { Workspace, friendlyDuration } from './annotate/workspace.js';
+import { Workspace, friendlyDuration, plural } from './annotate/workspace.js';
 import { GuidedCoach, minutesText } from './training/coach.js';
 import { PracticeReview, reviewAnnotations } from './training/review.js';
 import { trainingPath } from './training/path.js';
@@ -535,6 +535,8 @@ export class App {
   /** Open an assigned recording; with `revise`, a finished one, to revise it (docs/web/using.md, "History and revisions"). */
   openAssignment(item, { revise = false } = {}) {
     this.openFromComputer(item, { revise });
+    // Continue (where you left off, or the revision): the unfinished work is restored without asking.
+    if (this.openView && item && (item.status === 'in_progress' || (revise && item.revising))) this.openView.resume = true;
   }
 
   openFromComputer(expected, { revise = false, purpose = null } = {}) {
@@ -839,21 +841,16 @@ export class App {
     if (!tryOut) {
       const draft = session.pickDraft(match.draft);
       if (draft) {
-        const n = draft.annotations.length;
-        const rev = session.revision;
-        const yes = rev
-          ? await ask('Continue your revision?',
-            `${n} annotation(s) and ${friendlyDuration(draft.elapsed_s || 0)} of revising ${session.recordingId}, saved automatically ${friendlyTime(draft.saved_at)}.\n\n` +
-            `Continue the revision, or start again from version ${rev.revises} as it was saved?`,
-            { yes: 'Continue the revision', no: `Start again from version ${rev.revises}` })
-          : await ask('Restore unfinished work?',
-            `${n} annotation(s) and ${friendlyDuration(draft.elapsed_s || 0)} of work on ${session.recordingId}, saved automatically ${friendlyTime(draft.saved_at)}.\n\nRestore it and continue?`,
-            { yes: 'Restore and continue', no: 'Start afresh' });
+        const resume = Boolean(this.openView && this.openView.resume);
+        const yes = resume || await this._askRestore(session, draft);
         if (yes) {
           const view = session.restore(draft);
           if (view) session.view = view;
         } else {
-          await session.discardDrafts();
+          // Set aside in this tab, so that it can still be brought back (the Annotations tab offers it).
+          logger.event('draft_discarded', { recording_id: session.recordingId, n_annotations: draft.annotations.length,
+            elapsed_s: Math.round((Number(draft.elapsed_s) || 0) * 10) / 10, ...(session.revision ? { revises: session.revision.revises } : {}) });
+          await session.discardDrafts({ draft });
         }
       }
     }
@@ -876,6 +873,30 @@ export class App {
     if (session.revision) {
       logger.event('revision_started', { session_id: session.sessionId, recording_id: session.recordingId, version: session.revision.version,
         revises: session.revision.revises, revises_saved_at: session.revision.saved_at || null, annotations_loaded: session.store.size, resumed: session.resumed });
+    }
+  }
+
+  /**
+   * Restore unfinished work, or start afresh? Esc or a click beside the question keeps the work (it
+   * restores), and starting afresh asks a second time, as Discard and close does. True to restore.
+   */
+  async _askRestore(session, draft) {
+    const n = draft.annotations.length;
+    const rev = session.revision;
+    const what = `${plural(n, 'annotation')} and ${friendlyDuration(draft.elapsed_s || 0)} of ${rev ? 'revising' : 'work on'} ${session.recording.fileName}, kept automatically ${friendlyTime(draft.saved_at)}.`;
+    const afresh = rev ? `Start again from version ${rev.revises}` : 'Start afresh';
+    const keep = rev ? 'Continue the revision' : 'Restore and continue';
+    const body = h('div', {}, h('p.dialog-text', {}, what),
+      h('p.dialog-text', {}, rev ? `Continue the revision, or start again from version ${rev.revises} as it was saved?` : 'Restore it and continue?'));
+    for (;;) {
+      const choice = await showDialog({ title: rev ? 'Continue your revision?' : 'Restore unfinished work?', body, className: 'restore-question', logText: what,
+        buttons: [{ label: afresh, value: 'afresh' }, { label: keep, value: 'restore', kind: 'primary' }], cancelValue: 'restore' });
+      if (choice !== 'afresh') return true;
+      const sure = await ask(rev ? 'Discard your changes?' : 'Delete your unfinished work?',
+        `${rev ? `Your changes in this revision (${plural(n, 'annotation')}, ${friendlyDuration(draft.elapsed_s || 0)})` : `Your ${plural(n, 'annotation')} and ${friendlyDuration(draft.elapsed_s || 0)} of work`} ` +
+        `are deleted from your draft. Until you close this tab, the Annotations tab offers to bring them back.`,
+        { yes: rev ? 'Discard them' : 'Delete them', no: 'Keep them', defaultYes: false, destructive: true });
+      if (sure) return false;
     }
   }
 

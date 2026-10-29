@@ -21,14 +21,15 @@ const coarse = () => typeof matchMedia === 'function' && matchMedia('(pointer: c
 /**
  * @param {object} o layout ({source, points} of mapLayout), fileName (of an electrodes.tsv), channels
  *   [{name, type, bad}], picked (a Set of names, changed in place), colours (Map name -> colour),
- *   isShown (name -> bool, the chooser's search), onChange () after a change
- * @returns {{el: HTMLElement, refresh: Function, setDisabled: Function, focus: Function}}
+ *   isShown (name -> bool, the chooser's search), beforeChange () before a choice is made (the chooser
+ *   switches from Whole montage to Only these channels), onChange () after a change
+ * @returns {{el: HTMLElement, refresh: Function, setDimmed: Function, focus: Function}}
  */
-export function channelMap({ layout, fileName = null, channels, picked, colours = null, isShown = () => true, onChange = () => {} }) {
+export function channelMap({ layout, fileName = null, channels, picked, colours = null, isShown = () => true, beforeChange = () => {}, onChange = () => {} }) {
   const points = layout.points;
   const info = new Map(channels.map((c) => [c.name, c]));
   let zoomAt = 0;
-  let disabled = false;
+  let dimmed = false; // Whole montage is chosen: the map stays usable, and a choice switches to Only these channels
   let current = 0; // the electrode that takes the keyboard (roving focus)
   const buttons = points.map((p, i) => {
     const c = info.get(p.name) || {};
@@ -37,7 +38,7 @@ export function channelMap({ layout, fileName = null, channels, picked, colours 
       class: c.bad ? 'bad' : null, style: colours && colours.get(p.name) && !c.bad ? { '--el-colour': colours.get(p.name) } : {} }, h('span', {}, p.name));
     b.addEventListener('click', () => {
       if (suppressClick) { suppressClick = false; return; }
-      if (disabled) return;
+      beforeChange();
       current = i;
       const on = !picked.has(p.name);
       if (on) picked.add(p.name); else picked.delete(p.name);
@@ -62,7 +63,7 @@ export function channelMap({ layout, fileName = null, channels, picked, colours 
   const zoomIn = h('button.btn.icon.small', { type: 'button', 'aria-label': 'Larger map', title: 'Larger map', 'data-log': 'channel-map-larger', onclick: () => zoom(1) }, icon('plus'));
   const act = (label, log, fn) => h('button.btn.small', { type: 'button', 'data-log': `channel-map-${log}`, onclick: fn }, label);
   const all = act('Select all', 'all', () => bulk('all'));
-  const none = act('None', 'none', () => bulk('none'));
+  const none = act('Clear all', 'none', () => bulk('none'));
   const invert = act('Invert', 'invert', () => bulk('invert'));
   const tools = h('div.map-tools', {}, all, none, invert, h('span.map-zoom', { role: 'group', 'aria-label': 'Size of the map' }, zoomOut, zoomIn));
   const note = h('p.caption.map-note', {}, `${SOURCE_TEXT[layout.source](fileName)} `,
@@ -140,7 +141,7 @@ export function channelMap({ layout, fileName = null, channels, picked, colours 
   function changed() { refresh(); onChange(); }
   function targets() { return points.filter((p) => isShown(p.name)).map((p) => p.name); }
   function bulk(kind) {
-    if (disabled) return;
+    if (kind !== 'none') beforeChange();
     const names = targets();
     let n = 0;
     for (const name of names) {
@@ -155,10 +156,8 @@ export function channelMap({ layout, fileName = null, channels, picked, colours 
       const b = buttons[i];
       b.setAttribute('aria-pressed', String(picked.has(p.name)));
       b.classList.toggle('dim', !isShown(p.name));
-      b.disabled = disabled;
     });
-    for (const b of [all, none, invert]) b.disabled = disabled;
-    viewport.classList.toggle('disabled', disabled);
+    viewport.classList.toggle('disabled', dimmed);
   }
 
   // Pointers: a box with the mouse or the Pencil, a finger's drag moves the map.
@@ -169,7 +168,7 @@ export function channelMap({ layout, fileName = null, channels, picked, colours 
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   };
   viewport.addEventListener('pointerdown', (e) => {
-    if (disabled || e.button !== 0) return;
+    if (e.button !== 0) return;
     drag = { id: e.pointerId, type: e.pointerType || 'mouse', start: local(e), cx: e.clientX, cy: e.clientY, sl: viewport.scrollLeft, st: viewport.scrollTop, moved: false };
   });
   viewport.addEventListener('pointermove', (e) => {
@@ -209,6 +208,7 @@ export function channelMap({ layout, fileName = null, channels, picked, colours 
     // as the group buttons do: choose them all, or take them all back when all were chosen
     const on = !names.every((n) => picked.has(n));
     for (const n of names) { if (on) picked.add(n); else picked.delete(n); }
+    if (on) beforeChange();
     log('box', names.length, { chosen: on, pointer: d.type });
     changed();
   };
@@ -222,7 +222,7 @@ export function channelMap({ layout, fileName = null, channels, picked, colours 
     el,
     refresh,
     place,
-    setDisabled(v) { disabled = Boolean(v); refresh(); },
+    setDimmed(v) { dimmed = Boolean(v); refresh(); },
     focus() { buttons[current]?.focus({ preventScroll: true }); },
   };
 }

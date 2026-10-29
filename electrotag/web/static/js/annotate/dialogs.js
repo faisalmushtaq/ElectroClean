@@ -8,6 +8,7 @@ import { legibleOnWhite, local } from '../util.js';
 import { logger } from '../log/logger.js';
 import { channelMap } from './channel_map.js';
 import { MAX_NOTE_CHARS, cleanNote, noteProblem } from './confidence.js';
+import { parseTimeText } from './goto.js';
 
 /**
  * The searchable list of every artifact type. Resolves with the chosen label, or null.
@@ -262,24 +263,20 @@ export function chooseChannels({ title, channels, chosen = [], allowWholeMontage
   let shown = channels.length;
   const isWhole = () => allowWholeMontage && wholeRadio.checked;
   const shownBoxes = () => [...boxes].filter(([, b]) => !b.parentElement.hidden);
+  // With Whole montage chosen the channels stay usable, only dimmed: choosing one (in the list or on the
+  // map, or with a group button) switches to "Only these channels" by itself.
   const update = () => {
-    const disabled = isWhole();
-    grid.classList.toggle('disabled', disabled);
-    for (const b of boxes.values()) b.disabled = disabled;
-    for (const { btn, members } of groupButtons) {
-      btn.disabled = disabled;
-      btn.setAttribute('aria-pressed', String(members.every((n) => picked.has(n))));
-    }
-    for (const b of [all, none, ...(onlyChosen ? [onlyChosen] : [])]) b.disabled = disabled;
-    if (mapPart) mapPart.setDisabled(disabled);
+    const whole = isWhole();
+    grid.classList.toggle('disabled', whole);
+    for (const { btn, members } of groupButtons) btn.setAttribute('aria-pressed', String(!whole && members.every((n) => picked.has(n))));
+    if (mapPart) mapPart.setDimmed(whole);
     const narrowed = shown < channels.length;
-    if (many) {
-      all.textContent = narrowed ? `Select ${shown} shown` : 'Select all';
-      none.textContent = narrowed ? 'Clear shown' : 'Clear all';
-    }
-    count.textContent = disabled ? 'The annotation applies to every channel.'
-      : `${picked.size} of ${channels.length} channels chosen` + (many && narrowed ? ` · ${shown} shown` : '');
+    all.textContent = narrowed ? `Select ${shown} shown` : 'Select all';
+    none.textContent = narrowed ? 'Clear shown' : 'Clear all';
+    count.textContent = whole ? 'The annotation applies to every channel. Choose a channel to apply it to only some.'
+      : `${picked.size} of ${channels.length} channels chosen` + (narrowed ? ` · ${shown} shown` : '');
   };
+  const toSome = () => { if (isWhole()) someRadio.checked = true; };
   // Which channels are listed: those the search finds and, with "Show chosen only", those ticked.
   const apply = () => {
     const found = findChannels(names, filter.value);
@@ -294,18 +291,19 @@ export function chooseChannels({ title, channels, chosen = [], allowWholeMontage
   };
   for (const c of channels) {
     const box = h('input', { type: 'checkbox', checked: picked.has(c.name), 'data-name': c.name,
-      onchange: () => { if (box.checked) picked.add(c.name); else picked.delete(c.name); update(); } });
+      onchange: () => { toSome(); if (box.checked) picked.add(c.name); else picked.delete(c.name); update(); } });
     boxes.set(c.name, box);
     grid.appendChild(h('label.channel-chip', { title: `${c.name} (${c.type})` }, box, h('span', {}, c.name),
       suffixes.has(c.name) ? h('span.chip-type', {}, `· ${suffixes.get(c.name)}`) : null));
   }
   const setShown = (on) => {
+    if (on) toSome();
     for (const [n, b] of shownBoxes()) { b.checked = on; if (on) picked.add(n); else picked.delete(n); }
     update();
   };
   filter.addEventListener('input', apply);
-  const all = h('button.btn.quiet', { type: 'button', 'data-log': 'channels-select-shown', onclick: () => setShown(true) }, 'Select all shown');
-  const none = h('button.btn.quiet', { type: 'button', 'data-log': 'channels-clear-shown', onclick: () => setShown(false) }, 'Clear');
+  const all = h('button.btn.quiet', { type: 'button', 'data-log': 'channels-select-shown', onclick: () => setShown(true) }, 'Select all');
+  const none = h('button.btn.quiet', { type: 'button', 'data-log': 'channels-clear-shown', onclick: () => setShown(false) }, 'Clear all');
   wholeRadio.addEventListener('change', update);
   someRadio.addEventListener('change', update);
   let groupsBlock = null;
@@ -318,6 +316,7 @@ export function chooseChannels({ title, channels, chosen = [], allowWholeMontage
           const btn = h('button.btn.small.toggle', { type: 'button', 'data-log': `channel-group-${g.name}`, 'aria-pressed': 'false',
             title: `Tick these ${g.channels.length} channels, or clear them if all are ticked: ${g.channels.join(', ')}`,
             onclick: () => {
+              toSome();
               toggleGroup(picked, g.channels);
               for (const n of g.channels) boxes.get(n).checked = picked.has(n);
               apply();
@@ -334,7 +333,8 @@ export function chooseChannels({ title, channels, chosen = [], allowWholeMontage
     'when none begins with it. Put a name in quotes for that channel only ("b1"), or use * for any characters (*z).') : null;
   const foot = many ? h('div.channel-foot', {}, count, h('label.channel-only', {}, onlyChosen, ' Show chosen only')) : count;
   const { mapPart, viewRow, showView } = channelViews({ map, channels, picked, grid, listOnly: [all, none, help],
-    isShown: (n) => !boxes.get(n).parentElement.hidden, onChange: () => { for (const [n, b] of boxes) b.checked = picked.has(n); apply(); } });
+    isShown: (n) => !boxes.get(n).parentElement.hidden, beforeChange: toSome,
+    onChange: () => { for (const [n, b] of boxes) b.checked = picked.has(n); apply(); } });
   const body = h(`div.channel-chooser${many ? '.many' : ''}`, {},
     allowWholeMontage ? h('div.radio-row', {},
       h('label', {}, wholeRadio, ' Whole montage'), h('label', {}, someRadio, ' Only these channels:')) : null,
@@ -357,9 +357,9 @@ export function chooseChannels({ title, channels, chosen = [], allowWholeMontage
  * The List and Map views of the channel chooser: the switch between them, and the map. Returns
  * {mapPart, viewRow, showView}; without `map` there is only the list.
  */
-function channelViews({ map, channels, picked, grid, listOnly, isShown, onChange }) {
+function channelViews({ map, channels, picked, grid, listOnly, isShown, beforeChange, onChange }) {
   if (!map || !map.layout || !map.layout.points.length) return { mapPart: null, viewRow: null, showView: () => {} };
-  const mapPart = channelMap({ layout: map.layout, fileName: map.fileName, channels, picked, colours: map.colours, isShown, onChange });
+  const mapPart = channelMap({ layout: map.layout, fileName: map.fileName, channels, picked, colours: map.colours, isShown, beforeChange, onChange });
   let view = local.get(map.storageKey, 'list') === 'map' ? 'map' : 'list';
   const seg = (kind, label) => {
     const b = h('button.seg', { type: 'button', 'data-view': kind, 'data-log': `channel-view-${kind}`,
@@ -422,25 +422,31 @@ export function editNote({ title, note = '' }) {
 }
 
 /**
- * The start and end of an annotation in seconds, and its note when `note` is given (a string):
- * resolves with [start, end] (or [start, end, note]), or null when cancelled.
+ * The start and end of an annotation, and its note when `note` is given (a string): resolves with
+ * [start, end] in seconds (or [start, end, note]), or null when cancelled. The times are typed as
+ * Go to time takes them: seconds (12.5), m:ss (1:05.25) or h:mm:ss (1:02:05).
  */
 export function editTimes({ start, end, sfreq, duration, note = null }) {
   const digits = Math.max(3, Math.ceil(Math.log10(sfreq)));
-  const step = (1 / sfreq).toFixed(digits);
-  const a = h('input.field', { type: 'number', step, min: '0', max: String(duration), value: start.toFixed(digits), id: 'times-start', name: 'start' });
-  const b = h('input.field', { type: 'number', step, min: '0', max: String(duration), value: end.toFixed(digits), id: 'times-end', name: 'end' });
-  const msg = h('p.caption');
+  const field = (id, name, value) => h('input.field', { type: 'text', inputmode: 'decimal', autocomplete: 'off', spellcheck: 'false',
+    value: value.toFixed(digits), id, name, 'aria-describedby': 'times-msg' });
+  const a = field('times-start', 'start', start);
+  const b = field('times-end', 'end', end);
+  const msg = h('p.caption', { id: 'times-msg' });
   const nf = typeof note === 'string' ? noteField(note, 'times-note') : null;
   let ok = null;
+  const read = (input) => parseTimeText(input.value);
   const check = () => {
-    const s = Number(a.value);
-    const e = Number(b.value);
+    const ra = read(a);
+    const rb = read(b);
+    const s = ra.t;
+    const e = rb.t;
     let problem = '';
-    if (!Number.isFinite(s) || !Number.isFinite(e)) problem = 'Enter both times in seconds.';
+    if (!a.value.trim() || !b.value.trim()) problem = 'Enter both times.';
+    else if (ra.error || rb.error) problem = `${ra.error ? 'Start' : 'End'}: ${(ra.error || rb.error)}`;
     else if (s < 0 || e > duration + 1e-9) problem = `The times must lie between 0 and ${duration.toFixed(3)} s.`;
     else if (e <= s) problem = 'The end must come after the start.';
-    msg.textContent = problem || `Duration ${(e - s).toFixed(3)} s. Times are rounded to the nearest sample (${sfreq} per second).`;
+    msg.textContent = problem || `Duration ${(e - s).toFixed(3)} s. Type seconds (12.5), m:ss (1:05.25) or h:mm:ss; times are rounded to the nearest sample (${sfreq} per second).`;
     msg.classList.toggle('error', Boolean(problem));
     if (ok) ok.disabled = Boolean(problem) || (nf ? !nf.update() : false);
   };
@@ -448,8 +454,8 @@ export function editTimes({ start, end, sfreq, duration, note = null }) {
   b.addEventListener('input', check);
   if (nf) nf.input.addEventListener('input', check);
   const body = h('div.form', {},
-    h('label.form-row', { for: 'times-start' }, h('span', {}, 'Start (s)'), a),
-    h('label.form-row', { for: 'times-end' }, h('span', {}, 'End (s)'), b), msg,
+    h('label.form-row', { for: 'times-start' }, h('span', {}, 'Start'), a),
+    h('label.form-row', { for: 'times-end' }, h('span', {}, 'End'), b), msg,
     nf ? h('label.form-row', { for: 'times-note' }, h('span', {}, 'Note (optional)'), nf.input) : null, nf ? nf.count : null);
   return showDialog({
     title: 'Edit times', body,
@@ -461,7 +467,7 @@ export function editTimes({ start, end, sfreq, duration, note = null }) {
       a.focus();
       a.select();
     },
-  }).then((v) => (v !== 'ok' ? null : nf ? [Number(a.value), Number(b.value), cleanNote(nf.input.value)] : [Number(a.value), Number(b.value)]));
+  }).then((v) => (v !== 'ok' ? null : nf ? [read(a).t, read(b).t, cleanNote(nf.input.value)] : [read(a).t, read(b).t]));
 }
 
 /** A small swatch-and-name element for a type. */

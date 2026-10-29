@@ -78,6 +78,39 @@ buttons say Download the table (CSV); people who sign in with a password are no
 longer shown as not invited; a consensus lists its boundary slivers apart; and
 Skip to the section is the first Tab stop.
 
+The annotation view was changed after a hands-on usability check of how annotators work in it.
+A draft is never lost to a reflex: Esc or a click beside "Restore unfinished work?" (and "Continue
+your revision?") now restores the draft, Start afresh asks a second time ("Delete your unfinished
+work?", with Keep them as the safe answer), and Continue where you left off, or Continue in the
+list, restores without asking. Work deleted with Start afresh, Discard and close or Leave without
+changes is kept in the browser tab until it is closed, and the Annotations tab then offers Bring it
+back, which brings back its annotations, time worked and parts viewed as one change that Undo takes
+back. The header's Delete, Undo and Redo are greyed out when they have nothing to act on, and
+together with Draw/edit wait while the clock is paused (the Pause button then shows a play sign); a
+click on them leaves the keyboard with the EEG, so Space or Enter afterwards no longer presses them
+again. When drafts stop reaching the study, the top reads "Draft kept in this browser only" on a pale
+amber ground and the status line says so once; the draft is tried again a few seconds later and sent
+at once when the connection returns, while Save and Finish is never repeated by itself. The channels
+of an annotation are changed by selecting it and Shift+clicking a channel anywhere within its time
+(also on a row it does not have yet), or, for a channel-specific annotation, by clicking a channel's
+name; taking a channel out of a whole-montage annotation leaves the others, the last channel cannot
+be taken out, and the channels chosen for new annotations no longer change on the way. In Edit
+channels…, choosing a channel in the list or on the map switches from Whole montage to Only these
+channels by itself, and both views offer Select all and Clear all. In a study that asks for a rating
+on every annotation, the bar now waits beside the new annotation (outlined on the EEG, with its tag
+in view) until it is answered with D and a number or a click, while the number keys keep choosing
+the type; the request for a rating after D no longer ends by itself either. Draw/edit off reads
+"View only" and says so when a drag draws nothing; a plain click on a trace no longer speaks of bad
+channels. M, [ and ] mark at the time cursor when the pointer is away from the EEG (G places it, the
+, and . keys move it), the EEG has a place in the Tab order, and a mark waiting for its end is shown
+at the foot of the EEG with its time to the sample. Moving or resizing an annotation gives its new
+times; N with nothing selected starts from the annotation reaching into the screen, and N and P come
+round at the ends; Edit times… takes m:ss and h:mm:ss as Go to time does; the coverage check has
+Keep annotating and agrees in number; Report a problem chooses no reason in advance; Ctrl+F is left
+to the browser's Find; the idle pause says that the minutes before it still count; and messages
+count properly ("3 annotations"), say "type" and "the study team", and use the touch words on an
+iPad. The help and the guide describe all of this.
+
 The activity analysis (`electrotag-activity` and the admin area) now counts
 confidence ratings, notes, problem reports and the feedback on reviewed work.
 Each row of `recordings.tsv` gives the ratings given and cleared, the requests

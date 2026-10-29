@@ -108,6 +108,7 @@
   --i-close: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='square'%3E%3Cpath d='M4.5 4.5l7 7M11.5 4.5l-7 7'/%3E%3C/svg%3E");
   --i-star: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1.5l1.9 4.3 4.6.4-3.5 3 1.1 4.6L8 11.4l-4.1 2.4 1.1-4.6-3.5-3 4.6-.4z'/%3E%3C/svg%3E");
   --i-pause: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='square'%3E%3Cpath d='M5.5 3.5v9M10.5 3.5v9'/%3E%3C/svg%3E");
+  --i-play: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linejoin='round'%3E%3Cpath d='M5 3.5v9l7-4.5z'/%3E%3C/svg%3E");
   --i-skip-forward: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='square'%3E%3Cpath d='M2.5 8h8M7 4l4 4-4 4M13.5 3.5v9'/%3E%3C/svg%3E");
   --i-note: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linejoin='round'%3E%3Cpath d='M3.5 2.5h6l3 3v8h-9z'/%3E%3Cpath d='M9.5 2.5v3h3M5.5 8.5h5M5.5 11h3.5'/%3E%3C/svg%3E");
   --i-more: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='black'%3E%3Ccircle cx='3.5' cy='8' r='1.25'/%3E%3Ccircle cx='8' cy='8' r='1.25'/%3E%3Ccircle cx='12.5' cy='8' r='1.25'/%3E%3C/svg%3E");
@@ -177,6 +178,7 @@ kbd .ico { width: 12px; height: 12px; }
 .ico-star { --i: var(--i-star); }
 .ico-star-empty { --i: var(--i-star-empty); }
 .ico-pause { --i: var(--i-pause); }
+.ico-play { --i: var(--i-play); }
 .ico-skip-forward { --i: var(--i-skip-forward); }
 .ico-note { --i: var(--i-note); }
 .ico-more { --i: var(--i-more); }
@@ -536,6 +538,9 @@ ul.examples b { font-weight: 400; color: var(--ink); }
 }
 .ws-caption { color: var(--text-secondary); min-width: 60px; font: var(--t-14); }
 .ws-toolbar.changing .ws-caption { color: var(--accent); font-weight: 600; }
+/* Draw/edit off (view only): the caption says so and the type buttons step back. */
+.ws-toolbar.view-only .ws-caption { color: var(--ink); font-weight: 600; }
+.ws-toolbar.view-only .chips, .ws-toolbar.view-only .type-menu { opacity: 0.45; }
 .ws-toolbar .btn { height: 32px; padding: 0 12px; font: var(--t-14); }
 .ws-toolbar .btn.quiet { padding: 0 4px; }
 .chips { display: flex; gap: 2px; flex: none; }
@@ -586,6 +591,8 @@ ul.examples b { font-weight: 400; color: var(--ink); }
    over the EEG and the side panel, the break reminder, and how much of the recording has been viewed. */
 .ws-saved { font: var(--t-14); color: var(--text-secondary); white-space: nowrap; margin: 0 8px 0 4px; font-variant-numeric: tabular-nums lining-nums; }
 .ws-saved:empty { display: none; }
+/* The study has stopped receiving drafts (no connection): a calm warning, the draft still kept in this browser. */
+.ws-saved[data-saved="local-only"] { color: var(--warning-text); background: var(--warning-bg); padding: 2px 8px; }
 /* Pressed, it reads Resume in the grey of a pressed control: the panel's own Resume is the forward action. */
 .btn.pause-btn[aria-pressed="true"] { background: var(--fill-pressed); color: var(--ink); }
 .pause-panel {
@@ -620,6 +627,8 @@ ul.examples b { font-weight: 400; color: var(--ink); }
 .coverage-block .btn-row { margin-top: 8px; }
 .clock-note { margin: -4px 0 0; }
 .welcome-back { font: var(--t-14); margin-bottom: 12px; }
+.discarded-work { font: var(--t-14); margin-bottom: 12px; }
+.discarded-work p { margin: 0 0 8px; }
 fieldset.comfort .opt { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 4px 12px; align-items: center; }
 fieldset.comfort .opt-name { color: var(--text-secondary); }
 fieldset.comfort .opt-choices { display: flex; flex-wrap: wrap; gap: 4px 16px; }
@@ -1177,6 +1186,13 @@ button.review-line { text-align: left; font: var(--t-14); }
 .map-electrode.bad[aria-pressed="true"] { color: var(--selection-channel); border-color: var(--selection-channel); }
 .map-electrode.dim { opacity: 0.35; }
 .map-electrode:disabled { cursor: default; }
+/* The EEG in the Tab order (annotate/workspace.js): its focus ring inside its edge, where nothing clips it. */
+.ws-eeg canvas.layer.top:focus-visible { outline-offset: -2px; }
+/* A mark started with M or [ and waiting for its end (workspace.js _showPendingMark), at the foot of the EEG. */
+.mark-pending {
+  position: absolute; left: 104px; bottom: 72px; z-index: 6; margin: 0; max-width: calc(100% - 128px); padding: 4px 12px;
+  background: var(--page); border: 1px solid var(--rule); font: var(--t-14); color: var(--ink); font-variant-numeric: tabular-nums lining-nums;
+}
 .map-electrode:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; z-index: 2; }
 .map-box { position: absolute; border: 1px solid var(--accent); background: rgba(43, 67, 146, 0.08); pointer-events: none; }
 .map-note { margin: 8px 0 0; }

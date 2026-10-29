@@ -135,7 +135,8 @@ RECORDING_COLUMNS: list[tuple[str, str]] = [
     ("confidence_prompts", "Requests for a rating (after D, after a new mark in an every-mark study, or with "
                            "Rate them before Save and Finish)."),
     ("confidence_prompts_by_outcome", "How the requests for a rating ended (rated, cleared, cancelled, later, "
-                                      "timeout, other_input, replaced) and how often (JSON)."),
+                                      "other_input, replaced, deleted, and timeout in older logs) and how often "
+                                      "(JSON)."),
     ("confidence_checks", "Times Save and Finish found marks without a rating in an every-mark study."),
     ("confidence_check_choices", "The choices at those checks (rate, save, cancel) and how often (JSON)."),
     ("notes_written", "Notes added to annotations or changed (a count: the text of a note is never logged)."),

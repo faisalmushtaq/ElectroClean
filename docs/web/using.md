@@ -46,7 +46,8 @@ email that brought it.
 The first page has one black button, Open next recording, for the recording to do next. When you
 have a recording you started and did not finish, the card is headed In progress and the button
 reads Continue where you left off instead, with how much of that recording you have viewed, your annotations so far, the time worked
-and when the draft was last kept. Annotators in a training programme go straight to their training
+and when the draft was last kept. Choose it and open the same file, and the recording opens as you
+left it, without a question. Annotators in a training programme go straight to their training
 path instead (see below).
 
 Under it, Your progress shows how many of your recordings are done, with a thin bar, the time you
@@ -99,7 +100,8 @@ the study team instead. Choose Report a problem with this recording… from the 
 three dots) beside the recording in your list, which works even for a file that will not open, or
 from the More button in the header of the annotation view. Choose what is wrong, add a note of up
 to 300 characters if it helps (for example "Fp1 and Fp2 are flat from 2:10 on"), and choose what
-happens next.
+happens next. No reason is chosen for you, and Send the report waits until you have chosen one; in
+the annotation view, where the file has opened, "The file will not open" is not offered.
 
 Tell the study team and carry on sends the report and leaves everything as it was, so you can go
 on annotating the recording. This recording cannot be annotated sets it aside: the recording
@@ -283,7 +285,11 @@ Below the EEG, the overview bar shows the whole recording with your annotations 
 screen; click it to go anywhere.
 
 Two rows of controls sit above the EEG. The first has Draw/edit, Delete, Undo, Redo, the time your
-draft was last kept (for example "Draft saved 14:02"), Pause, Help and Save and Finish. The second chooses what you mark next: the numbered type buttons and the menu of all
+draft was last kept (for example "Draft saved 14:02"), Pause, Help and Save and Finish. Delete, Undo
+and Redo are greyed out when they have nothing to act on: Delete until an annotation is selected,
+Undo and Redo when there is no change to take back or make again. Draw/edit is on while you
+annotate; pressed, it switches to view only, in which nothing can be drawn or changed by accident,
+and the second row reads "View only" until you press it again. The second chooses what you mark next: the numbered type buttons and the menu of all
 types after "Draw as", then Whole montage or Selected channels, and Overlay. On the right, the Annotations tab
 lists everything you have marked, the Recording tab shows the time you have worked, how much of the
 recording you have viewed, the viewing options, your comfort choices and details of the recording,
@@ -313,7 +319,7 @@ types of channel when there are several. Show chosen only lists just the channel
 Map, at the top of the list, shows the channels as electrodes on a drawing of the head, seen from
 above with the nose at the top, each a small circle with its name. Click an electrode to choose it
 or take it back, or drag a box round several to choose them all (a box round electrodes that are
-all chosen takes them back). Select all, None and Invert act on every electrode, or on those your
+all chosen takes them back). Select all, Clear all and Invert act on every electrode, or on those your
 search finds; the search and the group buttons work as in the list, and the two always show the same
 choice. With the keyboard, the arrow keys move from an electrode to its neighbour in that direction
 and Space or Enter chooses it. The electrodes go where the recording's own BIDS electrodes.tsv puts
@@ -327,15 +333,24 @@ arranged in order". Channels that are not on the head (EOG, ECG and the like) ar
 Other channels. A bad channel is grey with a dashed edge and can still be chosen. When channels are
 coloured by group, the map uses the same colours. The − and + buttons make the map smaller or
 larger; a large map scrolls in its frame. ElectroTag remembers whether you last used the list or
-the map.
+the map. When Edit channels… opens on an annotation of the whole montage, choosing a channel, in
+the list or on the map, switches it to "Only these channels" by itself.
 
-Then drag across the EEG from the start of the artifact to its end. With the keyboard, point at the
-start and press M, then point at the end and press M again. You can scroll in between, which is the
-easy way to mark an artifact longer than the screen. The keys [ and ] mark the start and the end
-separately, and Esc cancels a started mark. You can also draw first and choose the type afterwards:
-click the new annotation and press a number, or double-click it to choose any type.
+Then drag across the EEG from the start of the artifact to its end. A drag that starts inside
+another annotation draws a new one as well. With the keyboard, point at the start and press M, then
+point at the end and press M again. You can scroll in between, which is the easy way to mark an
+artifact longer than the screen; a note at the foot of the EEG ("Marking Eye-blink-artifact from
+4.204 s") keeps the start in view while it waits for the end, and gives the time to the sample, as
+it is saved. The keys [ and ] mark the start and the end separately, and Esc cancels a started mark.
+You can also draw first and choose the type afterwards: click the new annotation and press a number,
+or double-click it to choose any type.
 
-In the overlay (below), every mark applies to the whole montage, since the channels share one axis
+Without a mouse, M, [ and ] mark at the time cursor, the thin line a click on empty EEG places. Press
+G and type a time to put the cursor there, and move it with the , and . keys (with Shift, ten times
+as far). The EEG has a place in the Tab order, with a ring round it when it has the keyboard. When
+the pointer rests on the EEG, the keys mark at the pointer, unless you moved the time cursor since.
+
+In the overlay (below), every new annotation applies to the whole montage, since the channels share one axis
 and a drag cannot say which of them it means; the toolbar says "all channels in the overlay", and
 Selected channels waits until you press O for the normal view again.
 
@@ -347,15 +362,27 @@ in seconds; hold the pointer over a row for the type's code and description. Cli
 select it, or pick it in the Annotations list. While annotations are
 selected the second row reads "Change to", and a number key, a type button or the menu changes their
 type. Esc, a click on empty EEG or a new drag ends the selection, and the row reads "Draw as" again.
-N and P select the next and previous annotation and bring it into view.
+N and P select the next and previous annotation and bring it into view. With nothing selected, N
+starts from the first annotation that reaches into the screen; after the last annotation N comes
+round to the first, and P after the first to the last.
 
 Drag an edge of an annotation to make it longer or shorter, and hold Shift while dragging its middle
-to move it. Shift+click a channel inside an annotation to add that channel to it or take it out.
-Right-click an annotation for the common types, Edit channels…, Apply to whole montage and Delete.
-Delete or Backspace removes the selected annotation, Ctrl+Z undoes and Ctrl+Y redoes (⌘ instead of
-Ctrl on a Mac). When two annotations of the same type on the same channels overlap, they become one
-automatically. In the Annotations list you can also edit the start and end times exactly, change the
-label of several annotations at once, and merge annotations of one type.
+to move it; the line at the bottom gives its new times. To change the channels of an annotation,
+select it and Shift+click a channel anywhere within its time, on the row of a channel it does not
+have yet as well as on its own: that channel is added or taken out. With a channel-specific
+annotation selected, a click on a channel's name does the same. Taking a channel out of a
+whole-montage annotation leaves every other channel, and putting it back makes it whole montage
+again. An annotation keeps at least one channel, so to remove its last channel, delete it or choose
+Apply to whole montage. While an annotation is selected, clicking names changes that annotation and
+leaves the channels for your next annotation as they were; Esc ends the selection. Right-click an
+annotation for its menu: the common types, Other type for any of the 29, Edit times…, Edit
+channels…, Confidence, Add a note…, Apply to whole montage (for a channel-specific annotation) and
+Delete. Delete or Backspace removes the selected annotation, Ctrl+Z undoes and Ctrl+Y redoes (⌘
+instead of Ctrl on a Mac). When two annotations of the same type on the same channels overlap, they
+become one automatically. In the Annotations list you can also edit the start and end times exactly
+(as seconds, 12.5, or as m:ss, 1:05.25, or h:mm:ss, the forms Go to time takes), change the type of
+several annotations at once, and merge annotations of one type. The buttons for these appear once an
+annotation is selected.
 
 ## Confidence and notes
 
@@ -364,22 +391,26 @@ confident, 2 slightly confident, 3 moderately confident, 4 very confident and 5 
 confident. Press D and then a number from 1 to 5: the rating goes to the selected annotation, or to
 the annotation you made last when nothing is selected. 0 clears the rating and Esc cancels. While
 ElectroTag waits for the number, the line at the bottom says so ("Confidence for Eye-blink-artifact:
-press 1–5, 0 to clear, Esc to cancel"), a small bar with the numbers appears over the top of the
-EEG, and the number keys rate rather than choose a type; the wait ends after the number, another
-key or a few seconds. You can also right-click the annotation (press and hold it on an iPad), choose
+press 1–5, 0 to clear, Esc to cancel"), the annotation is outlined, a small bar with the numbers
+appears beside it, under the band of labels, and the number keys rate rather than choose a type; the
+wait ends with the number, Esc or another key, and never by itself. You can also right-click the annotation (press and hold it on an iPad), choose
 Confidence and pick a number, with its meaning beside it, or Clear; or select the annotation in the
 Annotations list and tap one of the numbers 1 to 5 below the list. Undo takes back a rating like any
 other change.
 
-A new mark never starts with a rating, so that no rating is given without a thought. In most studies
-rating is optional: rate a mark when you want to, and leave the others as they are. Some studies ask
-for a rating on every mark: there, the question appears after each new mark, with the bar of numbers,
-and one key or tap answers it. You can carry on working without answering; the mark is then left
-unrated, and Save and Finish lists the marks without a rating ("2 marks have no confidence"), with
-Rate them, which takes you to each in turn and waits for its number, and Save anyway. A mark without
-a rating looks exactly as marks always have. The tag of a rated mark shows its rating, such as 3/5,
-marks rated 1 or 2 are filled more lightly on the EEG, and the Annotations list shows the rating with
-its meaning when you hold the pointer over it.
+A new annotation never starts with a rating, so that no rating is given without a thought. In most
+studies rating is optional: rate an annotation when you want to, and leave the others as they are.
+Some studies ask for a rating on every annotation: there, after each new one, it is outlined and the
+bar of numbers appears beside it, and stays until you answer. Click or tap a number on the bar, or
+press D and then the number. The number keys on their own keep choosing the type, as everywhere
+else, so a rating is never given by a key meant for a type. You can carry on working without
+answering, and Later or Esc puts the bar away; the annotation is then left unrated, and Save and
+Finish lists those without a rating ("2 annotations have no confidence"), with Rate them, which
+takes you to each in turn and waits for its number (here the number keys rate), Save anyway and
+Keep annotating. An annotation without a rating looks exactly as annotations always have. The tag of
+a rated annotation shows its rating, such as 3/5, annotations rated 1 or 2 are filled more lightly
+on the EEG, and the Annotations list shows the rating with its meaning when you hold the pointer
+over it.
 
 Any annotation can also carry a short note, of up to 200 characters on one line, for example "could
 be an eye movement rather than a blink". Choose Add a note… in the annotation's menu or below the
@@ -460,11 +491,12 @@ Annotating a recording takes a long time, and the time you work on each recordin
 study's results. Press Pause, at the top, or the key B when you step away: the clock that measures
 your time stops, your draft is kept, and a calm panel covers the EEG with the time worked so far and
 a large Resume button. Press Resume, or B again, to carry on. While you are paused nothing can be
-changed by accident.
+changed by accident: Draw/edit, Delete, Undo and Redo at the top wait for Resume too, and the Pause
+button reads Resume.
 
 ElectroTag also pauses by itself in two cases. After a few minutes without any input (three
 unless your study chose otherwise), it pauses and says so; the minutes before that pause still count,
-since you may have been reading the EEG. The pause starts when those minutes run out, so a computer
+since you may have been reading the EEG, and the panel says how much time since then is left out. The pause starts when those minutes run out, so a computer
 that went to sleep with the recording on screen comes back paused from then, without the night. When the page is out of sight for more than ten seconds,
 because you switched to another tab or app or the iPad locked, it pauses from the moment the page
 was hidden. When you come back, the panel says how long you were away and that the time was not
@@ -499,8 +531,8 @@ time and up and down through the channels; pinch sideways to show more or less t
 hold an annotation for its menu, the one a right-click opens on a computer, which also offers Edit
 times… to move it, Confidence and Add a note…; double-tap it to choose its type from the list
 of all types. The numbers 1 to 5 below the Annotations list rate the selected annotation with one
-tap, and in a study that asks for a rating on every mark a bar of numbers appears over the EEG after
-each new mark. A second finger
+tap, and in a study that asks for a rating on every annotation a bar of numbers appears beside each
+new one. A second finger
 that touches the screen while you are marking cancels the mark, so a move never leaves an
 annotation behind by accident.
 
@@ -527,8 +559,8 @@ download, such as your results in the demonstration, go to the Downloads folder 
 
 Press Save and Finish when you have looked through the whole recording. If some parts of at least a
 second have not been on the screen, ElectroTag first lists them with their times; Go to the first
-part takes you to the first of them, and Save anyway goes on, for example when you reviewed them another
-way. Your study may turn this check off. ElectroTag then shows how many annotations of each type you
+part (Go to that part, when there is one) takes you there, Save anyway goes on, for example when
+you reviewed them another way, and Keep annotating closes the list. Your study may turn this check off. ElectroTag then shows how many annotations of each type you
 are saving and asks you to confirm; once saved, the recording is complete. You can still revise it
 later from your history when your study allows revisions (see "History and revisions"); each
 revision is saved as a new version. If you marked nothing, it asks whether to save the recording as
@@ -544,8 +576,23 @@ where the latest version shows, rather than saving it twice.
 
 Your work is saved as a draft while you annotate, in the browser and with the study, so closing the
 page by accident loses nothing; the time at the top of the view says when the draft was last kept.
-The saved time worked on the recording leaves out every pause. ‹ Close asks whether to close and finish later, which keeps your
-annotations and time, or to discard them.
+When the study cannot be reached, for example because the connection dropped, the top reads "Draft
+kept in this browser only" on a pale amber ground, and the line at the bottom says so once. Your
+work is safe in this browser meanwhile, and the draft goes to the study as soon as the connection
+returns; the line then says that the study has your latest draft. Until then, the draft cannot
+follow you to another browser. Save and Finish is never sent again by itself: press it again once
+the connection is back. The saved time worked on the recording leaves out every pause.
+
+‹ Close asks whether to close and finish later, which keeps your draft with your annotations and
+time, or to discard them, which asks a second time. When you open a recording that has a draft
+from the home page's list or with Open a recording from your computer, ElectroTag asks whether to
+restore it. Esc or a click beside the question restores it, as Restore and continue does, and Start
+afresh asks a second time before it deletes the draft ("Delete your unfinished work?", with Keep
+them as the safe answer). Work deleted with Start afresh, Discard and close or Leave without changes
+is kept in the browser tab until you close it: when you open the recording again in that tab,
+a note in the Annotations tab offers Bring it back, which brings back its annotations, its time
+worked and the parts it had viewed, as one change that Undo takes back. A revision asks the same
+way ("Continue your revision?"), with Start again from version 1 behind a second question.
 
 ## On a phone
 
