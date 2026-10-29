@@ -21,6 +21,31 @@ through it in the header and on the sign-in page, and it is now also the
 browser tab's icon and the icon an iPad shows when ElectroTag is added to its
 home screen, which the application did not have before.
 
+Annotators can say how sure they are of each mark, and add a short note to
+it. Each annotation can have a confidence of definite, probable or possible:
+D gives the selected annotation (or the one just made) the next level, Set
+confidence… in its menu (a long press on an iPad) picks one, and the
+Confidence button below the Annotations list steps to the next with one tap.
+Probable and possible marks are filled more lightly on the EEG and named in
+their tag; the list shows a short word for them and a small tick for
+definite. Add a note…, in the menu, below the list or in Edit times…, keeps a
+note of up to 200 characters, shown by a small note sign with the text as its
+tooltip. The study chooses in its settings (`annotation.confidence`) whether
+confidence is optional, the default, where a new mark has none and looks as
+before, or asked for every mark, where every new mark starts as definite. Both
+are saved with the annotations and kept in drafts, revisions, undo and redo;
+overlapping marks that merge keep the lower confidence and both notes.
+`events.tsv` has two new columns, `confidence` and `annotation_note` (`n/a`
+when not given), described in `events.json`; the session and annotations
+files record the study's setting, and files written before are still read. The
+agreement analysis reports each annotator's distribution of confidence and,
+when any was given, agreement again without the marks given probable or
+possible (definite-confidence agreement), in the report and in
+`confidence_by_annotator.tsv` and `confidence_sensitivity.tsv`; notes are
+listed with each matched and unmatched event and used in no statistic. The
+interaction log records `confidence_set` and `note_set`, with a note's length
+only, never its text.
+
 The browser version holds up better when the study answers late or fails
 once, and when people press things twice. While Save and Finish waits for its
 answer, no draft is sent and Pause, Close and Leave without changes wait, so a

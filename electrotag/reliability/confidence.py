@@ -184,8 +184,8 @@ def explanation(ds: AgreementDataset, cfg: AnalysisConfig) -> str:
                          "default; compare their distributions of confidence before reading much into the difference.")
     if setting == "optional":
         return common + ("In this study a confidence was optional: annotators gave one only when they wished, so the "
-                         "marks with a confidence are a self-selected subset, and a mark without one is unknown "
-                         "rather than definite. Marks without a confidence are kept in both sets.")
+                         "marks with a confidence are a self-selected subset, and the confidence of a mark without one "
+                         "is unknown. Marks without a confidence are kept in both sets.")
     return common + ("The files analysed come from different confidence settings (or older files that do not record "
                      "the setting), so whether a confidence was volunteered or asked for every mark differs between "
                      "them; marks without a confidence are kept in both sets.")

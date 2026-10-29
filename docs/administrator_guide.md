@@ -220,6 +220,14 @@ the screen, or `"off"`.
 {"settings": {"annotation": {"break_reminder_minutes": 45, "idle_pause_minutes": 5, "coverage_check": "warn"}}}
 ```
 
+`annotation.confidence` is `"optional"` (the default), with which a new
+annotation has no confidence and annotators give one (definite, probable or
+possible) when they wish, or `"every_mark"`, with which every new annotation
+starts as definite and annotators change it when unsure. Annotators can always
+give a confidence and add a short note; the setting chooses what a new mark
+starts with, and it is recorded in every saved result
+([design decisions](design_decisions.md), "Confidence and notes").
+
 The time worked on a recording, saved in the session file (`timing.elapsed_seconds`),
 the `_time_viewed.txt` file and the completion register (`elapsed_s`), leaves out
 every pause in the browser: those the annotator chose, those

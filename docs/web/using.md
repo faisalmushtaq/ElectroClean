@@ -252,6 +252,33 @@ Ctrl on a Mac). When two annotations of the same type on the same channels overl
 automatically. In the Annotations list you can also edit the start and end times exactly, change the
 label of several annotations at once, and merge annotations of one type.
 
+## Confidence and notes
+
+When you are unsure of a mark, you can say how sure you are of it. Each annotation can have a
+confidence of definite, probable or possible. Press D to give the selected annotation the next
+level, or the annotation you made last when nothing is selected; press it again for the level after
+that. Right-click the annotation (press and hold it on an iPad) and choose Set confidence… to pick a
+level directly, or select it in the Annotations list and press the Confidence button below the list,
+which steps to the next level with one press or tap. Undo takes back a change of confidence like any
+other change.
+
+What a new mark starts with depends on the study. In most studies confidence is optional: a new mark
+has none, and the mark looks exactly as it always has. Give a confidence only when you want to, and
+choose Not given in the menu, or press D until the list shows no confidence, to take it away again.
+Some studies ask for a confidence on every mark: there, every new mark starts as definite, so you
+only need to do something when you are less sure, and D steps through definite, probable and
+possible. Marks you give probable or possible are filled more lightly on the EEG and their tag names
+the level; in the Annotations list they show a short "prob." or "poss.", and definite a small tick.
+
+Any annotation can also carry a short note, of up to 200 characters on one line, for example "could
+be an eye movement rather than a blink". Choose Add a note… in the annotation's menu or below the
+Annotations list, or write it in Edit times…, which shows the note beside the start and end. An
+annotation with a note has a small note sign in the list and in its tag on the EEG; hold the
+pointer over it to read the note, and choose Edit note… to change or remove it. Notes are saved
+with your annotations for the study's researchers, who use them, with the confidence levels, to
+understand where annotators disagree. The record of how you use ElectroTag keeps only that a note
+was added, changed or removed and how long it is, never what it says.
+
 ## Moving around the recording
 
 The arrow keys ← and → scroll back and forward through time (with Shift, a whole screen), and ↑
@@ -334,7 +361,9 @@ artifact, tap an annotation to select it, drag its edge to make it longer or sho
 channel's name or its trace to choose that channel. Two fingers move the EEG: sideways through
 time and up and down through the channels; pinch sideways to show more or less time. Press and
 hold an annotation for its menu, the one a right-click opens on a computer, which also offers Edit
-times… to move it; double-tap it to choose its type from the list of all types. A second finger
+times… to move it, Set confidence… and Add a note…; double-tap it to choose its type from the list
+of all types. The Confidence button below the Annotations list gives the selected annotation the
+next level of confidence with one tap. A second finger
 that touches the screen while you are marking cancels the mark, so a move never leaves an
 annotation behind by accident.
 

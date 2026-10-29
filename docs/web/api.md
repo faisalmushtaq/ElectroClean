@@ -40,7 +40,9 @@ Annotation = {
   "duration_samples": 102,            // integer >= annotation.min_duration_samples
   "channels": ["Fp1", "Fp2"],         // [] means the whole montage
   "created_at": "2026-10-28T10:15:02.120+00:00",
-  "modified_at": "2026-10-28T10:15:09.004+00:00"
+  "modified_at": "2026-10-28T10:15:09.004+00:00",
+  "confidence": "probable",           // optional: "definite", "probable", "possible", or null / left out (not given)
+  "note": "could be an eye movement"  // optional: one line of at most 200 characters ("" or left out: none)
 }
 
 Manifest = {                          // what the browser needs to show a registered recording
@@ -63,6 +65,12 @@ Draft = {"annotations": [Annotation], "view": {"start_s": 12.0, "duration_s": 10
          "viewed": [[0.0, 64.5], [120.0, 130.0]], "saved_at": "…",
          "revises": 1}                // only in the draft of a revision: the version being revised
 ```
+
+An annotation's `confidence` and `note` are checked wherever annotations are sent: a confidence
+other than the three levels or none, or a note that is not text, spans lines, is just `n/a` or is
+longer than 200 characters, is refused with 422 (`invalid_annotation` when saving, `invalid_draft`
+for a draft). Answers that return saved annotations (a revision's `annotations`) give both,
+`confidence` null and `note` "" when there is none.
 
 A draft's `elapsed_s` is the time worked so far, without the time paused (at least 0, or 422
 `invalid_draft`; more than a week is kept as a week). `viewed` lists the
@@ -117,7 +125,7 @@ password.
                 "channel_colours": "off" | "region" | "side" | "type"},     // the study's default
     "annotation": {"min_duration_samples": 1, "quick_labels": ["Eye-blink-artifact", "…"],
                    "break_reminder_minutes": 50, "idle_pause_minutes": 3, "coverage_check": "warn" | "off",
-                   "allow_revisions": true},
+                   "allow_revisions": true, "confidence": "optional" | "every_mark"},
     "gamification": {"enabled": true, "leaderboard": true},
     "logging": {"interactions": true, "pointer_hz": 5, "idle_after_s": 30},
     "logging_notice": "This study records how you use ElectroTag …"   // "" when logging is off
@@ -136,6 +144,8 @@ administrator has written one. The three settings for long sessions in
 `annotation` are described in the [administrator guide](../administrator_guide.md): minutes of work before a
 break reminder and minutes without input before the clock pauses itself (0 turns
 either off), and whether Save and Finish first lists the parts not yet viewed.
+`annotation.confidence` says what a new annotation's confidence is: none (`"optional"`, the
+default) or definite (`"every_mark"`); annotators can give or change it in either.
 `annotation.allow_revisions` says whether a finished study recording may be
 opened again and revised (see "Revisions" below), and `gamification` whether
 the home page shows the game elements and the leaderboard (see

@@ -444,6 +444,46 @@ people are on it, and lets each person leave it. Celebrations are short, quiet a
 respect a request for reduced motion. Because even well-meant game elements can change behaviour,
 they can be switched off, and a study that uses them should report them in its methods.
 
+## Confidence and notes (29 October 2026)
+
+In an agreement study, doubt is part of what is being measured: two annotators who disagree about a
+mark are often both unsure of it. Each annotation can therefore carry a confidence and a short note.
+Three levels, definite, probable and possible, are enough to separate a mark the annotator would
+defend from one they offer tentatively, and few enough to choose between at a glance; a finer scale
+would ask for distinctions people cannot make consistently from moment to moment, and two levels
+would merge "probably an artifact" with "perhaps one". Confidence is set with one key (D, which steps
+to the next level), one tap on the Annotations list's Confidence button, or the annotation's menu,
+so that it adds next to no work.
+
+The project lead asked that annotators can always give a confidence, and that the study chooses how
+much it asks for (`annotation.confidence`). **Optional**, the default, costs nothing: a new mark has
+no confidence and looks as marks always have, and annotators give one when they feel doubt. The
+saved files hold `n/a` for a mark without one, which means that the annotator gave none, and the
+marks with a confidence are a self-selected subset: some annotators will volunteer doubt more often
+than others, and the analyses say so. **Every mark** gives complete data: every new mark starts as
+definite, so the annotator acts only when unsure, which keeps the extra work near zero. The default
+brings its own risk of bias, since some annotators may never change it, and a definite mark from such
+an annotator says less than one from an annotator who uses all three levels. Each annotator's
+distribution of confidence in the agreement report shows who rarely leaves the default.
+
+The analyses use confidence in two ways. They report each annotator's distribution of the levels,
+with how many marks had a confidence given and how many carry a note. When any confidence was given,
+they report agreement twice, for all marks and again without the marks given probable or possible:
+a sensitivity analysis, called definite-confidence agreement, which in an every-mark study is
+agreement on the definite marks. In an optional study the marks without a confidence stay in both
+sets, because leaving them out would leave little beyond the self-selected definite marks; the
+report says that the confidence was volunteered. When agreement rises without the doubtful marks,
+much of the disagreement lies in marks the annotators themselves were unsure of. The main agreement
+tables always use every mark.
+
+When two marks of one type overlap and merge, the merged mark keeps the lower confidence of the two,
+since it is only as sure as its least sure part, and both notes, joined with "; " (each different
+note once, shortened to 200 characters if longer). A mark without a confidence adds none, so a
+definite mark merged with one without a confidence stays definite. Notes are research content: they
+are saved with the annotation, listed with each event in the analyses' matched and unmatched event
+tables, and used in no statistic. The interaction log records only that a note was added, changed or
+removed and its length, as it never records typed text.
+
 ## Decisions still open
 
 1. **Agreement settings to pre-register:** bin widths, the bin coverage rule,

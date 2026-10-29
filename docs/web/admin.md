@@ -410,6 +410,17 @@ and it always leaves out the time they were paused, whether they pressed Pause, 
 or left the page out of sight for more than ten seconds; the annotators' guide describes what they
 see.
 
+**Annotation** also chooses how confidence is asked for (`annotation.confidence`). Annotators can
+always say how sure they are of a mark, definite, probable or possible, and add a short note to it;
+the annotators' guide describes how. With **Optional** (`"optional"`, the default) a new mark has no
+confidence and annotators give one only when they wish, which costs them nothing and records doubt
+when they feel it; the saved files then hold `n/a` for a mark without one, meaning not given. With
+**Every mark** (`"every_mark"`) every new mark starts as definite and annotators change it when
+unsure, so every mark has a confidence; some annotators may rarely change the default, which the
+agreement analysis helps to see. The setting is recorded in each saved result, and the analyses
+report agreement for all marks and again without the marks given probable or possible (see the
+[design decisions](../design_decisions.md), "Confidence and notes").
+
 **Annotation** also chooses whether annotators may revise recordings they have
 finished (on by default; `annotation.allow_revisions`). A revision is saved as a new attempt of the
 same assignment beside the earlier files, which stay exactly as they were; the completion register

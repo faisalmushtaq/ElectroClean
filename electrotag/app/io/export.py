@@ -337,7 +337,7 @@ def build_events_sidecar(
                 if confidence_mode == "every_mark"
                 else "In this study a confidence was optional (annotation.confidence 'optional'): annotators gave one "
                 "only when they wished, so the annotations with a confidence are a self-selected subset and n/a "
-                "means not given, not definite."
+                "means that the annotator gave none."
             )
         ),
         "Levels": {

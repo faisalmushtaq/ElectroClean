@@ -85,7 +85,7 @@ in order of onset. Columns, in this order:
 2. any of `onset`, `duration`, `trial_type`, `value`, `sample`, `channels`
    that the original lacked;
 3. `artifact_code`, `event_source`, `annotation_id`, `annotator_id`,
-   `original_row`.
+   `original_row`, `confidence`, `annotation_note`.
 
 | Column | Original event rows | Artifact rows |
 |---|---|---|
@@ -100,6 +100,8 @@ in order of onset. Columns, in this order:
 | `annotation_id` | `n/a` | stable 32-character identifier |
 | `annotator_id` | `n/a` | annotator ID |
 | `original_row` | 1-based row number in the original file | `n/a` |
+| `confidence` | `n/a` | `definite`, `probable` or `possible`; `n/a` when no confidence was given |
+| `annotation_note` | `n/a` | the annotator's note (one line, at most 200 characters), or `n/a` when there is none |
 
 The original table can be rebuilt exactly by keeping the rows whose
 `event_source` starts with `original:`, sorting them by `original_row` and
@@ -117,12 +119,24 @@ events that already use HED-SCORE artifact names as `trial_type`, are noted in
 the session file. Files written by ElectroTag 1.0 kept artifact codes in
 `value`; `annotations_from_events_tsv` still reads them.
 
+**Confidence and notes.** `confidence` says how sure the annotator was of the
+artifact. In a study whose `annotation.confidence` setting is `"optional"` (the
+default) annotators gave one only when they wished, so `n/a` on an artifact row
+means not given, and the rows with a confidence are a self-selected subset; in
+a study set to `"every_mark"` every new annotation started as `definite`.
+`events.json` says which applied, and so do the session and annotations files.
+A note is never just the text `n/a`, which these columns keep for "none".
+Files written before these columns existed are still read: their artifacts
+count as having no confidence and no note.
+
 ## `…_events.json`
 
 The original `events.json` (with BIDS inheritance applied), plus:
 
 * descriptions of `channels`, `artifact_code` (with a `Levels` entry for every
-  code), `event_source`, `annotation_id`, `annotator_id` and `original_row`;
+  code), `event_source`, `annotation_id`, `annotator_id`, `original_row`,
+  `confidence` (with its three `Levels`, and what `n/a` means under the study's
+  setting) and `annotation_note`;
   the original description of `value` is kept unchanged; a column that
   ElectroTag adds because the original events lack it (often `value` or
   `sample`) is described by ElectroTag, even when the dataset's
@@ -132,14 +146,15 @@ The original `events.json` (with BIDS inheritance applied), plus:
   `"HEDVersion": ["8.5.0", "sc:score_2.2.0"]` in `dataset_description.json` to
   validate them);
 * `ElectroTagMetadata`: recording, annotator, session, time conventions,
-  the label catalogue and the result of the event-code check.
+  the label catalogue, the result of the event-code check and
+  `confidence_setting` (`optional` or `every_mark`).
 
 ## `…_annotations.json` (canonical format)
 
 ```json
 {
   "schema": "electrotag.annotations",
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "recording": {
     "recording_id": "sub-001/eeg/sub-001_task-rest_eeg.vhdr",
     "relative_path": "sub-001/eeg/sub-001_task-rest_eeg.vhdr",
@@ -150,9 +165,11 @@ The original `events.json` (with BIDS inheritance applied), plus:
   },
   "annotator": {"annotator_id": "A01", "display_name": "Demo A01"},
   "session": {"session_id": "20261026T154749Z-e6797cfe", "mode": "standard",
-              "created_at": "2026-10-26T15:47:49.375+00:00", "app_version": "1.1.0", "context": {}},
+              "created_at": "2026-10-26T15:47:49.375+00:00", "app_version": "1.1.0", "context": {},
+              "confidence": "optional"},
   "time_conventions": {"onset_origin": "first_sample", "...": "..."},
   "channel_convention": {"empty_list_means": "The annotation applies to the whole recording montage ...", "...": "..."},
+  "confidence_convention": {"levels": ["definite", "probable", "possible"], "not_given": "null: ...", "settings": {"...": "..."}},
   "label_catalogue": {"catalogue_id": "electrotag-hed-score-artifacts", "catalogue_version": "2.0.0",
                       "sha256": "...", "hed_library": "score", "hed_library_version": "2.2.0",
                       "labels": [{"value": 103, "label": "Eye-blink-artifact", "kind": "specific",
@@ -162,7 +179,7 @@ The original `events.json` (with BIDS inheritance applied), plus:
     {"annotation_id": "f70bc89fe0bd420192ad932194bdad6d", "label": "Eye-blink-artifact", "value": 103,
      "onset": 2.996, "duration": 0.428, "onset_sample": 749, "duration_samples": 107, "end_sample": 856,
      "channels": ["Fp1", "Fp2", "VEOG"], "scope": "channels",
-     "created_at": "...", "modified_at": "..."}
+     "created_at": "...", "modified_at": "...", "confidence": "probable", "note": "could be an eye movement"}
   ]
 }
 ```
@@ -173,6 +190,13 @@ trigger channels, they are listed in `recording.hidden_channels` (the key is
 absent otherwise). `fingerprint` has
 the roles `vhdr`, `eeg` and `vmrk` for BrainVision and `eeg` alone for EDF and
 BDF, followed by the BIDS sidecars.
+
+Each annotation's `confidence` is `definite`, `probable`, `possible` or
+`null` (not given), and its `note` is the annotator's note or `""`;
+`session.confidence` is the study's `annotation.confidence` setting when the
+annotations were made. Files of schema version 1.0.0 have none of these: their
+annotations are read as having no confidence and no note, and the setting as
+not recorded.
 
 When the file is read, the sample fields are authoritative; the seconds must
 agree with them to within half a sample, the `value` must match the label,
@@ -198,7 +222,7 @@ A single number: seconds spent annotating, to the nearest millisecond, e.g.
 | `application` | ElectroTag version, platform, versions of Python, MNE, NumPy, SciPy, pandas and matplotlib; for work saved from the browser also `client` (`web`), the study's back end (`server`), the annotator's browser (`browser`: its user agent and screen) and a `note` saying that the recording never left the annotator's computer. Files written by the desktop application (version 1.1.0 and earlier) also list the versions of its display libraries. |
 | `display` | `scalings` used (the study's, or for a type with an implausible amplitude the scale chosen for this recording), `amplitude_check` (the measured amplitude per channel type and any scale set automatically), and the amplitude factor, seconds and channels on screen at Save and Finish |
 | `filters` | Selected settings, whether fixed by the administrator, and `design`. For work saved from the browser, `design` names the filters the browser applied for display (`applied_in`, `settings`); in files written by MNE-based loading (the desktop application, and scripts), it holds the exact MNE calls and parameters, filter lengths, MNE's own description of each filter, edge-transient duration, discontinuities filtered separately, channels filtered, the number of blocks of channels they were filtered in, and how the display data were stored |
-| `annotations` | Counts in total, by label, whole-montage and channel-specific |
+| `annotations` | Counts in total, by label, whole-montage and channel-specific; `confidence` (the study's `setting`, `optional` or `every_mark`, what it means, `n_given`, `n_not_given` and the counts `by_level`) and `n_with_note` |
 | `label_catalogue` | As in the annotations file |
 | `original_events` | Source, the trigger channels read (when the events come from them), count, whether `sample` was computed, comparison of `events.tsv` with the marker file, the code check (original codes equal to artifact codes, artifact names used as `trial_type`, codes with several meanings) |
 | `channel_check` | Comparison of the recording's channels with `channels.tsv` |
@@ -357,6 +381,8 @@ report is regenerated from the same inputs.
 | `timeresolved_pairwise.tsv` | 2×2 tables and pairwise statistics per recording (and pooled), category, channel mode and representation |
 | `timeresolved_multirater.tsv` | Fleiss' kappa, Krippendorff's alpha and mean pairwise kappa |
 | `events_summary.tsv` | Event matching: counts, precision, recall, F1, IoU, channel overlap, boundary differences |
-| `events_matched.tsv` | Every matched pair of events |
-| `events_unmatched.tsv` | Every missed and extra event |
+| `events_matched.tsv` | Every matched pair of events, with each one's confidence and note |
+| `events_unmatched.tsv` | Every missed and extra event, with its confidence and note |
+| `confidence_by_annotator.tsv` | Per annotator: the confidence setting, annotations with a confidence given, the counts and shares of each level, and annotations with a note |
+| `confidence_sensitivity.tsv` | When any confidence was given: positive agreement, Cohen's kappa (sample by sample, pooled) and event F1 per category, mode and pair, for all marks and without the marks given probable or possible |
 | `confusion_time_weighted.tsv` | Time where one annotator used one label and the other another |

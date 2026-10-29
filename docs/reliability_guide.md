@@ -263,6 +263,29 @@ during which the first used one label and the second another ("none" means no
 label). It shows, for example, how much time one annotator called eye blink
 while the other called vertical eye movement.
 
+## 5. Confidence of the annotations
+
+Annotators may say how sure they are of each mark: definite, probable or
+possible. `confidence_by_annotator.tsv` gives, for each annotator, the study's
+confidence setting, how many marks had a confidence given and how those were
+spread over the three levels, and how many carry a note. When any confidence
+was given, `confidence_sensitivity.tsv` reports a sensitivity analysis,
+definite-confidence agreement: positive agreement and Cohen's kappa (sample by
+sample, all recordings pooled) and event F1 at the main threshold, per
+category, channel mode and pair of annotators, for all marks and again without
+the marks given probable or possible. When agreement rises without them, much
+of the disagreement lies in marks the annotators themselves doubted.
+
+How to read it depends on the study's setting, which the report states. With
+`every_mark`, every new mark started as definite, so the second set is the
+marks left as definite; an annotator who rarely changes the default (visible in
+`confidence_by_annotator.tsv`) may differ in habit rather than in doubt. With
+`optional`, a confidence was volunteered, so the marks with one are a
+self-selected subset and the confidence of a mark without one is unknown;
+marks without a confidence stay in both sets. Every other table uses all
+marks. Annotators' notes are listed with each event in `events_matched.tsv`
+and `events_unmatched.tsv` and take part in no statistic.
+
 ## Choosing settings
 
 ElectroTag's defaults are starting points. The research team should choose

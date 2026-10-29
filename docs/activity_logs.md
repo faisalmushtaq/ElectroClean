@@ -43,6 +43,9 @@ the field was edited (and, for number boxes such as the exact start and end of
 an annotation, the number chosen). Nothing at all is recorded from password
 fields. The annotator's display name is not in the logs; the annotator ID
 identifies them within the study. The computer's name is not recorded either.
+The text of a note on an annotation is research content, saved with the
+annotation in the result files and never in the log: the log says only that a
+note was added, changed or removed, and how many characters it has.
 
 ## Where the logs are
 
@@ -206,12 +209,25 @@ and `panel`).
 **Annotations.** `annotation_created`, `annotation_deleted`,
 `annotation_edited` (start or end), `annotation_channels_changed` and
 `annotation_relabelled` carry `annotations` (each with `id`, `label`,
-`onset_s`, `offset_s`, `channels`, `n_channels`), `before` (the previous state,
+`onset_s`, `offset_s`, `channels`, `n_channels`, `confidence`, null when none
+was given, and `note_length`, the number of characters of its note, 0 for
+none), `before` (the previous state,
 for changes), `description`, `n_total` (annotations afterwards) and `via`; an
 annotation that was merged automatically with an overlapping one of the same
 type has `auto_merged` and `merged_away`. `undo`, `redo`,
 `annotations_merged` and `annotations_reset` carry `added`, `removed` and
 `changed`.
+
+**Confidence and notes.** `confidence_set`, when the annotator gives an
+annotation a confidence or clears it (with D, the menu or the Annotations
+list's Confidence button), carries `annotations` (each with `id`, `label`,
+`confidence`, the new level or null, and `before`), `description`, `n_total`
+and `via` (`shortcut:Confidence` for D). `note_set`, when a note is added,
+changed or removed (from the menu, the list or Edit times…), carries
+`annotations` (each with `id`, `label`, `change`: `added`, `changed` or
+`removed`, `note_length` and `previous_length`), `description`, `n_total` and
+`via`; the note's text is never logged. A note changed in Edit times… together
+with the times gives `annotation_edited` followed by `note_set`.
 
 `via` says which input caused a change, when one happened in the three seconds
 before it: `eeg_drag`, `eeg_click` or `eeg_double_click` (on the EEG; on a touch
