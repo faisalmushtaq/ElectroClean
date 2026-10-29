@@ -16,7 +16,7 @@ import {
   minutesText, parseBulkPeople, plural, whenText,
 } from './model.js';
 import {
-  actionButton, card, chip, confirmInline, copyButton, copyText, dataTable, eachInTurn, field, infoTable, loading, messageArea, progressLine,
+  actionButton, card, chip, confirmInline, copyButton, copyText, dataTable, eachInTurn, oneAtATime, field, infoTable, loading, messageArea, progressLine,
   recordingName, resultsTable, secretBox, sectionHead, select, tabBar, textArea, textInput,
 } from './ui.js';
 
@@ -152,10 +152,12 @@ export class AnnotatorsSection {
       clear(this.bulkResult);
       const ids = others;
       if (!ids.length) throw new Error('Choose someone other than yourself: your own account is changed by another administrator.');
-      const results = await eachInTurn(ids, (aid) => this.area.write(op, { annotator_id: aid, ...body }), { progress, words: (i, n, aid) => `${label}: ${aid} (${i} of ${n})…` });
-      this._showResults(results, done, op === 'user_invite');
-      this.table.clearSelection();
-      await this.reload();
+      await oneAtATime(this, async () => {
+        const results = await eachInTurn(ids, (aid) => this.area.write(op, { annotator_id: aid, ...body }), { progress, words: (i, n, aid) => `${label}: ${aid} (${i} of ${n})…` });
+        this._showResults(results, done, op === 'user_invite');
+        this.table.clearSelection();
+        await this.reload();
+      });
     } });
     const days = select(DAYS, '14');
     days.setAttribute('aria-label', 'The new links last');
