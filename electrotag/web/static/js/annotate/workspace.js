@@ -289,7 +289,8 @@ export class Workspace {
         title: `${l.label} (${l.value}) · key ${i + 1}\n${l.description}\n\nClick (or press the key) to draw this type next; with annotations selected, to change them to it.`,
         onclick: () => { logger.noteInput(`button:${i + 1} ${l.short_code}`); this.applyType(name); },
         style: { '--chip-colour': l.colour, '--chip-text': readableTextColour(l.colour) },
-      }, h('span.swatch', { style: { background: l.colour } }), h('span.chip-key', {}, String(i + 1)), h('span.chip-code', {}, displayCode(l.short_code)));
+      }, h('span.swatch', { style: { background: l.colour } }), h('span.chip-key', {}, String(i + 1)), ' ', h('span.chip-code', {}, displayCode(l.short_code)),
+      h('span.sr-only', {}, `, ${l.label}`)); // the full name for screen readers: "1 Blink, Eye-blink-artifact"
       b.tabIndex = -1;
       b.addEventListener('mousedown', (e) => e.preventDefault()); // a click leaves the keyboard focus with the EEG
       return b;
@@ -307,34 +308,24 @@ export class Workspace {
       this.typeCaption, h('div.chips', {}, this.chips), this.typeMenuBtn, h('span.sep'),
       h('div.segmented', { role: 'group', 'aria-label': 'Applies to' }, this.scopeWhole, this.scopeSome), this.chooseBtn, this.chanSummary,
       h('span.ws-overlay-tool', {}, h('span.sep'), this._overlayButton()));
-    this._ro = new ResizeObserver(() => this._fitToolbar());
-    this._ro.observe(this.toolbar);
+    // Every type button shows its number and code; the toolbar wraps onto a second line when it needs one (app.css).
     return this.toolbar;
   }
 
-  _fitToolbar() {
-    // The type buttons show their code when there is room, otherwise only their number.
-    const tb = this.toolbar;
-    if (!tb) return;
-    tb.classList.remove('compact');
-    if (tb.scrollWidth > tb.clientWidth + 1) tb.classList.add('compact');
-  }
-
   _statusBar() {
-    const s = this.s;
-    const who = s.me ? `${s.me.annotator_id}${s.me.display_name ? ` (${s.me.display_name})` : ''}` : '';
     const touch = touchFirst();
     this.hintEl = h('span.ws-hint', {}, this.kind === 'review' ? (touch ? TOUCH_REVIEW_HINT : REVIEW_HINT)
       : this.readOnly ? (touch ? TOUCH_VIEW_HINT : 'N / P  next, previous annotation')
         : touch ? TOUCH_HINT : this.timed ? KEY_HINT : KEY_HINT.replace('  ·  B pause', '')); // a try-out has no Pause
     this.msgEl = h('span.ws-message', { role: 'status', 'aria-live': 'polite' });
+    // On the right, one above the other: how much has been viewed and how many annotations there are,
+    // then the filters. Who is annotating and in which mode are in the Recording tab and the header.
     this.fixedEl = h('span.ws-fixed');
-    this.countEl = h('span.ws-fixed');
-    this.viewedEl = h('span.ws-fixed.ws-viewed', { title: 'How much of the recording has been on the screen' });
-    this._fixedText = `Annotator: ${who}   |   Mode: ${MODE_TEXT[this.kind === 'annotate' ? s.mode : this.kind] || s.mode}`;
+    this.countEl = h('span.ws-count');
+    this.viewedEl = h('span.ws-viewed', { title: 'How much of the recording has been on the screen' });
     this.readoutEl = h('span.ws-readout', { 'aria-hidden': 'true', hidden: true });
     return h('footer.ws-status', {}, h('div.ws-status-left', {}, this.hintEl, this.msgEl), this.readoutEl,
-      h('div.ws-status-right', {}, this.timed ? this.viewedEl : null, this.countEl, this.fixedEl));
+      h('div.ws-status-right', {}, h('span.ws-status-counts', {}, this.timed ? this.viewedEl : null, this.countEl), this.fixedEl));
   }
 
   _sidePanel() {
@@ -445,8 +436,10 @@ export class Workspace {
       locked ? h('p.banner', {}, 'These settings are fixed by the study administrator.') : null,
       h('div.opt', {}, h('label', {}, hpOn, ` Apply ${hpHz} Hz high-pass filter (recommended)`)),
       h('div.opt', {}, h('label', {}, hpOff, ' No high-pass filter')),
-      h('div.opt', {}, h('label', {}, notch, ' Apply notch filter'), ' ', h('label', {}, n50, ' 50 Hz (UK, Europe)'), ' ', h('label', {}, n60, ' 60 Hz (North America)')),
-      h('div.opt', {}, h('label', {}, harm, ' Also remove harmonics (100, 150 Hz … or 120, 180 Hz …)')),
+      h('div.opt', {}, h('label', {}, notch, ' Apply notch filter')),
+      // The notch filter's own choices, set in under it.
+      h('div.opt.sub', { role: 'group', 'aria-label': 'Notch filter' }, h('label', {}, n50, ' 50 Hz (UK, Europe)'), h('label', {}, n60, ' 60 Hz (North America)')),
+      h('div.opt.sub', {}, h('label', {}, harm, ' Also remove harmonics (100, 150 Hz … or 120, 180 Hz …)')),
       this._channelColourOption());
   }
 
@@ -566,7 +559,6 @@ export class Workspace {
     }
     this._clock = setInterval(() => this._tick(), 1000);
     this._tick();
-    requestAnimationFrame(() => this._fitToolbar());
     const visibility = () => this._visibility();
     document.addEventListener('visibilitychange', visibility);
     this._listeners.push(() => document.removeEventListener('visibilitychange', visibility));
@@ -637,7 +629,6 @@ export class Workspace {
     this.s.onSaved = null;
     this._listeners.forEach((f) => f());
     this.store.removeListener(this._storeListener);
-    if (this._ro) this._ro.disconnect();
     if (this.coach) this.coach.destroy();
     this.viewer.destroy();
     closeMenu();
@@ -780,7 +771,7 @@ export class Workspace {
     this.breakEl = h('div.break-reminder.note', { role: 'status', 'aria-live': 'polite', 'data-log': 'break-reminder' },
       h('p', {}, `You have worked for ${minutesWords(worked)} since your last break. A few minutes away from the screen help you stay sharp.`),
       h('div.btn-row', {}, take, later));
-    this.eegHost.append(this.breakEl);
+    this.main.append(this.breakEl); // over the foot of the side panel (app.css), never over the EEG
     logger.event('break_reminder', { worked_s: Math.round(worked), interval_s: this.settings.breakReminderMinutes * 60 });
   }
 
@@ -832,7 +823,7 @@ export class Workspace {
     if (!this.timed) return;
     const f = cov.viewedFraction(this.s.viewed, this.s.recording.durationS, this._noData());
     const text = `Viewed ${cov.percentText(f)}`;
-    this.viewedEl.textContent = `${text}   |   `;
+    this.viewedEl.textContent = text;
     this.coverageText.textContent = `${text} of the recording`;
     this.coverageBar.style.width = `${Math.floor(f * 100)}%`;
   }
@@ -1022,7 +1013,7 @@ export class Workspace {
   }
 
   _refreshFixed() {
-    this.fixedEl.textContent = `${this._fixedText}   |   Filters: ${this.filtersText()}`;
+    this.fixedEl.textContent = `Filters: ${this.filtersText()}`;
   }
 
   _refreshList() {
@@ -1057,7 +1048,7 @@ export class Workspace {
     const n = anns.length;
     const nCh = anns.filter((a) => a.channels.length).length;
     this.countLabel.textContent = `${n} annotation(s): ${n - nCh} whole montage, ${nCh} channel-specific`;
-    this.countEl.textContent = `Annotations: ${n}   |   `;
+    this.countEl.textContent = `Annotations: ${n}`;
   }
 
   _rowClick(e, index, anns) {

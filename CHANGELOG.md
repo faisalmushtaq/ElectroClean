@@ -5,6 +5,28 @@ Each section below describes the changes in one version of ElectroTag;
 
 ## Unreleased
 
+Movement-artifact and Chewing-artifact have new colours (#52C493 and #5A1505),
+so that the nine types of the numbered buttons stay apart for annotators with
+red-green colour blindness; the colours are the same on the type buttons, the
+marks, the overview bar and the lists, and annotation files are unaffected.
+
+The annotation view fits more screens. The type buttons always show their
+number and short name (1 Blink, 2 HEM and so on), and the toolbar continues on
+a second line when the window is too narrow, where the names used to be cut to
+bare numbers on most laptops and on an iPad held sideways; screen readers hear
+each button's full type. The line at the bottom gives its message two lines, so
+that an instruction is read to its end, and keeps how much has been viewed, the
+number of annotations and the filters on its right (who is annotating and the
+mode are in the Recording tab and the header). With the browser's zoom at 150%
+the side panel stays beside the EEG and nothing is drawn over anything else; a
+short window scrolls instead. At 200% on a laptop the notice about a larger
+screen says how to make room and offers Continue in this window. The
+Annotations list keeps room for three or four rows, the break reminder sits at
+the foot of the side panel rather than over the EEG, every choice of the
+Recording tab is a 40-pixel row on a touch screen with the notch filter's
+frequencies set in under it, and text fields show the same focus ring as
+buttons.
+
 The EEG is easier to read on dense montages. Channel names are never drawn
 smaller than 11 pixels (13 when large): where the rows are shorter, every
 second or third channel is named, selected channels are always named and the
@@ -20,11 +42,6 @@ not wait for the rest. The channel map opens with the whole head in view: on a
 pointer or the keyboard's focus, and + climbs to the size where every name fits
 (on a touch screen it opens at the first size with targets large enough for a
 finger, centred on the head).
-
-Movement-artifact and Chewing-artifact have new colours (#52C493 and #5A1505),
-so that the nine types of the numbered buttons stay apart for annotators with
-red-green colour blindness; the colours are the same on the type buttons, the
-marks, the overview bar and the lists, and annotation files are unaffected.
 
 The activity analysis (`electrotag-activity` and the admin area) now counts
 confidence ratings, notes, problem reports and the feedback on reviewed work.

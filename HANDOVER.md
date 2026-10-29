@@ -209,7 +209,13 @@ report, and either offer it or retire the setting. `electrotag-admin` still offe
 that only mattered to the desktop application (`set-passphrase` and `resolve-failure`); the
 administrator guide says so, and they can be removed. The README has no
 picture of the browser application yet. Three small differences from the desktop application's
-display are documented in [docs/web/architecture.md](docs/web/architecture.md).
+display are documented in [docs/web/architecture.md](docs/web/architecture.md). After the usability review of 29 October, the
+annotation view's layout and the EEG drawing were reworked for small, zoomed and dense cases (see
+the CHANGELOG); two things were left. The marks on the overview bar are still told apart by colour
+alone (the nine types of the numbered buttons now stay apart under red-green colour blindness, the
+other twenty need not), and Show all on a long recording still reads every sample of the channels on
+screen; a low-resolution overview of the whole recording built in the background after it opens
+would make Show all immediate.
 
 **6. Loose ends from the night of 28 to 29 October.** A download from a real OneDrive link has not
 been tried (no public link was at hand); Dropbox was checked with real links, through a route that

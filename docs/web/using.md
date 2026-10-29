@@ -255,12 +255,15 @@ screen; click it to go anywhere.
 
 Two rows of controls sit above the EEG. The first has Draw/edit, Delete, Undo, Redo, the time your
 draft was last kept (for example "Draft saved 14:02"), Pause, Help and Save and Finish. The second chooses what you mark next: the numbered type buttons and the menu of all
-types after "Draw as", then Whole montage or Selected channels, and Overlay. On the right, the Annotations tab
+types after "Draw as", then Whole montage or Selected channels, and Overlay. Each type button shows
+its number and a short name (1 Blink, 2 HEM, 3 EMG and so on); when the window is too narrow for one
+line, the toolbar continues on a second. On the right, the Annotations tab
 lists everything you have marked, the Recording tab shows the time you have worked, how much of the
 recording you have viewed, the viewing options, your comfort choices and details of the recording,
-and the Help tab lists every key. The line at the bottom reminds you of the main keys, shows what
-each action did, and on the right says how much of the recording you have viewed and how many
-annotations you have made.
+and the Help tab lists every key. The line at the bottom reminds you of the main keys and shows what
+each action did and what to do next, on two lines when it needs them, so that an instruction is
+always read to its end. On its right it says how much of the recording you have viewed and how many
+annotations you have made, with the display filters below.
 
 ## Marking an artifact
 
@@ -448,7 +451,7 @@ was hidden. When you come back, the panel says how long you were away and that t
 counted.
 
 After a long stretch of work without a break (50 minutes unless your study chose otherwise), a small
-note in the corner of the EEG suggests a break. Take a break pauses straight away; Remind me in 15
+note at the foot of the side panel suggests a break, where it covers none of the EEG. Take a break pauses straight away; Remind me in 15
 minutes puts the note away for another quarter of an hour of work. The note never stops you working,
 and any pause of five minutes or more counts as a break. The time since your last break carries over
 from one recording to the next.
@@ -493,7 +496,9 @@ computer. The numbered type buttons, Whole montage and Selected channels, Delete
 the toolbars as on a computer, and a keyboard attached to the iPad works with every key described
 here. In Channels…, Map works by touch: tap an electrode to choose it, drag with the Pencil to
 choose several in a box, and drag with a finger to move a map larger than its frame; on an iPad the
-electrodes are large enough for a finger, so a dense montage makes a larger map. Held upright, the iPad shows the EEG across its width with the side panel (and the coach in
+electrodes are large enough for a finger, so a dense montage opens as a larger map, centred on the
+head. In the Recording tab every choice is a row large enough for a finger, and the 50 and 60 Hz
+choices are set in under the notch filter they belong to. Held upright, the iPad shows the EEG across its width with the side panel (and the coach in
 training) below it, and the Annotations tab puts its buttons beside the list so that several rows
 stay in view; on its side, the panel is beside the EEG as on a computer.
 
@@ -535,6 +540,14 @@ the admin area, which works on a phone. If you sign in as an annotator on a phon
 Email me this link, which starts an email to yourself with the address of the page (and of your
 study) to open later on a tablet or computer, and Sign out. Your work waits for you on the larger
 screen.
+
+On a computer the same notice appears when the browser window is very small, which is often because
+the page has been made larger with the browser's zoom (at 200% on a laptop, for example). The
+notice then says that Ctrl and minus (⌘ and minus on a Mac) makes room again, and offers Continue in
+this window, which brings the views back for as long as the tab is open. In a short window the
+annotation view keeps the EEG and the side panel at a usable height and scrolls down to the rest,
+rather than drawing one part over another; at 150% on a laptop, the side panel stays beside the
+EEG.
 
 ## The training programme
 
