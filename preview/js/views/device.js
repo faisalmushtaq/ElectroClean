@@ -17,7 +17,8 @@ const DEFAULT_PREFS = Object.freeze({ keepLinks: true, keepChosen: false, remove
 export function deviceStore(app) {
   if (!app.me || !app.backend) return null;
   const study = app.me.study || {};
-  const owner = ownerKey({ backend: app.backend.kind || '', studyId: study.study_id || study.name || '', annotatorId: app.me.annotator_id || '' });
+  const owner = ownerKey({ backend: app.backend.kind || '', server: app.backend.kind === 'server' ? app.backend.server || '' : '',
+    studyId: study.study_id || study.name || '', annotatorId: app.me.annotator_id || '' });
   if (!app._deviceStore || app._deviceStore.owner !== owner) app._deviceStore = new DeviceStore({ owner });
   return app._deviceStore;
 }
@@ -41,6 +42,9 @@ function prefCheck(app, name, text, logName) {
   box.checked = Boolean(prefs.get(name));
   return { el: h('label.check', {}, box, h('span', {}, text)), box };
 }
+
+/** A removal that kept copies because recordings opened from them are open. */
+const IN_USE_TEXT = (n) => `${n === 1 ? 'One recording is' : `${n} recordings are`} open in this or another tab or window, so ${n === 1 ? 'it was' : 'they were'} kept. Close ${n === 1 ? 'it' : 'them'} there, then remove ${n === 1 ? 'it' : 'them'} here.`;
 
 const CANNOT_KEEP = 'This browser cannot keep recordings on this device (in a private window, for example).';
 
@@ -155,6 +159,7 @@ export async function showDevicePanel(app) {
   if (!store) return;
   const body = h('div.device-panel');
   let confirm = null; // {what: 'finished'|'all'}
+  let inUse = 0; // copies the last removal kept, because a recording opened from them is open
   const render = async () => {
     const kept = await store.list().catch(() => []);
     const items = (app.assignments && app.assignments.items) || [];
@@ -174,13 +179,15 @@ export async function showDevicePanel(app) {
           h('td.num', {}, formatBytes(k.size)),
           h('td', {}, h(`span.chip${STATE[state[i]][1]}`, {}, STATE[state[i]][0])),
           h('td.actions', {}, h('button.btn.small', { type: 'button', 'data-log': 'device-remove-one', onclick: async () => {
-            await store.remove(k.sha256);
-            logger.event('device_removed', { reason: 'one', count: 1, size_bytes: k.size || 0 });
+            const removed = await store.remove(k.sha256);
+            inUse = removed ? 0 : 1;
+            if (removed) logger.event('device_removed', { reason: 'one', count: 1, size_bytes: k.size || 0 });
             await render();
           } }, 'Remove')))))));
     }
     const space = est && est.quota ? ` This site uses ${formatBytes(est.usage)} of this browser's storage; about ${formatBytes(Math.max(0, est.quota - est.usage))} more is available.` : '';
     body.append(h('p.caption', {}, `${total.count} ${total.count === 1 ? 'recording' : 'recordings'}, ${formatBytes(total.bytes)}.${space}`));
+    if (inUse) body.append(h('p.note.device-in-use', { role: 'status' }, IN_USE_TEXT(inUse)));
     const fin = finishedToRemove(kept, items);
     const actions = h('div.btn-row');
     if (confirm) {
@@ -191,7 +198,8 @@ export async function showDevicePanel(app) {
         h('button.btn', { type: 'button', 'data-log': 'device-confirm-no', onclick: () => { confirm = null; render(); } }, 'Cancel'),
         h('button.btn.destructive', { type: 'button', 'data-log': 'device-confirm-yes', onclick: async () => {
           const r = await store.removeMany(all ? kept : fin.remove);
-          logger.event('device_removed', { reason: all ? 'all' : 'finished', count: r.count, size_bytes: r.bytes });
+          logger.event('device_removed', { reason: all ? 'all' : 'finished', count: r.count, size_bytes: r.bytes, ...(r.inUse ? { in_use: r.inUse } : {}) });
+          inUse = r.inUse;
           confirm = null;
           await render();
         } }, all ? 'Remove all' : 'Remove finished recordings'));
@@ -204,7 +212,7 @@ export async function showDevicePanel(app) {
     body.append(actions, prefCheck(app, 'removeWhenFinished', 'Remove a recording from this device when I finish it', 'device-remove-when-finished').el);
   };
   await render();
-  await showDialog({ title: 'Recordings on this device', body, wide: true, className: 'device', buttons: [{ label: 'Close', value: true, kind: 'primary' }], cancelValue: true });
+  await showDialog({ title: 'Recordings on this device', body, wide: true, className: 'device', buttons: [{ label: 'Close', value: true }], cancelValue: true });
 }
 
 /** The home page's line: "3 recordings kept on this device, 1.2 GB. Manage" (nothing when none). */

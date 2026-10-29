@@ -27,7 +27,7 @@ export function badgeLabel(m) {
     recordings: `${m.target} recording${m.target === 1 ? '' : 's'} saved`,
     streak: `${m.target} days in a row`,
     thorough: `${m.target} recordings viewed in full`,
-    team: `The team at ${Math.round(m.target * 100)} % of the study`,
+    team: `The team at ${Math.round(m.target * 100)}% of the study`,
   }[m.kind] || m.name;
   return `${what}, ${m.reached ? 'reached' : 'not yet reached'}`;
 }
@@ -75,7 +75,7 @@ export function badge(m) {
   return svg;
 }
 
-function percent(x) { return `${Math.round(x * 100)} %`; }
+function percent(x) { return `${Math.round(x * 100)}%`; }
 
 function bar(share, label) {
   return h('span.progress.games-bar', { role: 'progressbar', 'aria-label': label, 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(Math.round(share * 100)) },
@@ -110,20 +110,21 @@ function goalBlock(app, facts) {
       const save = h('button.btn.small.primary', { type: 'button', 'data-log': 'goal-save', onclick: async () => {
         const n = Number(input.value);
         if (!Number.isInteger(n) || n < 1 || n > 200) { draw(true, 'Choose a whole number of recordings from 1 to 200.'); return; }
+        await change(n);
+      } }, 'Save the goal');
+      const clearBtn = goal ? h('button.btn.small', { type: 'button', 'data-log': 'goal-clear', onclick: () => change(null) }, 'No goal') : null;
+      // One change at a time: both buttons wait for the study's answer (a slow one too), which is kept
+      // only when no newer change has been made meanwhile (App.changeAchievements).
+      const change = async (n) => {
+        if (save.disabled) return;
         save.disabled = true;
+        if (clearBtn) clearBtn.disabled = true;
         try {
-          app.achievements = await app.backend.setAchievements({ goal_per_week: n });
+          await app.changeAchievements({ goal_per_week: n });
           logger.event('goal_set', { goal_per_week: n });
           app.refreshGames();
         } catch (exc) { draw(true, exc.message); }
-      } }, 'Save the goal');
-      const clearBtn = goal ? h('button.btn.small', { type: 'button', 'data-log': 'goal-clear', onclick: async () => {
-        try {
-          app.achievements = await app.backend.setAchievements({ goal_per_week: null });
-          logger.event('goal_set', { goal_per_week: null });
-          app.refreshGames();
-        } catch (exc) { draw(true, exc.message); }
-      } }, 'No goal') : null;
+      };
       host.append(h('label.goal-edit', {}, h('span', {}, 'Recordings this week'), input),
         h('div.btn-row', {}, save, clearBtn, h('button.btn.small.quiet', { type: 'button', onclick: () => draw(false) }, 'Cancel')), err);
       setTimeout(() => input.focus(), 0);
@@ -191,7 +192,7 @@ function leaderboardCard(app, facts) {
     const box = e.target;
     box.disabled = true;
     try {
-      app.achievements = await app.backend.setAchievements({ leaderboard_hidden: !box.checked });
+      await app.changeAchievements({ leaderboard_hidden: !box.checked });
       logger.event('leaderboard_visibility', { shown: box.checked });
       app.refreshGames();
     } catch {

@@ -25,7 +25,7 @@ export function openDownload(url) {
  *   onFiles: receives the fetched files (as if they had been chosen on the computer);
  *   chooseFile: opens the ordinary file chooser (the fallback's second step);
  *   extra: shown under the field (the open view's "Keep a copy on this device").
- * @returns {{el: HTMLElement, open: (items: {role?: string, url: string}[]) => Promise<boolean>, busy: () => boolean}}
+ * @returns {{el: HTMLElement, open: (items: {role?: string, url: string}[]) => Promise<boolean>, busy: () => boolean, cancel: () => void}}
  */
 export function linkPanel({ onFiles, chooseFile, extra = null }) {
   const id = `open-links-${++panelSeq}`;
@@ -58,7 +58,7 @@ export function linkPanel({ onFiles, chooseFile, extra = null }) {
           downloads.map((l, i) => h('button.btn', { type: 'button', 'data-log': 'link-download', onclick: () => { logger.event('link_fallback', { service: l.service, step: 'download' }); openDownload(l.downloadUrl); } },
             downloads.length > 1 ? `Download ${l.name || `file ${i + 1}`}` : 'Download the file')),
           h('button.btn', { type: 'button', 'data-log': 'link-choose', onclick: () => { logger.event('link_fallback', { step: 'choose' }); chooseFile(); } },
-            downloads.length > 1 ? 'then choose the downloaded files' : 'then choose the downloaded file')),
+            downloads.length > 1 ? 'Choose the downloaded files' : 'Choose the downloaded file')),
         h('p.caption', {}, `${where} ElectroClean cannot reach that folder, so delete the file there yourself when you no longer need it.`),
       ] : null));
   }
@@ -109,5 +109,5 @@ export function linkPanel({ onFiles, chooseFile, extra = null }) {
     extra,
     h('div.btn-row', {}, go, stop),
     status);
-  return { el, open, busy: () => Boolean(controller), field };
+  return { el, open, busy: () => Boolean(controller), cancel: () => { if (controller) controller.abort(); }, field };
 }

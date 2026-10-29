@@ -12,7 +12,7 @@ import {
   bytesText, chunkManifests, durationText, manifestSummary, mergeRegisterResults, plural, progressText, scopeText, whenText,
 } from './model.js';
 import {
-  actionButton, card, checkbox, chip, confirmInline, dataTable, eachInTurn, field, infoTable, messageArea, progressLine, recordingName, resultsTable,
+  STILL_RUNNING, actionButton, card, checkbox, chip, confirmInline, dataTable, eachInTurn, oneAtATime, field, infoTable, messageArea, progressLine, recordingName, resultsTable,
   sectionHead, select, textArea, textInput,
 } from './ui.js';
 
@@ -126,20 +126,27 @@ export class RecordingsSection {
     const retire = (to) => actionButton(to ? 'Retire' : 'Bring back into use', { kind: 'small', working: 'Working…', msg, log: to ? 'bulk-retire' : 'bulk-unretire', onClick: async () => {
       const list = this._chosen(this.table.selected()).filter((r) => Boolean(r.retired) !== to);
       if (!list.length) throw new Error(to ? 'The recordings chosen are retired already.' : 'The recordings chosen are in use already.');
-      const results = await eachInTurn(list, (r) => this.area.write('recording_update', { scope: r.scope, recording_id: r.recording_id, retired: to }),
-        { progress, words: (i, n) => `${to ? 'Retiring' : 'Bringing back'} ${i} of ${n}…` });
-      this._showResults(results, name, () => (to ? 'Retired: offered for no new assignments; work already assigned stays.' : 'In use again: it can be assigned.'));
+      await oneAtATime(this, async () => {
+        const results = await eachInTurn(list, (r) => this.area.write('recording_update', { scope: r.scope, recording_id: r.recording_id, retired: to }),
+          { progress, words: (i, n) => `${to ? 'Retiring' : 'Bringing back'} ${i} of ${n}…` });
+        await this._showResults(results, name, () => (to ? 'Retired: offered for no new assignments; work already assigned stays.' : 'In use again: it can be assigned.'));
+      });
     } });
     const removeHost = h('span.inline-confirm');
     removeHost.append(h('button.btn.small.destructive', { type: 'button', 'data-log': 'bulk-remove', onclick: async () => {
+      if (this._bulkRunning) { msg.problem(new Error(STILL_RUNNING)); return; }
       const list = this._chosen(this.table.selected());
       const yes = await confirmInline(removeHost, { text: `Remove the registration of ${plural(list.length, 'recording')}? Only their descriptions are deleted from the study; the EEG files never reached it and stay where they are. Recordings that someone has saved, or that a reference set uses, are kept.`,
         yes: `Remove ${plural(list.length, 'registration')}` });
       if (!yes) return;
-      const results = await eachInTurn(list, (r) => this.area.write('recording_remove', { scope: r.scope, recording_id: r.recording_id }),
-        { progress, words: (i, n) => `Removing ${i} of ${n}…` });
-      for (const r of results) if (!r.ok && r.error && r.error.code === 'has_results') r.kept = true;
-      this._showResults(results, name, () => 'Removed: its registration is deleted.');
+      try {
+        await oneAtATime(this, async () => {
+          const results = await eachInTurn(list, (r) => this.area.write('recording_remove', { scope: r.scope, recording_id: r.recording_id }),
+            { progress, words: (i, n) => `Removing ${i} of ${n}…` });
+          for (const r of results) if (!r.ok && r.error && r.error.code === 'has_results') r.kept = true;
+          await this._showResults(results, name, () => 'Removed: its registration is deleted.');
+        });
+      } catch (exc) { msg.problem(exc); }
     } }, 'Remove…'));
     this.bulkBar.append(
       h('p', {}, h('b', {}, `${plural(keys.length, 'recording')} chosen`)),
@@ -165,7 +172,7 @@ export class RecordingsSection {
           const again = await eachInTurn(kept.filter((r) => !r.retired), (r) => this.area.write('recording_update', { scope: r.scope, recording_id: r.recording_id, retired: true }));
           await this._showResults(again, name, () => 'Retired: offered for no new assignments.');
         } }))) : null,
-      resultsTable(results, { name, done }));
+      resultsTable(results, { name, done, title: 'Recording' }));
   }
 
   _filter() {

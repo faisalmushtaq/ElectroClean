@@ -220,6 +220,7 @@ export class Workspace {
   }
 
   async _leaveRevision(s) {
+    if (s.submitting) { this._waitForSave(); return false; }
     if (s.changedSinceSaved && !(await ask('Leave without changes?',
       `Your changes in this revision are discarded. Version ${s.revision.revises} stays as it was saved.`,
       { yes: 'Leave without changes', no: 'Keep revising', defaultYes: false, destructive: true }))) return false;
@@ -439,7 +440,7 @@ export class Workspace {
     return h('div.coverage-block', {},
       this.coverageText,
       h('div.progress', { role: 'presentation' }, this.coverageBar),
-      h('p.caption', {}, 'On the overview bar under the EEG, the parts not yet on the screen are white with an amber line above them.'),
+      h('p.caption', {}, 'On the overview bar under the EEG, the parts not yet on the screen are white with a thin grey line above them.'),
       h('div.btn-row', {}, this.nextUnviewedBtn));
   }
 
@@ -563,7 +564,15 @@ export class Workspace {
     logger.event('viewer_ready', {});
   }
 
+  /** Run `fn` when the view closes (at once when it has closed already). */
+  onDestroy(fn) {
+    if (this._destroyed) fn(); else (this._onDestroy || (this._onDestroy = [])).push(fn);
+  }
+
   destroy() {
+    if (this._destroyed) return; // a late answer may close a view that has closed already
+    this._destroyed = true;
+    for (const fn of this._onDestroy || []) { try { fn(); } catch { /* the view closes anyway */ } }
     clearInterval(this._clock);
     clearTimeout(this._hiddenTimer);
     clearInterval(this._pauseTimer);
@@ -586,13 +595,15 @@ export class Workspace {
   }
 
   _tick() {
-    const t = formatHms(this.s.elapsedS);
-    if (this.clockLabel) this.clockLabel.textContent = `Time worked on this recording: ${t}`;
+    // In the words of the paused panel ("3 min 05 s"), so that the two say the same thing the same way.
+    if (this.clockLabel) this.clockLabel.textContent = `Time worked on this recording: ${friendlyDuration(this.s.elapsedS)}`;
     const c = this.clock;
     if (this.timed && c) {
       // (while paused, the panel's own timer counts the pause)
       if (!c.paused && document.visibilityState !== 'hidden') {
-        if (idleDue(performance.now() - this._lastInput, this.settings.idlePauseMinutes)) this.pause('idle');
+        // The pause starts when the idle time ran out, not at this tick: after a computer slept, or a
+        // page whose timers waited, the first tick can come hours later, and those hours are not work.
+        if (idleDue(performance.now() - this._lastInput, this.settings.idlePauseMinutes)) this.pause('idle', { at: this._lastInput + this.settings.idlePauseMinutes * 60 * 1000 });
         else if (!this._breakShown && c.breakDue(this.settings.breakReminderMinutes * 60)) this._showBreakReminder();
       }
       this._tally();
@@ -632,7 +643,8 @@ export class Workspace {
   /** Stop the clock and cover the EEG. reason: button, key, idle, hidden or break; `at` starts the pause earlier. */
   pause(reason, { at } = {}) {
     const c = this.clock;
-    if (!this.timed || !c || c.paused || this.s.finished) return false;
+    // While Save and Finish waits for its answer the time is already counted: nothing to pause, and no draft to keep.
+    if (!this.timed || !c || c.paused || this.s.finished || this.s.submitting) return false;
     const idleS = (performance.now() - this._lastInput) / 1000;
     const p = c.pause(reason, at === undefined ? c.now() : at);
     // Nothing half-done stays behind the panel: a drag, a started mark, an open menu.
@@ -668,7 +680,8 @@ export class Workspace {
         this.pauseDraft.textContent = sent || s.tryOut ? 'Your draft is saved, in this browser and with the study.' : 'Your draft is saved in this browser.';
       }
     });
-    if (document.visibilityState !== 'hidden') this.resumeBtn.focus({ preventScroll: true });
+    // A dialog left open (the idle pause can come while one waits) keeps the focus: Enter still answers it.
+    if (document.visibilityState !== 'hidden' && !dialogOpen()) this.resumeBtn.focus({ preventScroll: true });
     return true;
   }
 
@@ -1591,7 +1604,12 @@ export class Workspace {
   // ================================================================ finishing
   async saveAndFinish() {
     const s = this.s;
-    if (!s.canSave) return false;
+    if (!s.canSave || s.submitting || this._finishing) return false;
+    this._finishing = true; // pressed again while its questions are open: the first press goes on alone
+    try { return await this._saveAndFinish(s); } finally { this._finishing = false; }
+  }
+
+  async _saveAndFinish(s) {
     if (this.clock && this.clock.paused) this.resume('save');
     if (this.coach && !this.coach.canSave()) return false;
     // A revision starts with nothing viewed and may fix one place only, so it is not asked to view everything again.
@@ -1620,6 +1638,18 @@ export class Workspace {
     } catch (exc) {
       this.saveBtn.disabled = false;
       this.saveBtn.textContent = oldText;
+      // No answer came (the connection, or a study that failed once): the study may have saved it all the same.
+      const lostBefore = s.answerLost;
+      if (exc.status === 0 || exc.status >= 500) s.answerLost = true;
+      if (exc.status === 409 && exc.code === 'already_revised' && lostBefore) {
+        await inform('Probably saved already', 'The study has a newer version of this recording than the one you opened. The first time you submitted, '
+          + 'the study most likely saved your revision, but its answer did not reach this page.\n\nYour history shows the latest version and when it was saved: open it there to check.');
+        s.finished = true;
+        s.forgetLocal();
+        logger.event('revision_answer_lost', { session_id: s.sessionId, revises: s.revision ? s.revision.revises : null });
+        this.app.leaveRecording(this, 'revision saved before its answer arrived');
+        return false;
+      }
       if (exc.status === 409 && (exc.code === 'already_revised' || exc.code === 'revisions_off')) {
         await inform('Not saved', `${exc.message}\n\nYour changes in this window were not saved.`);
         s.finished = true;
@@ -1653,7 +1683,7 @@ export class Workspace {
     return true;
   }
 
-  /** Before Save and Finish: the stretches never on screen, with Go to the first and Save anyway. True to go on saving. */
+  /** Before Save and Finish: the stretches never on screen, with Go to the first part and Save anyway. True to go on saving. */
   async _coverageCheck() {
     const gaps = this._unviewed();
     if (!gaps.length) return true;
@@ -1666,7 +1696,7 @@ export class Workspace {
       gaps.length > shown.length ? h('p.dialog-text', {}, `and ${gaps.length - shown.length} more, ${friendlyDuration(total)} in all.`) : null,
       h('p.dialog-text', {}, 'Look at them before you save, or save now if you have reviewed them another way.'));
     const choice = await showDialog({ title: 'Parts not yet viewed', body, className: 'coverage-check', logText: `${gaps.length} unviewed part(s), ${Math.round(total)} s`,
-      buttons: [{ label: 'Save anyway', value: 'save' }, { label: 'Go to the first', value: 'goto', kind: 'primary' }], cancelValue: 'cancel' });
+      buttons: [{ label: 'Save anyway', value: 'save' }, { label: 'Go to the first part', value: 'goto', kind: 'primary' }], cancelValue: 'cancel' });
     logger.event('coverage_check', { viewed_fraction: this._viewedFraction(), n_unviewed: gaps.length, unviewed_s: Math.round(total * 10) / 10, choice });
     if (choice === 'goto') {
       this.viewer.setView({ startS: cov.viewStartFor(gaps[0], this.viewer.view.durationS) }, 'unviewed');
@@ -1674,6 +1704,11 @@ export class Workspace {
       this.viewer.over.focus({ preventScroll: true });
     }
     return choice === 'save';
+  }
+
+  /** Asked to leave while Save and Finish waits for the study's answer: say so, and stay. */
+  _waitForSave() {
+    this.say('Saving your annotations: wait for the answer from the study before you leave this recording.', 6000);
   }
 
   _askSave(question, summary, after = null, label = 'Save and Finish') {
@@ -1690,6 +1725,7 @@ export class Workspace {
   /** Close (the Close button, or leaving the page's view): unfinished work is kept for later or discarded, as the annotator chooses. */
   async close() {
     const s = this.s;
+    if (s.submitting) { this._waitForSave(); return false; }
     if (this.clock && this.clock.paused) this.resume('close');
     if (this.kind === 'review') { this.app.leaveRecording(this, 'review_closed'); return true; }
     if (this.kind === 'tryout') {

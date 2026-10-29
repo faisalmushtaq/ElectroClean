@@ -34,10 +34,11 @@ export function safeSegment(text) {
 
 /**
  * Whose copies these are: the study (with the kind of backend, so that the demonstration and a
- * real study never mix) and the annotator.
+ * real study never mix, and the study server's address, so that two servers whose studies have the
+ * same ID never mix either) and the annotator.
  */
-export function ownerKey({ backend = '', studyId = '', annotatorId = '' } = {}) {
-  return `${safeSegment(`${backend}:${studyId}`)}/${safeSegment(annotatorId)}`;
+export function ownerKey({ backend = '', server = '', studyId = '', annotatorId = '' } = {}) {
+  return `${safeSegment(`${backend}${server ? `@${server}` : ''}:${studyId}`)}/${safeSegment(annotatorId)}`;
 }
 
 /** The key of one kept recording: its owner and its fingerprint. */
@@ -239,6 +240,30 @@ class IdbBackend {
   }
 }
 
+/**
+ * The name of the lock that a page holds, shared, while a recording it opened from a kept copy is
+ * open (the Web Locks API, which every tab of the site shares): the browser reads the files of a
+ * recording piece by piece as it is viewed, so a copy in use in any tab is never removed.
+ */
+export function inUseLockName(sha256) {
+  return `electroclean-kept-${sha256}`;
+}
+
+/** The name of the lock held while a tab writes a copy (exclusive) or reads it back (shared). */
+export function writeLockName(sha256) {
+  return `electroclean-writing-${sha256}`;
+}
+
+/** Run fn under the copy's write lock; without Web Locks, run it as it is. */
+function underWriteLock(sha256, mode, fn) {
+  const locks = webLocks();
+  return locks ? locks.request(writeLockName(sha256), { mode }, fn) : fn();
+}
+
+function webLocks() {
+  try { return (globalThis.navigator && globalThis.navigator.locks && typeof globalThis.navigator.locks.request === 'function') ? globalThis.navigator.locks : null; } catch { return null; }
+}
+
 /** The copies of one annotator in one study. */
 export class DeviceStore {
   /** @param {{owner: string, kind?: 'opfs'|'idb'|null}} options */
@@ -302,7 +327,15 @@ export class DeviceStore {
     const meta = makeMeta({ sha256, recordingId, fileName, files });
     recordingKey(this.owner, sha256);
     try {
-      await this._backend.put(this.owner, meta, Array.from(files));
+      // Two tabs keeping the same recording at once write it one after the other, and the second
+      // finds the first's whole copy and leaves it as it is.
+      const kept = await underWriteLock(sha256, 'exclusive', async () => {
+        const whole = await this._whole(sha256);
+        if (whole) return whole.meta;
+        await this._backend.put(this.owner, meta, Array.from(files));
+        return null;
+      });
+      if (kept) return kept;
     } catch (e) {
       if (isQuotaError(e)) throw new DeviceStoreError('There is no room left on this device to keep the recording', 'full');
       // Private windows of some browsers refuse the file system: IndexedDB may still work.
@@ -317,7 +350,8 @@ export class DeviceStore {
     if (!this._backend) return null;
     let got;
     try {
-      got = await this._backend.get(this.owner, sha256);
+      // a copy that another tab is still writing is read once it is whole
+      got = await underWriteLock(sha256, 'shared', () => this._backend.get(this.owner, sha256));
     } catch {
       await this.remove(sha256).catch(() => {});
       throw new DeviceStoreError('The copy kept on this device could not be read', 'broken');
@@ -331,15 +365,54 @@ export class DeviceStore {
     return got;
   }
 
-  async remove(sha256) {
-    if (this._backend) await this._backend.remove(this.owner, sha256);
+  /** The kept copy when it is there and whole, otherwise null (nothing is removed). */
+  async _whole(sha256) {
+    let got;
+    try { got = await this._backend.get(this.owner, sha256); } catch { return null; }
+    if (!got) return null;
+    const sizes = got.meta.files.map((f) => f.size);
+    return got.files.length === sizes.length && got.files.every((f, i) => f.size === sizes[i]) ? got : null;
   }
 
-  /** Remove several copies; resolves with their number and size. */
+  /**
+   * Remove a copy; resolves false (and keeps it) when a recording opened from it is open in this
+   * or another tab (holdInUse), true otherwise.
+   */
+  async remove(sha256) {
+    if (!this._backend) return true;
+    const locks = webLocks();
+    if (!locks) { await this._backend.remove(this.owner, sha256); return true; }
+    return locks.request(inUseLockName(sha256), { mode: 'exclusive', ifAvailable: true }, async (lock) => {
+      if (!lock) return false;
+      await this._backend.remove(this.owner, sha256);
+      return true;
+    });
+  }
+
+  /** Remove several copies; resolves with the number and size of those removed, and the number kept because they are in use. */
   async removeMany(metas) {
     let bytes = 0;
-    for (const m of metas) { await this.remove(m.sha256); bytes += m.size || 0; }
-    return { count: metas.length, bytes };
+    let count = 0;
+    let inUse = 0;
+    for (const m of metas) {
+      if (await this.remove(m.sha256)) { count += 1; bytes += m.size || 0; } else inUse += 1;
+    }
+    return { count, bytes, inUse };
+  }
+
+  /**
+   * Mark a kept copy as in use while a recording opened from it is open: resolves, once marked,
+   * with the function that ends the mark. Where the browser has no Web Locks it marks nothing.
+   */
+  static async holdInUse(sha256) {
+    const locks = webLocks();
+    if (!locks) return () => {};
+    let release;
+    const until = new Promise((r) => { release = r; });
+    await new Promise((marked) => {
+      locks.request(inUseLockName(sha256), { mode: 'shared' }, () => { marked(); return until; }).catch(() => marked());
+    });
+    return release;
   }
 
   async removeAll() {

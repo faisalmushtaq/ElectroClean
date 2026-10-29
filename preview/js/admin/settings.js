@@ -203,7 +203,7 @@ export class SettingsSection {
           field('Break reminder after (minutes of work)', breakAfter, { hint: 'A gentle offer of a break, which the annotator can put off for 15 minutes. 0 turns reminders off.' }),
           field('Pause after (minutes without input)', idlePause, { hint: 'The clock also pauses when the page is out of sight for more than 10 seconds. 0 turns this pause off.' })),
         coverage,
-        h('p.caption', {}, 'The list gives the stretches of at least a second that were never on the screen, with Go to the first and Save anyway.')),
+        h('p.caption', {}, 'The list gives the stretches of at least a second that were never on the screen, with Go to the first part and Save anyway.')),
       card('Game elements',
         games, board, boardFull,
         h('p.caption', {}, 'Milestones reward finishing recordings and viewing them in full, never speed or the number of annotations.'),

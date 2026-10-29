@@ -306,6 +306,34 @@ export function shareBar(fraction) {
  * has ended, the rest are left untried ({item, ok: false, skipped: true}).
  */
 export async function eachInTurn(items, fn, { progress = null, words = (i, n) => `${i} of ${n}…` } = {}) {
+  runStarted();
+  try { return await eachOne(items, fn, { progress, words }); } finally { runEnded(); }
+}
+
+// While actions on several items are under way, closing or reloading the page asks first: the items
+// not reached yet would be left as they were, and the table of what happened to each would be lost.
+let runsUnderWay = 0;
+const askBeforeLeaving = (e) => { e.preventDefault(); e.returnValue = ''; };
+function runStarted() {
+  runsUnderWay += 1;
+  if (runsUnderWay === 1 && typeof window !== 'undefined') window.addEventListener('beforeunload', askBeforeLeaving);
+}
+function runEnded() {
+  runsUnderWay -= 1;
+  if (runsUnderWay === 0 && typeof window !== 'undefined') window.removeEventListener('beforeunload', askBeforeLeaving);
+}
+
+/** The words for an action on several items pressed while another is still running. */
+export const STILL_RUNNING = 'The action before is still running. Wait for it to finish, then try again.';
+
+/** Run `fn` unless another run of `owner` (a section's bulk actions) is under way; then it throws STILL_RUNNING. */
+export async function oneAtATime(owner, fn) {
+  if (owner._bulkRunning) throw new Error(STILL_RUNNING);
+  owner._bulkRunning = true;
+  try { return await fn(); } finally { owner._bulkRunning = false; }
+}
+
+async function eachOne(items, fn, { progress, words }) {
   const results = [];
   let stop = false;
   for (let i = 0; i < items.length; i++) {
@@ -323,10 +351,10 @@ export async function eachInTurn(items, fn, { progress = null, words = (i, n) =>
 }
 
 /** A table of what happened to each item: its name, Done or Not done, and the reason. */
-export function resultsTable(results, { name, done = () => 'Done', caption = 'What happened to each' }) {
+export function resultsTable(results, { name, done = () => 'Done', caption = 'What happened to each', title = 'Item' }) {
   const rows = results.map((r, i) => ({ ...r, i }));
   return dataTable([
-    { title: 'Item', render: (r) => name(r.item) },
+    { title, render: (r) => name(r.item) },
     { title: 'Result', render: (r) => (r.ok ? chip('Done', 'done') : r.skipped ? chip('Not tried') : chip(r.kept ? 'Kept' : 'Not done', 'warning')) },
     { title: 'Details', render: (r) => (r.ok ? done(r) : r.skipped ? 'Not tried, because the study could not be reached.' : problemText(r.error)) },
   ], rows, { pageSize: 50, caption, rowKey: (r) => String(r.i) });

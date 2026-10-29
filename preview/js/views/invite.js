@@ -12,13 +12,18 @@ function dateText(iso) {
   return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
-/** The welcome card, once the study has said whose invitation it is (`info`), or why it cannot be used (`problem`). */
-export function inviteView(app, token, { info = null, problem = '' } = {}) {
+/**
+ * The welcome card, once the study has said whose invitation it is (`info`), or why it cannot be
+ * used (`problem`). With `retry` the study could not be asked (no connection, a study that is slow
+ * to start): the link may still be good, so the card offers to ask again and keeps the link.
+ */
+export function inviteView(app, token, { info = null, problem = '', retry = false } = {}) {
   if (!info) {
-    const card = h('div.card.signin-card.invite-card', { 'data-invite': 'problem' },
-      h('h1', {}, 'This link cannot be used'),
+    const again = retry ? h('button.btn.primary', { type: 'button', 'data-log': 'invite-retry', onclick: (e) => { e.currentTarget.disabled = true; app.showInvite(token); } }, 'Try again') : null;
+    const card = h('div.card.signin-card.invite-card', { 'data-invite': retry ? 'unreachable' : 'problem' },
+      h('h1', {}, retry ? 'The invitation could not be checked' : 'This link cannot be used'),
       h('div.banner', { role: 'alert' }, h('p', {}, problem || 'The invitation could not be checked. Try again in a moment.')),
-      h('div.btn-row', {}, h('button.btn.primary', { type: 'button', onclick: () => app.leaveInvite() }, 'Go to sign in')));
+      h('div.btn-row', {}, again, h(`button.btn${retry ? '' : '.primary'}`, { type: 'button', onclick: () => app.leaveInvite() }, 'Go to sign in')));
     return signinFrame(app, card);
   }
   const pw = h('input.field', { type: 'password', id: 'invite-password', name: 'new-password', autocomplete: 'new-password', required: true, minlength: '8' });
@@ -33,6 +38,7 @@ export function inviteView(app, token, { info = null, problem = '' } = {}) {
       err.hidden = true;
       if (pw.value.length < 8) { fail('Choose a password of at least 8 characters.'); pw.focus(); return; }
       if (pw.value !== again.value) { fail('The two passwords are not the same. Type the same password twice.'); again.select(); return; }
+      if (submit.disabled) return; // pressed again (or Enter) while the first press waits for the study
       submit.disabled = true;
       submit.textContent = 'Setting your password…';
       try {

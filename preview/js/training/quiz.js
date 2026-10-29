@@ -401,7 +401,7 @@ export class QuizView {
     let rec = recording;
     try {
       if (!rec) rec = await openRecordingFiles(files, { fileName: name, filters: studyFilters(this.app.me) });
-      const fp = await rec.fingerprint((f) => this._step(rid, `Checking ${name} (its fingerprint) ${Math.round(f * 100)} %`));
+      const fp = await rec.fingerprint((f) => this._step(rid, `Checking ${name} (its fingerprint) ${Math.round(f * 100)}%`));
       const want = manifest.fingerprint || {};
       const same = fp.hex === String(want.hex || '').toLowerCase() && (!want.size_bytes || fp.sizeBytes === want.size_bytes);
       logger.event('quiz_recording_checked', { set_id: this.setId, recording_id: rid, file_name: rec.fileName, matched: same });

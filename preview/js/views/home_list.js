@@ -10,6 +10,7 @@
 
 import { h, clear } from '../ui/dom.js';
 import { formatHms, local } from '../util.js';
+import { spanText } from './progress.js';
 
 export const PAGE_SIZE = 25;
 const PREFS_KEY = 'electroclean.home.list';
@@ -139,7 +140,7 @@ export function recordingsCard(app) {
         h('span.caption.when', {}, `Saved ${savedText(s.saved_at)}${it.revising ? ' · revision under way' : ''}`)),
       h('td.num', {}, String(s.version || 1)),
       h('td.num.opt', {}, s.n_annotations === null || s.n_annotations === undefined ? 'n/a' : String(s.n_annotations)),
-      h('td.num.opt', {}, s.elapsed_s === null || s.elapsed_s === undefined ? 'n/a' : formatHms(s.elapsed_s)),
+      h('td.num.opt', {}, s.elapsed_s === null || s.elapsed_s === undefined ? 'n/a' : spanText(s.elapsed_s)),
       h('td.actions', {}, action(it)));
   };
 
@@ -169,7 +170,7 @@ export function recordingsCard(app) {
     const history = st.tab === 'history';
     const head = history
       ? h('tr', {}, h('th.name', {}, 'File and when it was saved'), h('th.num.version', {}, 'Version'), h('th.num.opt.count', {}, 'Annotations'),
-        h('th.num.opt.time', {}, 'Time'), h('th.act', {}))
+        h('th.num.opt.time', {}, 'Time worked'), h('th.act', {}))
       : h('tr', {}, h('th', {}, 'File'), showMode ? h('th.opt', {}, 'Mode') : null, h('th.num', {}, 'Length'), h('th.num.opt', {}, 'Channels'), h('th', {}, 'Status'), h('th', {}, h('span.sr-only', {}, 'Actions')));
     body.append(h(`table.list${history ? '.history' : ''}`, { 'data-tab': st.tab }, h('thead', {}, head), h('tbody', {}, pg.rows.map(history ? historyRow : listRow))));
     const pages = pager(pg, rows.length);
