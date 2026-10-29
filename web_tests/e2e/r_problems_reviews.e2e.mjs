@@ -249,6 +249,18 @@ export const tests = [
       const marks = await page.evaluate(() => globalThis.ElectroTag.ws.viewer.markers.length);
       assert.equal(marks, 3);
       await t.screenshot(page, 'review_pass');
+      // The overlay (O) works in the review mode too: the marks stay, and the review's keys still answer.
+      await page.evaluate(() => globalThis.ElectroTag.ws.viewer.over.focus());
+      await page.keyboard.press('o');
+      assert.equal(await page.evaluate(() => Boolean(globalThis.ElectroTag.ws.viewer.overlay)), true);
+      assert.equal(await page.evaluate(() => globalThis.ElectroTag.ws.viewer.markers.length), 3);
+      await t.screenshot(page, 'review_pass_overlay');
+      await page.keyboard.press('p');
+      await page.keyboard.press('m');
+      assert.match(await page.textContent('.review-progress'), /2 of 2 annotations marked/);
+      await page.keyboard.press('a');
+      await page.keyboard.press('o');
+      assert.equal(await page.evaluate(() => Boolean(globalThis.ElectroTag.ws.viewer.overlay)), false);
       // Save the review pressed twice while a slow study answers: one review.
       await slowDemo(page, 'admin', 1200);
       await page.click('[data-log="review-save"]');
