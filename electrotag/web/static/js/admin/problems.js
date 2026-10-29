@@ -37,7 +37,7 @@ export class ProblemsSection {
     this.area = area;
     this.all = [];
     this.msg = messageArea();
-    this.tiles = h('div.stat-tiles');
+    this.tiles = h('div.stat-tiles.three');
     this.state = select([['open', 'Open'], ['resolved', 'Resolved'], ['', 'Open and resolved']], 'open');
     this.reason = select([['', 'Any reason'], ...Object.entries(REASON_TEXT)], '');
     this.person = textInput({ placeholder: 'Annotator ID' });
