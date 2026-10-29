@@ -586,8 +586,8 @@ export class Workspace {
   }
 
   _tick() {
-    const t = formatHms(this.s.elapsedS);
-    if (this.clockLabel) this.clockLabel.textContent = `Time worked on this recording: ${t}`;
+    // In the words of the paused panel ("3 min 05 s"), so that the two say the same thing the same way.
+    if (this.clockLabel) this.clockLabel.textContent = `Time worked on this recording: ${friendlyDuration(this.s.elapsedS)}`;
     const c = this.clock;
     if (this.timed && c) {
       // (while paused, the panel's own timer counts the pause)
