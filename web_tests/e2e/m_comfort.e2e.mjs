@@ -312,7 +312,8 @@ export const tests = [
       await signIn(page, 'A01');
       await waitForRoute(page, 'home');
       await studySettings(page, { idle_pause_minutes: 0, break_reminder_minutes: 0, coverage_check: 'off' });
-      assert.match(await page.textContent('.progress-card'), /0 of 3 done/);
+      assert.match(await page.textContent('.progress-card'), /0 of 3\s*recordings done/);
+      assert.match(await page.textContent('.progress-card .card-head'), /0 % done/);
       assert.match(await page.textContent('[data-stat="left"]'), /Not estimated yet.*after your first 2 recordings/);
       for (const i of [0, 1]) {
         await openExample(page, i);
@@ -328,8 +329,8 @@ export const tests = [
       for (const i of done) {
         assert.ok(i.elapsed_s > 1 && i.n_annotations === 0 && i.completed_at, JSON.stringify(i));
       }
-      assert.match(await page.textContent('.progress-card .card-head'), /2 of 3 done/);
-      assert.equal(await page.textContent('[data-stat="worked"] .stat-value'), 'under a minute');
+      assert.match(await page.textContent('.progress-card .card-head'), /67 % done/);
+      assert.equal(await page.textContent('[data-stat="worked"] .stat-value'), 'Under a minute');
       assert.equal(await page.textContent('[data-stat="worked"] .caption'), 'worked in all; under a minute per recording (median)');
       // Two quick recordings: the one left takes a few seconds at this pace (progress.test.mjs checks the sums).
       assert.match(await page.textContent('[data-stat="left"]'), /Nearly done.*judged from 2 recordings/);

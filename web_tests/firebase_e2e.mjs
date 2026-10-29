@@ -144,7 +144,7 @@ async function main() {
       await page.waitForFunction(() => /not right/.test(document.querySelector('form.signin-form')?.textContent || ''));
       await signIn(page, 'a01@example.org', PASSWORD);
       await waitForRoute(page, 'home', 30000);
-      assert.match(await page.textContent('main'), /0 of 3 done/);
+      assert.match(await page.textContent('main'), /0 of 3\s*recordings done/);
       await page.click('[data-log="open-next"]');
       await waitForRoute(page, 'open');
       const name = (await page.textContent('main h1')).replace(/^Open\s+/, '').trim();
@@ -159,7 +159,7 @@ async function main() {
       await saveAndFinish(page);
       await waitForRoute(page, 'home', 60000);
       await clickDialogButton(page, 'Back to my recordings');
-      assert.match(await page.textContent('main'), /1 of 3 done/);
+      assert.match(await page.textContent('main'), /1 of 3\s*recordings done/);
       // The functions give the history and the achievements (ec_assignments' saved, ec_achievements).
       assert.match(await page.textContent('.progress-card [data-stat="done"]'), /^1 of 3/);
       await page.click('.rec-tabs [data-tab="history"]');

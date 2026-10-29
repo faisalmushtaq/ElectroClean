@@ -73,7 +73,7 @@ export const tests = [
       const { assert } = t;
       const page = await signInAt(t, 'A01');
       await waitForRoute(page, 'home');
-      assert.match(await page.textContent('main'), /0 of 3 done/);
+      assert.match(await page.textContent('main'), /0 of 3\s*recordings done/);
       await page.click('[data-log="open-next"]');
       await waitForRoute(page, 'open');
       const name = (await page.textContent('main h1')).replace(/^Open\s+/, '').trim();
@@ -89,7 +89,7 @@ export const tests = [
       await page.waitForSelector('.dialog');
       assert.match(await page.textContent('.dialog'), /are saved and the recording is complete\.\s*(Milestone reached: First recording\.\s*)?Next: sub-002_task-rest_eeg\.vhdr/);
       await clickDialogButton(page, 'Back to my recordings');
-      assert.match(await page.textContent('main'), /1 of 3 done/);
+      assert.match(await page.textContent('main'), /1 of 3\s*recordings done/);
 
       const files = outputsOf(t.study.dir, 'A01');
       for (const suffix of ['_annotations.json', '_events.tsv', '_events.json', '_session.json']) {

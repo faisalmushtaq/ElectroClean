@@ -181,7 +181,7 @@ export const tests = [
       await page.click('[data-log="sign-out"]');
       await signIn(page, 'A05', password);
       await waitForRoute(page, 'home');
-      assert.match(await page.textContent('main'), /0 of 3 done/);
+      assert.match(await page.textContent('main'), /0 of 3\s*recordings done/);
       assert.equal(await page.locator('[data-log="admin"]').count(), 0);
       const me = await page.evaluate(() => globalThis.ElectroClean.me);
       assert.equal(me.study.name, 'Pilot study');
@@ -248,7 +248,7 @@ export const tests = [
         await page.click('[data-log="sign-out"]');
         await signIn(page, 'A01');
         await waitForRoute(page, 'home');
-        assert.match(await page.textContent('main'), /0 of 4 done/);
+        assert.match(await page.textContent('main'), /0 of 4\s*recordings done/);
         await page.locator('tr', { hasText: 'sub-new01_task-rest_eeg.edf' }).locator('button', { hasText: 'Open' }).click();
         await waitForRoute(page, 'open');
         await page.setInputFiles('input[data-log="file-input"]', data.file);
@@ -260,7 +260,7 @@ export const tests = [
         await clickDialogButton(page, 'Save and Finish');
         await waitForRoute(page, 'home', 30000);
         await page.locator('.dialog-buttons button').first().click();
-        assert.match(await page.textContent('main'), /1 of 4 done/);
+        assert.match(await page.textContent('main'), /1 of 4\s*recordings done/);
         const doc = await page.evaluate(() => globalThis.ElectroClean.backend.resultsDocument().annotation_documents
           .find((d) => d.recording.recording_id === 'sub-new01/eeg/sub-new01_task-rest_eeg.edf'));
         assert.equal(doc.recording.sfreq, 200);
