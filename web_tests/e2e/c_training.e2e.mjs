@@ -225,10 +225,10 @@ export const tests = [
             await b.guidedCheck(g.rid, { step: s, annotations: anns });
             if ((await b.guidedContinue(g.rid, { step: s })).complete) break;
           }
-          await b.submit({ recording_id: g.rid, mode: 'guided', context_id: 'example', annotations: anns, session: {} });
+          await b.submit({ recording_id: g.rid, mode: 'guided', context_id: 'example', annotations: anns, session: {}, sha256: 'f'.repeat(64) });
         }
         const truth = truthAnnotations(demoSpecs().find((x) => x.id === 'demo-03'));
-        await b.submit({ recording_id: TRAINING_SET.practice[0], mode: 'practice', context_id: 'example', annotations: truth, session: {} });
+        await b.submit({ recording_id: TRAINING_SET.practice[0], mode: 'practice', context_id: 'example', annotations: truth, session: {}, sha256: 'f'.repeat(64) });
       });
       await page.evaluate(() => globalThis.ElectroTag.showTraining());
       await page.waitForSelector('[data-stage="practice"] .chip.done');

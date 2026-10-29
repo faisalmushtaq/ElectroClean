@@ -94,8 +94,9 @@ const byOnset = (a, b) => a.onset_sample - b.onset_sample || end(a) - end(b) ||
  * Practice feedback in the shape of PracticeFeedback (docs/web/api.md).
  * @param {object[]} reference the experts' annotations
  * @param {object[]} mine the trainee's annotations
+ * @param {{iouThreshold?: number, passRule?: object, sfreq?: number}} opts sfreq gives the flags' times in seconds
  */
-export function practiceFeedback(reference, mine, { iouThreshold = DEFAULT_IOU, passRule = DEFAULT_PASS } = {}) {
+export function practiceFeedback(reference, mine, { iouThreshold = DEFAULT_IOU, passRule = DEFAULT_PASS, sfreq = 1 } = {}) {
   const ref = [...reference].sort(byOnset);
   const you = [...mine].sort(byOnset);
   // Event F1: the micro-average over the single-label categories.
@@ -113,24 +114,22 @@ export function practiceFeedback(reference, mine, { iouThreshold = DEFAULT_IOU, 
   const any = matchEvents(ref, you, { iouThreshold, preferSameLabel: true });
   const same = any.pairs.filter(([i, j]) => ref[i].label === you[j].label).length;
   const labelAccuracy = any.pairs.length ? same / any.pairs.length : NaN;
+  // The flags of the review, as the server words them (electrotag/web/coach.py practice_result with
+  // electrotag/training/review.py): each on the annotation it is about, the experts' or the trainee's.
   const flags = [];
-  for (const i of any.unmatchedRef) {
-    const a = ref[i];
-    flags.push({ kind: 'MISSED', label: a.label, your_label: null, onset_sample: a.onset_sample,
-      duration_samples: a.duration_samples, channels: [...a.channels], annotation_id: a.annotation_id });
-  }
-  for (const j of any.unmatchedTest) {
-    const a = you[j];
-    flags.push({ kind: 'EXTRA', label: a.label, your_label: a.label, onset_sample: a.onset_sample,
-      duration_samples: a.duration_samples, channels: [...a.channels], annotation_id: a.annotation_id });
-  }
-  for (const [i, j] of any.pairs) {
-    if (ref[i].label === you[j].label) continue;
-    const a = ref[i];
-    flags.push({ kind: 'TYPE', label: a.label, your_label: you[j].label, onset_sample: a.onset_sample,
-      duration_samples: a.duration_samples, channels: [...a.channels], annotation_id: you[j].annotation_id });
-  }
-  flags.sort((a, b) => a.onset_sample - b.onset_sample);
+  const flag = (kind, a, source, label, yourLabel) => {
+    const on = a.onset_sample / sfreq;
+    const off = end(a) / sfreq;
+    const span = `${on.toFixed(2)}–${off.toFixed(2)} s`;
+    flags.push({ kind, label, your_label: yourLabel, onset_sample: a.onset_sample, duration_samples: a.duration_samples,
+      channels: [...a.channels], annotation_id: a.annotation_id, source, onset_s: on, offset_s: off,
+      text: kind === 'MISSED' ? `Missed: ${label}, ${span}` : kind === 'EXTRA' ? `Extra: your ${label}, ${span} (not in the experts' annotations)`
+        : `Type: you chose ${yourLabel}; the experts chose ${label}, ${span}` });
+  };
+  for (const i of any.unmatchedRef) flag('MISSED', ref[i], 'reference', ref[i].label, null);
+  for (const j of any.unmatchedTest) flag('EXTRA', you[j], 'yours', you[j].label, you[j].label);
+  for (const [i, j] of any.pairs) if (ref[i].label !== you[j].label) flag('TYPE', you[j], 'yours', ref[i].label, you[j].label);
+  flags.sort((a, b) => a.onset_s - b.onset_s);
   // The pass rule, as PassRule.evaluate.
   let f = Number.isNaN(f1) ? null : f1;
   let acc = Number.isNaN(labelAccuracy) ? null : labelAccuracy;
@@ -144,10 +143,9 @@ export function practiceFeedback(reference, mine, { iouThreshold = DEFAULT_IOU, 
     score: { event_f1: f, label_accuracy: acc },
     counts: { reference_events: nRef, your_events: nYou, found: any.pairs.length, extra: any.unmatchedTest.length,
       other_type: any.pairs.length - same },
-    metrics: { event_f1: f, event_recall: recall, event_precision: precision, label_accuracy: acc,
-      reference_events: nRef, your_events: nYou, found: any.pairs.length },
+    metrics: { event_f1: f, event_recall: recall, event_precision: precision, label_accuracy: acc },
     flags,
-    reference: ref.map((a) => ({ ...a, channels: [...a.channels] })),
+    reference: ref.map((a) => ({ ...a, channels: [...a.channels], confidence: a.confidence ?? null, note: a.note || '' })),
   };
 }
 

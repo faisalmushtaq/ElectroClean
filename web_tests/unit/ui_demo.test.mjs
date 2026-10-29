@@ -12,6 +12,9 @@ const memory = () => {
   return { get: (k, f = null) => (m.has(k) ? JSON.parse(m.get(k)) : f), set: (k, v) => m.set(k, JSON.stringify(v)), remove: (k) => m.delete(k) };
 };
 
+/** Any file's checksum: the study keeps the one sent with the saved annotations. */
+const SHA = 'f'.repeat(64);
+
 async function signedIn(id) {
   const b = new DemoBackend({ storage: memory(), tokens: memory() });
   await b.login(id, 'demo');
@@ -50,7 +53,8 @@ test('a built-in recording matches by fingerprint; a changed copy by name; anyth
   assert.equal(m.manifest.fingerprint.hex, body.sha256);
   const changed = await b.match({ ...body, sha256: '0'.repeat(64) });
   assert.equal(changed.status, 'matched_metadata');
-  assert.ok(changed.differences.length >= 1);
+  assert.match(changed.message, /but is not byte for byte the study's copy/);
+  assert.match(changed.differences[0], /^The file's checksum differs/);
   const other = await b.match({ ...body, file_name: 'something_else.edf', sha256: '1'.repeat(64) });
   assert.equal(other.status, 'unknown');
 });
@@ -66,13 +70,13 @@ test('drafts are kept and saving marks the recording done; a second save is refu
   assert.equal((await b.match(body)).draft.annotations.length, 1);
   assert.equal((await b.assignments()).items[0].status, 'in_progress');
   await assert.rejects(() => b.submit({ recording_id: m.recording_id, mode: 'standard', context_id: '',
-    annotations: [{ ...ann, label: 'Not-a-type' }] }), (e) => e.status === 422);
+    annotations: [{ ...ann, label: 'Not-a-type' }], sha256: body.sha256 }), (e) => e.status === 422);
   const saved = await b.submit({ recording_id: m.recording_id, mode: 'standard', context_id: '', annotations: [ann], session: {}, sha256: body.sha256 });
   assert.equal(saved.saved, true);
   assert.equal(saved.feedback, null);
   assert.notEqual(saved.next, m.recording_id);
   assert.equal((await b.match(body)).status, 'done');
-  await assert.rejects(() => b.submit({ recording_id: m.recording_id, mode: 'standard', context_id: '', annotations: [] }),
+  await assert.rejects(() => b.submit({ recording_id: m.recording_id, mode: 'standard', context_id: '', annotations: [], sha256: body.sha256 }),
     (e) => e.status === 409 && e.code === 'already_done');
   const doc = b.resultsDocument();
   assert.equal(doc.annotation_documents[0].schema, 'electrotag.annotations');
@@ -120,7 +124,7 @@ test('guided training: a wrong attempt is explained, Show me places the answer, 
   }
   assert.equal(next.summary.steps, 6);
   assert.equal(next.summary.stars, 2 + 5);
-  const saved = await b.submit({ recording_id: rid, mode: 'guided', context_id: 'example', annotations: anns, session: {} });
+  const saved = await b.submit({ recording_id: rid, mode: 'guided', context_id: 'example', annotations: anns, session: {}, sha256: SHA });
   assert.equal(saved.saved, true);
   const t = await b.training();
   assert.equal(t.stages[0].status, 'in_progress');
@@ -154,7 +158,7 @@ test('practice is scored with MISSED, EXTRA and TYPE flags', async () => {
       const n = await b.guidedContinue(g.rid, { step: s });
       if (n.complete) break;
     }
-    await b.submit({ recording_id: g.rid, mode: 'guided', context_id: 'example', annotations: anns, session: {} });
+    await b.submit({ recording_id: g.rid, mode: 'guided', context_id: 'example', annotations: anns, session: {}, sha256: SHA });
   }
   const rid = TRAINING_SET.practice[0];
   assert.equal((await b.match(await matchBody(rid))).status, 'matched');
@@ -162,7 +166,7 @@ test('practice is scored with MISSED, EXTRA and TYPE flags', async () => {
   const truth = truthAnnotations(spec);
   const mine = truth.slice(0, 6).map((a, i) => ({ ...a, annotation_id: `m${i}`.padEnd(32, '0'), label: i === 0 ? 'EMG-artifact' : a.label }));
   mine.push({ ...truth[0], annotation_id: 'x'.padEnd(32, '0'), onset_sample: 21000, duration_samples: 100, channels: [] });
-  const r = await b.submit({ recording_id: rid, mode: 'practice', context_id: 'example', annotations: mine, session: {} });
+  const r = await b.submit({ recording_id: rid, mode: 'practice', context_id: 'example', annotations: mine, session: {}, sha256: SHA });
   const kinds = r.feedback.flags.map((f) => f.kind).sort();
   assert.deepEqual(kinds, ['EXTRA', 'MISSED', 'MISSED', 'TYPE']);
   assert.equal(r.feedback.reference.length, truth.length);

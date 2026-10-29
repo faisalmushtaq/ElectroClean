@@ -98,7 +98,7 @@ test('the demonstration\'s quiz: listed in /me, items in each annotator\'s own o
   const b = new DemoBackend({ storage: memory(), tokens: memory() });
   await b.login('A01', 'demo');
   const me = await b.me();
-  assert.deepEqual(me.quizzes, [{ set_id: 'example', name: 'Demonstration quiz', n_items: QUIZ.items.length, n_answered: 0, finished: false, feedback: 'immediate' }]);
+  assert.deepEqual(me.quizzes, [{ set_id: 'example', name: 'Demonstration training set', n_items: QUIZ.items.length, n_answered: 0, finished: false, feedback: 'immediate' }]);
   const q = await b.quiz('example', { action: 'get' });
   assert.equal(q.feedback, 'immediate');
   assert.equal(q.finished, false);

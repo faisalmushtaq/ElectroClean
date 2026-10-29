@@ -713,8 +713,9 @@ quiz, and a finished quiz has See my result, which shows the same result again.
 Without a study, ElectroTag runs as a demonstration in the browser. Sign in as A01 to annotate or
 as T01 to follow the training programme; the password is demo. Three example recordings with
 simulated artifacts are built in: use one straight away, or download them as EDF files and open
-them from your computer to try that way too. A demonstration quiz of seven segments from the first
-two examples, with feedback after each answer, is on the first page for both accounts; Use the
+them from your computer to try that way too. A quiz of seven segments from the first two examples,
+with feedback after each answer, is on the first page for both accounts, under the name of the
+Demonstration training set; Use the
 example recordings opens its recordings without any files. Your results stay in your browser;
 Download my results saves them as a file, and Reset the demonstration forgets them. Wherever the
 demonstration does what a study's server would do (checking guided steps, scoring practice, storing

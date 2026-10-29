@@ -67,7 +67,7 @@ test('demonstration: a report is kept once, and "cannot be annotated" sets the r
   const m = await b.match(await matchBody(b, rid));
   assert.equal(m.status, 'unusable');
   await assert.rejects(() => b.putDraft(rid, 'standard', '', { annotations: [], elapsed_s: 1 }), (e) => e.code === 'unusable');
-  await assert.rejects(() => b.submit({ recording_id: rid, mode: 'standard', context_id: '', annotations: [] }), (e) => e.code === 'unusable');
+  await assert.rejects(() => b.submit({ recording_id: rid, mode: 'standard', context_id: '', annotations: [], sha256: 'f'.repeat(64) }), (e) => e.code === 'unusable');
   await assert.rejects(() => b.reportProblem({ ...body, problem_id: 'x' }), (e) => e.status === 400);
   await assert.rejects(() => b.reportProblem({ ...body, problem_id: hex(2), note: 'x'.repeat(301) }), (e) => e.status === 400);
   // the home page: finished for the annotator, kept apart from done
@@ -109,7 +109,7 @@ test('demonstration: a review of a saved recording, seen by its annotator unless
   const rid = (await b.assignments()).items[0].recording_id;
   const blink = ann('b1', 'Eye-blink-artifact', 500, 50);
   const emg = ann('e1', 'EMG-artifact', 2000, 200);
-  await b.submit({ recording_id: rid, mode: 'standard', context_id: '', annotations: [blink, emg], session: { elapsed_s: 30 }, sha256: '' });
+  await b.submit({ recording_id: rid, mode: 'standard', context_id: '', annotations: [blink, emg], session: { elapsed_s: 30 }, sha256: 'f'.repeat(64) });
   await as(b, 'ADMIN');
   const got = await b.admin('saved_attempt_get', { annotator_id: 'A01', recording_id: rid });
   assert.equal(got.attempt, 1);

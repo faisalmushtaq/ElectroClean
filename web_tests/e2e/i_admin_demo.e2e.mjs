@@ -298,14 +298,9 @@ export const tests = [
         assert.ok(await noSideways(page), `${title} scrolls sideways`);
         await t.screenshot(page, `admin_narrow_${route}`);
       }
-      // Reference sets: a new set, its tabs and the criteria editor.
+      // The training set: its tabs and the criteria editor (a set of one's own needs a study server).
       await goSection(page, 'Training', 'admin-training');
-      await page.locator('summary', { hasText: 'New reference set' }).click();
-      const form = page.locator('details.admin-details[open] form');
-      await form.locator('input').first().fill('pilot');
-      await form.locator('input').nth(1).fill('Pilot set');
-      await page.click('[data-log="set-create"]');
-      await page.waitForFunction(() => /Pilot set/.test(document.querySelector('h2.set-title')?.textContent || ''));
+      await page.waitForFunction(() => /Demonstration training set/.test(document.querySelector('h2.set-title')?.textContent || ''));
       await page.click('.admin-tabs [data-tab="criteria"]');
       await page.locator('.criterion', { hasText: 'Event F1' }).locator('input[type="checkbox"]').check();
       await page.locator('.criterion', { hasText: 'Event F1' }).locator('input[type="number"]').fill('0.8');

@@ -62,8 +62,8 @@ export const tests = [
       await waitForRoute(page, 'open');
       await page.setInputFiles('input[data-log="file-input"]', files.changed);
       await page.waitForSelector('.dialog');
-      assert.match(await page.textContent('.dialog'), /not exactly the study's copy/);
-      assert.match(await page.textContent('.dialog'), /fingerprint \(SHA-256\) differs/);
+      assert.match(await page.textContent('.dialog'), /not byte for byte the study's copy/);
+      assert.match(await page.textContent('.dialog'), /checksum differs from that of the study's copy/);
       await t.screenshot(page, 'open_changed_copy');
       await clickDialogButton(page, 'Open it anyway');
       await waitForRoute(page, 'annotate');

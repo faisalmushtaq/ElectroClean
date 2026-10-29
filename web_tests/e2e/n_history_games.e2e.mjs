@@ -177,7 +177,7 @@ export const tests = [
       // Opening the finished file again from the computer offers the revision too.
       await page.locator('ul.examples button').first().click();
       await page.waitForSelector('.result [data-log="open-to-revise"]');
-      assert.match(await page.textContent('.result'), /already finished/);
+      assert.match(await page.textContent('.result'), /already completed/);
       await page.click('.result [data-log="open-to-revise"]');
       await waitForRoute(page, 'annotate');
       assert.match(await page.textContent('.ws-revision'), /Revising version 2/);
@@ -260,7 +260,7 @@ export const tests = [
       // An iPad, upright and on its side: the history and the game cards fit without sideways scrolling.
       for (const [w, h] of [[820, 1180], [1180, 820]]) {
         const ipad = await t.newPage({ width: w, height: h, ipad: true });
-        await ipad.evaluate((st) => localStorage.setItem('electrotag.demo.v1', st), await page.evaluate(() => localStorage.getItem('electrotag.demo.v1')));
+        await ipad.evaluate((st) => localStorage.setItem('electrotag.demo.v2', st), await page.evaluate(() => localStorage.getItem('electrotag.demo.v2')));
         await ipad.reload();
         await signIn(ipad, 'A01');
         await waitForRoute(ipad, 'home');

@@ -41,7 +41,7 @@ async function matchBody(b, rid) {
 }
 
 const submit = (b, rid, anns, extra = {}) => b.submit({ recording_id: rid, mode: 'standard', context_id: '', annotations: anns,
-  session: { elapsed_s: 30, viewed_fraction: 1 }, sha256: '', ...extra });
+  session: { elapsed_s: 30, viewed_fraction: 1 }, sha256: 'f'.repeat(64), ...extra });
 
 test('the pseudonyms\' words are those of the server', () => {
   const py = fs.readFileSync(path.join(ROOT, 'electrotag', 'web', 'games.py'), 'utf8');

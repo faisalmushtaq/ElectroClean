@@ -53,9 +53,13 @@ you choose apply when they next open a recording. Invitation links work too, in 
 open one in another tab to see the welcome a new annotator sees. Reset the demonstration, on the
 home page, forgets it all.
 
-The demonstration cannot run what needs ElectroTag's Python code: the agreement and activity
-analyses, competency reports, consensus and adjudicated references, the example set's files and the
-results as one zip file. It says so when you try, and suggests the local demonstration server
+The demonstration has one reference set, its Demonstration training set, which runs as T01's
+training programme: you can change its pass mark, its guided matching, how much help each guided
+recording gives and the experts' notes, and T01 sees the change. Reference sets of your own and
+their quizzes need a study server or Firebase, and so does what needs ElectroTag's Python code: the
+agreement and activity analyses, competency reports, consensus and adjudicated references, the
+example set's files and the results as one zip file. The demonstration says so when you try, and
+suggests the local demonstration server
 (`electrotag-web demo`, where ADMIN has the password electrotag), which runs every part of the
 admin area on your own computer.
 

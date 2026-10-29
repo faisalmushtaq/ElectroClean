@@ -2,7 +2,10 @@
 // (in a real study the server applies the Python rules and only sends the feedback).
 // Messages are the same, word for word.
 
-import { article, listWords, UNDO_HINT } from '../util.js';
+import { article, listWords } from '../util.js';
+
+/** How to undo, in the words of the study server's coach (electrotag/web/coach.py UNDO_HINT). */
+const UNDO_HINT = 'Ctrl+Z (⌘Z on a Mac) to undo';
 
 export const STARS_FIRST = 3;
 export const STARS_FEW = 2;
