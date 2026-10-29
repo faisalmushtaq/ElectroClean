@@ -57,7 +57,7 @@ test('sign-in with email and password; the annotator ID comes from the token cla
   assert.equal(b.signedIn, false);
 });
 
-test('operations call ec_<operation> in europe-west2 with the study and the same body', async () => {
+test('operations call et_<operation> in europe-west2 with the study and the same body', async () => {
   const { sdk, calls } = fakeSdk({ handlers: {
     et_me: () => ({ annotator_id: 'A07' }),
     et_match: (d) => ({ status: 'matched', echo: d.sha256 }),

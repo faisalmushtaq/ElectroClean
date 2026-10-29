@@ -128,7 +128,7 @@ async function studyServer(python) {
   const usable = await new Promise((r) => check.on('exit', (code) => r(code === 0)));
   if (!usable) return null;
   const port = await freePort();
-  const dir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'ec-study-'));
+  const dir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'et-study-'));
   const proc = spawn(python, ['-m', 'electrotag.web.cli', 'demo', '--dir', path.join(dir, 'demo'), '--host', '127.0.0.1', '--port', String(port), '--fresh'],
     { cwd: dir, env: { ...process.env, PYTHONPATH: REPO }, stdio: ['ignore', 'ignore', 'pipe'] });
   let stderr = '';

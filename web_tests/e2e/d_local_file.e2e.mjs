@@ -8,7 +8,7 @@ import { signIn, waitForRoute, waitForTraces, state, annotations, eegPoint, drag
 import { demoSpecs, syntheticEdfBytes } from '../../electrotag/web/static/js/data/synthetic.js';
 
 function writeFiles() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ec-e2e-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'et-e2e-'));
   const spec = demoSpecs()[0];
   const bytes = syntheticEdfBytes(spec);
   const good = path.join(dir, 'sub-demo01_task-rest_eeg.edf');

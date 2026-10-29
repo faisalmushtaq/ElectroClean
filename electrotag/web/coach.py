@@ -490,10 +490,10 @@ class Coach:
         in_programme = self.store.programme(user.annotator_id) == rs.set_id
         unlock = " The assessment is unlocked." if (in_programme and rs.assessment_recordings) else ""
         if verdict["passed"]:
-            verdict_html = (f"<p class='ec-pass'><b>Passed:</b> you reached the pass mark "
+            verdict_html = (f"<p class='et-pass'><b>Passed:</b> you reached the pass mark "
                             f"({html.escape(rule.describe())}).{unlock}</p>")
         else:
-            verdict_html = (f"<p class='ec-not-yet'><b>Not yet:</b> you need {html.escape(rule.describe())}. Review "
+            verdict_html = (f"<p class='et-not-yet'><b>Not yet:</b> you need {html.escape(rule.describe())}. Review "
                             "what you missed, then try the next practice recording or this one again.</p>")
         flags = []
         reference: list[dict[str, Any]] = []

@@ -43,7 +43,7 @@ function py(...args) {
 }
 
 const store = ['--firebase-project', PROJECT, '--study', STUDY];
-const WORK = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'ec-firebase-'));
+const WORK = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'et-firebase-'));
 
 function setUpStudy() {
   // The demonstration's recordings, then the commands of docs/web/firebase.md.

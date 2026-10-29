@@ -71,7 +71,9 @@ and `electrotag activity FOLDER` pass the rest of the line to the tool, each
 explains itself with `--help` under the name it was started by, and
 `electrotag` on its own (or `python -m electrotag`) lists the tools and how to
 start the demonstration. The tools keep their own names, `electrotag-web` and
-so on, which work as before. The guides now use the new form.
+so on, which work as before. The guides now use the new form, and the guides
+that still named the Firebase functions `ec_` give their names as they are now
+(`et_`) and their number, twenty.
 
 The README says plainly that the Python package is installed from the
 repository, since it is not on PyPI, and shows the shortest ways to do it: from

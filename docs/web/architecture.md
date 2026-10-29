@@ -34,7 +34,7 @@ application in one of two ways:
   `config.json` (`{"server": "…"}`) or the sign-in screen.
 
 Both study back ends perform the same operations with the same JSON (docs/web/api.md):
-over HTTP for the server, and as Firebase callable functions named `ec_<operation>`
+over HTTP for the server, and as Firebase callable functions named `et_<operation>`
 for Firebase. In the browser, `js/api/http.js` and `js/api/firebase.js` implement the
 same Backend interface, so the rest of the application does not know which is in use.
 On the server side one Python service layer implements the operations against a
