@@ -750,7 +750,8 @@ export class DemoBackend {
       save_times: [...mine.values()].flat().map((s) => s.saved_at).sort(),
       viewed_in_full: withCoverage.length ? withCoverage.filter((c) => c.viewed_fraction >= VIEWED_IN_FULL).length : null,
       goal: { per_week: record.goal_per_week ?? null },
-      team: { done: team.done, assigned: team.assigned, people: team.people },
+      // As the leaderboard: with fewer people, one's own figures would tell the others' (games.py).
+      team: team.people >= MIN_PEOPLE ? { done: team.done, assigned: team.assigned, people: team.people } : { done: null, assigned: null, people: team.people },
       leaderboard: g.leaderboard !== false
         ? leaderboardOf(aid, team, { hiddenMe: record.leaderboard_hidden === true, byFull: g.leaderboard_viewed_only === true }) : null,
     };

@@ -107,6 +107,16 @@ test('a revision in the demonstration: a new version, the earlier one kept, only
   await assert.rejects(() => b.putDraft(rid, 'standard', '', { annotations: [] }), (e) => e.code === 'already_done');
 });
 
+test('achievements in the demonstration: a team of fewer than three shows no progress', async () => {
+  const b = await demo('ADMIN');
+  await b.admin('user_add', { annotator_id: 'B01', password: 'password-1234' });
+  const rids = (await as(b, 'A01').then(() => b.assignments())).items.map((i) => i.recording_id);
+  await as(b, 'ADMIN');
+  await b.admin('assign', { annotator_ids: ['B01'], recording_ids: rids });
+  await as(b, 'A01');
+  assert.deepEqual((await b.achievements()).team, { done: null, assigned: null, people: 2 });
+});
+
 test('achievements in the demonstration: counters, goal, team and a leaderboard of pseudonyms', async () => {
   const b = await demo('ADMIN');
   for (const id of ['B01', 'B02', 'B03']) {

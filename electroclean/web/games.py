@@ -16,7 +16,9 @@ The leaderboard shows pseudonyms (an adjective and an animal) made from a keyed 
 annotator ID with a secret of the study that the store keeps and never sends, so no annotator's ID
 reaches anyone else; it ranks by recordings completed (or only those viewed in full), shows the top
 ten and the caller's own place, leaves out anyone who chose to be hidden, and appears only when at
-least three people are on it, so that nobody can tell who the others are by elimination.
+least three people are on it, so that nobody can tell who the others are by elimination. The team's
+progress follows the same rule: with fewer than three people, an annotator's own figures would tell
+what the others have done.
 """
 
 from __future__ import annotations
@@ -162,9 +164,17 @@ class Games:
             "viewed_in_full": (sum(1 for c in with_coverage if c["viewed_fraction"] >= VIEWED_IN_FULL)
                                if with_coverage else None),
             "goal": {"per_week": record.get("goal_per_week")},
-            "team": {k: team[k] for k in ("done", "assigned", "people")},
+            "team": self._team_out(team),
             "leaderboard": self._leaderboard(aid, team, record) if s.gamification_leaderboard else None,
         }
+
+    @staticmethod
+    def _team_out(team: dict[str, Any]) -> dict[str, Any]:
+        """The team's progress, given only when at least MIN_PEOPLE have recordings: with fewer, an
+        annotator's own figures would tell what the others have done."""
+        if team["people"] < MIN_PEOPLE:
+            return {"done": None, "assigned": None, "people": team["people"]}
+        return {k: team[k] for k in ("done", "assigned", "people")}
 
     def _update(self, user: User, body: dict[str, Any]) -> None:
         changes: dict[str, Any] = {}

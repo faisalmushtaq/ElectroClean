@@ -294,7 +294,7 @@ off, both answer `{"enabled": false, "leaderboard_enabled": false}`.
   "save_times": ["…"],                  // every save, revisions included (for streaks of days)
   "viewed_in_full": 9 | null,           // null when no saved recording reported what was viewed
   "goal": {"per_week": 10 | null},
-  "team": {"done": 640, "assigned": 1200, "people": 6},
+  "team": {"done": 640 | null, "assigned": 1200 | null, "people": 6},   // null below 3 people
   "leaderboard": null | {
     "ranked_by": "completed" | "viewed_in_full",
     "rows": [{"rank": 1, "name": "Steady Heron", "count": 54, "you": false}],   // the top ten
@@ -316,7 +316,9 @@ only by pseudonyms, an adjective and an animal chosen by an HMAC-SHA256 of the
 annotator ID keyed with a random secret of the study that the server keeps and
 never sends; it leaves out anyone who chose to be hidden, and it has no rows
 until at least `min_people` are on it, so that nobody can tell who the others
-are. No annotator ID is ever part of the answer.
+are. For the same reason `team.done` and `team.assigned` are null while fewer
+than three people have recordings, since one's own figures would otherwise tell
+the others'. No annotator ID is ever part of the answer.
 
 `GuidedSaved = {"summary": {"steps", "stars", "max_stars", "attempts", "failed_attempts", "shown", "time_s"},
 "message": "Recording saved: 14 of 18 stars (4.2 min)."}`.

@@ -9,7 +9,9 @@ The study server no longer takes a negative time worked in a draft, and records
 a time of more than a week for one recording (which the pausing clock cannot
 reach) as a week, with a warning in the saved session, so that one faulty or
 forged figure cannot distort the totals of the Progress section and the home
-page; the save itself always goes ahead.
+page; the save itself always goes ahead. The team's progress on the home page
+appears only once at least three people have recordings, as the leaderboard
+does, because with two each could work out the other's figures from their own.
 
 Annotators can open a recording from a Dropbox or OneDrive link (or any web
 address that lets web pages read its file): Open from a link, on the page

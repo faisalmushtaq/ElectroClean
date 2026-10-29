@@ -179,6 +179,16 @@ def test_removing_an_account_removes_its_record(service: StudyService, recording
     assert service.store.annotator_record("A03") == {}
 
 
+def test_a_team_of_two_does_not_show_its_progress(service: StudyService, recordings: Path) -> None:
+    save(service, recordings, "A01", SUB1)
+    save(service, recordings, "A02", SUB2)
+    assert board(service, "A01")["team"]["done"] == 2
+    for aid in ("A03", "A04"):
+        service.store.remove_account(aid)
+    # A01 knows their own count, so the team's would tell them what A02 has done.
+    assert board(service, "A01")["team"] == {"done": None, "assigned": None, "people": 2}
+
+
 def test_times_cannot_go_negative_or_absurd(service: StudyService, recordings: Path, study: Path) -> None:
     from electroclean.web.service import MAX_ELAPSED_S
 
