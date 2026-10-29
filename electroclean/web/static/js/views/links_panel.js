@@ -58,7 +58,7 @@ export function linkPanel({ onFiles, chooseFile, extra = null }) {
           downloads.map((l, i) => h('button.btn', { type: 'button', 'data-log': 'link-download', onclick: () => { logger.event('link_fallback', { service: l.service, step: 'download' }); openDownload(l.downloadUrl); } },
             downloads.length > 1 ? `Download ${l.name || `file ${i + 1}`}` : 'Download the file')),
           h('button.btn', { type: 'button', 'data-log': 'link-choose', onclick: () => { logger.event('link_fallback', { step: 'choose' }); chooseFile(); } },
-            downloads.length > 1 ? 'then choose the downloaded files' : 'then choose the downloaded file')),
+            downloads.length > 1 ? 'Choose the downloaded files' : 'Choose the downloaded file')),
         h('p.caption', {}, `${where} ElectroClean cannot reach that folder, so delete the file there yourself when you no longer need it.`),
       ] : null));
   }

@@ -77,9 +77,9 @@ export function viewedFraction(list, totalS, noData = []) {
   return Math.max(0, Math.min(1, seen / total));
 }
 
-/** The whole-number percentage shown ("Viewed 64 %"), rounded down: 100 only when nothing is left to see. */
+/** The whole-number percentage shown ("Viewed 64%"), rounded down: 100 only when nothing is left to see. */
 export function percentText(fraction) {
-  return `${Math.floor(Math.max(0, Math.min(1, fraction)) * 100 + 1e-9)} %`;
+  return `${Math.floor(Math.max(0, Math.min(1, fraction)) * 100 + 1e-9)}%`;
 }
 
 /**

@@ -351,10 +351,10 @@ async function eachOne(items, fn, { progress, words }) {
 }
 
 /** A table of what happened to each item: its name, Done or Not done, and the reason. */
-export function resultsTable(results, { name, done = () => 'Done', caption = 'What happened to each' }) {
+export function resultsTable(results, { name, done = () => 'Done', caption = 'What happened to each', title = 'Item' }) {
   const rows = results.map((r, i) => ({ ...r, i }));
   return dataTable([
-    { title: 'Item', render: (r) => name(r.item) },
+    { title, render: (r) => name(r.item) },
     { title: 'Result', render: (r) => (r.ok ? chip('Done', 'done') : r.skipped ? chip('Not tried') : chip(r.kept ? 'Kept' : 'Not done', 'warning')) },
     { title: 'Details', render: (r) => (r.ok ? done(r) : r.skipped ? 'Not tried, because the study could not be reached.' : problemText(r.error)) },
   ], rows, { pageSize: 50, caption, rowKey: (r) => String(r.i) });

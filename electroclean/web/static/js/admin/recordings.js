@@ -172,7 +172,7 @@ export class RecordingsSection {
           const again = await eachInTurn(kept.filter((r) => !r.retired), (r) => this.area.write('recording_update', { scope: r.scope, recording_id: r.recording_id, retired: true }));
           await this._showResults(again, name, () => 'Retired: offered for no new assignments.');
         } }))) : null,
-      resultsTable(results, { name, done }));
+      resultsTable(results, { name, done, title: 'Recording' }));
   }
 
   _filter() {

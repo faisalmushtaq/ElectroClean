@@ -327,6 +327,44 @@ the role of list items. An automated audit (axe-core) of every page of the
 demonstration found nothing after these changes, and a new end-to-end test
 (`o_landmarks.e2e.mjs`) keeps the structure it checked.
 
+A design pass over the new views makes them calmer and more consistent. The
+parts of a recording not yet viewed are marked on the overview bar by a thin
+grey line instead of an amber one, which read as a warning. Switches that are
+on, such as Draw/edit and Whole montage, are tinted in the ink-blue accent
+instead of black, and the pressed Pause button (Resume) is grey, so that each
+view has one black button for its forward action. Big figures stay on one
+line: the home page gives the time left as "3 h 15 min" (with "roughly" in the
+words under it) and the admin area's Progress gives the projected finish as "3
+Nov", with "around then" in its note. On a short screen the paused panel is
+more compact and scrolls from its top instead of cutting off its title.
+
+Wording is more consistent. Buttons say what they do from their first word:
+Choose the downloaded file (after Download the file, when a link cannot be
+read) and Go to the first part (in the check before Save and Finish), and
+Recordings on this device closes with a plain Close button. Percentages are
+written one way throughout ("74%"), as the admin area, the quiz and the
+training path already wrote them. The History tab gives the time worked on
+each recording in minutes ("5 min") as the progress card does, and the
+Recording tab gives it as the paused panel does ("3 min 05 s" rather than
+"00:03:05"). The home page's card for an unfinished recording is headed In
+progress, so that Continue where you left off is said once, on its button.
+
+Layouts are tidier. In the admin area, the length of new invitation links
+stands beside New invitation links with the word "lasting", Add several sets
+it on one line as Invitations does, the tables of what happened name their
+first column Person or Recording, Find suggests what to type when nothing
+matches, and on an iPad held upright Find has a line of its own instead of a
+cut-off box. Tables set headings of one and two lines on the same rule, the
+leaderboard's own highlighted row has room at both ends, and the annotation
+list keeps Start and End whole ("23.000") in the narrower side panel of a
+1280-pixel window or an iPad. On a touch screen, text buttons such as Back and
+Download my results, the Manage link and the Whole montage and Selected
+channels switch are at least 40 pixels tall.
+
+When the demonstration itself cannot be started, the sign-in page says so and
+suggests reloading, instead of reporting that "the study server at undefined"
+does not answer.
+
 ## 1.1.0
 
 The first public release, with stand-alone applications for Windows (64-bit),

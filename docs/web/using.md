@@ -32,8 +32,8 @@ The record contains clicks, key presses and what is on the screen, never anythin
 ## Your recordings
 
 The first page has one black button, Open next recording, for the recording to do next. When you
-have a recording you started and did not finish, the button reads Continue where you left off
-instead, with how much of that recording you have viewed, your annotations so far, the time worked
+have a recording you started and did not finish, the card is headed In progress and the button
+reads Continue where you left off instead, with how much of that recording you have viewed, your annotations so far, the time worked
 and when the draft was last kept. Annotators in a training programme go straight to their training
 path instead (see below).
 
@@ -56,7 +56,8 @@ tab and the order you chose are remembered in this browser.
 ## History and revisions
 
 The History tab lists every recording you have saved, the most recent first, with when it was
-saved, its version, the number of annotations in it and the time you spent on it. When you spot a
+saved, its version, the number of annotations in it and the time you worked on it (for example "5 min",
+as the progress card counts it). When you spot a
 problem in a recording you have already finished, choose Open to revise beside it (or in the Done
 tab), then open the same file from your computer as you did the first time. Opening a finished
 recording with Open a recording from your computer offers Open to revise as well. The recording opens with
@@ -90,7 +91,7 @@ the team's share of the study; reached badges have a solid blue ring, the others
 
 Milestones mark your progress through the study: your first recording, then 10, 25, 50, 100, 150,
 200 and 300 recordings; saving recordings on 3, 5 and 10 days in a row; recordings viewed from start
-to end (99 % or more of a recording on the screen, as the Recording tab measures it); and the team reaching a quarter, half,
+to end (99% or more of a recording on the screen, as the Recording tab measures it); and the team reaching a quarter, half,
 three quarters and all of its recordings. When Save and Finish reaches a milestone, the message
 after saving says so, and a short note with the milestone's badge appears above your milestones; it never stands between you and the next recording. Milestones reward finishing
 recordings and looking through them in full. They never reward speed or the number of annotations:
@@ -150,7 +151,7 @@ Some links cannot be read by a web page. Google Drive never allows it, OneDrive 
 school (SharePoint) usually does not, and a link that is not shared with everyone, has expired or
 points to a folder fails too. ElectroClean then says what went wrong in plain words and offers
 the next step in the same place: Download the file opens the link in a new tab, where your browser
-downloads the file, and then choose the downloaded file opens the usual file chooser so that you
+downloads the file, and then Choose the downloaded file opens the usual file chooser so that you
 can pick it from your Downloads folder (on an iPad, Downloads in the Files app). ElectroClean
 cannot reach your Downloads folder, so delete the downloaded file there yourself when you have
 finished with it: in the Files app on an iPad, press and hold the file and choose Delete; on a
@@ -281,8 +282,8 @@ ElectroClean remembers your choice in this browser; until you choose, the study'
 ElectroClean keeps track of the parts of the recording that have been on the screen, so that none
 is missed in a long recording. A part counts as viewed once it has stayed on the screen for a moment
 while you are working. On the overview bar under the EEG, the parts not yet viewed are white with a
-thin amber line above them, and the parts viewed keep the bar's usual warm grey. The Recording tab
-and the line at the bottom say how much you have viewed, for example "Viewed 64 %"; stretches where
+thin grey line above them, and the parts viewed keep the bar's usual warm grey. The Recording tab
+and the line at the bottom say how much you have viewed, for example "Viewed 64%"; stretches where
 the recording has no data count as viewed, since there is nothing to see there.
 
 Next part not yet viewed, in the Recording tab, or the key U, takes you to the next part you have
@@ -355,7 +356,7 @@ download, such as your results in the demonstration, go to the Downloads folder 
 
 Press Save and Finish when you have looked through the whole recording. If some parts of at least a
 second have not been on the screen, ElectroClean first lists them with their times; Go to the first
-takes you to the first of them, and Save anyway goes on, for example when you reviewed them another
+part takes you to the first of them, and Save anyway goes on, for example when you reviewed them another
 way. Your study may turn this check off. ElectroClean then shows how many annotations of each type you
 are saving and asks you to confirm; once saved, the recording is complete. You can still revise it
 later from your history when your study allows revisions (see "History and revisions"); each

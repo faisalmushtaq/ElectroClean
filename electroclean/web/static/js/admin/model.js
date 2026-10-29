@@ -690,6 +690,19 @@ export function projectionText(p) {
   return `Around ${dateText(p.date)}`;
 }
 
+/**
+ * The projected finish as a tile shows it: a short figure that fits on one line (the day and month,
+ * with the year only when it is not this year's) and a note that keeps the "around".
+ */
+export function projectionFigure(p, paceDays = 14, now = new Date()) {
+  if (!p || p.status !== 'projected') return { value: projectionText(p), note: '' };
+  const d = new Date(p.date);
+  if (Number.isNaN(d.getTime())) return { value: projectionText(p), note: `At the pace of the last ${paceDays} days` };
+  const sameYear = d.getFullYear() === now.getFullYear();
+  const value = d.toLocaleDateString('en-GB', sameYear ? { day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: 'numeric' });
+  return { value, note: `Around then, at the pace of the last ${paceDays} days` };
+}
+
 /** The number to show for a value that may be missing (one decimal for fractions). */
 export function numberText(v, digits = 0) {
   if (v === null || v === undefined || !Number.isFinite(Number(v))) return '–';

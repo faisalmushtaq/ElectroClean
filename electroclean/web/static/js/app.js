@@ -7,7 +7,7 @@
 import { h, clear } from './ui/dom.js';
 import { ask, inform, showDialog, setDialogLogger, dialogOpen } from './ui/dialog.js';
 import { Catalogue } from './catalogue.js';
-import { findBackend, connectServer, connectFirebase, makeDemo, rememberServer } from './api/choose.js';
+import { findBackend, connectServer, connectFirebase, makeDemo, rememberServer, unreachableText } from './api/choose.js';
 import { DEMO_NOTICE } from './api/notice.js';
 import { logger } from './log/logger.js';
 import { AnnotationSession } from './annotate/session.js';
@@ -126,9 +126,7 @@ export class App {
   }
 
   _unreachable(where, exc) {
-    if (where.kind === 'firebase') return `The study could not be loaded (${exc.message}). Check your internet connection and try again.`;
-    return `The study server at ${where.address} does not answer${exc && exc.code === 'not_electroclean' ? ' as an ElectroClean study server' : ''}. ` +
-      'Check your internet connection and the address, then try again. If it keeps happening, tell your study team.';
+    return unreachableText(where, exc);
   }
 
   async _connect(where) {
@@ -528,7 +526,7 @@ export class App {
     view.step('fp', 'Checking the file (its fingerprint)…', 'working', 0);
     let fp;
     try {
-      fp = await recording.fingerprint((f) => view.step('fp', `Checking the file (its fingerprint) ${Math.round(f * 100)} %`, 'working', f));
+      fp = await recording.fingerprint((f) => view.step('fp', `Checking the file (its fingerprint) ${Math.round(f * 100)}%`, 'working', f));
     } catch (exc) {
       view.step('fp', 'Checking the file', 'failed');
       view.showProblem(`The file could not be read to the end: ${exc.message}`, [view.chooseAgainButton()]);
