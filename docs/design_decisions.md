@@ -266,8 +266,15 @@ forward, with an arrow, and what is pressed; a single ink
 blue (#2B4392) marks links, selection, focus and the one figure worth
 noticing, such as the work done on the admin overview. Messages are tinted
 blocks with a 3-pixel bar in their colour. The colours of the 29 artifact types
-are unchanged, because they belong to the label catalogue and were chosen to
-stay distinguishable.
+belong to the label catalogue and are presentation only, so changing one
+leaves annotation files compatible. On review
+in October 2026, two were changed so that the nine types of the numbered buttons
+stay at least 8 apart under simulated red-green colour blindness, measured as the
+channel palettes are: Movement-artifact became a mint green (#52C493, from a
+yellow green that was 1.5 from EMG's orange) and Chewing-artifact a darker brown
+(#5A1505, 4.1 from ECG's red before). `web_tests/unit/ui_type_colours.test.mjs`
+keeps the nine apart. Every type button also shows its short name beside its
+number, so that colour is never the only way to tell the types apart there.
 
 The sign-in page shows an illustration drawn for ElectroTag: many EEG-like
 traces across a dark field, warm at the top and cool below, like a long exposure of a

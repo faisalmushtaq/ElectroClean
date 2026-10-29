@@ -5,6 +5,11 @@ Each section below describes the changes in one version of ElectroTag;
 
 ## Unreleased
 
+Movement-artifact and Chewing-artifact have new colours (#52C493 and #5A1505),
+so that the nine types of the numbered buttons stay apart for annotators with
+red-green colour blindness; the colours are the same on the type buttons, the
+marks, the overview bar and the lists, and annotation files are unaffected.
+
 The activity analysis (`electrotag-activity` and the admin area) now counts
 confidence ratings, notes, problem reports and the feedback on reviewed work.
 Each row of `recordings.tsv` gives the ratings given and cleared, the requests
