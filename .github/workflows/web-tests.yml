@@ -10,7 +10,7 @@ name: Browser version tests
 
 on:
   push:
-    branches: [main, claude/electrotag-web]
+    branches: [main, claude/electroclean-web]
     paths:
       - "electrotag/**"
       - "web_tests/**"

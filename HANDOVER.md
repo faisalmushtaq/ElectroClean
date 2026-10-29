@@ -32,7 +32,7 @@ used for the local demonstration and for a study that prefers its own computer).
 
 On 28 October 2026 the project lead decided to retire the desktop application and to make the
 browser version complete, with an admin area for the lead researchers. That work was finished and
-tested on the branch `claude/electrotag-web` and merged into `main` the same day, with the project
+tested on the branch `claude/electroclean-web` and merged into `main` the same day, with the project
 lead's agreement, so `main` now holds the browser application and GitHub Pages publishes it at
 <https://faisalmushtaq.github.io/ElectroTag/>.
 
@@ -97,7 +97,7 @@ There are no open pull requests or issues on GitHub.
 | Branch | What it holds | What to do with it |
 | --- | --- | --- |
 | `main` | The browser application, its admin area, the server, the Firebase functions and the Python core | Work on a branch from here. Pushes run *Tests* on Windows, macOS and Linux and *Browser version tests*, and publish the application at the site's root. |
-| `claude/electrotag-web` | The branch the browser version was built on; merged into `main` and identical to it | Keep it for previews or delete it: pushes to it publish the application under `preview/` without touching the site's root, a way to show work in progress before it reaches `main` (bring it up to date with `main` first). |
+| `claude/electroclean-web` | The branch the browser version was built on; merged into `main` and identical to it | Keep it for previews or delete it: pushes to it publish the application under `preview/` without touching the site's root, a way to show work in progress before it reaches `main` (bring it up to date with `main` first). |
 | `claude/eager-bardeen-33qhkb` | The branch earlier AI sessions worked on; identical to `main` | Nothing; it can be deleted. |
 | `gh-pages` | The published web pages, written by `.github/workflows/pages.yml` | Never edit it by hand. GitHub Pages serves it (Settings, Pages: deploy from branch `gh-pages`, folder `/ (root)`). |
 
@@ -149,7 +149,7 @@ Firebase tests need Java 21 for Google's emulators; `npx` fetches the Firebase t
 
 The [testing guide](docs/testing_guide.md) lists the checks that need a person before a study
 starts. *GitHub Pages* publishes the application (from `main` at the site's root, from
-`claude/electrotag-web` under `preview/`), and *Firebase deploy*, run by hand, deploys the
+`claude/electroclean-web` under `preview/`), and *Firebase deploy*, run by hand, deploys the
 functions and rules to a real project once it exists (see below).
 
 ## Setting up a real study on Firebase

@@ -45,6 +45,9 @@ settings file (`electrotag_study.json`), the names written in result files, the
 Firebase functions (`et_`), the environment variables (`ELECTROTAG_…`) and the
 application itself, published at <https://faisalmushtaq.github.io/ElectroTag/>.
 Version 1.1.0 and the versions before it were released as ElectroClean.
+The branch that publishes the preview keeps its name, `claude/electroclean-web`;
+the rename had also changed it in the workflows, so the preview under
+`preview/` stopped updating until this was put right.
 
 ElectroTag has its own mark: a short stretch of EEG marked as an artifact, the
 shaded band with its two edges that the application draws for each
