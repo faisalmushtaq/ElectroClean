@@ -208,8 +208,8 @@ async function main() {
       await saveAndFinish(page);
       await waitForRoute(page, 'review', 120000);
       const review = (await page.textContent('.review')).replace(/\s+/g, ' ');
-      assert.match(review, /Not yet: you need 80% for finding the artifacts and for their types/);
-      assert.match(review, /You found 0 of 15 reference artifacts/);
+      assert.match(review, /Not yet: you need a score of at least 80% and the right type for at least 80% of the artifacts you find\./);
+      assert.match(review, /You found 0 of the experts' 15 artifacts/);
       await shot(page, 'practice_review');
       await page.evaluate(() => globalThis.ElectroTag.flushLog());
     }],

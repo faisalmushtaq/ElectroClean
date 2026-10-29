@@ -478,7 +478,7 @@ def test_the_admin_area_on_firestore(service: StudyService, recordings: Path, tm
     service.call("quiz", A01, {"set_id": "pilot", "action": "answer", "item_id": "q01", "label": "EMG-artifact"})
     assert service.call("quiz", A01, {"set_id": "pilot", "action": "finish"})["score"]["n_correct"] == 0
     assert ok(service, "me", A01)["quizzes"] == [{"set_id": "pilot", "name": "Pilot", "n_items": 1,
-                                                 "finished": True, "feedback": "end"}]
+                                                 "n_answered": 1, "finished": True, "feedback": "end"}]
     # analyses
     ag = admin_ok(service, "agreement", {})
     assert ag["summary"]["n_comparable_recordings"] == 1 and "events_summary.tsv" in ag["tables"]
