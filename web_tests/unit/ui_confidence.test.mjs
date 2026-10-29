@@ -115,5 +115,5 @@ test('drafts and revisions keep both fields; an annotation from the server witho
   t.reset([...json, { annotation_id: 'x1', label: 'Movement-artifact', onset_sample: 3000, duration_samples: 10, channels: [], confidence: null, note: '' }]);
   assert.equal(t.get(a.annotation_id).note, 'jaw');
   assert.equal('confidence' in t.get('x1'), false);
-  for (const bad of ['probable', 7, '3']) assert.throws(() => t.reset([{ ...json[0], confidence: bad }]), AnnotationError);
+  for (const bad of ['high', 7, '3']) assert.throws(() => t.reset([{ ...json[0], confidence: bad }]), AnnotationError);
 });

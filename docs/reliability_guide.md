@@ -265,26 +265,36 @@ while the other called vertical eye movement.
 
 ## 5. Confidence of the annotations
 
-Annotators may say how sure they are of each mark: definite, probable or
-possible. `confidence_by_annotator.tsv` gives, for each annotator, the study's
-confidence setting, how many marks had a confidence given and how those were
-spread over the three levels, and how many carry a note. When any confidence
-was given, `confidence_sensitivity.tsv` reports a sensitivity analysis,
-definite-confidence agreement: positive agreement and Cohen's kappa (sample by
-sample, all recordings pooled) and event F1 at the main threshold, per
-category, channel mode and pair of annotators, for all marks and again without
-the marks given probable or possible. When agreement rises without them, much
-of the disagreement lies in marks the annotators themselves doubted.
+Annotators may rate their confidence in each mark on an ordinal 5-point
+Likert scale: 1, not at all confident; 2, slightly; 3, moderately; 4, very;
+5, completely confident. `confidence_by_annotator.tsv` gives, for each
+annotator, the study's confidence setting, how many marks were rated, how many
+had each rating, the median rating, and how many carry a note. The ratings are
+ordinal, so they are counted and compared, never averaged; and annotators use a
+scale differently, so each annotator's ratings are best read against their own.
 
-How to read it depends on the study's setting, which the report states. With
-`every_mark`, every new mark started as definite, so the second set is the
-marks left as definite; an annotator who rarely changes the default (visible in
-`confidence_by_annotator.tsv`) may differ in habit rather than in doubt. With
-`optional`, a confidence was volunteered, so the marks with one are a
-self-selected subset and the confidence of a mark without one is unknown;
-marks without a confidence stay in both sets. Every other table uses all
-marks. Annotators' notes are listed with each event in `events_matched.tsv`
-and `events_unmatched.tsv` and take part in no statistic.
+When any mark was rated, two more tables are written.
+`confidence_sensitivity.tsv` is a sensitivity analysis: positive agreement and
+Cohen's kappa (sample by sample, all recordings pooled) and event F1 at the
+main threshold, per category, channel mode and pair of annotators, for all
+marks (`*_all`) and again without the marks of low confidence, rated 1 or 2
+(`*_without_low_confidence`). Unrated marks stay in both sets. When agreement
+rises without the low-confidence marks, much of the disagreement lies in marks
+the annotators themselves doubted. `confidence_calibration.tsv` gives, for each
+annotator and for all annotators together, and for each rating (and for unrated
+marks), the number of marks and the share that at least one other annotator of
+the same recording also found: a mark of the same type that matches it, time
+only, by the study's matching criterion at the main threshold, one to one
+within each pair. If the share rises with the rating, the ratings tell which
+marks others agree with; a share based on a few marks is unreliable.
+
+How to read these depends on the study's setting, which the report states. With
+`every_mark`, annotators were asked to rate each new mark, and no mark started
+with a rating, so an unrated mark is one they chose to leave. With `optional`,
+ratings were volunteered, so the rated marks are a self-selected subset and the
+confidence of an unrated mark is unknown. Every other table uses all marks.
+Annotators' notes are listed with each event in `events_matched.tsv` and
+`events_unmatched.tsv` and take part in no statistic.
 
 ## Choosing settings
 

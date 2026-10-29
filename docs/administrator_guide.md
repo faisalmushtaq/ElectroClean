@@ -220,12 +220,12 @@ the screen, or `"off"`.
 {"settings": {"annotation": {"break_reminder_minutes": 45, "idle_pause_minutes": 5, "coverage_check": "warn"}}}
 ```
 
-`annotation.confidence` is `"optional"` (the default), with which a new
-annotation has no confidence and annotators give one (definite, probable or
-possible) when they wish, or `"every_mark"`, with which every new annotation
-starts as definite and annotators change it when unsure. Annotators can always
-give a confidence and add a short note; the setting chooses what a new mark
-starts with, and it is recorded in every saved result
+`annotation.confidence` is `"optional"` (the default), with which annotators
+rate their confidence in a mark on a 5-point scale (1, not at all confident, to
+5, completely confident) when they wish, or `"every_mark"`, with which they are
+asked for a rating after each new mark and Save and Finish lists the marks left
+unrated. No mark starts with a rating in either. Annotators can always rate a
+mark and add a short note; the setting is recorded in every saved result
 ([design decisions](design_decisions.md), "Confidence and notes").
 
 The time worked on a recording, saved in the session file (`timing.elapsed_seconds`),

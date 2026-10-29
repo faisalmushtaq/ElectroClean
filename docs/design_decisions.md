@@ -488,42 +488,51 @@ they can be switched off, and a study that uses them should report them in its m
 ## Confidence and notes (29 October 2026)
 
 In an agreement study, doubt is part of what is being measured: two annotators who disagree about a
-mark are often both unsure of it. Each annotation can therefore carry a confidence and a short note.
-Three levels, definite, probable and possible, are enough to separate a mark the annotator would
-defend from one they offer tentatively, and few enough to choose between at a glance; a finer scale
-would ask for distinctions people cannot make consistently from moment to moment, and two levels
-would merge "probably an artifact" with "perhaps one". Confidence is set with one key (D, which steps
-to the next level), one tap on the Annotations list's Confidence button, or the annotation's menu,
-so that it adds next to no work.
+mark are often both unsure of it. Each annotation can therefore carry a confidence rating and a short
+note. The first design used three named levels (definite, probable, possible); the project lead found
+them odd, and the rating is now a 5-point Likert scale with the usual unipolar anchors: 1, not at all
+confident; 2, slightly confident; 3, moderately confident; 4, very confident; 5, completely
+confident. A numbered scale with a word for every point is familiar from questionnaires, reads the
+same to every annotator, needs no explanation of what "probable" means for an artifact, and gives an
+ordinal measure the analyses can summarise with a median and compare across levels. Five points
+leave room to say "fairly sure" without forcing a choice between sure and unsure, and are few enough
+to choose between with one key. The ratings are ordinal: the analyses count and compare levels and
+never average them as if the steps were equal.
 
-The project lead asked that annotators can always give a confidence, and that the study chooses how
-much it asks for (`annotation.confidence`). **Optional**, the default, costs nothing: a new mark has
-no confidence and looks as marks always have, and annotators give one when they feel doubt. The
-saved files hold `n/a` for a mark without one, which means that the annotator gave none, and the
-marks with a confidence are a self-selected subset: some annotators will volunteer doubt more often
-than others, and the analyses say so. **Every mark** gives complete data: every new mark starts as
-definite, so the annotator acts only when unsure, which keeps the extra work near zero. The default
-brings its own risk of bias, since some annotators may never change it, and a definite mark from such
-an annotator says less than one from an annotator who uses all three levels. Each annotator's
-distribution of confidence in the agreement report shows who rarely leaves the default.
+Rating is a short, explicit step: D and then a digit, or a tap on a number below the Annotations
+list or in the menu. While ElectroTag waits for the digit the line at the bottom says so and the
+number keys rate rather than choose a type; the wait ends after the digit, Esc, another key or a few
+seconds, so it never traps the keyboard.
 
-The analyses use confidence in two ways. They report each annotator's distribution of the levels,
-with how many marks had a confidence given and how many carry a note. When any confidence was given,
-they report agreement twice, for all marks and again without the marks given probable or possible:
-a sensitivity analysis, called definite-confidence agreement, which in an every-mark study is
-agreement on the definite marks. In an optional study the marks without a confidence stay in both
-sets, because leaving them out would leave little beyond the self-selected definite marks; the
-report says that the confidence was volunteered. When agreement rises without the doubtful marks,
-much of the disagreement lies in marks the annotators themselves were unsure of. The main agreement
+The project lead asked that annotators can always rate a mark, and that the study chooses how much it
+asks for (`annotation.confidence`). **Optional**, the default, costs nothing: annotators rate a mark
+when they wish, and the rated marks are a self-selected subset, which the analyses say. **Every mark**
+asks for a rating after each new mark. No mark ever starts with a rating, in either setting: a
+default (for example "completely confident") would be kept by annotators who never change it, and a
+default rating cannot be told from a chosen one, which would bias the data towards the default.
+Instead the prompt opens by itself after each new mark, answered with one key or tap; carrying on
+without answering leaves the mark unrated, so the question never blocks the work, and Save and Finish
+lists the unrated marks with Rate them (which steps through them, one key each) and Save anyway, in
+the same way as the check of the parts not yet viewed. A rating is therefore always a choice the
+annotator made, and an unrated mark is recorded as such.
+
+The analyses use the ratings in three ways. They report each annotator's ratings: how many marks
+were rated, the distribution over 1 to 5, and the median, since annotators use a scale differently
+and each annotator's ratings are best compared with their own. When any mark was rated, they report
+agreement twice, for all marks and again without the marks of low confidence (rated 1 or 2): a
+sensitivity analysis in which unrated marks stay in both sets, because in an optional study leaving
+them out would leave only the self-selected rated marks. And a calibration table gives, for each
+annotator and rating, the share of their marks that at least one other annotator also found; if the
+share rises with the rating, the ratings tell which marks others agree with. The main agreement
 tables always use every mark.
 
-When two marks of one type overlap and merge, the merged mark keeps the lower confidence of the two,
-since it is only as sure as its least sure part, and both notes, joined with "; " (each different
-note once, shortened to 200 characters if longer). A mark without a confidence adds none, so a
-definite mark merged with one without a confidence stays definite. Notes are research content: they
-are saved with the annotation, listed with each event in the analyses' matched and unmatched event
-tables, and used in no statistic. The interaction log records only that a note was added, changed or
-removed and its length, as it never records typed text.
+When two marks of one type overlap and merge, the merged mark keeps the lower rating of the two,
+since it is only as sure as its least sure part, and both notes, joined with "; " (each
+different note once, shortened to 200 characters if longer). An unrated mark adds no rating, so a
+mark rated 5 merged with an unrated one stays at 5. Notes are research content: they are saved with
+the annotation, listed with each event in the analyses' matched and unmatched event tables, and used
+in no statistic. The interaction log records only that a note was added, changed or removed and its
+length, as it never records typed text.
 
 ## Problem reports and reviews of saved work (29 October 2026)
 

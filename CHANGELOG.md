@@ -53,29 +53,35 @@ through it in the header and on the sign-in page, and it is now also the
 browser tab's icon and the icon an iPad shows when ElectroTag is added to its
 home screen, which the application did not have before.
 
-Annotators can say how sure they are of each mark, and add a short note to
-it. Each annotation can have a confidence of definite, probable or possible:
-D gives the selected annotation (or the one just made) the next level, Set
-confidence… in its menu (a long press on an iPad) picks one, and the
-Confidence button below the Annotations list steps to the next with one tap.
-Probable and possible marks are filled more lightly on the EEG and named in
-their tag; the list shows a short word for them and a small tick for
-definite. Add a note…, in the menu, below the list or in Edit times…, keeps a
-note of up to 200 characters, shown by a small note sign with the text as its
-tooltip. The study chooses in its settings (`annotation.confidence`) whether
-confidence is optional, the default, where a new mark has none and looks as
-before, or asked for every mark, where every new mark starts as definite. Both
-are saved with the annotations and kept in drafts, revisions, undo and redo;
-overlapping marks that merge keep the lower confidence and both notes.
-`events.tsv` has two new columns, `confidence` and `annotation_note` (`n/a`
-when not given), described in `events.json`; the session and annotations
-files record the study's setting, and files written before are still read. The
-agreement analysis reports each annotator's distribution of confidence and,
-when any was given, agreement again without the marks given probable or
-possible (definite-confidence agreement), in the report and in
-`confidence_by_annotator.tsv` and `confidence_sensitivity.tsv`; notes are
-listed with each matched and unmatched event and used in no statistic. The
-interaction log records `confidence_set` and `note_set`, with a note's length
+Annotators can rate how confident they are of each mark, and add a short note
+to it. The rating is a 5-point scale: 1, not at all confident; 2, slightly; 3,
+moderately; 4, very; 5, completely confident. D and then a digit rates the
+selected annotation (or the one just made), 0 clears it and Esc cancels; while
+ElectroTag waits for the digit the line at the bottom says so and the number
+keys do not choose a type. The annotation's menu (a long press on an iPad) has
+Confidence, with the five numbers and their meanings and Clear, and five
+numbers below the Annotations list rate the selected annotation with one tap.
+The tag of a rated mark shows its rating, such as 3/5, marks rated 1 or 2 are
+filled more lightly, and a mark without a rating looks as before. Add a note…,
+in the menu, below the list or in Edit times…, keeps a note of up to 200
+characters, shown by a small note sign with the text as its tooltip. No mark
+starts with a rating. The study chooses in its settings
+(`annotation.confidence`) whether rating is optional, the default, or asked
+for every mark: then the question appears after each new mark, with a small
+bar of numbers, and never blocks the work, and Save and Finish lists the marks
+left unrated with Rate them and Save anyway. Ratings and notes are kept in
+drafts, revisions, undo and redo; overlapping marks that merge keep the lower
+rating and both notes. `events.tsv` has two new columns, `confidence` (1 to 5)
+and `annotation_note` (`n/a` when not given), described in `events.json`; the
+session and annotations files record the study's setting and the count of each
+rating, and files written before are still read. The agreement analysis
+reports each annotator's ratings and median, agreement again without the marks
+rated 1 or 2, and a calibration table of how often marks at each rating were
+found by another annotator, in the report and in
+`confidence_by_annotator.tsv`, `confidence_sensitivity.tsv` and
+`confidence_calibration.tsv`; notes are listed with each matched and unmatched
+event and used in no statistic. The interaction log records `confidence_set`,
+`confidence_prompt`, `confidence_check` and `note_set`, with a note's length
 only, never its text.
 
 The annotation view has four new ways of looking at the EEG, after those of

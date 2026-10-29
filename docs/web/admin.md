@@ -458,14 +458,15 @@ or left the page out of sight for more than ten seconds; the annotators' guide d
 see.
 
 **Annotation** also chooses how confidence is asked for (`annotation.confidence`). Annotators can
-always say how sure they are of a mark, definite, probable or possible, and add a short note to it;
-the annotators' guide describes how. With **Optional** (`"optional"`, the default) a new mark has no
-confidence and annotators give one only when they wish, which costs them nothing and records doubt
-when they feel it; the saved files then hold `n/a` for a mark without one, meaning not given. With
-**Every mark** (`"every_mark"`) every new mark starts as definite and annotators change it when
-unsure, so every mark has a confidence; some annotators may rarely change the default, which the
-agreement analysis helps to see. The setting is recorded in each saved result, and the analyses
-report agreement for all marks and again without the marks given probable or possible (see the
+always rate their confidence in a mark on a 5-point scale, from 1 (not at all confident) to 5
+(completely confident), and add a short note to it; the annotators' guide describes how. No mark
+starts with a rating. With **Optional** (`"optional"`, the default) annotators rate a mark only when
+they wish, which costs them nothing; the saved files hold `n/a` for a mark without a rating. With
+**Every mark** (`"every_mark"`) annotators are asked for a rating after each new mark, answered with
+one key or tap, and Save and Finish lists the marks left unrated, with Rate them and Save anyway; the
+question never blocks their work. The setting is recorded in each saved result, and the analyses
+report each annotator's ratings, agreement for all marks and again without the marks rated 1 or 2,
+and whether marks rated higher are found more often by other annotators (see the
 [design decisions](../design_decisions.md), "Confidence and notes").
 
 **Annotation** also chooses whether annotators may revise recordings they have
