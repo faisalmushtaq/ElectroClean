@@ -87,6 +87,16 @@ event and used in no statistic. The interaction log records `confidence_set`,
 `confidence_prompt`, `confidence_check` and `note_set`, with a note's length
 only, never its text.
 
+The Annotations list in the side panel shows every label in full. Each row
+has two lines: the label with its colour across the panel's whole width, and
+below it the channels, the rating and note sign, and the start and end in
+seconds, on the right. Before, the label had about a third of the panel and
+long labels such as Horizontal-eye-movement-artifact were cut short, more so
+with a rating or a note. The type's code, which had its own column on wide
+screens, is in the row's tooltip with the description. Held upright on an
+iPad, the Annotations tab puts its buttons beside the list, so that several
+rows stay in view.
+
 The annotation view has four new ways of looking at the EEG, after those of
 EEGNet. In Channels… and Edit channels…, Map shows the electrodes on a
 drawing of the head, placed from the recording's own BIDS electrodes.tsv when

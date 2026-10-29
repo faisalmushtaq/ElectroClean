@@ -145,6 +145,19 @@ test('the design is flat and quiet: no shadows, no gradients, no capitals; squar
   assert.ok(['0', '2px'].includes(t.radius) && ['0', '2px'].includes(t['radius-card']));
 });
 
+test('the Annotations list never cuts a label short: its rows wrap and set no ellipsis', () => {
+  // The browser check is t_annotation_list.e2e.mjs; this keeps the rules that would undo it out of the sheet.
+  const code = uncommented(APP_CSS);
+  const rules = [...code.matchAll(/([^{}]*\.ann-table[^{}]*)\{([^}]*)\}/g)].map((m) => [m[1].trim().split('\n').pop(), m[2]]);
+  assert.ok(rules.some(([sel]) => /\.label-text/.test(sel)), 'the label has a rule of its own');
+  for (const [sel, body] of rules) {
+    const rows = sel.split(',').filter((s) => !/\bth\b|\.ann-time/.test(s));
+    if (!rows.length) continue;
+    assert.doesNotMatch(body, /text-overflow\s*:\s*ellipsis/, `${sel} cuts text short`);
+    assert.doesNotMatch(body, /white-space\s*:\s*nowrap/, `${sel} keeps text from wrapping`);
+  }
+});
+
 test('icons are drawn: no arrows, ticks or stars from a font, and every icon used has a drawing', () => {
   const drawn = new Set([...APP_CSS.matchAll(/\.ico-([a-z-]+)\s*\{\s*--i:\s*var\(--i-\1\)/g)].map((m) => m[1]));
   for (const name of drawn) assert.match(APP_CSS, new RegExp(`--i-${name}: url\\("data:image/svg\\+xml,`), `--i-${name} is drawn`);

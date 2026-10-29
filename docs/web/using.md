@@ -299,7 +299,10 @@ Selected channels waits until you press O for the normal view again.
 
 ## Changing annotations
 
-Click an annotation to select it, or pick it in the Annotations list. While annotations are
+Each row of the Annotations list shows the whole label on its first line and, on the line below,
+the channels (or Whole montage), the rating and note sign when there are any, and the start and end
+in seconds; hold the pointer over a row for the type's code and description. Click an annotation to
+select it, or pick it in the Annotations list. While annotations are
 selected the second row reads "Change to", and a number key, a type button or the menu changes their
 type. Esc, a click on empty EEG or a new drag ends the selection, and the row reads "Draw as" again.
 N and P select the next and previous annotation and bring it into view.
@@ -469,7 +472,8 @@ the toolbars as on a computer, and a keyboard attached to the iPad works with ev
 here. In Channels…, Map works by touch: tap an electrode to choose it, drag with the Pencil to
 choose several in a box, and drag with a finger to move a map larger than its frame; on an iPad the
 electrodes are large enough for a finger, so a dense montage makes a larger map. Held upright, the iPad shows the EEG across its width with the side panel (and the coach in
-training) below it; on its side, the panel is beside the EEG as on a computer.
+training) below it, and the Annotations tab puts its buttons beside the list so that several rows
+stay in view; on its side, the panel is beside the EEG as on a computer.
 
 To open a recording, choose Choose a file…, which opens the iPad's file picker (the Files app, with
 iCloud Drive, the iPad itself and any drive plugged in). Tap Select in the picker to choose several

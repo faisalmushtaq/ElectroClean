@@ -230,9 +230,7 @@ so it was taken out again before the push.
 **6b. Loose ends from the EEGNet comparison (29 October).** Confidence, notes, problem reports,
 reviews of saved work, the channel map, the value under the pointer, the overlay and Go to time are
 in place. The activity summary (`electrotag-activity`) does not yet count the new `confidence_set`,
-`confidence_prompt`, `confidence_check`, `note_set`, `problem_reported` and review events, which are in the interaction log. The Annotations
-list in the side panel is narrow, so long labels are cut short, a little more so when a rating
-or a note is shown. Electrode positions from a BIDS `electrodes.tsv` are used only when the
+`confidence_prompt`, `confidence_check`, `note_set`, `problem_reported` and review events, which are in the interaction log. Electrode positions from a BIDS `electrodes.tsv` are used only when the
 annotator opens it with the recording; recordings opened from a link or kept on the device use
 standard positions.
 

@@ -347,7 +347,9 @@ with Shift+drag on a computer, is offered on a touch screen through Edit times�
 menu.
 
 Upright, an iPad is 744 to 1024 pixels wide, too narrow for the side panel beside the EEG, so up to
-1024 pixels the panel and the coach go below the EEG, side by side. A phone is too small for the
+1024 pixels the panel and the coach go below the EEG, side by side; there the panel is wide and
+short, so when the Annotations tab has 600 pixels of width its buttons stand beside the list rather
+than under it, and the list keeps the panel's height. A phone is too small for the
 EEG, and the views other than signing in and the admin area ask for a larger screen below 700
 pixels of width or 480 of height. On such a screen the sign-in page itself says that annotating
 needs a tablet or a computer and that administrators can sign in to check progress, and an
@@ -357,6 +359,20 @@ checks it; Safari zooms into a field set below 16 pixels, so fields are 16 pixel
 and a style shown on hover would stay on a tapped control, so hover styles apply only where the
 pointer can hover. The end-to-end tests run in WebKit, Safari's engine, as well as in Chromium, and
 `k_ipad.e2e.mjs` checks the touch gestures, the layouts and the file pickers.
+
+The side panel is 320 to 400 pixels wide, and the longest artifact labels
+(Horizontal-eye-movement-artifact, Artificial-ventilation-artifact) need about 215 pixels at the
+panel's text size. A table with columns for the label, the code, the start, the end and the
+channels left the label about a third of the panel, so every long label was cut short and a rating or a
+note sign shortened it further. Each row of the Annotations list now has two lines: the label with
+its colour across the panel's whole width, and below it, in the smaller secondary text, the
+channels, the rating, the note sign and the start and end, the times kept to the right in tabular
+figures so that they still line up from row to row. Every label then fits on its line at the panel's
+narrowest, and a longer text (the larger panel text, or the "TYPE: should be … · YOU:" of a training
+review) wraps at its hyphens and spaces and is still read in full. The code of the type moved into the
+row's title with the description. `t_annotation_list.e2e.mjs` checks that nothing in any row is cut
+short, for all 29 types with ratings, notes and channels, at 1280 × 720, 1440 × 900, 1920 × 1080 and
+on an iPad upright and on its side.
 
 ## Recordings from cloud links, and copies kept on the device (28 October 2026)
 
