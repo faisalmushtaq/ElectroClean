@@ -99,7 +99,13 @@ export class OpenView {
     this.handle(got.files, false, { kind: 'device', keep: false, sha256: got.meta.sha256 });
   }
 
+  /** The view is no longer shown: a download from a link still running is stopped. */
+  leave() {
+    if (this.links && this.links.cancel) this.links.cancel();
+  }
+
   async handle(files, fromFolder = false, source = null) {
+    if (this.app.openView !== this || this.app.route !== 'open') return; // a file that arrived after the view was left
     source = source || { kind: 'chosen', keep: Boolean(this.device.box && this.device.box.checked) };
     clear(this.result);
     let chosen = files;

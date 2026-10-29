@@ -44,6 +44,7 @@ export class ProgressSection {
       this.data = s;
       this.sets = sets.sets || [];
     } catch (exc) {
+      if (turn !== this._turn) return; // a newer request has the last word, whether it came back first or not
       this.asOf.textContent = '';
       this.msg.problem(exc);
       return;

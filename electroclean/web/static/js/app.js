@@ -20,6 +20,7 @@ import { signinView } from './views/signin.js';
 import { inviteView } from './views/invite.js';
 import { homeView } from './views/home.js';
 import { OpenView } from './views/open.js';
+import { DeviceStore } from './data/device_store.js';
 import { keepOnDevice, dropBrokenCopy, afterFinishOnDevice, offerRemovalAtSignOut } from './views/device.js';
 import { appHeader, downloadFiles, smallScreenNotice } from './views/common.js';
 import { nowLocalIso, session } from './util.js';
@@ -167,13 +168,16 @@ export class App {
     this._render(h('main.page.loading', {}, h('p.subtitle', {}, 'Checking your invitation…')), 'signin');
     let info = null;
     let problem = '';
+    let retry = false;
     try {
       info = await this.backend.inviteCheck(token);
     } catch (exc) {
       problem = exc.message;
       if (exc.code && /^invite_/.test(exc.code)) session.remove(INVITE_KEY);
+      else retry = true; // the study could not answer: the link may be good, so it is kept to ask again
     }
-    this._render(inviteView(this, token, { info, problem }), 'signin');
+    if (this.route !== 'signin') return; // the person went on while the study answered
+    this._render(inviteView(this, token, { info, problem, retry }), 'signin');
   }
 
   /** Set the password with the invitation and sign in (POST /invite/accept). */
@@ -241,13 +245,31 @@ export class App {
   async loadAchievements() {
     const g = this.me && this.me.study && this.me.study.gamification;
     if (!g || !g.enabled || this.me.programme || !this.backend.achievements) { this.achievements = null; return null; }
+    const changes = this._gamesSeq || 0;
     try {
-      this.achievements = await this.backend.achievements();
+      const facts = await this.backend.achievements();
+      // A change of the goal made while this was read is newer than what it read.
+      if ((this._gamesSeq || 0) === changes) this.achievements = facts;
     } catch (exc) {
       if (exc.status === 401) throw exc;
       this.achievements = null; // the home page works without them
     }
     return this.achievements;
+  }
+
+  /**
+   * POST /me/achievements: changes are sent one after another, never two at once, and the answer
+   * is kept only when no newer change was made meanwhile, so that a late answer never brings back
+   * an older goal. Never repeated by itself after a failure, like every change.
+   */
+  changeAchievements(body) {
+    const seq = (this._gamesSeq = (this._gamesSeq || 0) + 1);
+    const sent = (this._gamesChain || Promise.resolve()).catch(() => {}).then(() => this.backend.setAchievements(body));
+    this._gamesChain = sent;
+    return sent.then((facts) => {
+      if (seq === this._gamesSeq) this.achievements = facts;
+      return facts;
+    });
   }
 
   /** Draw the home page again after a change to the goal or the leaderboard (its list keeps its tab, search and page). */
@@ -296,6 +318,8 @@ export class App {
 
   // ===================================================================== views
   _render(el, route) {
+    // Leaving the open view stops its download from a link: a late file must not open by itself.
+    if (this.openView && this.openView.el !== el) this.openView.leave();
     if (this.quizView && this.quizView.el !== el) {
       this.quizView.destroy(); // the quiz's answers are with the study; its recordings are closed
       this.quizView = null;
@@ -461,6 +485,7 @@ export class App {
   }
 
   openFromComputer(expected, { revise = false } = {}) {
+    if (this.openView) this.openView.leave();
     this.openView = new OpenView(this, { expected, revise: Boolean(expected && revise) });
     this._render(this.openView.el, 'open');
   }
@@ -472,7 +497,13 @@ export class App {
     await this._process(recording, this.openView);
   }
 
+  /** Whether `view` is still the open view on screen: work for one that was left is dropped. */
+  _stillOpen(view) {
+    return this.openView === view && this.route === 'open';
+  }
+
   async processFiles(files, view, source = null) {
+    if (!this._stillOpen(view)) return;
     view.reset();
     view.step('read', source && source.kind === 'device' ? 'Reading the copy kept on this device…' : 'Reading the file…');
     let recording;
@@ -487,6 +518,7 @@ export class App {
       logger.event('load_failed', { kind: 'read', reason: exc.message });
       return;
     }
+    if (!this._stillOpen(view)) return; // the person went elsewhere while the file was read
     await this._process(recording, view);
   }
 
@@ -502,6 +534,7 @@ export class App {
       view.showProblem(`The file could not be read to the end: ${exc.message}`, [view.chooseAgainButton()]);
       return;
     }
+    if (!this._stillOpen(view)) return;
     if (!(await this._checkKeptCopy(recording, fp, view))) return;
     view.step('fp', 'Checked the file', 'done');
     view.step('match', this.backend.isDemo ? 'Looking it up in the demonstration study…' : 'Asking the study whether this is one of your recordings…');
@@ -517,6 +550,9 @@ export class App {
       if (exc.status !== 401) view.showProblem(`The study could not be asked: ${exc.message}`, [view.chooseAgainButton()]);
       return;
     }
+    // A late answer (a slow study) for a view that was left opens nothing: the person has moved on,
+    // perhaps to another recording, which must not be closed under them.
+    if (!this._stillOpen(view)) return;
     logger.event('recording_loading', { recording_id: m.recording_id, match: m.status, file_name: recording.fileName, size_bytes: recording.sizeBytes });
     const back = h('button.btn', { type: 'button', onclick: () => this.goBack() }, 'Back to my recordings');
     if (m.status === 'matched') {
@@ -603,6 +639,9 @@ export class App {
     if (this.ws) this.ws.destroy();
     const ws = new Workspace(this, session, { kind: tryOut ? 'tryout' : 'annotate' });
     this.ws = ws;
+    // A recording opened from a copy kept on this device reads its files as it is viewed: the copy is
+    // marked in use, so that no tab removes it until the recording is closed.
+    if (recording.source && recording.source.kind === 'device') void DeviceStore.holdInUse(sha).then((release) => ws.onDestroy(release));
     this._render(ws.el, 'annotate');
     ws.mount(this.content);
     if (session.mode === 'guided') {

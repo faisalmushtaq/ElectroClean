@@ -137,12 +137,19 @@ export class AdminArea {
     let matches = [];
     let active = -1;
     let data = null;
-    const load = async () => {
-      if (data) return data;
-      const [u, r] = await Promise.all([this.read('users_list').catch(() => ({ users: [] })), this.read('recordings_list').catch(() => ({ recordings: [] }))]);
-      data = { users: u.users || [], recordings: r.recordings || [] };
-      setTimeout(() => { data = null; }, 60000); // asked again a minute later
-      return data;
+    let loading = null; // the lists being read: every keystroke while they come waits for the same answer
+    const load = () => {
+      if (data) return Promise.resolve(data);
+      if (!loading) {
+        loading = Promise.all([this.read('users_list').catch(() => ({ users: [] })), this.read('recordings_list').catch(() => ({ recordings: [] }))])
+          .then(([u, r]) => {
+            data = { users: u.users || [], recordings: r.recordings || [] };
+            setTimeout(() => { data = null; }, 60000); // asked again a minute later
+            return data;
+          })
+          .finally(() => { loading = null; });
+      }
+      return loading;
     };
     const close = () => { list.hidden = true; input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant'); active = -1; };
     const mark = (i) => {
@@ -160,7 +167,8 @@ export class AdminArea {
     const fill = async () => {
       const q = input.value;
       const d = await load();
-      if (q !== input.value) return;
+      // A late answer for a search typed over since, or after the field was left, shows nothing.
+      if (q !== input.value || document.activeElement !== input) return;
       matches = findMatches(q, d);
       clear(list);
       if (!q.trim()) { close(); return; }

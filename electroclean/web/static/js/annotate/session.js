@@ -101,6 +101,7 @@ export class AnnotationSession {
     this._dirty = false;
     this._lastRemote = performance.now();
     this._remoteBusy = false;
+    this.submitting = false; // Save and Finish is waiting for the study's answer: no draft is sent meanwhile
     // A revision opens with the annotations of the latest saved version (docs/web/using.md, "History and revisions").
     this.revision = o.revision && Number.isInteger(o.revision.revises) ? { ...o.revision } : null;
     if (this.revision) {
@@ -179,7 +180,7 @@ export class AnnotationSession {
   }
 
   saveLocal() {
-    if (!this.canSave) return;
+    if (!this.canSave || this.submitting) return;
     if (local.set(this.localKey, this.draftPayload()) && this.onSaved) this.onSaved('browser', new Date());
   }
 
@@ -190,7 +191,8 @@ export class AnnotationSession {
 
   /** Send the draft to the server when something changed (at most every 30 s unless forced). */
   async saveRemote({ force = false, keepalive = false } = {}) {
-    if (!this.canSave || this._remoteBusy) return false;
+    // While Save and Finish waits for its answer, a draft that arrived after it would linger beside the saved result.
+    if (!this.canSave || this._remoteBusy || this.submitting) return false;
     if (!force && (!this._dirty || performance.now() - this._lastRemote < REMOTE_EVERY_MS)) return false;
     this._remoteBusy = true;
     const payload = this.draftPayload();
@@ -245,11 +247,18 @@ export class AnnotationSession {
   }
 
   async submit(visitId) {
-    const result = await this.backend.submit({
-      recording_id: this.recordingId, mode: this.mode, context_id: this.contextId,
-      annotations: this.store.toJSON(), session: this.sessionInfo(visitId), sha256: this.sha256,
-      ...(this.revision ? { revises: this.revision.revises } : {}),
-    });
+    if (this.submitting) throw new Error('This recording is being saved already.');
+    this.submitting = true;
+    let result;
+    try {
+      result = await this.backend.submit({
+        recording_id: this.recordingId, mode: this.mode, context_id: this.contextId,
+        annotations: this.store.toJSON(), session: this.sessionInfo(visitId), sha256: this.sha256,
+        ...(this.revision ? { revises: this.revision.revises } : {}),
+      });
+    } finally {
+      this.submitting = false;
+    }
     this.finished = true;
     this.forgetLocal();
     return result;

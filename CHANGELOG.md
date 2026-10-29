@@ -5,6 +5,27 @@ Each section below describes the changes in one version of ElectroClean;
 
 ## Unreleased
 
+The browser version holds up better when the study answers late or fails
+once, and when people press things twice. While Save and Finish waits for its
+answer, no draft is sent and Pause, Close and Leave without changes wait, so a
+late answer can neither leave a stray draft beside the saved result nor save a
+revision that was left; a revision whose first answer was lost is reported as
+most likely saved instead of being refused as unsaved. A download from a link,
+or a slow answer about a file, for an open view the person has left no longer
+opens that recording by itself (and so no longer closes the recording they
+went on to), and leaving the view stops the download. The pause after minutes
+without input starts when those minutes ran out, so a computer that slept with
+a recording on screen does not count the night as work, and that pause no
+longer takes the focus from a dialog left open. A double click on a button
+that opens a question no longer closes the question at once. Changes of the
+weekly goal and the leaderboard go one at a time and a late answer never brings
+back an older goal. In the admin area, Progress keeps the newest answer when
+two cross, Find reads its lists once however fast the person types, actions on
+several recordings or people run one at a time and ask before the page is
+closed mid-run, and an invitation link that could not be checked offers Try
+again. A recording kept on the device is not removed while a recording opened
+from it is open in any tab, since its files are read as it is viewed.
+
 Annotators can open a recording from a Dropbox or OneDrive link (or any web
 address that lets web pages read its file): Open from a link, on the page
 that opens recordings, takes one link per file, turns share links into the

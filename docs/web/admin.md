@@ -110,7 +110,10 @@ same place.
 
 A private invitation link lets one person choose their own password and sign in. When they open
 it, a welcome card names the study and their annotator ID and asks for the new password twice;
-then they are signed in and see their recordings. The link works once. It stops working when it
+then they are signed in and see their recordings. When the study cannot be reached as the link
+opens, the card says that the invitation could not be checked and offers Try again, keeping the link
+for the browser tab; a link that has expired, been used or been replaced says so, with the way to
+sign in. The link works once. It stops working when it
 has been used, when it expires (after 14 days unless you choose 7, 30 or 90), when you make a newer
 link for the same person, when you withdraw it, and when the account is switched off or removed. On
 a study server the study keeps only a fingerprint of each link (a SHA-256 hash of its random token),
@@ -149,7 +152,10 @@ chosen, Switch off and Switch on change their accounts, and New invitation links
 for each, shown in a table to copy or download as above. The actions run one person at a time with
 a line that shows how far they have got, and a table then says what happened to each, with the
 reason for anything not done. Your own account is left out of switching off and on and of new
-links.
+links. One action runs at a time: another pressed meanwhile says that the first is still running. The
+action carries on while you look at other sections, and its table is there when you come back;
+closing or reloading the page while it runs asks you first, since the people not reached yet would
+be left as they were.
 
 Manage opens a person's page. There you change their name, their role and the notes the study team
 keeps about them, reset their password (which shows a new invitation link or temporary password and
@@ -217,7 +223,7 @@ Tick recordings in the list (the box in the heading ticks every recording the fi
 on several at once: Assign to… takes the study's recordings chosen to Assignments, Retire and Bring
 back into use change them all, and Remove… removes their registrations after you confirm. Each runs
 one recording at a time with a line that shows how far it has got, and a table then says what
-happened to each. Removing keeps every recording with saved results or a place in a reference set,
+happened to each. As for people, one action runs at a time and closing the page meanwhile asks first. Removing keeps every recording with saved results or a place in a reference set,
 says which were kept and why, and offers to retire them instead.
 
 ## Assignments

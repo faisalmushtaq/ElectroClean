@@ -79,3 +79,36 @@ test('a copy is described by its files\' names and sizes, never by where it came
   assert.deepEqual(m, { version: 1, sha256: SHA, recordingId: 'sub-01/r', fileName: 'r.vhdr', files, size: 3030, keptAt: '2026-10-28T12:00:00.000Z' });
   assert.ok(!JSON.stringify(m).includes('http'));
 });
+
+test('a copy marked in use (in any tab) is kept by Remove; the mark ends with its recording', async () => {
+  const { inUseLockName } = await import('../../electroclean/web/static/js/data/device_store.js');
+  // A stand-in for the Web Locks API, shared by "tabs" as the browser's is.
+  const held = new Map();
+  const locks = {
+    async request(name, opts, cb) {
+      const h = held.get(name) || { shared: 0, exclusive: false };
+      held.set(name, h);
+      if (opts.ifAvailable && (h.exclusive || h.shared)) return cb(null);
+      if (opts.mode === 'shared') h.shared += 1; else h.exclusive = true;
+      try { return await cb({ name, mode: opts.mode }); } finally { if (opts.mode === 'shared') h.shared -= 1; else h.exclusive = false; }
+    },
+  };
+  const had = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  Object.defineProperty(globalThis, 'navigator', { value: { locks }, configurable: true });
+  try {
+    const removed = [];
+    const store = new DeviceStore({ owner: 'o', kind: null });
+    store._backend = { remove: async (_o, sha) => { removed.push(sha); } };
+    const release = await DeviceStore.holdInUse(SHA);
+    assert.equal(held.get(inUseLockName(SHA)).shared, 1);
+    const r = await store.removeMany([{ sha256: SHA, size: 10 }, { sha256: SHA2, size: 5 }]);
+    assert.deepEqual(r, { count: 1, bytes: 5, inUse: 1 });
+    assert.deepEqual(removed, [SHA2]);
+    release();
+    await new Promise((res) => setTimeout(res, 0));
+    assert.equal(await store.remove(SHA), true);
+    assert.deepEqual(removed, [SHA2, SHA]);
+  } finally {
+    if (had) Object.defineProperty(globalThis, 'navigator', had); else delete globalThis.navigator;
+  }
+});

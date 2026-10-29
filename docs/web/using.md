@@ -174,7 +174,9 @@ The home page says how many recordings are kept and how much space they take, wi
 page that opens recordings has a button, Recordings on this device…; both show the kept recordings with their
 sizes and whether you have finished them, the space this site uses and how much more the browser
 allows, and the ways to free space: Remove next to each recording, Remove finished recordings, which
-says how much it frees before it does so, and Remove all. Tick Remove a recording from this device
+says how much it frees before it does so, and Remove all. A copy that a recording open in this or
+another tab or window was opened from is kept, and the panel says so: the browser reads a recording's
+files bit by bit as you view it, so close it there first. Tick Remove a recording from this device
 when I finish it to have each copy removed once Save and Finish has saved your work. Removing a copy
 never touches your annotations, drafts or results, which the study keeps. When the device is full,
 the recording still opens, from memory, and ElectroClean offers to remove the recordings you have
@@ -297,7 +299,8 @@ changed by accident.
 
 ElectroClean also pauses by itself in two cases. After a few minutes without any input (three
 unless your study chose otherwise), it pauses and says so; the minutes before that pause still count,
-since you may have been reading the EEG. When the page is out of sight for more than ten seconds,
+since you may have been reading the EEG. The pause starts when those minutes run out, so a computer
+that went to sleep with the recording on screen comes back paused from then, without the night. When the page is out of sight for more than ten seconds,
 because you switched to another tab or app or the iPad locked, it pauses from the moment the page
 was hidden. When you come back, the panel says how long you were away and that the time was not
 counted.
@@ -357,6 +360,14 @@ are saving and asks you to confirm; once saved, the recording is complete. You c
 later from your history when your study allows revisions (see "History and revisions"); each
 revision is saved as a new version. If you marked nothing, it asks whether to save the recording as
 reviewed with no artifacts found. After saving, it offers the next recording.
+
+Saving can take a few seconds when the study is slow to answer. Meanwhile the button reads Saving…,
+pressing it again does nothing, and Close, Leave without changes and Pause wait for the answer, with
+a line at the bottom that says so; no draft is sent while the save is under way. If the answer never
+arrives (the connection dropped, or the study failed once), the recording stays open and you can try
+again. For a revision, the study may have saved it all the same: when you submit again, ElectroClean
+then says that the revision was most likely saved the first time and takes you to your history,
+where the latest version shows, rather than saving it twice.
 
 Your work is saved as a draft while you annotate, in the browser and with the study, so closing the
 page by accident loses nothing; the time at the top of the view says when the draft was last kept.
