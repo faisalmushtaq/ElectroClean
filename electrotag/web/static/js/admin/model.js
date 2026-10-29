@@ -602,7 +602,7 @@ export function inviteMessage({ annotatorId, name = '', study = '', link, expire
   const lines = [
     `Dear ${name || annotatorId},`,
     '',
-    `You are invited to annotate EEG recordings for ${study || 'our study'}, using ElectroTag in your web browser. This private link lets you choose your own password and sign in:`,
+    `You are invited to annotate EEG recordings for ${study || 'our study'}, using ElectroTag in your web browser. This private link lets you choose your own password and sign in. Please open it on the tablet (such as an iPad) or computer you will annotate on: annotating needs a larger screen than a phone has.`,
     '',
     link,
     '',

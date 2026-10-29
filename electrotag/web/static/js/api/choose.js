@@ -10,13 +10,18 @@
 //                                testing on the Firebase Emulator Suite)
 //       {"server": "https://…"}  a study server
 //   the server remembered in this browser
-//   the server that serves this page itself (api/v1/health beside index.html)
+//   the server that serves this page itself (api/v1/health beside index.html); once it has
+//                                answered, this browser remembers that the page's own site is a study
+//                                server, so that a later start when it does not answer says so
+//                                rather than starting the demonstration
 //   otherwise the demonstration.
 
 import { checkHealth, HttpBackend, normaliseServer } from './http.js';
 import { local } from '../util.js';
 
 const SERVER_KEY = 'electrotag.server';
+/** The page's own site, once it answered as a study server (see findBackend). */
+const SAME_SITE_KEY = 'electrotag.same_site_server';
 
 function queryParams() {
   try { return new URLSearchParams(globalThis.location ? globalThis.location.search : ''); } catch { return new URLSearchParams(''); }
@@ -33,7 +38,10 @@ async function readConfigFile() {
 
 export function rememberServer(address) {
   if (address) local.set(SERVER_KEY, normaliseServer(address));
-  else local.remove(SERVER_KEY);
+  else {
+    local.remove(SERVER_KEY);
+    local.remove(SAME_SITE_KEY); // the person chose the demonstration
+  }
 }
 
 export function rememberedServer() {
@@ -83,8 +91,13 @@ export async function findBackend() {
   if (here !== null) {
     try {
       const health = await checkHealth(here, { timeoutMs: 2500 });
+      local.set(SAME_SITE_KEY, here);
       return { kind: 'server', address: here, source: 'same-site', health };
-    } catch { /* not served by a study server */ }
+    } catch {
+      // A site that answered as a study server before is that study, not answering now: the sign-in
+      // page says so (App.boot connects to it and fails) instead of starting the demonstration.
+      if (local.get(SAME_SITE_KEY, '') === here) return { kind: 'server', address: here, source: 'same-site' };
+    }
   }
   return { kind: 'demo', source: 'none' };
 }

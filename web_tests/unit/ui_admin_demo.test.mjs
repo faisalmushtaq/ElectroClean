@@ -187,6 +187,8 @@ test('manifests are checked before they are kept, and shown to annotators as the
 test('study settings: checked, changed block by block, and used by the demonstration', async () => {
   const b = await demo();
   const before = await b.admin('settings_get');
+  // The demonstration's own notice says plainly that typed text is never recorded.
+  assert.match(before.logging_notice, /never records what you type/);
   assert.deepEqual(Object.keys(before.settings).sort(), ['annotation', 'channels', 'display', 'filters', 'gamification', 'loading', 'logging', 'selection']);
   await assert.rejects(() => b.admin('settings_update', { settings: { filters: { notch_hz: 55 } } }), (e) => e.status === 400 && e.code === 'invalid_settings');
   await assert.rejects(() => b.admin('settings_update', { settings: { output: { directory: '/' } } }), (e) => e.code === 'invalid_settings');

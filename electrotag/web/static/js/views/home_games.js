@@ -144,18 +144,26 @@ function goalBlock(app, facts) {
   return host;
 }
 
+/** "Next: Ten recordings, 9 to go." when it can be reached with the recordings assigned, and the streak. */
+function nextLine(next, last, current) {
+  const text = [next ? `Next: ${next.name}, ${next.remaining} to go.` : last ? 'Every recording milestone is reached.' : '',
+    current > 1 ? `You have saved recordings ${current} days running.` : ''].filter(Boolean).join(' ');
+  return text ? h('p.caption', {}, text) : null;
+}
+
 function milestonesBlock(facts) {
   const all = milestones(facts);
   const got = all.filter((m) => m.reached);
-  const next = nextRecordingStep(facts.counters.done);
+  const assigned = Number.isFinite(facts.counters.assigned) ? facts.counters.assigned : null;
+  const next = nextRecordingStep(facts.counters.done, assigned);
+  const last = nextRecordingStep(facts.counters.done) === null; // every recording milestone reached
   const { current } = streaks(facts.save_times);
   const item = (m) => h('li', { class: m.reached ? 'reached' : 'open', 'data-milestone': m.id }, badge(m),
     h('div', {}, h('b', {}, m.name), h('br'), h('span.caption', {}, m.text)));
   return h('div.games-milestones', {},
     got.length ? h('ul.badge-row', { 'aria-label': 'Milestones reached' }, got.map((m) => h('li', { 'data-milestone': m.id }, badge(m))))
       : h('p.caption', {}, 'Save your first recording to reach your first milestone.'),
-    got.length ? h('p.caption', {}, [next ? `Next: ${next.name}, ${next.remaining} to go.` : 'Every recording milestone is reached.',
-      current > 1 ? ` You have saved recordings ${current} days running.` : ''].join('')) : null,
+    got.length ? nextLine(next, last, current) : null,
     h('details.games-all', {}, h('summary', {}, `All milestones (${got.length} of ${all.length} reached)`), h('ul.milestone-list', {}, all.map(item))));
 }
 
@@ -176,7 +184,7 @@ function progressCard(app, facts) {
     milestonesBlock(facts),
     goalBlock(app, facts),
     share !== null ? h('div.games-team', {},
-      h('div.games-line', {}, h('span', {}, 'The whole team'), h('span.games-figure', {}, `${team.done} of ${team.assigned} · ${percent(share)}`)),
+      h('div.games-line', {}, h('span', {}, 'The whole team'), h('span.games-figure', {}, `${team.done} of ${team.assigned} saved · ${percent(share)}`)),
       bar(share, 'The whole team')) : null,
     h('p.caption.games-note', { 'data-stat': 'annotations' },
       `${c.annotations || 0} annotation${c.annotations === 1 ? '' : 's'} made, counted for interest only: mark what you see, as many or as few as there are.`));

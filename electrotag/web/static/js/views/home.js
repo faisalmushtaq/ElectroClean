@@ -4,6 +4,7 @@
 
 import { h } from '../ui/dom.js';
 import { appHeader } from './common.js';
+import { docsUrl } from '../ui/docs.js';
 import { ask } from '../ui/dialog.js';
 import { formatHms, local } from '../util.js';
 import { quizCard } from '../training/quiz.js';
@@ -13,7 +14,7 @@ import { gameCards } from './home_games.js';
 import { localDraft } from '../annotate/session.js';
 import { todayKey } from '../annotate/clock.js';
 import { percentText } from '../viewer/coverage.js';
-import { MIN_FOR_ESTIMATE, progressSummary, roundEstimate, spanText } from './progress.js';
+import { MIN_FOR_ESTIMATE, progressSummary, roundEstimate, spanText, todayText } from './progress.js';
 
 function friendlyWhen(iso) {
   if (!iso) return '';
@@ -59,8 +60,7 @@ function progressCard(p) {
   const leftCaption = !p.left ? 'You have finished every recording.'
     : p.remainingS === null ? `An estimate of the time left appears after your first ${MIN_FOR_ESTIMATE} recordings.`
       : `left, roughly, at your pace so far, judged from ${p.basedOn} recordings. Recordings differ, so take it as a guide.`;
-  const today = [p.todayS >= 60 ? `${spanText(p.todayS)} of work in this browser` : 'no work yet in this browser',
-    p.doneToday ? `${p.doneToday} recording${p.doneToday === 1 ? '' : 's'} finished` : null].filter(Boolean).join(', ');
+  const today = todayText(Number(p.todayS) || 0, p.doneToday);
   return h('section.card.progress-card', { 'aria-label': 'Your progress' },
     h('div.card-head', {}, h('h2', {}, 'Your progress'), h('span.caption', {}, `${pc}% done`)),
     h('div.progress', { role: 'progressbar', 'aria-label': 'Recordings done', 'aria-valuemin': '0', 'aria-valuemax': String(p.total), 'aria-valuenow': String(finished) },
@@ -111,7 +111,7 @@ export function homeView(app) {
       h('p.caption', {}, 'Simulated EEG with known artifacts. Use one straight away, or download them as EDF files and open them "from your computer" to try that way too.'),
       h('ul.examples', {}, examples.map((ex) => h('li', {},
         h('div', {}, h('b', {}, ex.title), h('br'), h('span.caption', {}, `${ex.file_name} · ${formatHms(ex.duration_s)} · ${ex.n_channels} channels`)),
-        h('button.btn.small', { type: 'button', 'data-log': `example-${ex.id}`, onclick: () => app.useExample(ex.recording_id) }, 'Use this example')))),
+        h('button.btn.small', { type: 'button', 'data-log': `example-${ex.id}`, 'aria-label': `Use ${ex.title}`, onclick: () => app.useExample(ex.recording_id) }, 'Use this example')))),
       h('div.btn-row', {},
         h('button.btn.quiet', { type: 'button', onclick: async () => app.download(await b.downloadRecordings()) }, 'Download the example recordings (EDF)'),
         h('button.btn.quiet', { type: 'button', onclick: () => app.downloadResults() }, 'Download my results'),
@@ -130,9 +130,16 @@ export function homeView(app) {
   return h('div.view.home', { 'data-view': 'home' }, appHeader(app),
     h('main.page', {},
       h('h1', {}, `Hello${app.me && app.me.display_name ? `, ${app.me.display_name}` : ''}`),
+      guideLine(),
       h('div.home-grid', {},
         h('div.col', {}, nextCard, !programme && items.length ? progressCard(p) : null, list, quizCard(app)),
         sideColumn([...gameCards(app), demo]))));
+}
+
+/** Where the annotators' guide is read (docs/web/using.md, in a new tab). */
+export function guideLine() {
+  return h('p.caption.guide-link', {}, 'How each step works, from opening a recording to saving it, is in the ',
+    h('a', { href: docsUrl('web/using.md'), target: '_blank', rel: 'noopener', 'data-log': 'guide' }, 'annotators\' guide'), ' (it opens in a new tab).');
 }
 
 /** The right-hand column: the game cards (home_games.js) and the demonstration's card, when there are any. */

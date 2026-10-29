@@ -97,7 +97,10 @@ export function teamShare(team) {
 
 /**
  * Every milestone with whether it is reached: [{id, kind, name, text, reached, target}]. Kinds:
- * recordings, streak, thorough (only when the study measures what was viewed) and team.
+ * recordings, streak, thorough and team. The browser measures what was viewed of every recording it
+ * saves, so the thoroughness milestones are listed from the start (nothing saved yet counts as none
+ * viewed in full) and left out only when saved recordings reported nothing viewed; the list then
+ * keeps its length when the first recording is saved.
  */
 export function milestones(facts, now = new Date()) {
   if (!facts || !facts.enabled) return [];
@@ -107,9 +110,10 @@ export function milestones(facts, now = new Date()) {
   const out = [];
   for (const [n, name, text] of RECORDING_STEPS) out.push({ id: `recordings-${n}`, kind: 'recordings', name, text, target: n, reached: done >= n });
   for (const [n, name, text] of STREAK_STEPS) out.push({ id: `streak-${n}`, kind: 'streak', name, text, target: n, reached: longest >= n });
-  if (facts.viewed_in_full !== null && facts.viewed_in_full !== undefined) {
+  const viewed = facts.viewed_in_full;
+  if ((viewed !== null && viewed !== undefined) || done === 0) {
     for (const [n, name, text] of THOROUGH_STEPS) {
-      out.push({ id: `thorough-${n}`, kind: 'thorough', name, text, target: n, reached: facts.viewed_in_full >= n });
+      out.push({ id: `thorough-${n}`, kind: 'thorough', name, text, target: n, reached: (viewed || 0) >= n });
     }
   }
   if (share !== null) {
@@ -124,10 +128,15 @@ export function newlyReached(before, after, now = new Date()) {
   return milestones(after, now).filter((m) => m.reached && !had.has(m.id));
 }
 
-/** The next recording milestone to reach: {name, target, remaining}, or null after the last. */
-export function nextRecordingStep(done) {
+/**
+ * The next recording milestone to reach: {name, target, remaining}, or null after the last. With
+ * `assigned` (the recordings given to the annotator), a milestone beyond them is not offered as the
+ * next one, since it cannot be reached with the recordings there are.
+ */
+export function nextRecordingStep(done, assigned = null) {
   const step = RECORDING_STEPS.find(([n]) => n > (done || 0));
-  return step ? { name: step[1], target: step[0], remaining: step[0] - (done || 0) } : null;
+  if (!step || (Number.isFinite(assigned) && assigned !== null && step[0] > assigned)) return null;
+  return { name: step[1], target: step[0], remaining: step[0] - (done || 0) };
 }
 
 /** Hours and minutes from seconds, for the counters ("3 h 05 min", "12 min"). */

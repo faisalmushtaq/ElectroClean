@@ -18,9 +18,9 @@ import {
 } from '../admin/model.js';
 
 export const ADMIN_ID = 'ADMIN';
-export const DEMO_LOGGING_NOTICE = 'This demonstration records how you use ElectroTag (clicks, keys and what is on the ' +
-  'screen, never what you type) and keeps the record in this browser only. In a real study the record ' +
-  "goes to the study team, as the study's information sheet explains.";
+export const DEMO_LOGGING_NOTICE = 'This demonstration records how you use ElectroTag (times, clicks, keys and what is on ' +
+  'screen) and keeps the record in this browser only. It never records what you type, such as notes or passwords. ' +
+  "In a real study the record goes to the study team, as the study's information sheet explains.";
 const MANIFEST_SCHEMA = 'electrotag.web_manifest';
 const MAX_MANIFEST_BYTES = 8 * 1024 * 1024;
 const LABEL_NAMES = CATALOGUE.labels.map((l) => l.label);
@@ -53,9 +53,9 @@ const PACE_DAYS = 14;
 const PACE_MIN = 3;
 /** What a person is told when an invitation link cannot be used (electrotag/web/service.py, INVITE_PROBLEMS). */
 const INVITE_PROBLEMS = {
-  unknown: [404, 'This invitation link is not known to the study. It may have been replaced by a newer link or withdrawn. Ask the study team for a new one.'],
+  unknown: [404, 'This invitation link is not known to the study. It may have been replaced by a newer link or withdrawn. To get a new link, contact the study team who invited you, for example by replying to the email that brought you this one.'],
   used: [409, 'This invitation link has been used already. Sign in with your annotator ID and the password you chose, or ask the study team for a new link.'],
-  expired: [409, 'This invitation link has expired. Ask the study team for a new one.'],
+  expired: [409, 'This invitation link has expired. To get a new link, contact the study team who invited you, for example by replying to the email that brought you this one.'],
 };
 /** Why an administrator's account is not given an invitation link (electrotag/web/admin.py, ADMIN_NOT_INVITED). */
 const ADMIN_NOT_INVITED = 'Invitation links are for annotators: a link sent by email must not open the admin area. Give an administrator a password instead (a temporary one, or one you choose).';

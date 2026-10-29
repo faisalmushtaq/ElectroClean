@@ -117,7 +117,7 @@ def test_an_invitation_is_a_private_link_used_once(client: TestClient, admin: Ap
     # Unknown links, in plain words.
     r = check(client, "x" * 43)
     assert (r.status_code, r.json()["error"]) == (404, "invite_unknown")
-    assert "Ask the study team for a new one" in r.json()["message"]
+    assert "contact the study team who invited you" in r.json()["message"]
     assert check(client, "").status_code == 404 and accept(client, "", "a long password").status_code == 404
     admin.admin_error("user_add", {"annotator_id": "A08", "invite": True, "password": "a-chosen-password"}, 400,
                       "bad_request")

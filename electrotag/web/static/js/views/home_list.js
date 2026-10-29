@@ -111,8 +111,11 @@ export function recordingsCard(app) {
   const drawTabs = () => {
     clear(tabs);
     for (const [k, t] of TABS) {
+      // Read aloud as "To do, 3 recordings" rather than "To do3".
+      const n = count(k);
       tabs.append(h('button.tab', { type: 'button', role: 'tab', 'aria-selected': String(st.tab === k), 'data-tab': k, 'data-log': `recordings-tab-${k}`,
-        onclick: () => { st.tab = k; st.page = 0; keep(); drawTabs(); draw(); } }, t, h('span.tab-count', {}, String(count(k)))));
+        'aria-label': `${t}, ${n} recording${n === 1 ? '' : 's'}`,
+        onclick: () => { st.tab = k; st.page = 0; keep(); drawTabs(); draw(); } }, t, h('span.tab-count', { 'aria-hidden': 'true' }, String(n))));
     }
   };
 
@@ -120,10 +123,12 @@ export function recordingsCard(app) {
     if (it.status === 'unusable') return null;
     if (it.status === 'done') {
       if (!canRevise(app, it)) return null;
-      return h('button.btn.small', { type: 'button', 'data-log': 'open-to-revise', onclick: () => app.openAssignment(it, { revise: true }) },
-        it.revising ? 'Continue the revision' : 'Open to revise');
+      const text = it.revising ? 'Continue the revision' : 'Open to revise';
+      return h('button.btn.small', { type: 'button', 'data-log': 'open-to-revise', 'aria-label': `${text}: ${it.file_name}`, onclick: () => app.openAssignment(it, { revise: true }) }, text);
     }
-    return h('button.btn.small', { type: 'button', onclick: () => app.openAssignment(it) }, it.status === 'in_progress' ? 'Continue' : 'Open');
+    // Each row's button names its recording for screen readers ("Open sub-001_task-rest_eeg.edf").
+    const text = it.status === 'in_progress' ? 'Continue' : 'Open';
+    return h('button.btn.small', { type: 'button', 'aria-label': `${text} ${it.file_name}`, onclick: () => app.openAssignment(it) }, text);
   };
 
   const listRow = (it) => {

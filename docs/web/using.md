@@ -5,6 +5,9 @@ the artifacts you see with their type, and press Save and Finish. The recording 
 computer and is read by the web page itself, so the EEG is never uploaded; only your annotations,
 and a record of how you used the tools if your study asks for one, go to the study.
 
+The application links to this guide from the sign-in page, under the greeting of your home page and
+at the end of the Help tab of the annotation view; each link opens the guide in a new tab.
+
 ## Opening ElectroTag
 
 Your study team sends you a link. Opening it shows the sign-in page of your study, with the study's
@@ -27,7 +30,16 @@ example), the page asks you to sign in again; your unsaved annotations are kept 
 are offered to you when you open the recording again.
 
 When a study records how its annotators use ElectroTag, a short notice says so after you sign in.
-The record contains clicks, key presses and what is on the screen, never anything you type.
+The record contains clicks, key presses and what is on the screen, never anything you type, and the
+notice says so in those words: notes and passwords are never recorded.
+
+Some studies send each annotator a private invitation link instead of a password. It opens a welcome
+page with your annotator ID, where you choose your own password and start. The link works once, so
+open it on the tablet or computer you will annotate on; on a phone the welcome page says first that
+annotating needs a larger screen, and the email with the link says the same. A link that has been
+used already leads to the sign-in. One that has expired, or was replaced by a newer one, says so and
+asks you to contact the study team who invited you for a new link, for example by replying to the
+email that brought it.
 
 ## Your recordings
 
@@ -109,8 +121,8 @@ Caveat or Comment, sometimes with a note, and adding a comment where an artifact
 missed. The review never changes your saved annotations. Your list and your history then say
 "Reviewed: 2 caveats, 1 comment" under the recording's name.
 
-To read the feedback, choose See the feedback… from the recording's More button and open the same
-file from your computer. Your latest saved version opens to read, with the feedback in the side
+To read the feedback, choose See the feedback… from the recording's More button, or the "Reviewed"
+line itself, and open the same file from your computer. Your latest saved version opens to read, with the feedback in the side
 panel and a calm blue mark under each annotation it is about (a dashed blue outline marks a stretch
 without an annotation). N and P, or a tap on an item, go from one item to the next. When the study
 takes revisions, Open to revise starts a revision of the recording, and the feedback stays in the
@@ -131,7 +143,9 @@ the team's share of the study; reached badges have a solid blue ring, the others
 Milestones mark your progress through the study: your first recording, then 10, 25, 50, 100, 150,
 200 and 300 recordings; saving recordings on 3, 5 and 10 days in a row; recordings viewed from start
 to end (99% or more of a recording on the screen, as the Recording tab measures it); and the team reaching a quarter, half,
-three quarters and all of its recordings. When Save and Finish reaches a milestone, the message
+three quarters and all of its recordings. The line under your badges names the next recording
+milestone only when the recordings assigned to you can reach it. The team's figure counts the
+recordings saved; your own progress also counts those set aside because they cannot be annotated. When Save and Finish reaches a milestone, the message
 after saving says so, and a short note with the milestone's badge appears above your milestones; it never stands between you and the next recording. Milestones reward finishing
 recordings and looking through them in full. They never reward speed or the number of annotations:
 mark what you see, as many or as few artifacts as there are. The number of annotations is shown for
@@ -153,13 +167,28 @@ choose its three files together (the .vhdr, .vmrk and .eeg), or their folder.
 The page then reads the file and works out its fingerprint, a checksum of its contents, which takes
 a few seconds for a large file and shows its progress. The fingerprint is what is sent to the study
 to recognise the recording; the EEG itself is not. The study's answer appears in plain words. When
-the file is the study's copy of one of your recordings, the recording opens. When the file has the
+the file is the study's copy of one of your recordings, the recording opens. The steps and the
+answer appear just under the place where you chose the file, and the page scrolls to the answer and
+gives it the focus, so you see at once what happened. When the file has the
 right name, sampling rate, length and channels but its contents differ from the study's copy (it
 may have been converted or re-saved), ElectroTag explains the difference and lets you choose
 between opening it anyway and choosing the study's copy; ask your study team if you are not sure.
 A file that is not part of the study can still be looked at in try-out mode, which is clearly
 labelled and saves nothing. A recording of the study that is not yours at the moment, or one you
 have already finished, is not opened, and the page says which of the two it is.
+
+When the page was opened for one recording (Open next recording, or a stage of your training path)
+and you choose another of your recordings, it opens directly if both are ordinary study recordings.
+If one of them belongs to the training programme, ElectroTag asks first, naming both, because a
+study recording counts as real work: choose Open it anyway, or Choose another file. On a training
+page the answers are worded for training, name the file that step needs, and Back returns to your
+training path.
+
+If the connection is lost before the page has loaded what it needs to read recordings, the page says
+so and offers Try again; nothing is wrong with your file, and a copy kept on this device stays
+there. A copy is removed only when its files can no longer be read as a recording. ElectroTag loads
+these parts of the page as soon as you sign in to a study, so this rarely happens. When the study
+cannot be reached to check a file, Try again asks it once more with the file already read.
 
 If you worked on the recording before without finishing it, ElectroTag offers to restore your
 unfinished work, with the number of annotations and the time spent. Choose Restore and continue, or
@@ -524,8 +553,9 @@ A phone has no room for the EEG traces, so annotating needs a tablet or a comput
 sign-in page says so, and administrators can still sign in there to check the study's progress in
 the admin area, which works on a phone. If you sign in as an annotator on a phone, the page offers
 Email me this link, which starts an email to yourself with the address of the page (and of your
-study) to open later on a tablet or computer, and Sign out. Your work waits for you on the larger
-screen.
+study) to open later on a tablet or computer, and Sign out, and it names the account you are signed
+in with. Your work waits for you on the larger screen. An invitation link opened on a phone says this
+before you choose a password, while the link is still unused.
 
 ## The training programme
 
@@ -588,7 +618,9 @@ results), the page says so.
 ## If something goes wrong
 
 If the page says the study does not answer, check your internet connection and try again; if it
-keeps happening, tell your study team. If a file is not recognised although it should be, make sure
+keeps happening, tell your study team. Once your browser has reached a study at its own address, a
+later visit when the study does not answer says so in this way, rather than opening the
+demonstration. If a file is not recognised although it should be, make sure
 you chose the study's copy of the recording and, for BrainVision, all three of its files. If a link
 does not open, download the file with the button ElectroTag offers and choose it, or ask your
 study team for a link that anyone with it can open. If your

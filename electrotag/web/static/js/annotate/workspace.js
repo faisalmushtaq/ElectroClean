@@ -223,7 +223,7 @@ export class Workspace {
     const b = h('button.btn.quiet.icon.ws-more', { type: 'button', 'aria-label': 'More', title: 'More: report a problem with this recording', 'aria-haspopup': 'menu', 'data-log': 'ws-more' }, icon('more'));
     b.addEventListener('click', () => {
       const r = b.getBoundingClientRect();
-      showMenu([{ label: 'Report a problem with this recording…', onSelect: () => this.reportProblem() }], Math.max(8, r.right - 300), r.bottom + 4, { className: 'ws-more-menu', minWidth: 300 });
+      showMenu([{ label: 'Report a problem with this recording…', onSelect: () => this.reportProblem() }], Math.max(8, r.right - 300), r.bottom + 4, { className: 'ws-more-menu', minWidth: 300, opener: b });
     });
     return b;
   }
@@ -1226,7 +1226,7 @@ export class Workspace {
       }
     }
     items.push({ separator: true }, { label: 'Find a type…', shortcut: '/', onSelect: () => this.findType() });
-    showMenu(items, r.left, r.bottom + 2, { className: 'type-menu-list', minWidth: Math.max(300, r.width) });
+    showMenu(items, r.left, r.bottom + 2, { className: 'type-menu-list', minWidth: Math.max(300, r.width), opener: anchor });
   }
 
   showContextMenu(id, x, y) {

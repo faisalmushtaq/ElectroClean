@@ -241,8 +241,9 @@ A final review asked for crisper type and controls and for one consistent
 finish on every page, which the rules below provide.
 
 Pages are #FDFCFB with a warmer band (#FAF6F0) for side panels, and faint
-column guides (three columns of the page's width) sit behind the pages around
-the EEG and stop where the EEG begins, so that nothing competes with the
+column guides mark the two edges of the page's width behind the pages around
+the EEG (an inner pair, which crossed headings and text, was taken out after the
+usability review of 29 October 2026) and stop where the EEG begins, so that nothing competes with the
 traces, which are drawn on white. One typeface, Newsreader, a serif with
 optical sizes, sets everything, the canvas included: text at its own optical
 size, and headings at a sturdy text cut (optical size 24) at regular weight

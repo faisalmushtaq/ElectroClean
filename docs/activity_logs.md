@@ -31,7 +31,8 @@ recorded). `idle_after_s` is how many seconds without any input count as idle
 
 When logging is on, annotators are told after they sign in: "This study
 records how you use ElectroTag (times, clicks, keys and what is on screen) for
-research. Ask your study administrator if you have questions." Annotators must
+research. It never records what you type, such as notes or passwords. Ask the
+study team if you have questions." Annotators must
 be told about the logs and agree to them under the study's ethics approval; the
 administrator guide has a paragraph on this.
 
