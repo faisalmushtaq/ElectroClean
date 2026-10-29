@@ -129,7 +129,9 @@ follows its `recording_opened`; `revision_submitted` (`session_id`, `version`,
 `revises`, `n_annotations`, `changed`, whether the annotations differ from the
 version revised, and `elapsed_s`, the time spent revising) follows its
 `recording_finished`; and `revision_left` (`session_id`, `revises`, `changed`,
-`elapsed_s`) records Leave without changes. The time spent revising is measured
+`elapsed_s`) records Leave without changes. `revision_answer_lost` (`session_id`,
+`revises`) records a second Submit the revision refused as already revised after the first one's
+answer never arrived: the first had most likely been saved. The time spent revising is measured
 by the session clock as for any recording.
 
 **Milestones and goals (browser).** When the game elements are on
@@ -177,8 +179,9 @@ browser, when the page gains or loses the focus).
 **Pauses, breaks and what has been viewed (in the browser).** `pause` (`reason`:
 `button` or `key` when the annotator paused, `idle` after the study's minutes without input,
 `hidden` when the page was out of sight for more than ten seconds, `break` for Take a break; the
-`elapsed_s` worked so far; for `idle` also `idle_s`, the seconds since the last input, which are
-still counted as work; for `hidden` also `hidden_s`, the seconds since the page was hidden, which
+`elapsed_s` worked so far; for `idle` also `idle_s`, the seconds since the last input, of which
+the study's idle minutes are still counted as work and any beyond them (a computer that slept with
+the page on screen) are not, since the pause starts when those minutes ran out; for `hidden` also `hidden_s`, the seconds since the page was hidden, which
 are not, since the pause starts when the page was hidden) and `resume` (the pause's `reason`,
 `paused_s`, its length, `via`: `button`, `key`, `save` or `close` when Save and Finish or Close
 ended it, `counts_as_break`, true for Take a break or a pause of five minutes or more, and
