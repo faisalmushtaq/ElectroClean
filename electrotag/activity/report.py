@@ -216,7 +216,49 @@ ROW_COLUMNS = [("annotator_id", "Annotator"), ("order", "Order"), ("mode", "Mode
                ("outcome", "Outcome"), ("active_s", "Active (s)"), ("wall_s", "Wall (s)"), ("clicks", "Clicks"),
                ("key_presses", "Keys"), ("shortcuts", "Shortcuts"), ("annotations_created", "Created"),
                ("final_annotations", "Saved"), ("seconds_per_annotation", "s per annotation"),
-               ("share_seen", "Share seen"), ("undos", "Undos"), ("score", "Score")]
+               ("share_seen", "Share seen"), ("undos", "Undos"), ("share_rated", "Share rated"),
+               ("annotations_with_note", "Notes"), ("problems_reported", "Problems"),
+               ("reviews_received", "Reviews"), ("score", "Score")]
+
+
+def _int(v: Any) -> int:
+    x = _num(v)
+    return 0 if math.isnan(x) else int(x)
+
+
+def _marks_table(tables: ActivityTables) -> str:
+    """Per annotator: ratings and notes on the annotations saved, problems reported and reviews received.
+
+    Empty when the logs have none of these."""
+    rows = tables.recordings
+    if not any(_int(r.get(c)) for r in rows for c in ("ratings_given", "notes_written", "confidence_prompts",
+                                                       "problems_reported", "reviews_received")) \
+            and not any(_int(v.get("problems_reported")) for v in tables.visits):
+        return ""
+    annotators = sorted({r["annotator_id"] for r in rows} | {v["annotator_id"] for v in tables.visits})
+    body = []
+    for ann in annotators:
+        done = [r for r in rows if r["annotator_id"] == ann and r["segment"] == "recording"
+                and r["outcome"] == "finished"]
+        known = [r for r in done if r.get("annotations_rated") not in ("", None)]
+        saved = sum(_int(r.get("final_annotations")) for r in done)
+        in_known = sum(_int(r.get("final_annotations")) for r in known)
+        rated = sum(_int(r.get("annotations_rated")) for r in known)
+        noted = sum(_int(r.get("annotations_with_note")) for r in known)
+        share = rated / in_known if in_known else float("nan")
+        problems = sum(_int(v.get("problems_reported")) for v in tables.visits if v["annotator_id"] == ann)
+        reviews: dict[tuple[str, str], int] = {}  # each recording's reviews once, however often they were read
+        for r in rows:
+            if r["annotator_id"] == ann and _int(r.get("reviews_received")):
+                key = (r["recording"], r["mode"])
+                reviews[key] = max(reviews.get(key, 0), _int(r.get("reviews_received")))
+        cells = [_esc(ann), f"{saved:,}", f"{rated:,}" if known else "", _fmt(share, 2),
+                 f"{noted:,}" if known else "", f"{problems:,}", f"{sum(reviews.values()):,}"]
+        body.append("<tr>" + "".join(f"<td>{c}</td>" if i == 0 else f'<td class="num">{c}</td>'
+                                     for i, c in enumerate(cells)) + "</tr>")
+    return ("<table><thead><tr><th>Annotator</th><th>Annotations saved</th><th>Rated</th><th>Share rated</th>"
+            "<th>With a note</th><th>Problems reported</th><th>Reviews received</th></tr></thead><tbody>"
+            + "".join(body) + "</tbody></table>")
 
 
 def report_html(tables: ActivityTables, *, files: dict[str, str] | None = None) -> str:
@@ -251,13 +293,22 @@ def report_html(tables: ActivityTables, *, files: dict[str, str] | None = None) 
                      "median seconds per annotation over their first finished recordings (up to three) and over their "
                      "last ones (the same number). A negative change means they got faster.</p>"
                      f"{_change_table(finished)}</section>")
+    marks = _marks_table(tables)
+    if marks:
+        parts.append('<section class="card"><h2>Confidence, notes, problems and reviews</h2><p class="sub">For each '
+                     "annotator: the annotations saved in their finished recordings, how many of them had a "
+                     "confidence rating and a note (the log holds only the length of a note, never its text), every "
+                     "problem they reported with a recording, and the reviews of their work they read, each "
+                     "recording's reviews counted once. Rated, Share rated and With a note leave out recordings that "
+                     "opened with annotations the logs do not show.</p>"
+                     f"{marks}</section>")
     head = "".join(f"<th>{_esc(h)}</th>" for _c, h in ROW_COLUMNS)
     body = []
     for r in rows:
         cells = []
         for c, _h in ROW_COLUMNS:
             v = r.get(c)
-            digits = 2 if c in ("score", "share_seen") else 1
+            digits = 2 if c in ("score", "share_seen", "share_rated") else 1
             if c == "recording":
                 short = str(v).rsplit("/", 1)[-1]
                 cells.append(f'<td class="rec" title="{_esc(v)}">{_esc(short)}</td>')

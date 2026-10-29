@@ -5,6 +5,22 @@ Each section below describes the changes in one version of ElectroTag;
 
 ## Unreleased
 
+The activity analysis (`electrotag-activity` and the admin area) now counts
+confidence ratings, notes, problem reports and the feedback on reviewed work.
+Each row of `recordings.tsv` gives the ratings given and cleared, the requests
+for a rating and how they ended, the checks before Save and Finish in an
+every-mark study and the choices made, the notes written and removed, and how
+many of the annotations saved had a rating (with the share rated) and a note;
+the problems reported from the annotation view and whether one set the
+recording aside; and the reviews received, the items of feedback shown and
+those the annotator went to. Reading the feedback on reviewed work is now a row
+of its own, with `segment` set to `feedback`, and no longer counts as a
+recording opened for annotation. `visits.tsv` adds the ratings given, the notes
+written, the problems reported (also from the list of recordings) and the
+times feedback was shown, and the report has a table of these for each
+annotator. The log holds only the length of a note, so the tables count notes
+and keep their text out.
+
 Annotators can report a problem with a recording instead of saving it as having
 no artifacts: from the More button beside it in their list (which works for a
 file that will not even open) or in the annotation view's header, they choose

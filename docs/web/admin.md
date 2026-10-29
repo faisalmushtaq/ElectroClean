@@ -351,7 +351,9 @@ choose the settings for your study before you look at its results, report them, 
 settings used (JSON) with the report. The reliability guide explains each measure.
 
 The **activity analysis and learning curves** summarise the interaction logs: time spent, clicks
-and keys, and how annotators got faster with practice, for everyone or for the annotators ticked.
+and keys, confidence ratings and notes on the annotations saved (counts only, never the text of a
+note), problems reported, the feedback on reviewed work that annotators read, and how annotators got
+faster with practice, for everyone or for the annotators ticked.
 
 A **competency report** compares a trainee's assessment recordings with a reference set's
 references and criteria, once every assessment recording is saved, and shows whether the criteria
