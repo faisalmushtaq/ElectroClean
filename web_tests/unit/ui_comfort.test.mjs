@@ -3,8 +3,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { BREAK_MIN_S, SNOOZE_S, WorkClock, idleDue, todayKey } from '../../electroclean/web/static/js/annotate/clock.js';
-import { DEFAULT_COMFORT, namePx, normaliseComfort, traceWidths } from '../../electroclean/web/static/js/ui/comfort.js';
+import { BREAK_MIN_S, SNOOZE_S, WorkClock, idleDue, todayKey } from '../../electrotag/web/static/js/annotate/clock.js';
+import { DEFAULT_COMFORT, namePx, normaliseComfort, traceWidths } from '../../electrotag/web/static/js/ui/comfort.js';
 
 /** A clock whose time (milliseconds) the test moves by hand. */
 function fakeClock(o = {}) {
@@ -85,7 +85,7 @@ test('a pause after a while without input, and today\'s key', () => {
   assert.equal(idleDue(179999, 3), false);
   assert.equal(idleDue(180000, 3), true);
   assert.equal(idleDue(1e9, 0), false, '0 never pauses');
-  assert.equal(todayKey('A01', new Date(2026, 0, 5, 23, 59)), 'electroclean.worked|A01|2026-01-05');
+  assert.equal(todayKey('A01', new Date(2026, 0, 5, 23, 59)), 'electrotag.worked|A01|2026-01-05');
 });
 
 // ------------------------------------------------------------ display comfort

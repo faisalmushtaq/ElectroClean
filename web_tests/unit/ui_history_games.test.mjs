@@ -1,16 +1,16 @@
 // The history, revisions and game elements in the browser: the demonstration's revisions (a new
 // version, the earlier one kept, only the latest revisable), its achievements and leaderboard
 // (pseudonyms only, hidden people left out), the home page's list helpers (tabs, search, sorting,
-// pages), and the pseudonyms' words, which must be those of electroclean/web/games.py.
+// pages), and the pseudonyms' words, which must be those of electrotag/web/games.py.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { DemoBackend, demoPseudonym, leaderboardOf } from '../../electroclean/web/static/js/api/demo.js';
-import { ADJECTIVES, ANIMALS } from '../../electroclean/web/static/js/games/words.js';
-import { PAGE_SIZE, pageOf, savedOf, visibleItems } from '../../electroclean/web/static/js/views/home_list.js';
+import { DemoBackend, demoPseudonym, leaderboardOf } from '../../electrotag/web/static/js/api/demo.js';
+import { ADJECTIVES, ANIMALS } from '../../electrotag/web/static/js/games/words.js';
+import { PAGE_SIZE, pageOf, savedOf, visibleItems } from '../../electrotag/web/static/js/views/home_list.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -44,7 +44,7 @@ const submit = (b, rid, anns, extra = {}) => b.submit({ recording_id: rid, mode:
   session: { elapsed_s: 30, viewed_fraction: 1 }, sha256: '', ...extra });
 
 test('the pseudonyms\' words are those of the server', () => {
-  const py = fs.readFileSync(path.join(ROOT, 'electroclean', 'web', 'games.py'), 'utf8');
+  const py = fs.readFileSync(path.join(ROOT, 'electrotag', 'web', 'games.py'), 'utf8');
   const words = (name) => [...py.slice(py.indexOf(`${name} = (`), py.indexOf(')', py.indexOf(`${name} = (`))).matchAll(/"([A-Za-z]+)"/g)].map((m) => m[1]);
   assert.deepEqual([...ADJECTIVES], words('ADJECTIVES'));
   assert.deepEqual([...ANIMALS], words('ANIMALS'));

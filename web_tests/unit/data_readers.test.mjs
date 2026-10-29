@@ -6,9 +6,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { openRecording } from "../../electroclean/web/static/js/data/recording.js";
-import { finishStimSteps, parseTals, stimEvents, stimSteps } from "../../electroclean/web/static/js/data/edf.js";
-import { parseIni, parseVhdr, parseVmrk } from "../../electroclean/web/static/js/data/brainvision.js";
+import { openRecording } from "../../electrotag/web/static/js/data/recording.js";
+import { finishStimSteps, parseTals, stimEvents, stimSteps } from "../../electrotag/web/static/js/data/edf.js";
+import { parseIni, parseVhdr, parseVmrk } from "../../electrotag/web/static/js/data/brainvision.js";
 import { ensureFixtures, expected, fixtureFiles } from "./_fixtures.mjs";
 
 const manifest = ensureFixtures();

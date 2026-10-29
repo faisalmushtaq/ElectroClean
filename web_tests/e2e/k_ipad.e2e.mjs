@@ -22,14 +22,14 @@ function fingers(cdp) {
 /** Client coordinates of time t (s), in the middle of the plot (or on row `row`). */
 async function at(page, t, row = null) {
   return page.evaluate(([t, row]) => {
-    const v = globalThis.ElectroClean.ws.viewer;
+    const v = globalThis.ElectroTag.ws.viewer;
     const r = v.over.getBoundingClientRect();
     return { x: r.left + v.tToX(t), y: r.top + (row === null ? (v.y0 + v.y1) / 2 : v.rowCentre(row)) };
   }, [t, row]);
 }
 
-const view = (page) => page.evaluate(() => ({ ...globalThis.ElectroClean.ws.viewer.view }));
-const resetView = (page) => page.evaluate(() => globalThis.ElectroClean.ws.viewer.setView({ startS: 0, durationS: 10, firstChannel: 0 }, 'code'));
+const view = (page) => page.evaluate(() => ({ ...globalThis.ElectroTag.ws.viewer.view }));
+const resetView = (page) => page.evaluate(() => globalThis.ElectroTag.ws.viewer.setView({ startS: 0, durationS: 10, firstChannel: 0 }, 'code'));
 
 export const tests = [
   {
@@ -55,7 +55,7 @@ export const tests = [
       await page.tap('[data-log="touch-larger"]');
       assert.ok((await view(page)).scaleFactor > v0.scaleFactor, 'larger traces');
       await resetView(page);
-      await page.evaluate(() => globalThis.ElectroClean.ws.viewer.setView({ scaleFactor: 1 }, 'code'));
+      await page.evaluate(() => globalThis.ElectroTag.ws.viewer.setView({ scaleFactor: 1 }, 'code'));
 
       // One finger draws an annotation of the chosen type.
       let a = await at(page, 3.0); let b = await at(page, 3.4);
@@ -80,15 +80,15 @@ export const tests = [
       await f.down(p); await f.slide(p, [{ x: mid - 240, y: p[0].y }, { x: mid + 240, y: p[1].y }]); await f.up();
       v = await view(page);
       assert.ok(v.durationS < 4, `pinched to ${v.durationS} s`);
-      const centre = await page.evaluate((x) => { const vw = globalThis.ElectroClean.ws.viewer; return vw.xToT(x - vw.over.getBoundingClientRect().left); }, mid);
+      const centre = await page.evaluate((x) => { const vw = globalThis.ElectroTag.ws.viewer; return vw.xToT(x - vw.over.getBoundingClientRect().left); }, mid);
       assert.ok(Math.abs(centre - tUnder) < 0.15, `the moment between the fingers stays put (${centre})`);
       // two fingers up and down move through the channels
       await resetView(page);
-      await page.evaluate(() => globalThis.ElectroClean.ws.viewer.setView({ nChannels: 8 }, 'code'));
+      await page.evaluate(() => globalThis.ElectroTag.ws.viewer.setView({ nChannels: 8 }, 'code'));
       p = [await at(page, 4.0, 6), await at(page, 6.0, 6)];
       await f.down(p); await f.slide(p, p.map((q) => ({ x: q.x, y: q.y - 150 }))); await f.up();
       assert.ok((await view(page)).firstChannel >= 2, 'moved down the channels');
-      await page.evaluate(() => globalThis.ElectroClean.ws.viewer.setView({ nChannels: 22, firstChannel: 0 }, 'code'));
+      await page.evaluate(() => globalThis.ElectroTag.ws.viewer.setView({ nChannels: 22, firstChannel: 0 }, 'code'));
       await resetView(page);
 
       // A second finger cancels the mark the first had begun.
@@ -98,7 +98,7 @@ export const tests = [
       await f.slide([b, { x: b.x + 200, y: b.y + 40 }], [{ x: b.x - 50, y: b.y }, { x: b.x + 150, y: b.y + 40 }], 3);
       await f.up();
       assert.equal((await annotations(page)).length, 1, 'no annotation from a cancelled mark');
-      assert.equal(await page.evaluate(() => globalThis.ElectroClean.ws.viewer.dragPreview), null);
+      assert.equal(await page.evaluate(() => globalThis.ElectroTag.ws.viewer.dragPreview), null);
       await resetView(page);
 
       // A finger finds an annotation's edge within its larger reach and resizes it.
@@ -127,8 +127,8 @@ export const tests = [
 
       // The interaction log says the presses were made with a finger, and names the long press.
       const events = await page.evaluate(async () => {
-        await globalThis.ElectroClean.flushLog();
-        return [...globalThis.ElectroClean.backend.visits.values()].flatMap((vs) => vs.events);
+        await globalThis.ElectroTag.flushLog();
+        return [...globalThis.ElectroTag.backend.visits.values()].flatMap((vs) => vs.events);
       });
       const presses = events.filter((e) => e.type === 'mouse_press' && e.area === 'eeg');
       assert.ok(presses.length >= 6 && presses.every((e) => e.pointer === 'touch'), 'presses on the EEG are logged as touch');

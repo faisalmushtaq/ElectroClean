@@ -9,12 +9,12 @@ import { fileURLToPath } from "node:url";
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 export const FIXTURES = join(ROOT, "web_tests", "fixtures");
-export const DATA = join(ROOT, "electroclean", "web", "static", "js", "data");
+export const DATA = join(ROOT, "electrotag", "web", "static", "js", "data");
 /** Must equal FIXTURE_VERSION in scripts/make_web_fixtures.py. */
 export const FIXTURE_VERSION = 4;
 
 function python() {
-  if (process.env.ELECTROCLEAN_PYTHON) return process.env.ELECTROCLEAN_PYTHON;
+  if (process.env.ELECTROTAG_PYTHON) return process.env.ELECTROTAG_PYTHON;
   for (const p of [join(ROOT, ".venv", "bin", "python"), join(ROOT, ".venv", "Scripts", "python.exe")]) if (existsSync(p)) return p;
   return process.platform === "win32" ? "python" : "python3";
 }
@@ -64,7 +64,7 @@ export function ensureFixtures({ perf = false } = {}) {
       if (r.status !== 0) {
         throw new Error(
           "Could not write the test recordings. Run `python scripts/make_web_fixtures.py` from the repository root " +
-            "with the development dependencies installed (mne, numpy, scipy, pybv), or set ELECTROCLEAN_PYTHON.\n" +
+            "with the development dependencies installed (mne, numpy, scipy, pybv), or set ELECTROTAG_PYTHON.\n" +
             (r.stderr || r.error || "").toString().slice(-2000),
         );
       }

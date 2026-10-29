@@ -2,13 +2,13 @@
 // with its legend, the choice remembered for the annotator, the study's default, bad channels kept
 // grey, and a 128-channel 10-10 montage. Screenshots of each mode are saved with --screenshots.
 import { signIn, waitForRoute, waitForTraces } from './helpers.mjs';
-import { DEMO_CHANNELS } from '../../electroclean/web/static/js/data/synthetic.js';
+import { DEMO_CHANNELS } from '../../electrotag/web/static/js/data/synthetic.js';
 
 async function openSynthetic(page, channels, id, durationS = 20) {
   await page.evaluate(async ([channels, id, durationS]) => {
     const { makeSyntheticRecording } = await import(new URL('js/data/synthetic.js', location.href).href);
     const recording = makeSyntheticRecording({ id, stem: `sub-${id}_task-rest`, sfreq: 256, durationS, seed: 3, channels, artifacts: [] });
-    await globalThis.ElectroClean.openWorkspace({ recording, match: { status: 'unknown' }, sha: '', tryOut: true });
+    await globalThis.ElectroTag.openWorkspace({ recording, match: { status: 'unknown' }, sha: '', tryOut: true });
   }, [channels, id, durationS]);
   await waitForTraces(page);
 }
@@ -18,7 +18,7 @@ async function choose(page, mode) {
   await page.selectOption('#channel-colours', mode);
   await page.waitForTimeout(100);
   return page.evaluate(() => {
-    const ws = globalThis.ElectroClean.ws;
+    const ws = globalThis.ElectroTag.ws;
     const v = ws.viewer;
     return {
       mode: ws.channelColourMode,
@@ -53,7 +53,7 @@ export const tests = [
       await signIn(page, 'A01');
       await waitForRoute(page, 'home');
       await openSynthetic(page, DEMO_CHANNELS, 'colours');
-      let s = await page.evaluate(() => ({ mode: globalThis.ElectroClean.ws.channelColourMode, colours: globalThis.ElectroClean.ws.viewer.channelColours }));
+      let s = await page.evaluate(() => ({ mode: globalThis.ElectroTag.ws.channelColourMode, colours: globalThis.ElectroTag.ws.viewer.channelColours }));
       assert.deepEqual(s, { mode: 'off', colours: null }, 'off unless the study or the annotator says otherwise');
 
       s = await choose(page, 'region');
@@ -74,7 +74,7 @@ export const tests = [
 
       // a bad channel keeps its grey, whatever its group
       const bad = await page.evaluate(() => {
-        const v = globalThis.ElectroClean.ws.viewer;
+        const v = globalThis.ElectroTag.ws.viewer;
         const ch = v.channels.find((c) => c.name === 'VEOG');
         const before = v.groupColour(ch);
         ch.bad = true;
@@ -87,22 +87,22 @@ export const tests = [
       s = await choose(page, 'region');
       await close(page);
       await openSynthetic(page, DEMO_CHANNELS, 'colours2');
-      assert.equal(await page.evaluate(() => globalThis.ElectroClean.ws.channelColourMode), 'region');
+      assert.equal(await page.evaluate(() => globalThis.ElectroTag.ws.channelColourMode), 'region');
       assert.equal(await page.inputValue('#channel-colours'), 'region');
       s = await choose(page, 'off');
       assert.equal(s.colours, null);
       assert.equal(s.legendShown, false);
-      const events = await page.evaluate(() => globalThis.ElectroClean.debugState().loggedEvents);
+      const events = await page.evaluate(() => globalThis.ElectroTag.debugState().loggedEvents);
       assert.ok(events > 0);
       await close(page);
 
       // the study's default, for an annotator who has not chosen
       await page.evaluate(() => {
-        for (const k of Object.keys(localStorage)) if (k.startsWith('electroclean.channel_colours')) localStorage.removeItem(k);
-        globalThis.ElectroClean.me.study.display.channel_colours = 'side';
+        for (const k of Object.keys(localStorage)) if (k.startsWith('electrotag.channel_colours')) localStorage.removeItem(k);
+        globalThis.ElectroTag.me.study.display.channel_colours = 'side';
       });
       await openSynthetic(page, DEMO_CHANNELS, 'colours3');
-      assert.equal(await page.evaluate(() => globalThis.ElectroClean.ws.channelColourMode), 'side');
+      assert.equal(await page.evaluate(() => globalThis.ElectroTag.ws.channelColourMode), 'side');
     },
   },
   {
@@ -116,7 +116,7 @@ export const tests = [
       await openSynthetic(page, names, 'tenten', 10);
       const s = await choose(page, 'region');
       assert.equal(Object.keys(s.colours).length, 128);
-      await page.evaluate(() => globalThis.ElectroClean.ws.viewer.setView({ nChannels: 64 }, 'test'));
+      await page.evaluate(() => globalThis.ElectroTag.ws.viewer.setView({ nChannels: 64 }, 'test'));
       await page.waitForTimeout(300);
       await t.screenshot(page, 'colours_128_region');
       await choose(page, 'side');

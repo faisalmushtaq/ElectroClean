@@ -98,7 +98,7 @@ export const tests = [
       await drag(page, await eegPoint(page, 4.1), await eegPoint(page, 4.5));
       const s0 = await state(page);
       assert.equal(s0.annotations.length, 1);
-      await page.evaluate(() => globalThis.ElectroClean.ws.viewer.setView({ startS: 6 }));
+      await page.evaluate(() => globalThis.ElectroTag.ws.viewer.setView({ startS: 6 }));
       await page.waitForTimeout(200);
       await page.keyboard.press('3');
       await drag(page, await eegPoint(page, 11.0), await eegPoint(page, 13.0));
@@ -122,8 +122,8 @@ export const tests = [
       assert.match(await page.locator('[data-stage="practice"]').textContent(), /In progress/);
       assert.match(await page.locator('[data-stage="practice"]').textContent(), /Best: \d+% found/);
       assert.match(await page.textContent('main.training'), /Try a practice recording again/);
-      await page.evaluate(() => globalThis.ElectroClean.flushLog());
-      const events = await page.evaluate(() => globalThis.ElectroClean.backend.resultsDocument().interaction_logs[0].events.map((e) => e.type));
+      await page.evaluate(() => globalThis.ElectroTag.flushLog());
+      const events = await page.evaluate(() => globalThis.ElectroTag.backend.resultsDocument().interaction_logs[0].events.map((e) => e.type));
       for (const kind of ['guided_step_started', 'guided_check', 'guided_show_me', 'guided_step_completed', 'guided_recording_completed',
         'practice_scored', 'practice_review_opened', 'review_item_jumped', 'training_path_opened', 'stage_started']) {
         assert.ok(events.includes(kind), `no ${kind} event; got ${[...new Set(events)].join(', ')} (${events.length})`);

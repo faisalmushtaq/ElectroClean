@@ -1,6 +1,6 @@
 // The admin area's menu in groups, Find, private invitation links, adding several people at once,
 // the Progress section and actions on many recordings and people, in the demonstration and on the
-// real study server (`electroclean-web demo`, started by run_e2e.mjs for the tests marked
+// real study server (`electrotag-web demo`, started by run_e2e.mjs for the tests marked
 // needs: 'study'). An invitation is followed end to end: the administrator makes the link, the
 // person opens it in another browser, chooses a password and lands on their recordings.
 import crypto from 'node:crypto';
@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { signIn, waitForRoute } from './helpers.mjs';
 
-const PASSWORD = 'electroclean';
+const PASSWORD = 'electrotag';
 
 async function goSection(page, title, route) {
   await page.locator('.admin-nav a', { hasText: title }).click();
@@ -34,7 +34,7 @@ async function acceptInvite(page, { id, study, password }) {
   await page.fill('#invite-password-again', password);
   await page.click('.invite-form button[type="submit"]');
   await page.waitForFunction(() => Boolean(document.querySelector('.dialog.logging-notice'))
-    || (globalThis.ElectroClean && globalThis.ElectroClean.route !== 'signin'), null, { timeout: 30000 });
+    || (globalThis.ElectroTag && globalThis.ElectroTag.route !== 'signin'), null, { timeout: 30000 });
   const notice = page.locator('.dialog.logging-notice button', { hasText: 'Continue' });
   if (await notice.count()) await notice.click();
   await waitForRoute(page, 'home');
@@ -299,7 +299,7 @@ export const tests = [
     async run(t) {
       const { assert } = t;
       const api = async (method, p, body, token) => {
-        const headers = { 'X-ElectroClean': '1', 'Content-Type': 'application/json' };
+        const headers = { 'X-ElectroTag': '1', 'Content-Type': 'application/json' };
         if (token) headers.Authorization = `Bearer ${token}`;
         const res = await fetch(`${t.study.base}api/v1${p}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
         return { status: res.status, json: await res.json() };

@@ -1,4 +1,4 @@
-"""Shared helpers for the tests of the browser version's Python side (electroclean/web/)."""
+"""Shared helpers for the tests of the browser version's Python side (electrotag/web/)."""
 
 from __future__ import annotations
 
@@ -7,9 +7,9 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from electroclean.web.demo import DEMO_PASSWORD, build_demo
+from electrotag.web.demo import DEMO_PASSWORD, build_demo
 
-H = {"X-ElectroClean": "1"}
+H = {"X-ElectroTag": "1"}
 SUB1 = "sub-001/eeg/sub-001_task-rest_eeg.vhdr"
 SUB2 = "sub-002/eeg/sub-002_task-rest_eeg.vhdr"
 SUB3 = "sub-003/eeg/sub-003_task-rest_eeg.edf"
@@ -38,7 +38,7 @@ def data_file(recordings: Path, rid: str) -> Path:
     """The file the browser fingerprints: the EDF/BDF file, or the BrainVision .eeg file."""
     base = recordings / ("training" if rid.startswith("sub-example") else "study") / rid
     if base.suffix == ".vhdr":
-        from electroclean.app.io.discovery import read_vhdr_header
+        from electrotag.app.io.discovery import read_vhdr_header
 
         return base.parent / read_vhdr_header(base).data_file
     return base
@@ -61,7 +61,7 @@ def ann(aid: str, label: str, onset: int, dur: int, channels: list[str] | None =
 
 
 class Api:
-    """A signed-in test client for the ElectroClean server."""
+    """A signed-in test client for the ElectroTag server."""
 
     def __init__(self, client: Any, annotator: str, password: str = DEMO_PASSWORD) -> None:
         self.client = client
@@ -119,7 +119,7 @@ def submission(recordings: Path, rid: str, annotations: list[dict[str, Any]], mo
 
 def reference_annotations(study_or_store: Any, set_id: str, rid: str) -> list[Any]:
     """The experts' annotations (the tests may know them; the browser never receives them)."""
-    from electroclean.training.guided import build_steps
+    from electrotag.training.guided import build_steps
 
     rs = study_or_store.reference_set(set_id)
     return [s.target for s in build_steps(rs.reference_document(rid))]
@@ -132,9 +132,9 @@ def as_wire(a: Any, aid: str | None = None) -> dict[str, Any]:
 def build_manifests(folder: Path, scope: str = "study") -> list[dict[str, Any]]:
     """The manifests of every recording in a folder, as the desktop's registration makes them (MNE-Python),
     which is what the browser's registration (js/data/register.js) builds too."""
-    from electroclean.app.annotations.labels import default_catalogue
-    from electroclean.config.settings import load_settings
-    from electroclean.web.registration import collect
+    from electrotag.app.annotations.labels import default_catalogue
+    from electrotag.config.settings import load_settings
+    from electrotag.web.registration import collect
 
     settings, _ = load_settings(None)
     reg = collect(folder, settings, default_catalogue(), include_sets=False, say=lambda _m: None)
@@ -156,8 +156,8 @@ def race_revisions(service: Any, user: Any, bodies: list[dict[str, Any]], monkey
     answer or the ApiError it raised."""
     import threading
 
-    from electroclean.web import saving
-    from electroclean.web.errors import ApiError
+    from electrotag.web import saving
+    from electrotag.web.errors import ApiError
 
     start, run = saving.WebSession.start, saving.run_session
     both_checked = threading.Barrier(2, timeout=30)

@@ -1,4 +1,0 @@
-# Made before deploying: the ElectroClean code (scripts/vendor_functions.py) and Firebase's virtual environment.
-electroclean/
-venv/
-__pycache__/

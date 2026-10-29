@@ -10,15 +10,15 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from electroclean.app.common import IdentifierError, friendly_duration, friendly_time, normalise_annotator_id
-from electroclean.app.eeg.loading import RecordingLoadError, load_recording
-from electroclean.app.io.discovery import discover_recordings
-from electroclean.app.io.locking import FileLock, LockError
-from electroclean.app.session.failures import FailureLog, SessionLog
-from electroclean.app.session.register import CompletionRegister
-from electroclean.app.session.selection import balanced_allocation, select_next, seeded_order
-from electroclean.app.session.session import SessionError
-from electroclean.app.session.transaction import ExportCommitError, recover_interrupted_exports
+from electrotag.app.common import IdentifierError, friendly_duration, friendly_time, normalise_annotator_id
+from electrotag.app.eeg.loading import RecordingLoadError, load_recording
+from electrotag.app.io.discovery import discover_recordings
+from electrotag.app.io.locking import FileLock, LockError
+from electrotag.app.session.failures import FailureLog, SessionLog
+from electrotag.app.session.register import CompletionRegister
+from electrotag.app.session.selection import balanced_allocation, select_next, seeded_order
+from electrotag.app.session.session import SessionError
+from electrotag.app.session.transaction import ExportCommitError, recover_interrupted_exports
 from tests.conftest import SUB1, SUB2, make_session
 
 

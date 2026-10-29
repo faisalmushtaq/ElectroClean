@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { FirebaseBackend, toApiError, authError } from '../../electroclean/web/static/js/api/firebase.js';
+import { FirebaseBackend, toApiError, authError } from '../../electrotag/web/static/js/api/firebase.js';
 
 class FakeHttpsError extends Error {
   constructor(code, message, details) { super(message); this.code = `functions/${code}`; this.details = details; }
@@ -59,11 +59,11 @@ test('sign-in with email and password; the annotator ID comes from the token cla
 
 test('operations call ec_<operation> in europe-west2 with the study and the same body', async () => {
   const { sdk, calls } = fakeSdk({ handlers: {
-    ec_me: () => ({ annotator_id: 'A07' }),
-    ec_match: (d) => ({ status: 'matched', echo: d.sha256 }),
-    ec_put_draft: () => ({ saved_at: 'now' }),
-    ec_guided_check: (d) => ({ matched: d.step === 3 }),
-    ec_visit_events: () => ({}),
+    et_me: () => ({ annotator_id: 'A07' }),
+    et_match: (d) => ({ status: 'matched', echo: d.sha256 }),
+    et_put_draft: () => ({ saved_at: 'now' }),
+    et_guided_check: (d) => ({ matched: d.step === 3 }),
+    et_visit_events: () => ({}),
   } });
   const b = await FirebaseBackend.create({ config: {}, study: 'pilot', sdk });
   assert.equal((await b.me()).annotator_id, 'A07');
@@ -71,7 +71,7 @@ test('operations call ec_<operation> in europe-west2 with the study and the same
   await b.putDraft('sub-01/eeg/x.edf', 'standard', '', { annotations: [], elapsed_s: 2 });
   assert.equal((await b.guidedCheck('sub-01/eeg/x.edf', { step: 3, annotations: [] })).matched, true);
   await b.sendEvents('v1', [{ t: 1, type: 'key' }]);
-  assert.deepEqual(calls.map((c) => c.name), ['ec_me', 'ec_match', 'ec_put_draft', 'ec_guided_check', 'ec_visit_events']);
+  assert.deepEqual(calls.map((c) => c.name), ['et_me', 'et_match', 'et_put_draft', 'et_guided_check', 'et_visit_events']);
   assert.ok(calls.every((c) => c.region === 'europe-west2' && c.data.study === 'pilot'));
   assert.deepEqual(calls[2].data, { study: 'pilot', recording_id: 'sub-01/eeg/x.edf', mode: 'standard', context_id: '', draft: { annotations: [], elapsed_s: 2 } });
   assert.equal(calls[3].data.recording_id, 'sub-01/eeg/x.edf');
@@ -81,8 +81,8 @@ test('operations call ec_<operation> in europe-west2 with the study and the same
 test('HttpsError becomes the same errors as the server gives', async () => {
   let signedOut = 0;
   const { sdk } = fakeSdk({ handlers: {
-    ec_submit: () => { throw new FakeHttpsError('already-exists', 'This recording has already been saved.', { error: 'already_done' }); },
-    ec_assignments: () => { throw new FakeHttpsError('unauthenticated', 'Please sign in again.', { error: 'not_signed_in' }); },
+    et_submit: () => { throw new FakeHttpsError('already-exists', 'This recording has already been saved.', { error: 'already_done' }); },
+    et_assignments: () => { throw new FakeHttpsError('unauthenticated', 'Please sign in again.', { error: 'not_signed_in' }); },
   } });
   const b = await FirebaseBackend.create({ config: {}, study: 's', sdk, onUnauthorized: () => { signedOut += 1; } });
   await assert.rejects(() => b.submit({}), (e) => e.status === 409 && e.code === 'already_done' && /already been saved/.test(e.message));
@@ -111,9 +111,9 @@ test('a read-only call is asked once more after a failure; a call that saves is 
   let matches = 0;
   let submits = 0;
   const { sdk, calls } = fakeSdk({ handlers: {
-    ec_match: () => { matches += 1; if (matches === 1) throw new FakeHttpsError('internal', 'internal', {}); return { status: 'matched' }; },
-    ec_submit: () => { submits += 1; throw new FakeHttpsError('unavailable', 'unavailable', {}); },
-    ec_assignments: () => { throw new FakeHttpsError('permission-denied', 'Not in this study.', { error: 'not_in_study' }); },
+    et_match: () => { matches += 1; if (matches === 1) throw new FakeHttpsError('internal', 'internal', {}); return { status: 'matched' }; },
+    et_submit: () => { submits += 1; throw new FakeHttpsError('unavailable', 'unavailable', {}); },
+    et_assignments: () => { throw new FakeHttpsError('permission-denied', 'Not in this study.', { error: 'not_in_study' }); },
   } });
   const b = await FirebaseBackend.create({ config: {}, study: 's', sdk });
   b.retryDelayMs = 1;
@@ -122,14 +122,14 @@ test('a read-only call is asked once more after a failure; a call that saves is 
   await assert.rejects(() => b.submit({}), (e) => e.status === 0 && e.code === 'network');
   assert.equal(submits, 1);
   await assert.rejects(() => b.assignments(), (e) => e.status === 403);
-  assert.equal(calls.filter((c) => c.name === 'ec_assignments').length, 1); // a refusal is not repeated
+  assert.equal(calls.filter((c) => c.name === 'et_assignments').length, 1); // a refusal is not repeated
 });
 
 test('achievements: read with a retry, changed without one', async () => {
   let reads = 0;
   let writes = 0;
   const { sdk, calls } = fakeSdk({ handlers: {
-    ec_achievements: (d) => {
+    et_achievements: (d) => {
       if (d.goal_per_week !== undefined) { writes += 1; throw new FakeHttpsError('unavailable', 'unavailable', {}); }
       reads += 1;
       if (reads === 1) throw new FakeHttpsError('internal', 'internal', {});

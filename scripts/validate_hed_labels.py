@@ -1,8 +1,8 @@
-"""Check ElectroClean's artifact labels against a HED SCORE library schema.
+"""Check ElectroTag's artifact labels against a HED SCORE library schema.
 
 This is a development-time script. It reads a HED SCORE XML schema (downloaded
 from the hed-standard/hed-schemas repository, or supplied as a local file),
-confirms that every label in ``electroclean/config/artifact_labels.json`` is a
+confirms that every label in ``electrotag/config/artifact_labels.json`` is a
 node of that schema with exactly the same spelling and capitalisation, that
 its kind (specific type or group term) and parent group agree with the schema,
 and that no artifact term of the schema is missing; it writes a snapshot that
@@ -28,7 +28,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-CATALOGUE = REPO / "electroclean" / "config" / "artifact_labels.json"
+CATALOGUE = REPO / "electrotag" / "config" / "artifact_labels.json"
 URL_TEMPLATE = (
     "https://raw.githubusercontent.com/hed-standard/hed-schemas/main/"
     "library_schemas/score/hedxml/HED_score_{version}.xml"
@@ -63,7 +63,7 @@ def main(argv: list[str] | None = None) -> int:
         "--out",
         type=Path,
         default=None,
-        help="Snapshot output (default: electroclean/config/hed_score_<version>_validation.json)",
+        help="Snapshot output (default: electrotag/config/hed_score_<version>_validation.json)",
     )
     args = parser.parse_args(argv)
 
@@ -144,7 +144,7 @@ def main(argv: list[str] | None = None) -> int:
         "discrepancies": discrepancies,
         "schema_artifact_terms_not_in_catalogue": other_artifact_nodes,
     }
-    out = args.out or (REPO / "electroclean" / "config" / f"hed_score_{schema_version}_validation.json")
+    out = args.out or (REPO / "electrotag" / "config" / f"hed_score_{schema_version}_validation.json")
     out.write_text(json.dumps(snapshot, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(f"HED {library} {schema_version}: {len(results) - len(discrepancies)}/{len(results)} labels found exactly")
     for d in discrepancies:

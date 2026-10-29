@@ -1,11 +1,11 @@
-# Using ElectroClean in the browser
+# Using ElectroTag in the browser
 
-This guide is for annotators. ElectroClean runs in your web browser: you open an EEG recording, mark
+This guide is for annotators. ElectroTag runs in your web browser: you open an EEG recording, mark
 the artifacts you see with their type, and press Save and Finish. The recording stays on your own
 computer and is read by the web page itself, so the EEG is never uploaded; only your annotations,
 and a record of how you used the tools if your study asks for one, go to the study.
 
-## Opening ElectroClean
+## Opening ElectroTag
 
 Your study team sends you a link. Opening it shows the sign-in page of your study, with the study's
 name under the heading. If the page says "Demonstration" instead, you are in the demonstration,
@@ -13,7 +13,7 @@ which needs no account and keeps everything in your browser (see the last sectio
 given a study address rather than a link, choose "Taking part in a study? Enter its address" on the
 sign-in page, type the address and choose Connect; the browser remembers it next time.
 
-ElectroClean needs a screen the size of a tablet or larger: a computer with a mouse or trackpad and
+ElectroTag needs a screen the size of a tablet or larger: a computer with a mouse or trackpad and
 a keyboard, or a tablet such as an iPad, held upright or on its side (the section "On an iPad"
 below describes the touch controls). See "On a phone" below for what a phone shows.
 
@@ -26,7 +26,7 @@ or close the browser tab. If your sign-in ends while you are working (after a lo
 example), the page asks you to sign in again; your unsaved annotations are kept in the browser and
 are offered to you when you open the recording again.
 
-When a study records how its annotators use ElectroClean, a short notice says so after you sign in.
+When a study records how its annotators use ElectroTag, a short notice says so after you sign in.
 The record contains clicks, key presses and what is on the screen, never anything you type.
 
 ## Your recordings
@@ -107,7 +107,7 @@ come back at any time.
 
 ## Opening a recording
 
-ElectroClean asks you to choose the recording on your computer. Choose the file (an EDF or BDF
+ElectroTag asks you to choose the recording on your computer. Choose the file (an EDF or BDF
 file), drop it onto the page, or choose the folder that holds it. For a BrainVision recording
 choose its three files together (the .vhdr, .vmrk and .eeg), or their folder.
 
@@ -116,13 +116,13 @@ a few seconds for a large file and shows its progress. The fingerprint is what i
 to recognise the recording; the EEG itself is not. The study's answer appears in plain words. When
 the file is the study's copy of one of your recordings, the recording opens. When the file has the
 right name, sampling rate, length and channels but its contents differ from the study's copy (it
-may have been converted or re-saved), ElectroClean explains the difference and lets you choose
+may have been converted or re-saved), ElectroTag explains the difference and lets you choose
 between opening it anyway and choosing the study's copy; ask your study team if you are not sure.
 A file that is not part of the study can still be looked at in try-out mode, which is clearly
 labelled and saves nothing. A recording of the study that is not yours at the moment, or one you
 have already finished, is not opened, and the page says which of the two it is.
 
-If you worked on the recording before without finishing it, ElectroClean offers to restore your
+If you worked on the recording before without finishing it, ElectroTag offers to restore your
 unfinished work, with the number of annotations and the time spent. Choose Restore and continue, or
 Start afresh to begin again. A restored draft opens exactly where you left off: the same moment of
 the recording, the same channels, amount of time and trace size, and the parts you had already
@@ -149,10 +149,10 @@ who annotates the recording and switch it off when the study no longer needs it.
 
 Some links cannot be read by a web page. Google Drive never allows it, OneDrive for work or
 school (SharePoint) usually does not, and a link that is not shared with everyone, has expired or
-points to a folder fails too. ElectroClean then says what went wrong in plain words and offers
+points to a folder fails too. ElectroTag then says what went wrong in plain words and offers
 the next step in the same place: Download the file opens the link in a new tab, where your browser
 downloads the file, and then Choose the downloaded file opens the usual file chooser so that you
-can pick it from your Downloads folder (on an iPad, Downloads in the Files app). ElectroClean
+can pick it from your Downloads folder (on an iPad, Downloads in the Files app). ElectroTag
 cannot reach your Downloads folder, so delete the downloaded file there yourself when you have
 finished with it: in the Files app on an iPad, press and hold the file and choose Delete; on a
 Mac, drag it from Downloads in the Finder to the Bin; in Windows, select it in File Explorer and
@@ -161,8 +161,8 @@ press Delete.
 ## Recordings kept on this device
 
 A recording opened from a link is kept on the device, in this browser's own storage for
-ElectroClean, so that it opens again without downloading: the next time you open that recording,
-ElectroClean finds the copy, checks its fingerprint as it does for any file, and opens it straight
+ElectroTag, so that it opens again without downloading: the next time you open that recording,
+ElectroTag finds the copy, checks its fingerprint as it does for any file, and opens it straight
 away. Untick Keep a copy on this device under the link field if you would rather download it each
 time. Files you choose on your computer are already on it and are not copied, unless you tick Also
 keep files I choose here on this device (useful on an iPad, where the Files app may not keep a
@@ -181,16 +181,16 @@ another tab or window was opened from is kept, and the panel says so: the browse
 files bit by bit as you view it, so close it there first. Tick Remove a recording from this device
 when I finish it to have each copy removed once Save and Finish has saved your work. Removing a copy
 never touches your annotations, drafts or results, which the study keeps. When the device is full,
-the recording still opens, from memory, and ElectroClean offers to remove the recordings you have
-finished. When the first recording is kept, ElectroClean asks the browser to keep the site's storage
+the recording still opens, from memory, and ElectroTag offers to remove the recordings you have
+finished. When the first recording is kept, ElectroTag asks the browser to keep the site's storage
 even when space runs low (some browsers ask you, others decide for themselves); without that, a
 browser short of space may clear the copies, and they are then downloaded again from the link.
 
-When you sign out with recordings kept, ElectroClean asks whether to keep them or remove them.
+When you sign out with recordings kept, ElectroTag asks whether to keep them or remove them.
 Keeping them is the default, for your own device; on a computer that others use, remove them. The
 copies also go when you clear this site's data in the browser's settings. Files you downloaded
 yourself, with Download the file or in any other way, are in your Downloads folder, which
-ElectroClean cannot reach: delete those in the Files app, the Finder or File Explorer as described
+ElectroTag cannot reach: delete those in the Files app, the Finder or File Explorer as described
 above.
 
 ## The annotation view
@@ -274,12 +274,12 @@ black. A small legend under the choice says what each colour means and how many 
 The colours only tell groups apart: a bad channel stays grey and is labelled "(bad)", the channels
 you select stay pink, and no colour stands for a problem. Regions and sides follow the 10-20 and
 10-10 names; a montage named otherwise, such as BioSemi's A1 to D32, stays black by region and side.
-ElectroClean remembers your choice in this browser; until you choose, the study's default applies
+ElectroTag remembers your choice in this browser; until you choose, the study's default applies
 (none, unless the study team set one).
 
 ## Seeing the whole recording
 
-ElectroClean keeps track of the parts of the recording that have been on the screen, so that none
+ElectroTag keeps track of the parts of the recording that have been on the screen, so that none
 is missed in a long recording. A part counts as viewed once it has stayed on the screen for a moment
 while you are working. On the overview bar under the EEG, the parts not yet viewed are white with a
 thin grey line above them, and the parts viewed keep the bar's usual warm grey. The Recording tab
@@ -299,7 +299,7 @@ your time stops, your draft is kept, and a calm panel covers the EEG with the ti
 a large Resume button. Press Resume, or B again, to carry on. While you are paused nothing can be
 changed by accident.
 
-ElectroClean also pauses by itself in two cases. After a few minutes without any input (three
+ElectroTag also pauses by itself in two cases. After a few minutes without any input (three
 unless your study chose otherwise), it pauses and says so; the minutes before that pause still count,
 since you may have been reading the EEG. The pause starts when those minutes run out, so a computer
 that went to sleep with the recording on screen comes back paused from then, without the night. When the page is out of sight for more than ten seconds,
@@ -323,7 +323,7 @@ The Recording tab has a Comfort panel with choices of your own, kept in the brow
 applied to every recording you open there. Traces can be thin, normal or thick; thick traces are
 easier to follow on a bright screen or from a little further away. Channel names can be normal or
 large, and the text of the side panel normal or larger. These choices change only how the EEG and
-the panel look, never what is saved. ElectroClean also follows your computer's or iPad's setting
+the panel look, never what is saved. ElectroTag also follows your computer's or iPad's setting
 to reduce motion, and announces its messages to screen readers.
 
 ## On an iPad
@@ -349,15 +349,15 @@ training) below it; on its side, the panel is beside the EEG as on a computer.
 To open a recording, choose Choose a file…, which opens the iPad's file picker (the Files app, with
 iCloud Drive, the iPad itself and any drive plugged in). Tap Select in the picker to choose several
 files, such as the three files of a BrainVision recording; the iPad cannot choose a whole folder.
-Every file can be chosen, and ElectroClean checks that it is a recording of the study. Files you
+Every file can be chosen, and ElectroTag checks that it is a recording of the study. Files you
 download, such as your results in the demonstration, go to the Downloads folder in Files.
 
 ## Saving
 
 Press Save and Finish when you have looked through the whole recording. If some parts of at least a
-second have not been on the screen, ElectroClean first lists them with their times; Go to the first
+second have not been on the screen, ElectroTag first lists them with their times; Go to the first
 part takes you to the first of them, and Save anyway goes on, for example when you reviewed them another
-way. Your study may turn this check off. ElectroClean then shows how many annotations of each type you
+way. Your study may turn this check off. ElectroTag then shows how many annotations of each type you
 are saving and asks you to confirm; once saved, the recording is complete. You can still revise it
 later from your history when your study allows revisions (see "History and revisions"); each
 revision is saved as a new version. If you marked nothing, it asks whether to save the recording as
@@ -367,7 +367,7 @@ Saving can take a few seconds when the study is slow to answer. Meanwhile the bu
 pressing it again does nothing, and Close, Leave without changes and Pause wait for the answer, with
 a line at the bottom that says so; no draft is sent while the save is under way. If the answer never
 arrives (the connection dropped, or the study failed once), the recording stays open and you can try
-again. For a revision, the study may have saved it all the same: when you submit again, ElectroClean
+again. For a revision, the study may have saved it all the same: when you submit again, ElectroTag
 then says that the revision was most likely saved the first time and takes you to your history,
 where the latest version shows, rather than saving it twice.
 
@@ -398,7 +398,7 @@ several tries, and one when you used Show me. Save and Finish becomes available 
 matches.
 
 In the second stage, On your own, you annotate a practice recording without help. After you save
-it, ElectroClean shows your score, whether you reached the pass mark, and your annotations next to
+it, ElectroTag shows your score, whether you reached the pass mark, and your annotations next to
 the experts', with every disagreement labelled on the EEG: MISSED for an artifact you did not mark,
 EXTRA for one the experts did not mark, and TYPE for one you gave another type. The list "What to
 look at" takes you to each of them, and N and P step through it.
@@ -427,13 +427,13 @@ the end. Every answer is kept with the study as soon as you send it, together wi
 to give it, and cannot be changed afterwards: if you answer a segment on two pages or computers, the
 first answer is kept and the page says so. ‹ Stop the quiz offers two choices: Stop for now keeps
 your answers so that you can carry on another time from where you stopped, and End the quiz now
-finishes it with the score of the segments you answered. At the end ElectroClean shows how many
+finishes it with the score of the segments you answered. At the end ElectroTag shows how many
 segments you answered correctly, overall and for each artifact type, and opening a finished quiz
 again shows the same result.
 
 ## The demonstration
 
-Without a study, ElectroClean runs as a demonstration in the browser. Sign in as A01 to annotate or
+Without a study, ElectroTag runs as a demonstration in the browser. Sign in as A01 to annotate or
 as T01 to follow the training programme; the password is demo. Three example recordings with
 simulated artifacts are built in: use one straight away, or download them as EDF files and open
 them from your computer to try that way too. A demonstration quiz of seven segments from the first
@@ -448,6 +448,6 @@ results), the page says so.
 If the page says the study does not answer, check your internet connection and try again; if it
 keeps happening, tell your study team. If a file is not recognised although it should be, make sure
 you chose the study's copy of the recording and, for BrainVision, all three of its files. If a link
-does not open, download the file with the button ElectroClean offers and choose it, or ask your
+does not open, download the file with the button ElectroTag offers and choose it, or ask your
 study team for a link that anyone with it can open. If your
 sign-in has ended, sign in again: your unsaved work is still in the browser.

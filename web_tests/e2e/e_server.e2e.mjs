@@ -34,7 +34,7 @@ function checkHeaders(t) {
   t.assert.ok(health.every((r) => !r.headers.authorization), 'health is asked without a token');
   const me = reqs.filter((r) => r.path === '/api/v1/me').at(-1);
   t.assert.match(me.headers.authorization, /^Bearer tok-\d+$/);
-  t.assert.equal(me.headers['x-electroclean'], '1');
+  t.assert.equal(me.headers['x-electrotag'], '1');
   t.assert.ok(!me.headers.cookie, 'no cookies');
 }
 
@@ -59,9 +59,9 @@ export const tests = [
       await signInToStub(t, page);
       checkHeaders(t);
       // The address is remembered in this browser (localStorage), the token only for this tab.
-      const kept = await page.evaluate(() => [localStorage.getItem('electroclean.server'), Object.keys(sessionStorage)]);
+      const kept = await page.evaluate(() => [localStorage.getItem('electrotag.server'), Object.keys(sessionStorage)]);
       t.assert.equal(JSON.parse(kept[0]), t.api);
-      t.assert.ok(kept[1].includes('electroclean.token'));
+      t.assert.ok(kept[1].includes('electrotag.token'));
       t.assert.ok(!Object.keys(await page.evaluate(() => ({ ...localStorage }))).some((k) => /token/.test(k)));
       await t.screenshot(page, 'home_study');
       await page.click('[data-log="sign-out"]');
@@ -90,7 +90,7 @@ export const tests = [
       await page.fill('#study-address', deadAddress);
       await page.click('.connect-fields button');
       await page.waitForSelector('.connect-fields .error:not([hidden])');
-      t.assert.ok((await page.textContent('.connect-fields .error')).includes(`no ElectroClean study at ${deadAddress}`));
+      t.assert.ok((await page.textContent('.connect-fields .error')).includes(`no ElectroTag study at ${deadAddress}`));
       await page.fill('#study-address', t.api);
       await page.click('.connect-fields button');
       await signInToStub(t, page);

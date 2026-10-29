@@ -9,13 +9,13 @@ async function measure(t, scale) {
     const { makeSyntheticRecording } = await import(new URL('js/data/synthetic.js', location.href).href);
     const channels = Array.from({ length: 128 }, (_, i) => `E${i + 1}`);
     const recording = makeSyntheticRecording({ id: 'perf', stem: 'sub-perf_task-rest', sfreq: 1024, durationS: 30, seed: 5, channels, artifacts: [] });
-    await globalThis.ElectroClean.openWorkspace({ recording, match: { status: 'unknown' }, sha: '', tryOut: true });
-    globalThis.ElectroClean.ws.viewer.setView({ nChannels: 128, durationS: 10, startS: 5 });
+    await globalThis.ElectroTag.openWorkspace({ recording, match: { status: 'unknown' }, sha: '', tryOut: true });
+    globalThis.ElectroTag.ws.viewer.setView({ nChannels: 128, durationS: 10, startS: 5 });
   });
   await waitForTraces(page);
-  await page.waitForFunction(() => globalThis.ElectroClean.ws.viewer._covers());
+  await page.waitForFunction(() => globalThis.ElectroTag.ws.viewer._covers());
   const r = await page.evaluate(async () => {
-    const v = globalThis.ElectroClean.ws.viewer;
+    const v = globalThis.ElectroTag.ws.viewer;
     const med = (a) => [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)];
     const run = async (positions, cold) => {
       const full = []; const dec = []; let layers = null;

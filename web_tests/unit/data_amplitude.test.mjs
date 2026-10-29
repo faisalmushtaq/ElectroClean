@@ -1,4 +1,4 @@
-// The amplitude check of the browser against the desktop's (electroclean/app/eeg/amplitude.py)
+// The amplitude check of the browser against the desktop's (electrotag/app/eeg/amplitude.py)
 // on the same files, channel types and filters, and its helpers.
 
 import assert from "node:assert/strict";
@@ -10,8 +10,8 @@ import {
   formatG,
   formatVolts,
   niceScale,
-} from "../../electroclean/web/static/js/data/amplitude.js";
-import { openRecording } from "../../electroclean/web/static/js/data/recording.js";
+} from "../../electrotag/web/static/js/data/amplitude.js";
+import { openRecording } from "../../electrotag/web/static/js/data/recording.js";
 import { ensureFixtures, expected, fixtureFiles } from "./_fixtures.mjs";
 
 const manifest = ensureFixtures();

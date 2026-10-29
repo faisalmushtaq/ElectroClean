@@ -1,0 +1,16 @@
+# The Cloud Functions' dependencies (installed by Firebase when the functions are deployed).
+# The ElectroTag code they use is copied into this folder before deploying (scripts/vendor_functions.py,
+# run by the predeploy step in firebase.json). MNE-Python is left out: recordings are registered in the
+# browser or with electrotag-web register, and the example set's manifests come with the package
+# (electrotag/web/example.py).
+firebase-functions==0.6.0
+firebase-admin==7.7.0
+google-cloud-firestore==2.34.1
+# ElectroTag's core: saving (numpy); practice scoring, competency reports and the agreement analysis
+# (pandas, SciPy); the agreement report's figures (matplotlib); the example training set's simulated
+# recordings (pybv).
+numpy==2.5.4
+scipy==1.18.1
+pandas==3.1.0
+matplotlib==3.11.2
+pybv==0.8.1

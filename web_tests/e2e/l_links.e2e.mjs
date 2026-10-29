@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { signIn, waitForRoute, waitForTraces, clickDialogButton } from './helpers.mjs';
-import { demoSpecs, syntheticEdfBytes } from '../../electroclean/web/static/js/data/synthetic.js';
+import { demoSpecs, syntheticEdfBytes } from '../../electrotag/web/static/js/data/synthetic.js';
 
 export const NAME = 'sub-demo01_task-rest_eeg.edf';
 
@@ -42,7 +42,7 @@ export async function cloudService(bytes) {
 /** Keep a copy of every interaction event the page sends. */
 export async function recordEvents(page) {
   await page.evaluate(() => {
-    const b = globalThis.ElectroClean.backend;
+    const b = globalThis.ElectroTag.backend;
     const send = b.sendEvents.bind(b);
     globalThis.__events = [];
     b.sendEvents = (id, batch, o) => { globalThis.__events.push(...batch); return send(id, batch, o); };
@@ -50,7 +50,7 @@ export async function recordEvents(page) {
 }
 
 export async function sentEvents(page) {
-  return page.evaluate(async () => { await globalThis.ElectroClean.flushLog(); return globalThis.__events; });
+  return page.evaluate(async () => { await globalThis.ElectroTag.flushLog(); return globalThis.__events; });
 }
 
 /** Remove the browser's own console report of the request the stand-in service refused. */
@@ -78,14 +78,14 @@ export const tests = [
         // A link the page may read: fetched, fingerprinted, recognised and opened.
         // (not kept on the device here, so that the next Open asks again: l_device.e2e.mjs keeps)
         // (WebKit's private profiles store nothing, and the tick box is then a sentence instead)
-        await page.evaluate(async () => (await import('./js/views/device.js')).deviceStore(globalThis.ElectroClean).usable());
+        await page.evaluate(async () => (await import('./js/views/device.js')).deviceStore(globalThis.ElectroTag).usable());
         if (await page.locator('[data-log="keep-link"]').count()) await page.uncheck('[data-log="keep-link"]');
         const good = `${cloud.base}/cors/${NAME}?rlkey=secret-key-123`;
         await page.fill('.link-panel textarea', good);
         await page.click('[data-log="open-link"]');
         await waitForRoute(page, 'annotate', 30000);
         await waitForTraces(page);
-        const s = await page.evaluate(() => ({ file: globalThis.ElectroClean.ws.s.recording.fileName, mode: globalThis.ElectroClean.ws.s.mode }));
+        const s = await page.evaluate(() => ({ file: globalThis.ElectroTag.ws.s.recording.fileName, mode: globalThis.ElectroTag.ws.s.mode }));
         assert.equal(s.file, NAME);
         assert.equal(s.mode, 'standard');
         const fetched = cloud.seen.find((r) => r.path.startsWith('/cors/'));

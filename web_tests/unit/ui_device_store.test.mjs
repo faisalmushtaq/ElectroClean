@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 const { safeSegment, ownerKey, recordingKey, isQuotaError, chooseBackend, finishedState, finishedToRemove, summarise, makeMeta,
-  DeviceStore, DeviceStoreError } = await import('../../electroclean/web/static/js/data/device_store.js');
+  DeviceStore, DeviceStoreError } = await import('../../electrotag/web/static/js/data/device_store.js');
 
 const SHA = 'a'.repeat(64);
 const SHA2 = 'b'.repeat(64);
@@ -85,7 +85,7 @@ test('a copy is described by its files\' names and sizes, never by where it came
 });
 
 test('a copy marked in use (in any tab) is kept by Remove; the mark ends with its recording', async () => {
-  const { inUseLockName } = await import('../../electroclean/web/static/js/data/device_store.js');
+  const { inUseLockName } = await import('../../electrotag/web/static/js/data/device_store.js');
   // A stand-in for the Web Locks API, shared by "tabs" as the browser's is.
   const held = new Map();
   const locks = {

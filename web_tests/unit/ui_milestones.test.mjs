@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import {
   RECORDING_STEPS, doneThisWeek, goalShare, hoursText, localDay, milestones, newlyReached, nextRecordingStep, streaks,
   teamShare, weekStart,
-} from '../../electroclean/web/static/js/games/milestones.js';
+} from '../../electrotag/web/static/js/games/milestones.js';
 
 const NOW = new Date(2026, 9, 28, 15, 0); // Wednesday 28 October 2026, 15:00 local time
 const at = (y, m, d, hh = 10) => new Date(y, m - 1, d, hh).toISOString();

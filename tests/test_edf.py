@@ -1,6 +1,6 @@
 """EDF, EDF+ and BDF recordings, and channels hidden by the study settings.
 
-The files are written by ``electroclean.synthetic.write_edf``, which follows
+The files are written by ``electrotag.synthetic.write_edf``, which follows
 the EDF and EDF+ specifications, and imitate an export from a consumer EEG
 headset: housekeeping channels (sample counter, contact quality, battery)
 next to the EEG, a channels.tsv that types every channel as EEG, an events.tsv
@@ -19,14 +19,14 @@ import mne
 import numpy as np
 import pytest
 
-from electroclean.app.eeg.loading import RecordingLoadError, load_recording
-from electroclean.app.io.discovery import discover_recordings
-from electroclean.app.io.edf import read_edf_header
-from electroclean.app.io.naming import OutputLayout
-from electroclean.config.settings import SettingsError, load_settings
-from electroclean.reliability.analysis import run_analysis
-from electroclean.reliability.config import AnalysisConfig
-from electroclean.synthetic import ALL_CHANNELS, write_edf, write_edf_recording
+from electrotag.app.eeg.loading import RecordingLoadError, load_recording
+from electrotag.app.io.discovery import discover_recordings
+from electrotag.app.io.edf import read_edf_header
+from electrotag.app.io.naming import OutputLayout
+from electrotag.config.settings import SettingsError, load_settings
+from electrotag.reliability.analysis import run_analysis
+from electrotag.reliability.config import AnalysisConfig
+from electrotag.synthetic import ALL_CHANNELS, write_edf, write_edf_recording
 from tests.conftest import make_session
 
 REC = "sub-01/eeg/sub-01_task-rest_eeg.edf"
@@ -43,7 +43,7 @@ def edf_root(tmp_path: Path) -> Path:
 def _load(root: Path, rid: str = REC, overrides=None, **kw):
     settings, _ = load_settings(root, overrides)
     recs = {r.recording_id: r for r in discover_recordings(root, suffixes=settings.discovery_suffixes)}
-    from electroclean.app.annotations.labels import default_catalogue
+    from electrotag.app.annotations.labels import default_catalogue
 
     return load_recording(recs[rid], settings, settings.filters, default_catalogue(), **kw), settings
 
@@ -229,7 +229,7 @@ def test_discovery_settings(edf_root):
 
 def test_session_saves_and_validates_edf_outputs(edf_root):
     lr, settings = _load(edf_root)
-    from electroclean.app.annotations.labels import default_catalogue
+    from electrotag.app.annotations.labels import default_catalogue
 
     layout = OutputLayout(edf_root / "Annotated_Events")
     session = make_session(layout, settings, default_catalogue(), lr)

@@ -1,6 +1,6 @@
 # The admin area
 
-This guide is for the lead researchers who run a study of ElectroClean in the browser. The admin
+This guide is for the lead researchers who run a study of ElectroTag in the browser. The admin
 area is the part of the browser application where you add the study's recordings and accounts,
 decide who annotates what, set up the training programme and its reference sets, run the agreement
 and activity analyses, follow everyone's progress and keep the study's records. Only administrators
@@ -36,7 +36,7 @@ an iPad, recordings are added by choosing their files (their names become their 
 iPad cannot choose a whole dataset folder with its paths; that needs a computer. Work in progress carries on while you look at another section: a folder of recordings
 being read, or an analysis being computed, is still there when you come back.
 
-When a study records how its annotators use ElectroClean, what you do in the admin area is left out
+When a study records how its annotators use ElectroTag, what you do in the admin area is left out
 of that record; the interaction log notes only that the admin area was opened and left.
 
 ## Trying it in the demonstration
@@ -49,10 +49,10 @@ you choose apply when they next open a recording. Invitation links work too, in 
 open one in another tab to see the welcome a new annotator sees. Reset the demonstration, on the
 home page, forgets it all.
 
-The demonstration cannot run what needs ElectroClean's Python code: the agreement and activity
+The demonstration cannot run what needs ElectroTag's Python code: the agreement and activity
 analyses, competency reports, consensus and adjudicated references, the example set's files and the
 results as one zip file. It says so when you try, and suggests the local demonstration server
-(`electroclean-web demo`, where ADMIN has the password electroclean), which runs every part of the
+(`electrotag-web demo`, where ADMIN has the password electrotag), which runs every part of the
 admin area on your own computer.
 
 ## Overview
@@ -185,7 +185,7 @@ study team keeps about it.
 ### Adding recordings from this computer
 
 Choose the dataset folder with Choose a folder…, or the files of some recordings with Choose
-files…. Your browser then reads each recording with the same rules as `electroclean-web register`
+files…. Your browser then reads each recording with the same rules as `electrotag-web register`
 on the command line: it finds the recordings among the files (EDF, BDF and BrainVision, the latter
 with its .vhdr, .vmrk and .eeg files), works out the fingerprint of each data file, reads the
 channels and their types, the original events and the stretches without data, and uses the BIDS
@@ -195,7 +195,7 @@ progress bar shows how far it has got; large recordings take a little while, bec
 the data file goes into its fingerprint.
 
 The folder you choose is the dataset folder, and each recording's ID is its path inside it, for
-example `sub-001/eeg/sub-001_task-rest_eeg.vhdr`, just as `electroclean-web register` names
+example `sub-001/eeg/sub-001_task-rest_eeg.vhdr`, just as `electrotag-web register` names
 recordings. Choose the same folder for every batch, so that the same recording always has the same
 ID.
 
@@ -211,7 +211,7 @@ never for the study's own annotation.
 
 If you close the page before Add, nothing is registered. If the connection fails part of the way
 through, the page says how many recordings were added; choose Add again for the rest, and those
-added already are skipped. The `electroclean-web register` command remains for registering from the
+added already are skipped. The `electrotag-web register` command remains for registering from the
 command line.
 
 ### Notes, retiring and removing
@@ -265,8 +265,8 @@ mode, and saves it; their saved annotations become the reference. This is the si
 a reference in a browser study: give the experts accounts, assign them the recording, and add the
 reference once they have saved.
 
-**An annotation file.** An ElectroClean `_annotations.json`, for example one an expert saved in
-another ElectroClean study. It must be for the same recording (the same sampling rate and length).
+**An annotation file.** An ElectroTag `_annotations.json`, for example one an expert saved in
+another ElectroTag study. It must be for the same recording (the same sampling rate and length).
 
 **A consensus of several annotators.** Two or more experts annotate the recording and the study
 combines their saved annotations, sample by sample and type by type: where enough of them marked an
@@ -308,7 +308,7 @@ sensitivity, precision, kappa and positive agreement over time, positive agreeme
 channels, the mean overlap of matched events in time and in channels, the share given the same
 label, and extra events per minute) can be ticked with a threshold, overall or in every assessed
 category. A category is assessed only when the reference has at least the given number of events of
-it. Leave every measure unticked to report results without a pass or fail decision. ElectroClean
+it. Leave every measure unticked to report results without a pass or fail decision. ElectroTag
 suggests no thresholds: they depend on pilot data and on how well the experts agree with each other.
 
 ### Quiz
@@ -322,7 +322,7 @@ its quiz.
 
 ### The example training set
 
-Create the example training set makes ElectroClean's simulated set (two recordings to learn with the
+Create the example training set makes ElectroTag's simulated set (two recordings to learn with the
 experts and one to practise on) and offers its recordings as a zip file to give to trainees. It is a
 placeholder until your experts' recordings are ready; replace it then.
 
@@ -339,7 +339,7 @@ annotators and the recordings (none ticked means all of them), the kinds of sess
 research annotation), and whether everyone is compared with one reference annotator (an expert, for
 example) rather than every pair with each other. Categories chooses the artifact types; ANY-artifact
 (any artifact against none) is always included. Settings of the analysis holds the measures' own
-settings, with ElectroClean's defaults: the time bins for the binned comparisons, the share of a bin
+settings, with ElectroTag's defaults: the time bins for the binned comparisons, the share of a bin
 an annotation must cover, how events are matched (by overlap, by the closeness of their start and
 end, or both) with the overlap thresholds and the main threshold, the tolerances, whether one event
 may match several, the channel overlap needed when channels are compared, which channels to leave
@@ -359,21 +359,21 @@ are met; download it as HTML, and its data as JSON.
 Progress lists each person with their work done, in progress and to do, their training programme's
 stages and when they were last seen; Work shows their recordings one by one, and Download the table
 (TSV) saves the list. Download all results (zip) gives every result of the study in one file: the
-annotations in ElectroClean's usual folders (an `_annotations.json`, `_events.tsv`,
+annotations in ElectroTag's usual folders (an `_annotations.json`, `_events.tsv`,
 `_events.json` and `_session.json` for each recording and annotator), the interaction logs, the
 training progress and the reports. When the results are too large to send through the page, the
 page gives the command to use instead: on a study server the results are already in the study
-folder's `Annotated_Events`, and on Firebase `electroclean-web export` writes them into the same
+folder's `Annotated_Events`, and on Firebase `electrotag-web export` writes them into the same
 folders (docs/web/firebase.md).
 
 ## Records
 
 The audit log records every change made to the study, in the admin area and with the
-`electroclean-web` commands: when, by whom, what was done, and the details. It shows the newest
+`electrotag-web` commands: when, by whom, what was done, and the details. It shows the newest
 first; Show older entries goes further back, and the filters show one person's changes or one kind
 of change among the entries shown.
 
-Visits lists each time someone signed in and used ElectroClean, newest first, with the mode, when
+Visits lists each time someone signed in and used ElectroTag, newest first, with the mode, when
 the visit ended and how many interaction events it logged. When the study records interactions,
 each visit has its own log among the results (`interaction_logs`).
 
@@ -428,7 +428,7 @@ its methods, with the settings it used; switch them off, or the leaderboard alon
 needs annotators who are not nudged at all.
 
 **Interaction log** chooses whether the study records
-how annotators use ElectroClean (clicks, keys and what is on the screen, never what they type), how
+how annotators use ElectroTag (clicks, keys and what is on the screen, never what they type), how
 often the pointer is sampled over the EEG, after how many seconds without input an annotator counts
 as idle, and the notice each annotator reads once after signing in; say there what is recorded and
 why, as the study's information sheet does.

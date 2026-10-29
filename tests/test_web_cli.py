@@ -1,4 +1,4 @@
-"""``electroclean-web`` with a study folder: setting up a study, registering, accounts, assignments."""
+"""``electrotag-web`` with a study folder: setting up a study, registering, accounts, assignments."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from electroclean.web.cli import main as cli
-from electroclean.web.store_files import FilesStore
+from electrotag.web.cli import main as cli
+from electrotag.web.store_files import FilesStore
 from tests.web_helpers import GUIDED1, SUB1, SUB3, make_template
 
 
@@ -21,7 +21,7 @@ def test_a_study_folder_from_scratch(template: Path, tmp_path: Path, capsys: pyt
                                      monkeypatch: pytest.MonkeyPatch) -> None:
     study = tmp_path / "pilot"
     assert cli(["init-study", "--study-dir", str(study), "--study", "pilot", "--name", "Pilot study"]) == 0
-    assert json.loads((study / "electroclean_study.json").read_text())["name"] == "Pilot study"
+    assert json.loads((study / "electrotag_study.json").read_text())["name"] == "Pilot study"
     assert cli(["init-study", "--study-dir", str(study), "--study", "pilot"]) == 2  # exists already
     assert cli(["register", str(template / "recordings" / "study"), "--study-dir", str(study)]) == 0
     assert cli(["register", str(template / "training-source"), "--study-dir", str(study)]) == 0
@@ -36,7 +36,7 @@ def test_a_study_folder_from_scratch(template: Path, tmp_path: Path, capsys: pyt
     assert rs.reference_document(GUIDED1).annotations
     assert not list(study.rglob("*.eeg")) and not list(study.rglob("*.edf")) and not list(study.rglob("*.vhdr"))
     store.close()
-    monkeypatch.setenv("ELECTROCLEAN_PASSWORD", "a-long-password")
+    monkeypatch.setenv("ELECTROTAG_PASSWORD", "a-long-password")
     assert cli(["add-user", "a01", "--study-dir", str(study), "--name", "Ann"]) == 0
     assert cli(["add-user", "A01", "--study-dir", str(study)]) == 2  # exists: --replace to change it
     assert cli(["add-user", "B01", "--study-dir", str(study), "--password", "short"]) == 2

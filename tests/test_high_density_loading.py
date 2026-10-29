@@ -1,7 +1,7 @@
 """Lessons from 128-channel recordings: trigger channels, channel types set by the study,
 implausible amplitudes, and display filtering in blocks of channels (memory and progress).
 
-Every recording here is synthetic (``electroclean.synthetic.write_edf``); the trigger channel
+Every recording here is synthetic (``electrotag.synthetic.write_edf``); the trigger channel
 imitates BioSemi's Status channel, whose upper bits carry system flags.
 """
 
@@ -16,17 +16,17 @@ import mne
 import numpy as np
 import pytest
 
-from electroclean.app.annotations.labels import default_catalogue
-from electroclean.app.eeg import filtering
-from electroclean.app.eeg.amplitude import check_amplitudes, format_volts, nice_scale
-from electroclean.app.eeg.events import SOURCE_STIM
-from electroclean.app.eeg.filtering import apply_view_filters, channel_blocks
-from electroclean.app.eeg.loading import load_recording
-from electroclean.app.io.discovery import discover_recordings
-from electroclean.app.io.naming import OutputLayout
-from electroclean.config.settings import FilterSettings, SettingsError, load_default_settings_dict, load_settings
-from electroclean.config.settings import Settings as SettingsCls
-from electroclean.synthetic import write_edf
+from electrotag.app.annotations.labels import default_catalogue
+from electrotag.app.eeg import filtering
+from electrotag.app.eeg.amplitude import check_amplitudes, format_volts, nice_scale
+from electrotag.app.eeg.events import SOURCE_STIM
+from electrotag.app.eeg.filtering import apply_view_filters, channel_blocks
+from electrotag.app.eeg.loading import load_recording
+from electrotag.app.io.discovery import discover_recordings
+from electrotag.app.io.naming import OutputLayout
+from electrotag.config.settings import FilterSettings, SettingsError, load_default_settings_dict, load_settings
+from electrotag.config.settings import Settings as SettingsCls
+from electrotag.synthetic import write_edf
 from tests.conftest import make_session
 
 SF = 256.0

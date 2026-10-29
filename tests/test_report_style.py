@@ -7,13 +7,13 @@ import re
 import pandas as pd
 import pytest
 
-from electroclean.activity.report import _css as activity_css
-from electroclean.activity.report import line_chart
-from electroclean.reliability.report import CSS as AGREEMENT_CSS
-from electroclean.reliability.report import INK, _table, _value_colour
-from electroclean.report_style import COLOURS, FONT_CODE, FONT_SERIF, TEXT_PAIRS, contrast_ratio
-from electroclean.training.assessment import _CSS as COMPETENCY_CSS
-from electroclean.training.assessment import competency_html
+from electrotag.activity.report import _css as activity_css
+from electrotag.activity.report import line_chart
+from electrotag.reliability.report import CSS as AGREEMENT_CSS
+from electrotag.reliability.report import INK, _table, _value_colour
+from electrotag.report_style import COLOURS, FONT_CODE, FONT_SERIF, TEXT_PAIRS, contrast_ratio
+from electrotag.training.assessment import _CSS as COMPETENCY_CSS
+from electrotag.training.assessment import competency_html
 
 STYLE_SHEETS = {"agreement": AGREEMENT_CSS, "activity": activity_css(), "competency": COMPETENCY_CSS}
 
@@ -64,7 +64,7 @@ def test_a_single_learning_curve_takes_the_accent_and_several_keep_their_palette
 ])
 def test_competency_status_uses_the_state_colours(status, text, background, bar):
     report = {"status": status, "status_text": "Result.", "annotator_id": "A01", "inputs": {},
-              "reference_set": {"set_id": "s", "name": "Set", "provenance": {}}, "software": {"electroclean": "x"}}
+              "reference_set": {"set_id": "s", "name": "Set", "provenance": {}}, "software": {"electrotag": "x"}}
     page = competency_html(report)
     heading = page[page.index("<h2 class='status'"):]
     heading = heading[:heading.index(">")]

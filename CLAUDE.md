@@ -1,4 +1,4 @@
-# Working on ElectroClean
+# Working on ElectroTag
 
 This file is for AI coding assistants working in this repository (Claude Code reads it
 automatically; [AGENTS.md](AGENTS.md) points other assistants here). Read
@@ -8,11 +8,11 @@ fits together and [docs/developer_guide.md](docs/developer_guide.md) the Python 
 
 ## The project in two sentences
 
-ElectroClean is research software for annotating artifacts in continuous EEG, measuring agreement
+ElectroTag is research software for annotating artifacts in continuous EEG, measuring agreement
 between annotators, and training and assessing them, with an interaction log of how they work. It
-runs in the web browser: the application (`electroclean/web/static`, plain ES modules) reads each
+runs in the web browser: the application (`electrotag/web/static`, plain ES modules) reads each
 recording on the person's own computer, and a study's records live on Firebase or on the
-ElectroClean server, both running one Python service layer (`electroclean/web/service.py`) on top of
+ElectroTag server, both running one Python service layer (`electrotag/web/service.py`) on top of
 the Python core (annotations, loading, saving, training, agreement and activity analyses).
 
 The desktop application was retired on 28 October 2026; version 1.1.0 on the Releases page was its
@@ -24,20 +24,20 @@ last release. Do not bring back Qt or a desktop window.
 python -m pip install -r requirements-dev.txt && python -m pip install --no-deps -e .   # Python 3.12 or 3.13
 python -m pytest                                          # the Python suite
 python -m pytest tests/test_web_server.py -q              # one file
-ruff check --select E,F,W,B electroclean tests scripts    # the useful lint subset
+ruff check --select E,F,W,B electrotag tests scripts    # the useful lint subset
 node --test web_tests/unit/*.test.mjs                     # browser modules (Node.js 22; give a glob, not a folder)
-ELECTROCLEAN_PYTHON=python node web_tests/run_e2e.mjs     # the application in Chromium (Playwright), incl. the real server
-ELECTROCLEAN_PYTHON=python node web_tests/run_e2e.mjs --browser webkit   # the same in WebKit (Safari, iPads)
+ELECTROTAG_PYTHON=python node web_tests/run_e2e.mjs     # the application in Chromium (Playwright), incl. the real server
+ELECTROTAG_PYTHON=python node web_tests/run_e2e.mjs --browser webkit   # the same in WebKit (Safari, iPads)
 bash scripts/test_firebase_emulators.sh                   # functions and Firestore store on the emulators (Java 21)
 bash scripts/test_web_firebase.sh                         # the application on the Firebase emulators
-electroclean-web demo                                     # the whole system on http://localhost:8000/
+electrotag-web demo                                     # the whole system on http://localhost:8000/
 ```
 
-`run_e2e.mjs` and the unit tests find Python through `ELECTROCLEAN_PYTHON`, then the repository's
-`.venv`, then `python3`. The emulators use the project ID `demo-electroclean`, which never reaches a
+`run_e2e.mjs` and the unit tests find Python through `ELECTROTAG_PYTHON`, then the repository's
+`.venv`, then `python3`. The emulators use the project ID `demo-electrotag`, which never reaches a
 real Firebase project. `requirements.txt` holds everything the server and the commands need;
 `requirements-dev.txt` adds the test tools and the Cloud Functions' SDK; the functions themselves
-install `electroclean/web/firebase/functions/requirements.txt`.
+install `electrotag/web/firebase/functions/requirements.txt`.
 
 ## Rules that protect the research data
 
@@ -45,9 +45,9 @@ EEG recordings never leave the computer they are on: the browser reads them, and
 (fingerprints, timing, channels, events), annotations and interaction logs go to the study. Source
 files are read-only: no code path may write to one. A recording is marked complete only after its
 five output files are written, read back and verified (the journalled save in
-`electroclean/app/session/`). The annotation store is the single source of truth; interfaces display
+`electrotag/app/session/`). The annotation store is the single source of truth; interfaces display
 it and send every action to it. Never commit participant data or real recordings: tests use the
-synthetic recordings of `electroclean/synthetic.py` and `scripts/make_web_fixtures.py` (written to
+synthetic recordings of `electrotag/synthetic.py` and `scripts/make_web_fixtures.py` (written to
 `web_tests/fixtures/`, which is ignored). The interaction logs never record typed text or passwords.
 Every change an administrator makes is written to the study's audit log; keep it that way for new
 operations.
@@ -69,7 +69,7 @@ figures, sizes from the `--t-*` scale of whole pixels, drawn icons from `icon()`
 tokens rather than new colours or sizes, and run `web_tests/unit/ui_design.test.mjs`, which checks
 contrast and these rules.
 
-The browser application has no build step: plain ES modules under `electroclean/web/static`, with
+The browser application has no build step: plain ES modules under `electrotag/web/static`, with
 every path relative so that it works under `/preview/` on GitHub Pages (workers are created with
 `new URL("./worker.js", import.meta.url)`), and plain `#name` routes only. External scripts come
 only from fixed, versioned URLs (the Firebase SDK from gstatic.com, loaded only for Firebase
@@ -77,9 +77,9 @@ studies).
 
 The contract between browser and server is [docs/web/api.md](docs/web/api.md): the annotators'
 operations, the administrator's operations (`admin(op, body)`: `POST /admin/{op}`, or the callable
-`ec_admin`) and the quiz (`quiz(setId, body)`). A change to a request or response is made in the
-service layer (`electroclean/web/service.py` and the modules it calls), the HTTP route
-(`electroclean/web/app.py`), the Firebase function (`electroclean/web/firebase/functions/main.py`),
+`et_admin`) and the quiz (`quiz(setId, body)`). A change to a request or response is made in the
+service layer (`electrotag/web/service.py` and the modules it calls), the HTTP route
+(`electrotag/web/app.py`), the Firebase function (`electrotag/web/firebase/functions/main.py`),
 the browser's `js/api/http.js`, `js/api/firebase.js` and the in-browser demonstration
 `js/api/demo.js`, and the contract itself; then run the end-to-end tests against the real server and
 the emulators, which are what catch mismatches. Firebase functions can answer slowly after a quiet
@@ -88,7 +88,7 @@ presses a key again while waiting; only calls that read may be retried automatic
 that save, score, register or count an attempt.
 
 Registration in the browser (`js/data/register.js`) must build the same manifest as the Python
-`electroclean.web.manifest.build_manifest` for the same files and settings; the parity tests compare
+`electrotag.web.manifest.build_manifest` for the same files and settings; the parity tests compare
 them field by field, so change both together.
 
 ## Writing style for text in the repository
@@ -119,7 +119,7 @@ project unless the person you are working for asks for it. *Tests* runs the Pyth
 every push; Windows, macOS and Linux for `main`, pull requests and runs started by hand), *Browser
 version tests* runs the browser modules, the application in Chromium and the Firebase emulator
 tests, and *GitHub Pages* publishes the application to the `gh-pages` branch: from `main` at the
-site's root, and from `claude/electroclean-web`, kept for previews, under `preview/` (never edit
+site's root, and from `claude/electrotag-web`, kept for previews, under `preview/` (never edit
 `gh-pages` by hand). *Firebase deploy*, run by hand, deploys the functions and rules once the
 repository's `FIREBASE_SERVICE_ACCOUNT` secret and `FIREBASE_PROJECT` variable are set
 (docs/web/firebase.md).

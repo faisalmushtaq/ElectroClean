@@ -5,7 +5,7 @@
 Each case is {"sfreq", "n_samples", "ch_names", "reference": [Annotation], "mine": [Annotation]};
 the answer gives, per case, the event F1, the label accuracy, the pass decision (default pass rule)
 and the missed, extra and relabelled artifacts, so web_tests/unit/ui_scoring.test.mjs can check
-js/training/scoring.js against electroclean.training.assessment.practice_feedback.
+js/training/scoring.js against electrotag.training.assessment.practice_feedback.
 """
 
 from __future__ import annotations
@@ -17,12 +17,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from electroclean.app.annotations.labels import default_catalogue  # noqa: E402
-from electroclean.app.annotations.model import AnnotationDocument, ArtifactAnnotation, RecordingInfo  # noqa: E402
-from electroclean.app.annotations.timing import RecordingTiming  # noqa: E402
-from electroclean.training.assessment import practice_feedback  # noqa: E402
-from electroclean.training.programme import PassRule  # noqa: E402
-from electroclean.training.reference import REFERENCE_ANNOTATOR  # noqa: E402
+from electrotag.app.annotations.labels import default_catalogue  # noqa: E402
+from electrotag.app.annotations.model import AnnotationDocument, ArtifactAnnotation, RecordingInfo  # noqa: E402
+from electrotag.app.annotations.timing import RecordingTiming  # noqa: E402
+from electrotag.training.assessment import practice_feedback  # noqa: E402
+from electrotag.training.programme import PassRule  # noqa: E402
+from electrotag.training.reference import REFERENCE_ANNOTATOR  # noqa: E402
 
 
 def doc(case: dict, key: str, annotator: str, mode: str) -> AnnotationDocument:

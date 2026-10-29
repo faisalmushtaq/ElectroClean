@@ -12,14 +12,14 @@ from itertools import combinations
 import numpy as np
 import pytest
 
-import electroclean.reliability.timeresolved as tr
-from electroclean.app.annotations.labels import default_catalogue
-from electroclean.app.annotations.model import AnnotationDocument, ArtifactAnnotation, RecordingInfo
-from electroclean.app.annotations.timing import RecordingTiming
-from electroclean.reliability.config import AnalysisConfig
-from electroclean.reliability.data import build_dataset
-from electroclean.reliability.intervals import binarise, coverage_per_bin, intersection_length, total_length
-from electroclean.reliability.statistics import PairTable
+import electrotag.reliability.timeresolved as tr
+from electrotag.app.annotations.labels import default_catalogue
+from electrotag.app.annotations.model import AnnotationDocument, ArtifactAnnotation, RecordingInfo
+from electrotag.app.annotations.timing import RecordingTiming
+from electrotag.reliability.config import AnalysisConfig
+from electrotag.reliability.data import build_dataset
+from electrotag.reliability.intervals import binarise, coverage_per_bin, intersection_length, total_length
+from electrotag.reliability.statistics import PairTable
 
 CAT = default_catalogue()
 SF = 256.0

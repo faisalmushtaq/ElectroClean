@@ -1,4 +1,4 @@
-# ElectroClean web API (version 1)
+# ElectroTag web API (version 1)
 
 The contract between the browser application and the server. All paths start
 with `/api/v1`. Requests and responses are JSON (UTF-8). Times on the wire are
@@ -14,14 +14,14 @@ other request except `GET /health` sends `Authorization: Bearer <token>`. The
 browser keeps the token in memory and in `sessionStorage` (never in
 `localStorage`), so it ends with the browser tab. Tokens expire after 12 hours
 without use and on `POST /logout`. Every request except `GET /health` also
-carries the header `X-ElectroClean: 1`.
+carries the header `X-ElectroTag: 1`.
 
 The application is usually served from GitHub Pages
 (`https://<owner>.github.io/<repo>/…`) while the server runs elsewhere, so the
 server answers CORS requests from the origins listed in its setting
-`ELECTROCLEAN_ALLOWED_ORIGINS` (comma-separated; the demo and local servers
+`ELECTROTAG_ALLOWED_ORIGINS` (comma-separated; the demo and local servers
 also allow the origin they serve the application from), allowing the
-`Authorization`, `Content-Type` and `X-ElectroClean` headers and no cookies.
+`Authorization`, `Content-Type` and `X-ElectroTag` headers and no cookies.
 When the server also serves the application itself (same origin), the same
 token scheme is used, and the server answers `GET /config.json` (outside
 `/api/v1`) with `{"server": "<its own address>", "study": "<study id>"}`, so the
@@ -120,7 +120,7 @@ password.
                    "allow_revisions": true},
     "gamification": {"enabled": true, "leaderboard": true},
     "logging": {"interactions": true, "pointer_hz": 5, "idle_after_s": 30},
-    "logging_notice": "This study records how you use ElectroClean …"   // "" when logging is off
+    "logging_notice": "This study records how you use ElectroTag …"   // "" when logging is off
   },
   "catalogue": {"labels": [{"label": "Eye-blink-artifact", "value": 103, "short_code": "BLINK",
                              "colour": "#0067A5", "section": "Eye", "is_group": false,
@@ -151,7 +151,7 @@ the home page shows the game elements and the leaderboard (see
 "next": "<recording_id>" | null, "next_item": {"recording_id", "mode", "context_id"} | null}`. `next` is the
 recording to do next: unfinished work first, then the training programme's
 next step, then the study's selection strategy (`manual`: the assignment order;
-`seeded`: ElectroClean's seeded order; `random`: a random choice that stays the
+`seeded`: ElectroTag's seeded order; `random`: a random choice that stays the
 same until something more is completed). `next_item` says in which mode and
 context. A trainee's list holds the recordings of the programme's unlocked
 stages. `repeat` is true for a practice recording the programme lets the
@@ -251,7 +251,7 @@ towards the milestones for recordings viewed in full.
 the catalogue and the manifest (422 `invalid_annotation` with the reason),
 refuses a second completion that is not a revision (409 `already_done`; see "Revisions" below), refuses a training recording
 whose stage is still locked (403 `locked`) and writes the outputs with
-ElectroClean's export code, then discards the draft. A guided recording is
+ElectroTag's export code, then discards the draft. A guided recording is
 saved only when every step still matches and nothing extra is marked (422
 `guided_incomplete`, with `step` when a step no longer matches; that step is
 then the current one again). When the file's checksum differs from the
@@ -407,7 +407,7 @@ or `token` are dropped. At most 2000 events per batch. The browser sends a batch
 every few seconds and with `navigator.sendBeacon` when the page is hidden:
 sendBeacon cannot set headers, so for these two paths the server also accepts a
 `text/plain` body holding the JSON with `"token"` added (no `Authorization` and
-no `X-ElectroClean` needed). `POST /visits/{visit_id}/close` `{"reason": "…"}` →
+no `X-ElectroTag` needed). `POST /visits/{visit_id}/close` `{"reason": "…"}` →
 `{}` (writes `log_closed`; closing twice does nothing). A closed visit refuses
 events (409 `visit_closed`); another annotator's visit is 404 `unknown_visit`.
 
@@ -418,11 +418,11 @@ Lead researchers (accounts with the role `admin`) run the study from the
 `POST /admin/{op}` with a JSON body (403 `forbidden` for anyone else, 404
 `not_found` for an `op` the server does not offer, as an older server answers;
 the admin area then says the operation is not offered yet) and, on Firebase,
-the one callable function `ec_admin` with `{"study", "op", ...the body}`; in the
+the one callable function `et_admin` with `{"study", "op", ...the body}`; in the
 service layer it is `StudyService.admin(op, user, body)`
-(`electroclean/web/admin.py`), so the ElectroClean server and Firebase behave
+(`electrotag/web/admin.py`), so the ElectroTag server and Firebase behave
 the same. Every operation that changes something appends an entry to the
-study's **audit log** (below), as do the `electroclean-web` commands that
+study's **audit log** (below), as do the `electrotag-web` commands that
 change the study (`"by": "command"`). `GET /admin/progress` and
 `GET /admin/results.zip` remain as before. Each administrative call reads the
 study afresh, so a change made through one Firebase instance is seen by the
@@ -431,7 +431,7 @@ next call whichever instance answers it.
 The EEG never reaches the study: an administrator adds recordings by choosing
 them on their own computer, the browser reads them and builds each
 recording's manifest (`js/data/register.js`), and only the manifests are sent
-(`recordings_register`). The `electroclean-web register` command remains for
+(`recordings_register`). The `electrotag-web register` command remains for
 registering from the command line.
 
 ### Shapes
@@ -452,7 +452,7 @@ SetRecord = {"set_id", "name", "description", "created_at", "created_by",
               "practice_review": true, "allowed_annotators": [] /* empty: everyone */,
               "practice_pass": {"event_f1": 0.8, "label_accuracy": 0.8},
               "guided_tolerance": {"seconds": 0.2, "fraction": 0.2, "channel_jaccard": 0.75, "accepted_labels": {}},
-              "criteria": CompetencyCriteria /* electroclean.training.assessment, to_dict() */,
+              "criteria": CompetencyCriteria /* electrotag.training.assessment, to_dict() */,
               "recordings": [{"recording_id", "use": "guided" | "practice" | "assessment",
                               "guidance": "auto" | "show" | "find" | "find_unnamed",
                               "effective_guidance": "show" | null /* guided recordings only */,
@@ -464,7 +464,7 @@ SetRecord = {"set_id", "name", "description", "created_at", "created_by",
 ```
 
 `registered_by` is the administrator's ID, or `command` for recordings registered
-with `electroclean-web`. A set made in the admin area is self-contained: its
+with `electrotag-web`. A set made in the admin area is self-contained: its
 recordings are registered in its own scope `set:<set_id>`, so they are never
 offered for study annotation. Sets registered from a dataset that refer to the
 study's own recordings have `"self_contained": false` and `"scope": "study"`.
@@ -474,8 +474,8 @@ study's own recordings have `"self_contained": false` and `"scope": "study"`.
 | op | body | answer |
 | --- | --- | --- |
 | `overview` | `{}` | `{"study": {"study_id", "name"}, "counts": {"recordings", "annotators", "admins", "assignments", "done", "in_progress", "todo"}, "recent": [AuditEntry], "last_saved": [{"annotator_id", "recording_id", "mode", "context_id", "at"}]}` (ten of each; `recordings` counts the study's own, the others the active accounts and their work) |
-| `settings_get` | `{}` | `{"name", "settings": {"filters", "display", "channels", "selection", "logging", "annotation", "loading", "discovery", "gamification"}, "logging_notice", "logging_notice_is_default"}`: the effective values of the blocks of `electroclean_study.json` that a study may change |
-| `settings_update` | `{"name"?, "settings"?: {block: {key: value}}, "logging_notice"?}` | as `settings_get`. Each key given replaces that setting; the result is checked with ElectroClean's own settings code and refused with 400 `invalid_settings` and the reason (also for a block or key that cannot be changed). `"logging_notice": ""` goes back to ElectroClean's own notice |
+| `settings_get` | `{}` | `{"name", "settings": {"filters", "display", "channels", "selection", "logging", "annotation", "loading", "discovery", "gamification"}, "logging_notice", "logging_notice_is_default"}`: the effective values of the blocks of `electrotag_study.json` that a study may change |
+| `settings_update` | `{"name"?, "settings"?: {block: {key: value}}, "logging_notice"?}` | as `settings_get`. Each key given replaces that setting; the result is checked with ElectroTag's own settings code and refused with 400 `invalid_settings` and the reason (also for a block or key that cannot be changed). `"logging_notice": ""` goes back to ElectroTag's own notice |
 | `users_list` | `{}` | `{"users": [UserRecord]}` (disabled accounts too) |
 | `user_add` | `{"annotator_id", "display_name"?, "email"?, "role"?: "annotator", "password"?, "invite"?: false, "expires_days"?: 14}` | `{"user": UserRecord, "invite_link": str \| null, "temporary_password": str \| null}`, with `"invite_token", "expires_at"` when `invite` is true. On Firebase `email` is required (400 `email_required`), the Firebase Authentication user is created (or, for a person already in another study of the project, given this study) with the custom claims below, and `invite_link` lets the person choose a password when none is given. On the server a temporary password (three groups of four characters) is made when none is given; with `"invite": true` the account is made with an invitation instead (as `user_invite`), and nobody knows its first password. A password has 8 to 200 characters; a password and `invite` together are 400; `invite` for an administrator is 409 `admin_account`. 409 `user_exists`, 409 `email_in_use` |
 | `user_update` | `{"annotator_id", "display_name"?, "role"?, "status"?, "notes"?}` | `{"user": UserRecord}`; 404 `unknown_user`. Disabling ends the person's sessions at once and stops them signing in; on Firebase the role is also written into their claims. An administrator cannot demote or disable themselves (409 `self`) |
@@ -488,12 +488,12 @@ study's own recordings have `"self_contained": false` and `"scope": "study"`.
 | `unassign` | `{"annotator_id", "recording_id", "mode"?, "context_id"?}` | `{}`; 409 `done` for a completed item, 404 `not_assigned` |
 | `programme_set` | `{"annotator_id", "set_id": str \| null}` | `{}`; 404 `no_reference_set`, 409 `not_allowed` |
 | `recordings_list` | `{"scope"?}` | `{"recordings": [RecordingRecord]}` (every scope when none is given) |
-| `recordings_register` | `{"scope": "study" \| "set:<id>", "manifests": [Manifest], "replace"?: false}` | `{"added": [recording_id], "replaced": [..], "skipped": [{"recording_id", "reason"}]}`. `Manifest` is the internal manifest of `electroclean/web/manifest.py` (`schema` `electroclean.web_manifest`) as the browser builds it; the server checks it (below), stores it with `registered_via` `browser`, keeps the notes and retirement of a recording registered again, and never replaces a recording that has results unless the fingerprint is the same. At most 500 manifests per call (413 `too_large`); a set scope must be a self-contained set's |
+| `recordings_register` | `{"scope": "study" \| "set:<id>", "manifests": [Manifest], "replace"?: false}` | `{"added": [recording_id], "replaced": [..], "skipped": [{"recording_id", "reason"}]}`. `Manifest` is the internal manifest of `electrotag/web/manifest.py` (`schema` `electrotag.web_manifest`) as the browser builds it; the server checks it (below), stores it with `registered_via` `browser`, keeps the notes and retirement of a recording registered again, and never replaces a recording that has results unless the fingerprint is the same. At most 500 manifests per call (413 `too_large`); a set scope must be a self-contained set's |
 | `recording_update` | `{"scope", "recording_id", "notes"?, "retired"?}` | `{"recording": RecordingRecord}`; a retired recording is offered for no new assignments; 404 `unknown_recording` |
 | `recording_remove` | `{"scope", "recording_id"}` | `{}`; 409 `has_results` when anyone saved it or a reference set uses it (as a reference or in a quiz item). Its unfinished assignments go with it |
 | `sets_list` | `{}` | `{"sets": [SetRecord]}` |
-| `set_create` | `{"set_id", "name"?, "description"?, "method"?: "single_expert", "experts"?: [..], "notes"?}` | `{"set": SetRecord}`; a self-contained set; `method`, `experts` and `notes` are the provenance declared for the set, as `electroclean-admin create-reference-set` records it; 409 `set_exists` |
-| `set_update` | `{"set_id", "name"?, "description"?, "practice_review"?, "allowed_annotators"?, "practice_pass"?, "guided_tolerance"?, "criteria"?, "quiz"?: {"include_none_option"?, "feedback"?}, "show_full_report_to_annotator"?}` | `{"set": SetRecord}`. `practice_pass` and `guided_tolerance` change only the keys given; `criteria` is the whole `CompetencyCriteria`. Values ElectroClean refuses give 400 `invalid_set` with the reason |
+| `set_create` | `{"set_id", "name"?, "description"?, "method"?: "single_expert", "experts"?: [..], "notes"?}` | `{"set": SetRecord}`; a self-contained set; `method`, `experts` and `notes` are the provenance declared for the set, as `electrotag-admin create-reference-set` records it; 409 `set_exists` |
+| `set_update` | `{"set_id", "name"?, "description"?, "practice_review"?, "allowed_annotators"?, "practice_pass"?, "guided_tolerance"?, "criteria"?, "quiz"?: {"include_none_option"?, "feedback"?}, "show_full_report_to_annotator"?}` | `{"set": SetRecord}`. `practice_pass` and `guided_tolerance` change only the keys given; `criteria` is the whole `CompetencyCriteria`. Values ElectroTag refuses give 400 `invalid_set` with the reason |
 | `set_delete` | `{"set_id"}` | `{}`; 409 `in_use` when trainees have results in it, are enrolled in it or have finished its quiz. Its recordings (scope `set:<id>`) and assignments go with it |
 | `set_add_reference` | `{"set_id", "recording_id", "recording_scope"?: "study" \| "set:<id>", "use", "source": Source, "provenance"?: {"notes"}}` | `{"set": SetRecord, "disagreements": [row] \| null}`; a study recording is copied into the set's scope, so training recordings are never offered for study annotation. The reference must fit the recording (sampling rate, length, channels, labels: 422 `invalid_document`); 404 `no_saved_annotations` when a source's annotations were never saved; 409 `conflict` when the set holds another recording of that name |
 | `set_recording_update` | `{"set_id", "recording_id", "use"?, "guidance"?: "auto" \| "show" \| "find" \| "find_unnamed"}` | `{"set": SetRecord, "warnings": [".."]}` (for example when trainees have already done a recording now used for assessment); 404 `not_in_set` |
@@ -501,15 +501,15 @@ study's own recordings have `"self_contained": false` and `"scope": "study"`.
 | `set_guided_notes` | `{"set_id", "recording_id"}` | `{"notes": [{"annotation_id", "label", "onset_s", "offset_s", "note"}]}` (every reference annotation of the recording, with its note or "") |
 | `set_guided_note` | `{"set_id", "annotation_id", "text"}` | `{}` ("" removes the note); 404 `unknown_annotation` |
 | `set_example_create` | `{}` | `{"set": SetRecord, "recordings_zip": {"file_name", "base64", "size_bytes"}}` (the simulated recordings to give trainees, about 4.6 MB); 409 `set_exists`; 422 `example_unavailable` (see below) |
-| `quiz_items` | `{"set_id"}` | `{"items": [QuizItem]}` (`electroclean.training.reference.QuizItem.to_dict()`) |
+| `quiz_items` | `{"set_id"}` | `{"items": [QuizItem]}` (`electrotag.training.reference.QuizItem.to_dict()`) |
 | `quiz_item_add` | `{"set_id", "recording_id", "start_s", "end_s", "correct_label", "accepted_labels"?, "explanation"?, "context_s"?: 2.0, "item_id"?}` | `{"item": QuizItem}`. The recording must be registered in the set's scope (404 `unknown_recording`); the segment lies within it; the labels are the catalogue's, or "No artifact / none of these" when the set offers it (`quiz.include_none_option`). Without `item_id` the next free `q01`, `q02` … is used; an existing `item_id` is replaced |
 | `quiz_item_remove` | `{"set_id", "item_id"}` | `{}`; 404 `unknown_item` |
 | `progress` | `{}` | as `GET /admin/progress` |
 | `stats` | `{"work"?: "study" \| "all"}` | `Stats` (below): how far the study has got and how long the work takes, from the completion register (`elapsed_s`, `n_annotations`, `completed_at`), the drafts, the assignments, the accounts' `last_seen` and the visits. `work` `study` counts the study's own annotation (mode `standard`), `all` training too; 400 otherwise. A recording saved more than once (a revision, or a practice recording repeated) counts as one recording done, on the day of its first save, with the annotations of its latest attempt and the time of all its attempts together; `saved` per recording is the number of people who saved it |
-| `agreement` | `{"annotator_ids"?, "recording_ids"?, "modes"?: ["standard"], "config"?: {..AnalysisConfig fields..}}` | `{"summary": {"n_recordings", "n_comparable_recordings", "annotators", "config", "key_results": [..]}, "report_html": str, "tables": {"<name>.tsv": str}, "warnings": [..]}`, computed on demand with `electroclean.reliability` (the files of `electroclean-agreement`). Annotators and modes are chosen with `annotator_ids` and `modes`, not in `config`; settings it refuses give 400 `invalid_config`; 422 `not_enough` when no recording has two annotators. When the tables would exceed 12 MB, `events_matched.tsv` and `events_unmatched.tsv` are left out with a warning |
-| `activity` | `{"annotator_ids"?}` | `{"report_html": str, "tables": {"visits.tsv": str, "recordings.tsv": str}}`, with `electroclean.activity`; 422 `no_logs` when there are no interaction logs |
+| `agreement` | `{"annotator_ids"?, "recording_ids"?, "modes"?: ["standard"], "config"?: {..AnalysisConfig fields..}}` | `{"summary": {"n_recordings", "n_comparable_recordings", "annotators", "config", "key_results": [..]}, "report_html": str, "tables": {"<name>.tsv": str}, "warnings": [..]}`, computed on demand with `electrotag.reliability` (the files of `electrotag-agreement`). Annotators and modes are chosen with `annotator_ids` and `modes`, not in `config`; settings it refuses give 400 `invalid_config`; 422 `not_enough` when no recording has two annotators. When the tables would exceed 12 MB, `events_matched.tsv` and `events_unmatched.tsv` are left out with a warning |
+| `activity` | `{"annotator_ids"?}` | `{"report_html": str, "tables": {"visits.tsv": str, "recordings.tsv": str}}`, with `electrotag.activity`; 422 `no_logs` when there are no interaction logs |
 | `competency` | `{"set_id", "annotator_id"}` | `{"report": {..}, "html": str}` (`competency_report`, made again and kept, and `competency_html`); 404 `not_complete` until every assessment recording is saved (also for a set without assessment recordings) |
-| `results_zip` | `{}` | `{"file_name", "base64", "size_bytes"}`: the results folder as `GET /admin/results.zip` gives it, quiz results included; 413 `too_large` (with `size_bytes`) above 25,000,000 bytes (use `electroclean-web export`) |
+| `results_zip` | `{}` | `{"file_name", "base64", "size_bytes"}`: the results folder as `GET /admin/results.zip` gives it, quiz results included; 413 `too_large` (with `size_bytes`) above 25,000,000 bytes (use `electrotag-web export`) |
 | `audit` | `{"before"?: str, "limit"?: 50}` | `{"entries": [AuditEntry], "next": str \| null}`, newest first; `before` is the `next` of the page before (400 `bad_request` otherwise); `limit` 1 to 500 |
 | `visits` | `{"annotator_id"?, "limit"?: 100}` | `{"visits": [{"visit_id", "annotator_id", "mode", "context_id", "started_at", "closed_at", "n_events"}]}`, newest first; `limit` 1 to 1000 |
 
@@ -550,13 +550,13 @@ Authentication where it is not available answers 503 `auth_unavailable`.
 
 `mode` and `context_id` (standard and "" when left out) say which saved
 annotations are meant, for every kind except `document`; the latest saved
-attempt is used. Consensus uses `electroclean.training.consensus.build_consensus`
+attempt is used. Consensus uses `electrotag.training.consensus.build_consensus`
 and returns its disagreement rows (`{"kind": "time" | "channels", "label",
 "onset_s", "offset_s", "experts_marking", "experts_not_marking", "note"}`;
 422 `invalid_consensus` when it cannot be built); it needs at least two
 annotators. An adjudicated reference names at least two experts. The reference
-is stored with ElectroClean's reference-set code (`ReferenceSet.add_reference`
-in `electroclean/training/reference.py`), which records its provenance: the
+is stored with ElectroTag's reference-set code (`ReferenceSet.add_reference`
+in `electrotag/training/reference.py`), which records its provenance: the
 method, the experts, the adjudicator, copies of the source files (the saved
 `_annotations.json` of each person, or the uploaded document) with their
 checksums, the time, the consensus rule and the administrator's notes. An
@@ -564,9 +564,9 @@ uploaded document must use a label catalogue compatible with the study's
 (422 `invalid_document`); its recording ID is replaced by the set's.
 
 **The checks of a manifest.** `recordings_register` stores only manifests that
-pass `electroclean/web/manifest_check.py`, and keeps only the fields ElectroClean
+pass `electrotag/web/manifest_check.py`, and keeps only the fields ElectroTag
 knows. A manifest is refused, with a reason in `skipped`, unless: `schema` is
-`electroclean.web_manifest` and `schema_version` has major version 1; it is
+`electrotag.web_manifest` and `schema_version` has major version 1; it is
 at most 2 MB of JSON with finite numbers; `recording_id` is a relative path
 with forward slashes and no empty, `.` or `..` parts, ending with one of the
 study's `discovery.suffixes` and with the extension of its `format`
@@ -583,7 +583,7 @@ is above 0 and at most 1 MHz, `n_samples` a whole number of at least 1 and
 `duration_s`, when given, their quotient; `ch_names` holds at least one
 channel and no name twice; `hidden_channels` share no channel with it;
 `trigger_channels` are among the hidden channels; `channel_types` gives a type
-of `electroclean.config.settings.CHANNEL_TYPES` for exactly the channels shown;
+of `electrotag.config.settings.CHANNEL_TYPES` for exactly the channels shown;
 `bad_channels` are among them; `acquisition_gaps` are `[start, end]` pairs in
 order inside the recording; `discontinuity_samples` lie inside it;
 `original_events` has a known `source` (`events_tsv`, `brainvision_vmrk`,
@@ -596,19 +596,19 @@ and to write result files. The server records `registration`
 (`{"registered_at", "registered_by", "registered_via", "notes", "retired"}`) in
 the stored manifest itself; a browser's `registration` is ignored.
 
-**The example training set.** `set_example_create` makes ElectroClean's example
-set (`electroclean/training/examples.py`: three simulated recordings, two for
+**The example training set.** `set_example_create` makes ElectroTag's example
+set (`electrotag/training/examples.py`: three simulated recordings, two for
 learning with the experts and one for practice, with the simulation's ground
 truth as the reference) and answers with its recordings as a zip. The
 recordings and the reference need only numpy and pybv. The manifests are made
-with MNE-Python where it is installed (the ElectroClean server, with the
+with MNE-Python where it is installed (the ElectroTag server, with the
 study's settings); the Cloud Functions do not include MNE-Python and use the
-manifests kept in `electroclean/config/example_set_manifests.json` (made with
-MNE-Python and the default settings by `python -m electroclean.web.example`),
+manifests kept in `electrotag/config/example_set_manifests.json` (made with
+MNE-Python and the default settings by `python -m electrotag.web.example`),
 after checking that every file made has exactly the size and SHA-256 they
 record. If the files differ, the answer is 422 `example_unavailable`, and
-`electroclean-web create-example-set` makes the set from a computer with
-ElectroClean installed.
+`electrotag-web create-example-set` makes the set from a computer with
+ElectroTag installed.
 
 ### The short-segment quiz (annotators)
 
@@ -616,8 +616,8 @@ A reference set with quiz items offers its quiz to the annotators allowed to
 use the set (everyone when `allowed_annotators` is empty); `GET /me` lists them
 as `"quizzes": [{"set_id", "name", "n_items", "finished": false, "feedback":
 "immediate" | "end"}]` (empty when there are none). `POST /quiz/{set_id}`
-(`ec_quiz` with `{"set_id", "action", …}` on Firebase,
-`StudyService.quiz(user, set_id, body)`, `electroclean/web/quiz.py`) takes an
+(`et_quiz` with `{"set_id", "action", …}` on Firebase,
+`StudyService.quiz(user, set_id, body)`, `electrotag/web/quiz.py`) takes an
 `action`:
 
 `{"action": "get"}` →
@@ -625,7 +625,7 @@ as `"quizzes": [{"set_id", "name", "n_items", "finished": false, "feedback":
 "answered": {"<item_id>": {"label", "correct", "correct_label"?, "explanation"?}}, "feedback": "immediate" | "end",
 "finished": false, "score": {...} | null, "n_items": 4, "recordings": {"<recording_id>": Manifest}}`.
 The items come in the annotator's own order
-(`electroclean.training.quiz.item_order`) without their answers; `options` are
+(`electrotag.training.quiz.item_order`) without their answers; `options` are
 the catalogue's labels, with "No artifact / none of these" when the set offers
 it. `recordings` holds the manifests of the recordings the items come from, so
 that the browser can check the files the annotator opens against their
@@ -646,7 +646,7 @@ to the answer, kept with the answer to the millisecond.
 
 `{"action": "finish"}` → `{"score": {...}}` (as `QuizSession.score()`, with null
 for a proportion that cannot be computed). The result is saved with
-`QuizSession.save` (`electroclean/training/quiz.py`), as
+`QuizSession.save` (`electrotag/training/quiz.py`), as
 `training/<set>/quiz/annotator-<ID>_quiz_<mode>_<session>.json` in the results
 folder (`mode` `practice` for immediate feedback, `assessment` for feedback at
 the end), so the export and the results zip include it; a quiz finished before
@@ -661,11 +661,11 @@ computer as for training.
 
 On Firebase every operation above is a callable Cloud Function (Python, 2nd
 generation, region europe-west2) taking and returning the same JSON:
-`ec_me`, `ec_assignments`, `ec_match`, `ec_put_draft`, `ec_delete_draft`,
-`ec_submit`, `ec_training`, `ec_guided_get`, `ec_guided_check`,
-`ec_guided_continue`, `ec_guided_show_me`, `ec_visit_open`, `ec_visit_events`,
-`ec_visit_close`, `ec_quiz`, `ec_achievements` and, for administrators, `ec_admin_progress` and
-`ec_admin` (every operation of the admin area, by `op`; it has 2 GB of memory
+`et_me`, `et_assignments`, `et_match`, `et_put_draft`, `et_delete_draft`,
+`et_submit`, `et_training`, `et_guided_get`, `et_guided_check`,
+`et_guided_continue`, `et_guided_show_me`, `et_visit_open`, `et_visit_events`,
+`et_visit_close`, `et_quiz`, `et_achievements` and, for administrators, `et_admin_progress` and
+`et_admin` (every operation of the admin area, by `op`; it has 2 GB of memory
 and up to 540 s for the analyses and the results zip). Each takes
 `{"study": "<study id>", ...the request body...}` (path parameters such as the
 recording ID become fields). Signing in uses Firebase Authentication (email and
@@ -684,25 +684,25 @@ The fields of each call:
 
 | function | data (besides `study`) |
 | --- | --- |
-| `ec_me`, `ec_assignments`, `ec_training`, `ec_admin_progress` | none |
-| `ec_match` | the body of `POST /match` |
-| `ec_put_draft` | `{"recording_id", "mode", "context_id", "draft": Draft}` |
-| `ec_delete_draft` | `{"recording_id", "mode", "context_id"}` |
-| `ec_submit` | the body of `POST /submissions` |
-| `ec_guided_get` | `{"recording_id"}` |
-| `ec_guided_check`, `ec_guided_continue`, `ec_guided_show_me` | `{"recording_id", ...the body of the request}` |
-| `ec_visit_open` | the body of `POST /visits` |
-| `ec_visit_events`, `ec_visit_close` | `{"visit_id", ...the body of the request}` |
-| `ec_admin` | `{"op", ...the body of `POST /admin/{op}`}` |
+| `et_me`, `et_assignments`, `et_training`, `et_admin_progress` | none |
+| `et_match` | the body of `POST /match` |
+| `et_put_draft` | `{"recording_id", "mode", "context_id", "draft": Draft}` |
+| `et_delete_draft` | `{"recording_id", "mode", "context_id"}` |
+| `et_submit` | the body of `POST /submissions` |
+| `et_guided_get` | `{"recording_id"}` |
+| `et_guided_check`, `et_guided_continue`, `et_guided_show_me` | `{"recording_id", ...the body of the request}` |
+| `et_visit_open` | the body of `POST /visits` |
+| `et_visit_events`, `et_visit_close` | `{"visit_id", ...the body of the request}` |
+| `et_admin` | `{"op", ...the body of `POST /admin/{op}`}` |
 | (none) | `POST /invite/check` and `POST /invite/accept` have no function: on Firebase `user_invite` answers Firebase Authentication's `invite_link` |
-| `ec_quiz` | `{"set_id", ...the body of `POST /quiz/{set_id}`}` |
-| `ec_achievements` | none for `GET /me/achievements`; `{"goal_per_week"}` or `{"leaderboard_hidden"}` for `POST` |
+| `et_quiz` | `{"set_id", ...the body of `POST /quiz/{set_id}`}` |
+| `et_achievements` | none for `GET /me/achievements`; `{"goal_per_week"}` or `{"leaderboard_hidden"}` for `POST` |
 
 There is no `token` and no beacon on Firebase: the Firebase SDK adds the ID
-token; to send the last events when the page is hidden, call `ec_visit_events`
+token; to send the last events when the page is hidden, call `et_visit_events`
 with `fetch(…, {keepalive: true})` or simply on the next visit. The admin
-area downloads the results with `ec_admin` `results_zip` (up to 25 MB); larger
-studies export them with `electroclean-web export` (docs/web/firebase.md).
+area downloads the results with `et_admin` `results_zip` (up to 25 MB); larger
+studies export them with `electrotag-web export` (docs/web/firebase.md).
 
 The HTTP status of an error becomes the `HttpsError` code: 400 and 413
 `invalid-argument`, 401 `unauthenticated`, 403 `permission-denied`, 404
@@ -718,6 +718,6 @@ project. A caller counts as an administrator only when both the claims and
 their account in the study say so.
 
 The application learns about the Firebase project from `config.json` beside
-it, which `electroclean-web config` writes:
+it, which `electrotag-web config` writes:
 `{"firebase": {"apiKey", "authDomain", "projectId", "appId", …}, "study": "<study id>",
 "functions_region": "europe-west2"}`.

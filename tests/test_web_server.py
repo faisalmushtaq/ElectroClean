@@ -1,4 +1,4 @@
-"""The ElectroClean server (electroclean/web/app.py) with the files store, end to end over HTTP."""
+"""The ElectroTag server (electrotag/web/app.py) with the files store, end to end over HTTP."""
 
 from __future__ import annotations
 
@@ -15,9 +15,9 @@ pytest.importorskip("httpx")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from electroclean.app.io.naming import OutputLayout  # noqa: E402
-from electroclean.app.session.register import CompletionRegister  # noqa: E402
-from electroclean.web.app import PAGES_ORIGIN, create_app  # noqa: E402
+from electrotag.app.io.naming import OutputLayout  # noqa: E402
+from electrotag.app.session.register import CompletionRegister  # noqa: E402
+from electrotag.web.app import PAGES_ORIGIN, create_app  # noqa: E402
 from tests.web_helpers import (  # noqa: E402
     GUIDED1,
     GUIDED2,
@@ -72,22 +72,22 @@ EMG = ann("c" * 32, "EMG-artifact", 3000, 250, [])
 def test_health_is_open_to_every_origin(client: TestClient) -> None:
     r = client.get("/api/v1/health", headers={"Origin": "https://anywhere.example"})
     assert r.status_code == 200
-    assert r.json() == {"ok": True, "version": r.json()["version"], "study": "ElectroClean demonstration",
+    assert r.json() == {"ok": True, "version": r.json()["version"], "study": "ElectroTag demonstration",
                         "demo": True}
     assert r.headers["access-control-allow-origin"] == "*"
 
 
-def test_requests_need_the_electroclean_header(client: TestClient) -> None:
-    r = client.post("/api/v1/login", json={"annotator_id": "A01", "password": "electroclean"})
+def test_requests_need_the_electrotag_header(client: TestClient) -> None:
+    r = client.post("/api/v1/login", json={"annotator_id": "A01", "password": "electrotag"})
     assert r.status_code == 403 and r.json()["error"] == "missing_header"
 
 
 def test_cors_answers_only_allowed_origins(client: TestClient) -> None:
-    pre = {"Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "authorization,x-electroclean"}
+    pre = {"Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "authorization,x-electrotag"}
     ok = client.options("/api/v1/me", headers={"Origin": "https://lab.example.org", **pre})
     assert ok.status_code == 204
     assert ok.headers["access-control-allow-origin"] == "https://lab.example.org"
-    assert "X-ElectroClean" in ok.headers["access-control-allow-headers"]
+    assert "X-ElectroTag" in ok.headers["access-control-allow-headers"]
     assert "access-control-allow-credentials" not in ok.headers
     assert int(ok.headers["access-control-max-age"]) > 0
     pages = client.options("/api/v1/me", headers={"Origin": PAGES_ORIGIN, **pre})  # the demo allows GitHub Pages
@@ -123,7 +123,7 @@ def test_sign_in_tokens_and_sign_out(client: TestClient, app) -> None:
 def test_sign_in_attempts_are_limited(client: TestClient) -> None:
     for _ in range(10):
         client.post("/api/v1/login", json={"annotator_id": "A02", "password": "nope-nope"}, headers=H)
-    r = client.post("/api/v1/login", json={"annotator_id": "A02", "password": "electroclean"}, headers=H)
+    r = client.post("/api/v1/login", json={"annotator_id": "A02", "password": "electrotag"}, headers=H)
     assert r.status_code == 429 and r.json()["error"] == "too_many_attempts"
 
 
@@ -144,12 +144,12 @@ def test_errors_never_show_a_stack_trace(client: TestClient, app, monkeypatch: p
 def test_the_server_serves_the_browser_application(study: Path, tmp_path: Path) -> None:
     static = tmp_path / "static"
     (static / "js").mkdir(parents=True)
-    (static / "index.html").write_text("<!doctype html><title>ElectroClean</title><script src='js/main.js'></script>")
+    (static / "index.html").write_text("<!doctype html><title>ElectroTag</title><script src='js/main.js'></script>")
     (static / "js" / "main.js").write_text("export const ok = true;\n")
     (static / "config.json").write_text(json.dumps({"firebase": {"apiKey": "x"}, "study": "pilot"}))
     app = create_app(study, demo=True, static_dir=static)
     c = TestClient(app)
-    assert "<title>ElectroClean</title>" in c.get("/").text
+    assert "<title>ElectroTag</title>" in c.get("/").text
     js = c.get("/js/main.js")
     assert js.status_code == 200 and "javascript" in js.headers["content-type"]
     # served from here, the application talks to this server, whatever config.json it was published with
@@ -166,7 +166,7 @@ def test_the_server_serves_the_browser_application(study: Path, tmp_path: Path) 
 
 def test_static_application_and_demo_recordings(client: TestClient) -> None:
     r = client.get("/")
-    assert r.status_code == 200 and "ElectroClean" in r.text
+    assert r.status_code == 200 and "ElectroTag" in r.text
     z = client.get("/demo/recordings.zip")
     assert z.status_code == 200
     names = zipfile.ZipFile(io.BytesIO(z.content)).namelist()
@@ -302,7 +302,7 @@ def test_the_browsers_session_id_links_logs_and_results(client: TestClient, reco
 
 def _interrupt_register(monkeypatch: pytest.MonkeyPatch) -> None:
     """Saving writes and verifies every file, then cannot update the completion register."""
-    import electroclean.web.saving as saving
+    import electrotag.web.saving as saving
 
     real = saving.WebSession.finish
 
@@ -324,13 +324,13 @@ def test_an_interrupted_save_is_rolled_forward_at_once(client: TestClient, recor
     assert r["saved"] and len(r["files"]) == 5 and r["attempt"] == 1
     assert CompletionRegister(OutputLayout(study / "Annotated_Events")).is_completed(SUB1, "A01")
     assert api.ok("post", "/match", match_body(recordings, SUB1))["status"] == "done"
-    staging = study / "Annotated_Events" / ".electroclean" / "staging"
+    staging = study / "Annotated_Events" / ".electrotag" / "staging"
     assert not [p for p in staging.iterdir() if p.is_dir()]
 
 
 def test_interrupted_saves_are_recovered_when_the_study_opens(client: TestClient, recordings: Path, study: Path,
                                                               monkeypatch: pytest.MonkeyPatch) -> None:
-    from electroclean.web.store_files import FilesStore
+    from electrotag.web.store_files import FilesStore
 
     _interrupt_register(monkeypatch)
     monkeypatch.setattr(FilesStore, "recover_interrupted", lambda self: [])  # the server stopped at that moment
@@ -378,12 +378,12 @@ def test_unsafe_recording_ids_are_refused(client: TestClient) -> None:
 
 def test_web_outputs_match_the_desktop(client: TestClient, recordings: Path, study: Path, tmp_path: Path) -> None:
     """The same annotations saved by the desktop application give the same files."""
-    from electroclean.app.annotations.labels import default_catalogue
-    from electroclean.app.annotations.model import ArtifactAnnotation
-    from electroclean.app.eeg.loading import load_recording
-    from electroclean.app.io.discovery import discover_recordings
-    from electroclean.app.session.session import AnnotationSession
-    from electroclean.web.store_files import FilesStore
+    from electrotag.app.annotations.labels import default_catalogue
+    from electrotag.app.annotations.model import ArtifactAnnotation
+    from electrotag.app.eeg.loading import load_recording
+    from electrotag.app.io.discovery import discover_recordings
+    from electrotag.app.session.session import AnnotationSession
+    from electrotag.web.store_files import FilesStore
 
     api = Api(client, "A01")
     for rid in (SUB1, SUB3):  # BrainVision and EDF+
@@ -429,7 +429,7 @@ def without_session(obj: object) -> object:
 
 def test_agreement_analysis_runs_on_the_study_folder(client: TestClient, recordings: Path, study: Path,
                                                      tmp_path: Path) -> None:
-    from electroclean.reliability.cli import main as agreement
+    from electrotag.reliability.cli import main as agreement
 
     a1, a2 = Api(client, "A01"), Api(client, "A02")
     a1.ok("post", "/submissions", submission(recordings, SUB1, [BLINK, EMG]))
@@ -442,8 +442,8 @@ def test_agreement_analysis_runs_on_the_study_folder(client: TestClient, recordi
 
 # --------------------------------------------------------------------- visits
 def test_interaction_logs_are_desktop_logs(client: TestClient, study: Path) -> None:
-    from electroclean.activity.logs import find_logs, read_visit_log
-    from electroclean.activity.summary import summarise
+    from electrotag.activity.logs import find_logs, read_visit_log
+    from electrotag.activity.summary import summarise
 
     api = Api(client, "A01")
     v = api.ok("post", "/visits", {"client": {"user_agent": "pytest-browser", "screen": {"width": 1280,
@@ -475,13 +475,13 @@ def test_interaction_logs_are_desktop_logs(client: TestClient, study: Path) -> N
                                                "idle_start", "log_closed"]
     assert "password" not in json.dumps(log.events)
     tables = summarise([log])
-    assert tables  # electroclean-activity summarises it like a desktop visit
+    assert tables  # electrotag-activity summarises it like a desktop visit
 
 
 # ------------------------------------------------------------------- training
 def test_guided_training_with_the_coach(client: TestClient, recordings: Path, study: Path) -> None:
-    from electroclean.training.guided import STARS_FIRST, STARS_SHOWN
-    from electroclean.web.store_files import FilesStore
+    from electrotag.training.guided import STARS_FIRST, STARS_SHOWN
+    from electrotag.web.store_files import FilesStore
 
     store = FilesStore(study)
     steps = reference_annotations(store, "example", GUIDED1)
@@ -564,7 +564,7 @@ def test_guided_training_with_the_coach(client: TestClient, recordings: Path, st
 
 
 def _finish_guided(api: Api, study: Path, recordings: Path, rid: str) -> None:
-    from electroclean.web.store_files import FilesStore
+    from electrotag.web.store_files import FilesStore
 
     store = FilesStore(study)
     steps = reference_annotations(store, "example", rid)
@@ -578,7 +578,7 @@ def _finish_guided(api: Api, study: Path, recordings: Path, rid: str) -> None:
 
 def test_practice_feedback_reveals_the_reference_after_saving(client: TestClient, recordings: Path,
                                                                study: Path) -> None:
-    from electroclean.web.store_files import FilesStore
+    from electrotag.web.store_files import FilesStore
 
     api = Api(client, "T01")
     assert api.post("/submissions", submission(recordings, PRACTICE1, [], "practice", "example")).status_code == 403
@@ -609,8 +609,8 @@ def test_practice_feedback_reveals_the_reference_after_saving(client: TestClient
 
 def test_assessment_completion_gives_the_competency_result(client: TestClient, recordings: Path,
                                                             study: Path) -> None:
-    from electroclean.training.reference import ReferenceSet
-    from electroclean.web.store_files import FilesStore
+    from electrotag.training.reference import ReferenceSet
+    from electrotag.web.store_files import FilesStore
 
     store = FilesStore(study)
     rs = store.reference_set("example")
@@ -652,4 +652,4 @@ def test_administration(client: TestClient, recordings: Path) -> None:
     names = zipfile.ZipFile(io.BytesIO(z.content)).namelist()
     assert "Annotated_Events/completion_register.tsv" in names
     assert any(n.endswith("sub-001_task-rest_eeg_annotator-A01_events.tsv") for n in names)
-    assert not any("/.electroclean/" in n for n in names)
+    assert not any("/.electrotag/" in n for n in names)

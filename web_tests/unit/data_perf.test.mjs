@@ -1,6 +1,6 @@
 // Timing of the data layer on a 128-channel, 30-minute, 1024 Hz BDF recording (713 MB) with a
 // Status channel. The recording is large, so this test runs only when it exists
-// (python scripts/make_web_fixtures.py --perf) or when ELECTROCLEAN_PERF=1 asks for it to be made.
+// (python scripts/make_web_fixtures.py --perf) or when ELECTROTAG_PERF=1 asks for it to be made.
 // It checks the results and reports the times; it does not fail on slow machines.
 
 import assert from "node:assert/strict";
@@ -8,12 +8,12 @@ import { existsSync, openAsBlob, readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
-import { openRecording } from "../../electroclean/web/static/js/data/recording.js";
-import { sha256Blob } from "../../electroclean/web/static/js/data/sha256.js";
+import { openRecording } from "../../electrotag/web/static/js/data/recording.js";
+import { sha256Blob } from "../../electrotag/web/static/js/data/sha256.js";
 import { FIXTURES, ensureFixtures } from "./_fixtures.mjs";
 
 function perfInfo() {
-  if (process.env.ELECTROCLEAN_PERF === "1") return ensureFixtures({ perf: true }).perf;
+  if (process.env.ELECTROTAG_PERF === "1") return ensureFixtures({ perf: true }).perf;
   try {
     const m = JSON.parse(readFileSync(join(FIXTURES, "manifest.json"), "utf8"));
     return m.perf && existsSync(join(FIXTURES, m.perf.file)) ? m.perf : null;

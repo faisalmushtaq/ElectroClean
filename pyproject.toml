@@ -3,12 +3,12 @@ requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "electroclean"
+name = "electrotag"
 dynamic = ["version"]
 description = "Manual EEG artifact annotation in the web browser, inter-rater reliability analysis and annotator competency assessment"
 readme = "README.md"
 requires-python = ">=3.12"
-authors = [{ name = "ElectroClean contributors" }]
+authors = [{ name = "ElectroTag contributors" }]
 # Free for research, teaching and other non-commercial use (source-available, not OSI open source).
 license = "PolyForm-Noncommercial-1.0.0"
 license-files = ["LICENSE.md", "THIRD_PARTY_NOTICES.md"]
@@ -28,7 +28,7 @@ dependencies = [
   "pandas>=2.1",
   "matplotlib>=3.8",
   "pybv>=0.7",  # simulated recordings for the demonstration, the example training set and the examples
-  # The ElectroClean server (electroclean-web serve and demo)
+  # The ElectroTag server (electrotag-web serve and demo)
   "fastapi>=0.115",
   "uvicorn>=0.30",
   "httpx>=0.27",
@@ -41,21 +41,21 @@ dependencies = [
 dev = ["pytest>=8"]
 
 [project.scripts]
-electroclean-agreement = "electroclean.reliability.cli:main"
-electroclean-admin = "electroclean.training.cli:main"
-electroclean-activity = "electroclean.activity.cli:main"
-electroclean-web = "electroclean.web.cli:main"
+electrotag-agreement = "electrotag.reliability.cli:main"
+electrotag-admin = "electrotag.training.cli:main"
+electrotag-activity = "electrotag.activity.cli:main"
+electrotag-web = "electrotag.web.cli:main"
 
 [tool.setuptools.dynamic]
-version = { attr = "electroclean.__version__" }
+version = { attr = "electrotag.__version__" }
 
 [tool.setuptools.packages.find]
-include = ["electroclean*"]
+include = ["electrotag*"]
 # The Cloud Functions are deployed from their folder (firebase.json), not installed with the package.
-exclude = ["electroclean.web.firebase.functions*"]
+exclude = ["electrotag.web.firebase.functions*"]
 
 [tool.setuptools.package-data]
-electroclean = ["config/*.json", "web/static/**/*"]
+electrotag = ["config/*.json", "web/static/**/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import * as rules from '../../electroclean/web/static/js/training/rules.js';
+import * as rules from '../../electrotag/web/static/js/training/rules.js';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SF = 250;
@@ -55,18 +55,18 @@ test('feedback for the common mistakes', () => {
   assert.deepEqual(r[11].problems, ['missing']); // an annotation already used for another step does not count
 });
 
-// A Python that can import ElectroClean: $ELECTROCLEAN_PYTHON, the repository's .venv, or python3.
+// A Python that can import ElectroTag: $ELECTROTAG_PYTHON, the repository's .venv, or python3.
 function findPython() {
-  for (const p of [process.env.ELECTROCLEAN_PYTHON, path.join(REPO, '.venv', 'bin', 'python'), 'python3']) {
+  for (const p of [process.env.ELECTROTAG_PYTHON, path.join(REPO, '.venv', 'bin', 'python'), 'python3']) {
     if (!p || (p.includes('/') && !fs.existsSync(p))) continue;
-    const r = spawnSync(p, ['-c', 'import electroclean.training.guided'], { cwd: REPO, encoding: 'utf8' });
+    const r = spawnSync(p, ['-c', 'import electrotag.training.guided'], { cwd: REPO, encoding: 'utf8' });
     if (r.status === 0) return p;
   }
   return null;
 }
 const PYTHON = findPython();
 
-test('the same feedback as the desktop application (Python)', { skip: !PYTHON && 'no Python with ElectroClean installed' }, () => {
+test('the same feedback as the desktop application (Python)', { skip: !PYTHON && 'no Python with ElectroTag installed' }, () => {
   const python = PYTHON;
   const input = JSON.stringify(CASES.map((c) => ({ ...c, sfreq: SF, quick_keys: c.quick_keys ?? KEYS })));
   const res = spawnSync(python, [path.join(REPO, 'web_tests', 'guided_parity.py')], { input, encoding: 'utf8', cwd: REPO });

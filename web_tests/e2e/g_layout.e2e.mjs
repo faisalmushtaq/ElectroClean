@@ -76,7 +76,7 @@ export const tests = [
       await signIn(page, 'A01');
       await waitForRoute(page, 'home');
       await page.waitForSelector('.small-screen', { state: 'visible' });
-      assert.match(await page.textContent('.small-screen'), /ElectroClean needs a larger screen/);
+      assert.match(await page.textContent('.small-screen'), /ElectroTag needs a larger screen/);
       assert.ok(await noSideways(page));
       await t.screenshot(page, 'small_screen');
       // Widening the window brings the view back.

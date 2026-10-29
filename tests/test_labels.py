@@ -6,8 +6,8 @@ import json
 
 import pytest
 
-from electroclean.app.annotations.labels import LabelCatalogue, LabelError, default_catalogue
-from electroclean.config.settings import CONFIG_DIR
+from electrotag.app.annotations.labels import LabelCatalogue, LabelError, default_catalogue
+from electrotag.config.settings import CONFIG_DIR
 
 # The 16 labels and codes of the original specification: never renumbered.
 SPEC_TABLE = {

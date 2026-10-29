@@ -8,11 +8,11 @@ import mne
 import numpy as np
 import pytest
 
-from electroclean.app.annotations.labels import default_catalogue
-from electroclean.app.annotations.mne_bridge import from_mne_annotations, to_mne_annotations
-from electroclean.app.annotations.model import ArtifactAnnotation, RecordingInfo
-from electroclean.app.annotations.timing import RecordingTiming, TimingError
-from electroclean.app.eeg.events import format_seconds
+from electrotag.app.annotations.labels import default_catalogue
+from electrotag.app.annotations.mne_bridge import from_mne_annotations, to_mne_annotations
+from electrotag.app.annotations.model import ArtifactAnnotation, RecordingInfo
+from electrotag.app.annotations.timing import RecordingTiming, TimingError
+from electrotag.app.eeg.events import format_seconds
 
 
 @pytest.mark.parametrize("sfreq", [100.0, 250.0, 256.0, 500.0, 512.0, 1000.0, 1024.0, 2048.0, 5000.0, 999.9, 333.3333])

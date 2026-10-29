@@ -1,5 +1,5 @@
 {
-  "schema": "electroclean.session",
+  "schema": "electrotag.session",
   "schema_version": "1.0.0",
   "session_id": "20261028T111922Z-cdd443af",
   "mode": "standard",
@@ -113,12 +113,12 @@
     "resumed_from_autosave": []
   },
   "application": {
-    "name": "ElectroClean",
+    "name": "ElectroTag",
     "version": "1.1.0",
     "platform": "Linux-6.18.44-fc-v180-x86_64-with-glibc2.39",
     "libraries": {
       "python": "3.13.17",
-      "electroclean": "1.1.0",
+      "electrotag": "1.1.0",
       "mne": "1.13.2",
       "numpy": "2.5.4",
       "scipy": "1.18.1",
@@ -273,7 +273,7 @@
     }
   },
   "label_catalogue": {
-    "catalogue_id": "electroclean-hed-score-artifacts",
+    "catalogue_id": "electrotag-hed-score-artifacts",
     "catalogue_version": "2.0.0",
     "sha256": "34f144b5c8699afeb41dd6fc9a4fd343e602123e979ee41471971b4fec7800ad",
     "hed_library": "score",

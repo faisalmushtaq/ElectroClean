@@ -1,4 +1,4 @@
-"""The game elements (electroclean/web/games.py): counters, the team's progress and the anonymised
+"""The game elements (electrotag/web/games.py): counters, the team's progress and the anonymised
 leaderboard, with pseudonyms that are stable and never reveal an annotator's ID."""
 
 from __future__ import annotations
@@ -9,11 +9,11 @@ from pathlib import Path
 
 import pytest
 
-from electroclean.web.errors import ApiError
-from electroclean.web.games import ADJECTIVES, ANIMALS, MIN_PEOPLE, pseudonym, pseudonyms
-from electroclean.web.service import StudyService
-from electroclean.web.store import User
-from electroclean.web.store_files import FilesStore
+from electrotag.web.errors import ApiError
+from electrotag.web.games import ADJECTIVES, ANIMALS, MIN_PEOPLE, pseudonym, pseudonyms
+from electrotag.web.service import StudyService
+from electrotag.web.store import User
+from electrotag.web.store_files import FilesStore
 from tests.web_helpers import SUB1, SUB2, SUB3, ann, copy_demo, make_template, submission
 
 BLINK = ann("b" * 32, "Eye-blink-artifact", 500, 100, ["Fp1", "Fp2"])
@@ -194,7 +194,7 @@ def test_a_team_of_two_does_not_show_its_progress(service: StudyService, recordi
 
 
 def test_times_cannot_go_negative_or_absurd(service: StudyService, recordings: Path, study: Path) -> None:
-    from electroclean.web.service import MAX_ELAPSED_S
+    from electrotag.web.service import MAX_ELAPSED_S
 
     def draft(elapsed):
         return service.call("put_draft", User("A01"), {"recording_id": SUB2, "mode": "standard", "context_id": "",

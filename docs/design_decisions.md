@@ -3,18 +3,18 @@
 This document records how the specification was interpreted: what MNE-Python
 already provides, what had to be added, the ambiguities and data-integrity
 risks that were found, how each was handled, and the decisions that need the
-research team. ElectroClean began as a desktop application and has run in the
+research team. ElectroTag began as a desktop application and has run in the
 browser since 28 October 2026 (see "Web-only" below); the sections written for
 the desktop application are kept as the record of how the rules came about,
 and the rules themselves apply unchanged in the browser.
 
-## What MNE-Python provides and what ElectroClean adds
+## What MNE-Python provides and what ElectroTag adds
 
 The table describes the Python core, which registers recordings and writes
 the results. The browser application reads, filters and shows the annotator's
 copy itself, reproducing MNE's results ([web/architecture.md](web/architecture.md)).
 
-| Need | Provided by MNE | Added by ElectroClean |
+| Need | Provided by MNE | Added by ElectroTag |
 |---|---|---|
 | Reading BrainVision | `mne.io.read_raw_brainvision` (resolves `.eeg` and `.vmrk` from the header) | Pre-checks of companion files and data-file size; treating MNE's "markers outside data range" and "marker file not found" warnings as failures |
 | Reading EDF, EDF+ and BDF | `mne.io.read_raw_edf`, `read_raw_bdf` (EDF+ annotations become `raw.annotations`) | A check of the header against the file size, because MNE silently infers the number of data records from the size when they disagree; refusing EDF+D; hidden headset channels; `BAD_ACQ_SKIP` stretches treated as gaps |
@@ -55,7 +55,7 @@ identified by their own identifier, undo and redo, and Save and Finish.
 
 **Time origin.** BIDS onsets are relative to the first stored sample; MNE's
 annotations attached to a recording are relative to the measurement date and
-include `first_samp / sfreq`. ElectroClean stores onsets relative to the
+include `first_samp / sfreq`. ElectroTag stores onsets relative to the
 first sample (as BIDS) and converts at the MNE boundary. BrainVision recordings
 always have `first_samp = 0` in MNE, but the conversion is tested with other
 values.
@@ -86,7 +86,7 @@ not corrected. Many EDF files have no event annotations at all; their
 `events.tsv` is then the only record and nothing is compared. BIDS defines
 `sample` as the onset in samples; when a dataset uses the column for
 something else (one dataset tested stores stimulus-software timestamps
-there), ElectroClean times the events from `onset`, keeps the column
+there), ElectroTag times the events from `onset`, keeps the column
 unchanged and says so in the session file and `events.json`. Events that lie
 beyond the end of the recording are kept and reported.
 
@@ -98,7 +98,7 @@ different codes, are reported as inconsistencies for review.
 artifact appears to begin slightly before it does, and edges and
 discontinuities produce transients of up to half the filter length. With
 MNE's defaults the 1 Hz FIR high-pass is 3.3 s long and the FIR notch 6.6 s,
-so the first and last 5 s or so of a recording can be distorted. ElectroClean
+so the first and last 5 s or so of a recording can be distorted. ElectroTag
 filters the segments between BrainVision "New Segment" markers separately,
 hatches the affected zones in the viewer and records the exact design in
 every session file. The browser's filters reproduce MNE's designs and edge
@@ -152,7 +152,7 @@ electrodes. The default list holds the Emotiv names, which do not occur as
 electrode names in the 10-20 or 10-10 systems.
 
 **Stretches without data.** MNE's EDF export pads the last data record and
-marks the padding `BAD_ACQ_SKIP`. ElectroClean hatches such stretches, leaves
+marks the padding `BAD_ACQ_SKIP`. ElectroTag hatches such stretches, leaves
 them unfiltered and filters the data on either side separately, so that the
 padding does not create a filter transient. The annotation is kept with the
 original events but not drawn as an event line.
@@ -165,7 +165,7 @@ stay separate. For time-resolved agreement, any remaining overlaps of one
 label (for example in files made before merging was introduced) are combined;
 for event matching they remain separate events.
 
-**HED-SCORE labels.** At the research team's request ElectroClean offers all
+**HED-SCORE labels.** At the research team's request ElectroTag offers all
 29 artifact terms of HED SCORE 2.2.0, including the seven group terms, with
 the original 16 codes unchanged (see
 [hed_score_validation.md](hed_score_validation.md)). Group terms have roll-up
@@ -195,7 +195,7 @@ other non-commercial use (PolyForm Noncommercial License 1.0.0); autosave.
 
 ## Changes after a test on the group's own data (27 October 2026)
 
-ElectroClean was run over the group's low-density dataset (772 Emotiv
+ElectroTag was run over the group's low-density dataset (772 Emotiv
 recordings in EDF+ with BIDS sidecars). Every recording now loads; this needed
 EDF, EDF+ and BDF support, the `channels.hide` setting for the headset's
 housekeeping channels, the handling of `BAD_ACQ_SKIP` padding and of a
@@ -269,7 +269,7 @@ blocks with a 3-pixel bar in their colour. The colours of the 29 artifact types
 are unchanged, because they belong to the label catalogue and were chosen to
 stay distinguishable.
 
-The sign-in page shows an illustration drawn for ElectroClean: many EEG-like
+The sign-in page shows an illustration drawn for ElectroTag: many EEG-like
 traces across a dark field, warm at the top and cool below, like a long exposure of a
 recording, drawn from a fixed seed, with the 10-20 montage as a small
 wireframe whose three outer nodes turn slowly (and stand still when a person
@@ -286,9 +286,9 @@ scripts use has a drawing, and the font is served with its licence.
 
 ## Web-only (28 October 2026)
 
-The project lead decided that ElectroClean runs in the web browser only. The
+The project lead decided that ElectroTag runs in the web browser only. The
 browser version had been finished and tested end to end (the browser modules,
-the application in Chromium against the demonstration, the ElectroClean
+the application in Chromium against the demonstration, the ElectroTag
 server and Firebase on Google's emulators), and it now does everything the
 desktop application did, with an admin area for lead researchers in place of
 the desktop's administrator tools. The desktop application (PySide6 windows on
@@ -307,14 +307,14 @@ Only annotations, drafts and the interaction log travel to the study.
 
 Real studies run on Firebase: Firebase Authentication for accounts, Firestore
 in Google's London region (europe-west2) for the study's records, and Python
-Cloud Functions in the same region for the private work. The ElectroClean
+Cloud Functions in the same region for the private work. The ElectroTag
 server, which runs the same service layer over a study folder, serves the
 local demonstration and the tests, and remains available to a study that
 prefers a computer of its own. The Python core stays (annotations, loading
 with MNE-Python, export, the journalled save, training, reliability, activity
 and the synthetic data), because the server and the functions save results
-with it and the commands `electroclean-agreement`, `electroclean-admin` and
-`electroclean-activity` work on exported results. Nothing in the package
+with it and the commands `electrotag-agreement`, `electrotag-admin` and
+`electrotag-activity` work on exported results. Nothing in the package
 imports a desktop toolkit any more, and the requirements no longer include Qt.
 The open decision on code signing of the stand-alone applications no longer
 applies.
@@ -384,7 +384,7 @@ the colours suggesting a bad channel. MNE-Python's browser colours traces by cha
 EOG black, ECG magenta) and draws bad channels in light grey, its `make_1020_channel_selections`
 groups 10-20 names into left (odd numbers), midline (z) and right (even numbers), and NeuroScope
 lets users colour channels by anatomical group; no common clinical convention for hemisphere colours
-was found. ElectroClean therefore offers region, side and type, with the grouping the channel
+was found. ElectroTag therefore offers region, side and type, with the grouping the channel
 chooser already used, and keeps the meanings the EEG already has: bad channels stay grey with
 "(bad)" after their name, selected channels stay pink, the experimental events stay teal, and the
 ink-blue accent still marks the channel name under the pointer.
@@ -444,7 +444,7 @@ they can be switched off, and a study that uses them should report them in its m
    to schedule them yet.
 4. **Idle time:** should the time measurement exclude periods without any
    interaction?
-5. **Copyright holder** for the licence notice (currently "The ElectroClean
+5. **Copyright holder** for the licence notice (currently "The ElectroTag
    authors"), which may need to be agreed with the University.
 6. **Contact-quality channels.** Emotiv's `CQ_*` channels are hidden with the
    other housekeeping channels. They could instead be shown (not annotated) as

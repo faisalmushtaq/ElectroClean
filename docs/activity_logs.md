@@ -1,6 +1,6 @@
 # Interaction logs and activity analysis
 
-ElectroClean can keep a detailed, time-stamped record of how each annotator
+ElectroTag can keep a detailed, time-stamped record of how each annotator
 uses it: every click, key press and shortcut, what was on screen, every change
 to the annotations, the dialogs they saw and answered, and the periods when they
 were idle or working in another program. The logs are research data. They make
@@ -10,7 +10,7 @@ much of each recording they looked at, how often they undo, and how training
 changes this.
 
 This document describes what is recorded, the file format, and the tables and
-report that `electroclean-activity` and the admin area ([web/admin.md](web/admin.md))
+report that `electrotag-activity` and the admin area ([web/admin.md](web/admin.md))
 make from the logs. The logs are recorded by the browser application, which
 sends them to the study in batches; the desktop application (version 1.1.0 and
 earlier) wrote logs in the same format, and the analysis reads both.
@@ -30,7 +30,7 @@ recorded). `idle_after_s` is how many seconds without any input count as idle
 (see *Active time* below).
 
 When logging is on, annotators are told after they sign in: "This study
-records how you use ElectroClean (times, clicks, keys and what is on screen) for
+records how you use ElectroTag (times, clicks, keys and what is on screen) for
 research. Ask your study administrator if you have questions." Annotators must
 be told about the logs and agree to them under the study's ethics approval; the
 administrator guide has a paragraph on this.
@@ -48,9 +48,9 @@ identifies them within the study. The computer's name is not recorded either.
 
 One log is kept per visit, from signing in until signing out or closing the
 page (in the desktop application, from pressing **Begin** on the start window
-until going back to it or quitting). The ElectroClean server writes each
+until going back to it or quitting). The ElectroTag server writes each
 visit's log into the study's results as the events arrive; a study on Firebase
-keeps the events in Firestore, and `electroclean-web export` writes the same
+keeps the events in Firestore, and `electrotag-web export` writes the same
 files:
 
 ```
@@ -67,11 +67,11 @@ line. Lines are written as they happen, so a log survives a crash up to its last
 event; the last line may then be cut short, which the analysis reports and skips.
 
 The **first line** is the header: `type` (`"header"`), `schema`
-(`"electroclean.interaction_log"`), `schema_version` (`"1.0.0"`), `started_at`
+(`"electrotag.interaction_log"`), `schema_version` (`"1.0.0"`), `started_at`
 (local time with its UTC offset), `visit_id`, `annotator_id`, `mode`
 (`standard`, `guided`, `practice` or `assessment`), `context_id` and
 `reference_set` (for training), `programme` (true for the training programme),
-`assessment_kind`, `study_id`, `versions` (ElectroClean, Python, the study's
+`assessment_kind`, `study_id`, `versions` (ElectroTag, Python, the study's
 back end and the browser's user agent), `os`, `screens` (the screen's width,
 height and device pixel ratio), `settings_sha256` (a checksum of the study
 settings in force), `filters` (the default viewing filters), `logging` (the
@@ -255,12 +255,12 @@ events table.
 ## Making the tables and the report
 
 The admin area shows the report and offers the tables for the study's logs.
-From a terminal, on the results of a study on the ElectroClean server or on
-the folder written by `electroclean-web export`:
+From a terminal, on the results of a study on the ElectroTag server or on
+the folder written by `electrotag-web export`:
 
 ```
-electroclean-activity "path/to/Annotated_Events"
-electroclean-activity "path/to/Annotated_Events" --annotator A01 --events --out activity
+electrotag-activity "path/to/Annotated_Events"
+electrotag-activity "path/to/Annotated_Events" --annotator A01 --events --out activity
 ```
 
 Both write to `activity_reports/<date and time>/` in the results folder unless
@@ -282,7 +282,7 @@ and the last table lists every row.
 
 The time between two inputs (mouse, wheel, keys and pointer movement over the
 EEG) counts in full up to `idle_after_s` seconds; a longer gap counts only its
-first `idle_after_s` seconds. Time while ElectroClean was not the active
+first `idle_after_s` seconds. Time while ElectroTag was not the active
 application (another program in front) does not count. Opening and closing the
 recording count as inputs, so a recording's active time is never longer than its
 wall-clock time. `idle_s` is the rest of the wall-clock time.
@@ -304,12 +304,12 @@ wall-clock time. `idle_s` is the rest of the wall-clock time.
 | `recordings_finished` | Recordings saved with Save and Finish. |
 | `recordings_closed_without_saving` | Recordings closed without saving. |
 | `annotations_saved` | Annotations in the recordings saved during the visit. |
-| `clicks` | Mouse button presses anywhere in ElectroClean. |
+| `clicks` | Mouse button presses anywhere in ElectroTag. |
 | `key_presses` | Key presses (not counting held-down repeats or keys typed into text fields). |
 | `shortcuts` | Keyboard shortcuts used (for example 1 to 9, M, N, Delete, Ctrl+Z). |
 | `events` | Events in the log. |
 | `bad_lines` | Lines that could not be read (usually the last line after a crash). |
-| `electroclean_version` | ElectroClean version. |
+| `electrotag_version` | ElectroTag version. |
 | `os` | Operating system. |
 | `screen` | Size of the primary screen in pixels (width x height). |
 | `device_pixel_ratio` | Pixel ratio of the primary screen (2 on most high-resolution screens). |
@@ -344,7 +344,7 @@ assessment recordings separately.
 | `n_channels_shown` | Channels shown in the viewer. |
 | `wall_s` | Seconds from opening the recording to finishing or closing it. |
 | `active_s` | Active seconds (see 'Active time'). |
-| `inactive_s` | Seconds while ElectroClean was not the active application. |
+| `inactive_s` | Seconds while ElectroTag was not the active application. |
 | `idle_s` | Seconds without input beyond the idle threshold (wall_s minus active_s and inactive_s). |
 | `idle_periods` | Number of idle periods logged. |
 | `clicks` | Mouse button presses. |

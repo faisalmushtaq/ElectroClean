@@ -7,11 +7,11 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from electroclean.activity.cli import main as activity_main
-from electroclean.activity.cli import write_activity
-from electroclean.activity.logs import find_logs, read_logs, read_visit_log
-from electroclean.activity.summary import active_seconds, summarise
-from electroclean.app.session.interaction_log import NULL_LOG, InteractionLog
+from electrotag.activity.cli import main as activity_main
+from electrotag.activity.cli import write_activity
+from electrotag.activity.logs import find_logs, read_logs, read_visit_log
+from electrotag.activity.summary import active_seconds, summarise
+from electrotag.app.session.interaction_log import NULL_LOG, InteractionLog
 from tests.activity_logs_helper import LogBuilder, demo_logs
 
 T0 = datetime(2026, 10, 1, 9, 0, tzinfo=timezone.utc)
@@ -41,7 +41,7 @@ def test_log_lines_header_context_and_null_log(tmp_path):
 # --------------------------------------------------------------- analytics
 def test_active_time_caps_long_gaps_and_leaves_out_inactive_time():
     assert active_seconds([10, 20, 100], 0, 110, 30) == pytest.approx(10 + 10 + 30 + 10)
-    # ElectroClean inactive from 30 to 40 s: inside the (capped) gap from 20 to 50 s.
+    # ElectroTag inactive from 30 to 40 s: inside the (capped) gap from 20 to 50 s.
     assert active_seconds([10, 20, 100], 0, 110, 30, [(30, 40)]) == pytest.approx(10 + 10 + 20 + 10)
 
 
@@ -112,11 +112,11 @@ def test_crashed_and_foreign_logs_are_read_safely(tmp_path):
     assert v.bad_lines == 1 and not v.closed and v.close_reason.startswith("not closed")
     (tmp_path / "other.jsonl").write_text('{"hello": 1}\n', encoding="utf-8")
     newer = tmp_path / "newer.jsonl"
-    newer.write_text(json.dumps({"type": "header", "schema": "electroclean.interaction_log",
+    newer.write_text(json.dumps({"type": "header", "schema": "electrotag.interaction_log",
                                  "schema_version": "9.0.0"}) + "\n", encoding="utf-8")
     visits, warnings = read_logs(find_logs([tmp_path]))
     assert [x.path.name for x in visits] == ["a.jsonl"]
-    assert any("not an ElectroClean" in w for w in warnings) and any("not supported" in w for w in warnings)
+    assert any("not an ElectroTag" in w for w in warnings) and any("not supported" in w for w in warnings)
     assert any("could not be read" in w for w in warnings)
     (row,) = summarise(visits).recordings
     assert row["outcome"] == "not_finished" and row["final_annotations"] == 1

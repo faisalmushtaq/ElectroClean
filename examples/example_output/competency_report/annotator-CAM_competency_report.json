@@ -1,5 +1,5 @@
 {
-  "schema": "electroclean.competency_report",
+  "schema": "electrotag.competency_report",
   "schema_version": "1.0.0",
   "annotator_id": "CAM",
   "reference_set": {
@@ -79,7 +79,7 @@
     }
   },
   "software": {
-    "electroclean": "1.1.0"
+    "electrotag": "1.1.0"
   },
   "metrics": {
     "overall": {

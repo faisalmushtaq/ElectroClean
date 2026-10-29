@@ -2,8 +2,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { columnMinMax, decimateColumns, layoutTags, niceStep, stepOption, tickLabel, voltsText, DURATIONS, CHANNEL_COUNTS } from '../../electroclean/web/static/js/viewer/geometry.js';
-import { filesForRecording } from '../../electroclean/web/static/js/views/open.js';
+import { columnMinMax, decimateColumns, layoutTags, niceStep, stepOption, tickLabel, voltsText, DURATIONS, CHANNEL_COUNTS } from '../../electrotag/web/static/js/viewer/geometry.js';
+import { filesForRecording } from '../../electrotag/web/static/js/views/open.js';
 
 test('min and max per pixel column', () => {
   const data = Float32Array.from({ length: 100 }, (_, i) => Math.sin(i / 5));

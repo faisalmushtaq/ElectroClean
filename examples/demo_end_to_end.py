@@ -1,4 +1,4 @@
-"""Demonstration of the complete ElectroClean workflow on synthetic EEG.
+"""Demonstration of the complete ElectroTag workflow on synthetic EEG.
 
     python examples/demo_end_to_end.py [work_folder] [--save-examples]
 
@@ -32,9 +32,9 @@ sys.path.insert(0, str(REPO))
 
 def annotate(root: Path, layout, settings, catalogue, rid: str, annotator: str, annotations, *, mode="standard",
              context=None, display_name: str = "") -> object:
-    from electroclean.app.eeg.loading import load_recording
-    from electroclean.app.io.discovery import discover_recordings
-    from electroclean.app.session.session import AnnotationSession
+    from electrotag.app.eeg.loading import load_recording
+    from electrotag.app.io.discovery import discover_recordings
+    from electrotag.app.session.session import AnnotationSession
 
     files = {r.recording_id: r for r in discover_recordings(root)}[rid]
     lr = load_recording(files, settings, settings.filters, catalogue)
@@ -58,15 +58,15 @@ def main(argv: list[str] | None = None) -> int:
     import mne
 
     mne.set_log_level("error")
-    from electroclean.app.annotations.labels import default_catalogue
-    from electroclean.app.annotations.model import AnnotationDocument
-    from electroclean.app.io.naming import OutputLayout
-    from electroclean.app.session.register import CompletionRegister
-    from electroclean.config.settings import load_settings
-    from electroclean.reliability import AnalysisConfig, run_analysis, write_outputs
-    from electroclean.synthetic import make_synthetic_dataset, simulate_rater
-    from electroclean.training.assessment import competency_report
-    from electroclean.training.reference import ReferenceSet, reference_sets_dir
+    from electrotag.app.annotations.labels import default_catalogue
+    from electrotag.app.annotations.model import AnnotationDocument
+    from electrotag.app.io.naming import OutputLayout
+    from electrotag.app.session.register import CompletionRegister
+    from electrotag.config.settings import load_settings
+    from electrotag.reliability import AnalysisConfig, run_analysis, write_outputs
+    from electrotag.synthetic import make_synthetic_dataset, simulate_rater
+    from electrotag.training.assessment import competency_report
+    from electrotag.training.reference import ReferenceSet, reference_sets_dir
 
     work: Path = args.work
     if work.exists():

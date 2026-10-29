@@ -1,12 +1,12 @@
 # Developer guide
 
-ElectroClean has two halves. The **browser application**
-(`electroclean/web/static`, plain ES modules with no build step) reads
+ElectroTag has two halves. The **browser application**
+(`electrotag/web/static`, plain ES modules with no build step) reads
 recordings on the annotator's computer, shows them and provides the annotation
 and training tools. The **Python package** holds everything else: a core that
 reads recordings with MNE-Python, models and validates annotations and writes
 and verifies the result files; the agreement, training and activity analyses;
-and the study's back ends, the ElectroClean server (FastAPI) and the Firebase
+and the study's back ends, the ElectroTag server (FastAPI) and the Firebase
 Cloud Functions, which share one service layer. This guide describes the
 Python core. The browser application, the service layer and how they fit
 together are described in [web/architecture.md](web/architecture.md), and the
@@ -42,9 +42,9 @@ contract between browser and server in [web/api.md](web/api.md).
 ## Package layout
 
 ```text
-electroclean/
+electrotag/
     __init__.py            version
-    __main__.py            python -m electroclean: the commands and how to start the demonstration
+    __main__.py            python -m electrotag: the commands and how to start the demonstration
     synthetic.py           synthetic BrainVision, EDF and BDF recordings with ground truth
     hints.py               "did you mean" suggestions for mistyped names
     report_style.py        the look shared by the HTML reports: colours, fonts, base style sheet
@@ -68,18 +68,18 @@ electroclean/
                            programme.py (the three stages and their unlocking), guided.py (the
                            checks of guided steps), review.py (the disagreements flagged in a
                            practice review), examples.py (the placeholder example set)
-    activity/              logs.py, summary.py, report.py, cli.py (electroclean-activity)
+    activity/              logs.py, summary.py, report.py, cli.py (electrotag-activity)
     web/                   the browser version (web/architecture.md): service.py (the operations,
                            shared by the server and the Firebase functions), coach.py, visits.py,
                            manifest.py and registration.py, saving.py, store_files.py and
-                           store_firestore.py, app.py (FastAPI), cli.py (electroclean-web),
+                           store_firestore.py, app.py (FastAPI), cli.py (electrotag-web),
                            firebase/functions/main.py, static/ (the application)
 ```
 
 ## Data flow of one recording
 
 1. **Registration**, on the computer that holds the dataset
-   (`electroclean-web register`, or the admin area, whose browser code builds
+   (`electrotag-web register`, or the admin area, whose browser code builds
    the same manifest). `io.discovery.discover_recordings` walks the dataset,
    parses each BrainVision `.vhdr` header for `DataFile` and `MarkerFile` or
    each EDF/BDF header (`io.edf`), and resolves BIDS sidecars with the
@@ -103,9 +103,9 @@ electroclean/
    stands in for the loaded recording, builds the document and the five files
    (`io.export`, `io.canonical`); `session.transaction.commit_outputs` stages,
    validates (`validation.exports`), commits and registers them. The
-   ElectroClean server writes into the study folder; the Firebase functions
+   ElectroTag server writes into the study folder; the Firebase functions
    write into a scratch folder and keep the files in Firestore, from which
-   `electroclean-web export` writes the same folders.
+   `electrotag-web export` writes the same folders.
 
 Scripts can drive the same core directly: `examples/demo_end_to_end.py` loads
 recordings with `load_recording`, adds annotations to an `AnnotationSession`
@@ -126,7 +126,7 @@ store (your annotations next to the reference) is created with
 ## The save transaction
 
 `commit_outputs` writes a journal (`transaction.json`) in
-`.electroclean/staging/<session>/` and moves through the states `staging`,
+`.electrotag/staging/<session>/` and moves through the states `staging`,
 `validated`, `committing`, `files_committed` and `complete`:
 
 1. write each file atomically into the staging folder;
@@ -143,10 +143,10 @@ An error before step 3 removes the staging folder. An error during step 3
 moves any committed files out again. An error at step 4 leaves the files in
 place and the journal at `files_committed`. `recover_interrupted_exports` rolls
 such journals forward (all files present and verified) or back (moving partial
-files to `.electroclean/interrupted/`), and when a session starts, output files
+files to `.electrotag/interrupted/`), and when a session starts, output files
 for the same recording and annotator that are not registered as complete are
 handled first: a complete, consistent set is registered (its register row was
-lost), anything else is moved to `.electroclean/interrupted/` with a warning.
+lost), anything else is moved to `.electrotag/interrupted/` with a warning.
 The tests simulate a crash at every stage with a `BaseException` hook.
 
 ## Locks
@@ -172,7 +172,7 @@ lock is held, so a second request never interferes with a save in progress.
 Files are moved into the results folder with a move that refuses to replace an
 existing file (`atomic.move_no_clobber`). The journal stores the final folder
 relative to the results folder, so recovery works when the folder is reached
-by another path. On the ElectroClean server two requests to save the same
+by another path. On the ElectroTag server two requests to save the same
 recording for the same annotator meet at the recording lock, and the second is
 told to try again.
 
@@ -191,7 +191,7 @@ told to try again.
 * **Selection strategies.** The order in which a study offers an annotator's
   recordings is chosen in `web.service.StudyService._next` with
   `session.selection.seeded_order`; `session.selection` also holds
-  `select_next` and the balanced allocation of `electroclean-admin allocate`.
+  `select_next` and the balanced allocation of `electrotag-admin allocate`.
 * **Data formats.** Formats are listed in `io.discovery.FORMATS` and read in
   `eeg.loading._read_raw`; supporting another MNE reader means adding its
   extension there and in `config.settings.RECORDING_EXTENSIONS`, a header or
@@ -218,15 +218,15 @@ answer arrives late) are in [CLAUDE.md](../CLAUDE.md) and
 ## Packaging and continuous integration
 
 `pyproject.toml` defines the package and four commands
-(`electroclean-web`, `electroclean-agreement`, `electroclean-admin` and
-`electroclean-activity`); `python -m electroclean` lists them.
+(`electrotag-web`, `electrotag-agreement`, `electrotag-admin` and
+`electrotag-activity`); `python -m electrotag` lists them.
 `requirements.txt` pins every package the server, the commands and
 registration need (MNE-Python and the scientific stack, pybv for the simulated
 recordings, FastAPI and uvicorn for the server, firebase-admin and
 google-cloud-firestore for the administrator's Firebase commands), and
 `requirements-dev.txt` adds pytest and the Cloud Functions' SDK for the
 functions' tests. The Cloud Functions are deployed with their own
-`electroclean/web/firebase/functions/requirements.txt` and a copy of the
+`electrotag/web/firebase/functions/requirements.txt` and a copy of the
 package made by `scripts/vendor_functions.py`. After changing dependencies,
 regenerate `THIRD_PARTY_NOTICES.md` with `scripts/third_party_notices.py` in an
 environment made from `requirements.txt`.

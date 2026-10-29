@@ -9,7 +9,7 @@ import { clickDialogButton, drag, eegPoint, openExample, pressSave, signIn, stat
 /** Change the demonstration's study settings (annotation block) and read GET /me again. */
 async function studySettings(page, annotation) {
   await page.evaluate(async (a) => {
-    const app = globalThis.ElectroClean;
+    const app = globalThis.ElectroTag;
     Object.assign(app.backend._admin.s.settings.annotation, a);
     app.backend._save();
     await app.refreshMe();
@@ -19,15 +19,15 @@ async function studySettings(page, annotation) {
 /** Every event logged in this visit so far. */
 async function events(page) {
   return page.evaluate(async () => {
-    await globalThis.ElectroClean.flushLog();
-    return globalThis.ElectroClean.backend.resultsDocument().interaction_logs.flatMap((l) => l.events);
+    await globalThis.ElectroTag.flushLog();
+    return globalThis.ElectroTag.backend.resultsDocument().interaction_logs.flatMap((l) => l.events);
   });
 }
 
 /** The working-time clock: worked, paused in all, and the wall-clock time since it started (seconds). */
 async function clock(page) {
   return page.evaluate(() => {
-    const c = globalThis.ElectroClean.ws.clock;
+    const c = globalThis.ElectroTag.ws.clock;
     return { elapsed: c.elapsedS, paused: c.pausedTotalS, wall: (c.now() - c.startedAt) / 1000, isPaused: c.paused, sinceBreak: c.sinceBreakS };
   });
 }
@@ -47,7 +47,7 @@ async function setHidden(page, hidden) {
 /** The colour of a pixel of the overview bar, at a fraction of its width, `y` pixels from the top. */
 async function overviewPixel(page, fraction, y) {
   return page.evaluate(([f, yy]) => {
-    const c = globalThis.ElectroClean.ws.viewer.overviewCanvas;
+    const c = globalThis.ElectroTag.ws.viewer.overviewCanvas;
     const dpr = window.devicePixelRatio || 1;
     const d = c.getContext('2d').getImageData(Math.floor(c.width * f), Math.floor(yy * dpr), 1, 1).data;
     return `#${[d[0], d[1], d[2]].map((v) => v.toString(16).padStart(2, '0')).join('').toUpperCase()}`;
@@ -87,7 +87,7 @@ export const tests = [
       await page.click('[data-log="resume"]');
       await panelHidden(page);
       assert.match(await page.textContent('.ws-message'), /Welcome back\. The \d+ s you were paused were not counted\./);
-      assert.ok(await page.evaluate(() => document.activeElement === globalThis.ElectroClean.ws.viewer.over), 'the EEG has the focus again');
+      assert.ok(await page.evaluate(() => document.activeElement === globalThis.ElectroTag.ws.viewer.over), 'the EEG has the focus again');
 
       // The key B pauses and resumes.
       await page.keyboard.press('b');
@@ -103,7 +103,7 @@ export const tests = [
       await panelHidden(page);
 
       // The page out of sight for longer than the limit (shortened here from 10 s).
-      await page.evaluate(() => { globalThis.ElectroClean.ws.hiddenPauseMs = 300; });
+      await page.evaluate(() => { globalThis.ElectroTag.ws.hiddenPauseMs = 300; });
       await setHidden(page, true);
       await page.waitForTimeout(1300);
       await setHidden(page, false);
@@ -130,12 +130,12 @@ export const tests = [
       assert.ok(ev.find((e) => e.type === 'pause' && e.reason === 'hidden').hidden_s >= 0.3);
 
       // The draft and the saved result keep the time without the pauses.
-      const draft = await page.evaluate(() => globalThis.ElectroClean.ws.s.draftPayload());
+      const draft = await page.evaluate(() => globalThis.ElectroTag.ws.s.draftPayload());
       assert.ok(draft.elapsed_s <= c.wall - c.paused + 0.2, `draft ${draft.elapsed_s} s`);
       await pressSave(page);
       await clickDialogButton(page, 'Save with no artifacts');
       await waitForRoute(page, 'home');
-      const sub = await page.evaluate(() => globalThis.ElectroClean.backend.state.submissions[0]);
+      const sub = await page.evaluate(() => globalThis.ElectroTag.backend.state.submissions[0]);
       assert.ok(sub.session.elapsed_s < c.wall - 3, `saved ${sub.session.elapsed_s} s of ${c.wall} s open`);
       const finished = (await events(page)).find((e) => e.type === 'recording_finished');
       assert.equal(finished.n_pauses, 4);
@@ -160,10 +160,10 @@ export const tests = [
       assert.equal((await state(page)).currentLabel, 'EMG-artifact');
       await page.click('[data-log="break-later"]');
       assert.equal(await page.locator('.break-reminder').count(), 0);
-      const snoozed = await page.evaluate(() => { const k = globalThis.ElectroClean.ws.clock; return k.remindAtS - k.sinceBreakS; });
+      const snoozed = await page.evaluate(() => { const k = globalThis.ElectroTag.ws.clock; return k.remindAtS - k.sinceBreakS; });
       assert.ok(snoozed > 890 && snoozed <= 900, `asks again after ${snoozed} s`);
       // Fifteen minutes later (brought forward here), Take a break pauses.
-      await page.evaluate(() => { const k = globalThis.ElectroClean.ws.clock; k.remindAtS = k.sinceBreakS + 1; });
+      await page.evaluate(() => { const k = globalThis.ElectroTag.ws.clock; k.remindAtS = k.sinceBreakS + 1; });
       await page.waitForSelector('.break-reminder', { timeout: 10000 });
       await page.click('[data-log="break-take"]');
       await panelShown(page);
@@ -187,8 +187,8 @@ export const tests = [
       await waitForRoute(page, 'home');
       await studySettings(page, { idle_pause_minutes: 0, break_reminder_minutes: 0 });
       await openExample(page, 0); // 70 s, 10 s on the screen
-      await page.waitForFunction(() => globalThis.ElectroClean.ws.s.viewed.length === 1);
-      let viewed = await page.evaluate(() => globalThis.ElectroClean.ws.s.viewed);
+      await page.waitForFunction(() => globalThis.ElectroTag.ws.s.viewed.length === 1);
+      let viewed = await page.evaluate(() => globalThis.ElectroTag.ws.s.viewed);
       assert.deepEqual(viewed, [[0, 10]]);
       assert.match(await page.textContent('.ws-viewed'), /^Viewed 14%/);
       // On the overview bar: the rest white with a thin grey line above it (calm: no warning colour).
@@ -196,16 +196,16 @@ export const tests = [
       assert.equal(await overviewPixel(page, 0.9, 12), '#FFFFFF');
       // Recording a view redraws the overview only.
       await waitForTraces(page);
-      await page.evaluate(() => { const ws = globalThis.ElectroClean.ws; ws.viewer.stats.layers = null; ws.viewer.setCoverage(ws.s.viewed); });
-      await page.waitForFunction(() => globalThis.ElectroClean.ws.viewer.stats.layers);
-      assert.deepEqual(Object.keys(await page.evaluate(() => globalThis.ElectroClean.ws.viewer.stats.layers)), ['overview']);
+      await page.evaluate(() => { const ws = globalThis.ElectroTag.ws; ws.viewer.stats.layers = null; ws.viewer.setCoverage(ws.s.viewed); });
+      await page.waitForFunction(() => globalThis.ElectroTag.ws.viewer.stats.layers);
+      assert.deepEqual(Object.keys(await page.evaluate(() => globalThis.ElectroTag.ws.viewer.stats.layers)), ['overview']);
 
       // U and the button show the next part not yet viewed.
       await page.keyboard.press('u');
       let v = (await state(page)).view;
       assert.equal(v.startS, 9, 'the next part, with a second of what was seen before it');
       assert.match(await page.textContent('.ws-message'), /Not yet viewed: 0:10 to 1:10\. This is the last such part\./);
-      await page.waitForFunction(() => globalThis.ElectroClean.ws.s.viewed[0][1] === 19);
+      await page.waitForFunction(() => globalThis.ElectroTag.ws.s.viewed[0][1] === 19);
       // What has been seen, away from the view, keeps the overview's warm grey.
       assert.equal(await overviewPixel(page, 0.05, 12), '#F3EFE8');
       await page.click('.tab[data-tab="recording"]');
@@ -214,17 +214,17 @@ export const tests = [
       await page.click('.coverage-block [data-log="next-unviewed"]');
       v = (await state(page)).view;
       assert.equal(v.startS, 18);
-      await page.waitForFunction(() => globalThis.ElectroClean.ws.s.viewed[0][1] === 28);
+      await page.waitForFunction(() => globalThis.ElectroTag.ws.s.viewed[0][1] === 28);
       // An unviewed part in the middle: the next one comes round from wherever the view is.
-      await page.evaluate(() => globalThis.ElectroClean.ws.viewer.setView({ startS: 50 }, 'key'));
-      await page.waitForFunction(() => globalThis.ElectroClean.ws.s.viewed.length === 2);
-      viewed = await page.evaluate(() => globalThis.ElectroClean.ws.s.viewed);
+      await page.evaluate(() => globalThis.ElectroTag.ws.viewer.setView({ startS: 50 }, 'key'));
+      await page.waitForFunction(() => globalThis.ElectroTag.ws.s.viewed.length === 2);
+      viewed = await page.evaluate(() => globalThis.ElectroTag.ws.s.viewed);
       assert.deepEqual(viewed, [[0, 28], [50, 60]]);
       await page.keyboard.press('u');
       assert.equal((await state(page)).view.startS, 60, 'after the view comes 60 to 70 s, which just fits on the screen');
       // The draft keeps them.
       await page.waitForFunction(() => {
-        const ws = globalThis.ElectroClean.ws;
+        const ws = globalThis.ElectroTag.ws;
         const d = JSON.parse(localStorage.getItem(ws.s.localKey) || 'null');
         return d && d.viewed && d.viewed.some(([a, b]) => a <= 50 && b >= 70);
       });
@@ -239,9 +239,9 @@ export const tests = [
       await clickDialogButton(page, 'Go to the first part');
       assert.equal(await page.locator('.dialog').count(), 0, 'nothing is saved');
       assert.equal((await state(page)).view.startS, 27);
-      await page.waitForFunction(() => globalThis.ElectroClean.ws.s.viewed.length === 2 && globalThis.ElectroClean.ws.s.viewed[0][1] === 37);
+      await page.waitForFunction(() => globalThis.ElectroTag.ws.s.viewed.length === 2 && globalThis.ElectroTag.ws.s.viewed[0][1] === 37);
       // With everything seen, Save and Finish asks its own question straight away.
-      await page.evaluate(() => { const ws = globalThis.ElectroClean.ws; ws.s.noteViewed([[0, 70]]); ws.viewer.setCoverage(ws.s.viewed); ws._refreshCoverage(); });
+      await page.evaluate(() => { const ws = globalThis.ElectroTag.ws; ws.s.noteViewed([[0, 70]]); ws.viewer.setCoverage(ws.s.viewed); ws._refreshCoverage(); });
       assert.match(await page.textContent('.ws-viewed'), /^Viewed 100%/);
       await page.keyboard.press('u');
       assert.match(await page.textContent('.ws-message'), /Every part of the recording has been on the screen\./);
@@ -269,12 +269,12 @@ export const tests = [
       await drag(page, await eegPoint(page, 3.0), await eegPoint(page, 3.4));
       // Somewhere else, with more time, fewer channels and larger traces.
       for (const key of ['End', 'PageUp', '+']) await page.keyboard.press(key);
-      await page.evaluate(() => globalThis.ElectroClean.ws.viewer.setView({ startS: 24, firstChannel: 3 }, 'key'));
+      await page.evaluate(() => globalThis.ElectroTag.ws.viewer.setView({ startS: 24, firstChannel: 3 }, 'key'));
       const before = (await state(page)).view;
       await page.waitForSelector('.ws-saved:not(:empty)');
       assert.match(await page.textContent('.ws-saved'), /^Draft saved \d\d:\d\d$/);
-      await page.waitForFunction(() => globalThis.ElectroClean.ws.s.viewed.some(([a, b]) => a <= 24 && b >= 24 + globalThis.ElectroClean.ws.viewer.view.durationS));
-      const viewed = await page.evaluate(() => globalThis.ElectroClean.ws.s.viewed);
+      await page.waitForFunction(() => globalThis.ElectroTag.ws.s.viewed.some(([a, b]) => a <= 24 && b >= 24 + globalThis.ElectroTag.ws.viewer.view.durationS));
+      const viewed = await page.evaluate(() => globalThis.ElectroTag.ws.s.viewed);
       await page.click('[data-log="close"]');
       await clickDialogButton(page, 'Close and finish later');
       await waitForRoute(page, 'home');
@@ -295,7 +295,7 @@ export const tests = [
       await waitForTraces(page);
       const after = (await state(page)).view;
       for (const k of ['startS', 'durationS', 'firstChannel', 'nChannels', 'scaleFactor']) assert.equal(after[k], before[k], `${k} restored`);
-      assert.deepEqual(await page.evaluate(() => globalThis.ElectroClean.ws.s.viewed.slice(0, 2)), viewed.slice(0, 2), 'the parts viewed are restored');
+      assert.deepEqual(await page.evaluate(() => globalThis.ElectroTag.ws.s.viewed.slice(0, 2)), viewed.slice(0, 2), 'the parts viewed are restored');
       const welcome = await page.textContent('.welcome-back');
       assert.match(welcome, /^Welcome back\. You were at 0:24, channels \S+ to \S+, with 1 annotation kept and \d+ s worked so far\.$/);
       assert.match(await page.textContent('.ws-message'), /^Welcome back/);
@@ -324,7 +324,7 @@ export const tests = [
         await waitForRoute(page, 'home');
         await page.locator('.dialog-buttons button', { hasText: 'Back to my recordings' }).click();
       }
-      const items = await page.evaluate(async () => (await globalThis.ElectroClean.backend.assignments()).items);
+      const items = await page.evaluate(async () => (await globalThis.ElectroTag.backend.assignments()).items);
       const done = items.filter((i) => i.status === 'done');
       assert.equal(done.length, 2);
       for (const i of done) {
@@ -339,10 +339,10 @@ export const tests = [
       assert.equal(await page.getAttribute('.progress-card [role="progressbar"]', 'aria-valuenow'), '2');
       // Today's time in this browser, once there is a minute of it.
       await page.evaluate(() => {
-        const who = globalThis.ElectroClean.me.annotator_id;
+        const who = globalThis.ElectroTag.me.annotator_id;
         const d = new Date(); const p = (n) => String(n).padStart(2, '0');
-        localStorage.setItem(`electroclean.worked|${who}|${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`, '3900');
-        globalThis.ElectroClean.showHome();
+        localStorage.setItem(`electrotag.worked|${who}|${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`, '3900');
+        globalThis.ElectroTag.showHome();
       });
       assert.match(await page.textContent('[data-stat="today"]'), /Today: 1 h 5 min of work in this browser, 2 recordings finished\./);
       await t.screenshot(page, 'comfort_home_progress');
@@ -354,8 +354,8 @@ export const tests = [
       const { assert } = t;
       const page = await t.newPage({ width: 1440, height: 900 });
       await signIn(page, 'ADMIN');
-      await page.waitForFunction(() => /^admin/.test(globalThis.ElectroClean.route || ''));
-      await page.evaluate(() => globalThis.ElectroClean.showAdmin('admin-settings'));
+      await page.waitForFunction(() => /^admin/.test(globalThis.ElectroTag.route || ''));
+      await page.evaluate(() => globalThis.ElectroTag.showAdmin('admin-settings'));
       await page.waitForSelector('.admin-section[data-section="settings"] input[name="break_reminder_minutes"]');
       assert.equal(await page.inputValue('input[name="break_reminder_minutes"]'), '50');
       assert.equal(await page.inputValue('input[name="idle_pause_minutes"]'), '3');
@@ -372,7 +372,7 @@ export const tests = [
       await page.waitForFunction((s) => /The settings are saved/.test(document.querySelector(`${s} > .admin-msg`)?.textContent || ''), section);
       await page.locator(`${section} h3`, { hasText: 'Long sessions' }).scrollIntoViewIfNeeded();
       await t.screenshot(page, 'comfort_admin_settings');
-      const me = await page.evaluate(async () => (await globalThis.ElectroClean.backend.me()).study.annotation);
+      const me = await page.evaluate(async () => (await globalThis.ElectroTag.backend.me()).study.annotation);
       assert.equal(me.idle_pause_minutes, 5);
       assert.equal(me.break_reminder_minutes, 45);
       assert.equal(me.coverage_check, 'off');
@@ -382,17 +382,17 @@ export const tests = [
       await signIn(page, 'A01');
       await waitForRoute(page, 'home');
       await openExample(page, 0);
-      assert.equal(await page.evaluate(() => globalThis.ElectroClean.ws.settings.coverageCheck), 'off');
+      assert.equal(await page.evaluate(() => globalThis.ElectroTag.ws.settings.coverageCheck), 'off');
       await page.click('.tab[data-tab="recording"]');
       await page.check('input[data-comfort="trace:thick"]');
       await page.check('input[data-comfort="names:large"]');
       await page.check('input[data-comfort="panel:large"]');
-      assert.deepEqual(await page.evaluate(() => globalThis.ElectroClean.ws.viewer.comfort), { trace: 'thick', names: 'large' });
+      assert.deepEqual(await page.evaluate(() => globalThis.ElectroTag.ws.viewer.comfort), { trace: 'thick', names: 'large' });
       assert.ok(await page.evaluate(() => document.querySelector('.ws-side').classList.contains('large-text')));
       assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.tab-panel[data-panel="recording"]')).fontSize), '16px');
       await page.waitForTimeout(200);
       await t.screenshot(page, 'comfort_display');
-      const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('electroclean.comfort|A01')));
+      const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('electrotag.comfort|A01')));
       assert.deepEqual(kept, { trace: 'thick', names: 'large', panel: 'large' });
       assert.ok((await events(page)).some((e) => e.type === 'state' && e.comfort && e.comfort.trace === 'thick'));
     },
@@ -418,12 +418,12 @@ export const tests = [
       await panelHidden(page);
       await page.locator('.coach button', { hasText: 'Show me' }).click();
       await page.waitForFunction(() => /This is how the experts marked it/.test(document.querySelector('.coach')?.textContent || ''));
-      const wall = await page.evaluate(() => (performance.now() - globalThis.ElectroClean.ws.coach.stepT0) / 1000);
+      const wall = await page.evaluate(() => (performance.now() - globalThis.ElectroTag.ws.coach.stepT0) / 1000);
       await page.keyboard.press('Enter');
       await page.waitForFunction(() => /Step 2 of/.test(document.querySelector('.coach-header')?.textContent || ''));
       const step = (await events(page)).find((e) => e.type === 'guided_step_completed');
       assert.ok(step.seconds < wall - 1.8, `the step took ${step.seconds} s of ${wall} s`);
-      const kept = await page.evaluate(() => Object.values(globalThis.ElectroClean.backend.state.guided).find((g) => g.seconds && g.seconds[0] !== undefined).seconds[0]);
+      const kept = await page.evaluate(() => Object.values(globalThis.ElectroTag.backend.state.guided).find((g) => g.seconds && g.seconds[0] !== undefined).seconds[0]);
       assert.ok(kept < wall - 1.8, `the study keeps ${kept} s`);
     },
   },
@@ -450,7 +450,7 @@ export const tests = [
       await t.screenshot(page, 'comfort_ipad_paused');
       await page.tap('[data-log="resume"]');
       await panelHidden(page);
-      await page.waitForFunction(() => globalThis.ElectroClean.ws.s.viewed.length === 1);
+      await page.waitForFunction(() => globalThis.ElectroTag.ws.s.viewed.length === 1);
       await page.tap('[data-log="touch-next-unviewed"]');
       assert.equal((await state(page)).view.startS, 9);
       await t.screenshot(page, 'comfort_ipad_after');

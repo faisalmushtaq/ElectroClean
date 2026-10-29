@@ -9,9 +9,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { COLOURS, FONT } from '../../electroclean/web/static/js/ui/theme.js';
+import { COLOURS, FONT } from '../../electrotag/web/static/js/ui/theme.js';
 
-const STATIC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'electroclean', 'web', 'static');
+const STATIC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'electrotag', 'web', 'static');
 const APP_CSS = fs.readFileSync(path.join(STATIC, 'app.css'), 'utf8');
 const ADMIN_CSS = fs.readFileSync(path.join(STATIC, 'admin.css'), 'utf8');
 const SHEETS = [['app.css', APP_CSS], ['admin.css', ADMIN_CSS]];

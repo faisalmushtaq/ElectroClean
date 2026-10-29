@@ -3,8 +3,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { AnnotationStore, AnnotationError } from '../../electroclean/web/static/js/annotate/store.js';
-import { CATALOGUE } from '../../electroclean/web/static/js/api/demo_catalogue.js';
+import { AnnotationStore, AnnotationError } from '../../electrotag/web/static/js/annotate/store.js';
+import { CATALOGUE } from '../../electrotag/web/static/js/api/demo_catalogue.js';
 
 const CH = ['Fp1', 'Fp2', 'C3', 'C4', 'O1', 'O2'];
 const store = (opts = {}) => new AnnotationStore({ chNames: CH, nSamples: 10000, sfreq: 250, labels: CATALOGUE.labels.map((l) => l.label), ...opts });

@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { FFT, kernelSpectrum, nextPow2 } from "../../electroclean/web/static/js/data/fft.js";
+import { FFT, kernelSpectrum, nextPow2 } from "../../electrotag/web/static/js/data/fft.js";
 import {
   autoFilterLength,
   designHighpass,
@@ -15,7 +15,7 @@ import {
   hammingSymmetric,
   notchFrequencies,
   planFilters,
-} from "../../electroclean/web/static/js/data/filters.js";
+} from "../../electrotag/web/static/js/data/filters.js";
 import { ensureFixtures, expected } from "./_fixtures.mjs";
 
 test("FFT matches a direct DFT and inverts exactly", () => {

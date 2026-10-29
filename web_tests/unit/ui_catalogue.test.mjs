@@ -6,14 +6,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { CATALOGUE, DEFAULT_QUICK_LABELS, DEFAULT_SCALINGS, DEFAULT_FILTERS } from '../../electroclean/web/static/js/api/demo_catalogue.js';
-import { Catalogue, displayCode } from '../../electroclean/web/static/js/catalogue.js';
+import { CATALOGUE, DEFAULT_QUICK_LABELS, DEFAULT_SCALINGS, DEFAULT_FILTERS } from '../../electrotag/web/static/js/api/demo_catalogue.js';
+import { Catalogue, displayCode } from '../../electrotag/web/static/js/catalogue.js';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (p) => JSON.parse(fs.readFileSync(path.join(REPO, p), 'utf8'));
 
 test('the same 29 artifact types, codes, colours and descriptions as artifact_labels.json', () => {
-  const src = read('electroclean/config/artifact_labels.json').labels;
+  const src = read('electrotag/config/artifact_labels.json').labels;
   const byLabel = new Map(CATALOGUE.labels.map((l) => [l.label, l]));
   assert.equal(CATALOGUE.labels.length, src.length);
   for (const s of src) {
@@ -25,7 +25,7 @@ test('the same 29 artifact types, codes, colours and descriptions as artifact_la
 });
 
 test('the same quick types, scalings and filters as default_settings.json', () => {
-  const s = read('electroclean/config/default_settings.json');
+  const s = read('electrotag/config/default_settings.json');
   assert.deepEqual(DEFAULT_QUICK_LABELS, s.annotation.quick_labels);
   assert.deepEqual(DEFAULT_SCALINGS, s.display.scalings);
   assert.equal(DEFAULT_FILTERS.highpass_hz, s.filters.highpass_hz);

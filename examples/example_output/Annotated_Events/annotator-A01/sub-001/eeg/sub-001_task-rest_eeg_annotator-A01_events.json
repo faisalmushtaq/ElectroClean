@@ -72,7 +72,7 @@
   },
   "artifact_code": {
     "LongName": "Artifact code",
-    "Description": "Fixed ElectroClean code of the artifact type on rows with event_source 'electroclean_artifact' (n/a on original rows). Codes never change between datasets or versions: 100-136, with group terms from 130.",
+    "Description": "Fixed ElectroTag code of the artifact type on rows with event_source 'electrotag_artifact' (n/a on original rows). Codes never change between datasets or versions: 100-136, with group terms from 130.",
     "Levels": {
       "100": "Chewing-artifact",
       "101": "ECG-artifact",
@@ -110,7 +110,7 @@
   },
   "channels": {
     "LongName": "Affected channels",
-    "Description": "For rows with event_source 'electroclean_artifact': a JSON array of channel names. An empty array [] means the artifact affects the whole recording montage (all channels). Original rows have n/a (no channel information in the original events)."
+    "Description": "For rows with event_source 'electrotag_artifact': a JSON array of channel names. An empty array [] means the artifact affects the whole recording montage (all channels). Original rows have n/a (no channel information in the original events)."
   },
   "event_source": {
     "Description": "Origin of the row.",
@@ -120,11 +120,11 @@
       "original:edf_annotations": "Annotation from the EDF+ file itself (read with MNE-Python).",
       "original:bdf_annotations": "Annotation from the BDF+ file itself (read with MNE-Python).",
       "original:stim_channel": "Trigger read from the recording's trigger channel with mne.find_events (every change to a non-zero code; for BDF files the lower 16 bits of the Status channel).",
-      "electroclean_artifact": "Artifact annotation created with ElectroClean."
+      "electrotag_artifact": "Artifact annotation created with ElectroTag."
     }
   },
   "annotation_id": {
-    "Description": "Stable identifier of the ElectroClean artifact annotation (n/a for original rows)."
+    "Description": "Stable identifier of the ElectroTag artifact annotation (n/a for original rows)."
   },
   "annotator_id": {
     "Description": "Identifier of the annotator who created the artifact annotation (n/a for original rows)."
@@ -132,8 +132,8 @@
   "original_row": {
     "Description": "1-based row number in the original events file (n/a for artifact rows)."
   },
-  "ElectroCleanMetadata": {
-    "GeneratedBy": "ElectroClean 1.1.0",
+  "ElectroTagMetadata": {
+    "GeneratedBy": "ElectroTag 1.1.0",
     "recording_id": "sub-001/eeg/sub-001_task-rest_eeg.vhdr",
     "annotator_id": "A01",
     "session_id": "20261028T111921Z-2c8b8d66",
@@ -148,7 +148,7 @@
       "mne_annotations": "In mne.Annotations attached to Raw, onset_mne = onset + first_samp / sfreq (relative to orig_time)."
     },
     "label_catalogue": {
-      "catalogue_id": "electroclean-hed-score-artifacts",
+      "catalogue_id": "electrotag-hed-score-artifacts",
       "catalogue_version": "2.0.0",
       "sha256": "34f144b5c8699afeb41dd6fc9a4fd343e602123e979ee41471971b4fec7800ad",
       "hed_library": "score",

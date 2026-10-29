@@ -10,7 +10,7 @@ python -m pytest tests/test_store.py -q           # one file
 ```
 
 The Python tests cover the annotation core, the agreement, training and
-activity analyses, the commands, the ElectroClean server (through FastAPI's
+activity analyses, the commands, the ElectroTag server (through FastAPI's
 test client) and the Firebase functions. They need no display and no network;
 the Firestore tests are skipped unless the Firestore emulator is running (see
 below).
@@ -20,8 +20,8 @@ The browser application has tests of its own, described in
 
 ```bash
 node --test web_tests/unit/*.test.mjs                     # the browser modules (Node.js 22)
-ELECTROCLEAN_PYTHON=python node web_tests/run_e2e.mjs     # the application in Chromium (Playwright)
-ELECTROCLEAN_PYTHON=python node web_tests/run_e2e.mjs --browser webkit   # the same in WebKit, Safari's engine
+ELECTROTAG_PYTHON=python node web_tests/run_e2e.mjs     # the application in Chromium (Playwright)
+ELECTROTAG_PYTHON=python node web_tests/run_e2e.mjs --browser webkit   # the same in WebKit, Safari's engine
 bash scripts/test_firebase_emulators.sh                   # the functions and the Firestore store (Java 21)
 bash scripts/test_web_firebase.sh                         # the application with a study on Firebase's emulators
 ```
@@ -30,7 +30,7 @@ The unit tests compare the browser's readers, filters, amplitude check and
 fingerprints with MNE-Python and `hashlib` on recordings that
 `scripts/make_web_fixtures.py` writes into `web_tests/fixtures/` (not
 committed). `run_e2e.mjs` drives the application in Chromium against the
-demonstration, a stand-in server and the real `electroclean-web demo`, with
+demonstration, a stand-in server and the real `electrotag-web demo`, with
 recordings opened from disk and the results checked in the study folder; it
 needs Playwright with Chromium (`npm install --no-save playwright@1.63.0` and
 `npx playwright install chromium`). With `--browser webkit` the same tests run in
@@ -45,7 +45,7 @@ starts with `demo-` and so never reaches a real Firebase project.
 
 ## Synthetic data
 
-`electroclean/synthetic.py` writes small BIDS datasets of BrainVision
+`electrotag/synthetic.py` writes small BIDS datasets of BrainVision
 recordings (22 channels: 19 EEG, HEOG, VEOG and ECG, 250 Hz, 50 Hz mains) with:
 
 * background activity, alpha rhythm and mains interference;
@@ -103,7 +103,7 @@ analysis, without an interface); `test_web_server.py` (signing in, matching a
 file, drafts, saving the same files as the core writes, guided training,
 practice feedback, the competency result and administration, over HTTP);
 `web_tests/e2e/h_study_server.e2e.mjs` (the application in Chromium against
-the real `electroclean-web demo`: a recording opened from disk and saved into
+the real `electrotag-web demo`: a recording opened from disk and saved into
 the study folder, a draft restored in another browser, and the training
 programme checked and scored by the server); and `scripts/test_web_firebase.sh`
 (the same with a study on Firebase's emulators, including the administrator's
@@ -139,7 +139,7 @@ annotators will use (Firefox, Safari and a real iPad in particular):
 
 1. The study's link opens the sign-in page, and signing in, the notice about
    the interaction log and the list of recordings appear as described in
-   [using ElectroClean](web/using.md).
+   [using ElectroTag](web/using.md).
 2. Opening a recording from the computer works with the file picker, with a
    folder and by dropping the files on the page, for EDF, BDF and BrainVision
    (all three files), and a large recording shows the progress of its

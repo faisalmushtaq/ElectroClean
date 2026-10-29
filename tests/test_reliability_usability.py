@@ -14,17 +14,17 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from electroclean.app.annotations.timing import RecordingTiming
-from electroclean.app.io.canonical import write_annotations_json
-from electroclean.reliability.analysis import (
+from electrotag.app.annotations.timing import RecordingTiming
+from electrotag.app.io.canonical import write_annotations_json
+from electrotag.reliability.analysis import (
     TABLE_COLUMNS,
     AnalysisCancelled,
     run_analysis,
     write_outputs,
 )
-from electroclean.reliability.cli import EXIT_NOTHING_TO_COMPARE, build_parser, main
-from electroclean.reliability.config import AnalysisConfig
-from electroclean.synthetic import default_artifact_plan, simulate_rater, truth_document
+from electrotag.reliability.cli import EXIT_NOTHING_TO_COMPARE, build_parser, main
+from electrotag.reliability.config import AnalysisConfig
+from electrotag.synthetic import default_artifact_plan, simulate_rater, truth_document
 
 
 def _write_annotations(folder: Path, annotators=("A01", "A02", "A03"), n_recordings: int = 2) -> Path:

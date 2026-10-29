@@ -4,17 +4,17 @@ from __future__ import annotations
 
 import json
 
-from electroclean.app.annotations.model import AnnotationDocument
-from electroclean.app.eeg.events import OriginalEvents, check_event_codes, events_from_raw_annotations
-from electroclean.app.io.canonical import document_from_dict, document_to_dict, read_annotations_json
-from electroclean.app.io.export import (
+from electrotag.app.annotations.model import AnnotationDocument
+from electrotag.app.eeg.events import OriginalEvents, check_event_codes, events_from_raw_annotations
+from electrotag.app.io.canonical import document_from_dict, document_to_dict, read_annotations_json
+from electrotag.app.io.export import (
     annotations_from_events_tsv,
     build_events_sidecar,
     build_events_table,
     events_tsv_bytes,
     original_rows_from_events_tsv,
 )
-from electroclean.app.io.tsv import parse_tsv_text
+from electrotag.app.io.tsv import parse_tsv_text
 from tests.conftest import make_session
 
 
@@ -35,7 +35,7 @@ def test_all_labels_export_with_fixed_codes(layout, settings, catalogue, loaded)
     data = events_tsv_bytes(loaded.original_events, _doc(loaded, s.store))
     cols, rows = parse_tsv_text(data.decode())
     idx = {c: i for i, c in enumerate(cols)}
-    art = [r for r in rows if r[idx["event_source"]] == "electroclean_artifact"]
+    art = [r for r in rows if r[idx["event_source"]] == "electrotag_artifact"]
     assert {(r[idx["trial_type"]], int(r[idx["artifact_code"]])) for r in art} == {
         (lab.label, lab.value) for lab in catalogue.labels
     }
@@ -87,7 +87,7 @@ def test_whole_montage_and_channel_encodings(layout, settings, catalogue, loaded
     s.store.add_interval("EMG-artifact", 9.0, 10.0, ["T7", "T8"])
     cols, rows = build_events_table(loaded.original_events, _doc(loaded, s.store))
     idx = {c: i for i, c in enumerate(cols)}
-    chans = {r[idx["trial_type"]]: r[idx["channels"]] for r in rows if r[idx["event_source"]] == "electroclean_artifact"}
+    chans = {r[idx["trial_type"]]: r[idx["channels"]] for r in rows if r[idx["event_source"]] == "electrotag_artifact"}
     assert chans == {"Movement-artifact": "[]", "EMG-artifact": '["T7","T8"]'}
     assert all(r[idx["channels"]] == "n/a" for r in rows if r[idx["event_source"]].startswith("original"))
     payload = document_to_dict(_doc(loaded, s.store))
@@ -114,7 +114,7 @@ def test_sidecar_describes_new_columns_and_codes(layout, settings, catalogue, lo
     assert sidecar["artifact_code"]["Levels"]["103"] == "Eye-blink-artifact"
     assert sidecar["artifact_code"]["Levels"]["132"] == "Eye-artifact"
     assert sidecar["value"] == loaded.events_sidecar.get("value", sidecar["value"])  # original description untouched
-    assert sidecar["ElectroCleanMetadata"]["label_catalogue"]["sha256"] == catalogue.sha256
+    assert sidecar["ElectroTagMetadata"]["label_catalogue"]["sha256"] == catalogue.sha256
 
 
 def test_sidecar_never_describes_added_columns_with_the_datasets_text(layout, settings, catalogue, loaded):
@@ -130,14 +130,14 @@ def test_sidecar_never_describes_added_columns_with_the_datasets_text(layout, se
     sidecar, notes = build_events_sidecar(original, narrow, doc)
     assert sidecar["sample"]["Description"].startswith("Onset as a 0-based sample index")
     assert "computed it from onset" in sidecar["sample"]["Description"]
-    assert sidecar["value"]["Description"].startswith("Added by ElectroClean")
+    assert sidecar["value"]["Description"].startswith("Added by ElectroTag")
     assert sum("does not have" in n or "do not have" in n for n in notes) == 2
 
 
 def test_vmrk_events_used_without_events_tsv(rich_dataset, catalogue):
-    from electroclean.app.eeg.loading import load_recording
-    from electroclean.app.io.discovery import discover_recordings
-    from electroclean.config.settings import load_settings
+    from electrotag.app.eeg.loading import load_recording
+    from electrotag.app.io.discovery import discover_recordings
+    from electrotag.config.settings import load_settings
 
     root, _ = rich_dataset
     settings, _ = load_settings(root)
@@ -182,10 +182,10 @@ def test_original_code_report_never_blocks(catalogue):
 
 def test_original_codes_that_equal_artifact_codes_cannot_be_confused(rich_dataset, catalogue, tmp_path):
     """The dataset's events use 101; an ECG artifact is coded 101 in its own column."""
-    from electroclean.app.eeg.loading import load_recording
-    from electroclean.app.io.discovery import discover_recordings
-    from electroclean.app.io.naming import OutputLayout
-    from electroclean.config.settings import load_settings
+    from electrotag.app.eeg.loading import load_recording
+    from electrotag.app.io.discovery import discover_recordings
+    from electrotag.app.io.naming import OutputLayout
+    from electrotag.config.settings import load_settings
 
     root, _ = rich_dataset
     settings, _ = load_settings(root)  # no policy needed
@@ -200,7 +200,7 @@ def test_original_codes_that_equal_artifact_codes_cannot_be_confused(rich_datase
     cols, rows = parse_tsv_text(text)
     idx = {c: i for i, c in enumerate(cols)}
     assert {r[idx["event_source"]] for r in rows if r[idx["value"]] == "101"} == {"original:events_tsv"}
-    (art,) = [r for r in rows if r[idx["event_source"]] == "electroclean_artifact"]
+    (art,) = [r for r in rows if r[idx["event_source"]] == "electrotag_artifact"]
     assert (art[idx["value"]], art[idx["artifact_code"]], art[idx["trial_type"]]) == ("n/a", "101", "ECG-artifact")
     sidecar = json.loads(res.commit.paths["events_json"].read_text(encoding="utf-8"))
     assert sidecar["artifact_code"]["Levels"]["101"] == "ECG-artifact"
@@ -213,7 +213,7 @@ def test_original_codes_that_equal_artifact_codes_cannot_be_confused(rich_datase
 def test_exports_from_version_1_can_still_be_read(loaded, catalogue):
     """Before version 2, artifact codes were in the value column."""
     header = "onset\tduration\ttrial_type\tvalue\tsample\tchannels\tevent_source\tannotation_id\tannotator_id\toriginal_row"
-    row = "1.0\t0.5\tEMG-artifact\t102\t250\t[]\telectroclean_artifact\tabc\tA01\tn/a"
+    row = "1.0\t0.5\tEMG-artifact\t102\t250\t[]\telectrotag_artifact\tabc\tA01\tn/a"
     (ann,) = annotations_from_events_tsv(header + "\n" + row + "\n", loaded.info, catalogue)
     assert (ann.label, ann.onset_sample, ann.duration_samples) == ("EMG-artifact", 250, 125)
 

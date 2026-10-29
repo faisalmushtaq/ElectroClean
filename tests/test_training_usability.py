@@ -11,12 +11,12 @@ import json
 
 import pytest
 
-from electroclean.app.annotations.labels import default_catalogue
-from electroclean.app.annotations.model import AnnotationDocument
-from electroclean.app.io.canonical import write_annotations_json
-from electroclean.app.io.naming import OutputLayout
-from electroclean.config.settings import load_settings
-from electroclean.training.assessment import (
+from electrotag.app.annotations.labels import default_catalogue
+from electrotag.app.annotations.model import AnnotationDocument
+from electrotag.app.io.canonical import write_annotations_json
+from electrotag.app.io.naming import OutputLayout
+from electrotag.config.settings import load_settings
+from electrotag.training.assessment import (
     METRICS,
     competency_html,
     competency_report,
@@ -24,7 +24,7 @@ from electroclean.training.assessment import (
     matching_in_words,
     verify_competency_report,
 )
-from electroclean.training.reference import QuizItem, ReferenceSet, reference_sets_dir
+from electrotag.training.reference import QuizItem, ReferenceSet, reference_sets_dir
 from tests.conftest import SUB1, SUB2
 
 CAT = default_catalogue()

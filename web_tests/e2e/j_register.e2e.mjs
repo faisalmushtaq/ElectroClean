@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { buildManifests } from '../../electroclean/web/static/js/data/register.js';
+import { buildManifests } from '../../electrotag/web/static/js/data/register.js';
 import { ensureFixtures, FIXTURES } from '../unit/_fixtures.mjs';
 
 async function nodeFiles(dir, name) {

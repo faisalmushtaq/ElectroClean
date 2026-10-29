@@ -9,9 +9,9 @@ import mne
 import numpy as np
 import pytest
 
-from electroclean.app.eeg.loading import RecordingLoadError, load_recording
-from electroclean.app.io.discovery import discover_recordings
-from electroclean.config.settings import FilterSettings, load_settings
+from electrotag.app.eeg.loading import RecordingLoadError, load_recording
+from electrotag.app.io.discovery import discover_recordings
+from electrotag.config.settings import FilterSettings, load_settings
 from tests.conftest import SUB1
 
 
@@ -185,7 +185,7 @@ def test_original_codes_like_artifact_codes_load_without_a_policy(rich_dataset, 
     assert lr.event_report.codes_also_used_for_artifacts == [101]
     lr.close()
     # An old study file that still sets the retired policy is accepted.
-    (root / "electroclean_study.json").write_text(
+    (root / "electrotag_study.json").write_text(
         json.dumps({"settings": {"events": {"collision_policy": "preserve_and_flag"}}}), encoding="utf-8"
     )
     settings, _ = load_settings(root)

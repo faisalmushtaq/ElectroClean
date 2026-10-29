@@ -6,27 +6,27 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { signIn, waitForRoute, clickDialogButton } from './helpers.mjs';
-import { QUIZ } from '../../electroclean/web/static/js/api/demo.js';
-import { demoSpecs, syntheticEdfBytes } from '../../electroclean/web/static/js/data/synthetic.js';
+import { QUIZ } from '../../electrotag/web/static/js/api/demo.js';
+import { demoSpecs, syntheticEdfBytes } from '../../electrotag/web/static/js/data/synthetic.js';
 
 const TRUTH = new Map(QUIZ.items.map((i) => [i.item_id, i]));
 
 async function current(page) {
   try {
     await page.waitForFunction(() => {
-      const q = globalThis.ElectroClean.quizView;
+      const q = globalThis.ElectroTag.quizView;
       return q && q.viewer && q.current && q.viewer.stats.traceMs > 0 && !q.busy;
     }, null, { timeout: 15000 });
   } catch (exc) {
     const why = await page.evaluate(() => {
-      const q = globalThis.ElectroClean.quizView;
-      return { route: globalThis.ElectroClean.route, quiz: Boolean(q), viewer: Boolean(q && q.viewer), busy: q && q.busy, current: Boolean(q && q.current),
+      const q = globalThis.ElectroTag.quizView;
+      return { route: globalThis.ElectroTag.route, quiz: Boolean(q), viewer: Boolean(q && q.viewer), busy: q && q.busy, current: Boolean(q && q.current),
         stats: q && q.viewer ? q.viewer.stats : null, error: q && q.viewer ? String(q.viewer.loadError || '') : '', body: document.querySelector('.quiz-body')?.textContent.slice(0, 400) };
     });
     throw new Error(`the quiz did not show its segment: ${JSON.stringify(why)}`);
   }
   return page.evaluate(() => {
-    const q = globalThis.ElectroClean.quizView;
+    const q = globalThis.ElectroTag.quizView;
     const v = q.viewer;
     return { item: q.current.item, index: q.current.index, ghost: v.ghost, view: { ...v.view }, total: v.durationTotal, rows: v.channels.length,
       progress: document.querySelector('.quiz-progress').textContent };
@@ -138,8 +138,8 @@ export const tests = [
 
       // the interaction log has the desktop's quiz events
       const events = await page.evaluate(async () => {
-        await globalThis.ElectroClean.flushLog();
-        return [...globalThis.ElectroClean.backend.visits.values()].flatMap((v) => v.events);
+        await globalThis.ElectroTag.flushLog();
+        return [...globalThis.ElectroTag.backend.visits.values()].flatMap((v) => v.events);
       });
       const of = (type) => events.filter((e) => e.type === type);
       assert.equal(of('quiz_item_shown').length, n);
@@ -167,7 +167,7 @@ export const tests = [
       const truth = TRUTH.get(c.item.item_id);
       const elsewhere = truth.correct_label === 'EMG-artifact' ? 'Chewing-artifact' : 'EMG-artifact';
       // the same segment answered on another page (the demonstration's study is in this browser)
-      await page.evaluate(([id, label]) => globalThis.ElectroClean.backend.quiz('example', { action: 'answer', item_id: id, label }), [c.item.item_id, elsewhere]);
+      await page.evaluate(([id, label]) => globalThis.ElectroTag.backend.quiz('example', { action: 'answer', item_id: id, label }), [c.item.item_id, elsewhere]);
       await answer(page, truth.correct_label);
       await page.waitForSelector('.quiz-feedback.note');
       assert.equal(await page.textContent('.quiz-feedback.note'), `Your earlier answer to that segment, ${elsewhere}, is the one kept.`);
@@ -175,14 +175,14 @@ export const tests = [
       assert.equal(c2.progress, `Segment 2 of ${QUIZ.items.length}`);
       assert.notEqual(c2.item.item_id, c.item.item_id);
       // the quiz finished on another page: the next answer finds it finished, and its score is shown
-      await page.evaluate(() => globalThis.ElectroClean.backend.quiz('example', { action: 'finish' }));
+      await page.evaluate(() => globalThis.ElectroTag.backend.quiz('example', { action: 'finish' }));
       await answer(page, TRUTH.get(c2.item.item_id).correct_label);
       await page.waitForSelector('.quiz-score');
       assert.equal(await page.textContent('.quiz-score'), `You answered 0 of 1 segment correctly (0%). ${QUIZ.items.length - 1} of the ${QUIZ.items.length} segments were not answered.`);
       assert.match(await page.textContent('.quiz-body'), /You have finished this quiz[\s\S]*This quiz was finished on another page or computer\./);
       const refused = await page.evaluate(async () => {
-        await globalThis.ElectroClean.flushLog();
-        return [...globalThis.ElectroClean.backend.visits.values()].flatMap((v) => v.events).filter((e) => e.type === 'quiz_answer_refused');
+        await globalThis.ElectroTag.flushLog();
+        return [...globalThis.ElectroTag.backend.visits.values()].flatMap((v) => v.events).filter((e) => e.type === 'quiz_answer_refused');
       });
       assert.deepEqual(refused.map((e) => [e.reason, e.kept_answer]), [['already_answered', elsewhere], ['finished', null]]);
     },
@@ -207,8 +207,8 @@ export const tests = [
       const n = QUIZ.items.length;
       assert.equal(await page.textContent('.quiz-score'), `You answered 1 of 1 segment correctly (100%). ${n - 1} of the ${n} segments were not answered.`);
       const ended = await page.evaluate(async () => {
-        await globalThis.ElectroClean.flushLog();
-        return [...globalThis.ElectroClean.backend.visits.values()].flatMap((v) => v.events).filter((e) => e.type === 'quiz_ended_early');
+        await globalThis.ElectroTag.flushLog();
+        return [...globalThis.ElectroTag.backend.visits.values()].flatMap((v) => v.events).filter((e) => e.type === 'quiz_ended_early');
       });
       assert.equal(ended.length, 1);
       assert.equal(ended[0].answered, 1);

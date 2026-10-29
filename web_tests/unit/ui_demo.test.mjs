@@ -3,8 +3,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { DemoBackend, exampleRecording, TRAINING_SET } from '../../electroclean/web/static/js/api/demo.js';
-import { truthAnnotations, demoSpecs } from '../../electroclean/web/static/js/data/synthetic.js';
+import { DemoBackend, exampleRecording, TRAINING_SET } from '../../electrotag/web/static/js/api/demo.js';
+import { truthAnnotations, demoSpecs } from '../../electrotag/web/static/js/data/synthetic.js';
 
 const memory = () => {
   const m = new Map();
@@ -74,7 +74,7 @@ test('drafts are kept and saving marks the recording done; a second save is refu
   await assert.rejects(() => b.submit({ recording_id: m.recording_id, mode: 'standard', context_id: '', annotations: [] }),
     (e) => e.status === 409 && e.code === 'already_done');
   const doc = b.resultsDocument();
-  assert.equal(doc.annotation_documents[0].schema, 'electroclean.annotations');
+  assert.equal(doc.annotation_documents[0].schema, 'electrotag.annotations');
   assert.equal(doc.annotation_documents[0].annotations[0].onset, 3);
 });
 

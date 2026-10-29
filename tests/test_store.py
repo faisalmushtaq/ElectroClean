@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from electroclean.app.annotations.labels import default_catalogue
-from electroclean.app.annotations.model import AnnotationError, RecordingInfo
-from electroclean.app.annotations.store import AnnotationStore
-from electroclean.app.annotations.timing import RecordingTiming
+from electrotag.app.annotations.labels import default_catalogue
+from electrotag.app.annotations.model import AnnotationError, RecordingInfo
+from electrotag.app.annotations.store import AnnotationStore
+from electrotag.app.annotations.timing import RecordingTiming
 
 CH = ("Fp1", "Fp2", "C3", "C4", "O1", "O2")
 
@@ -104,7 +104,7 @@ def test_repeated_same_label_annotations(store):
 
 
 def test_automatic_merging_can_be_switched_off(store):
-    from electroclean.app.annotations.store import AnnotationStore
+    from electrotag.app.annotations.store import AnnotationStore
 
     plain = AnnotationStore(store.recording, store.catalogue, auto_merge=False)
     plain.add_interval("EMG-artifact", 1.0, 2.0)

@@ -1,11 +1,11 @@
 // Registration in the browser (js/data/register.js): the manifests built from the datasets of
 // scripts/make_web_fixtures.py must equal, field by field, those the desktop's loader builds for the
-// same files and settings (web_tests/register_parity.py runs electroclean.web.registration.collect).
+// same files and settings (web_tests/register_parity.py runs electrotag.web.registration.collect).
 //
 // Tolerances: amplitudes (amplitude.report.amplitudes_v) to 1 part in 100,000, as the data layer's
 // own amplitude tests (the browser filters the display copy in single precision); mtime_ns to the
 // millisecond (a browser knows a file's time only to the millisecond). created_at and
-// electroclean_version are not compared. Paths that Python writes in full in a message (an
+// electrotag_version are not compared. Paths that Python writes in full in a message (an
 // ambiguous sidecar's folder, a malformed TSV) are compared from the dataset folder on, which is
 // all a browser knows of them.
 
@@ -21,13 +21,13 @@ import {
   DEFAULT_SETTINGS,
   findDatasetRecordings,
   registrationSettings,
-} from "../../electroclean/web/static/js/data/register.js";
+} from "../../electrotag/web/static/js/data/register.js";
 import { ensureFixtures, FIXTURES, ROOT } from "./_fixtures.mjs";
 
 const manifest = ensureFixtures();
 
 function python() {
-  for (const p of [process.env.ELECTROCLEAN_PYTHON, join(ROOT, ".venv", "bin", "python"), join(ROOT, ".venv", "Scripts", "python.exe"), "python3"]) {
+  for (const p of [process.env.ELECTROTAG_PYTHON, join(ROOT, ".venv", "bin", "python"), join(ROOT, ".venv", "Scripts", "python.exe"), "python3"]) {
     if (!p || ((p.includes("/") || p.includes("\\")) && !existsSync(p))) continue;
     const r = spawnSync(p, ["-I", "-c", "import mne, pybv"], { cwd: ROOT, encoding: "utf8" });
     if (r.status === 0) return p;
@@ -99,7 +99,7 @@ function expectedManifests() {
 
 /** Every difference between the browser's value and Python's, as "path: browser vs python". */
 function differences(js, py, path, ctx, out = []) {
-  if (path.endsWith(".created_at") || path.endsWith(".electroclean_version")) return out;
+  if (path.endsWith(".created_at") || path.endsWith(".electrotag_version")) return out;
   if (/\.mtime_ns$/.test(path)) {
     if (!(typeof js === "number" && Math.abs(js - py) <= 1e6 + 1024)) out.push(`${path}: ${js} vs ${py}`);
     return out;
@@ -134,7 +134,7 @@ function differences(js, py, path, ctx, out = []) {
   return out;
 }
 
-const skipPython = !PYTHON && "no Python with ElectroClean and MNE-Python (set ELECTROCLEAN_PYTHON)";
+const skipPython = !PYTHON && "no Python with ElectroTag and MNE-Python (set ELECTROTAG_PYTHON)";
 
 JOBS.forEach((job, k) => {
   test(`the same manifests as the desktop's registration: ${job.name}`, { skip: skipPython, timeout: 300000 }, async () => {
@@ -157,7 +157,7 @@ JOBS.forEach((job, k) => {
 });
 
 // The study server checks every manifest a browser sends before storing it (recordings_register,
-// electroclean/web/manifest_check.py), and keeps only the fields it knows: every manifest built
+// electrotag/web/manifest_check.py), and keeps only the fields it knows: every manifest built
 // here must pass, and come back unchanged. Until the server side is in this tree, the test says so.
 // bids_bv's sub-02 has an events.tsv row past the end of the recording on purpose: the loader keeps
 // it with a warning, and the server accepts it too.
@@ -253,7 +253,7 @@ test("files chosen one by one: recording IDs are their names", async () => {
   assert.equal(m.recording_id, "sub-02_task-rest_eeg.edf");
   assert.equal(m.files.channels_tsv, "sub-02_task-rest_channels.tsv");
   assert.deepEqual(problems, m.warnings);
-  assert.equal(m.schema, "electroclean.web_manifest");
+  assert.equal(m.schema, "electrotag.web_manifest");
   assert.match(m.created_at, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}[+-]\d\d:\d\d$/);
 });
 
@@ -269,7 +269,7 @@ test("a BrainVision recording whose companions are missing is refused in the des
 });
 
 test("the default settings are those of default_settings.json", () => {
-  const defaults = JSON.parse(readFileSync(join(ROOT, "electroclean", "config", "default_settings.json"), "utf8"));
+  const defaults = JSON.parse(readFileSync(join(ROOT, "electrotag", "config", "default_settings.json"), "utf8"));
   for (const block of Object.keys(DEFAULT_SETTINGS)) assert.deepEqual(DEFAULT_SETTINGS[block], defaults[block], block);
   const s = registrationSettings({ name: "x", settings: { channels: { types: { "EXG*": " MISC " } } } });
   assert.deepEqual(s.typePatterns, [["EXG*", "misc"]]);

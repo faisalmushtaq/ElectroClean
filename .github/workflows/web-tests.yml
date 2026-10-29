@@ -10,9 +10,9 @@ name: Browser version tests
 
 on:
   push:
-    branches: [main, claude/electroclean-web]
+    branches: [main, claude/electrotag-web]
     paths:
-      - "electroclean/**"
+      - "electrotag/**"
       - "web_tests/**"
       - "scripts/make_web_fixtures.py"
       - "scripts/test_*firebase*.sh"
@@ -63,11 +63,11 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Browser modules (node --test)
         env:
-          ELECTROCLEAN_PYTHON: python
+          ELECTROTAG_PYTHON: python
         run: node --test web_tests/unit/*.test.mjs
       - name: The application in Chromium (demonstration and the real study server)
         env:
-          ELECTROCLEAN_PYTHON: python
+          ELECTROTAG_PYTHON: python
         run: node web_tests/run_e2e.mjs --screenshots e2e-screenshots
       - name: Keep the screenshots
         if: always()
@@ -102,7 +102,7 @@ jobs:
           npx playwright install --with-deps webkit
       - name: The application in WebKit (demonstration, the real study server, iPads)
         env:
-          ELECTROCLEAN_PYTHON: python
+          ELECTROTAG_PYTHON: python
         run: node web_tests/run_e2e.mjs --browser webkit --screenshots webkit-screenshots
       - name: Keep the screenshots
         if: always()
@@ -126,7 +126,7 @@ jobs:
           cache-dependency-path: |
             requirements.txt
             requirements-dev.txt
-            electroclean/web/firebase/functions/requirements.txt
+            electrotag/web/firebase/functions/requirements.txt
       - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}

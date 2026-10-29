@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { EDGE_PX_PEN, EDGE_PX_TOUCH, MIN_PINCH_SPAN, PINCH_DEAD_PX, edgePx, isDoubleTap, pinchView, twoFingers } from '../../electroclean/web/static/js/viewer/touch.js';
+import { EDGE_PX_PEN, EDGE_PX_TOUCH, MIN_PINCH_SPAN, PINCH_DEAD_PX, edgePx, isDoubleTap, pinchView, twoFingers } from '../../electrotag/web/static/js/viewer/touch.js';
 
 const G = { x0: 100, plotW: 1000, rowH: 20, durationTotal: 70 };
 const start = (cx, cy, spanX, view = { startS: 10, durationS: 10, firstChannel: 4 }) =>

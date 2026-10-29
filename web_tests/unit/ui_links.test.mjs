@@ -6,8 +6,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 const { directLink, parseLinks, fileNameFromDisposition, base64Url, safeFileName, formatBytes, LinkProblem } =
-  await import('../../electroclean/web/static/js/data/links.js');
-const { fetchLinkedFiles, LinkError, problemForStatus } = await import('../../electroclean/web/static/js/data/fetch_links.js');
+  await import('../../electrotag/web/static/js/data/links.js');
+const { fetchLinkedFiles, LinkError, problemForStatus } = await import('../../electrotag/web/static/js/data/fetch_links.js');
 
 const kindOf = (fn) => { try { fn(); } catch (e) { assert.ok(e instanceof LinkProblem); return e.kind; } return null; };
 

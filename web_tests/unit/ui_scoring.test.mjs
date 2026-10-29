@@ -7,8 +7,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { hungarianMax, matchEvents, practiceFeedback, describePassRule } from '../../electroclean/web/static/js/training/scoring.js';
-import { demoSpecs, truthAnnotations } from '../../electroclean/web/static/js/data/synthetic.js';
+import { hungarianMax, matchEvents, practiceFeedback, describePassRule } from '../../electrotag/web/static/js/training/scoring.js';
+import { demoSpecs, truthAnnotations } from '../../electrotag/web/static/js/data/synthetic.js';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const ann = (id, label, on, dur, channels = []) => ({ annotation_id: id, label, onset_sample: on, duration_samples: dur, channels });
@@ -43,18 +43,18 @@ test('practice feedback: perfect, empty and mixed', () => {
   assert.equal(describePassRule({ event_f1: 0.8, label_accuracy: 0.8 }), '80% for finding the artifacts and for their types');
 });
 
-// A Python that can import ElectroClean: $ELECTROCLEAN_PYTHON, the repository's .venv, or python3.
+// A Python that can import ElectroTag: $ELECTROTAG_PYTHON, the repository's .venv, or python3.
 function findPython() {
-  for (const p of [process.env.ELECTROCLEAN_PYTHON, path.join(REPO, '.venv', 'bin', 'python'), 'python3']) {
+  for (const p of [process.env.ELECTROTAG_PYTHON, path.join(REPO, '.venv', 'bin', 'python'), 'python3']) {
     if (!p || (p.includes('/') && !fs.existsSync(p))) continue;
-    const r = spawnSync(p, ['-c', 'import electroclean.training.assessment'], { cwd: REPO, encoding: 'utf8' });
+    const r = spawnSync(p, ['-c', 'import electrotag.training.assessment'], { cwd: REPO, encoding: 'utf8' });
     if (r.status === 0) return p;
   }
   return null;
 }
 const PYTHON = findPython();
 
-test('the same scores and flags as the desktop application (Python)', { skip: !PYTHON && 'no Python with ElectroClean installed' }, () => {
+test('the same scores and flags as the desktop application (Python)', { skip: !PYTHON && 'no Python with ElectroTag installed' }, () => {
   const spec = demoSpecs()[2];
   const truth = truthAnnotations(spec);
   const shift = (a, d) => ({ ...a, annotation_id: `m-${a.annotation_id}`, onset_sample: a.onset_sample + d });

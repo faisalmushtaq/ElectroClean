@@ -1,4 +1,4 @@
-// The short-segment quiz with the real study server (`electroclean-web demo`): quiz items added to
+// The short-segment quiz with the real study server (`electrotag-web demo`): quiz items added to
 // the example set by the administrator (the demonstration study has none of its own), the quiz
 // listed in GET /me, its recordings opened from the demonstration's folder and checked against the
 // server's manifests, every segment answered, the score, and the result saved in the study folder
@@ -7,10 +7,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { signIn, waitForRoute } from './helpers.mjs';
 
-const PASSWORD = 'electroclean';
+const PASSWORD = 'electrotag';
 
 async function api(base, method, route, body, token = null) {
-  const headers = { 'X-ElectroClean': '1' };
+  const headers = { 'X-ElectroTag': '1' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (token) headers.Authorization = `Bearer ${token}`;
   const res = await fetch(`${base.replace(/\/+$/, '')}/api/v1${route}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -97,7 +97,7 @@ export const tests = [
       let n = 0;
       for (let guard = 0; guard < 200; guard++) {
         await page.waitForFunction(() => {
-          const q = globalThis.ElectroClean.quizView;
+          const q = globalThis.ElectroTag.quizView;
           return q && !q.busy && (document.querySelector('.quiz-score') || (q.viewer && q.viewer.stats.traceMs > 0) || document.querySelector('.quiz-body .banner'));
         }, null, { timeout: 30000 });
         if (await page.$('.quiz-score')) break;
@@ -107,7 +107,7 @@ export const tests = [
         await first.check();
         await page.click('[data-log="quiz-submit"]');
         n += 1;
-        const immediate = await page.evaluate(() => globalThis.ElectroClean.quizView.immediate);
+        const immediate = await page.evaluate(() => globalThis.ElectroTag.quizView.immediate);
         if (immediate) {
           await page.waitForSelector('.quiz-feedback.success, .quiz-feedback.banner');
           assert.match(await page.textContent('.quiz-feedback'), /^(Correct\.|Not quite)/);
@@ -125,7 +125,7 @@ export const tests = [
       const files = findFiles(t.study.dir, 'annotator-A01_quiz_');
       assert.equal(files.length, 1, `the quiz result in the study folder: ${files.join(', ')}`);
       const result = JSON.parse(fs.readFileSync(files[0], 'utf8'));
-      assert.equal(result.schema, 'electroclean.quiz_result');
+      assert.equal(result.schema, 'electrotag.quiz_result');
       assert.equal(result.completed, true);
       assert.equal(result.answers.length, n);
       assert.ok(result.answers.every((a) => typeof a.response_time_s === 'number' && a.response_time_s > 0), 'response times kept');

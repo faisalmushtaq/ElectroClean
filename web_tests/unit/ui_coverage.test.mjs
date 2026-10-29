@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import {
   MAX_INTERVALS, addInterval, complement, coveredS, fromDraft, mergeIntervals, nextUnviewed, percentText, toDraft, unviewed,
   viewStartFor, viewedFraction,
-} from '../../electroclean/web/static/js/viewer/coverage.js';
+} from '../../electrotag/web/static/js/viewer/coverage.js';
 
 // --------------------------------------------------------------- the coverage
 

@@ -1,13 +1,13 @@
-"""Copy the ElectroClean code the Cloud Functions need into their folder (run before deploying).
+"""Copy the ElectroTag code the Cloud Functions need into their folder (run before deploying).
 
     python scripts/vendor_functions.py [functions_folder]
 
 firebase.json runs this as the functions' predeploy step. Firebase uploads only the functions
-folder, so the ``electroclean`` package is copied into it, without the browser application and
+folder, so the ``electrotag`` package is copied into it, without the browser application and
 the functions themselves. The copy is ignored by git. It includes the
 analyses of the admin area (``reliability``, ``activity``, ``training``) and the kept registrations
 of the example training set (``config/example_set_manifests.json``), which the functions use
-because they do not include MNE-Python (electroclean/web/example.py). Only the standard library is
+because they do not include MNE-Python (electrotag/web/example.py). Only the standard library is
 needed to run this script.
 """
 
@@ -18,8 +18,8 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-DEFAULT = REPO / "electroclean" / "web" / "firebase" / "functions"
-#: Left out of the copy (paths relative to the electroclean package).
+DEFAULT = REPO / "electrotag" / "web" / "firebase" / "functions"
+#: Left out of the copy (paths relative to the electrotag package).
 EXCLUDE = (
     "web/static",
     "web/firebase/functions",
@@ -27,8 +27,8 @@ EXCLUDE = (
 
 
 def vendor(dest_functions: Path = DEFAULT) -> Path:
-    src = REPO / "electroclean"
-    dest = Path(dest_functions) / "electroclean"
+    src = REPO / "electrotag"
+    dest = Path(dest_functions) / "electrotag"
     if dest.exists():
         shutil.rmtree(dest)
 
@@ -48,4 +48,4 @@ def vendor(dest_functions: Path = DEFAULT) -> Path:
 
 if __name__ == "__main__":
     where = vendor(Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT)
-    print(f"Copied the ElectroClean code for the functions into {where}")
+    print(f"Copied the ElectroTag code for the functions into {where}")

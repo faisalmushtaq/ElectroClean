@@ -1,7 +1,7 @@
 // The browser application with a study on Firebase, on the Firebase Emulator Suite: the
 // administrator's commands set up the study, then an annotator signs in with email and password,
 // opens a recording from disk, annotates and saves, a trainee works through guided training and a
-// practice recording, and the results are exported into ElectroClean's folders.
+// practice recording, and the results are exported into ElectroTag's folders.
 //
 // Run it with scripts/test_web_firebase.sh, which starts the Auth, Firestore and Functions emulators
 // and runs this file inside `firebase emulators:exec`. Nothing reaches a real Firebase project: the
@@ -24,21 +24,21 @@ const { chromium } = require('playwright');
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..');
-const STATIC = path.join(REPO, 'electroclean', 'web', 'static');
-const PROJECT = process.env.GCLOUD_PROJECT || 'demo-electroclean';
+const STATIC = path.join(REPO, 'electrotag', 'web', 'static');
+const PROJECT = process.env.GCLOUD_PROJECT || 'demo-electrotag';
 const STUDY = 'webtest';
-const PASSWORD = 'electroclean-test';
+const PASSWORD = 'electrotag-test';
 const PYTHON = process.env.PYTHON || 'python3';
 const shotsDir = process.argv.includes('--screenshots') ? process.argv[process.argv.indexOf('--screenshots') + 1] : null;
 
 for (const name of ['FIRESTORE_EMULATOR_HOST', 'FIREBASE_AUTH_EMULATOR_HOST']) {
   if (!process.env[name]) throw new Error(`${name} is not set: run this with scripts/test_web_firebase.sh`);
 }
-const functionsHost = process.env.ELECTROCLEAN_FUNCTIONS_HOST || '127.0.0.1:5001';
+const functionsHost = process.env.ELECTROTAG_FUNCTIONS_HOST || '127.0.0.1:5001';
 
 function py(...args) {
-  const r = spawnSync(PYTHON, ['-m', 'electroclean.web.cli', ...args], { cwd: WORK, env: { ...process.env, PYTHONPATH: REPO }, encoding: 'utf8' });
-  if (r.status !== 0) throw new Error(`electroclean-web ${args.join(' ')} failed:\n${r.stdout}\n${r.stderr}`);
+  const r = spawnSync(PYTHON, ['-m', 'electrotag.web.cli', ...args], { cwd: WORK, env: { ...process.env, PYTHONPATH: REPO }, encoding: 'utf8' });
+  if (r.status !== 0) throw new Error(`electrotag-web ${args.join(' ')} failed:\n${r.stdout}\n${r.stderr}`);
   return r.stdout;
 }
 
@@ -154,17 +154,17 @@ async function main() {
       await page.keyboard.press('1');
       await drag(page, await eegPoint(page, 3.0), await eegPoint(page, 3.4));
       assert.equal((await annotations(page)).length, 1);
-      assert.equal(await page.evaluate(() => globalThis.ElectroClean.ws.s.saveRemote({ force: true })), true);
+      assert.equal(await page.evaluate(() => globalThis.ElectroTag.ws.s.saveRemote({ force: true })), true);
       await shot(page, 'annotate');
       await saveAndFinish(page);
       await waitForRoute(page, 'home', 60000);
       await clickDialogButton(page, 'Back to my recordings');
       assert.match(await page.textContent('main'), /1 of 3\s*recordings done/);
-      // The functions give the history and the achievements (ec_assignments' saved, ec_achievements).
+      // The functions give the history and the achievements (et_assignments' saved, et_achievements).
       assert.match(await page.textContent('.progress-card [data-stat="done"]'), /^1 of 3/);
       await page.click('.rec-tabs [data-tab="history"]');
       await page.locator('.recordings-card table.history tbody tr button', { hasText: 'Open to revise' }).waitFor();
-      await page.evaluate(() => globalThis.ElectroClean.flushLog());
+      await page.evaluate(() => globalThis.ElectroTag.flushLog());
     }],
     ['a trainee is guided by the functions and a practice recording is scored', async () => {
       const page = await newPage();
@@ -211,7 +211,7 @@ async function main() {
       assert.match(review, /Not yet: you need 80% for finding the artifacts and for their types/);
       assert.match(review, /You found 0 of 15 reference artifacts/);
       await shot(page, 'practice_review');
-      await page.evaluate(() => globalThis.ElectroClean.flushLog());
+      await page.evaluate(() => globalThis.ElectroTag.flushLog());
     }],
     ['a lead researcher runs the study from the admin area on Firebase', async () => {
       const page = await newPage();
@@ -278,7 +278,7 @@ async function main() {
       }
     }
     if (!failed) {
-      // The administrator's export: ElectroClean's usual results folders.
+      // The administrator's export: ElectroTag's usual results folders.
       const out = path.join(WORK, 'export');
       py('export', ...store, '--to', out);
       const root = path.join(out, 'Annotated_Events');
@@ -290,7 +290,7 @@ async function main() {
       ];
       for (const rel of expect) assert.ok(fs.existsSync(path.join(root, rel)), `the export has no ${rel}`);
       const tsv = fs.readFileSync(path.join(root, expect[0]), 'utf8');
-      assert.match(tsv, /\n3\.0\t0\.4\tEye-blink-artifact\tn\/a\t750\t\[\]\t103\telectroclean_artifact\t[0-9a-f]+\tA01\t/);
+      assert.match(tsv, /\n3\.0\t0\.4\tEye-blink-artifact\tn\/a\t750\t\[\]\t103\telectrotag_artifact\t[0-9a-f]+\tA01\t/);
       const logs = path.join(root, 'interaction_logs', 'annotator-A01');
       const lines = fs.readdirSync(logs).flatMap((f) => fs.readFileSync(path.join(logs, f), 'utf8').trim().split('\n').map((l) => JSON.parse(l)));
       assert.equal(lines[0].type, 'header');

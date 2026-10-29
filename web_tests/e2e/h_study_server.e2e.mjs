@@ -1,12 +1,12 @@
-// The browser application with the real study server (`electroclean-web demo`, started by
+// The browser application with the real study server (`electrotag-web demo`, started by
 // run_e2e.mjs): recordings opened from disk and recognised by their fingerprint, saving into
-// ElectroClean's folders, drafts kept on the server, the training programme checked and scored by
+// ElectroTag's folders, drafts kept on the server, the training programme checked and scored by
 // the server, and the interaction logs it writes.
 import fs from 'node:fs';
 import path from 'node:path';
 import { pressSave, signIn, waitForRoute, waitForTraces, annotations, eegPoint, drag, clickDialogButton } from './helpers.mjs';
 
-const PASSWORD = 'electroclean';
+const PASSWORD = 'electrotag';
 
 /** The files of one recording in the demonstration's recordings folder (all three for BrainVision). */
 function filesFor(dir, fileName) {
@@ -98,12 +98,12 @@ export const tests = [
       const tsv = fs.readFileSync(path.join(t.study.dir, 'study', 'Annotated_Events', 'annotator-A01', 'sub-001', 'eeg',
         'sub-001_task-rest_eeg_annotator-A01_events.tsv'), 'utf8');
       if (t.browserName === 'chromium') {
-        assert.match(tsv, /\n3\.0\t0\.4\tEye-blink-artifact\tn\/a\t750\t\[\]\t103\telectroclean_artifact\t[0-9a-f]+\tA01\t/);
+        assert.match(tsv, /\n3\.0\t0\.4\tEye-blink-artifact\tn\/a\t750\t\[\]\t103\telectrotag_artifact\t[0-9a-f]+\tA01\t/);
       } else {
         // WebKit (Safari's engine) reports the pointer in whole pixels, so the drag is within a pixel of 3.0–3.4 s.
         const row = tsv.split('\n').find((l) => l.includes('\tEye-blink-artifact\t')).split('\t');
         assert.ok(Math.abs(Number(row[0]) - 3.0) <= 0.01 && Math.abs(Number(row[1]) - 0.4) <= 0.02 && Math.abs(Number(row[4]) - 750) <= 3, row.join(' '));
-        assert.deepEqual([row[3], row[5], row[6], row[7], row[9]], ['n/a', '[]', '103', 'electroclean_artifact', 'A01']);
+        assert.deepEqual([row[3], row[5], row[6], row[7], row[9]], ['n/a', '[]', '103', 'electrotag_artifact', 'A01']);
         assert.match(row[8], /^[0-9a-f]+$/);
       }
 
@@ -111,10 +111,10 @@ export const tests = [
       await page.locator('button', { hasText: 'Open a recording from your computer' }).click();
       await openFile(t, page, name);
       await page.waitForFunction(() => /already completed/.test(document.querySelector('.result')?.textContent || ''), null, { timeout: 20000 });
-      assert.equal(await page.evaluate(() => globalThis.ElectroClean.route), 'open');
+      assert.equal(await page.evaluate(() => globalThis.ElectroTag.route), 'open');
 
       // The interaction log, written by the server: one visit_started, then the browser's events.
-      await page.evaluate(() => globalThis.ElectroClean.flushLog());
+      await page.evaluate(() => globalThis.ElectroTag.flushLog());
       const [log] = logEvents(t.study.dir, 'A01');
       assert.equal(log[0].type, 'header');
       assert.equal(log[0].client, 'web');
@@ -141,7 +141,7 @@ export const tests = [
       await drag(page, await eegPoint(page, 2.0), await eegPoint(page, 2.5));
       await page.keyboard.press('3');
       await drag(page, await eegPoint(page, 5.0), await eegPoint(page, 6.0));
-      assert.equal(await page.evaluate(() => globalThis.ElectroClean.ws.s.saveRemote({ force: true })), true);
+      assert.equal(await page.evaluate(() => globalThis.ElectroTag.ws.s.saveRemote({ force: true })), true);
       await page.context().close();
 
       // A new browser has no local copy: the draft comes from the server.
@@ -221,7 +221,7 @@ export const tests = [
       assert.match(review, /Not yet: you need 80% for finding the artifacts and for their types/);
       assert.match(review, /You found 0 of 15 reference artifacts/);
       await page.keyboard.press('n');
-      assert.match((await page.evaluate(() => globalThis.ElectroClean.debugState())).selection[0], /^(ref|you)-/);
+      assert.match((await page.evaluate(() => globalThis.ElectroTag.debugState())).selection[0], /^(ref|you)-/);
       await page.locator('.ws-actions button.primary').click();
       await waitForRoute(page, 'training');
       assert.match(await page.locator('[data-stage="practice"]').textContent(), /In progress/);
@@ -233,7 +233,7 @@ export const tests = [
         assert.ok(fs.existsSync(f), `no ${f}`);
       }
       assert.ok(fs.existsSync(path.join(t.study.dir, 'study', 'Annotated_Events', 'training_progress', 'example', 'annotator-T01.json')));
-      await page.evaluate(() => globalThis.ElectroClean.flushLog());
+      await page.evaluate(() => globalThis.ElectroTag.flushLog());
       const kinds = logEvents(t.study.dir, 'T01').flat().map((e) => e.type);
       for (const kind of ['guided_step_started', 'guided_check', 'guided_show_me', 'guided_step_completed', 'practice_scored']) {
         assert.ok(kinds.includes(kind), `no ${kind} event; got ${[...new Set(kinds)].join(', ')}`);

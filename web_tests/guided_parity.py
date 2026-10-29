@@ -16,8 +16,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from electroclean.app.annotations.model import ArtifactAnnotation  # noqa: E402
-from electroclean.training.guided import Step, Tolerance, check_step  # noqa: E402
+from electrotag.app.annotations.model import ArtifactAnnotation  # noqa: E402
+from electrotag.training.guided import Step, Tolerance, check_step  # noqa: E402
 
 
 def annotation(d: dict) -> ArtifactAnnotation:

@@ -105,7 +105,7 @@ export const tests = [
     name: 'the screens of the analyses, references and downloads, against a stand-in study server',
     async run(t) {
       const { assert } = t;
-      const { CATALOGUE } = await import('../../electroclean/web/static/js/api/demo_catalogue.js');
+      const { CATALOGUE } = await import('../../electrotag/web/static/js/api/demo_catalogue.js');
       const study = contractStudy(CATALOGUE);
       const page = await t.newPage({ width: 1280, height: 720, url: null });
       await page.route('**/api/v1/**', study.handle);
@@ -114,7 +114,7 @@ export const tests = [
       await waitForRoute(page, 'admin');
       await page.waitForSelector('.stat-tile');
       assert.equal(study.calls[0].op, 'overview');
-      assert.equal(study.calls[0].headers['x-electroclean'], '1');
+      assert.equal(study.calls[0].headers['x-electrotag'], '1');
       assert.equal(study.calls[0].headers.authorization, 'Bearer tok');
 
       // An invitation link, shown once (as a study on Firebase answers).

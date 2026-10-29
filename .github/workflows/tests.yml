@@ -1,10 +1,10 @@
 # Runs the Python test-suite: the annotation core, the agreement, training and activity analyses,
-# the ElectroClean server and the Firebase code (the browser application has its own workflow,
-# web-tests.yml). The commands (electroclean-web, electroclean-agreement, electroclean-admin and
-# electroclean-activity) run on researchers' own computers, so the suite runs on Windows, macOS and
+# the ElectroTag server and the Firebase code (the browser application has its own workflow,
+# web-tests.yml). The commands (electrotag-web, electrotag-agreement, electrotag-admin and
+# electrotag-activity) run on researchers' own computers, so the suite runs on Windows, macOS and
 # Linux for pushes to main, pull requests into main and runs started by hand ("Run workflow" in the
 # Actions tab). Pushes to other branches run it on Linux only, which is quicker. Python 3.12, the
-# oldest version ElectroClean supports, is tested on Linux every time.
+# oldest version ElectroTag supports, is tested on Linux every time.
 name: Tests
 
 on:
@@ -47,16 +47,16 @@ jobs:
           cache-dependency-path: |
             requirements.txt
             requirements-dev.txt
-      - name: Install requirements and ElectroClean
+      - name: Install requirements and ElectroTag
         run: |
           python -m pip install -r requirements-dev.txt
           python -m pip install --no-deps -e .
       - name: The commands start
         run: |
-          python -m electroclean
-          electroclean-web --help
-          electroclean-agreement --help
-          electroclean-admin --help
-          electroclean-activity --help
+          python -m electrotag
+          electrotag-web --help
+          electrotag-agreement --help
+          electrotag-admin --help
+          electrotag-activity --help
       - name: Run the test-suite
         run: python -m pytest -q

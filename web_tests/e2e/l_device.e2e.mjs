@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { signIn, waitForRoute, waitForTraces, clickDialogButton, eegPoint, drag, pressSave } from './helpers.mjs';
 import { cloudService, recordEvents, sentEvents, NAME } from './l_links.e2e.mjs';
-import { demoSpecs, syntheticEdfBytes } from '../../electroclean/web/static/js/data/synthetic.js';
+import { demoSpecs, syntheticEdfBytes } from '../../electrotag/web/static/js/data/synthetic.js';
 
 const require = createRequire(import.meta.url);
 
@@ -33,7 +33,7 @@ async function profilePage(t, { init = null } = {}) {
 async function kept(page) {
   return page.evaluate(async () => {
     const { deviceStore } = await import('./js/views/device.js');
-    const s = deviceStore(globalThis.ElectroClean);
+    const s = deviceStore(globalThis.ElectroTag);
     return { kind: s.kind, list: await s.list(), probe: s.probeProblem || '' };
   });
 }
@@ -48,14 +48,14 @@ async function opfsFiles(page) {
         if (h.kind === 'directory') await walk(h, `${at}${name}/`); else out.push(`${at}${name}`);
       }
     };
-    try { await walk(await (await navigator.storage.getDirectory()).getDirectoryHandle('electroclean-recordings'), ''); } catch { /* none */ }
+    try { await walk(await (await navigator.storage.getDirectory()).getDirectoryHandle('electrotag-recordings'), ''); } catch { /* none */ }
     return out;
   });
 }
 
 async function idbCount(page) {
   return page.evaluate(() => new Promise((resolve) => {
-    const req = indexedDB.open('electroclean-device', 1);
+    const req = indexedDB.open('electrotag-device', 1);
     req.onupgradeneeded = () => req.result.createObjectStore('recordings', { keyPath: 'key' }).createIndex('owner', 'owner');
     req.onsuccess = () => {
       const tx = req.result.transaction('recordings', 'readonly');
@@ -72,7 +72,7 @@ async function waitKept(page, n) {
     const k = await kept(page);
     if (k.list.length === n) return k;
     if (Date.now() - t0 > 20000) {
-      const why = await page.evaluate(() => globalThis.ElectroClean.deviceProblem || 'no problem reported');
+      const why = await page.evaluate(() => globalThis.ElectroTag.deviceProblem || 'no problem reported');
       throw new Error(`${k.list.length} recordings kept, expected ${n} (${why})`);
     }
     await page.waitForTimeout(100);
@@ -253,7 +253,7 @@ export const tests = [
           await page.waitForSelector('.dialog.device-full');
           assert.match(await page.textContent('.dialog.device-full'), /The recording is open, but this device has no room to keep a copy of it/);
           await clickDialogButton(page, 'OK');
-          assert.equal((await page.evaluate(() => globalThis.ElectroClean.route)), 'annotate');
+          assert.equal((await page.evaluate(() => globalThis.ElectroTag.route)), 'annotate');
           assert.deepEqual((await kept(page)).list, []);
           assert.ok((await sentEvents(page)).some((e) => e.type === 'device_full' && e.size_bytes === bytes.length));
       } finally {
@@ -270,7 +270,7 @@ export const tests = [
       await page.addInitScript(() => {
         if (navigator.storage) navigator.storage.getDirectory = () => Promise.reject(new DOMException('no', 'SecurityError'));
         const open = indexedDB.open.bind(indexedDB);
-        indexedDB.open = (name, v) => { if (name === 'electroclean-device') throw new DOMException('no', 'InvalidStateError'); return open(name, v); };
+        indexedDB.open = (name, v) => { if (name === 'electrotag-device') throw new DOMException('no', 'InvalidStateError'); return open(name, v); };
       });
       await page.goto(t.base);
       await signIn(page, 'A01');

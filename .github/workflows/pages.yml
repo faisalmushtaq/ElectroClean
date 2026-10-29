@@ -1,16 +1,16 @@
-# Publishes the browser application (electroclean/web/static) on GitHub Pages.
+# Publishes the browser application (electrotag/web/static) on GitHub Pages.
 #
 # The site is kept on the gh-pages branch: main publishes the released application at the site's
-# root, and claude/electroclean-web publishes work in progress under preview/, so a preview
+# root, and claude/electrotag-web publishes work in progress under preview/, so a preview
 # never replaces what annotators use. GitHub Pages must be set to "Deploy from a branch", branch
 # gh-pages, folder "/ (root)" (Settings, Pages); see docs/web/server.md.
 name: GitHub Pages
 
 on:
   push:
-    branches: [main, claude/electroclean-web]
+    branches: [main, claude/electrotag-web]
     paths:
-      - "electroclean/web/static/**"
+      - "electrotag/web/static/**"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -35,14 +35,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          app=src/electroclean/web/static
+          app=src/electrotag/web/static
           if [ ! -f "$app/index.html" ]; then
             # No application on this branch yet: publish a holding page, so that the gh-pages
             # branch exists and can be chosen in Settings, Pages.
             app=holding
             mkdir -p "$app"
-            printf '%s\n' '<!doctype html><meta charset="utf-8"><title>ElectroClean</title>' \
-              '<p>ElectroClean in the browser is being built. This page will show the preview when it is ready.</p>' \
+            printf '%s\n' '<!doctype html><meta charset="utf-8"><title>ElectroTag</title>' \
+              '<p>ElectroTag in the browser is being built. This page will show the preview when it is ready.</p>' \
               > "$app/index.html"
           fi
           git init -q site
@@ -69,9 +69,9 @@ jobs:
           touch .nojekyll
           if [ ! -f index.html ]; then
             # Until main publishes a released version, the root points to the preview.
-            printf '%s\n' '<!doctype html><meta charset="utf-8"><title>ElectroClean</title>' \
+            printf '%s\n' '<!doctype html><meta charset="utf-8"><title>ElectroTag</title>' \
               '<meta http-equiv="refresh" content="0; url=preview/">' \
-              '<p>ElectroClean in the browser is in preview: <a href="preview/">open the preview</a>.</p>' > index.html
+              '<p>ElectroTag in the browser is in preview: <a href="preview/">open the preview</a>.</p>' > index.html
           fi
           git add -A
           if git diff --cached --quiet; then

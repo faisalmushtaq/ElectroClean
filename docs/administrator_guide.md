@@ -8,23 +8,23 @@ it. The steps themselves are in three other guides. The
 [admin area](web/admin.md) is where a lead researcher runs a study in the
 browser: accounts, recordings, assignments, settings, reference sets, progress
 and results. [Running a study on Firebase](web/firebase.md) sets up a real
-study from the beginning, and [the ElectroClean server](web/server.md) covers
+study from the beginning, and [the ElectroTag server](web/server.md) covers
 the demonstration and a study on a computer of your own.
 
 The same settings and rules apply wherever a choice is made. The admin area
-changes the study it is signed in to. The command `electroclean-web` does the
+changes the study it is signed in to. The command `electrotag-web` does the
 same from a terminal, for example when a study is created
-(`electroclean-web init-study --settings settings.json`) and when the
-recordings of a dataset folder are registered (`electroclean-web register`).
-The command `electroclean-admin` works on a folder: a dataset folder whose
+(`electrotag-web init-study --settings settings.json`) and when the
+recordings of a dataset folder are registered (`electrotag-web register`).
+The command `electrotag-admin` works on a folder: a dataset folder whose
 reference sets you prepare before registering them, or the study folder of an
-ElectroClean server, which keeps the study's settings in
-`electroclean_study.json` just as a dataset folder does. Each command explains
-its options, for example `electroclean-admin set-criteria --help`.
+ElectroTag server, which keeps the study's settings in
+`electrotag_study.json` just as a dataset folder does. Each command explains
+its options, for example `electrotag-admin set-criteria --help`.
 
 ## The settings
 
-Every setting has a default, in `electroclean/config/default_settings.json`,
+Every setting has a default, in `electrotag/config/default_settings.json`,
 and a study gives only the ones it changes, as the `settings` block of a study
 file (the format is in [file_formats.md](file_formats.md)):
 
@@ -37,7 +37,7 @@ file (the format is in [file_formats.md](file_formats.md)):
 The admin area's settings change the blocks `filters`, `display`, `channels`,
 `selection`, `logging`, `annotation` and `loading`, and the study keeps them
 with its records: in Firestore for a study on Firebase, and in the study
-folder's `electroclean_study.json` on an ElectroClean server. The settings that
+folder's `electrotag_study.json` on an ElectroTag server. The settings that
 decide what a recording consists of (the channels to hide, the channel types,
 the BIDS options under `loading` and, for a dataset folder, the file endings
 under `discovery`) are applied when the recording is registered, because the
@@ -46,10 +46,10 @@ them before registering the recordings.
 
 ## Recordings and their channels
 
-ElectroClean reads BrainVision (`*_eeg.vhdr` with its `.eeg` and `.vmrk`
+ElectroTag reads BrainVision (`*_eeg.vhdr` with its `.eeg` and `.vmrk`
 files), EDF and EDF+ (`*_eeg.edf`) and BDF (`*_eeg.bdf`) recordings. A
 recording is read when it is registered, on the computer that holds it (with
-MNE-Python by `electroclean-web register`, or by the browser in the admin area,
+MNE-Python by `electrotag-web register`, or by the browser in the admin area,
 which builds the same registration), and again when an annotator opens their
 own copy, by the browser itself, which reproduces MNE's reading
 ([architecture](web/architecture.md)). The registration stores the
@@ -133,14 +133,14 @@ for recordings made with 60 Hz mains. For a reliability study all annotators
 should see the same filtered signal, so the filters can be fixed with
 `"filters": {"locked": true}` together with the values wanted
 (`highpass_enabled`, `highpass_hz`, `notch_enabled`, `notch_hz`,
-`notch_harmonics`). In a folder, `electroclean-admin fix-filters` and
+`notch_harmonics`). In a folder, `electrotag-admin fix-filters` and
 `unlock-filters` write the same settings:
 
 ```bash
-electroclean-admin fix-filters /data/MyStudy                     # 1 Hz high-pass, 50 Hz notch, FIR
-electroclean-admin fix-filters /data/MyStudy --notch 60          # for 60 Hz mains
-electroclean-admin fix-filters /data/MyStudy --no-highpass --notch off
-electroclean-admin unlock-filters /data/MyStudy
+electrotag-admin fix-filters /data/MyStudy                     # 1 Hz high-pass, 50 Hz notch, FIR
+electrotag-admin fix-filters /data/MyStudy --notch 60          # for 60 Hz mains
+electrotag-admin fix-filters /data/MyStudy --no-highpass --notch off
+electrotag-admin unlock-filters /data/MyStudy
 ```
 
 Annotators then see the filters in the viewing options but cannot change
@@ -173,7 +173,7 @@ low-density consumer headsets such as Emotiv's record larger signals, and
 {"settings": {"display": {"scalings": {"eeg": 1e-4}}}}
 ```
 
-ElectroClean measures the amplitude of a recording's EEG, EOG, EMG and ECG
+ElectroTag measures the amplitude of a recording's EEG, EOG, EMG and ECG
 channels in a few short stretches spread through the recording (the median
 over channels of the 99.5th percentile of each channel's deviation from its
 median). An amplitude outside what the body produces (below 0.25 µV, or above
@@ -230,7 +230,7 @@ more than ten seconds. The interaction log records each pause and its length
 ## Which recording comes next
 
 Each annotator works on the recordings assigned to them, in the admin area or
-with `electroclean-web assign`. The page of their recordings offers one of them
+with `electrotag-web assign`. The page of their recordings offers one of them
 as the next to do. A recording they have started and not finished always comes
 first; otherwise the setting `selection.strategy` decides. With `random` (the
 default) it is a random choice among their open recordings, which stays the
@@ -239,16 +239,16 @@ annotator gets a reproducible order, derived from the seed and their annotator
 ID. With `manual` it is the first open recording in the order they were
 assigned. Annotators can still open any of their recordings from the list.
 
-To plan a controlled overlap, `electroclean-admin allocate` computes a
+To plan a controlled overlap, `electrotag-admin allocate` computes a
 balanced allocation for the recordings of a folder: every recording is given
 to exactly the number of annotators asked for, balancing the workload and the
 number of recordings each pair of annotators shares. It writes the allocation
-into the folder's study file, where `electroclean-admin show` lists it; assign
+into the folder's study file, where `electrotag-admin show` lists it; assign
 those recordings to each annotator in the admin area or with
-`electroclean-web assign`.
+`electrotag-web assign`.
 
 ```bash
-electroclean-admin allocate /data/MyStudy --annotators A01 A02 A03 CAM \
+electrotag-admin allocate /data/MyStudy --annotators A01 A02 A03 CAM \
     --raters-per-recording 2 --seed 7
 ```
 
@@ -274,7 +274,7 @@ HED-SCORE artifact names. Older study files that still set
 
 ## Saving, and unfinished work
 
-Save and Finish sends the annotations to the study, where ElectroClean's own
+Save and Finish sends the annotations to the study, where ElectroTag's own
 code validates them, writes the five result files, reads them back, checks them
 and only then marks the recording complete for that annotator (the journalled
 save described in the [developer guide](developer_guide.md)). If saving is
@@ -299,7 +299,7 @@ method used is stored as provenance with each reference. Each reference is
 given its use by an explicit choice, without a default, because a reference
 imported for practice by mistake would give annotators feedback on an
 assessment recording; when trainees have already done a recording that is
-then given another use, ElectroClean names them and warns that the assessment
+then given another use, ElectroTag names them and warns that the assessment
 would not be blinded for them.
 
 A reference set keeps its training recordings apart from the study's: a study
@@ -334,33 +334,33 @@ There are three ways to establish a reference.
    with it.
 
 The admin area makes references in all three ways from the annotations saved
-in the study. In a folder, `electroclean-admin` does the same from files
+in the study. In a folder, `electrotag-admin` does the same from files
 (`create-reference-set`, then `add-reference`, `build-consensus` with
 `--min-agreement`, `--merge-gap`, `--min-duration` and `--disagreements`,
-`export-disagreements` and `add-adjudicated`), and `electroclean-web register`
+`export-disagreements` and `add-adjudicated`), and `electrotag-web register`
 then stores the folder's reference sets with the study, with their experts'
 annotations and without their recordings:
 
 ```bash
-electroclean-admin create-reference-set /data/MyStudy pilot --name "Pilot set" \
+electrotag-admin create-reference-set /data/MyStudy pilot --name "Pilot set" \
     --method consensus --experts E1 E2 E3
-electroclean-admin build-consensus /data/MyStudy pilot E1.json E2.json E3.json \
+electrotag-admin build-consensus /data/MyStudy pilot E1.json E2.json E3.json \
     --use assessment --disagreements dis.tsv
 ```
 
 Files imported into a reference set are copied into it with their checksums,
 and a reference file that has been edited afterwards is refused. In a folder,
-reference sets are kept in `derivatives/electroclean_reference_sets` unless
+reference sets are kept in `derivatives/electrotag_reference_sets` unless
 `training.reference_sets_dir` names another place.
 
 A reference set can be restricted to particular annotators (none means
-anyone): in the admin area, or with `electroclean-admin assign /data/MyStudy
+anyone): in the admin area, or with `electrotag-admin assign /data/MyStudy
 pilot CAM A03`. `practice_review` (on by default) offers a side-by-side review
 against the reference after each practice recording.
 
 ### Competency criteria
 
-ElectroClean does not impose a universal threshold: no criteria are set until
+ElectroTag does not impose a universal threshold: no criteria are set until
 you set them, and reports then say "not determined". Choose criteria from
 pilot data, expert agreement and the intended use of the labels. Thresholds can
 only take values the measure can have (0 to 1 for proportions, -1 to 1 for
@@ -393,7 +393,7 @@ refers to a different version of the recording); the report lists the
 reasons.
 
 ```bash
-electroclean-admin set-criteria /data/MyStudy pilot \
+electrotag-admin set-criteria /data/MyStudy pilot \
     --criterion event_f1:0.8 --criterion event_recall:0.7:each_category \
     --criterion label_accuracy:0.85 --min-reference-events 3
 ```
@@ -407,7 +407,7 @@ measures are based on them.
 ### The training programme
 
 An annotator enrolled in a reference set's training programme (in the admin
-area, or with `electroclean-web assign T01 --programme SET`) goes straight to
+area, or with `electrotag-web assign T01 --programme SET`) goes straight to
 their training path when they sign in. They work through three stages of the
 set, each unlocked by the one before: **learn with the experts** (the set's
 guided recordings), **on your own** (its practice recordings, with a pass
@@ -418,8 +418,8 @@ the next step; the [guide for annotators](web/using.md) describes what they
 see.
 
 **The example training set.** Until your experts' files are ready, the example
-training set (in the admin area, or `electroclean-web create-example-set`, or
-`electroclean-admin create-example-set` in a folder) is a set called *Example
+training set (in the admin area, or `electrotag-web create-example-set`, or
+`electrotag-admin create-example-set` in a folder) is a set called *Example
 training set (placeholder)* with three simulated recordings: two for guided
 learning and one for practice. Its reference is the simulation's ground truth,
 known exactly because the artifacts were simulated, and each guided step has a
@@ -429,7 +429,7 @@ ready.
 
 **Real expert files.** Each expert annotates the recordings in standard mode,
 and their annotations become references as described above. In a folder,
-`electroclean-admin import-recording /data/MyStudy SET recording_eeg.vhdr
+`electrotag-admin import-recording /data/MyStudy SET recording_eeg.vhdr
 E1_annotations.json --use guided` copies the recording, its companion files and
 its BIDS sidecars into the set's own folder (`recordings/` inside the set, laid
 out like a small BIDS dataset) and uses the expert's file as the reference. To
@@ -443,12 +443,12 @@ each artifact (a dashed outline of the experts' interval and channels), the
 second names the type and shows a screen that contains it, and later ones only
 say that another artifact follows. Each recording's level can be chosen
 (`show`, `find` or `find_unnamed`; `auto` chooses by its place), in the admin
-area or with `electroclean-admin set-guidance /data/MyStudy SET RECORDING
+area or with `electrotag-admin set-guidance /data/MyStudy SET RECORDING
 show|find|find_unnamed`.
 
 **Notes from the experts.** Each guided step can show the experts' explanation
 of that artifact, written in the admin area or with
-`electroclean-admin set-note /data/MyStudy SET ANNOTATION_ID "Look at the
+`electrotag-admin set-note /data/MyStudy SET ANNOTATION_ID "Look at the
 frontal channels first"`. The notes are stored under `guided.notes` in the
 set's `reference_set.json`.
 
@@ -458,7 +458,7 @@ or 20 % of the experts' duration (whichever is larger), it has the same scope
 (whole montage or particular channels) and, for channel-specific annotations,
 at least 75 % of the channels are the same (Jaccard index: the channels both
 chose divided by the channels either chose). These are set for each reference
-set, in the admin area or with `electroclean-admin set-programme
+set, in the admin area or with `electrotag-admin set-programme
 /data/MyStudy SET --tolerance-s 0.25 --tolerance-fraction 0.2
 --channel-overlap 0.75`. Alternatives that are also accepted for a type can be
 listed in `guided.tolerance.accepted_labels` in `reference_set.json`, for
@@ -467,7 +467,7 @@ example `{"Eye-blink-artifact": ["Eye-artifact"]}`.
 **The pass mark for practice.** A practice recording passes when the
 annotator finds at least 80 % of the experts' artifacts (event F1) and gives
 at least 80 % of those found the experts' type, by default; both are set for
-each reference set (`electroclean-admin set-programme /data/MyStudy SET
+each reference set (`electrotag-admin set-programme /data/MyStudy SET
 --pass-f1 0.8 --pass-types 0.8` in a folder). One passed practice recording
 unlocks the assessment. When every practice recording has been done without
 passing, the training path offers one of them again, saved as a second attempt
@@ -480,8 +480,8 @@ each guided recording's summary (steps, stars, attempts, steps shown) is also
 in its session file, so the progress can be rebuilt if it is lost. Every step
 (each check with what differed, each *Show me*, each step's time and stars,
 each practice score, and each item opened in a review) is recorded in the
-visit's interaction log. The admin area, `electroclean-web progress` and
-`electroclean-admin progress` list, for each annotator, the guided recordings
+visit's interaction log. The admin area, `electrotag-web progress` and
+`electrotag-admin progress` list, for each annotator, the guided recordings
 done with their stars, the practice recordings done and whether one passed,
 and the assessment recordings done.
 
@@ -490,7 +490,7 @@ and the assessment recordings done.
 In **practice** annotators see feedback after each recording and can review
 their annotations next to the reference, with each missed, extra or relabelled
 artifact listed to step through. In **assessment** they see nothing until all
-assessment recordings are complete; ElectroClean then makes the competency
+assessment recordings are complete; ElectroTag then makes the competency
 report and shows the annotator a summary: the overall result, the table of
 criteria and what to do next. The full report, which shows where the
 reference's artifacts are, is for you. Guided, practice and assessment
@@ -508,12 +508,12 @@ every input file. It is in the admin area, in the exported results
 (`training/<set>/reports/`), and can be made again from a results folder:
 
 ```bash
-electroclean-admin progress /data/MyStudy pilot --annotators CAM A03
-electroclean-admin report /data/MyStudy pilot CAM
+electrotag-admin progress /data/MyStudy pilot --annotators CAM A03
+electrotag-admin report /data/MyStudy pilot CAM
 ```
 
 Each competency report carries a `results_sha256` digest of its contents.
-`electroclean.training.assessment.verify_competency_report(path)` recomputes
+`electrotag.training.assessment.verify_competency_report(path)` recomputes
 it from the saved JSON file, and regenerating a report from the same files
 gives the same digest, which makes the assessment reproducible.
 
@@ -529,7 +529,7 @@ eye blink) and an explanation, shown after each answer when the quiz is used
 for practice. Items are added in the admin area, or in a folder with:
 
 ```bash
-electroclean-admin add-quiz-item /data/MyStudy pilot --item-id q01 \
+electrotag-admin add-quiz-item /data/MyStudy pilot --item-id q01 \
     --recording sub-002/eeg/sub-002_task-rest_eeg.vhdr --start 9.2 --end 10.8 \
     --label EMG-artifact --explanation "High-frequency activity over temporal channels"
 ```
@@ -543,20 +543,20 @@ Results are saved in `training/<set>/quiz/` in the results.
 
 ## Interaction logs (research data)
 
-By default ElectroClean keeps a log of every visit: the time of every click,
+By default ElectroTag keeps a log of every visit: the time of every click,
 key press and shortcut, what part of the recording was on screen, every
 annotation created, changed or deleted, the dialogs shown and the answers
 given, and when the annotator was idle or working in another program. Text
 typed into fields is never recorded, nor anything typed into password fields,
 nor the display name. After signing in, annotators are told that their use of
-ElectroClean is recorded; they must also be told what is recorded and why, and
+ElectroTag is recorded; they must also be told what is recorded and why, and
 agree to it, under the study's ethics approval, in the same way as for any
 other data collected from participants. A study that does not need the logs
 switches them off with `{"settings": {"logging": {"interactions": false}}}`;
 `logging.pointer_hz` (5 by default, 0 for none) sets how often the pointer
 position over the EEG is recorded, and `logging.idle_after_s` (30 s) how long
 without input counts as idle. The admin area shows the tables and report of
-time, clicks, keys and learning curves, and `electroclean-activity` makes them
+time, clicks, keys and learning curves, and `electrotag-activity` makes them
 from exported results; every event and column is described in
 [interaction logs](activity_logs.md).
 
@@ -564,12 +564,12 @@ from exported results; every event and column is described in
 
 A study file written for the desktop application (version 1.1.0 and earlier)
 can hold three things the browser does not use: the administrator passphrase
-(`admin_passphrase`, set with `electroclean-admin set-passphrase`), which kept
+(`admin_passphrase`, set with `electrotag-admin set-passphrase`), which kept
 annotators out of the desktop's administrator tools, where accounts with the
 administrator role now do that; the list of annotators with
 `allow_unlisted_annotators`, where accounts now decide who annotates; and
 manual assignments in its `allocation` block, where the study's assignments now
-decide. `electroclean-admin resolve-failure` marks a load failure in a results
+decide. `electrotag-admin resolve-failure` marks a load failure in a results
 folder of the desktop application as resolved; in a browser study a recording
 that cannot be read is reported when it is registered. The settings blocks of
 such a file apply unchanged.
@@ -582,6 +582,6 @@ such a file apply unchanged.
 2. Fix the viewing filters, choose how the next recording is chosen, and set
    the channels to hide and their types before registering the recordings.
 3. Register the recordings and check that every one was registered; the
-   admin area and `electroclean-web list` show what the study holds.
+   admin area and `electrotag-web list` show what the study holds.
 4. Agree the settings of the agreement analysis and write them in a JSON file
-   (`electroclean-agreement --config settings.json …`).
+   (`electrotag-agreement --config settings.json …`).

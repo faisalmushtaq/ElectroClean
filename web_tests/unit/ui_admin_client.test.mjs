@@ -1,5 +1,5 @@
 // The admin area's client method, admin(op, body), on the study server (POST /admin/{op}) and on
-// Firebase (the callable ec_admin with {op, ...body}), as docs/web/api.md "Administration" says:
+// Firebase (the callable et_admin with {op, ...body}), as docs/web/api.md "Administration" says:
 // the same headers and errors as every other request, and a second attempt only for reads.
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
@@ -11,8 +11,8 @@ const store = () => {
 globalThis.sessionStorage = store();
 globalThis.localStorage = store();
 
-const { HttpBackend } = await import('../../electroclean/web/static/js/api/http.js');
-const { FirebaseBackend, isAdminRead } = await import('../../electroclean/web/static/js/api/firebase.js');
+const { HttpBackend } = await import('../../electrotag/web/static/js/api/http.js');
+const { FirebaseBackend, isAdminRead } = await import('../../electrotag/web/static/js/api/firebase.js');
 
 let calls = [];
 let reply = null;
@@ -27,7 +27,7 @@ beforeEach(() => {
 
 test('server: an operation is POST /api/v1/admin/{op} with the token, the header and a JSON body', async () => {
   reply = () => ({ status: 200, body: { users: [] } });
-  globalThis.sessionStorage.setItem('electroclean.token', JSON.stringify({ server: 'https://s.org', token: 'T' }));
+  globalThis.sessionStorage.setItem('electrotag.token', JSON.stringify({ server: 'https://s.org', token: 'T' }));
   const b = new HttpBackend('https://s.org');
   assert.deepEqual(await b.admin('users_list'), { users: [] });
   await b.admin('user_add', { annotator_id: 'A03', role: 'annotator' });
@@ -38,7 +38,7 @@ test('server: an operation is POST /api/v1/admin/{op} with the token, the header
   assert.deepEqual(JSON.parse(calls[1].body), { annotator_id: 'A03', role: 'annotator' });
   for (const c of calls) {
     assert.equal(c.headers.Authorization, 'Bearer T');
-    assert.equal(c.headers['X-ElectroClean'], '1');
+    assert.equal(c.headers['X-ElectroTag'], '1');
     assert.equal(c.headers['Content-Type'], 'application/json');
     assert.equal(c.credentials, 'omit');
   }
@@ -74,11 +74,11 @@ function fakeSdk(handler) {
   return { sdk, fcalls };
 }
 
-test('Firebase: every operation is ec_admin with the study, the op and the body', async () => {
+test('Firebase: every operation is et_admin with the study, the op and the body', async () => {
   const { sdk, fcalls } = fakeSdk((name, d) => ({ echo: d.op }));
   const b = await FirebaseBackend.create({ config: {}, study: 'pilot', sdk });
   assert.deepEqual(await b.admin('assign', { annotator_ids: ['A01'], all: true, mode: 'standard', context_id: '' }), { echo: 'assign' });
-  assert.deepEqual(fcalls[0], { name: 'ec_admin', region: 'europe-west2',
+  assert.deepEqual(fcalls[0], { name: 'et_admin', region: 'europe-west2',
     data: { study: 'pilot', annotator_ids: ['A01'], all: true, mode: 'standard', context_id: '', op: 'assign' } });
   // The body cannot change which operation is called.
   await b.admin('overview', { op: 'user_remove' });

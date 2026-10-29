@@ -1,5 +1,5 @@
 // The study server backend (js/api/http.js) follows docs/web/api.md: the bearer token, the
-// X-ElectroClean header, sessionStorage only, and the errors.
+// X-ElectroTag header, sessionStorage only, and the errors.
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -10,7 +10,7 @@ const store = () => {
 globalThis.sessionStorage = store();
 globalThis.localStorage = store();
 
-const { HttpBackend, normaliseServer, idPath, checkHealth } = await import('../../electroclean/web/static/js/api/http.js');
+const { HttpBackend, normaliseServer, idPath, checkHealth } = await import('../../electrotag/web/static/js/api/http.js');
 
 let calls = [];
 let reply = null;
@@ -35,10 +35,10 @@ test('signing in keeps the token for the tab and sends it with the header', asyn
   const b = new HttpBackend('https://s.org');
   await b.login('A01', 'pw');
   assert.equal(calls[0].url, 'https://s.org/api/v1/login');
-  assert.equal(calls[0].headers['X-ElectroClean'], '1');
+  assert.equal(calls[0].headers['X-ElectroTag'], '1');
   assert.equal(calls[0].headers.Authorization, undefined);
   assert.equal(calls[0].credentials, 'omit');
-  assert.deepEqual(JSON.parse(globalThis.sessionStorage.getItem('electroclean.token')), { server: 'https://s.org', token: 'T' });
+  assert.deepEqual(JSON.parse(globalThis.sessionStorage.getItem('electrotag.token')), { server: 'https://s.org', token: 'T' });
   assert.equal(globalThis.localStorage.keys().length, 0);
   await b.putDraft('sub-01/eeg/x.edf', 'guided', 'set 1', { annotations: [] });
   const put = calls[1];
@@ -55,22 +55,22 @@ test('errors carry the server message; 401 signs out', async () => {
   let expired = 0;
   reply = (url) => (url.endsWith('/submissions') ? { status: 409, body: { error: 'already_done', message: 'Saved already.' } }
     : { status: 401, body: { error: 'not_signed_in', message: 'Please sign in again.' } });
-  globalThis.sessionStorage.setItem('electroclean.token', JSON.stringify({ server: 'https://s.org', token: 'T' }));
+  globalThis.sessionStorage.setItem('electrotag.token', JSON.stringify({ server: 'https://s.org', token: 'T' }));
   const b = new HttpBackend('https://s.org', { onUnauthorized: () => { expired += 1; } });
   await assert.rejects(() => b.submit({}), (e) => e.status === 409 && e.code === 'already_done' && e.message === 'Saved already.');
   await assert.rejects(() => b.assignments(), (e) => e.status === 401);
   assert.equal(expired, 1);
   assert.equal(b.signedIn, false);
-  assert.equal(globalThis.sessionStorage.getItem('electroclean.token'), null);
+  assert.equal(globalThis.sessionStorage.getItem('electrotag.token'), null);
 });
 
-test('the health check needs an ElectroClean answer', async () => {
+test('the health check needs an ElectroTag answer', async () => {
   reply = () => ({ status: 200, body: { ok: true, study: 'S' } });
   assert.equal((await checkHealth('https://s.org')).study, 'S');
   assert.equal(calls[0].url, 'https://s.org/api/v1/health');
   assert.equal(calls[0].headers.Authorization, undefined);
   reply = () => ({ status: 200, body: { hello: 'world' } });
-  await assert.rejects(() => checkHealth('https://s.org'), (e) => e.code === 'not_electroclean');
+  await assert.rejects(() => checkHealth('https://s.org'), (e) => e.code === 'not_electrotag');
 });
 
 test('events can be sent while the page closes (keepalive)', async () => {
@@ -104,15 +104,15 @@ test('an invitation link is checked and accepted without a sign-in, then signs t
   await b.inviteAccept('t'.repeat(43), 'a long password');
   assert.equal(calls[1].url, 'https://s.org/api/v1/invite/accept');
   assert.equal(calls[1].headers.Authorization, undefined);
-  assert.deepEqual(JSON.parse(globalThis.sessionStorage.getItem('electroclean.token')), { server: 'https://s.org', token: 'NEW' });
+  assert.deepEqual(JSON.parse(globalThis.sessionStorage.getItem('electrotag.token')), { server: 'https://s.org', token: 'NEW' });
   reply = () => ({ status: 409, body: { error: 'invite_used', message: 'This invitation link has been used already.' } });
   await assert.rejects(() => b.inviteCheck('t'.repeat(43)), (e) => e.code === 'invite_used' && /used already/.test(e.message));
 });
 
 test('the sign-in page names what could not be reached, and never an undefined address', async () => {
-  const { unreachableText } = await import('../../electroclean/web/static/js/api/choose.js');
+  const { unreachableText } = await import('../../electrotag/web/static/js/api/choose.js');
   assert.match(unreachableText({ kind: 'server', address: 'https://study.example.org' }), /^The study server at https:\/\/study\.example\.org does not answer\. /);
-  assert.match(unreachableText({ kind: 'server', address: 'https://x.org' }, { code: 'not_electroclean' }), /does not answer as an ElectroClean study server/);
+  assert.match(unreachableText({ kind: 'server', address: 'https://x.org' }, { code: 'not_electrotag' }), /does not answer as an ElectroTag study server/);
   assert.match(unreachableText({ kind: 'firebase' }, new Error('offline')), /^The study could not be loaded \(offline\)/);
   for (const where of [{ kind: 'demo', source: 'none' }, null, { kind: 'server' }]) {
     const text = unreachableText(where, new Error('boom'));

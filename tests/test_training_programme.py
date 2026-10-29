@@ -11,13 +11,13 @@ from pathlib import Path
 
 import pytest
 
-from electroclean.app.annotations.labels import default_catalogue
-from electroclean.app.annotations.model import ArtifactAnnotation
-from electroclean.app.io.canonical import write_annotations_json
-from electroclean.app.io.discovery import discover_recordings
-from electroclean.synthetic import truth_document, write_recording
-from electroclean.training.examples import create_example_training_set
-from electroclean.training.guided import (
+from electrotag.app.annotations.labels import default_catalogue
+from electrotag.app.annotations.model import ArtifactAnnotation
+from electrotag.app.io.canonical import write_annotations_json
+from electrotag.app.io.discovery import discover_recordings
+from electrotag.synthetic import truth_document, write_recording
+from electrotag.training.examples import create_example_training_set
+from electrotag.training.guided import (
     Step,
     Tolerance,
     build_steps,
@@ -25,13 +25,13 @@ from electroclean.training.guided import (
     extras,
     stars_for,
 )
-from electroclean.training.programme import PassRule
-from electroclean.training.reference import (
+from electrotag.training.programme import PassRule
+from electrotag.training.reference import (
     ReferenceSet,
     import_expert_recording,
     reference_sets_dir,
 )
-from electroclean.training.review import review_flags
+from electrotag.training.review import review_flags
 
 CAT = default_catalogue()
 SF = 250.0
@@ -174,7 +174,7 @@ def test_review_flags_tie_each_disagreement_to_an_annotation():
 
 # ----------------------------------------------------------- administration
 def test_cli_for_the_programme(dataset, tmp_path, capsys):
-    from electroclean.training.cli import main
+    from electrotag.training.cli import main
 
     root, _ = dataset
     assert main(["create-example-set", str(root)]) == 0

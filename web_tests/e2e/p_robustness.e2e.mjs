@@ -10,12 +10,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { clickDialogButton, drag, eegPoint, openExample, pressSave, signIn, state, waitForRoute, waitForTraces } from './helpers.mjs';
-import { demoSpecs, syntheticEdfBytes } from '../../electroclean/web/static/js/data/synthetic.js';
+import { demoSpecs, syntheticEdfBytes } from '../../electrotag/web/static/js/data/synthetic.js';
 import { cloudService } from './l_links.e2e.mjs';
 
 const require = createRequire(import.meta.url);
 
-const PASSWORD = 'electroclean';
+const PASSWORD = 'electrotag';
 const HOUR_MS = 3600 * 1000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -27,7 +27,7 @@ async function mark(page, from, to) {
 /** Change the demonstration's study settings (annotation block) and read GET /me again. */
 async function studySettings(page, annotation) {
   await page.evaluate(async (a) => {
-    const app = globalThis.ElectroClean;
+    const app = globalThis.ElectroTag;
     Object.assign(app.backend._admin.s.settings.annotation, a);
     app.backend._save();
     await app.refreshMe();
@@ -41,7 +41,7 @@ async function studySettings(page, annotation) {
  */
 async function slowDemo(page, name, ms, failSource = null) {
   await page.evaluate(([n, wait, failSrc]) => {
-    const b = globalThis.ElectroClean.backend;
+    const b = globalThis.ElectroTag.backend;
     globalThis.__calls = globalThis.__calls || {};
     globalThis.__calls[n] = [];
     const orig = (b.__orig = b.__orig || {})[n] || b[n].bind(b);
@@ -65,8 +65,8 @@ const calls = (page, name) => page.evaluate((n) => (globalThis.__calls && global
 /** Every event logged in this visit so far (the demonstration). */
 async function events(page) {
   return page.evaluate(async () => {
-    await globalThis.ElectroClean.flushLog();
-    return [...globalThis.ElectroClean.backend.visits.values()].flatMap((v) => v.events);
+    await globalThis.ElectroTag.flushLog();
+    return [...globalThis.ElectroTag.backend.visits.values()].flatMap((v) => v.events);
   });
 }
 
@@ -81,7 +81,7 @@ async function setHidden(page, hidden) {
 
 async function clock(page) {
   return page.evaluate(() => {
-    const c = globalThis.ElectroClean.ws.clock;
+    const c = globalThis.ElectroTag.ws.clock;
     return { elapsed: c.elapsedS, isPaused: c.paused, reason: c.pauseReason, pausedFor: c.pausedForS };
   });
 }
@@ -94,13 +94,13 @@ const asksBeforeLeaving = (page) => page.evaluate(() => {
 });
 
 async function adminLogin(t) {
-  const res = await fetch(`${t.study.base}api/v1/login`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-ElectroClean': '1' },
+  const res = await fetch(`${t.study.base}api/v1/login`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-ElectroTag': '1' },
     body: JSON.stringify({ annotator_id: 'ADMIN', password: PASSWORD }) });
   return (await res.json()).token;
 }
 
 async function adminCall(t, token, op, body) {
-  const res = await fetch(`${t.study.base}api/v1/admin/${op}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'X-ElectroClean': '1' },
+  const res = await fetch(`${t.study.base}api/v1/admin/${op}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'X-ElectroTag': '1' },
     body: JSON.stringify(body) });
   const data = await res.json();
   if (!res.ok) throw new Error(`${op}: ${res.status} ${JSON.stringify(data)}`);
@@ -169,7 +169,7 @@ async function profile(t, { init = null } = {}) {
 async function keptList(page) {
   return page.evaluate(async () => {
     const { deviceStore } = await import('./js/views/device.js');
-    return deviceStore(globalThis.ElectroClean).list();
+    return deviceStore(globalThis.ElectroTag).list();
   });
 }
 
@@ -182,7 +182,7 @@ async function opfsFiles(page) {
         if (h.kind === 'directory') await walk(h, `${at}${name}/`); else out.push(`${at}${name}`);
       }
     };
-    try { await walk(await (await navigator.storage.getDirectory()).getDirectoryHandle('electroclean-recordings'), ''); } catch { /* none */ }
+    try { await walk(await (await navigator.storage.getDirectory()).getDirectoryHandle('electrotag-recordings'), ''); } catch { /* none */ }
     return out;
   });
 }
@@ -223,7 +223,7 @@ export const tests = [
       await slowDemo(page, 'putDraft', 0);
       await pressSave(page);
       await clickDialogButton(page, 'Save and Finish');
-      await page.waitForFunction(() => globalThis.ElectroClean.ws && globalThis.ElectroClean.ws.s.submitting);
+      await page.waitForFunction(() => globalThis.ElectroTag.ws && globalThis.ElectroTag.ws.s.submitting);
       // While the study has not answered: the page goes out of sight, B is pressed, Close is pressed.
       await setHidden(page, true);
       await setHidden(page, false);
@@ -232,7 +232,7 @@ export const tests = [
       await page.click('[data-log="close"]');
       assert.equal(await page.locator('.dialog').count(), 0, 'Close asks nothing while the save waits');
       assert.match(await page.textContent('.ws-message'), /wait for the answer/);
-      assert.equal(await page.evaluate(() => globalThis.ElectroClean.ws.saveAndFinish()), false, 'a second Save and Finish does nothing');
+      assert.equal(await page.evaluate(() => globalThis.ElectroTag.ws.saveAndFinish()), false, 'a second Save and Finish does nothing');
       await page.waitForSelector('.dialog .dialog-title', { timeout: 15000 });
       assert.equal(await page.textContent('.dialog .dialog-title'), 'Saved');
       assert.equal((await calls(page, 'submit')).length, 1);
@@ -254,7 +254,7 @@ export const tests = [
       await page.waitForTimeout(300);
       assert.equal(await page.locator('.dialog').count(), 1, 'one question, still open after a double click');
       await clickDialogButton(page, 'Submit the revision');
-      await page.waitForFunction(() => globalThis.ElectroClean.ws.s.submitting);
+      await page.waitForFunction(() => globalThis.ElectroTag.ws.s.submitting);
       await page.click('.ws-revision button.primary', { force: true }).catch(() => {});
       await page.click('.ws-revision [data-log="leave-revision"]');
       assert.equal(await page.locator('.dialog').count(), 0, 'Leave without changes waits for the save');
@@ -264,7 +264,7 @@ export const tests = [
       await clickDialogButton(page, 'Back to my recordings');
       await waitForRoute(page, 'home');
       assert.equal((await calls(page, 'submit')).length, 1, 'one revision sent');
-      const subs = await page.evaluate(() => globalThis.ElectroClean.backend.state.submissions.filter((s) => s.recording_id.includes('demo01')).map((s) => s.attempt));
+      const subs = await page.evaluate(() => globalThis.ElectroTag.backend.state.submissions.filter((s) => s.recording_id.includes('demo01')).map((s) => s.attempt));
       assert.deepEqual(subs, [1, 2], 'one new attempt');
       const kinds = (await events(page)).map((e) => e.type);
       assert.ok(!kinds.includes('revision_left'), 'the revision was not left');
@@ -279,7 +279,7 @@ export const tests = [
       await waitForTraces(page);
       await mark(page, 14.2, 15.0);
       await page.evaluate(() => {
-        const b = globalThis.ElectroClean.backend;
+        const b = globalThis.ElectroTag.backend;
         const submit = b.__orig.submit;
         let n = 0;
         b.submit = async (body) => {
@@ -300,7 +300,7 @@ export const tests = [
       assert.match(await page.textContent('.dialog'), /most likely saved your revision/);
       await clickDialogButton(page, 'OK');
       await waitForRoute(page, 'home');
-      const versions = await page.evaluate(() => globalThis.ElectroClean.backend.state.submissions.filter((x) => x.recording_id.includes('demo01')).map((x) => x.attempt));
+      const versions = await page.evaluate(() => globalThis.ElectroTag.backend.state.submissions.filter((x) => x.recording_id.includes('demo01')).map((x) => x.attempt));
       assert.deepEqual(versions, [1, 2, 3], 'the revision whose answer was lost was saved once');
     },
   },
@@ -318,7 +318,7 @@ export const tests = [
       // Save and Finish lists the parts not yet viewed, and the annotator leaves it open.
       await page.click('.ws-actions button.primary');
       await page.waitForSelector('.dialog.coverage-check');
-      await page.waitForFunction(() => globalThis.ElectroClean.ws.clock.paused, null, { timeout: 10000 });
+      await page.waitForFunction(() => globalThis.ElectroTag.ws.clock.paused, null, { timeout: 10000 });
       assert.equal((await clock(page)).reason, 'idle');
       assert.ok(await page.evaluate(() => document.querySelector('.dialog').contains(document.activeElement)), 'the focus stays in the dialog');
       await page.keyboard.press('Enter'); // the dialog's own button (Go to the first)
@@ -329,13 +329,13 @@ export const tests = [
       // The computer sleeps with the page on screen: the first tick after waking comes hours later.
       const before = (await clock(page)).elapsed;
       await page.evaluate((h8) => {
-        const ws = globalThis.ElectroClean.ws;
+        const ws = globalThis.ElectroTag.ws;
         const c = ws.clock;
         // The last input was 8 hours ago, with the clock running and the work done by then as now.
         c.runningSince -= h8; c.startedAt -= h8;
         ws._lastInput -= h8;
       }, 8 * HOUR_MS);
-      await page.waitForFunction(() => globalThis.ElectroClean.ws.clock.paused, null, { timeout: 5000 });
+      await page.waitForFunction(() => globalThis.ElectroTag.ws.clock.paused, null, { timeout: 5000 });
       const after = await clock(page);
       assert.equal(after.reason, 'idle');
       assert.ok(after.elapsed < before + 10, `the night is not counted: ${before} s before, ${after.elapsed} s after`);
@@ -356,7 +356,7 @@ export const tests = [
       await setHidden(page, true);
       // The night: the page was hidden 8 hours ago, the clock running since before then.
       await page.evaluate((h8) => {
-        const ws = globalThis.ElectroClean.ws;
+        const ws = globalThis.ElectroTag.ws;
         ws._hiddenAt -= h8;
         ws.clock.runningSince -= h8; ws.clock.startedAt -= h8;
       }, 8 * HOUR_MS);
@@ -407,7 +407,7 @@ export const tests = [
       assert.equal((await calls(page, 'setAchievements')).length, 1, 'never repeated automatically');
       // A slow read of the facts and a change made while it waits: the change stays.
       const kept = await page.evaluate(async () => {
-        const app = globalThis.ElectroClean;
+        const app = globalThis.ElectroTag;
         const b = app.backend;
         b.setAchievements = b.__orig.setAchievements;
         const read = b.achievements.bind(b);
@@ -421,7 +421,7 @@ export const tests = [
       assert.equal(kept, 12, 'the late read did not bring back the older goal');
       // Two changes at once (the goal, then the leaderboard) go one after the other; the last answer has both.
       const both = await page.evaluate(async () => {
-        const app = globalThis.ElectroClean;
+        const app = globalThis.ElectroTag;
         const b = app.backend;
         const set = b.setAchievements.bind(b);
         const order = [];
@@ -446,7 +446,7 @@ export const tests = [
       // Two answers out of order: the first (slow) one fails, the second (quick) one arrives first.
       await slowDemo(page, 'admin', 0, 'const [op, body] = args; if (op === "stats" && i === 0) return { status: 503, code: "unavailable", message: "Late failure" }; return null;');
       await page.evaluate(() => {
-        const b = globalThis.ElectroClean.backend;
+        const b = globalThis.ElectroTag.backend;
         const admin = b.admin;
         let n = 0;
         b.admin = async (op, body) => { if (op === 'stats' && n++ === 0) await new Promise((r) => setTimeout(r, 1200)); return admin(op, body); };
@@ -471,7 +471,7 @@ export const tests = [
       // Bulk: the second of three fails half way; Retire again and Remove wait; the admin moves away and back.
       await slowDemo(page, 'admin', 0, 'const [op] = args; return op === "recording_update" && (globalThis.__updates = (globalThis.__updates || 0) + 1) === 2 ? { status: 409, code: "conflict", message: "Refused for the test." } : null;');
       await page.evaluate(() => {
-        const b = globalThis.ElectroClean.backend;
+        const b = globalThis.ElectroTag.backend;
         const admin = b.admin;
         b.admin = async (op, body) => { if (op === 'recording_update') await new Promise((r) => setTimeout(r, 500)); return admin(op, body); };
       });
@@ -545,19 +545,19 @@ export const tests = [
         // While another recording is open, a late file from an earlier open view does not close it.
         await toOpenView(page);
         await page.fill('.link-panel textarea', `${cloud.base}/slow/${NAME}`);
-        await page.evaluate(() => { globalThis.__late = globalThis.ElectroClean.openView; });
+        await page.evaluate(() => { globalThis.__late = globalThis.ElectroTag.openView; });
         await page.click('[data-log="open-link"]');
         await page.waitForSelector('[data-log="stop-link"]:not([hidden])');
         await page.click('main .back');
         await waitForRoute(page, 'home');
         await openExample(page, 1);
-        const open = await page.evaluate(() => globalThis.ElectroClean.ws.s.recording.fileName);
+        const open = await page.evaluate(() => globalThis.ElectroTag.ws.s.recording.fileName);
         await page.evaluate(async () => { // a file that arrives for the view that was left
           const f = new File([new Uint8Array(10)], 'late.edf');
           await globalThis.__late.handle([f]);
         });
         await sleep(500);
-        assert.equal(await page.evaluate(() => globalThis.ElectroClean.ws && globalThis.ElectroClean.ws.s.recording.fileName), open, 'the open recording stays open');
+        assert.equal(await page.evaluate(() => globalThis.ElectroTag.ws && globalThis.ElectroTag.ws.s.recording.fileName), open, 'the open recording stays open');
         await page.click('[data-log="close"]');
         await clickDialogButton(page, 'Discard and close');
         await waitForRoute(page, 'home');
@@ -620,7 +620,7 @@ export const tests = [
         const sha = (await keptList(a))[0].sha256;
         const whole = await a.evaluate(async (hx) => {
           const { deviceStore } = await import('./js/views/device.js');
-          const got = await deviceStore(globalThis.ElectroClean).open(hx);
+          const got = await deviceStore(globalThis.ElectroTag).open(hx);
           return got && got.files[0].size;
         }, sha);
         assert.equal(whole, bytes.length);
@@ -640,9 +640,9 @@ export const tests = [
         await a.locator('.recordings-card table.history tbody tr').first().locator('button', { hasText: 'Open to revise' }).click();
         await waitForRoute(a, 'annotate', 30000);
         await waitForTraces(a);
-        assert.equal(await a.evaluate(() => globalThis.ElectroClean.ws.s.recording.source.kind), 'device');
+        assert.equal(await a.evaluate(() => globalThis.ElectroTag.ws.s.recording.source.kind), 'device');
         await sleep(300);
-        await b.evaluate(() => globalThis.ElectroClean.loadAssignments().then(() => globalThis.ElectroClean.showHome()));
+        await b.evaluate(() => globalThis.ElectroTag.loadAssignments().then(() => globalThis.ElectroTag.showHome()));
         await b.click('.device-line [data-log="device-manage"]');
         await b.waitForSelector('.dialog.device');
         await b.click('[data-log="device-remove-finished"]');
@@ -652,13 +652,13 @@ export const tests = [
         assert.equal((await keptList(b)).length, 1);
         // Tab A reads on: its file can still be read, and the next screen draws.
         const readable = await a.evaluate(async () => {
-          const f = globalThis.ElectroClean.ws.s.recording.sourceFiles[0];
+          const f = globalThis.ElectroTag.ws.s.recording.sourceFiles[0];
           try { return (await f.slice(f.size - 64, f.size).arrayBuffer()).byteLength; } catch (e) { return `${e.name}: ${e.message}`; }
         });
         assert.equal(readable, 64, 'the open recording\'s file is still there');
         await a.keyboard.press('ArrowRight');
         await a.waitForTimeout(500);
-        assert.equal(await a.evaluate(() => globalThis.ElectroClean.ws.viewer.stats.traceMs > 0), true);
+        assert.equal(await a.evaluate(() => globalThis.ElectroTag.ws.viewer.stats.traceMs > 0), true);
         // Once tab A has left the revision, the copy can go.
         await a.click('.ws-revision [data-log="leave-revision"]');
         await waitForRoute(a, 'home');
@@ -681,7 +681,7 @@ export const tests = [
       await signIn(page, 'A01');
       await waitForRoute(page, 'home');
       await page.evaluate((n) => {
-        const b = globalThis.ElectroClean.backend;
+        const b = globalThis.ElectroTag.backend;
         const s = b._admin.s;
         for (let i = 0; i < n; i++) {
           const id = `p${String(i).padStart(4, '0')}`;
@@ -703,7 +703,7 @@ export const tests = [
         b._save();
       }, 300);
       const timing = await page.evaluate(async () => {
-        const app = globalThis.ElectroClean;
+        const app = globalThis.ElectroTag;
         await app.loadAssignments();
         const t0 = performance.now();
         app.showHome();
@@ -757,7 +757,7 @@ export const tests = [
       await signIn(page, 'ADMIN');
       await waitForRoute(page, 'admin-annotators');
       const token = await page.evaluate(async () => {
-        const b = globalThis.ElectroClean.backend;
+        const b = globalThis.ElectroTag.backend;
         const out = await b.admin('user_add', { annotator_id: 'X41', display_name: 'Exp', role: 'annotator', invite: true, expires_days: 1 });
         b._admin._invites.X41.expires_ms = Date.now() - 1000;
         b._save();
@@ -810,7 +810,7 @@ export const tests = [
       await page.click('.invite-form button[type="submit"]', { force: true }).catch(() => {});
       await page.press('#invite-password-again', 'Enter').catch(() => {});
       await page.waitForFunction(() => Boolean(document.querySelector('.dialog.logging-notice'))
-        || (globalThis.ElectroClean && globalThis.ElectroClean.route !== 'signin'), null, { timeout: 30000 });
+        || (globalThis.ElectroTag && globalThis.ElectroTag.route !== 'signin'), null, { timeout: 30000 });
       const notice = page.locator('.dialog.logging-notice button', { hasText: 'Continue' });
       if (await notice.count()) await notice.click();
       await waitForRoute(page, 'home', 20000);

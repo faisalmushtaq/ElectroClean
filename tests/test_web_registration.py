@@ -1,4 +1,4 @@
-"""Checking the manifests a browser sends (electroclean/web/manifest_check.py), and the example set's kept ones."""
+"""Checking the manifests a browser sends (electrotag/web/manifest_check.py), and the example set's kept ones."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from electroclean.web.manifest_check import MAX_MANIFEST_BYTES, ManifestProblem, check_manifest
+from electrotag.web.manifest_check import MAX_MANIFEST_BYTES, ManifestProblem, check_manifest
 from tests.web_helpers import build_manifests
 
 SUFFIXES = ("_eeg.vhdr", "_eeg.edf", "_eeg.bdf")
@@ -19,7 +19,7 @@ SUFFIXES = ("_eeg.vhdr", "_eeg.edf", "_eeg.bdf")
 @pytest.fixture(scope="module")
 def manifests(tmp_path_factory: pytest.TempPathFactory) -> dict[str, dict[str, Any]]:
     """Real manifests (MNE-Python) of BrainVision, EDF+ and BDF recordings with what makes them hard."""
-    from electroclean.synthetic import write_edf, write_edf_recording, write_recording
+    from electrotag.synthetic import write_edf, write_edf_recording, write_recording
 
     root = tmp_path_factory.mktemp("reg-data")
     write_recording(root / "sub-001" / "eeg", "sub-001_task-rest", sfreq=250.0, duration_s=30.0, seed=1,
@@ -179,7 +179,7 @@ def _to_12_digits(value: Any) -> Any:
 
 
 def test_synthetic_recordings_are_the_same_bytes_on_every_system(tmp_path: Path) -> None:
-    from electroclean.synthetic import write_recording
+    from electrotag.synthetic import write_recording
 
     write_recording(tmp_path, "sub-01_task-rest", sfreq=250.0, duration_s=8.0, seed=1, discontinuity_s=4.0)
     texts = [p for p in tmp_path.iterdir() if p.suffix in (".vhdr", ".vmrk", ".tsv", ".json")]
@@ -190,10 +190,10 @@ def test_synthetic_recordings_are_the_same_bytes_on_every_system(tmp_path: Path)
 
 def test_the_kept_example_manifests_are_those_mne_makes() -> None:
     """If this fails, the example set, the simulation or the loader changed: run
-    ``python -m electroclean.web.example`` and commit electroclean/config/example_set_manifests.json."""
-    from electroclean.app.annotations.labels import default_catalogue
-    from electroclean.config.settings import load_settings
-    from electroclean.web.example import _stable, build_example, template_manifests
+    ``python -m electrotag.web.example`` and commit electrotag/config/example_set_manifests.json."""
+    from electrotag.app.annotations.labels import default_catalogue
+    from electrotag.config.settings import load_settings
+    from electrotag.web.example import _stable, build_example, template_manifests
 
     settings, _ = load_settings(None)
     live = build_example(settings, default_catalogue(), use_mne=True)
@@ -208,9 +208,9 @@ def test_the_kept_example_manifests_are_those_mne_makes() -> None:
 
 
 def test_the_example_set_is_refused_when_its_files_differ(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    import electroclean.web.example as example
-    from electroclean.app.annotations.labels import default_catalogue
-    from electroclean.config.settings import load_settings
+    import electrotag.web.example as example
+    from electrotag.app.annotations.labels import default_catalogue
+    from electrotag.config.settings import load_settings
 
     data = json.loads(example.TEMPLATE_PATH.read_text(encoding="utf-8"))
     data["manifests"][0]["fingerprint"]["eeg"]["sha256"] = "0" * 64
@@ -226,9 +226,9 @@ def test_the_example_set_is_refused_when_its_files_differ(monkeypatch: pytest.Mo
 
 
 def test_the_register_command_records_how_recordings_came(tmp_path: Path) -> None:
-    from electroclean.synthetic import write_edf_recording
-    from electroclean.web.cli import main as cli
-    from electroclean.web.store_files import FilesStore
+    from electrotag.synthetic import write_edf_recording
+    from electrotag.web.cli import main as cli
+    from electrotag.web.store_files import FilesStore
 
     write_edf_recording(tmp_path / "data" / "sub-001" / "eeg", "sub-001_task-rest", duration_s=10.0, seed=4)
     study = tmp_path / "study"
@@ -239,5 +239,5 @@ def test_the_register_command_records_how_recordings_came(tmp_path: Path) -> Non
     assert m["registration"]["registered_via"] == "command" and m["registration"]["registered_by"] == "command"
     entries, _next = store.audit_page(None, 10)
     assert [(e["op"], e["by"]) for e in entries] == [("recordings_register", "command"), ("study_create", "command")]
-    assert "electroclean-web" in entries[0]["summary"] and str(tmp_path) not in json.dumps(entries)
+    assert "electrotag-web" in entries[0]["summary"] and str(tmp_path) not in json.dumps(entries)
     store.close()

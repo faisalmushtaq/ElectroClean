@@ -1,6 +1,6 @@
-# ElectroClean in the browser: architecture
+# ElectroTag in the browser: architecture
 
-ElectroClean keeps every EEG recording on the annotator's own computer.
+ElectroTag keeps every EEG recording on the annotator's own computer.
 The annotator receives the recordings locally (for example on an encrypted
 drive) and opens them in a web page; the page reads the file directly from
 their disk, so the EEG is never uploaded. A light server holds the study's
@@ -19,15 +19,15 @@ application in one of two ways:
 * **Study on Firebase** (the chosen way to run real studies): sign-in with
   Firebase Authentication, the study's records in Firestore (in Google's London
   region, europe-west2), and the private work done by Python Cloud Functions
-  that reuse ElectroClean's own code: matching a file against the register,
+  that reuse ElectroTag's own code: matching a file against the register,
   validating and storing results, checking guided training attempts and scoring
   practice recordings, so the experts' answers never reach the browser. The
   Firebase project's public web configuration is given in `config.json` beside
   the application (`{"firebase": {...}, "study": "<study id>"}`); a link may
   pick another study of the same project with `?study=<id>`. A command exports
-  the results from Firestore into ElectroClean's usual folders for the
+  the results from Firestore into ElectroTag's usual folders for the
   agreement and activity analyses.
-* **Study on an ElectroClean server** (`electroclean-web`, Python): the same
+* **Study on an ElectroTag server** (`electrotag-web`, Python): the same
   operations over HTTP, used for local testing and the demonstration server,
   and available to a study that prefers its own server (for example a
   university machine). Its address comes from `?server=https://…`,
@@ -51,7 +51,7 @@ returned by sign-in) and allows the application's origin through CORS.
 ## Who does what
 
 **The browser** reads EDF, EDF+, BDF and BrainVision files, computes the
-fingerprint of the data file (SHA-256, the same checksum that ElectroClean's
+fingerprint of the data file (SHA-256, the same checksum that ElectroTag's
 Python code records for a recording's `eeg` source file), filters for display,
 draws the EEG, and provides the annotation and training tools (number keys and
 type buttons, the type picker, M / [ / ] marks, N / P, C, Draw as / Change to,
@@ -62,14 +62,14 @@ the server. For administrators it holds the admin area (docs/web/admin.md),
 which registers recordings from the files on the administrator's own computer
 and sends the study only their manifests.
 
-**The server** (Python, `electroclean/web/`) holds:
+**The server** (Python, `electrotag/web/`) holds:
 
 * the study: settings, the label catalogue, accounts and assignments;
 * the register of recordings: for each one a *manifest* made by the study
   administrator from the real files (fingerprints, timing, channels shown and
   hidden, channel types, original events, gaps, display scalings), so the
   server never needs the EEG itself;
-* the results, written with ElectroClean's own code in its results layout
+* the results, written with ElectroTag's own code in its results layout
   (`Annotated_Events/...`, `interaction_logs/...`), which the agreement
   analysis and the activity analysis read as they are;
 * the training reference annotations, which never leave the server: it checks
@@ -79,11 +79,11 @@ and sends the study only their manifests.
 ## Folder layout
 
 ```
-electroclean/web/                 the server (FastAPI), the service layer it shares with the Firebase
+electrotag/web/                 the server (FastAPI), the service layer it shares with the Firebase
                                   functions (with games.py for the achievements and the
-                                  leaderboard), and the administrator's command, electroclean-web
-electroclean/web/firebase/        the Cloud Functions (functions/main.py) and the administrator's access
-electroclean/web/static/          the browser application (plain ES modules, no build step)
+                                  leaderboard), and the administrator's command, electrotag-web
+electrotag/web/firebase/        the Cloud Functions (functions/main.py) and the administrator's access
+electrotag/web/static/          the browser application (plain ES modules, no build step)
     index.html, app.css           the page and the application's design system (tokens, components)
     fonts/                        Newsreader, the one typeface (woff2, with its licence; made by
                                   scripts/make_web_fonts.py)
@@ -122,13 +122,13 @@ electroclean/web/static/          the browser application (plain ES modules, no 
     js/ui/                        dialogs, menus, building elements, the colours for the canvas,
                                   each annotator's display comfort (comfort.js)
     js/log/                       the interaction logger
-electroclean/app/                 the Python core: annotations, reading recordings with MNE-Python
+electrotag/app/                 the Python core: annotations, reading recordings with MNE-Python
                                   (eeg/), files and the export (io/), the journalled save (session/)
-electroclean/config/              the default settings and the artifact label catalogue
-electroclean/training/            reference sets, guided training, practice scoring, the quiz and
-                                  competency reports (electroclean-admin)
-electroclean/reliability/         the agreement analysis (electroclean-agreement)
-electroclean/activity/            the activity analysis of the interaction logs (electroclean-activity)
+electrotag/config/              the default settings and the artifact label catalogue
+electrotag/training/            reference sets, guided training, practice scoring, the quiz and
+                                  competency reports (electrotag-admin)
+electrotag/reliability/         the agreement analysis (electrotag-agreement)
+electrotag/activity/            the activity analysis of the interaction logs (electrotag-activity)
 web_tests/unit/                   node --test unit tests of the browser modules
 web_tests/e2e/                    Playwright end-to-end tests
 docs/web/api.md                   the HTTP API (the contract between browser and server)
@@ -187,7 +187,7 @@ Recording += {
   triggers: [{ sample, code, channel }],          // every trigger code of the trigger channels
   discontinuities: [sample],     // BrainVision "New Segment" markers after the start
   notes: [string],               // information for the annotator, such as the hidden channels
-  amplitudes: { eeg, eog, ecg, emg },             // volts, as electroclean/app/eeg/amplitude.py measures
+  amplitudes: { eeg, eog, ecg, emg },             // volts, as electrotag/app/eeg/amplitude.py measures
   suggestedScalings: { eeg?, ... },               // display scales for implausible amplitudes
   readerKind: "worker" | "page",
   edgeZones(filters) -> [[startSample, endSample]],  // the hatched zones of the whole recording
@@ -207,8 +207,8 @@ A channel's `unit` is "V" for voltage channels, "" for trigger channels and
 the file's own unit for the few non-voltage channels BrainVision files can
 hold (a temperature in °C, for example). `findRecordings(files)` lists the
 recordings among picked files (for a folder holding several), and errors are
-`RecordingError`s whose `kind` is the one ElectroClean's Python loader gives
-(`RecordingLoadError` in `electroclean/app/eeg/loading.py`: `corrupt_recording`,
+`RecordingError`s whose `kind` is the one ElectroTag's Python loader gives
+(`RecordingLoadError` in `electrotag/app/eeg/loading.py`: `corrupt_recording`,
 `unsupported_format`, `missing_companion`, `inconsistent_recording` and so on).
 
 ## Reading recordings in the browser
@@ -257,8 +257,8 @@ the choices remembered per annotator are in `js/views/device.js`.
 
 ### What is read, and how it compares with MNE-Python
 
-The readers give the values MNE-Python gives ElectroClean's Python loader
-(`electroclean/app/eeg/loading.py`: `read_raw_edf` and `read_raw_bdf` with
+The readers give the values MNE-Python gives ElectroTag's Python loader
+(`electrotag/app/eeg/loading.py`: `read_raw_edf` and `read_raw_bdf` with
 `infer_types=False`, and `read_raw_brainvision`), in volts and computed in the
 same order of operations, so a sample differs from MNE's double-precision value
 only by its rounding to single precision (at most 6 parts in 100 million). For
@@ -294,10 +294,10 @@ offset of the first record and annotations that name a channel), and .vmrk
 markers likewise (the first New Segment marker is left out, descriptions are
 `Type/Description`, positions count from one). Annotations starting with
 BAD_ACQ_SKIP become `gaps`, and New Segment markers after the start become
-`discontinuities`, which the filters treat as ElectroClean's Python filtering
-(`electroclean/app/eeg/filtering.py`) does. When a file has no event
+`discontinuities`, which the filters treat as ElectroTag's Python filtering
+(`electrotag/app/eeg/filtering.py`) does. When a file has no event
 annotations, the codes of its trigger channels become the markers, found as the
-Python loader finds them (`electroclean/app/eeg/events.py`: `mne.find_events`
+Python loader finds them (`electrotag/app/eeg/events.py`: `mne.find_events`
 with `consecutive=True` and `shortest_event=1`, the lower 16 bits of a BDF
 Status channel, the channel padded with zero after its end). The Python loader
 reads trigger codes only when a file has no annotations at all, so for a BDF+
@@ -306,8 +306,8 @@ browser shows the trigger codes where the loader finds none.
 
 Channel types come from the names: trigger channels, EOG, ECG (or EKG) and EMG
 by the usual abbreviations, EEG otherwise. Trigger channels and channels
-matching the default `channels.hide` patterns of ElectroClean's settings
-(`electroclean/config/default_settings.json`: the Emotiv timestamp, counter,
+matching the default `channels.hide` patterns of ElectroTag's settings
+(`electrotag/config/default_settings.json`: the Emotiv timestamp, counter,
 contact-quality and battery channels) are marked `hidden` as a suggestion; when
 the server has matched the recording, its manifest says what is shown, and
 `setChannelTypes` applies its `channel_types`. Trigger channels are never
@@ -316,8 +316,8 @@ filtered.
 ### Fingerprints
 
 `fingerprint()` is the SHA-256 of the data file, the same hex digest as the
-`hashlib` checksum that ElectroClean's Python code records for a recording's
-`eeg` source file (`fingerprint_sources` in `electroclean/app/eeg/loading.py`).
+`hashlib` checksum that ElectroTag's Python code records for a recording's
+`eeg` source file (`fingerprint_sources` in `electrotag/app/eeg/loading.py`).
 Files up to an eighth of the device's memory (at most 1 GB) are read into
 memory and hashed with the browser's own `crypto.subtle`; larger files, and
 browsers without it, stream through an incremental SHA-256 written for speed
@@ -329,8 +329,8 @@ file is scanned.
 
 ### Display filters
 
-`filters.js` designs the filters that ElectroClean's Python filtering
-(`apply_view_filters` in `electroclean/app/eeg/filtering.py`) asks MNE for
+`filters.js` designs the filters that ElectroTag's Python filtering
+(`apply_view_filters` in `electrotag/app/eeg/filtering.py`) asks MNE for
 (high-pass with `l_trans_bandwidth="auto"`, notch with widths of f/200 Hz and
 1 Hz transitions, harmonics below Nyquist minus 1 Hz; FIR, zero phase, `firwin`
 with a Hamming window, `filter_length="auto"`), porting
@@ -353,8 +353,8 @@ rounding of the result. `edgeZones` gives the zones the viewer hatches, as the
 Python filter report gives them: half the filter lengths at both ends of the
 recording and around every discontinuity and gap edge.
 
-The amplitude check is a port of ElectroClean's (`check_amplitudes` in
-`electroclean/app/eeg/amplitude.py`): the same ten windows of two seconds, the
+The amplitude check is a port of ElectroTag's (`check_amplitudes` in
+`electrotag/app/eeg/amplitude.py`): the same ten windows of two seconds, the
 same measure (the median over a type's channels of the 99.5th percentile of the
 distance from the median), the same bounds, display scales and warnings. It
 measures the display copy, so it depends on the filters: `openRecording` uses
@@ -374,7 +374,7 @@ kept in blocks of about 32,768 samples per channel (at most 16 MB each) in a
 cache of 256 MB, and filtered pieces in a cache of 192 MB; both forget the
 least recently used first, so a 1 GB recording is never in memory at once. A
 filtered piece is longer than the window (22,630 samples at 1024 Hz with
-ElectroClean's default filters, the length that fills a power-of-two FFT),
+ElectroTag's default filters, the length that fills a power-of-two FFT),
 extends in the direction the annotator scrolls, and the next window is filtered
 in the background while the annotator looks at the current one; the background
 work waits whenever the annotator asks for a window, unless that window needs
@@ -399,7 +399,7 @@ current laptop is two to three times faster):
 The test recordings and three real ones (a 58-channel Emotiv EDF+ file of
 17 MB, a 128-channel BrainVision file of 51 MB and a 137-channel BDF file of
 771 MB with 1112 trigger codes) give the same channels, markers, gaps,
-triggers, samples, filtered samples and fingerprints as ElectroClean's Python
+triggers, samples, filtered samples and fingerprints as ElectroTag's Python
 code and MNE-Python.
 
 ### Tests
@@ -411,15 +411,15 @@ and the fingerprints with MNE-Python and `hashlib` on recordings written by
 `python scripts/make_web_fixtures.py` into `web_tests/fixtures/` (not
 committed); the tests run the script themselves when the recordings are
 missing or out of date, with the repository's `.venv` (or the interpreter
-named by `ELECTROCLEAN_PYTHON`) and its development dependencies (mne, numpy,
+named by `ELECTROTAG_PYTHON`) and its development dependencies (mne, numpy,
 scipy, pybv). `python scripts/make_web_fixtures.py --perf` also writes the
 713 MB recording above, and `data_perf.test.mjs` then reports the times (set
-`ELECTROCLEAN_PERF=1` to have the tests write it).
+`ELECTROTAG_PERF=1` to have the tests write it).
 
 `node web_tests/run_e2e.mjs` runs the application in Chromium with Playwright:
 the demonstration, a stand-in server, and the real demonstration server
-(`electroclean-web demo`, started by the runner when the Python of
-`ELECTROCLEAN_PYTHON` or the repository's `.venv` has the packages of
+(`electrotag-web demo`, started by the runner when the Python of
+`ELECTROTAG_PYTHON` or the repository's `.venv` has the packages of
 requirements-web.txt), with recordings opened from disk and the results checked
 in the study folder; `--browser webkit` runs the same tests in WebKit, Safari's
 engine, which iPads use. `scripts/test_web_firebase.sh` does the same for a study
@@ -436,8 +436,8 @@ returns a Promise of the JSON described in docs/web/api.md.
 
 Two methods carry the administrator's and the quiz's operations, so that every
 backend implements them the same way: `admin(op, body)` (`POST /admin/{op}`,
-or `ec_admin` with `{op, ...body}` on Firebase) and `quiz(setId, body)`
-(`POST /quiz/{set_id}`, or `ec_quiz`). The demonstration implements the admin
+or `et_admin` with `{op, ...body}` on Firebase) and `quiz(setId, body)`
+(`POST /quiz/{set_id}`, or `et_quiz`). The demonstration implements the admin
 operations it can run in the browser (accounts, assignments, recordings,
 settings, reference sets from saved annotations or files, the audit log) and
 answers the analyses (agreement, activity, competency, consensus) with an
@@ -467,8 +467,8 @@ does not know it, and `quiz_finished` has the counts; a refused answer is
 logged as `quiz_answer_refused` with the reason and the answer kept. The
 demonstration has a quiz of seven segments from its first two examples, in an
 order of its own for each account (a study orders the items with `item_order`
-in `electroclean/training/quiz.py`, which uses Python's random generator), and
-answers with the study server's fields and errors (`electroclean/web/quiz.py`).
+in `electrotag/training/quiz.py`, which uses Python's random generator), and
+answers with the study server's fields and errors (`electrotag/web/quiz.py`).
 
 The channel chooser (`chooseChannels` in `js/annotate/dialogs.js`, behind
 Channels… and Edit channels…) follows the channel dialog of the desktop
@@ -486,7 +486,7 @@ it always was.
 
 The admin area adds recordings without uploading them: `js/data/register.js`
 builds, in the browser, the same internal manifest that
-`electroclean.web.manifest.build_manifest` builds from MNE-Python's reading of
+`electrotag.web.manifest.build_manifest` builds from MNE-Python's reading of
 the files, and only the manifests go to the study (`recordings_register`).
 
 ```js
@@ -503,8 +503,8 @@ buildManifests(files, { settings, scope, onProgress, catalogue, worker, version,
 
 `files` come from a folder picker (each with its `webkitRelativePath`) or are
 chosen one by one. The folder chosen is the dataset root, and recording IDs are
-the paths below it, as ElectroClean's discovery makes them
-(`electroclean/app/io/discovery.py`): a file is a recording when its name ends
+the paths below it, as ElectroTag's discovery makes them
+(`electrotag/app/io/discovery.py`): a file is a recording when its name ends
 in one of the discovery suffixes (in any case), outside hidden folders, the
 folders the settings exclude (`derivatives`, `Annotated_Events` and so on) and
 the results folder. Files picked one by one are all in the root, so their IDs
@@ -525,17 +525,17 @@ before assigning the recording.
 `channels.types`, `filters`, `loading` (BIDS channel types and bad channels)
 and, when given, `discovery`. `catalogue` is the study's label catalogue (from
 `GET /me`), used to note original events named like artifacts; the default is
-ElectroClean's own. `version` fills `electroclean_version` (the study's version
+ElectroTag's own. `version` fills `electrotag_version` (the study's version
 from `GET /health`, say), which is otherwise `browser`; `created_at` is the
 moment of registration on the administrator's clock, in the format of
-ElectroClean's Python code (local time with its UTC offset, to the
+ElectroTag's Python code (local time with its UTC offset, to the
 millisecond).
 
 Everything else is computed as `register_recording` computes it, with the
 Python loader's wording for every message. The companions a BrainVision header
 names must be among the picked files. The BIDS sidecars come from the dataset
 root down to the recording's folder with the inheritance principle
-(`js/data/bids.js`, a port of `electroclean/app/io/bids.py`), TSV files are
+(`js/data/bids.js`, a port of `electrotag/app/io/bids.py`), TSV files are
 read exactly as strings, and JSON sidecars are read as Python reads them
 (`js/data/pyjson.js`): NaN and Infinity become null and are reported, and a
 file that cannot be read is reported with Python's own error message. The
@@ -577,8 +577,8 @@ BrainVision recordings with inherited sidecars, EDF+, EDF and BDF files of many
 kinds, a BrainVision header written by hand and a collection of odd and broken
 metadata) with default and with a study's own settings, and compares every
 field with the manifests that `web_tests/register_parity.py` builds as
-`electroclean-web register` does, with ElectroClean's Python loader
-(`load_recording` in `electroclean/app/eeg/loading.py`). The amplitudes may
+`electrotag-web register` does, with ElectroTag's Python loader
+(`load_recording` in `electrotag/app/eeg/loading.py`). The amplitudes may
 differ by 1 part in 100,000, as elsewhere in the data layer, because the
 display copy is filtered in single precision; everything else must be equal.
 `web_tests/unit/data_register_py.test.mjs` checks the imitations of Python
@@ -591,7 +591,7 @@ equal to Python's in every field, with amplitudes within 3 parts in
 100 million.
 
 The same test passes every manifest built from the datasets through the study
-server's own checks (`electroclean/web/manifest_check.py`, which
+server's own checks (`electrotag/web/manifest_check.py`, which
 `recordings_register` runs before storing a manifest, called through
 `register_parity.py --check`) and requires each to be accepted and kept
 unchanged; in a tree without the server's checks the test says so and is
@@ -628,7 +628,7 @@ The browser records the events that docs/activity_logs.md describes
 (`mouse_press`, `key`, `shortcut`, `view`, `annotation_created`, `pointer`,
 `idle_start`, the training events ...) with `t` measured from the start of the
 visit, and sends them in batches. The server writes them as JSON Lines files in
-`interaction_logs/`, which `electroclean-activity` and the admin area's
+`interaction_logs/`, which `electrotag-activity` and the admin area's
 activity analysis summarise. Logs written by the desktop application (version
 1.1.0 and earlier) have the same format, so the analysis reads them together
 with the browser's. Typed text and passwords are never recorded.

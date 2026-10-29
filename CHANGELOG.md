@@ -1,9 +1,18 @@
 # Changes
 
-Each section below describes the changes in one version of ElectroClean;
+Each section below describes the changes in one version of ElectroTag;
 *Unreleased* collects what has changed since the last release.
 
 ## Unreleased
+
+ElectroClean is now called ElectroTag, a name that says what it does: people
+tag the artifacts in EEG recordings. Everything carries the new name: the
+Python package (`electrotag`), the commands (`electrotag-web`,
+`electrotag-agreement`, `electrotag-admin`, `electrotag-activity`), the study
+settings file (`electrotag_study.json`), the names written in result files, the
+Firebase functions (`et_`), the environment variables (`ELECTROTAG_…`) and the
+application itself, published at <https://faisalmushtaq.github.io/ElectroTag/>.
+Version 1.1.0 and the versions before it were released as ElectroClean.
 
 The browser version holds up better when the study answers late or fails
 once, and when people press things twice. While Save and Finish waits for its
@@ -71,7 +80,7 @@ warning. The choice is remembered for each annotator in their browser, and a
 study can set the starting choice with the new setting
 `display.channel_colours`.
 
-ElectroClean now runs in the web browser only, and the desktop application
+ElectroTag now runs in the web browser only, and the desktop application
 has been removed. Annotators open the browser application from a link, sign
 in, and open the recordings they were given from their own computer; the page
 reads them there, so the EEG is never uploaded, and the study holds only each
@@ -81,24 +90,24 @@ EDF, EDF+, BDF and BrainVision files, and gains an admin area in which lead
 researchers add recordings, accounts and assignments, change the study's
 settings, prepare reference sets and follow progress and results. Real studies
 run on Firebase (sign-in, Firestore in Google's London region and Cloud
-Functions that save results with ElectroClean's own code, check training and
-score practice, so the experts' answers stay with the study); the ElectroClean
-server, `electroclean-web`, runs the local demonstration and suits a study that
-prefers its own computer. The commands `electroclean-agreement`,
-`electroclean-admin` and `electroclean-activity` work as before on the saved
-results, which keep the same folders and files, and `python -m electroclean`
-lists them. The `electroclean` command, the stand-alone applications, the
-launchers and the self-test are gone, and installing ElectroClean no longer
+Functions that save results with ElectroTag's own code, check training and
+score practice, so the experts' answers stay with the study); the ElectroTag
+server, `electrotag-web`, runs the local demonstration and suits a study that
+prefers its own computer. The commands `electrotag-agreement`,
+`electrotag-admin` and `electrotag-activity` work as before on the saved
+results, which keep the same folders and files, and `python -m electrotag`
+lists them. The `electrotag` command, the stand-alone applications, the
+launchers and the self-test are gone, and installing ElectroTag no longer
 installs Qt. Version 1.1.0 remains on the Releases page as the last desktop
 release, and the results folders it wrote are read by the analyses unchanged.
 
 The admin area has sections for the overview, annotators, recordings,
 assignments, training, analyses, results, records and the study's settings.
 Lead researchers invite annotators (by an invitation link on Firebase, or with
-a temporary password on the ElectroClean server), switch accounts off and on,
+a temporary password on the ElectroTag server), switch accounts off and on,
 and keep notes about people and recordings. Recordings are added from the
 administrator's own computer: the browser reads the chosen folder or files,
-builds each recording's manifest with the same rules as `electroclean-web
+builds each recording's manifest with the same rules as `electrotag-web
 register`, shows what it found and sends only the manifests, and a recording
 that someone has saved results for is replaced only by the very same file.
 Reference sets take their references from someone's saved annotations, from an
@@ -117,14 +126,14 @@ keeps each correct answer until the segment has been answered; it can be
 stopped and resumed later, or ended early with the score of the segments
 answered.
 
-ElectroClean works on an iPad, upright or on its side, with fingers or an
+ElectroTag works on an iPad, upright or on its side, with fingers or an
 Apple Pencil. One finger marks, selects and resizes as the mouse does; two
 fingers move through time and the channels, and a pinch shows more or less
 time; a long press opens an annotation's menu and a double tap the list of
 types. A row of buttons under the EEG does what the keys do on a computer, the
 side panel moves below the EEG when the iPad is upright, and buttons are large
 enough for a finger. The file picker offers every file, since iPadOS greys out
-extensions it does not know such as .edf, and ElectroClean checks what it is
+extensions it does not know such as .edf, and ElectroTag checks what it is
 given. The annotation menu now also offers Edit times… (with the mouse too). On
 a phone the sign-in page and the admin area work, and the rest asks for a
 larger screen. The interaction log records whether each press came from a
@@ -176,11 +185,11 @@ recordings stands in until real expert-annotated recordings are imported,
 and training recordings are kept with their reference set, so they are never
 offered for study annotation.
 
-ElectroClean can record how annotators work, as research data: every click
+ElectroTag can record how annotators work, as research data: every click
 and key, what was on screen, every change to the annotations, the dialogs, idle
 periods and the training steps, time-stamped in one log per visit (text typed
 into fields and passwords are never recorded, and annotators are told when
-recording is on). The admin area, or `electroclean-activity`, turns the logs
+recording is on). The admin area, or `electrotag-activity`, turns the logs
 into tables for R or Python and a report showing, for example, whether
 annotators got faster from one recording to the next.
 
@@ -220,13 +229,13 @@ the application.
 Long annotation sessions are more comfortable. Pause, at the top of the
 annotation view, or the key B, stops the clock that measures the time worked
 on a recording and covers the EEG with a calm panel until the annotator
-resumes; ElectroClean also pauses by itself after a few minutes without input
+resumes; ElectroTag also pauses by itself after a few minutes without input
 and when the page is out of sight for more than ten seconds, and says on
 return how long the annotator was away. The time worked that is saved with
 each recording (`elapsed_s`) and kept in drafts now leaves out every pause,
 and the time a guided training step took leaves out the time paused during
 it. After a long stretch of work a gentle note offers a break or a reminder
-in 15 minutes. ElectroClean keeps track of the parts of each recording that
+in 15 minutes. ElectroTag keeps track of the parts of each recording that
 have been on the screen: the overview bar shows the parts not yet viewed,
 the Recording tab and the status line say how much has been viewed, Next part
 not yet viewed (the key U, and a button under the EEG on an iPad) goes to the
@@ -308,7 +317,7 @@ anonymised leaderboard under pseudonyms made for the study, which each person
 may leave. Milestones reward progress and thoroughness, never speed or the
 number of annotations, and a milestone reached by Save and Finish is
 celebrated briefly without getting in the way. The new `GET` and `POST
-/me/achievements` (`ec_achievements` on Firebase) give the facts, and the
+/me/achievements` (`et_achievements` on Firebase) give the facts, and the
 study settings gain `gamification.enabled`, `gamification.leaderboard` and
 `gamification.leaderboard_viewed_only`, with a reminder to report game
 elements in a study's methods. The log records `milestone_reached`, `goal_set`

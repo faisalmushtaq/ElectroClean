@@ -7,11 +7,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { signIn, waitForRoute, waitForTraces, annotations, eegPoint, drag, clickDialogButton, openExample, pressSave } from './helpers.mjs';
 
-const PASSWORD = 'electroclean';
+const PASSWORD = 'electrotag';
 
 async function events(page) {
-  await page.evaluate(() => globalThis.ElectroClean.flushLog());
-  return page.evaluate(() => [...globalThis.ElectroClean.backend.visits.values()].flatMap((v) => v.events));
+  await page.evaluate(() => globalThis.ElectroTag.flushLog());
+  return page.evaluate(() => [...globalThis.ElectroTag.backend.visits.values()].flatMap((v) => v.events));
 }
 
 async function mark(page, from, to) {
@@ -34,7 +34,7 @@ async function homeTab(page, tab) {
 /** A demonstration with `n` extra recordings assigned to A01 (`done` of them saved) and three colleagues. */
 async function bigDemo(page, n, done) {
   await page.evaluate(([n, done]) => {
-    const b = globalThis.ElectroClean.backend;
+    const b = globalThis.ElectroTag.backend;
     const s = b._admin.s;
     const day = 86400000;
     const start = Date.now() - done * 3600000;
@@ -92,7 +92,7 @@ function checksums(folder) {
 }
 
 async function adminCall(t, token, op, body) {
-  const res = await fetch(`${t.study.base}api/v1/admin/${op}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'X-ElectroClean': '1' },
+  const res = await fetch(`${t.study.base}api/v1/admin/${op}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'X-ElectroTag': '1' },
     body: JSON.stringify(body) });
   const data = await res.json();
   if (!res.ok && !(op === 'user_add' && res.status === 409)) throw new Error(`${op}: ${res.status} ${JSON.stringify(data)}`);
@@ -152,11 +152,11 @@ export const tests = [
       assert.equal(await page.textContent('.dialog .dialog-title'), 'Revision saved');
       await clickDialogButton(page, 'Back to my recordings');
       await waitForRoute(page, 'home');
-      const subs = await page.evaluate(() => globalThis.ElectroClean.backend.state.submissions.filter((s) => s.recording_id.includes('demo01'))
+      const subs = await page.evaluate(() => globalThis.ElectroTag.backend.state.submissions.filter((s) => s.recording_id.includes('demo01'))
         .map((s) => [s.attempt, s.annotations.length]));
       assert.deepEqual(subs, [[1, 1], [2, 2]]);
       // What was on the screen (the coverage of the Recording tab) goes with each save, for the "viewed in full" milestones.
-      const viewed = await page.evaluate(() => globalThis.ElectroClean.backend.state.submissions.map((x) => x.session.viewed_fraction));
+      const viewed = await page.evaluate(() => globalThis.ElectroTag.backend.state.submissions.map((x) => x.session.viewed_fraction));
       assert.ok(viewed.every((v) => typeof v === 'number' && v > 0 && v <= 1), JSON.stringify(viewed));
       await homeTab(page, 'history');
       const second = await cells(page.locator(HISTORY_ROWS).first());
@@ -173,7 +173,7 @@ export const tests = [
       assert.equal((await annotations(page)).length, 2);
       await page.click('.ws-revision button:not(.primary)');
       await waitForRoute(page, 'home');
-      assert.equal(await page.evaluate(() => globalThis.ElectroClean.backend.state.submissions.length), 2);
+      assert.equal(await page.evaluate(() => globalThis.ElectroTag.backend.state.submissions.length), 2);
       // Opening the finished file again from the computer offers the revision too.
       await page.locator('ul.examples button').first().click();
       await page.waitForSelector('.result [data-log="open-to-revise"]');
@@ -199,7 +199,7 @@ export const tests = [
       await bigDemo(page, 300, 120);
       const ms = await page.evaluate(async () => {
         const t0 = performance.now();
-        await globalThis.ElectroClean.reloadHome();
+        await globalThis.ElectroTag.reloadHome();
         return performance.now() - t0;
       });
       assert.ok(ms < 3000, `the home page took ${Math.round(ms)} ms`);
@@ -260,7 +260,7 @@ export const tests = [
       // An iPad, upright and on its side: the history and the game cards fit without sideways scrolling.
       for (const [w, h] of [[820, 1180], [1180, 820]]) {
         const ipad = await t.newPage({ width: w, height: h, ipad: true });
-        await ipad.evaluate((st) => localStorage.setItem('electroclean.demo.v1', st), await page.evaluate(() => localStorage.getItem('electroclean.demo.v1')));
+        await ipad.evaluate((st) => localStorage.setItem('electrotag.demo.v1', st), await page.evaluate(() => localStorage.getItem('electrotag.demo.v1')));
         await ipad.reload();
         await signIn(ipad, 'A01');
         await waitForRoute(ipad, 'home');
@@ -279,9 +279,9 @@ export const tests = [
       const { assert } = t;
       const page = await t.newPage({ width: 1280, height: 720 });
       await signIn(page, 'ADMIN');
-      await page.waitForFunction(() => /^admin/.test(globalThis.ElectroClean.route || '') && globalThis.ElectroClean.adminArea);
-      await page.evaluate(() => globalThis.ElectroClean.backend.admin('settings_update', { settings: { annotation: { allow_revisions: false }, gamification: { enabled: false } } }));
-      await page.evaluate(() => globalThis.ElectroClean.showAdmin('admin-settings'));
+      await page.waitForFunction(() => /^admin/.test(globalThis.ElectroTag.route || '') && globalThis.ElectroTag.adminArea);
+      await page.evaluate(() => globalThis.ElectroTag.backend.admin('settings_update', { settings: { annotation: { allow_revisions: false }, gamification: { enabled: false } } }));
+      await page.evaluate(() => globalThis.ElectroTag.showAdmin('admin-settings'));
       await page.waitForSelector('.admin-section[data-section="settings"] .games-warning');
       assert.match(await page.textContent('.admin-section[data-section="settings"]'), /Let annotators revise recordings they have finished/);
       assert.match(await page.textContent('.games-warning'), /say so in the study's methods/);
@@ -331,11 +331,11 @@ export const tests = [
       assert.ok(await phone.isVisible('form.signin-form'));
       // An administrator can go on to the admin area, which works on a phone.
       await signIn(phone, 'ADMIN');
-      await phone.waitForFunction(() => /^admin/.test(globalThis.ElectroClean.route || ''));
-      await phone.evaluate(() => globalThis.ElectroClean.showHome());
+      await phone.waitForFunction(() => /^admin/.test(globalThis.ElectroTag.route || ''));
+      await phone.evaluate(() => globalThis.ElectroTag.showHome());
       await phone.waitForSelector('.small-screen button[data-log="admin"]', { state: 'visible' });
       await phone.click('.small-screen button[data-log="admin"]');
-      await phone.waitForFunction(() => /^admin/.test(globalThis.ElectroClean.route || ''));
+      await phone.waitForFunction(() => /^admin/.test(globalThis.ElectroTag.route || ''));
       // The larger screen is unaffected.
       const desk = await t.newPage({ width: 1280, height: 720 });
       await desk.waitForSelector('form.signin-form');
@@ -348,7 +348,7 @@ export const tests = [
     async run(t) {
       const { assert } = t;
       // An annotator of this test's own, so that the other tests' figures stay as they were.
-      const login = await (await fetch(`${t.study.base}api/v1/login`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-ElectroClean': '1' },
+      const login = await (await fetch(`${t.study.base}api/v1/login`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-ElectroTag': '1' },
         body: JSON.stringify({ annotator_id: 'ADMIN', password: PASSWORD }) })).json();
       await adminCall(t, login.token, 'user_add', { annotator_id: 'R01', display_name: 'Reviser', password: PASSWORD });
       await adminCall(t, login.token, 'assign', { annotator_ids: ['R01'], all: true });
@@ -400,7 +400,7 @@ export const tests = [
       const v2 = await cells(page.locator(HISTORY_ROWS, { hasText: file }));
       assert.deepEqual([v2[1], v2[2]], ['2', '2'], v2.join(' | '));
       // The interaction log, written by the server, has the revision.
-      await page.evaluate(() => globalThis.ElectroClean.flushLog());
+      await page.evaluate(() => globalThis.ElectroTag.flushLog());
       const logs = path.join(t.study.dir, 'study', 'Annotated_Events', 'interaction_logs', 'annotator-R01');
       const kinds = fs.readdirSync(logs).filter((f) => f.endsWith('.jsonl'))
         .flatMap((f) => fs.readFileSync(path.join(logs, f), 'utf8').trim().split('\n').map((l) => JSON.parse(l).type));

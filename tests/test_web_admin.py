@@ -1,4 +1,4 @@
-"""The admin area's operations (POST /admin/{op}) on the ElectroClean server, end to end over HTTP."""
+"""The admin area's operations (POST /admin/{op}) on the ElectroTag server, end to end over HTTP."""
 
 from __future__ import annotations
 
@@ -17,9 +17,9 @@ pytest.importorskip("httpx")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from electroclean.web.admin import OPERATIONS, READ_ONLY  # noqa: E402
-from electroclean.web.app import create_app  # noqa: E402
-from electroclean.web.study import WebStudy  # noqa: E402
+from electrotag.web.admin import OPERATIONS, READ_ONLY  # noqa: E402
+from electrotag.web.app import create_app  # noqa: E402
+from electrotag.web.study import WebStudy  # noqa: E402
 from tests.web_helpers import (  # noqa: E402
     GUIDED1,
     H,
@@ -96,7 +96,7 @@ def test_only_administrators_use_the_admin_area(client: TestClient, admin: Api) 
 def test_overview_counts_and_recent_changes(client: TestClient, admin: Api, recordings: Path) -> None:
     Api(client, "A01").ok("post", "/submissions", submission(recordings, SUB1, [BLINK]))
     o = admin.admin_ok("overview")
-    assert o["study"] == {"study_id": "demo", "name": "ElectroClean demonstration"}
+    assert o["study"] == {"study_id": "demo", "name": "ElectroTag demonstration"}
     c = o["counts"]
     assert (c["recordings"], c["annotators"], c["admins"]) == (3, 3, 1)
     assert c["done"] == 1 and c["assignments"] == c["done"] + c["in_progress"] + c["todo"]
@@ -150,7 +150,7 @@ def test_settings_are_read_changed_and_checked(client: TestClient, admin: Api) -
     entry = admin_audit(admin)[0]
     assert entry["op"] == "settings_update" and entry["by"] == "ADMIN"
     assert "filters.notch_hz" in entry["summary"] and entry["details"]["changes"]["filters.notch_hz"] == 60.0
-    admin.admin_ok("settings_update", {"logging_notice": ""})  # back to ElectroClean's own notice
+    admin.admin_ok("settings_update", {"logging_notice": ""})  # back to ElectroTag's own notice
     assert admin.admin_ok("settings_get")["logging_notice_is_default"] is True
     # the admin area sends display.scalings as a whole: a type left out goes back to the default
     scal = dict(s["settings"]["display"]["scalings"], eeg=0.0001)
@@ -284,7 +284,7 @@ def test_assignments_and_programmes(client: TestClient, admin: Api, recordings: 
 
 # ---------------------------------------------------------------------- recordings
 def test_recordings_registered_from_the_browser(client: TestClient, admin: Api, tmp_path: Path) -> None:
-    from electroclean.synthetic import write_edf_recording
+    from electrotag.synthetic import write_edf_recording
 
     folder = tmp_path / "new-data"
     write_edf_recording(folder / "sub-101" / "eeg", "sub-101_task-rest", sfreq=128.0, duration_s=20.0, seed=11)
@@ -359,7 +359,7 @@ def test_recording_notes_retirement_and_removal(client: TestClient, admin: Api, 
 # ------------------------------------------------------------------ reference sets
 def test_reference_sets_from_saved_annotations(client: TestClient, admin: Api, recordings: Path,
                                                study: Path) -> None:
-    from electroclean.web.store_files import FilesStore
+    from electrotag.web.store_files import FilesStore
 
     a01, a02 = Api(client, "A01"), Api(client, "A02")
     a01.ok("post", "/submissions", submission(recordings, SUB1, [BLINK, EMG]))
@@ -513,18 +513,18 @@ def test_set_settings_and_deletion(client: TestClient, admin: Api, study: Path) 
     assert {x["set_id"] for x in admin.admin_ok("sets_list")["sets"]} == {"example", "s2"}
     admin.admin_ok("set_delete", {"set_id": "s2"})
     assert {x["set_id"] for x in admin.admin_ok("sets_list")["sets"]} == {"example"}
-    assert not (study / "derivatives" / "electroclean_reference_sets" / "s2").exists()
+    assert not (study / "derivatives" / "electrotag_reference_sets" / "s2").exists()
     admin.admin_error("set_delete", {"set_id": "example"}, 409, "in_use")  # T01 takes its programme
 
 
 def test_the_example_set_from_the_admin_area(tmp_path: Path) -> None:
     root = tmp_path / "fresh"
     WebStudy.init(root, study_id="fresh", name="Fresh study")
-    from electroclean.web.store_files import FilesStore
+    from electrotag.web.store_files import FilesStore
 
     store = FilesStore(root)
-    store.db.add_user("ADMIN", "electroclean", role="admin")
-    store.db.add_user("T01", "electroclean")
+    store.db.add_user("ADMIN", "electrotag", role="admin")
+    store.db.add_user("T01", "electrotag")
     store.close()
     app = create_app(root)
     client = TestClient(app)
@@ -535,13 +535,13 @@ def test_the_example_set_from_the_admin_area(tmp_path: Path) -> None:
     z = zipfile.ZipFile(io.BytesIO(base64.b64decode(r["recordings_zip"]["base64"])))
     assert r["recordings_zip"]["file_name"].endswith(".zip")
     names = z.namelist()
-    assert f"electroclean-example-set/{GUIDED1}" in names and not any("reference" in n for n in names)
+    assert f"electrotag-example-set/{GUIDED1}" in names and not any("reference" in n for n in names)
     admin.admin_error("set_example_create", {}, 409, "set_exists")
     recs = admin.admin_ok("recordings_list", {"scope": "set:example"})["recordings"]
     assert {x["registered_via"] for x in recs} == {"browser"}
     # a trainee opens a recording from the zip: it is the registered one
     admin.admin_ok("programme_set", {"annotator_id": "T01", "set_id": "example"})
-    data_name = f"electroclean-example-set/{GUIDED1}".replace(".vhdr", ".eeg")
+    data_name = f"electrotag-example-set/{GUIDED1}".replace(".vhdr", ".eeg")
     data = z.read(data_name)
     t01 = Api(client, "T01")
     m = t01.ok("post", "/match", {"file_name": Path(GUIDED1).name, "size_bytes": len(data),
@@ -554,7 +554,7 @@ def test_the_example_set_from_the_admin_area(tmp_path: Path) -> None:
 
 # ------------------------------------------------------------------------ analyses
 def test_analyses_on_demand(client: TestClient, admin: Api, recordings: Path, study: Path) -> None:
-    from electroclean.training.reference import ReferenceSet
+    from electrotag.training.reference import ReferenceSet
 
     a01, a02 = Api(client, "A01"), Api(client, "A02")
     a01.ok("post", "/submissions", submission(recordings, SUB1, [BLINK, EMG]))
@@ -568,7 +568,7 @@ def test_analyses_on_demand(client: TestClient, admin: Api, recordings: Path, st
     only = admin.admin_ok("agreement", {"annotator_ids": ["A01", "A02"], "recording_ids": [SUB1]})
     assert only["summary"]["n_recordings"] == 1
     # what the admin area sends: every setting but annotators, modes and extra_measures
-    from electroclean.reliability.config import AnalysisConfig
+    from electrotag.reliability.config import AnalysisConfig
 
     sent = {k: v for k, v in AnalysisConfig().to_dict().items() if k not in ("annotators", "modes", "extra_measures")}
     assert sent["categories"] is None
@@ -594,12 +594,12 @@ def test_analyses_on_demand(client: TestClient, admin: Api, recordings: Path, st
     assert vs[0]["visit_id"] == v["visit_id"] and vs[0]["n_events"] == 4 and vs[0]["closed_at"]
     assert admin.admin_ok("visits", {"annotator_id": "A02"})["visits"] == []
     # competency, once every assessment recording is saved
-    rs = ReferenceSet.load(study / "derivatives" / "electroclean_reference_sets" / "example")
+    rs = ReferenceSet.load(study / "derivatives" / "electrotag_reference_sets" / "example")
     rs.set_use(PRACTICE1, "assessment")
     admin.admin_ok("assign", {"annotator_ids": ["A01"], "recording_ids": [PRACTICE1], "mode": "assessment",
                               "context_id": "example"})
     admin.admin_error("competency", {"set_id": "example", "annotator_id": "A01"}, 404, "not_complete")
-    from electroclean.web.store_files import FilesStore
+    from electrotag.web.store_files import FilesStore
 
     store = FilesStore(study)
     ref = reference_annotations(store, "example", PRACTICE1)
@@ -623,16 +623,16 @@ def test_analyses_on_demand(client: TestClient, admin: Api, recordings: Path, st
 
 
 def test_results_zip_has_a_size_limit(admin: Api, monkeypatch: pytest.MonkeyPatch) -> None:
-    import electroclean.web.export as export
+    import electrotag.web.export as export
 
     monkeypatch.setattr(export, "MAX_RESULTS_ZIP", 10)
     r = admin.admin_error("results_zip", {}, 413, "too_large")
-    assert "electroclean-web export" in r["message"] and r["size_bytes"] > 10
+    assert "electrotag-web export" in r["message"] and r["size_bytes"] > 10
 
 
 # --------------------------------------------------------------------- audit log
 def test_the_audit_log_pages_newest_first(admin: Api, study: Path) -> None:
-    from electroclean.web.cli import main as cli
+    from electrotag.web.cli import main as cli
 
     for i in range(5):
         admin.admin_ok("recording_update", {"scope": "study", "recording_id": SUB1, "notes": f"note {i}"})

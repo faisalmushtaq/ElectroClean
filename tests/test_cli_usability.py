@@ -1,6 +1,6 @@
 """Command-line tools refuse mistakes instead of acting on them (usability review).
 
-``electroclean-admin`` must not create study files in mistyped folders, mark
+``electrotag-admin`` must not create study files in mistyped folders, mark
 failures resolved that were never logged, or report on annotators who do not
 exist; mistyped names get a "did you mean" suggestion.
 """
@@ -9,13 +9,13 @@ from __future__ import annotations
 
 import pytest
 
-from electroclean.app.annotations.labels import default_catalogue
-from electroclean.app.io.naming import OutputLayout
-from electroclean.app.session.failures import FailureLog
-from electroclean.config.settings import load_settings
-from electroclean.hints import did_you_mean, unknown_names
-from electroclean.training.cli import build_parser, main
-from electroclean.training.reference import ReferenceSet, reference_sets_dir
+from electrotag.app.annotations.labels import default_catalogue
+from electrotag.app.io.naming import OutputLayout
+from electrotag.app.session.failures import FailureLog
+from electrotag.config.settings import load_settings
+from electrotag.hints import did_you_mean, unknown_names
+from electrotag.training.cli import build_parser, main
+from electrotag.training.reference import ReferenceSet, reference_sets_dir
 
 
 def test_did_you_mean():
@@ -39,12 +39,12 @@ def test_admin_refuses_mistyped_folders(tmp_path, capsys):
     empty = tmp_path / "empty"
     empty.mkdir()
     assert main(["show", str(empty)]) == 2
-    assert "does not look like an ElectroClean dataset" in capsys.readouterr().err
-    assert main(["fix-filters", str(empty)]) == 2 and not (empty / "electroclean_study.json").exists()
+    assert "does not look like an ElectroTag dataset" in capsys.readouterr().err
+    assert main(["fix-filters", str(empty)]) == 2 and not (empty / "electrotag_study.json").exists()
     # A new study in a new folder is possible when asked for explicitly.
     assert main(["init-study", str(typo), "--study-id", "x", "--create"]) == 0
     captured = capsys.readouterr()
-    assert (typo / "electroclean_study.json").is_file() and "no recordings were found" in captured.err
+    assert (typo / "electrotag_study.json").is_file() and "no recordings were found" in captured.err
     assert main(["show", str(typo)]) == 0  # a study file is enough
 
 

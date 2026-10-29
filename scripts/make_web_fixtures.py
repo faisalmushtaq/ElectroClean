@@ -1,6 +1,6 @@
 """Write the test recordings of the browser data layer and what MNE-Python reads from them.
 
-The browser reads EDF, EDF+, BDF and BrainVision files itself (electroclean/web/static/js/data/).
+The browser reads EDF, EDF+, BDF and BrainVision files itself (electrotag/web/static/js/data/).
 Its unit tests (web_tests/unit/, run with ``node --test web_tests/unit``) open the recordings
 written here and compare everything with the values in the ``*.expected.json`` files: what MNE
 reads (in volts), the SHA-256 that hashlib computes, the markers, gaps and triggers the desktop
@@ -146,11 +146,11 @@ def describe(raw, fmt: str, data_file: Path, files: list[Path], *, filters: list
              amplitude_filters: dict | None = None) -> dict:
     import mne
 
-    from electroclean.app.annotations.timing import RecordingTiming
-    from electroclean.app.eeg.amplitude import check_amplitudes
-    from electroclean.app.eeg.filtering import apply_view_filters
-    from electroclean.app.eeg.loading import _acquisition_gaps, _discontinuities
-    from electroclean.config.settings import FilterSettings
+    from electrotag.app.annotations.timing import RecordingTiming
+    from electrotag.app.eeg.amplitude import check_amplitudes
+    from electrotag.app.eeg.filtering import apply_view_filters
+    from electrotag.app.eeg.loading import _acquisition_gaps, _discontinuities
+    from electrotag.config.settings import FilterSettings
 
     timing = RecordingTiming.from_raw(raw)
     sfreq = float(raw.info["sfreq"])
@@ -251,8 +251,8 @@ def filter_designs() -> list[dict]:
     """Coefficients of MNE's designs for the desktop's settings at several sampling rates."""
     from mne.filter import create_filter
 
-    from electroclean.app.eeg.filtering import notch_frequencies
-    from electroclean.config.settings import FilterSettings
+    from electrotag.app.eeg.filtering import notch_frequencies
+    from electrotag.config.settings import FilterSettings
 
     out = []
     for sfreq in (100.0, 128.0, 200.0, 250.0, 256.0, 500.0, 512.0, 1000.0, 1024.0, 2048.0):
@@ -294,7 +294,7 @@ def _summary(h: np.ndarray) -> dict:
 
 # ----------------------------------------------------------------------------- fixtures
 def make_all(out: Path) -> dict:
-    from electroclean.synthetic import (
+    from electrotag.synthetic import (
         ALL_CHANNELS,
         default_artifact_plan,
         synthesise_signal,
@@ -411,7 +411,7 @@ def make_all(out: Path) -> dict:
     save("bdfplus", describe(raw, "bdf", p, [p], filters=[], windows=[(0, 50)], sample_idx=[0, 100, 3000, 3148, 3149]))
 
     # 5. BrainVision float32 (pybv), with a second 'New Segment' marker (a discontinuity).
-    from electroclean.synthetic import write_recording
+    from electrotag.synthetic import write_recording
 
     vhdr, _, _ = write_recording(out / "bv_float32", "sub-01_task-rest", sfreq=500.0, duration_s=40.0, seed=5,
                                  discontinuity_s=20.0, write_bids_sidecars=False)
@@ -610,7 +610,7 @@ def make_datasets(out: Path) -> dict:
     """
     import shutil
 
-    from electroclean.synthetic import (
+    from electrotag.synthetic import (
         ALL_CHANNELS,
         default_artifact_plan,
         synthesise_signal,

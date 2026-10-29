@@ -7,13 +7,13 @@ from pathlib import Path
 import mne
 import pytest
 
-from electroclean.app.annotations.labels import default_catalogue
-from electroclean.app.eeg.loading import load_recording
-from electroclean.app.io.discovery import discover_recordings
-from electroclean.app.io.naming import OutputLayout
-from electroclean.app.session.session import AnnotationSession
-from electroclean.config.settings import load_settings
-from electroclean.synthetic import make_synthetic_dataset
+from electrotag.app.annotations.labels import default_catalogue
+from electrotag.app.eeg.loading import load_recording
+from electrotag.app.io.discovery import discover_recordings
+from electrotag.app.io.naming import OutputLayout
+from electrotag.app.session.session import AnnotationSession
+from electrotag.config.settings import load_settings
+from electrotag.synthetic import make_synthetic_dataset
 
 mne.set_log_level("error")
 

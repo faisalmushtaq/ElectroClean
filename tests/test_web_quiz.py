@@ -1,4 +1,4 @@
-"""The short-segment quiz (POST /quiz/{set_id}) and its items in the admin area, on the ElectroClean server."""
+"""The short-segment quiz (POST /quiz/{set_id}) and its items in the admin area, on the ElectroTag server."""
 
 from __future__ import annotations
 
@@ -12,9 +12,9 @@ pytest.importorskip("httpx")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from electroclean.training.quiz import item_order  # noqa: E402
-from electroclean.training.reference import NONE_OPTION  # noqa: E402
-from electroclean.web.app import create_app  # noqa: E402
+from electrotag.training.quiz import item_order  # noqa: E402
+from electrotag.training.reference import NONE_OPTION  # noqa: E402
+from electrotag.web.app import create_app  # noqa: E402
 from tests.web_helpers import GUIDED1, GUIDED2, PRACTICE1, Api, admin_audit, copy_demo, make_template  # noqa: E402
 
 
@@ -89,7 +89,7 @@ def test_quiz_items_in_the_admin_area(admin: Api, client: TestClient) -> None:
 
 
 def test_the_quiz_with_feedback_after_each_answer(admin: Api, client: TestClient, study: Path) -> None:
-    from electroclean.web.store_files import FilesStore
+    from electrotag.web.store_files import FilesStore
 
     add_items(admin)
     a01 = Api(client, "A01")
@@ -144,7 +144,7 @@ def test_the_quiz_with_feedback_after_each_answer(admin: Api, client: TestClient
     results = list((study / "Annotated_Events" / "training" / "example" / "quiz").glob("annotator-A01_quiz_*.json"))
     assert len(results) == 1 and "_quiz_practice_" in results[0].name
     saved = json.loads(results[0].read_text())
-    assert saved["schema"] == "electroclean.quiz_result" and saved["completed"] is True
+    assert saved["schema"] == "electrotag.quiz_result" and saved["completed"] is True
     assert [a["item_id"] for a in saved["answers"]] == order
     q01 = next(a for a in saved["answers"] if a["item_id"] == "q01")
     assert q01["response_time_s"] == 2.5 and q01["answer"] == "Eye-artifact" and "index" not in q01
@@ -196,9 +196,9 @@ def test_only_allowed_annotators_see_a_quiz(admin: Api, client: TestClient) -> N
 
 
 def test_the_demonstration_offers_a_quiz(tmp_path: Path) -> None:
-    """`electroclean-web demo` gives the example set three quiz segments, one per artifact type."""
-    from electroclean.web.demo import build_demo
-    from electroclean.web.store_files import FilesStore
+    """`electrotag-web demo` gives the example set three quiz segments, one per artifact type."""
+    from electrotag.web.demo import build_demo
+    from electrotag.web.store_files import FilesStore
 
     store = FilesStore(build_demo(tmp_path / "demo", say=lambda _m: None))
     try:

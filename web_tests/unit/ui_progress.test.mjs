@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { isToday, median, progressSummary, roundEstimate, spanText } from '../../electroclean/web/static/js/views/progress.js';
+import { isToday, median, progressSummary, roundEstimate, spanText } from '../../electrotag/web/static/js/views/progress.js';
 
 // --------------------------------------------------------------- the progress
 

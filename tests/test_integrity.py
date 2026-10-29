@@ -1,6 +1,6 @@
 """Data-integrity edge cases: concurrent sessions, relocated folders, failing moves, leftovers.
 
-Each test reproduces a failure found in review and checks that ElectroClean
+Each test reproduces a failure found in review and checks that ElectroTag
 now keeps the outputs and the completion register consistent.
 """
 
@@ -14,15 +14,15 @@ import time
 
 import pytest
 
-import electroclean.app.session.transaction as tx
-from electroclean.app.eeg.loading import RecordingLoadError, load_recording
-from electroclean.app.io.discovery import discover_recordings
-from electroclean.app.io.locking import FileLock, LockError
-from electroclean.app.io.naming import OutputLayout
-from electroclean.app.io.tsv import parse_tsv_text
-from electroclean.app.session.register import CompletionRegister
-from electroclean.app.session.session import SessionError
-from electroclean.app.session.transaction import ExportCommitError, recover_interrupted_exports
+import electrotag.app.session.transaction as tx
+from electrotag.app.eeg.loading import RecordingLoadError, load_recording
+from electrotag.app.io.discovery import discover_recordings
+from electrotag.app.io.locking import FileLock, LockError
+from electrotag.app.io.naming import OutputLayout
+from electrotag.app.io.tsv import parse_tsv_text
+from electrotag.app.session.register import CompletionRegister
+from electrotag.app.session.session import SessionError
+from electrotag.app.session.transaction import ExportCommitError, recover_interrupted_exports
 from tests.conftest import SUB1, SUB2, make_session
 
 FINAL = ("annotator-A01", "sub-001", "eeg")
@@ -84,7 +84,7 @@ def test_lock_age_uses_the_folders_clock_and_heartbeat(tmp_path, monkeypatch):
     path = tmp_path / "rec.lock"
     held = FileLock(path, stale_after_s=300).acquire()
     # Another computer whose clock is ten minutes ahead does not see a fresh lock as stale.
-    import electroclean.app.io.locking as locking
+    import electrotag.app.io.locking as locking
 
     monkeypatch.setattr(locking.socket, "gethostname", lambda: "LAB-PC-2")
     real_time = time.time
@@ -283,13 +283,13 @@ def test_sidecars_with_bom_or_nan_and_inherited_fingerprints(dataset, settings, 
         lr.close()
 
 
-def test_events_tsv_with_electroclean_columns_refused_at_load(dataset, settings, catalogue):
+def test_events_tsv_with_electrotag_columns_refused_at_load(dataset, settings, catalogue):
     root, _ = dataset
     ev = root / "sub-001" / "eeg" / "sub-001_task-rest_events.tsv"
     lines = ev.read_text(encoding="utf-8").splitlines()
     ev.write_text("\n".join([lines[0] + "\tannotator_id"] + [ln + "\tX" for ln in lines[1:]]) + "\n", encoding="utf-8")
     rec = {r.recording_id: r for r in discover_recordings(root)}[SUB1]
-    with pytest.raises(RecordingLoadError, match="ElectroClean uses"):
+    with pytest.raises(RecordingLoadError, match="ElectroTag uses"):
         load_recording(rec, settings, settings.filters, catalogue)
 
 
@@ -299,7 +299,7 @@ def test_tsv_rows_of_empty_cells_are_kept():
 
 
 def test_local_failures_only_exclude_the_annotator_who_met_them(layout, recordings):
-    from electroclean.app.session.failures import FailureLog
+    from electrotag.app.session.failures import FailureLog
 
     log = FailureLog(layout)
     recs = list(recordings.values())

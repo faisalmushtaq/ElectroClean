@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from electroclean.app.session.interaction_log import SCHEMA, SCHEMA_VERSION
+from electrotag.app.session.interaction_log import SCHEMA, SCHEMA_VERSION
 
 
 class LogBuilder:
@@ -22,7 +22,7 @@ class LogBuilder:
             "type": "header", "schema": SCHEMA, "schema_version": SCHEMA_VERSION,
             "started_at": started.isoformat(timespec="milliseconds"), "visit_id": f"{annotator}-{path.stem}",
             "annotator_id": annotator, "mode": mode, "context_id": context_id,
-            "versions": {"electroclean": "test"}, "os": "test", "logging": {"pointer_hz": 5, "idle_after_s": idle_after_s},
+            "versions": {"electrotag": "test"}, "os": "test", "logging": {"pointer_hz": 5, "idle_after_s": idle_after_s},
             "screens": [{"name": "s", "geometry": [0, 0, 1920, 1080], "device_pixel_ratio": 2.0}],
         }]
         self.context: dict[str, Any] = {}

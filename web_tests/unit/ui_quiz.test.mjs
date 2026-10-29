@@ -11,12 +11,12 @@ globalThis.sessionStorage = store();
 globalThis.localStorage = store();
 
 const { groupOptions, nextIndex, scoreText, feedbackText, segmentBounds, segmentRecording, verdictText, quizMode, NONE_OPTION, QUESTION } =
-  await import('../../electroclean/web/static/js/training/quiz.js');
-const { DemoBackend, QUIZ, QUIZ_NONE_OPTION, quizOrder, quizScore, exampleRecording } = await import('../../electroclean/web/static/js/api/demo.js');
-const { Catalogue } = await import('../../electroclean/web/static/js/catalogue.js');
-const { CATALOGUE } = await import('../../electroclean/web/static/js/api/demo_catalogue.js');
-const { HttpBackend } = await import('../../electroclean/web/static/js/api/http.js');
-const { FirebaseBackend } = await import('../../electroclean/web/static/js/api/firebase.js');
+  await import('../../electrotag/web/static/js/training/quiz.js');
+const { DemoBackend, QUIZ, QUIZ_NONE_OPTION, quizOrder, quizScore, exampleRecording } = await import('../../electrotag/web/static/js/api/demo.js');
+const { Catalogue } = await import('../../electrotag/web/static/js/catalogue.js');
+const { CATALOGUE } = await import('../../electrotag/web/static/js/api/demo_catalogue.js');
+const { HttpBackend } = await import('../../electrotag/web/static/js/api/http.js');
+const { FirebaseBackend } = await import('../../electrotag/web/static/js/api/firebase.js');
 
 const memory = () => {
   const m = new Map();
@@ -120,7 +120,7 @@ test('the demonstration\'s quiz: listed in /me, items in each annotator\'s own o
     assert.equal(q.recordings[rid].fingerprint.hex, fp.hex);
     assert.equal(q.recordings[rid].fingerprint.size_bytes, fp.sizeBytes);
   }
-  // the study server's errors (electroclean/web/quiz.py)
+  // the study server's errors (electrotag/web/quiz.py)
   const code = (status, c) => (e) => e.status === status && e.code === c;
   await assert.rejects(() => b.quiz('other', { action: 'get' }), code(404, 'no_reference_set'));
   await assert.rejects(() => b.quiz('example', { action: 'guess' }), code(400, 'bad_request'));
@@ -229,7 +229,7 @@ test('the study server: POST /quiz/{set_id} with the body as it is', async () =>
   assert.equal(calls[0].headers.Authorization, 'Bearer T');
 });
 
-test('Firebase: ec_quiz with the set and the body; only "get" is asked a second time', async () => {
+test('Firebase: et_quiz with the set and the body; only "get" is asked a second time', async () => {
   const seen = [];
   let fail = 0;
   const sdk = {
@@ -253,7 +253,7 @@ test('Firebase: ec_quiz with the set and the body; only "get" is asked a second 
   b.retryDelayMs = 1;
   fail = 1;
   assert.deepEqual(await b.quiz('example', { action: 'get' }), { ok: true });
-  assert.deepEqual(seen.map((s) => s.name), ['ec_quiz', 'ec_quiz']);
+  assert.deepEqual(seen.map((s) => s.name), ['et_quiz', 'et_quiz']);
   assert.deepEqual(seen[0].data, { study: 'pilot', set_id: 'example', action: 'get' });
   seen.length = 0;
   for (const body of [{ action: 'answer', item_id: 'q1', label: 'EMG-artifact' }, { action: 'finish' }]) {

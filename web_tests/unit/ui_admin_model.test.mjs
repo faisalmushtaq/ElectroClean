@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import * as m from '../../electroclean/web/static/js/admin/model.js';
+import * as m from '../../electrotag/web/static/js/admin/model.js';
 
 test('the sections have plain hashes', () => {
   assert.equal(m.isAdminRoute('admin'), true);
@@ -52,7 +52,7 @@ test('competency criteria go to and from the editor as CompetencyCriteria.to_dic
     'Extra events (matching no reference artifact) per minute ≤ 2 (overall)');
 });
 
-test('study settings are checked as electroclean.config.settings checks them', () => {
+test('study settings are checked as electrotag.config.settings checks them', () => {
   const ok = { filters: { highpass_enabled: true, highpass_hz: 1, notch_enabled: true, notch_hz: 50 },
     display: { duration_s: 10, n_channels: 32, scalings: { eeg: 5e-5 } }, channels: { hide: ['COUNTER'], types: { 'EXG*': 'eog' } },
     selection: { strategy: 'seeded', seed: 7 }, logging: { pointer_hz: 5, idle_after_s: 30 },
@@ -88,7 +88,7 @@ test('the agreement settings start from AnalysisConfig and are checked like it',
 });
 
 const manifest = (rid, extra = {}) => ({
-  schema: 'electroclean.web_manifest', schema_version: '1.0.0', scope: 'study', recording_id: rid, file_name: rid.split('/').pop(),
+  schema: 'electrotag.web_manifest', schema_version: '1.0.0', scope: 'study', recording_id: rid, file_name: rid.split('/').pop(),
   format: 'brainvision', format_name: 'BrainVision', timing: { sfreq: 250, n_samples: 15000 }, ch_names: ['Fp1', 'Fp2', 'Cz'],
   hidden_channels: ['Status'], fingerprint: { eeg: { sha256: 'a'.repeat(64), size: 1234 } }, warnings: ['Odd amplitude'],
   amplitude: { warnings: ['Odd amplitude', 'EOG very large'] }, notes: [], ...extra,
@@ -135,7 +135,7 @@ test('files: base64, TSV tables and annotation documents', () => {
   assert.deepEqual([...m.base64ToBytes('AAEC/w==')], [0, 1, 2, 255]);
   assert.equal(m.tsvText(['kind', 'onset_s', 'note'], [{ kind: 'time', onset_s: 1.23456, note: 'a\tb' }, { kind: 'channels', onset_s: 2, note: null }]),
     'kind\tonset_s\tnote\ntime\t1.2346\ta b\nchannels\t2\tn/a\n');
-  const doc = m.readAnnotationDocument(JSON.stringify({ schema: 'electroclean.annotations', annotations: [] }));
+  const doc = m.readAnnotationDocument(JSON.stringify({ schema: 'electrotag.annotations', annotations: [] }));
   assert.deepEqual(doc.annotations, []);
   assert.throws(() => m.readAnnotationDocument('{'), /cannot be read as JSON/);
   assert.throws(() => m.readAnnotationDocument('{"a": 1}'), /no list of annotations/);

@@ -7,19 +7,19 @@ from __future__ import annotations
 import hashlib
 import json
 
-from electroclean.app.annotations.labels import default_catalogue
-from electroclean.app.eeg.loading import load_recording
-from electroclean.app.io.canonical import read_annotations_json
-from electroclean.app.io.discovery import discover_recordings
-from electroclean.app.io.export import annotations_from_events_tsv
-from electroclean.app.io.naming import OutputLayout
-from electroclean.app.session.failures import FailureLog
-from electroclean.app.session.register import CompletionRegister
-from electroclean.app.session.selection import select_next
-from electroclean.app.session.session import AnnotationSession
-from electroclean.config.settings import load_settings
-from electroclean.reliability import AnalysisConfig, run_analysis, write_outputs
-from electroclean.synthetic import simulate_rater
+from electrotag.app.annotations.labels import default_catalogue
+from electrotag.app.eeg.loading import load_recording
+from electrotag.app.io.canonical import read_annotations_json
+from electrotag.app.io.discovery import discover_recordings
+from electrotag.app.io.export import annotations_from_events_tsv
+from electrotag.app.io.naming import OutputLayout
+from electrotag.app.session.failures import FailureLog
+from electrotag.app.session.register import CompletionRegister
+from electrotag.app.session.selection import select_next
+from electrotag.app.session.session import AnnotationSession
+from electrotag.config.settings import load_settings
+from electrotag.reliability import AnalysisConfig, run_analysis, write_outputs
+from electrotag.synthetic import simulate_rater
 
 
 def _tree_hash(root):

@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { signIn, waitForRoute, waitForTraces, state, annotations, eegPoint, drag, clickDialogButton } from './helpers.mjs';
-import { demoSpecs, syntheticEdfBytes } from '../../electroclean/web/static/js/data/synthetic.js';
+import { demoSpecs, syntheticEdfBytes } from '../../electrotag/web/static/js/data/synthetic.js';
 
 function writeFiles() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ec-e2e-'));
@@ -44,7 +44,7 @@ export const tests = [
       assert.equal(s.route, 'annotate');
       // The file read from the computer shows the same EEG as the built-in example.
       const samples = await page.evaluate(async () => {
-        const ws = globalThis.ElectroClean.ws;
+        const ws = globalThis.ElectroTag.ws;
         const w = await ws.s.recording.readWindow({ startSample: 750, nSamples: 5, channels: [0], filters: null });
         return Array.from(w.data[0]);
       });

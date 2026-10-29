@@ -1,4 +1,4 @@
-"""Create a synthetic BIDS/BrainVision dataset to try ElectroClean.
+"""Create a synthetic BIDS/BrainVision dataset to try ElectroTag.
 
     python examples/make_synthetic_dataset.py OUTPUT_FOLDER [--subjects 3] [--duration 120] [--seed 0]
         [--line-frequency 50] [--with-problems]
@@ -27,7 +27,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--line-frequency", type=float, default=60.0)
     ap.add_argument("--with-problems", action="store_true")
     a = ap.parse_args(argv)
-    from electroclean.synthetic import make_synthetic_dataset
+    from electrotag.synthetic import make_synthetic_dataset
 
     truths = make_synthetic_dataset(
         a.output, n_subjects=a.subjects, sfreq=a.sfreq, duration_s=a.duration, seed=a.seed, line_freq=a.line_frequency,

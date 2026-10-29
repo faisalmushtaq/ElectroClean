@@ -1,8 +1,8 @@
 {
   "functions": [
     {
-      "source": "electroclean/web/firebase/functions",
-      "codebase": "electroclean",
+      "source": "electrotag/web/firebase/functions",
+      "codebase": "electrotag",
       "runtime": "python313",
       "ignore": ["venv", ".git", "__pycache__", "*.pyc"],
       "predeploy": ["python3 \"$RESOURCE_DIR/../../../../scripts/vendor_functions.py\" \"$RESOURCE_DIR\""]

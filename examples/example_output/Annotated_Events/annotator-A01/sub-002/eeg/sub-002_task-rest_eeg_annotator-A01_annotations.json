@@ -1,5 +1,5 @@
 {
-  "schema": "electroclean.annotations",
+  "schema": "electrotag.annotations",
   "schema_version": "1.0.0",
   "recording": {
     "recording_id": "sub-002/eeg/sub-002_task-rest_eeg.vhdr",
@@ -105,7 +105,7 @@
     "hidden_channels": "recording.ch_names lists the channels that were shown and could be annotated. Channels in the file that the study settings hide (for example a headset's timestamp or contact-quality channels) and trigger channels (for example BioSemi's Status channel) are listed in recording.hidden_channels, when there are any, and are never part of the whole montage."
   },
   "label_catalogue": {
-    "catalogue_id": "electroclean-hed-score-artifacts",
+    "catalogue_id": "electrotag-hed-score-artifacts",
     "catalogue_version": "2.0.0",
     "sha256": "34f144b5c8699afeb41dd6fc9a4fd343e602123e979ee41471971b4fec7800ad",
     "hed_library": "score",

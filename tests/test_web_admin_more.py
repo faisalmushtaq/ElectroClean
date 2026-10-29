@@ -1,5 +1,5 @@
 """The admin area's private invitation links and its progress figures (``user_invite``, ``stats``), on the
-ElectroClean server over HTTP, with the unauthenticated ``POST /invite/check`` and ``/invite/accept``."""
+ElectroTag server over HTTP, with the unauthenticated ``POST /invite/check`` and ``/invite/accept``."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ pytest.importorskip("httpx")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from electroclean.web.app import create_app  # noqa: E402
+from electrotag.web.app import create_app  # noqa: E402
 from tests.web_helpers import SUB1, SUB2, H, Api, admin_audit, ann, copy_demo, make_template, submission  # noqa: E402
 
 BLINK = ann("b" * 32, "Eye-blink-artifact", 500, 100, ["Fp1", "Fp2"])
@@ -95,7 +95,7 @@ def test_an_invitation_is_a_private_link_used_once(client: TestClient, admin: Ap
     r = check(client, token)
     assert r.status_code == 200, r.text
     assert r.json() == {"annotator_id": "A07", "display_name": "Annotator seven",
-                        "study_name": "ElectroClean demonstration", "expires_at": out["expires_at"]}
+                        "study_name": "ElectroTag demonstration", "expires_at": out["expires_at"]}
     assert client.post("/api/v1/invite/check", json={"token": token}).status_code == 403
     # Nobody knows the account's first password.
     assert client.post("/api/v1/login", json={"annotator_id": "A07", "password": token}, headers=H).status_code == 401
@@ -228,7 +228,7 @@ def test_the_access_log_never_holds_an_invitation_token(app, caplog: pytest.LogC
         access.info("GET /index.html?invite=" + token)  # a message without arguments
     assert len(caplog.records) == 3 and token not in caplog.text
     assert "/?server=x&invite=(hidden)#a" in caplog.text
-    from electroclean.web.app import HideInvitations, hide_invitations_in_access_log
+    from electrotag.web.app import HideInvitations, hide_invitations_in_access_log
 
     hide_invitations_in_access_log()  # as a second app would: still one filter
     assert sum(isinstance(f, HideInvitations) for f in access.filters) == 1

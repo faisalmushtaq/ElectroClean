@@ -1,4 +1,4 @@
-"""Make the browser application's font files (electroclean/web/static/fonts) from the fonts' sources.
+"""Make the browser application's font files (electrotag/web/static/fonts) from the fonts' sources.
 
 The application uses one typeface under the SIL Open Font License 1.1: Newsreader, a serif with
 optical sizes, for everything (roman and italic). It is served with the application, so that
@@ -9,7 +9,7 @@ the application uses and its tabular figures. It needs fontTools and brotli
 
 Download the sources from the Google Fonts repository into one folder, then run, for example:
 
-    python scripts/make_web_fonts.py ~/Downloads/fonts electroclean/web/static/fonts
+    python scripts/make_web_fonts.py ~/Downloads/fonts electrotag/web/static/fonts
 
 with these files in the source folder (https://github.com/google/fonts, folder ofl/<family>):
 ``Newsreader[opsz,wght].ttf`` and ``Newsreader-Italic[opsz,wght].ttf``. The family's OFL.txt is kept

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 
-from electroclean.app.io.bids import parse_bids_name, resolve_sidecars
-from electroclean.app.io.discovery import discover_recordings
+from electrotag.app.io.bids import parse_bids_name, resolve_sidecars
+from electrotag.app.io.discovery import discover_recordings
 
 
 def test_recursive_discovery_and_exclusions(rich_dataset):

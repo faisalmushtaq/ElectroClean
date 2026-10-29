@@ -12,12 +12,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const STATIC = path.join(HERE, '..', '..', 'electroclean', 'web', 'static');
+const STATIC = path.join(HERE, '..', '..', 'electrotag', 'web', 'static');
 const { CHANNEL_COLOUR_MODES, GROUP_COLOURS, GROUPS, REGION_NEIGHBOURS, channelColours, legendOf, groupOf, normaliseMode } =
-  await import('../../electroclean/web/static/js/viewer/channel_colours.js');
-const { COLOURS } = await import('../../electroclean/web/static/js/ui/theme.js');
-const { contrast, hexToRgb } = await import('../../electroclean/web/static/js/util.js');
-const { DEMO_CHANNELS, channelType } = await import('../../electroclean/web/static/js/data/synthetic.js');
+  await import('../../electrotag/web/static/js/viewer/channel_colours.js');
+const { COLOURS } = await import('../../electrotag/web/static/js/ui/theme.js');
+const { contrast, hexToRgb } = await import('../../electrotag/web/static/js/util.js');
+const { DEMO_CHANNELS, channelType } = await import('../../electrotag/web/static/js/data/synthetic.js');
 
 // ---------------------------------------------------------------- colour science
 const lin = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };

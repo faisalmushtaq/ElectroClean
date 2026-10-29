@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { withReportFont } from '../../electroclean/web/static/js/admin/ui.js';
+import { withReportFont } from '../../electrotag/web/static/js/admin/ui.js';
 
 const CSS = '<style>@font-face{font-family:"Newsreader"}</style>';
 

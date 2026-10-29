@@ -1,4 +1,4 @@
-# Deploys ElectroClean's Cloud Functions and Firestore rules to a Firebase project, on demand.
+# Deploys ElectroTag's Cloud Functions and Firestore rules to a Firebase project, on demand.
 #
 # Run it from the Actions tab ("Firebase deploy", Run workflow). It needs the repository secret
 # FIREBASE_SERVICE_ACCOUNT (the JSON key of a Google Cloud service account allowed to deploy) and
@@ -47,7 +47,7 @@ jobs:
           {
             echo "## Nothing was deployed"
             echo
-            echo "This workflow deploys ElectroClean's Cloud Functions and Firestore rules. It needs:"
+            echo "This workflow deploys ElectroTag's Cloud Functions and Firestore rules. It needs:"
             echo
             echo "* the repository secret **FIREBASE_SERVICE_ACCOUNT**: the JSON key of a service account that may"
             echo "  deploy to your Firebase project (Settings, Secrets and variables, Actions, New repository secret);"
@@ -76,7 +76,7 @@ jobs:
       - name: Prepare the functions
         if: env.FIREBASE_SERVICE_ACCOUNT != '' && env.PROJECT != '' && contains(env.ONLY, 'functions')
         run: |
-          cd electroclean/web/firebase/functions
+          cd electrotag/web/firebase/functions
           python -m venv venv
           venv/bin/python -m pip install --quiet -r requirements.txt
           cd -

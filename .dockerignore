@@ -2,8 +2,8 @@
 .venv
 **/__pycache__
 **/*.pyc
-electroclean/web/firebase/functions/venv
-electroclean/web/firebase/functions/electroclean
+electrotag/web/firebase/functions/venv
+electrotag/web/firebase/functions/electrotag
 web_tests
 node_modules
 dist

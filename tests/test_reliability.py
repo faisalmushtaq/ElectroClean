@@ -9,16 +9,16 @@ from itertools import combinations
 import numpy as np
 import pytest
 
-from electroclean.app.annotations.labels import LabelCatalogue, default_catalogue
-from electroclean.app.annotations.model import AnnotationDocument, AnnotationError, ArtifactAnnotation, RecordingInfo
-from electroclean.app.annotations.timing import RecordingTiming
-from electroclean.reliability.analysis import run_analysis, write_outputs
-from electroclean.reliability.config import ANY_ARTIFACT, AnalysisConfig
-from electroclean.reliability.data import build_dataset
-from electroclean.reliability.intervals import binarise, coverage_per_bin, intersection_length, union
-from electroclean.reliability.matching import events_for, match_events
-from electroclean.config.settings import CONFIG_DIR
-from electroclean.reliability.statistics import (
+from electrotag.app.annotations.labels import LabelCatalogue, default_catalogue
+from electrotag.app.annotations.model import AnnotationDocument, AnnotationError, ArtifactAnnotation, RecordingInfo
+from electrotag.app.annotations.timing import RecordingTiming
+from electrotag.reliability.analysis import run_analysis, write_outputs
+from electrotag.reliability.config import ANY_ARTIFACT, AnalysisConfig
+from electrotag.reliability.data import build_dataset
+from electrotag.reliability.intervals import binarise, coverage_per_bin, intersection_length, union
+from electrotag.reliability.matching import events_for, match_events
+from electrotag.config.settings import CONFIG_DIR
+from electrotag.reliability.statistics import (
     PairTable,
     fleiss_kappa,
     histogram_from_counts,
@@ -326,7 +326,7 @@ def test_dataset_rules():
 
 
 def test_synthetic_raters_end_to_end(tmp_path):
-    from electroclean.synthetic import make_synthetic_dataset, simulate_rater
+    from electrotag.synthetic import make_synthetic_dataset, simulate_rater
 
     truths = make_synthetic_dataset(tmp_path / "ds", n_subjects=2, duration_s=40.0, seed=4)
     docs = []
@@ -408,7 +408,7 @@ def test_mean_pairwise_kappa_uses_reference_pairs_everywhere():
 
 
 def test_bin_names_are_exact_and_unique():
-    from electroclean.reliability.timeresolved import representation_name, resolution_of
+    from electrotag.reliability.timeresolved import representation_name, resolution_of
 
     for r in (0.01, 0.1, 1 / 3, 0.1000001, 2.5):
         assert resolution_of(representation_name(r)) == r

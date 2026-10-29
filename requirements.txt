@@ -1,9 +1,9 @@
-# Exact versions ElectroClean was tested with (Python 3.12 and 3.13): everything the ElectroClean
-# server, the commands (electroclean-web, electroclean-agreement, electroclean-admin,
-# electroclean-activity) and the registration of recordings need. Install with:
+# Exact versions ElectroTag was tested with (Python 3.12 and 3.13): everything the ElectroTag
+# server, the commands (electrotag-web, electrotag-agreement, electrotag-admin,
+# electrotag-activity) and the registration of recordings need. Install with:
 #     python -m pip install -r requirements.txt
 #     python -m pip install --no-deps -e .
-# The browser application itself needs nothing installed: it is static files (electroclean/web/static).
+# The browser application itself needs nothing installed: it is static files (electrotag/web/static).
 #
 # Reading recordings with MNE-Python (registration, reference sets), the analyses and their reports
 mne==1.13.2
@@ -13,7 +13,7 @@ pandas==3.1.0
 matplotlib==3.11.2
 # Writes the simulated recordings of the demonstration, the example training set and the examples
 pybv==0.8.1
-# The ElectroClean server (electroclean-web serve and demo)
+# The ElectroTag server (electrotag-web serve and demo)
 fastapi==0.162.0
 uvicorn==0.54.0
 starlette==1.10.0

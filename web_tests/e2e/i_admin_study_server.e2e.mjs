@@ -1,4 +1,4 @@
-// The admin area with the real study server (`electroclean-web demo`, started by run_e2e.mjs):
+// The admin area with the real study server (`electrotag-web demo`, started by run_e2e.mjs):
 // accounts, the agreement and activity reports, a consensus reference, every result as a zip
 // file, and recordings added from this computer. The server's admin operations
 // (POST /api/v1/admin/{op}) come with the service layer's admin work; until a server has them,
@@ -9,13 +9,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SkipTest, signIn, waitForRoute } from './helpers.mjs';
 
-const PASSWORD = 'electroclean';
+const PASSWORD = 'electrotag';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const REGISTER_JS = path.resolve(HERE, '..', '..', 'electroclean', 'web', 'static', 'js', 'data', 'register.js');
+const REGISTER_JS = path.resolve(HERE, '..', '..', 'electrotag', 'web', 'static', 'js', 'data', 'register.js');
 const NO_ADMIN = 'the study server has no admin operations yet (POST /api/v1/admin/overview answers 404)';
 
 async function api(t, method, p, body, token) {
-  const headers = { 'X-ElectroClean': '1' };
+  const headers = { 'X-ElectroTag': '1' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (token) headers.Authorization = `Bearer ${token}`;
   const res = await fetch(`${t.study.base}api/v1${p}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });

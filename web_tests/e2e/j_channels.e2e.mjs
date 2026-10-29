@@ -4,7 +4,7 @@
 // becoming the selection; a 10-20 montage with its regions and sides; a BioSemi montage with its
 // banks; and a small montage keeping the plain list it always had.
 import { signIn, waitForRoute, waitForTraces, clickDialogButton } from './helpers.mjs';
-import { DEMO_CHANNELS } from '../../electroclean/web/static/js/data/synthetic.js';
+import { DEMO_CHANNELS } from '../../electrotag/web/static/js/data/synthetic.js';
 
 const range = (prefix, from, to) => Array.from({ length: to - from + 1 }, (_, i) => `${prefix}${from + i}`);
 
@@ -12,7 +12,7 @@ async function openSynthetic(page, channels, id) {
   await page.evaluate(async ([channels, id]) => {
     const { makeSyntheticRecording } = await import(new URL('js/data/synthetic.js', location.href).href);
     const recording = makeSyntheticRecording({ id, stem: `sub-${id}_task-rest`, sfreq: 256, durationS: 20, seed: 3, channels, artifacts: [] });
-    await globalThis.ElectroClean.openWorkspace({ recording, match: { status: 'unknown' }, sha: '', tryOut: true });
+    await globalThis.ElectroTag.openWorkspace({ recording, match: { status: 'unknown' }, sha: '', tryOut: true });
   }, [channels, id]);
   await waitForTraces(page);
 }
@@ -105,14 +105,14 @@ export const tests = [
       await page.uncheck('.dialog [data-log="channels-chosen-only"]');
       assert.equal((await chooser(page)).shown.length, 128);
       await clickDialogButton(page, 'OK');
-      const ws = await page.evaluate(() => ({ chosen: [...globalThis.ElectroClean.ws.selectedChannels], scope: globalThis.ElectroClean.ws.scope }));
+      const ws = await page.evaluate(() => ({ chosen: [...globalThis.ElectroTag.ws.selectedChannels], scope: globalThis.ElectroTag.ws.scope }));
       assert.deepEqual(ws.chosen, [...range('E', 10, 19), ...range('E', 97, 128)]);
       assert.equal(ws.scope, 'channels');
 
       // the log names the buttons; the text typed to find channels is never kept
       const events = await page.evaluate(async () => {
-        await globalThis.ElectroClean.flushLog();
-        return [...globalThis.ElectroClean.backend.visits.values()].flatMap((v) => v.events);
+        await globalThis.ElectroTag.flushLog();
+        return [...globalThis.ElectroTag.backend.visits.values()].flatMap((v) => v.events);
       });
       assert.ok(events.some((e) => e.type === 'mouse_press' && e.name === 'channel-group-E97–E128' && e.text === 'E97–E128 (32)'), 'the bank button in the log');
       assert.ok(!JSON.stringify(events).includes('E1?') && !JSON.stringify(events).includes('"e1"'), 'no search text in the log');
@@ -141,12 +141,12 @@ export const tests = [
       assert.deepEqual((await chooser(page)).shown, ['Fz', 'Cz', 'Pz'], 'a term that begins no name finds the names containing it');
       await t.screenshot(page, 'channels_1020');
       await clickDialogButton(page, 'Cancel');
-      assert.deepEqual(await page.evaluate(() => [...globalThis.ElectroClean.ws.selectedChannels]), [], 'Cancel changes nothing');
+      assert.deepEqual(await page.evaluate(() => [...globalThis.ElectroTag.ws.selectedChannels]), [], 'Cancel changes nothing');
 
       // Whole montage, as for an annotation's channels: the groups wait until "Only these channels"
       const pending = page.evaluate(async () => {
         const { chooseChannels } = await import(new URL('js/annotate/dialogs.js', location.href).href);
-        globalThis.__chosen = await chooseChannels({ title: 'Channels affected', channels: globalThis.ElectroClean.ws.s.channels, chosen: [], allowWholeMontage: true, wholeMontage: true });
+        globalThis.__chosen = await chooseChannels({ title: 'Channels affected', channels: globalThis.ElectroTag.ws.s.channels, chosen: [], allowWholeMontage: true, wholeMontage: true });
       });
       await page.waitForSelector('.dialog .channel-chooser');
       c = await chooser(page);
@@ -184,7 +184,7 @@ export const tests = [
       assert.deepEqual((await chooser(page)).shown, ['Cz', 'Pz', 'Oz']);
       await page.click('.dialog [data-log="channels-select-shown"]');
       await clickDialogButton(page, 'OK');
-      assert.deepEqual(await page.evaluate(() => [...globalThis.ElectroClean.ws.selectedChannels]), ['Cz', 'Pz', 'Oz']);
+      assert.deepEqual(await page.evaluate(() => [...globalThis.ElectroTag.ws.selectedChannels]), ['Cz', 'Pz', 'Oz']);
     },
   },
 ];

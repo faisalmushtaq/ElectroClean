@@ -10,7 +10,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { signIn, state, waitForRoute, waitForTraces, eegPoint, drag, clickDialogButton, pressSave } from './helpers.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const STATIC = path.resolve(HERE, '..', '..', 'electroclean', 'web', 'static');
+const STATIC = path.resolve(HERE, '..', '..', 'electrotag', 'web', 'static');
 
 /**
  * A stand-in for js/data/register.js with the interface of docs/web/architecture.md: it reads each
@@ -37,7 +37,7 @@ export async function buildManifests(files, { settings, scope, onProgress } = {}
     const rec = await openRecording([f]);
     const fp = await rec.fingerprint();
     manifests.push({
-      schema: 'electroclean.web_manifest', schema_version: '1.0.0', scope, recording_id: p, relative_path: p, format: 'edf', format_name: 'EDF',
+      schema: 'electrotag.web_manifest', schema_version: '1.0.0', scope, recording_id: p, relative_path: p, format: 'edf', format_name: 'EDF',
       file_name: f.name, files: { stem: f.name.replace(/_eeg\\.edf$/i, ''), path: p },
       timing: { sfreq: rec.sfreq, n_samples: rec.nSamples, first_samp: 0, meas_date: rec.measDate, duration_s: rec.durationS },
       ch_names: rec.channels.map((c) => c.name), hidden_channels: [], trigger_channels: [],
@@ -167,7 +167,7 @@ export const tests = [
       await goSection(page, 'Analyses', 'admin-analyses');
       await page.click('[data-log="agreement-run"]');
       await page.waitForFunction(() => /needs a study server or Firebase/.test(document.querySelector('.admin-section[data-section="analyses"] .note')?.textContent || ''));
-      assert.match(await sectionText(page), /electroclean-web demo/);
+      assert.match(await sectionText(page), /electrotag-web demo/);
 
       // Back to annotating, and in again from the header.
       await page.click('[data-log="leave-admin"]');
@@ -183,7 +183,7 @@ export const tests = [
       await waitForRoute(page, 'home');
       assert.match(await page.textContent('main'), /0 of 3\s*recordings done/);
       assert.equal(await page.locator('[data-log="admin"]').count(), 0);
-      const me = await page.evaluate(() => globalThis.ElectroClean.me);
+      const me = await page.evaluate(() => globalThis.ElectroTag.me);
       assert.equal(me.study.name, 'Pilot study');
       assert.equal(me.study.annotation.quick_labels[0], 'Nystagmus-artifact');
       // The admin area is for administrators only.
@@ -261,7 +261,7 @@ export const tests = [
         await waitForRoute(page, 'home', 30000);
         await page.locator('.dialog-buttons button').first().click();
         assert.match(await page.textContent('main'), /1 of 4\s*recordings done/);
-        const doc = await page.evaluate(() => globalThis.ElectroClean.backend.resultsDocument().annotation_documents
+        const doc = await page.evaluate(() => globalThis.ElectroTag.backend.resultsDocument().annotation_documents
           .find((d) => d.recording.recording_id === 'sub-new01/eeg/sub-new01_task-rest_eeg.edf'));
         assert.equal(doc.recording.sfreq, 200);
         assert.equal(doc.annotations.length, 1);

@@ -2,7 +2,7 @@
 
 These tests need the Firebase Emulator Suite and are skipped without it. Run them with
 ``scripts/test_firebase_emulators.sh``, which starts the Auth, Firestore and Functions emulators
-(the Python functions of electroclean/web/firebase/functions) and runs this file inside
+(the Python functions of electrotag/web/firebase/functions) and runs this file inside
 ``firebase emulators:exec``. With only ``FIRESTORE_EMULATOR_HOST`` set, the store and service tests
 run and the sign-in and callable tests are skipped.
 """
@@ -26,12 +26,12 @@ pytest.importorskip("google.cloud.firestore")
 
 import httpx  # noqa: E402
 
-from electroclean.web.cli import main as cli  # noqa: E402
-from electroclean.web.errors import ApiError  # noqa: E402
-from electroclean.web.firebase import firestore_client  # noqa: E402
-from electroclean.web.service import StudyService  # noqa: E402
-from electroclean.web.store import User, item_key  # noqa: E402
-from electroclean.web.store_firestore import FirestoreStore  # noqa: E402
+from electrotag.web.cli import main as cli  # noqa: E402
+from electrotag.web.errors import ApiError  # noqa: E402
+from electrotag.web.firebase import firestore_client  # noqa: E402
+from electrotag.web.service import StudyService  # noqa: E402
+from electrotag.web.store import User, item_key  # noqa: E402
+from electrotag.web.store_firestore import FirestoreStore  # noqa: E402
 from tests.web_helpers import (  # noqa: E402
     GUIDED1,
     GUIDED2,
@@ -46,10 +46,10 @@ from tests.web_helpers import (  # noqa: E402
     submission,
 )
 
-PROJECT = os.environ.get("GCLOUD_PROJECT") or "demo-electroclean"
+PROJECT = os.environ.get("GCLOUD_PROJECT") or "demo-electrotag"
 AUTH = os.environ.get("FIREBASE_AUTH_EMULATOR_HOST")
-FUNCTIONS = os.environ.get("ELECTROCLEAN_FUNCTIONS_URL")
-PASSWORD = "electroclean-test"
+FUNCTIONS = os.environ.get("ELECTROTAG_FUNCTIONS_URL")
+PASSWORD = "electrotag-test"
 REPO = Path(__file__).resolve().parents[1]
 BLINK = ann("b" * 32, "Eye-blink-artifact", 500, 100, ["Fp1", "Fp2"])
 EMG = ann("c" * 32, "EMG-artifact", 3000, 250, [])
@@ -238,12 +238,12 @@ def test_training_programme_on_firestore(service: StudyService, recordings: Path
 
 def test_export_writes_the_files_store_layout(service: StudyService, recordings: Path, template: Path,
                                              tmp_path: Path) -> None:
-    """Exported results are the files the ElectroClean server writes for the same work."""
-    from electroclean.activity.logs import find_logs, read_visit_log
-    from electroclean.app.io.naming import OutputLayout
-    from electroclean.app.session.register import CompletionRegister
-    from electroclean.reliability.cli import main as agreement
-    from electroclean.web.store_files import FilesStore
+    """Exported results are the files the ElectroTag server writes for the same work."""
+    from electrotag.activity.logs import find_logs, read_visit_log
+    from electrotag.app.io.naming import OutputLayout
+    from electrotag.app.session.register import CompletionRegister
+    from electrotag.reliability.cli import main as agreement
+    from electrotag.web.store_files import FilesStore
     from tests.test_web_server import without_session
     from tests.web_helpers import copy_demo
 
@@ -261,7 +261,7 @@ def test_export_writes_the_files_store_layout(service: StudyService, recordings:
     layout = OutputLayout(out / "Annotated_Events")
     entries = CompletionRegister(layout).entries()
     assert len(entries) == 4  # exported twice, registered once
-    # the same work on the ElectroClean server
+    # the same work on the ElectroTag server
     files = FilesStore(copy_demo(template, tmp_path / "server"))
     fsvc = StudyService(files)
     fsvc.call("submit", A01, submission(recordings, SUB1, [BLINK, EMG]))
@@ -332,7 +332,7 @@ def test_pieces_of_interrupted_writes_are_cleaned_up(service: StudyService, tmp_
 
 
 def test_a_guided_check_on_firestore_does_not_import_pandas(study: str) -> None:
-    main_py = REPO / "electroclean" / "web" / "firebase" / "functions" / "main.py"
+    main_py = REPO / "electrotag" / "web" / "firebase" / "functions" / "main.py"
     code = f"""
 import importlib.util, inspect, json, os, sys
 sys.path.insert(0, {str(REPO)!r})
@@ -345,8 +345,8 @@ def call(name, data):
     req = https_fn.CallableRequest(data={{"study": {study!r}, **data}}, raw_request=None,
                                    auth=https_fn.AuthData(uid="u", token=claims))
     return inspect.unwrap(getattr(m, name))(req)
-call("ec_guided_get", {{"recording_id": {GUIDED1!r}}})
-r = call("ec_guided_check", {{"recording_id": {GUIDED1!r}, "step": 1, "annotations": []}})
+call("et_guided_get", {{"recording_id": {GUIDED1!r}}})
+r = call("et_guided_check", {{"recording_id": {GUIDED1!r}, "step": 1, "annotations": []}})
 print(json.dumps({{"problems": r["problems"], "loaded": [x for x in ("pandas", "scipy", "mne") if x in sys.modules]}}))
 """
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=120, env=os.environ)
@@ -387,7 +387,7 @@ def admin_err(service: StudyService, op: str, body: dict[str, Any]) -> ApiError:
 
 
 def test_the_admin_area_on_firestore(service: StudyService, recordings: Path, tmp_path: Path) -> None:
-    from electroclean.synthetic import write_edf_recording
+    from electrotag.synthetic import write_edf_recording
     from tests.web_helpers import build_manifests
 
     assert admin_err(service, "no_such_op", {}).code == "not_found"
@@ -473,7 +473,7 @@ def test_the_admin_area_on_firestore(service: StudyService, recordings: Path, tm
 
 def test_the_example_set_without_mne_on_firestore(template: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """As in the functions, which do not include MNE-Python: the kept registrations are used."""
-    import electroclean.web.example as example
+    import electrotag.web.example as example
 
     sid = f"t{uuid.uuid4().hex[:10]}"
     run_cli("init-study", "--study", sid)
@@ -492,7 +492,7 @@ def test_the_example_set_without_mne_on_firestore(template: Path, monkeypatch: p
 
 
 def firebase_service(study: str) -> StudyService:
-    from electroclean.web.firebase import firebase_app
+    from electrotag.web.firebase import firebase_app
 
     return StudyService(FirestoreStore(firestore_client(PROJECT), study, auth_app=firebase_app(PROJECT)))
 
@@ -513,7 +513,7 @@ def choose_password(link: str, password: str) -> None:
 def test_accounts_with_firebase_authentication(study: str) -> None:
     from firebase_admin import auth
 
-    from electroclean.web.firebase import firebase_app
+    from electrotag.web.firebase import firebase_app
 
     svc = firebase_service(study)
     app = firebase_app(PROJECT)
@@ -598,35 +598,35 @@ def callable_(name: str, data: dict[str, Any], token: str | None) -> tuple[int, 
 @pytest.mark.skipif(not (AUTH and FUNCTIONS), reason="needs the Auth and Functions emulators")
 def test_callables_end_to_end(study: str, recordings: Path) -> None:
     token = sign_in(f"a01-{study}@example.org")
-    status, body = callable_("ec_me", {"study": study}, token)
+    status, body = callable_("et_me", {"study": study}, token)
     assert status == 200 and body["result"]["annotator_id"] == "A01"
     assert body["result"]["display_name"] == "Annotator one"
-    status, body = callable_("ec_me", {"study": study}, None)
+    status, body = callable_("et_me", {"study": study}, None)
     assert body["error"]["status"] == "UNAUTHENTICATED" and body["error"]["details"]["error"] == "not_signed_in"
-    status, body = callable_("ec_me", {"study": "someone-elses"}, token)
+    status, body = callable_("et_me", {"study": "someone-elses"}, token)
     assert body["error"]["status"] == "PERMISSION_DENIED"
-    _, body = callable_("ec_match", {"study": study, **match_body(recordings, SUB1)}, token)
+    _, body = callable_("et_match", {"study": study, **match_body(recordings, SUB1)}, token)
     assert body["result"]["status"] == "matched"
-    _, body = callable_("ec_submit", {"study": study, **submission(recordings, SUB1, [BLINK])}, token)
+    _, body = callable_("et_submit", {"study": study, **submission(recordings, SUB1, [BLINK])}, token)
     assert body["result"]["saved"] is True
-    _, body = callable_("ec_submit", {"study": study, **submission(recordings, SUB1, [BLINK])}, token)
+    _, body = callable_("et_submit", {"study": study, **submission(recordings, SUB1, [BLINK])}, token)
     assert body["error"]["status"] == "ALREADY_EXISTS" and body["error"]["details"]["error"] == "already_done"
-    _, body = callable_("ec_visit_open", {"study": study, "client": {"user_agent": "pytest"}}, token)
+    _, body = callable_("et_visit_open", {"study": study, "client": {"user_agent": "pytest"}}, token)
     vid = body["result"]["visit_id"]
-    _, body = callable_("ec_visit_events", {"study": study, "visit_id": vid, "events": [{"t": 1, "type": "key"}]},
+    _, body = callable_("et_visit_events", {"study": study, "visit_id": vid, "events": [{"t": 1, "type": "key"}]},
                         token)
     assert body["result"]["received"] == 1
-    _, body = callable_("ec_admin_progress", {"study": study}, token)
+    _, body = callable_("et_admin_progress", {"study": study}, token)
     assert body["error"]["details"]["error"] == "forbidden"
     admin = sign_in(f"admin-{study}@example.org")
-    _, body = callable_("ec_admin_progress", {"study": study}, admin)
+    _, body = callable_("et_admin_progress", {"study": study}, admin)
     assert {a["annotator_id"] for a in body["result"]["annotators"]} == {"A01", "A02", "T01", "ADMIN"}
     trainee = sign_in(f"t01-{study}@example.org")
-    _, body = callable_("ec_training", {"study": study}, trainee)
+    _, body = callable_("et_training", {"study": study}, trainee)
     assert body["result"]["next"]["recording_id"] == GUIDED1
-    _, body = callable_("ec_guided_get", {"study": study, "recording_id": GUIDED1}, trainee)
+    _, body = callable_("et_guided_get", {"study": study, "recording_id": GUIDED1}, trainee)
     assert body["result"]["current"]["step"] == 1
-    _, body = callable_("ec_guided_check", {"study": study, "recording_id": GUIDED1, "step": 1, "annotations": []},
+    _, body = callable_("et_guided_check", {"study": study, "recording_id": GUIDED1, "step": 1, "annotations": []},
                         trainee)
     assert body["result"]["problems"] == ["missing"]
 
@@ -635,37 +635,37 @@ def test_callables_end_to_end(study: str, recordings: Path) -> None:
 def test_admin_and_quiz_callables(study: str) -> None:
     admin = sign_in(f"admin-{study}@example.org")
     annotator = sign_in(f"a01-{study}@example.org")
-    _, body = callable_("ec_admin", {"study": study, "op": "overview"}, annotator)
+    _, body = callable_("et_admin", {"study": study, "op": "overview"}, annotator)
     assert body["error"]["status"] == "PERMISSION_DENIED" and body["error"]["details"]["error"] == "forbidden"
-    status, body = callable_("ec_admin", {"study": study, "op": "overview"}, admin)
+    status, body = callable_("et_admin", {"study": study, "op": "overview"}, admin)
     assert status == 200 and body["result"]["counts"]["recordings"] == 3
-    _, body = callable_("ec_admin", {"study": study, "op": "no_such_op"}, admin)
+    _, body = callable_("et_admin", {"study": study, "op": "no_such_op"}, admin)
     assert body["error"]["status"] == "NOT_FOUND" and body["error"]["details"]["error"] == "not_found"
     # an account made through the functions, in the Auth emulator
     email = f"a07-{study}@example.org"
-    _, body = callable_("ec_admin", {"study": study, "op": "user_add", "annotator_id": "A07", "email": email}, admin)
+    _, body = callable_("et_admin", {"study": study, "op": "user_add", "annotator_id": "A07", "email": email}, admin)
     assert "oobCode" in body["result"]["invite_link"], body
     choose_password(body["result"]["invite_link"], "a-seventh-password")
     a07 = sign_in(email, "a-seventh-password")
-    _, body = callable_("ec_me", {"study": study}, a07)
+    _, body = callable_("et_me", {"study": study}, a07)
     assert body["result"]["annotator_id"] == "A07" and body["result"]["quizzes"] == []
     # the quiz
-    _, body = callable_("ec_admin", {"study": study, "op": "quiz_item_add", "set_id": "example",
+    _, body = callable_("et_admin", {"study": study, "op": "quiz_item_add", "set_id": "example",
                                      "recording_id": GUIDED1, "start_s": 4.0, "end_s": 4.4,
                                      "correct_label": "Eye-blink-artifact"}, admin)
     item = body["result"]["item"]["item_id"]
-    _, body = callable_("ec_quiz", {"study": study, "set_id": "example", "action": "get"}, a07)
+    _, body = callable_("et_quiz", {"study": study, "set_id": "example", "action": "get"}, a07)
     assert [i["item_id"] for i in body["result"]["items"]] == [item]
-    _, body = callable_("ec_quiz", {"study": study, "set_id": "example", "action": "answer", "item_id": item,
+    _, body = callable_("et_quiz", {"study": study, "set_id": "example", "action": "answer", "item_id": item,
                                     "label": "Eye-blink-artifact"}, a07)
     assert body["result"]["correct"] is True
-    _, body = callable_("ec_quiz", {"study": study, "set_id": "example", "action": "finish"}, a07)
+    _, body = callable_("et_quiz", {"study": study, "set_id": "example", "action": "finish"}, a07)
     assert body["result"]["score"]["n_correct"] == 1
     # disabled in the admin area: refused at once, even with a token still valid
-    _, body = callable_("ec_admin", {"study": study, "op": "user_update", "annotator_id": "A07",
+    _, body = callable_("et_admin", {"study": study, "op": "user_update", "annotator_id": "A07",
                                      "status": "disabled"}, admin)
     assert body["result"]["user"]["status"] == "disabled"
-    _, body = callable_("ec_me", {"study": study}, a07)
+    _, body = callable_("et_me", {"study": study}, a07)
     assert body["error"]["details"]["error"] == "not_in_study"
 
 
@@ -683,12 +683,12 @@ def test_the_analyses_and_the_example_set_in_the_functions(study: str, recording
     v = ok(service, "visit_open", A01, {})
     ok(service, "visit_events", A01, {"visit_id": v["visit_id"], "events": [{"t": 1.0, "type": "key"}]})
     admin = sign_in(f"admin-{study}@example.org")
-    status, body = callable_("ec_admin", {"study": study, "op": "agreement"}, admin)
+    status, body = callable_("et_admin", {"study": study, "op": "agreement"}, admin)
     assert status == 200, body
     assert "<img" in body["result"]["report_html"] and "events_summary.tsv" in body["result"]["tables"]
-    _, body = callable_("ec_admin", {"study": study, "op": "activity"}, admin)
+    _, body = callable_("et_admin", {"study": study, "op": "activity"}, admin)
     assert "A01" in body["result"]["tables"]["visits.tsv"]
-    _, body = callable_("ec_admin", {"study": study, "op": "results_zip"}, admin)
+    _, body = callable_("et_admin", {"study": study, "op": "results_zip"}, admin)
     names = zipfile.ZipFile(io.BytesIO(base64.b64decode(body["result"]["base64"]))).namelist()
     assert "Annotated_Events/completion_register.tsv" in names
     # the example set, made without MNE-Python from the kept registrations
@@ -697,11 +697,11 @@ def test_the_analyses_and_the_example_set_in_the_functions(study: str, recording
     run_cli("add-user", "ADMIN", "--study", sid, "--email", f"admin-{sid}@example.org", "--password", PASSWORD,
             "--admin")
     admin2 = sign_in(f"admin-{sid}@example.org")
-    status, body = callable_("ec_admin", {"study": sid, "op": "set_example_create"}, admin2)
+    status, body = callable_("et_admin", {"study": sid, "op": "set_example_create"}, admin2)
     assert status == 200, body
     z = zipfile.ZipFile(io.BytesIO(base64.b64decode(body["result"]["recordings_zip"]["base64"])))
-    assert f"electroclean-example-set/{GUIDED1}" in z.namelist()
-    _, body = callable_("ec_admin", {"study": sid, "op": "audit", "limit": 1}, admin2)
+    assert f"electrotag-example-set/{GUIDED1}" in z.namelist()
+    _, body = callable_("et_admin", {"study": sid, "op": "audit", "limit": 1}, admin2)
     entry = body["result"]["entries"][0]
     assert entry["op"] == "set_example_create" and entry["details"]["registered_with"] == "template"
 

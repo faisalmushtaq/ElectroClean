@@ -9,14 +9,14 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
-import { pyCompare, pyFixed, pyFloatRepr, pyFormatG, pyIntText, pyListRepr, pySetRepr, pyStrip, pyStrRepr, timedeltaMicros } from "../../electroclean/web/static/js/data/pyfmt.js";
-import { decodeUtf8Python, parsePythonJson, pyValueText } from "../../electroclean/web/static/js/data/pyjson.js";
-import { parseFloatPy, parseIntCode } from "../../electroclean/web/static/js/data/events.js";
-import { parseBidsName, parseTsvText, TsvError } from "../../electroclean/web/static/js/data/bids.js";
+import { pyCompare, pyFixed, pyFloatRepr, pyFormatG, pyIntText, pyListRepr, pySetRepr, pyStrip, pyStrRepr, timedeltaMicros } from "../../electrotag/web/static/js/data/pyfmt.js";
+import { decodeUtf8Python, parsePythonJson, pyValueText } from "../../electrotag/web/static/js/data/pyjson.js";
+import { parseFloatPy, parseIntCode } from "../../electrotag/web/static/js/data/events.js";
+import { parseBidsName, parseTsvText, TsvError } from "../../electrotag/web/static/js/data/bids.js";
 import { ROOT } from "./_fixtures.mjs";
 
 function python() {
-  for (const p of [process.env.ELECTROCLEAN_PYTHON, join(ROOT, ".venv", "bin", "python"), join(ROOT, ".venv", "Scripts", "python.exe"), "python3"]) {
+  for (const p of [process.env.ELECTROTAG_PYTHON, join(ROOT, ".venv", "bin", "python"), join(ROOT, ".venv", "Scripts", "python.exe"), "python3"]) {
     if (!p || ((p.includes("/") || p.includes("\\")) && !existsSync(p))) continue;
     const r = spawnSync(p, ["-I", "-c", "import mne"], { cwd: ROOT, encoding: "utf8" });
     if (r.status === 0) return p;
@@ -79,7 +79,7 @@ function pythonAnswers() {
   answers = JSON.parse(r.stdout);
   return answers;
 }
-const skip = !PYTHON && "no Python with MNE-Python (set ELECTROCLEAN_PYTHON)";
+const skip = !PYTHON && "no Python with MNE-Python (set ELECTROTAG_PYTHON)";
 
 const mismatches = (got, want, label) => got.map((v, i) => (v === want[i] ? null : `${label}[${i}]: ${JSON.stringify(v)} vs ${JSON.stringify(want[i])}`)).filter(Boolean);
 

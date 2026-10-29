@@ -1,13 +1,17 @@
 # Handover notes
 
-These notes are for whoever takes ElectroClean on next, and for the AI assistant they work with.
-They say where the project stands on 28 October 2026, what is still open, and how to carry on
+These notes are for whoever takes ElectroTag on next, and for the AI assistant they work with.
+They say where the project stands on 29 October 2026, what is still open, and how to carry on
 without having to rediscover anything. Instructions written for AI coding assistants are in
 [CLAUDE.md](CLAUDE.md); read both before changing anything.
 
-## What ElectroClean is
+The project was called ElectroClean until 29 October 2026, when it was renamed ElectroTag before
+any study had started; the repository, the package, the commands and every name in the files
+changed together, and the 1.1.0 release and the history before it keep the old name.
 
-ElectroClean is research software for the manual annotation of artifacts in continuous EEG,
+## What ElectroTag is
+
+ElectroTag is research software for the manual annotation of artifacts in continuous EEG,
 written for a PhD project on EEG artifact identification and automated EEG cleaning. Annotators
 mark artifact intervals with the 29 HED-SCORE artifact terms, on the whole montage or on chosen
 channels; the results are saved as validated, BIDS-compatible files; an agreement analysis
@@ -16,28 +20,28 @@ guided practice to a competency assessment; and an interaction log records how e
 works, as research data in its own right. The [README](README.md) is the best short introduction,
 and the [design decisions](docs/design_decisions.md) record why things are as they are.
 
-ElectroClean runs in the web browser. Annotators open a link, sign in and open the recordings they
+ElectroTag runs in the web browser. Annotators open a link, sign in and open the recordings they
 were given from their own computer: the page reads each file there, so the EEG never leaves that
 computer, and the study holds only each recording's manifest (the SHA-256 fingerprint of its data
 file, its timing, channels and events), the annotations and the interaction logs. Lead researchers
 run the study from the admin area of the same application. A study's records live on **Firebase**
-(the chosen way to run real studies) or on **ElectroClean's own server** (`electroclean-web serve`,
+(the chosen way to run real studies) or on **ElectroTag's own server** (`electrotag-web serve`,
 used for the local demonstration and for a study that prefers its own computer).
 
 ## Where things stand
 
 On 28 October 2026 the project lead decided to retire the desktop application and to make the
 browser version complete, with an admin area for the lead researchers. That work was finished and
-tested on the branch `claude/electroclean-web` and merged into `main` the same day, with the project
+tested on the branch `claude/electrotag-web` and merged into `main` the same day, with the project
 lead's agreement, so `main` now holds the browser application and GitHub Pages publishes it at
-<https://faisalmushtaq.github.io/ElectroClean/>.
+<https://faisalmushtaq.github.io/ElectroTag/>.
 
 The browser version now does everything the desktop application did. Annotators annotate with the
 same keys, toolbar and dialogs (including a channel chooser that works on 128-channel montages),
 save with Save and Finish, keep a draft that follows them to another browser, follow the training
 programme from guided learning to the competency assessment, and take the short-segment quiz,
 which they can stop and resume or end early with the score of the segments answered. The admin area
-covers what the desktop's administrator tools and `electroclean-admin` covered, and more: accounts
+covers what the desktop's administrator tools and `electrotag-admin` covered, and more: accounts
 (with invitation links on Firebase), recordings added from the administrator's own computer (the
 browser builds the same manifests as the command line), assignments, reference sets with their
 four sources of reference (someone's saved annotations, a file, a consensus of several experts with
@@ -48,10 +52,10 @@ settings, and an audit log of every change an administrator makes.
 The desktop application has been removed from the branch, with its stand-alone applications, the
 launchers, the self-test and Qt. The Python core stays: it loads recordings with MNE-Python, writes
 and verifies the result files, and runs the agreement, training and activity analyses, and the
-server and the Firebase functions call it. The commands `electroclean-agreement`,
-`electroclean-admin` and `electroclean-activity` work as before on saved results, and
-`electroclean-web` runs the server, registers recordings and exports a Firebase study. Version 1.1.0
-on the [Releases page](https://github.com/faisalmushtaq/ElectroClean/releases) was the last desktop
+server and the Firebase functions call it. The commands `electrotag-agreement`,
+`electrotag-admin` and `electrotag-activity` work as before on saved results, and
+`electrotag-web` runs the server, registers recordings and exports a Firebase study. Version 1.1.0
+on the [Releases page](https://github.com/faisalmushtaq/ElectroTag/releases) was the last desktop
 release; the results folders it wrote are read unchanged.
 
 On the night of 28 to 29 October 2026 the application gained what a long study needs from day to
@@ -76,14 +80,14 @@ readers that keeps grey for bad channels. On a phone the application says plainl
 needs a tablet or a computer and offers to email the link. The [CHANGELOG](CHANGELOG.md) has the
 details, and [docs/design_decisions.md](docs/design_decisions.md) the reasons.
 
-**Trying it.** The application at <https://faisalmushtaq.github.io/ElectroClean/>, opened without a
+**Trying it.** The application at <https://faisalmushtaq.github.io/ElectroTag/>, opened without a
 study, is a demonstration that needs no server and keeps everything in the browser: sign in as A01 to annotate,
 T01 for the training programme or ADMIN for the admin area, with the password `demo`. The home page
 offers the example recordings as EDF files to open "from your computer", which is what annotators
 do with real recordings. The demonstration cannot run what needs Python (the analyses, consensus
 references, the results zip file); for those, run the whole system on one computer with
-`electroclean-web demo` and open <http://localhost:8000/>, signing in as A01, A02, T01 or ADMIN with
-the password `electroclean` ([docs/web/server.md](docs/web/server.md) says where the recordings to
+`electrotag-web demo` and open <http://localhost:8000/>, signing in as A01, A02, T01 or ADMIN with
+the password `electrotag` ([docs/web/server.md](docs/web/server.md) says where the recordings to
 open and the results are).
 
 There are no open pull requests or issues on GitHub.
@@ -93,7 +97,7 @@ There are no open pull requests or issues on GitHub.
 | Branch | What it holds | What to do with it |
 | --- | --- | --- |
 | `main` | The browser application, its admin area, the server, the Firebase functions and the Python core | Work on a branch from here. Pushes run *Tests* on Windows, macOS and Linux and *Browser version tests*, and publish the application at the site's root. |
-| `claude/electroclean-web` | The branch the browser version was built on; merged into `main` and identical to it | Keep it for previews or delete it: pushes to it publish the application under `preview/` without touching the site's root, a way to show work in progress before it reaches `main` (bring it up to date with `main` first). |
+| `claude/electrotag-web` | The branch the browser version was built on; merged into `main` and identical to it | Keep it for previews or delete it: pushes to it publish the application under `preview/` without touching the site's root, a way to show work in progress before it reaches `main` (bring it up to date with `main` first). |
 | `claude/eager-bardeen-33qhkb` | The branch earlier AI sessions worked on; identical to `main` | Nothing; it can be deleted. |
 | `gh-pages` | The published web pages, written by `.github/workflows/pages.yml` | Never edit it by hand. GitHub Pages serves it (Settings, Pages: deploy from branch `gh-pages`, folder `/ (root)`). |
 
@@ -104,7 +108,7 @@ do not. The desktop application's last state is in `main`'s history (before the 
 
 ## Setting up
 
-ElectroClean needs Python 3.12 or 3.13 (64-bit). From a clone of the repository:
+ElectroTag needs Python 3.12 or 3.13 (64-bit). From a clone of the repository:
 
 ```bash
 python -m venv .venv
@@ -112,7 +116,7 @@ source .venv/bin/activate              # Windows: .venv\Scripts\activate
 python -m pip install -r requirements-dev.txt
 python -m pip install --no-deps -e .
 python -m pytest                       # the Python suite, a few minutes
-electroclean-web demo                  # the whole system on http://localhost:8000/
+electrotag-web demo                  # the whole system on http://localhost:8000/
 ```
 
 `requirements.txt` holds what the server and the commands need, and `requirements-dev.txt` adds the
@@ -124,14 +128,14 @@ Firebase tests need Java 21 for Google's emulators; `npx` fetches the Firebase t
 
 | To | Run |
 | --- | --- |
-| Try everything on this computer | `electroclean-web demo`, then <http://localhost:8000/> (accounts above) |
-| Run a study on your own server | `electroclean-web serve --study-dir …` ([docs/web/server.md](docs/web/server.md)) |
-| Register recordings from the command line | `electroclean-web register …` (the admin area does the same in the browser) |
-| See who has done what | the admin area's Results section, or `electroclean-web progress --study-dir …` or `--firebase-project … --study …` |
-| Write a Firebase study's results into ElectroClean's folders | `electroclean-web export …` |
-| Compare annotators | the admin area's Analyses section, or `electroclean-agreement path/to/Annotated_Events` |
-| Turn interaction logs into tables and learning curves | the admin area, or `electroclean-activity path/to/Annotated_Events` |
-| Work with reference sets in a folder | `electroclean-admin --help` |
+| Try everything on this computer | `electrotag-web demo`, then <http://localhost:8000/> (accounts above) |
+| Run a study on your own server | `electrotag-web serve --study-dir …` ([docs/web/server.md](docs/web/server.md)) |
+| Register recordings from the command line | `electrotag-web register …` (the admin area does the same in the browser) |
+| See who has done what | the admin area's Results section, or `electrotag-web progress --study-dir …` or `--firebase-project … --study …` |
+| Write a Firebase study's results into ElectroTag's folders | `electrotag-web export …` |
+| Compare annotators | the admin area's Analyses section, or `electrotag-agreement path/to/Annotated_Events` |
+| Turn interaction logs into tables and learning curves | the admin area, or `electrotag-activity path/to/Annotated_Events` |
+| Work with reference sets in a folder | `electrotag-admin --help` |
 | Run the whole workflow in plain Python | `python examples/demo_end_to_end.py` |
 
 ## Tests and continuous integration
@@ -140,12 +144,12 @@ Firebase tests need Java 21 for Google's emulators; `npx` fetches the Firebase t
 | --- | --- | --- |
 | Python (core, agreement, training, activity, the server, the admin and quiz operations, registration, the Firebase store and the functions) | `python -m pytest` (about 370 tests) | *Tests*: Linux on every push; Windows, macOS and Linux for `main`, pull requests into `main` and runs started by hand |
 | Browser modules | `node --test web_tests/unit/*.test.mjs` (about 200 tests; the data tests write their recordings with `scripts/make_web_fixtures.py`, and a parity test checks that the browser's manifests match Python's) | *Browser version tests* |
-| The browser application in Chromium | `ELECTROCLEAN_PYTHON=python node web_tests/run_e2e.mjs` (48 tests, against the demonstration and against the real `electroclean-web demo`) | *Browser version tests* |
+| The browser application in Chromium | `ELECTROTAG_PYTHON=python node web_tests/run_e2e.mjs` (48 tests, against the demonstration and against the real `electrotag-web demo`) | *Browser version tests* |
 | Firebase on the emulators | `bash scripts/test_firebase_emulators.sh` (the functions and the Firestore store) and `bash scripts/test_web_firebase.sh` (the application signing in, annotating, training, exporting and running the admin area) | *Browser version tests* |
 
 The [testing guide](docs/testing_guide.md) lists the checks that need a person before a study
 starts. *GitHub Pages* publishes the application (from `main` at the site's root, from
-`claude/electroclean-web` under `preview/`), and *Firebase deploy*, run by hand, deploys the
+`claude/electrotag-web` under `preview/`), and *Firebase deploy*, run by hand, deploys the
 functions and rules to a real project once it exists (see below).
 
 ## Setting up a real study on Firebase
@@ -158,7 +162,7 @@ the study and your own administrator account, and then do the rest in the admin 
 recordings from your computer, invite the annotators, assign the recordings, set up the reference
 sets and choose the settings. Publish `config.json` so the application finds the project, send the
 annotators the link and their recordings (on an encrypted drive, for example), and use
-`electroclean-web export` or the admin area's zip file for the analyses. The *Firebase deploy*
+`electrotag-web export` or the admin area's zip file for the analyses. The *Firebase deploy*
 workflow can deploy updates once the secret `FIREBASE_SERVICE_ACCOUNT` and the variable
 `FIREBASE_PROJECT` are set in the repository; neither is set yet.
 
@@ -170,7 +174,7 @@ is obtaining two or three properly annotated recordings. In a browser study the 
 for the experts to annotate them in the study and for the admin area to turn their saved
 annotations into references, or a consensus of them (the Training section of
 [docs/web/admin.md](docs/web/admin.md)); the [administrator guide](docs/administrator_guide.md)
-("Real expert files") describes the same with `electroclean-admin` in a folder. Once the real set
+("Real expert files") describes the same with `electrotag-admin` in a folder. Once the real set
 works, remove the example set.
 
 **2. Versions and releases.** `__version__` is still `1.1.0`, and the *Unreleased* section of
@@ -201,7 +205,7 @@ recording with filters took about 0.3 s to appear and the following screen, prep
 about 0.02 s; check this on the computers annotators will use. A reference set's
 `show_full_report_to_annotator` setting has no effect in the browser, where competency reports are
 for administrators and trainees see their result; decide whether trainees should ever see the full
-report, and either offer it or retire the setting. `electroclean-admin` still offers a few options
+report, and either offer it or retire the setting. `electrotag-admin` still offers a few options
 that only mattered to the desktop application (`set-passphrase` and `resolve-failure`); the
 administrator guide says so, and they can be removed. The README has no
 picture of the browser application yet. Three small differences from the desktop application's
@@ -213,7 +217,7 @@ works but that Dropbox does not document, and Google Drive cannot be read by a w
 always use the two-step download. Attaching a link to each registered recording, so that Open fetches
 it without the annotator pasting anything, is the natural next step: `js/data/fetch_links.js`
 already takes a list of files and their links. The study default for channel colours
-(`display.channel_colours`) has no control in the admin area yet. `electroclean-activity` does not
+(`display.channel_colours`) has no control in the admin area yet. `electrotag-activity` does not
 yet put the time paused (`paused_s`, in the interaction log) in its tables. A Firebase invitation
 shows no expiry date, because Firebase does not give one. Keeping recordings on an iPad uses the
 faster storage from iPadOS 26 and the browser's database before it; check both on a real iPad. Two tabs that keep the same
@@ -234,22 +238,22 @@ accurate as history, and can be reworded to name the Python code instead as the 
 **The annotation store is the single source of truth**: the interface displays it and sends every
 action to it. **Source EEG files are never written to**, and a recording is marked complete only
 after its five output files have been written, read back and verified (the journalled save in
-`electroclean/app/session/`). **Every change an administrator makes is written to the audit log**,
+`electrotag/app/session/`). **Every change an administrator makes is written to the audit log**,
 whichever way it is made. Keep all three properties whatever else changes.
 
 **The browser, the server and the Firebase functions share one contract**,
 [docs/web/api.md](docs/web/api.md), with the annotators' operations, the administrator's operations
-(`POST /api/v1/admin/{op}`, or the callable `ec_admin`) and the quiz. A change to a request or
-response touches the service layer (`electroclean/web/service.py` and the modules it calls, such as
-`admin.py`, `quiz.py`, `coach.py` and `visits.py`), the HTTP route in `electroclean/web/app.py`, the
-Firebase function in `electroclean/web/firebase/functions/main.py`, the browser's `js/api/http.js`,
+(`POST /api/v1/admin/{op}`, or the callable `et_admin`) and the quiz. A change to a request or
+response touches the service layer (`electrotag/web/service.py` and the modules it calls, such as
+`admin.py`, `quiz.py`, `coach.py` and `visits.py`), the HTTP route in `electrotag/web/app.py`, the
+Firebase function in `electrotag/web/firebase/functions/main.py`, the browser's `js/api/http.js`,
 `js/api/firebase.js` and the in-browser demonstration (`js/api/demo.js` and `demo_admin.js`), and
 the contract itself. The end-to-end tests against the real server and the emulators are what catch
 a mismatch.
 
 **Registration happens in two places.** The browser's `js/data/register.js` must build the same
-manifest as Python's `electroclean.web.manifest.build_manifest` for the same files and settings, and
-the server checks every manifest it receives (`electroclean/web/manifest_check.py`) before storing
+manifest as Python's `electrotag.web.manifest.build_manifest` for the same files and settings, and
+the server checks every manifest it receives (`electrotag/web/manifest_check.py`) before storing
 it. The parity tests compare the two field by field; change both together.
 
 **Slow answers are normal on Firebase.** Functions can take a few seconds to start after a quiet
@@ -273,11 +277,11 @@ guides. Any literature cited must be checked against the original source before 
 
 | Document | For |
 | --- | --- |
-| [README.md](README.md) | What ElectroClean is, trying it, running a study, the outputs |
+| [README.md](README.md) | What ElectroTag is, trying it, running a study, the outputs |
 | [docs/web/using.md](docs/web/using.md) | Annotators and trainees using the browser application |
 | [docs/web/admin.md](docs/web/admin.md) | Lead researchers using the admin area |
 | [docs/web/firebase.md](docs/web/firebase.md) | Setting up a real study on Firebase, step by step |
-| [docs/web/server.md](docs/web/server.md) | The demonstration and a study on ElectroClean's own server |
+| [docs/web/server.md](docs/web/server.md) | The demonstration and a study on ElectroTag's own server |
 | [docs/web/architecture.md](docs/web/architecture.md) | How the browser application, the server and Firebase fit together |
 | [docs/web/api.md](docs/web/api.md) | The contract between browser and server, and the Firebase functions |
 | [docs/administrator_guide.md](docs/administrator_guide.md) | Every study setting, reference sets, competency criteria, the training programme |

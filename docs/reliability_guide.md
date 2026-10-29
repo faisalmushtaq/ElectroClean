@@ -1,6 +1,6 @@
 # Reliability analysis guide
 
-This guide explains how ElectroClean compares annotations from several
+This guide explains how ElectroTag compares annotations from several
 annotators (Component B), which assumptions each measure makes and how to read
 the results. The same code compares annotators with a reference in the
 training component.
@@ -11,19 +11,19 @@ Two annotators reviewing the same continuous recording can disagree in three
 ways: about **category** (one calls it an eye blink, the other a vertical eye
 movement), about **time** (both mark the blink but place its start and end
 differently, or only one marks it) and about **channels** (both mark an
-electrode pop, on different channels). ElectroClean measures all three, and
+electrode pop, on different channels). ElectroTag measures all three, and
 reports each separately, because a single number cannot show which kind of
 disagreement occurred.
 
 ## Running an analysis
 
 ```bash
-electroclean-agreement Annotated_Events --out agreement_results \
+electrotag-agreement Annotated_Events --out agreement_results \
     --resolutions 0.01 0.05 0.1 --min-bin-coverage 0.5 \
     --criterion iou --iou-thresholds 0 0.2 0.5 --primary-iou 0.2
 ```
 
-`electroclean-agreement --help` describes every option with its unit and
+`electrotag-agreement --help` describes every option with its unit and
 default. Without `--out` the results go to a new folder
 `agreement_<date>-<time>` in the current folder, and a folder that already
 holds the results of an earlier analysis is only reused with `--overwrite`, so
@@ -37,11 +37,11 @@ annotators being compared.
 The admin area of the browser application ([web/admin.md](web/admin.md)) runs
 the same analysis on the study's saved results, for the annotators, recordings
 and settings chosen there, and offers the report and the tables to download.
-For a study on Firebase, `electroclean-web export` writes the results into an
+For a study on Firebase, `electrotag-web export` writes the results into an
 `Annotated_Events` folder for the command. From Python:
 
 ```python
-from electroclean.reliability import AnalysisConfig, run_analysis, write_outputs
+from electrotag.reliability import AnalysisConfig, run_analysis, write_outputs
 result = run_analysis(["Annotated_Events"], AnalysisConfig(resolutions_s=(0.01, 0.05, 0.1)))
 write_outputs(result, "agreement_results")
 ```
@@ -94,7 +94,7 @@ Two representations are computed:
 Tables are computed per recording and pooled over recordings by adding the
 2×2 tables (so long recordings weigh more than short ones).
 
-From each table ElectroClean reports:
+From each table ElectroTag reports:
 
 | Measure | Formula | Notes |
 |---|---|---|
@@ -143,8 +143,8 @@ annotation is counted once. Set `include_group_rollups` to false to leave the
 roll-ups out.
 
 **Label catalogue versions.** Files made with different versions of
-ElectroClean's label catalogue are analysed together when the versions are
-compatible (every label they share has the same code, which ElectroClean
+ElectroTag's label catalogue are analysed together when the versions are
+compatible (every label they share has the same code, which ElectroTag
 guarantees by never reusing codes), using the larger catalogue; the report
 notes the versions.
 
@@ -200,7 +200,7 @@ requires both. In time-and-channel mode the events must also share channels
 
 **How are events matched?** By default, one-to-one: each event can match at
 most one event of the other annotator. Among all possible one-to-one
-assignments, ElectroClean chooses the one with the largest number of matches
+assignments, ElectroTag chooses the one with the largest number of matches
 and, among those, the largest total IoU. This is solved exactly with the
 Hungarian algorithm after sorting events by onset, offset and identifier, so
 the result is deterministic. A simple greedy rule (best IoU first) can match
@@ -265,7 +265,7 @@ while the other called vertical eye movement.
 
 ## Choosing settings
 
-ElectroClean's defaults are starting points. The research team should choose
+ElectroTag's defaults are starting points. The research team should choose
 and report the bin widths, the coverage rule, the matching criterion and
 thresholds and whether many-to-one matches are allowed, ideally before seeing
 the results. Reasonable choices depend on the artifact: a 100 ms tolerance is
@@ -274,7 +274,7 @@ why results are given per category.
 
 ## Extending the analysis
 
-Measures are registered in `electroclean.reliability.analysis.MEASURES`. A new
+Measures are registered in `electrotag.reliability.analysis.MEASURES`. A new
 measure is a function receiving the loaded dataset and the configuration and
 returning named tables; registering it with `register_measure` adds its
 tables to the outputs and to the report. Statistics designed for unitized

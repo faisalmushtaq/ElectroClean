@@ -3,8 +3,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { demoSpecs, makeSyntheticRecording, syntheticEdfBytes, truthAnnotations, sha256Hex, edgeHalfWidthS } from '../../electroclean/web/static/js/data/synthetic.js';
-import { openRecording } from '../../electroclean/web/static/js/data/recording.js';
+import { demoSpecs, makeSyntheticRecording, syntheticEdfBytes, truthAnnotations, sha256Hex, edgeHalfWidthS } from '../../electrotag/web/static/js/data/synthetic.js';
+import { openRecording } from '../../electrotag/web/static/js/data/recording.js';
 
 const [spec1, , spec3] = demoSpecs();
 

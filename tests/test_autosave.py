@@ -7,8 +7,8 @@ import time
 
 import pytest
 
-from electroclean.app.session.autosave import autosaves_for, find_autosave, read_autosave
-from electroclean.app.session.register import CompletionRegister
+from electrotag.app.session.autosave import autosaves_for, find_autosave, read_autosave
+from electrotag.app.session.register import CompletionRegister
 from tests.conftest import SUB1, make_session
 
 

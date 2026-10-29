@@ -4,8 +4,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { DemoBackend, exampleRecording, TRAINING_SET } from '../../electroclean/web/static/js/api/demo.js';
-import { manifestProblem, publicManifest } from '../../electroclean/web/static/js/api/demo_admin.js';
+import { DemoBackend, exampleRecording, TRAINING_SET } from '../../electrotag/web/static/js/api/demo.js';
+import { manifestProblem, publicManifest } from '../../electrotag/web/static/js/api/demo_admin.js';
 
 const memory = () => {
   const m = new Map();
@@ -28,7 +28,7 @@ async function as(b, id, password = 'demo') {
 const SHA = 'c'.repeat(64);
 function manifest(rid = 'sub-new/eeg/sub-new_task-rest_eeg.edf', extra = {}) {
   return {
-    schema: 'electroclean.web_manifest', schema_version: '1.0.0', scope: 'study', recording_id: rid, relative_path: rid,
+    schema: 'electrotag.web_manifest', schema_version: '1.0.0', scope: 'study', recording_id: rid, relative_path: rid,
     format: 'edf', format_name: 'EDF', file_name: rid.split('/').pop(), files: { stem: 'sub-new_task-rest', path: rid },
     timing: { sfreq: 100, n_samples: 6000, first_samp: 0, meas_date: null, duration_s: 60 },
     ch_names: ['Fp1', 'Fp2', 'Cz', 'HEOG'], hidden_channels: ['Status'], trigger_channels: ['Status'],
@@ -172,7 +172,7 @@ test('recordings added as manifests are registered, matched by fingerprint and s
 
 test('manifests are checked before they are kept, and shown to annotators as the Manifest of the contract', () => {
   assert.equal(manifestProblem(manifest()), null);
-  assert.match(manifestProblem({ ...manifest(), schema: 'x' }), /not an ElectroClean recording description/);
+  assert.match(manifestProblem({ ...manifest(), schema: 'x' }), /not an ElectroTag recording description/);
   assert.match(manifestProblem({ ...manifest(), schema_version: '2.0.0' }), /not supported/);
   assert.match(manifestProblem(manifest('../outside.edf')), /not a path inside the dataset/);
   assert.match(manifestProblem({ ...manifest(), ch_names: ['A', 'A'] }), /listed twice/);
@@ -239,7 +239,7 @@ test('reference sets: created, given references from saved annotations or a file
   assert.ok((await b.admin('recordings_list', { scope: 'set:pilot' })).recordings.some((r) => r.recording_id === rid));
   // A file from the desktop application; it must fit the recording.
   const spec = exampleRecording(rid2);
-  const docOk = { schema: 'electroclean.annotations', recording: { recording_id: rid2, sfreq: spec.sfreq, n_samples: spec.nSamples },
+  const docOk = { schema: 'electrotag.annotations', recording: { recording_id: rid2, sfreq: spec.sfreq, n_samples: spec.nSamples },
     annotator: { annotator_id: 'E1' }, annotations: [{ label: 'Movement-artifact', onset: 24, duration: 2, channels: [] }] };
   await assert.rejects(() => b.admin('set_add_reference', { set_id: 'pilot', recording_id: rid2, recording_scope: 'study', use: 'assessment',
     source: { kind: 'document', document: { ...docOk, recording: { n_samples: 5 } } } }), (e) => e.status === 422);
@@ -248,7 +248,7 @@ test('reference sets: created, given references from saved annotations or a file
   assert.deepEqual([guided.use, guided.guidance, guided.effective_guidance, guided.n_reference_events, guided.provenance.experts], ['guided', 'auto', 'show', 1, ['E1']]);
   // Consensus and adjudication need the server.
   await assert.rejects(() => b.admin('set_add_reference', { set_id: 'pilot', recording_id: rid, use: 'practice', source: { kind: 'consensus', annotator_ids: ['A01', 'T01'] } }),
-    (e) => e.status === 501 && e.code === 'needs_server' && /electroclean-web demo/.test(e.message));
+    (e) => e.status === 501 && e.code === 'needs_server' && /electrotag-web demo/.test(e.message));
   // Use and guidance; a warning when a training recording becomes an assessment one.
   b.state.submissions.push({ key: 'x', annotator_id: 'T01', recording_id: rid, mode: 'practice', context_id: 'pilot', attempt: 1, saved_at: 'now', annotations: [], session: {} });
   const changed = await b.admin('set_recording_update', { set_id: 'pilot', recording_id: rid, use: 'assessment' });
@@ -352,7 +352,7 @@ test('what needs a study server says so, and how to try it', async () => {
   const b = await demo();
   for (const op of ['agreement', 'activity', 'competency', 'results_zip', 'set_example_create']) {
     await assert.rejects(() => b.admin(op, {}), (e) => e.status === 501 && e.code === 'needs_server' && /study server or Firebase/.test(e.message) &&
-      /electroclean-web demo/.test(e.message), op);
+      /electrotag-web demo/.test(e.message), op);
   }
 });
 

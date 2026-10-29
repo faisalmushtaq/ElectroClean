@@ -1,4 +1,4 @@
-Required Notice: Copyright 2026 The ElectroClean authors
+Required Notice: Copyright 2026 The ElectroTag authors
 
 # PolyForm Noncommercial License 1.0.0
 

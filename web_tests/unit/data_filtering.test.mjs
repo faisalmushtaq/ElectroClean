@@ -1,5 +1,5 @@
 // Display filters in the browser compared with the desktop application's own filtering
-// (electroclean.app.eeg.filtering.apply_view_filters, which calls MNE-Python), window by window:
+// (electrotag.app.eeg.filtering.apply_view_filters, which calls MNE-Python), window by window:
 // at the start and end of the recording, around stretches without data (BAD_ACQ_SKIP), around a
 // BrainVision discontinuity and in segments shorter than the filter. Also the hatched edge zones,
 // the caching of filtered pieces and the channels that are never filtered.
@@ -7,9 +7,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { Engine } from "../../electroclean/web/static/js/data/engine.js";
-import { planFilters } from "../../electroclean/web/static/js/data/filters.js";
-import { openRecording } from "../../electroclean/web/static/js/data/recording.js";
+import { Engine } from "../../electrotag/web/static/js/data/engine.js";
+import { planFilters } from "../../electrotag/web/static/js/data/filters.js";
+import { openRecording } from "../../electrotag/web/static/js/data/recording.js";
 import { ensureFixtures, expected, fixtureFiles } from "./_fixtures.mjs";
 
 const manifest = ensureFixtures();

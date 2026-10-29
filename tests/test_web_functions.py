@@ -1,4 +1,4 @@
-"""The Firebase callables (electroclean/web/firebase/functions/main.py) with fake requests.
+"""The Firebase callables (electrotag/web/firebase/functions/main.py) with fake requests.
 
 The functions are run here without Firebase: the service behind them is given a study folder
 (the files store), so these tests check who may call what, the error codes and the JSON, and that a
@@ -19,23 +19,23 @@ import pytest
 
 https_fn = pytest.importorskip("firebase_functions.https_fn")
 
-from electroclean.web.service import StudyService  # noqa: E402
-from electroclean.web.store_files import FilesStore  # noqa: E402
+from electrotag.web.service import StudyService  # noqa: E402
+from electrotag.web.store_files import FilesStore  # noqa: E402
 from tests.web_helpers import GUIDED1, SUB1, ann, copy_demo, make_template, match_body, submission  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
-MAIN = REPO / "electroclean" / "web" / "firebase" / "functions" / "main.py"
-OPERATIONS = {"ec_me": "me", "ec_assignments": "assignments", "ec_match": "match", "ec_put_draft": "put_draft",
-              "ec_delete_draft": "delete_draft", "ec_submit": "submit", "ec_training": "training",
-              "ec_guided_get": "guided_get", "ec_guided_check": "guided_check",
-              "ec_guided_continue": "guided_continue", "ec_guided_show_me": "guided_show_me",
-              "ec_visit_open": "visit_open", "ec_visit_events": "visit_events", "ec_visit_close": "visit_close",
-              "ec_admin_progress": "admin_progress", "ec_admin": "admin", "ec_quiz": "quiz",
-              "ec_achievements": "achievements"}
+MAIN = REPO / "electrotag" / "web" / "firebase" / "functions" / "main.py"
+OPERATIONS = {"et_me": "me", "et_assignments": "assignments", "et_match": "match", "et_put_draft": "put_draft",
+              "et_delete_draft": "delete_draft", "et_submit": "submit", "et_training": "training",
+              "et_guided_get": "guided_get", "et_guided_check": "guided_check",
+              "et_guided_continue": "guided_continue", "et_guided_show_me": "guided_show_me",
+              "et_visit_open": "visit_open", "et_visit_events": "visit_events", "et_visit_close": "visit_close",
+              "et_admin_progress": "admin_progress", "et_admin": "admin", "et_quiz": "quiz",
+              "et_achievements": "achievements"}
 
 
 def load_main():
-    spec = importlib.util.spec_from_file_location("electroclean_functions_main", MAIN)
+    spec = importlib.util.spec_from_file_location("electrotag_functions_main", MAIN)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -77,91 +77,91 @@ def test_every_operation_is_a_callable_in_london(main) -> None:
 
 def test_callers_must_be_signed_in_members_of_the_study(main) -> None:
     with pytest.raises(https_fn.HttpsError) as e:
-        call(main, "ec_me", {"study": "demo"}, None)
+        call(main, "et_me", {"study": "demo"}, None)
     assert e.value.code.value == "unauthenticated" and e.value.details["error"] == "not_signed_in"
     with pytest.raises(https_fn.HttpsError) as e:
-        call(main, "ec_me", {"study": "other"}, A01)
+        call(main, "et_me", {"study": "other"}, A01)
     assert e.value.code.value == "permission-denied" and e.value.details["error"] == "not_in_study"
     with pytest.raises(https_fn.HttpsError) as e:
-        call(main, "ec_me", {"study": "demo"}, {**A01, "annotator_id": "Z99"})  # no account in the study
+        call(main, "et_me", {"study": "demo"}, {**A01, "annotator_id": "Z99"})  # no account in the study
     assert e.value.details["error"] == "not_in_study"
     with pytest.raises(https_fn.HttpsError) as e:
-        call(main, "ec_me", {"study": "../x"}, A01)
+        call(main, "et_me", {"study": "../x"}, A01)
     assert e.value.code.value == "invalid-argument"
-    me = call(main, "ec_me", {"study": "demo"}, A01)
+    me = call(main, "et_me", {"study": "demo"}, A01)
     assert me["annotator_id"] == "A01" and me["study"]["study_id"] == "demo"
 
 
 def test_the_same_json_as_the_server(main, template: Path) -> None:
     recordings = template / "recordings"
-    a = call(main, "ec_assignments", {"study": "demo"}, A01)
+    a = call(main, "et_assignments", {"study": "demo"}, A01)
     assert a["next"] == SUB1
-    m = call(main, "ec_match", {"study": "demo", **match_body(recordings, SUB1)}, A01)
+    m = call(main, "et_match", {"study": "demo", **match_body(recordings, SUB1)}, A01)
     assert m["status"] == "matched" and m["manifest"]["recording_id"] == SUB1
     blink = ann("b" * 32, "Eye-blink-artifact", 500, 100, ["Fp1", "Fp2"])
-    d = call(main, "ec_put_draft", {"study": "demo", "recording_id": SUB1, "mode": "standard",
+    d = call(main, "et_put_draft", {"study": "demo", "recording_id": SUB1, "mode": "standard",
                                     "draft": {"annotations": [blink], "elapsed_s": 2.0}}, A01)
     assert d["saved_at"]
-    r = call(main, "ec_submit", {"study": "demo", **submission(recordings, SUB1, [blink])}, A01)
+    r = call(main, "et_submit", {"study": "demo", **submission(recordings, SUB1, [blink])}, A01)
     assert r["saved"] and r["attempt"] == 1
     with pytest.raises(https_fn.HttpsError) as e:
-        call(main, "ec_submit", {"study": "demo", **submission(recordings, SUB1, [blink])}, A01)
+        call(main, "et_submit", {"study": "demo", **submission(recordings, SUB1, [blink])}, A01)
     assert e.value.code.value == "already-exists" and e.value.details["error"] == "already_done"
     with pytest.raises(https_fn.HttpsError) as e:
-        call(main, "ec_submit", {"study": "demo", **submission(recordings, "sub-002/eeg/sub-002_task-rest_eeg.vhdr",
+        call(main, "et_submit", {"study": "demo", **submission(recordings, "sub-002/eeg/sub-002_task-rest_eeg.vhdr",
                                                               [ann("c" * 32, "Nope", 1, 1)])}, A01)
     assert e.value.code.value == "failed-precondition" and e.value.details["error"] == "invalid_annotation"
-    v = call(main, "ec_visit_open", {"study": "demo", "client": {"user_agent": "test"}}, A01)
-    assert call(main, "ec_visit_events", {"study": "demo", "visit_id": v["visit_id"],
+    v = call(main, "et_visit_open", {"study": "demo", "client": {"user_agent": "test"}}, A01)
+    assert call(main, "et_visit_events", {"study": "demo", "visit_id": v["visit_id"],
                                           "events": [{"t": 1.0, "type": "key"}]}, A01)["received"] == 1
-    assert call(main, "ec_visit_close", {"study": "demo", "visit_id": v["visit_id"], "reason": "x"}, A01) == {}
+    assert call(main, "et_visit_close", {"study": "demo", "visit_id": v["visit_id"], "reason": "x"}, A01) == {}
 
 
 def test_administrators_need_the_claim_and_the_account(main) -> None:
     with pytest.raises(https_fn.HttpsError) as e:
-        call(main, "ec_admin_progress", {"study": "demo"}, A01)
+        call(main, "et_admin_progress", {"study": "demo"}, A01)
     assert e.value.code.value == "permission-denied" and e.value.details["error"] == "forbidden"
     admin_claims = {"annotator_id": "ADMIN", "roles": {"demo": "admin"}, "studies": ["demo"], "role": "admin"}
-    p = call(main, "ec_admin_progress", {"study": "demo"}, admin_claims)
+    p = call(main, "et_admin_progress", {"study": "demo"}, admin_claims)
     assert {a["annotator_id"] for a in p["annotators"]} == {"ADMIN", "A01", "A02", "T01"}
     # a claim alone is not enough: A01's account in the study is an annotator's
     with pytest.raises(https_fn.HttpsError):
-        call(main, "ec_admin_progress", {"study": "demo"}, {**A01, "roles": {"demo": "admin"}, "role": "admin"})
+        call(main, "et_admin_progress", {"study": "demo"}, {**A01, "roles": {"demo": "admin"}, "role": "admin"})
 
 
 ADMIN = {"annotator_id": "ADMIN", "roles": {"demo": "admin"}, "studies": ["demo"], "role": "admin"}
 
 
 def test_the_admin_area_and_the_quiz_as_callables(main) -> None:
-    endpoint = main.ec_admin.__firebase_endpoint__
+    endpoint = main.et_admin.__firebase_endpoint__
     assert endpoint.availableMemoryMb == 2048 and endpoint.timeoutSeconds == 540
     with pytest.raises(https_fn.HttpsError) as e:
-        call(main, "ec_admin", {"study": "demo", "op": "overview"}, A01)
+        call(main, "et_admin", {"study": "demo", "op": "overview"}, A01)
     assert e.value.code.value == "permission-denied" and e.value.details["error"] == "forbidden"
     with pytest.raises(https_fn.HttpsError) as e:  # the claim alone is not enough
-        call(main, "ec_admin", {"study": "demo", "op": "overview"}, {**A01, "roles": {"demo": "admin"}})
+        call(main, "et_admin", {"study": "demo", "op": "overview"}, {**A01, "roles": {"demo": "admin"}})
     assert e.value.details["error"] == "forbidden"
-    o = call(main, "ec_admin", {"study": "demo", "op": "overview"}, ADMIN)
+    o = call(main, "et_admin", {"study": "demo", "op": "overview"}, ADMIN)
     assert o["counts"]["recordings"] == 3
     with pytest.raises(https_fn.HttpsError) as e:
-        call(main, "ec_admin", {"study": "demo", "op": "nothing"}, ADMIN)
+        call(main, "et_admin", {"study": "demo", "op": "nothing"}, ADMIN)
     assert e.value.code.value == "not-found" and e.value.details["error"] == "not_found"
     with pytest.raises(https_fn.HttpsError) as e:
-        call(main, "ec_admin", {"study": "demo", "op": "user_update", "annotator_id": "ADMIN", "role": "annotator"},
+        call(main, "et_admin", {"study": "demo", "op": "user_update", "annotator_id": "ADMIN", "role": "annotator"},
              ADMIN)
     assert e.value.code.value == "already-exists" and e.value.details["error"] == "self"
-    item = call(main, "ec_admin", {"study": "demo", "op": "quiz_item_add", "set_id": "example",
+    item = call(main, "et_admin", {"study": "demo", "op": "quiz_item_add", "set_id": "example",
                                    "recording_id": GUIDED1, "start_s": 4.0, "end_s": 4.4,
                                    "correct_label": "Eye-blink-artifact"}, ADMIN)["item"]
-    g = call(main, "ec_quiz", {"study": "demo", "set_id": "example", "action": "get"}, A01)
+    g = call(main, "et_quiz", {"study": "demo", "set_id": "example", "action": "get"}, A01)
     assert [i["item_id"] for i in g["items"]] == [item["item_id"]] and GUIDED1 in g["recordings"]
-    r = call(main, "ec_quiz", {"study": "demo", "set_id": "example", "action": "answer", "item_id": item["item_id"],
+    r = call(main, "et_quiz", {"study": "demo", "set_id": "example", "action": "answer", "item_id": item["item_id"],
                                "label": "Eye-blink-artifact"}, A01)
     assert r["correct"] is True
-    assert call(main, "ec_quiz", {"study": "demo", "set_id": "example", "action": "finish"}, A01)["score"][
+    assert call(main, "et_quiz", {"study": "demo", "set_id": "example", "action": "finish"}, A01)["score"][
         "n_correct"] == 1
-    assert call(main, "ec_me", {"study": "demo"}, A01)["quizzes"][0]["finished"] is True
-    entries = call(main, "ec_admin", {"study": "demo", "op": "audit", "limit": 5}, ADMIN)["entries"]
+    assert call(main, "et_me", {"study": "demo"}, A01)["quizzes"][0]["finished"] is True
+    entries = call(main, "et_admin", {"study": "demo", "op": "audit", "limit": 5}, ADMIN)["entries"]
     assert entries[0]["op"] == "quiz_item_add" and entries[0]["by"] == "ADMIN"
 
 
@@ -169,7 +169,7 @@ def test_unexpected_errors_are_hidden(main, monkeypatch: pytest.MonkeyPatch) -> 
     svc = main.service_for("demo")
     monkeypatch.setattr(svc, "me", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("secret details")))
     with pytest.raises(https_fn.HttpsError) as e:
-        call(main, "ec_me", {"study": "demo"}, A01)
+        call(main, "et_me", {"study": "demo"}, A01)
     assert e.value.code.value == "internal" and "secret" not in e.value.message
 
 
@@ -182,8 +182,8 @@ sys.path.insert(0, {str(REPO)!r})
 spec = importlib.util.spec_from_file_location("m", {str(MAIN)!r})
 m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 from firebase_functions import https_fn
-from electroclean.web.service import StudyService
-from electroclean.web.store_files import FilesStore
+from electrotag.web.service import StudyService
+from electrotag.web.store_files import FilesStore
 svc = StudyService(FilesStore({str(study)!r}))
 m.service_for = lambda study: svc
 claims = {{"annotator_id": "T01", "roles": {{"demo": "annotator"}}, "studies": ["demo"]}}
@@ -191,8 +191,8 @@ def call(name, data):
     req = https_fn.CallableRequest(data={{"study": "demo", **data}}, raw_request=None,
                                    auth=https_fn.AuthData(uid="u", token=claims))
     return inspect.unwrap(getattr(m, name))(req)
-call("ec_guided_get", {{"recording_id": {GUIDED1!r}}})
-r = call("ec_guided_check", {{"recording_id": {GUIDED1!r}, "step": 1, "annotations": []}})
+call("et_guided_get", {{"recording_id": {GUIDED1!r}}})
+r = call("et_guided_check", {{"recording_id": {GUIDED1!r}, "step": 1, "annotations": []}})
 print(json.dumps({{"problems": r["problems"], "loaded": [x for x in ("pandas", "scipy", "mne") if x in sys.modules]}}))
 """
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=120)

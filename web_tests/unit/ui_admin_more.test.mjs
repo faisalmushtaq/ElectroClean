@@ -4,11 +4,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import * as m from '../../electroclean/web/static/js/admin/model.js';
-import { niceTicks } from '../../electroclean/web/static/js/admin/chart.js';
-import { DemoBackend } from '../../electroclean/web/static/js/api/demo.js';
-import { inviteToken } from '../../electroclean/web/static/js/api/demo_admin.js';
-import { sha256Hex } from '../../electroclean/web/static/js/data/sha256.js';
+import * as m from '../../electrotag/web/static/js/admin/model.js';
+import { niceTicks } from '../../electrotag/web/static/js/admin/chart.js';
+import { DemoBackend } from '../../electrotag/web/static/js/api/demo.js';
+import { inviteToken } from '../../electrotag/web/static/js/api/demo_admin.js';
+import { sha256Hex } from '../../electrotag/web/static/js/data/sha256.js';
 
 const memory = () => {
   const s = new Map();
@@ -129,7 +129,7 @@ test('demonstration: an invitation is a private link used once, kept only as a f
   const days = (Date.parse(r.expires_at) - Date.now()) / 86400000;
   assert.ok(days > 6.9 && days <= 7, String(days));
   // Only the token's SHA-256 is kept, and the audit log never has the token.
-  const kept = JSON.stringify(storage.get('electroclean.demo.v1') || b.state);
+  const kept = JSON.stringify(storage.get('electrotag.demo.v1') || b.state);
   assert.ok(!kept.includes(r.invite_token));
   assert.ok(kept.includes(sha256Hex(new TextEncoder().encode(r.invite_token))));
   const audit = await b.admin('audit', { limit: 10 });

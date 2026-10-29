@@ -17,24 +17,24 @@ export async function signIn(page, id = 'A01', password = 'demo') {
   // view, or in an error on the sign-in view. A busy computer or a cold Firebase function can take a
   // while, so wait for whichever comes first, then answer the notice: the application waits for it.
   await page.waitForFunction(() => Boolean(document.querySelector('.dialog.logging-notice'))
-    || (globalThis.ElectroClean && globalThis.ElectroClean.route !== 'signin')
+    || (globalThis.ElectroTag && globalThis.ElectroTag.route !== 'signin')
     || document.querySelector('form.signin-form .error:not([hidden])') !== null, null, { timeout: 60000 });
   const notice = page.locator('.dialog.logging-notice button', { hasText: 'Continue' });
   if (await notice.count()) await notice.click();
 }
 
 export async function state(page) {
-  return page.evaluate(() => globalThis.ElectroClean.debugState());
+  return page.evaluate(() => globalThis.ElectroTag.debugState());
 }
 
 export async function waitForRoute(page, route, timeout = 15000) {
-  await page.waitForFunction((r) => globalThis.ElectroClean && globalThis.ElectroClean.route === r, route, { timeout });
+  await page.waitForFunction((r) => globalThis.ElectroTag && globalThis.ElectroTag.route === r, route, { timeout });
 }
 
 /** Wait until the viewer has drawn traces. */
 export async function waitForTraces(page) {
   await page.waitForFunction(() => {
-    const ws = globalThis.ElectroClean.ws;
+    const ws = globalThis.ElectroTag.ws;
     return ws && ws.viewer._cache && ws.viewer.stats.traceMs > 0;
   }, null, { timeout: 15000 });
 }
@@ -42,7 +42,7 @@ export async function waitForTraces(page) {
 /** Client coordinates of time t (s) on channel `name` (or the middle of the plot). */
 export async function eegPoint(page, t, name = null) {
   return page.evaluate(([t, name]) => {
-    const v = globalThis.ElectroClean.ws.viewer;
+    const v = globalThis.ElectroTag.ws.viewer;
     const r = v.over.getBoundingClientRect();
     let y = (v.y0 + v.y1) / 2;
     if (name) {

@@ -125,8 +125,8 @@ export const tests = [
       await page.click('.rec-tabs [data-tab="all"]');
       assert.match(await page.textContent('table.list'), /Done/);
       // The saved results can be downloaded.
-      await page.evaluate(() => globalThis.ElectroClean.flushLog());
-      const doc = await page.evaluate(() => globalThis.ElectroClean.backend.resultsDocument());
+      await page.evaluate(() => globalThis.ElectroTag.flushLog());
+      const doc = await page.evaluate(() => globalThis.ElectroTag.backend.resultsDocument());
       assert.equal(doc.annotation_documents.length, 1);
       assert.equal(doc.annotation_documents[0].n_annotations, before);
       assert.ok(doc.interaction_logs[0].events.some((e) => e.type === 'annotation_created' && e.via === 'eeg_drag'));

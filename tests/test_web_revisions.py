@@ -17,15 +17,15 @@ pytest.importorskip("httpx")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from electroclean.app.io.canonical import read_annotations_json  # noqa: E402
-from electroclean.app.io.naming import OutputLayout  # noqa: E402
-from electroclean.app.session.register import CompletionRegister  # noqa: E402
-from electroclean.config.settings import SettingsError, Settings, deep_merge, load_default_settings_dict  # noqa: E402
-from electroclean.reliability.config import AnalysisConfig  # noqa: E402
-from electroclean.reliability.data import build_dataset, load_dataset  # noqa: E402
-from electroclean.web.app import create_app  # noqa: E402
-from electroclean.web.service import StudyService, WorkItem  # noqa: E402
-from electroclean.web.store import attempt_of, latest_entry  # noqa: E402
+from electrotag.app.io.canonical import read_annotations_json  # noqa: E402
+from electrotag.app.io.naming import OutputLayout  # noqa: E402
+from electrotag.app.session.register import CompletionRegister  # noqa: E402
+from electrotag.config.settings import SettingsError, Settings, deep_merge, load_default_settings_dict  # noqa: E402
+from electrotag.reliability.config import AnalysisConfig  # noqa: E402
+from electrotag.reliability.data import build_dataset, load_dataset  # noqa: E402
+from electrotag.web.app import create_app  # noqa: E402
+from electrotag.web.service import StudyService, WorkItem  # noqa: E402
+from electrotag.web.store import attempt_of, latest_entry  # noqa: E402
 from tests.web_helpers import SUB1, SUB2, Api, ann, copy_demo, make_template, match_body, submission  # noqa: E402
 
 BLINK = ann("b" * 32, "Eye-blink-artifact", 500, 100, ["Fp1", "Fp2"])
@@ -171,9 +171,9 @@ def test_two_revisions_sent_at_once_save_one_attempt(client: TestClient, recordi
 @pytest.mark.parametrize("one_after_the_other", [False, True])
 def test_two_revisions_past_the_version_check_save_one_attempt(study: Path, recordings: Path, monkeypatch,
                                                                one_after_the_other: bool) -> None:
-    from electroclean.web.errors import ApiError
-    from electroclean.web.store import User
-    from electroclean.web.store_files import FilesStore
+    from electrotag.web.errors import ApiError
+    from electrotag.web.store import User
+    from electrotag.web.store_files import FilesStore
     from tests.web_helpers import race_revisions
 
     store = FilesStore(study)

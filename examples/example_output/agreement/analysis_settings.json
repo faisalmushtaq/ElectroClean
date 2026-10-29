@@ -1,5 +1,5 @@
 {
-  "generated_by": "ElectroClean 1.1.0",
+  "generated_by": "ElectroTag 1.1.0",
   "python": "3.13.17",
   "pandas": "3.1.0",
   "config": {
@@ -39,7 +39,7 @@
     "extra_measures": []
   },
   "label_catalogue": {
-    "catalogue_id": "electroclean-hed-score-artifacts",
+    "catalogue_id": "electrotag-hed-score-artifacts",
     "catalogue_version": "2.0.0",
     "sha256": "34f144b5c8699afeb41dd6fc9a4fd343e602123e979ee41471971b4fec7800ad",
     "hed_library": "score",

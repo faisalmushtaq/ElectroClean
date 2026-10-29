@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from electroclean.config.settings import Settings, SettingsError, load_default_settings_dict
+from electrotag.config.settings import Settings, SettingsError, load_default_settings_dict
 
 
 def _with(**annotation: Any) -> Settings:
