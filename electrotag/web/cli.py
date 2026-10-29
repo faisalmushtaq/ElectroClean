@@ -482,9 +482,10 @@ def cmd_demo(a: argparse.Namespace) -> int:
 
 
 # --------------------------------------------------------------------- parser
-def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="electrotag-web", description="The study of ElectroTag in the browser: "
-                                "on Firebase, or on an ElectroTag server.", epilog=EPILOG,
+def build_parser(prog: str = "electrotag-web") -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(prog=prog, description="The study of ElectroTag in the browser: "
+                                "on Firebase, or on an ElectroTag server.",
+                                epilog=EPILOG.replace("electrotag-web ", f"{prog} "),
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--version", action="version", version=f"ElectroTag {__version__}")
     sub = p.add_subparsers(dest="command", metavar="command")
@@ -587,8 +588,8 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = build_parser()
+def main(argv: list[str] | None = None, prog: str = "electrotag-web") -> int:
+    parser = build_parser(prog)
     a = parser.parse_args(argv)
     if not getattr(a, "func", None):
         parser.print_help()
@@ -598,7 +599,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return int(a.func(a) or 0)
     except CommandError as exc:
-        print(f"electrotag-web {a.command}: {exc}", file=sys.stderr)
+        print(f"{prog} {a.command}: {exc}", file=sys.stderr)
         return 2
     except KeyboardInterrupt:
         return 130

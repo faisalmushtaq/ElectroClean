@@ -18,12 +18,12 @@ disagreement occurred.
 ## Running an analysis
 
 ```bash
-electrotag-agreement Annotated_Events --out agreement_results \
+electrotag agreement Annotated_Events --out agreement_results \
     --resolutions 0.01 0.05 0.1 --min-bin-coverage 0.5 \
     --criterion iou --iou-thresholds 0 0.2 0.5 --primary-iou 0.2
 ```
 
-`electrotag-agreement --help` describes every option with its unit and
+`electrotag agreement --help` describes every option with its unit and
 default. Without `--out` the results go to a new folder
 `agreement_<date>-<time>` in the current folder, and a folder that already
 holds the results of an earlier analysis is only reused with `--overwrite`, so
@@ -37,7 +37,7 @@ annotators being compared.
 The admin area of the browser application ([web/admin.md](web/admin.md)) runs
 the same analysis on the study's saved results, for the annotators, recordings
 and settings chosen there, and offers the report and the tables to download.
-For a study on Firebase, `electrotag-web export` writes the results into an
+For a study on Firebase, `electrotag web export` writes the results into an
 `Annotated_Events` folder for the command. From Python:
 
 ```python

@@ -27,7 +27,7 @@ application in one of two ways:
   pick another study of the same project with `?study=<id>`. A command exports
   the results from Firestore into ElectroTag's usual folders for the
   agreement and activity analyses.
-* **Study on an ElectroTag server** (`electrotag-web`, Python): the same
+* **Study on an ElectroTag server** (`electrotag web`, Python): the same
   operations over HTTP, used for local testing and the demonstration server,
   and available to a study that prefers its own server (for example a
   university machine). Its address comes from `?server=https://…`,
@@ -82,7 +82,7 @@ and sends the study only their manifests.
 electrotag/web/                 the server (FastAPI), the service layer it shares with the Firebase
                                   functions (with games.py for the achievements and the
                                   leaderboard, feedback.py for problem reports and reviews of
-                                  saved work), and the administrator's command, electrotag-web
+                                  saved work), and the administrator's command, electrotag web
 electrotag/web/firebase/        the Cloud Functions (functions/main.py) and the administrator's access
 electrotag/web/static/          the browser application (plain ES modules, no build step)
     index.html, app.css           the page and the application's design system (tokens, components)
@@ -133,9 +133,9 @@ electrotag/app/                 the Python core: annotations, reading recordings
                                   (eeg/), files and the export (io/), the journalled save (session/)
 electrotag/config/              the default settings and the artifact label catalogue
 electrotag/training/            reference sets, guided training, practice scoring, the quiz and
-                                  competency reports (electrotag-admin)
-electrotag/reliability/         the agreement analysis (electrotag-agreement)
-electrotag/activity/            the activity analysis of the interaction logs (electrotag-activity)
+                                  competency reports (electrotag admin)
+electrotag/reliability/         the agreement analysis (electrotag agreement)
+electrotag/activity/            the activity analysis of the interaction logs (electrotag activity)
 web_tests/unit/                   node --test unit tests of the browser modules
 web_tests/e2e/                    Playwright end-to-end tests
 docs/web/api.md                   the HTTP API (the contract between browser and server)
@@ -431,7 +431,7 @@ scipy, pybv). `python scripts/make_web_fixtures.py --perf` also writes the
 
 `node web_tests/run_e2e.mjs` runs the application in Chromium with Playwright:
 the demonstration, a stand-in server, and the real demonstration server
-(`electrotag-web demo`, started by the runner when the Python of
+(`electrotag web demo`, started by the runner when the Python of
 `ELECTROTAG_PYTHON` or the repository's `.venv` has the packages of
 requirements.txt), with recordings opened from disk and the results checked
 in the study folder; `--browser webkit` runs the same tests in WebKit, Safari's
@@ -590,7 +590,7 @@ BrainVision recordings with inherited sidecars, EDF+, EDF and BDF files of many
 kinds, a BrainVision header written by hand and a collection of odd and broken
 metadata) with default and with a study's own settings, and compares every
 field with the manifests that `web_tests/register_parity.py` builds as
-`electrotag-web register` does, with ElectroTag's Python loader
+`electrotag web register` does, with ElectroTag's Python loader
 (`load_recording` in `electrotag/app/eeg/loading.py`). The amplitudes may
 differ by 1 part in 100,000, as elsewhere in the data layer, because the
 display copy is filtered in single precision; everything else must be equal.
@@ -648,7 +648,7 @@ The browser records the events that docs/activity_logs.md describes
 (`mouse_press`, `key`, `shortcut`, `view`, `annotation_created`, `pointer`,
 `idle_start`, the training events ...) with `t` measured from the start of the
 visit, and sends them in batches. The server writes them as JSON Lines files in
-`interaction_logs/`, which `electrotag-activity` and the admin area's
+`interaction_logs/`, which `electrotag activity` and the admin area's
 activity analysis summarise. Logs written by the desktop application (version
 1.1.0 and earlier) have the same format, so the analysis reads them together
 with the browser's. Typed text and passwords are never recorded.

@@ -513,7 +513,7 @@ the one callable function `et_admin` with `{"study", "op", ...the body}`; in the
 service layer it is `StudyService.admin(op, user, body)`
 (`electrotag/web/admin.py`), so the ElectroTag server and Firebase behave
 the same. Every operation that changes something appends an entry to the
-study's **audit log** (below), as do the `electrotag-web` commands that
+study's **audit log** (below), as do the `electrotag web` commands that
 change the study (`"by": "command"`). `GET /admin/progress` and
 `GET /admin/results.zip` remain as before. Each administrative call reads the
 study afresh, so a change made through one Firebase instance is seen by the
@@ -522,7 +522,7 @@ next call whichever instance answers it.
 The EEG never reaches the study: an administrator adds recordings by choosing
 them on their own computer, the browser reads them and builds each
 recording's manifest (`js/data/register.js`), and only the manifests are sent
-(`recordings_register`). The `electrotag-web register` command remains for
+(`recordings_register`). The `electrotag web register` command remains for
 registering from the command line.
 
 ### Shapes
@@ -555,7 +555,7 @@ SetRecord = {"set_id", "name", "description", "created_at", "created_by",
 ```
 
 `registered_by` is the administrator's ID, or `command` for recordings registered
-with `electrotag-web`. A set made in the admin area is self-contained: its
+with `electrotag web`. A set made in the admin area is self-contained: its
 recordings are registered in its own scope `set:<set_id>`, so they are never
 offered for study annotation. Sets registered from a dataset that refer to the
 study's own recordings have `"self_contained": false` and `"scope": "study"`.
@@ -708,7 +708,7 @@ manifests kept in `electrotag/config/example_set_manifests.json` (made with
 MNE-Python and the default settings by `python -m electrotag.web.example`),
 after checking that every file made has exactly the size and SHA-256 they
 record. If the files differ, the answer is 422 `example_unavailable`, and
-`electrotag-web create-example-set` makes the set from a computer with
+`electrotag web create-example-set` makes the set from a computer with
 ElectroTag installed.
 
 ### The short-segment quiz (annotators)
@@ -805,7 +805,7 @@ There is no `token` and no beacon on Firebase: the Firebase SDK adds the ID
 token; to send the last events when the page is hidden, call `et_visit_events`
 with `fetch(…, {keepalive: true})` or simply on the next visit. The admin
 area downloads the results with `et_admin` `results_zip` (up to 25 MB); larger
-studies export them with `electrotag-web export` (docs/web/firebase.md).
+studies export them with `electrotag web export` (docs/web/firebase.md).
 
 The HTTP status of an error becomes the `HttpsError` code: 400 and 413
 `invalid-argument`, 401 `unauthenticated`, 403 `permission-denied`, 404
@@ -821,6 +821,6 @@ project. A caller counts as an administrator only when both the claims and
 their account in the study say so.
 
 The application learns about the Firebase project from `config.json` beside
-it, which `electrotag-web config` writes:
+it, which `electrotag web config` writes:
 `{"firebase": {"apiKey", "authDomain", "projectId", "appId", …}, "study": "<study id>",
 "functions_region": "europe-west2"}`.

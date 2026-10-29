@@ -32,7 +32,7 @@ into place in one step, so a file is either complete or absent.
 
 The results of a study are kept in this layout: in the study folder of an
 ElectroTag server as each recording is saved, and for a study on Firebase in
-the folder that `electrotag-web export` writes. Results folders of the
+the folder that `electrotag web export` writes. Results folders of the
 desktop application (version 1.1.0 and earlier) have the same layout.
 
 ```text
@@ -239,7 +239,7 @@ A single number: seconds spent annotating, to the nearest millisecond, e.g.
 
 Problem reports and reviews of saved work are kept by the study (in the server's
 database, or in Firestore) and written into the results when the admin area makes
-the results zip or `electrotag-web export` runs, as they stand at that moment.
+the results zip or `electrotag web export` runs, as they stand at that moment.
 They never change the annotation files.
 
 `problem_reports/problem_reports.tsv` has a row for each report, the oldest
@@ -317,9 +317,9 @@ recording IDs completed in standard mode by that annotator, one per line
 ## `electrotag_study.json` (a study's settings)
 
 A study folder of the ElectroTag server keeps the study's settings in this
-file, and so can a dataset folder, where `electrotag-admin` reads and writes
+file, and so can a dataset folder, where `electrotag admin` reads and writes
 it. A study on Firebase keeps the same `settings` block in Firestore, given
-with `electrotag-web init-study --settings` or changed in the admin area.
+with `electrotag web init-study --settings` or changed in the admin area.
 
 ```json
 {
@@ -343,7 +343,7 @@ with `electrotag-web init-study --settings` or changed in the admin area.
 
 `settings` may override any key of `electrotag/config/default_settings.json`;
 the [administrator guide](administrator_guide.md) explains each one.
-`electrotag-admin` validates the file before saving it. `annotators`,
+`electrotag admin` validates the file before saving it. `annotators`,
 `allow_unlisted_annotators`, `allocation.assignments` and `admin_passphrase`
 were read by the desktop application only: in the browser, accounts and their
 assignments take their place.

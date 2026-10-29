@@ -111,13 +111,18 @@ do not. The desktop application's last state is in `main`'s history (before the 
 ElectroTag needs Python 3.12 or 3.13 (64-bit). From a clone of the repository:
 
 ```bash
-python -m venv .venv
+python3 -m venv .venv                  # Windows: py -m venv .venv
 source .venv/bin/activate              # Windows: .venv\Scripts\activate
-python -m pip install -r requirements-dev.txt
-python -m pip install --no-deps -e .
+pip install -r requirements-dev.txt
+pip install -e .
 python -m pytest                       # the Python suite, a few minutes
-electrotag-web demo                  # the whole system on http://localhost:8000/
+electrotag web demo                    # the whole system on http://localhost:8000/
 ```
+
+The package is installed from the repository and is not on PyPI; the README's "Installing the
+Python package" also shows how to install it straight from GitHub. `electrotag` lists the four
+tools (`electrotag web`, `agreement`, `admin` and `activity`), which keep their older names
+`electrotag-web` and so on as well.
 
 `requirements.txt` holds what the server and the commands need, and `requirements-dev.txt` adds the
 test tools and the Cloud Functions' SDK. The browser tests also need Node.js 22 and Playwright with

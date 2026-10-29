@@ -2,10 +2,13 @@
 
 ## Running the tests
 
+In an active virtual environment (the [README](../README.md) shows how to make
+one), from the repository's folder:
+
 ```bash
-python -m pip install -r requirements-dev.txt
-python -m pip install --no-deps -e .
-python -m pytest                                  # the Python tests (about 290, a few minutes)
+pip install -r requirements-dev.txt
+pip install -e .
+python -m pytest                                  # the Python tests (about 500, a few minutes)
 python -m pytest tests/test_store.py -q           # one file
 ```
 
@@ -30,7 +33,7 @@ The unit tests compare the browser's readers, filters, amplitude check and
 fingerprints with MNE-Python and `hashlib` on recordings that
 `scripts/make_web_fixtures.py` writes into `web_tests/fixtures/` (not
 committed). `run_e2e.mjs` drives the application in Chromium against the
-demonstration, a stand-in server and the real `electrotag-web demo`, with
+demonstration, a stand-in server and the real `electrotag web demo`, with
 recordings opened from disk and the results checked in the study folder; it
 needs Playwright with Chromium (`npm install --no-save playwright@1.63.0` and
 `npx playwright install chromium`). With `--browser webkit` the same tests run in
@@ -104,7 +107,7 @@ analysis, without an interface); `test_web_server.py` (signing in, matching a
 file, drafts, saving the same files as the core writes, guided training,
 practice feedback, the competency result and administration, over HTTP);
 `web_tests/e2e/h_study_server.e2e.mjs` (the application in Chromium against
-the real `electrotag-web demo`: a recording opened from disk and saved into
+the real `electrotag web demo`: a recording opened from disk and saved into
 the study folder, a draft restored in another browser, and the training
 programme checked and scored by the server); and `scripts/test_web_firebase.sh`
 (the same with a study on Firebase's emulators, including the administrator's

@@ -44,7 +44,8 @@ contract between browser and server in [web/api.md](web/api.md).
 ```text
 electrotag/
     __init__.py            version
-    __main__.py            python -m electrotag: the commands and how to start the demonstration
+    cli.py                 the electrotag command: lists the tools and passes the rest of the line to one
+    __main__.py            python -m electrotag, the same as the electrotag command
     synthetic.py           synthetic BrainVision, EDF and BDF recordings with ground truth
     hints.py               "did you mean" suggestions for mistyped names
     report_style.py        the look shared by the HTML reports: colours, fonts, base style sheet
@@ -69,18 +70,18 @@ electrotag/
                            programme.py (the three stages and their unlocking), guided.py (the
                            checks of guided steps), review.py (the disagreements flagged in a
                            practice review), examples.py (the placeholder example set)
-    activity/              logs.py, summary.py, report.py, cli.py (electrotag-activity)
+    activity/              logs.py, summary.py, report.py, cli.py (electrotag activity)
     web/                   the browser version (web/architecture.md): service.py (the operations,
                            shared by the server and the Firebase functions), coach.py, visits.py,
                            manifest.py and registration.py, saving.py, store_files.py and
-                           store_firestore.py, app.py (FastAPI), cli.py (electrotag-web),
+                           store_firestore.py, app.py (FastAPI), cli.py (electrotag web),
                            firebase/functions/main.py, static/ (the application)
 ```
 
 ## Data flow of one recording
 
 1. **Registration**, on the computer that holds the dataset
-   (`electrotag-web register`, or the admin area, whose browser code builds
+   (`electrotag web register`, or the admin area, whose browser code builds
    the same manifest). `io.discovery.discover_recordings` walks the dataset,
    parses each BrainVision `.vhdr` header for `DataFile` and `MarkerFile` or
    each EDF/BDF header (`io.edf`), and resolves BIDS sidecars with the
@@ -106,7 +107,7 @@ electrotag/
    validates (`validation.exports`), commits and registers them. The
    ElectroTag server writes into the study folder; the Firebase functions
    write into a scratch folder and keep the files in Firestore, from which
-   `electrotag-web export` writes the same folders.
+   `electrotag web export` writes the same folders.
 
 Scripts can drive the same core directly: `examples/demo_end_to_end.py` loads
 recordings with `load_recording`, adds annotations to an `AnnotationSession`
@@ -192,7 +193,7 @@ told to try again.
 * **Selection strategies.** The order in which a study offers an annotator's
   recordings is chosen in `web.service.StudyService._next` with
   `session.selection.seeded_order`; `session.selection` also holds
-  `select_next` and the balanced allocation of `electrotag-admin allocate`.
+  `select_next` and the balanced allocation of `electrotag admin allocate`.
 * **Data formats.** Formats are listed in `io.discovery.FORMATS` and read in
   `eeg.loading._read_raw`; supporting another MNE reader means adding its
   extension there and in `config.settings.RECORDING_EXTENSIONS`, a header or
@@ -218,9 +219,23 @@ answer arrives late) are in [CLAUDE.md](../CLAUDE.md) and
 
 ## Packaging and continuous integration
 
-`pyproject.toml` defines the package and four commands
+`pyproject.toml` defines the package and its command, `electrotag`
+(`electrotag/cli.py`), which lists the four tools and runs each of them:
+`electrotag web`, `electrotag agreement`, `electrotag admin` and
+`electrotag activity` pass the rest of the line to the `main(argv, prog)` of
+`electrotag.web.cli`, `electrotag.reliability.cli`, `electrotag.training.cli`
+and `electrotag.activity.cli`, so each tool's `--help` shows the name it was
+started by. The tools are also console scripts of their own
 (`electrotag-web`, `electrotag-agreement`, `electrotag-admin` and
-`electrotag-activity`); `python -m electrotag` lists them.
+`electrotag-activity`), which the workflows, the `Dockerfile` and older notes
+use, and `python -m electrotag` is the same as `electrotag`. A new tool is a
+module with such a `main` and an entry in `TOOLS` in `electrotag/cli.py`.
+The package is installed from the repository (it is not published on PyPI);
+the README gives the commands. Its package data (the configuration files and
+the whole browser application under `electrotag/web/static`) is listed in
+`[tool.setuptools.package-data]`, so an installation straight from GitHub
+(`pip install "electrotag @ git+https://github.com/faisalmushtaq/ElectroTag"`)
+serves the application as a copy of the repository does.
 `requirements.txt` pins every package the server, the commands and
 registration need (MNE-Python and the scientific stack, pybv for the simulated
 recordings, FastAPI and uvicorn for the server, firebase-admin and
@@ -234,9 +249,11 @@ environment made from `requirements.txt`.
 
 Four GitHub Actions workflows run the checks and publish the application.
 *Tests* (`.github/workflows/tests.yml`) runs the Python tests on Linux for every
-push, and on Windows, macOS and Linux for pushes to main, pull requests into
-main and runs started by hand, because the commands run on researchers' own
-computers. *Browser version tests* (`web-tests.yml`) runs the browser modules,
-the application in Chromium and the Firebase emulators. *GitHub Pages*
+push with Python 3.13 and 3.12, the oldest version supported, and on Windows,
+macOS and Linux for pushes to main, pull requests into main and runs started
+by hand, because the commands run on researchers' own computers. *Browser
+version tests* (`web-tests.yml`) runs the browser modules (against Python 3.13
+and 3.12, since the browser builds manifests as Python does), the application
+in Chromium and WebKit, and the Firebase emulators. *GitHub Pages*
 (`pages.yml`) publishes the browser application, and *Firebase deploy*
 (`firebase-deploy.yml`) deploys the functions and rules on demand.

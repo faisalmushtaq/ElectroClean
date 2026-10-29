@@ -10,7 +10,7 @@ much of each recording they looked at, how often they undo, and how training
 changes this.
 
 This document describes what is recorded, the file format, and the tables and
-report that `electrotag-activity` and the admin area ([web/admin.md](web/admin.md))
+report that `electrotag activity` and the admin area ([web/admin.md](web/admin.md))
 make from the logs. The logs are recorded by the browser application, which
 sends them to the study in batches; the desktop application (version 1.1.0 and
 earlier) wrote logs in the same format, and the analysis reads both.
@@ -58,7 +58,7 @@ One log is kept per visit, from signing in until signing out or closing the
 page (in the desktop application, from pressing **Begin** on the start window
 until going back to it or quitting). The ElectroTag server writes each
 visit's log into the study's results as the events arrive; a study on Firebase
-keeps the events in Firestore, and `electrotag-web export` writes the same
+keeps the events in Firestore, and `electrotag web export` writes the same
 files:
 
 ```
@@ -335,11 +335,11 @@ events table.
 
 The admin area shows the report and offers the tables for the study's logs.
 From a terminal, on the results of a study on the ElectroTag server or on
-the folder written by `electrotag-web export`:
+the folder written by `electrotag web export`:
 
 ```
-electrotag-activity "path/to/Annotated_Events"
-electrotag-activity "path/to/Annotated_Events" --annotator A01 --events --out activity
+electrotag activity "path/to/Annotated_Events"
+electrotag activity "path/to/Annotated_Events" --annotator A01 --events --out activity
 ```
 
 Both write to `activity_reports/<date and time>/` in the results folder unless

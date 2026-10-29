@@ -41,6 +41,8 @@ dependencies = [
 dev = ["pytest>=8"]
 
 [project.scripts]
+# One command for the four tools (electrotag web, agreement, admin, activity); each tool keeps its own name too.
+electrotag = "electrotag.cli:main"
 electrotag-agreement = "electrotag.reliability.cli:main"
 electrotag-admin = "electrotag.training.cli:main"
 electrotag-activity = "electrotag.activity.cli:main"

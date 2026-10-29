@@ -1,8 +1,8 @@
 # Exact versions ElectroTag was tested with (Python 3.12 and 3.13): everything the ElectroTag
-# server, the commands (electrotag-web, electrotag-agreement, electrotag-admin,
-# electrotag-activity) and the registration of recordings need. Install with:
-#     python -m pip install -r requirements.txt
-#     python -m pip install --no-deps -e .
+# server, the electrotag command and its tools (web, agreement, admin, activity) and the
+# registration of recordings need, and nothing more. In an active virtual environment (README.md):
+#     pip install -r requirements.txt
+#     pip install -e .
 # The browser application itself needs nothing installed: it is static files (electrotag/web/static).
 #
 # Reading recordings with MNE-Python (registration, reference sets), the analyses and their reports

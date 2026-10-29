@@ -1,10 +1,10 @@
 # Runs the Python test-suite: the annotation core, the agreement, training and activity analyses,
 # the ElectroTag server and the Firebase code (the browser application has its own workflow,
-# web-tests.yml). The commands (electrotag-web, electrotag-agreement, electrotag-admin and
-# electrotag-activity) run on researchers' own computers, so the suite runs on Windows, macOS and
-# Linux for pushes to main, pull requests into main and runs started by hand ("Run workflow" in the
-# Actions tab). Pushes to other branches run it on Linux only, which is quicker. Python 3.12, the
-# oldest version ElectroTag supports, is tested on Linux every time.
+# web-tests.yml). The commands (electrotag and its tools web, agreement, admin and activity, also
+# installed as electrotag-web and so on) run on researchers' own computers, so the suite runs on
+# Windows, macOS and Linux for pushes to main, pull requests into main and runs started by hand
+# ("Run workflow" in the Actions tab). Pushes to other branches run it on Linux only, which is
+# quicker. Python 3.12, the oldest version ElectroTag supports, is tested on Linux every time.
 name: Tests
 
 on:
@@ -54,6 +54,11 @@ jobs:
       - name: The commands start
         run: |
           python -m electrotag
+          electrotag
+          electrotag web --help
+          electrotag agreement --help
+          electrotag admin --help
+          electrotag activity --help
           electrotag-web --help
           electrotag-agreement --help
           electrotag-admin --help
