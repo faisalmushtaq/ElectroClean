@@ -177,3 +177,26 @@ def test_removing_an_account_removes_its_record(service: StudyService, recording
     assert service.store.annotator_record("A03")["goal_per_week"] == 3
     service.store.remove_account("A03")
     assert service.store.annotator_record("A03") == {}
+
+
+def test_times_cannot_go_negative_or_absurd(service: StudyService, recordings: Path, study: Path) -> None:
+    from electroclean.web.service import MAX_ELAPSED_S
+
+    def draft(elapsed):
+        return service.call("put_draft", User("A01"), {"recording_id": SUB2, "mode": "standard", "context_id": "",
+                                                       "draft": {"annotations": [], "view": {}, "elapsed_s": elapsed}})
+
+    with pytest.raises(ApiError) as exc:
+        draft(-50.0)
+    assert (exc.value.status, exc.value.code) == (422, "invalid_draft")
+    draft(1e300)
+    key = service.find_item(User("A01"), SUB2, "standard", "").key
+    assert service.store.draft("A01", key)["draft"]["elapsed_s"] == MAX_ELAPSED_S
+    # A save is never refused for its time: an absurd figure is recorded as a week, with a warning.
+    service.call("submit", User("A01"), submission(recordings, SUB1, [BLINK], elapsed=1e300))
+    sess = json.loads((study / "Annotated_Events" / "annotator-A01" / "sub-001" / "eeg"
+                       / "sub-001_task-rest_eeg_annotator-A01_session.json").read_text())
+    assert "more than a week" in json.dumps(sess)
+    assert board(service, "A01")["counters"]["worked_s"] == MAX_ELAPSED_S
+    with pytest.raises(ApiError):
+        service.call("submit", User("A01"), submission(recordings, SUB3, [BLINK], elapsed=-1.0))

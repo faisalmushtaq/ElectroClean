@@ -5,6 +5,12 @@ Each section below describes the changes in one version of ElectroClean;
 
 ## Unreleased
 
+The study server no longer takes a negative time worked in a draft, and records
+a time of more than a week for one recording (which the pausing clock cannot
+reach) as a week, with a warning in the saved session, so that one faulty or
+forged figure cannot distort the totals of the Progress section and the home
+page; the save itself always goes ahead.
+
 Annotators can open a recording from a Dropbox or OneDrive link (or any web
 address that lets web pages read its file): Open from a link, on the page
 that opens recordings, takes one link per file, turns share links into the

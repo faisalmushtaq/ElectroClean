@@ -64,7 +64,8 @@ Draft = {"annotations": [Annotation], "view": {"start_s": 12.0, "duration_s": 10
          "revises": 1}                // only in the draft of a revision: the version being revised
 ```
 
-A draft's `elapsed_s` is the time worked so far, without the time paused. `viewed` lists the
+A draft's `elapsed_s` is the time worked so far, without the time paused (at least 0, or 422
+`invalid_draft`; more than a week is kept as a week). `viewed` lists the
 stretches of the recording that have been on the screen, as `[start_s, end_s]` pairs in seconds
 (sorted and merged by the browser; at most 5000 pairs, each with `0 <= start_s <= end_s`, or 422
 `invalid_draft`). A draft without `viewed` counts as nothing viewed.
@@ -229,7 +230,10 @@ be revised (409 `already_done` otherwise).
 }
 ```
 
-`session.filters` gives the display filters used (`highpass_hz` or `notch_hz`
+`session.elapsed_s` is at least 0 (422 `invalid_session` otherwise); a figure of more than a
+week, which the browser's pausing clock cannot reach, is recorded as a week with a warning in the
+saved `_session.json`, so that one faulty figure cannot distort the study's totals, and the save
+goes ahead. `session.filters` gives the display filters used (`highpass_hz` or `notch_hz`
 null when that filter was off); when the study fixes the filters, the study's
 are recorded. `session.session_id` (optional, 32 hexadecimal characters, 400
 `bad_request` otherwise) is the browser's ID of the annotation session, the one
