@@ -21,7 +21,7 @@ last release. Do not bring back Qt or a desktop window.
 ## Commands
 
 ```bash
-python -m pip install -r requirements-dev.txt && python -m pip install --no-deps -e .   # Python 3.12 or 3.13
+pip install -r requirements-dev.txt && pip install --no-deps -e .   # in an active virtual environment, Python 3.12 or 3.13
 python -m pytest                                          # the Python suite
 python -m pytest tests/test_web_server.py -q              # one file
 ruff check --select E,F,W,B electrotag tests scripts    # the useful lint subset
@@ -30,7 +30,7 @@ ELECTROTAG_PYTHON=python node web_tests/run_e2e.mjs     # the application in Chr
 ELECTROTAG_PYTHON=python node web_tests/run_e2e.mjs --browser webkit   # the same in WebKit (Safari, iPads)
 bash scripts/test_firebase_emulators.sh                   # functions and Firestore store on the emulators (Java 21)
 bash scripts/test_web_firebase.sh                         # the application on the Firebase emulators
-electrotag-web demo                                     # the whole system on http://localhost:8000/
+electrotag web demo                                     # the whole system on http://localhost:8000/
 ```
 
 `run_e2e.mjs` and the unit tests find Python through `ELECTROTAG_PYTHON`, then the repository's
