@@ -190,6 +190,11 @@ export class FirebaseBackend {
 
   me() { return this._call('ec_me', {}, { retry: true }); }
 
+  achievements() { return this._call('ec_achievements', {}, { retry: true }); }
+
+  /** Changes the goal or the leaderboard's visibility: not repeated after a failure, like every change. */
+  setAchievements(body) { return this._call('ec_achievements', body || {}); }
+
   assignments() { return this._call('ec_assignments', {}, { retry: true }); }
 
   match(body) { return this._call('ec_match', body, { retry: true }); }

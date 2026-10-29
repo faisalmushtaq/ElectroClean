@@ -122,6 +122,7 @@ export const tests = [
       assert.match(await page.textContent('.dialog'), /Demonstration: in a real study/);
       await clickDialogButton(page, 'Back to my recordings');
       await waitForRoute(page, 'home');
+      await page.click('.rec-tabs [data-tab="all"]');
       assert.match(await page.textContent('table.list'), /Done/);
       // The saved results can be downloaded.
       await page.evaluate(() => globalThis.ElectroClean.flushLog());

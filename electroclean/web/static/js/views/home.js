@@ -8,6 +8,8 @@ import { ask } from '../ui/dialog.js';
 import { formatHms, local } from '../util.js';
 import { quizCard } from '../training/quiz.js';
 import { deviceHomeLine } from './device.js';
+import { recordingsCard } from './home_list.js';
+import { gameCards } from './home_games.js';
 import { localDraft } from '../annotate/session.js';
 import { todayKey } from '../annotate/clock.js';
 import { percentText } from '../viewer/coverage.js';
@@ -68,14 +70,11 @@ function progressCard(p) {
     h('p.caption.today', { 'data-stat': 'today' }, `Today: ${today}.`));
 }
 
-const STATUS = { todo: ['To do', ''], in_progress: ['In progress', 'active'], done: ['Done', 'done'] };
-const MODES = { standard: 'Annotation', guided: 'Guided training', practice: 'Practice', assessment: 'Assessment' };
 
 export function homeView(app) {
   const items = (app.assignments && app.assignments.items) || [];
   const nextId = app.assignments && app.assignments.next;
   const next = items.find((i) => i.recording_id === nextId) || null;
-  const done = items.filter((i) => i.status === 'done').length;
   const programme = app.me && app.me.programme;
   const b = app.backend;
   const p = annotatorProgress(app, items, next);
@@ -97,22 +96,10 @@ export function homeView(app) {
         : [h('h2', {}, items.length ? 'All done' : 'Nothing to do yet'),
           h('p.success', {}, items.length ? `You have finished all ${items.length} of your recordings. Thank you.` : 'No recordings are assigned to you at the moment.')]);
 
-  const rows = items.map((it) => {
-    const [text, cls] = STATUS[it.status] || [it.status, ''];
-    return h('tr', { 'data-id': it.recording_id, 'data-log-text': it.file_name },
-      h('td', {}, h('span.file', { title: it.recording_id }, it.file_name)),
-      h('td', {}, MODES[it.mode] || it.mode),
-      h('td.num', {}, formatHms(it.duration_s)),
-      h('td.num', {}, String(it.n_channels)),
-      h('td', {}, h(`span.chip${cls ? `.${cls}` : ''}`, {}, text)),
-      h('td.actions', {}, it.status === 'done' ? null : h('button.btn.small', { type: 'button', onclick: () => app.openAssignment(it) }, it.status === 'in_progress' ? 'Continue' : 'Open')));
-  });
-  const list = h('section.card', {},
-    h('div.card-head', {}, h('h2', {}, 'Your recordings'), h('span.caption', {}, `${done} of ${items.length} done`)),
-    items.length ? h('table.list', {}, h('thead', {}, h('tr', {}, h('th', {}, 'File'), h('th', {}, 'Mode'), h('th.num', {}, 'Length'), h('th.num', {}, 'Channels'), h('th', {}, 'Status'), h('th', {}))), h('tbody', {}, rows))
-      : h('p.caption', {}, 'Your study team assigns recordings to you.'),
-    h('div.btn-row', {}, h('button.btn.quiet', { type: 'button', onclick: () => app.openFromComputer(null) }, 'Open a recording from your computer…')),
-    deviceHomeLine(app));
+  // The list of recordings, with its tabs, history, search and pages (home_list.js), and the
+  // recordings kept on this device under it (device.js).
+  const list = recordingsCard(app);
+  list.append(deviceHomeLine(app));
 
   let demo = null;
   if (b && b.isDemo) {
@@ -141,5 +128,13 @@ export function homeView(app) {
   return h('div.view.home', { 'data-view': 'home' }, appHeader(app),
     h('main.page', {},
       h('h1', {}, `Hello${app.me && app.me.display_name ? `, ${app.me.display_name}` : ''}`),
-      h('div.home-grid', {}, h('div.col', {}, nextCard, !programme && items.length ? progressCard(p) : null, list, quizCard(app)), demo ? h('div.col', {}, demo) : null)));
+      h('div.home-grid', {},
+        h('div.col', {}, nextCard, !programme && items.length ? progressCard(p) : null, list, quizCard(app)),
+        sideColumn([...gameCards(app), demo]))));
+}
+
+/** The right-hand column: the game cards (home_games.js) and the demonstration's card, when there are any. */
+function sideColumn(cards) {
+  const list = cards.filter(Boolean);
+  return list.length ? h('div.col.side-col', {}, list) : null;
 }

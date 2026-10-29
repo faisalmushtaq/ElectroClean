@@ -225,11 +225,24 @@ def test_stats_of_a_small_study(client: TestClient, admin: Api, recordings: Path
     assert todo["elapsed_s"] is None and todo["saved_at"] is None
     a02_items = {i["recording_id"]: i for i in admin.admin_ok("assignments_list", {"annotator_id": "A02"})["items"]}
     assert a02_items[SUB2]["status"] == "in_progress" and a02_items[SUB2]["elapsed_s"] == 30.0
+    # A revision is another attempt of the same recording: still one recording done, on the day of the
+    # first save, with the annotations of the latest attempt and the time of both attempts.
+    a01.ok("post", "/submissions", {**submission(recordings, SUB1, [BLINK], elapsed=30.0), "revises": 1})
+    s = admin.admin_ok("stats")
+    t = s["totals"]
+    assert (t["done"], t["done_7d"], sum(s["daily"])) == (3, 3, 3)
+    assert t["annotator_hours"] == pytest.approx((150 + 60 + 300 + 30) / 3600)
+    p = {x["annotator_id"]: x for x in s["annotators"]}["A01"]
+    assert (p["done"], p["done_7d"], p["time_s"], p["median_s"], p["median_annotations"]) == (2, 2, 210.0, 105.0, 1.0)
+    r = {x["recording_id"]: x for x in s["recordings"]}[SUB1]
+    assert (r["saved"], r["min_annotations"], r["max_annotations"]) == (2, 1, 3)
+    items = {i["recording_id"]: i for i in admin.admin_ok("assignments_list", {"annotator_id": "A01"})["items"]}
+    assert (items[SUB1]["attempts"], items[SUB1]["elapsed_s"], items[SUB1]["n_annotations"]) == (2, 150.0, 1)
     # A switched-off account leaves the study's totals; its saved work still counts in the hours.
     admin.admin_ok("user_update", {"annotator_id": "A02", "status": "disabled"})
     t = admin.admin_ok("stats")["totals"]
     assert (t["assigned"], t["done"]) == (3, 2)
-    assert t["annotator_hours"] == pytest.approx((120 + 60 + 300) / 3600)
+    assert t["annotator_hours"] == pytest.approx((150 + 60 + 300) / 3600)
     # Training too, when asked.
     assert admin.admin_ok("stats", {"work": "all"})["work"] == "all"
     admin.admin_error("stats", {"work": "some"}, 400, "bad_request")

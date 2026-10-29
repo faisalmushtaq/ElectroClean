@@ -298,6 +298,14 @@ def create_app(study_dir: Path | str, *, demo: bool = False, allowed_origins: li
     async def me(request: Request) -> JSONResponse:
         return await authed(request, "me")
 
+    @app.get(f"{p}/me/achievements")
+    async def achievements(request: Request) -> JSONResponse:
+        return await authed(request, "achievements")
+
+    @app.post(f"{p}/me/achievements")
+    async def achievements_update(request: Request) -> JSONResponse:
+        return await authed(request, "achievements", await body_of(request))
+
     @app.get(f"{p}/assignments")
     async def assignments(request: Request) -> JSONResponse:
         return await authed(request, "assignments")

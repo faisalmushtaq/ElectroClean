@@ -12,6 +12,7 @@ answering a guided check starts quickly; saving and practice scoring import what
 from __future__ import annotations
 
 import json
+import logging
 import math
 import random
 import re
@@ -32,7 +33,7 @@ from electroclean.config.settings import FilterSettings, SettingsError
 from electroclean.training.reference import ReferenceSet, ReferenceSetError
 from electroclean.web.errors import ApiError
 from electroclean.web.manifest import SCOPE_STUDY, fingerprint_of, public_manifest, set_scope
-from electroclean.web.store import MODES, Store, User, item_key
+from electroclean.web.store import MODES, Store, User, attempt_of, item_key, latest_entry
 
 ANN_ID_RE = re.compile(r"^[0-9A-Za-z_-]{1,64}$")
 STAMP_RE = re.compile(r"^[0-9T:.+\-Z ]{0,40}$")
@@ -46,6 +47,7 @@ LOGGING_NOTICE = ("This study records how you use ElectroClean (times, clicks, k
                   "research. Ask your study administrator if you have questions.")
 
 __all__ = ["ApiError", "StudyService", "WorkItem", "annotation_dict", "parse_annotations"]
+log = logging.getLogger("electroclean.web")
 
 
 # ------------------------------------------------------------------ annotations
@@ -186,7 +188,9 @@ class WorkItem:
     position: int = 0
     repeat: bool = False  # a practice recording that may be annotated again
     source: str = "assignment"  # or "programme"
-    result: dict[str, str] | None = None  # the completion register's row of the latest save, when done
+    result: dict[str, str] | None = None  # the completion register's row of the latest attempt, when done
+    saved: dict[str, Any] | None = None  # the history's figures of every saved attempt (games.saved_summary)
+    revising: bool = False  # done, with a revision under way (its draft is kept)
 
     @property
     def key(self) -> str:
@@ -224,6 +228,9 @@ class StudyService:
         self.administration = Admin(self)
         self.analyses = Analyses(self)
         self.quizzes = Quizzes(self)
+        from electroclean.web.games import Games
+
+        self.games = Games(self)
 
     # ----------------------------------------------------------------- basics
     @property
@@ -264,7 +271,10 @@ class StudyService:
             "annotation": {"min_duration_samples": s.min_duration_samples,
                            "quick_labels": [q for q in s.quick_labels if cat.is_permitted(q)],
                            "break_reminder_minutes": s.break_reminder_minutes,
-                           "idle_pause_minutes": s.idle_pause_minutes, "coverage_check": s.coverage_check},
+                           "idle_pause_minutes": s.idle_pause_minutes, "coverage_check": s.coverage_check,
+                           "allow_revisions": s.allow_revisions},
+            "gamification": {"enabled": s.gamification_enabled,
+                             "leaderboard": s.gamification_enabled and s.gamification_leaderboard},
             "logging": self.logging_info(),
             "logging_notice": (self.store.logging_notice or LOGGING_NOTICE) if s.logging_interactions else "",
         }
@@ -301,14 +311,12 @@ class StudyService:
         drafts = self.store.draft_keys(aid)
         entries = self.store.completion_entries(aid)
         done: dict[tuple[str, str], set[str]] = {}
-        latest: dict[tuple[str, str, str], dict[str, str]] = {}
+        saved: dict[tuple[str, str, str], list[dict[str, str]]] = {}
         for e in entries:
             if e.get("status") == "completed":
                 mode_ctx = (e.get("mode", "standard"), e.get("context", ""))
                 done.setdefault(mode_ctx, set()).add(e["recording_id"])
-                k = (e["recording_id"], *mode_ctx)
-                if str(e.get("completed_at", "")) >= str(latest.get(k, {}).get("completed_at", "")):
-                    latest[k] = e
+                saved.setdefault((e["recording_id"], *mode_ctx), []).append(e)
         items: list[WorkItem] = []
         seen: set[tuple[str, str, str]] = set()
 
@@ -328,7 +336,15 @@ class StudyService:
                 status = "in_progress"
             else:
                 status = "todo"
-            items.append(WorkItem(rid, mode, ctx, m, status, position, repeat, source, latest.get(key)))
+            # the latest attempt by its number (a revision is always the latest), whatever the clocks said
+            item = WorkItem(rid, mode, ctx, m, status, position, repeat, source,
+                            latest_entry(saved[key]) if key in saved else None)
+            if key in saved:
+                from electroclean.web.games import saved_summary
+
+                item.saved = saved_summary(saved[key])
+                item.revising = status == "done" and item_key(rid, mode, ctx) in drafts
+            items.append(item)
 
         set_id = self.store.programme(aid)
         if set_id:
@@ -368,7 +384,11 @@ class StudyService:
         out = []
         for i in items:
             d = i.to_dict()
-            d["draft"] = self._draft_summary(user, i) if i.status == "in_progress" else None
+            d["draft"] = self._draft_summary(user, i) if i.status == "in_progress" or i.revising else None
+            # what only the history needs: the latest version's number, the first save and the time of all versions
+            d["saved"] = ({k: i.saved[k] for k in ("version", "first_saved_at", "total_elapsed_s")}
+                          if i.saved is not None else None)
+            d["revising"] = i.revising
             out.append(d)
         return {"items": out,
                 "next": nxt.recording_id if nxt is not None else None,
@@ -414,13 +434,14 @@ class StudyService:
             raise ApiError(400, "bad_request", "size_bytes must be the size of the file in bytes")
         items = self.work_items(user)
         nxt = self._next(user, items)
+        revise = body.get("revise") is True
         exact = self.store.manifests_by_fingerprint(sha, size)
         if exact:
-            return self._match_answer(user, items, exact, "matched", [], nxt)
+            return self._match_answer(user, items, exact, "matched", [], nxt, revise=revise)
         candidates = self._metadata_matches(body)
         if len(candidates) == 1:
             m, differences = candidates[0]
-            return self._match_answer(user, items, [m], "matched_metadata", differences, nxt)
+            return self._match_answer(user, items, [m], "matched_metadata", differences, nxt, revise=revise)
         if len(candidates) > 1:
             return self._answer("unknown", "This file looks like several recordings of the study and cannot be told "
                                 "apart from them. Open the exact file you were given, or ask your study administrator.")
@@ -430,7 +451,7 @@ class StudyService:
     @staticmethod
     def _answer(status: str, message: str, **fields: Any) -> dict[str, Any]:
         out = {"status": status, "message": message, "recording_id": None, "mode": None, "context_id": None,
-               "manifest": None, "draft": None, "differences": [], "repeat": False}
+               "manifest": None, "draft": None, "differences": [], "repeat": False, "revision": None}
         out.update(fields)
         return out
 
@@ -469,7 +490,7 @@ class StudyService:
         return out
 
     def _match_answer(self, user: User, items: list[WorkItem], manifests: list[dict[str, Any]], status: str,
-                      differences: list[str], nxt: WorkItem | None) -> dict[str, Any]:
+                      differences: list[str], nxt: WorkItem | None, *, revise: bool = False) -> dict[str, Any]:
         keys = {(m["scope"], m["recording_id"]) for m in manifests}
         mine = [i for i in items if (self.scope_for(i.mode, i.context_id), i.recording_id) in keys]
         rid = manifests[0]["recording_id"]
@@ -480,8 +501,13 @@ class StudyService:
         open_items = [i for i in mine if i.status != "done"]
         if not open_items:
             i = mine[0]
-            return self._answer("done", f"You have already completed {rid}. Choose another recording from your list.",
-                                recording_id=rid, mode=i.mode, context_id=i.context_id)
+            revisable = next((x for x in mine if self.can_revise(x)), None)
+            if revise and revisable is not None:
+                return self._revision_answer(user, revisable, status, differences)
+            hint = (" To change your annotations, open it from your history with Open to revise."
+                    if revisable is not None else "")
+            return self._answer("done", f"You have already completed {rid}.{hint} Choose another recording from your "
+                                "list.", recording_id=rid, mode=i.mode, context_id=i.context_id)
         chosen = next((i for i in open_items if nxt is not None and (i.recording_id, i.mode, i.context_id)
                        == (nxt.recording_id, nxt.mode, nxt.context_id)), None)
         if chosen is None:
@@ -499,13 +525,52 @@ class StudyService:
     def public_manifest(self, m: dict[str, Any]) -> dict[str, Any]:
         return public_manifest(m, self.settings.display.scalings)
 
+    # ------------------------------------------------------------- revisions
+    def can_revise(self, item: WorkItem) -> bool:
+        """A finished study recording may be opened again, changed and submitted as a new attempt."""
+        return (item.status == "done" and item.mode == "standard" and item.saved is not None
+                and bool(self.settings.allow_revisions))
+
+    def saved_annotations(self, user: User, item: WorkItem) -> list[dict[str, Any]]:
+        """The annotations of the latest saved attempt, as the browser's annotations."""
+        raw = self.store.saved_document(user.annotator_id, item.recording_id, item.mode, item.context_id)
+        if raw is None:
+            return []
+        try:
+            doc = json.loads(raw)
+        except ValueError:
+            return []
+        keys = ("annotation_id", "label", "onset_sample", "duration_samples", "channels", "created_at", "modified_at")
+        return [{k: a.get(k, [] if k == "channels" else "") for k in keys}
+                for a in doc.get("annotations", []) if isinstance(a, dict)]
+
+    def _revision_answer(self, user: User, item: WorkItem, status: str, differences: list[str]) -> dict[str, Any]:
+        version = int((item.saved or {}).get("version") or 1)
+        record = self.store.draft(user.annotator_id, item.key) or {}
+        draft = record.get("draft") if record.get("revises") == version else None
+        message = (f"Recording found: {item.recording_id}. You are revising it: your version {version} opens, and "
+                   f"submitting the revision saves version {version + 1}, keeping the earlier one."
+                   if status == "matched" else
+                   "This file has the name, sampling rate, length and channels of " + item.recording_id
+                   + " but is not byte for byte the study's copy. Continue only if you are sure it is the same "
+                   "recording.")
+        return self._answer(status, message, recording_id=item.recording_id, mode=item.mode,
+                            context_id=item.context_id, manifest=self.public_manifest(item.manifest), draft=draft,
+                            differences=differences,
+                            revision={"version": version + 1, "revises": version,
+                                      "saved_at": (item.saved or {}).get("saved_at"),
+                                      "annotations": self.saved_annotations(user, item)})
+
     # ---------------------------------------------------------------- drafts
     def put_draft(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
         """``PUT /drafts/{recording_id}?mode=&context=`` with the Draft as body (``ec_put_draft``:
         ``{"recording_id", "mode", "context_id", "draft": Draft}``)."""
         item = self.find_item(user, body.get("recording_id"), body.get("mode"), body.get("context_id"))
+        revises = None
         if item.status == "done" and not item.repeat:
-            raise ApiError(409, "already_done", f"{item.recording_id} has already been completed")
+            if not self.can_revise(item):
+                raise ApiError(409, "already_done", f"{item.recording_id} has already been completed")
+            revises = int((item.saved or {}).get("version") or 1)  # the draft of a revision
         draft = body.get("draft")
         if not isinstance(draft, dict):
             raise ApiError(400, "bad_request", "A draft must be an object")
@@ -524,6 +589,9 @@ class StudyService:
                   "context_id": item.context_id, "annotator_id": user.annotator_id, "saved_at": saved_at,
                   "draft": {"annotations": anns, "view": view or {}, "elapsed_s": float(elapsed), "viewed": viewed,
                             "saved_at": saved_at}}
+        if revises is not None:
+            record["revises"] = revises
+            record["draft"]["revises"] = revises
         if len(json.dumps(record)) > 8 * 1024 * 1024:
             raise ApiError(413, "too_large", "The draft is too large to keep")
         self.store.put_draft(user.annotator_id, item.key, record)
@@ -569,8 +637,26 @@ class StudyService:
 
         item = self.find_item(user, body.get("recording_id"), body.get("mode"), body.get("context_id"))
         rid = item.recording_id
+        revision: dict[str, Any] | None = None
         if item.status == "done" and not item.repeat:
-            raise ApiError(409, "already_done", f"You have already completed {rid}; it is not saved twice.")
+            revises = body.get("revises")
+            if revises is None:
+                raise ApiError(409, "already_done", f"You have already completed {rid}; it is not saved twice.")
+            if not self.can_revise(item):
+                raise ApiError(409, "revisions_off", f"You have already completed {rid}, and this study does not "
+                               "take revisions of finished recordings.")
+            if isinstance(revises, bool) or not isinstance(revises, int):
+                raise ApiError(400, "bad_request", "revises must be the version being revised (a whole number)")
+            latest = latest_entry([e for e in self.store.completion_entries(user.annotator_id)
+                                   if e.get("recording_id") == rid and e.get("mode", "standard") == item.mode
+                                   and e.get("context", "") == item.context_id and e.get("status") == "completed"])
+            version = attempt_of(latest)
+            if revises != version:
+                raise ApiError(409, "already_revised", f"{rid} has been saved again since you opened it (version "
+                               f"{version}). Open it again from your history to revise the latest version.")
+            revision = {"version": version + 1, "revises_version": version,
+                        "revises_session_id": latest.get("session_id", ""),
+                        "revises_output_basename": latest.get("output_basename", "")}
         self.coach.require_unlocked(user, item)
         info = body.get("session") if isinstance(body.get("session"), dict) else {}
         sha = str(body.get("sha256") or "").lower()
@@ -591,6 +677,8 @@ class StudyService:
         anns = parse_annotations(body.get("annotations"), loaded.info, self.store.catalogue,
                                  self.settings.min_duration_samples)
         context: dict[str, Any] = {}
+        if revision is not None:
+            context["revision"] = dict(revision)  # in the saved _annotations.json and _session.json
         rs: ReferenceSet | None = None
         guided_summary = None
         if item.mode != "standard":
@@ -612,19 +700,33 @@ class StudyService:
                                                      "scale_factor")
                          if isinstance(view.get(k), (int, float)) and not isinstance(view.get(k), bool)
                          and math.isfinite(view[k])}
+        from electroclean.web.games import viewed_fraction
+
+        viewed = viewed_fraction(info.get("viewed_fraction"))
+        if viewed is not None:
+            display_state["viewed_fraction"] = viewed
 
         def make_session(layout: Any) -> WebSession:
             s = WebSession(layout=layout, settings=self.settings, filters=filters, catalogue=self.store.catalogue,
                            loaded=loaded, annotator_id=user.annotator_id, display_name=user.display_name,
-                           mode=item.mode, context=context, initial_annotations=anns, allow_repeat=item.repeat,
-                           autosave_enabled=False, client=client, server=self.store.kind, session_id=session_id)
+                           mode=item.mode, context=context, initial_annotations=anns,
+                           allow_repeat=item.repeat or revision is not None, autosave_enabled=False, client=client,
+                           server=self.store.kind, session_id=session_id,
+                           expected_attempt=revision["version"] if revision is not None else None)
             s.display_state = display_state
             return s
 
         saved = self.store.save_results(make_session, elapsed_s=elapsed, started_at=_stamp(info.get("started_at")))
         self.store.delete_draft(user.annotator_id, item.key)
         out: dict[str, Any] = {"saved": True, "files": sorted(saved.files), "attempt": saved.attempt,
-                               "feedback": None, "guided": None, "assessment": None}
+                               "feedback": None, "guided": None, "assessment": None,
+                               "revision": ({"version": saved.attempt, "revises": revision["revises_version"]}
+                                            if revision is not None else None)}
+        if viewed is not None:
+            try:
+                self.games.record_viewed(user, rid, item.mode, item.context_id, viewed)
+            except Exception:  # noqa: BLE001 - the results are saved; a lost coverage figure only affects a badge
+                log.exception("The share viewed of %s could not be kept", rid)
         if item.mode == "practice" and rs is not None:
             out["feedback"] = self.coach.practice_result(user, rs, rid, saved.session.build_document(), elapsed,
                                                          loaded.info.timing.sfreq)
@@ -650,6 +752,11 @@ class StudyService:
 
     def guided_show_me(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
         return self.coach.guided_show_me(user, _rid(body), body)
+
+    # ---------------------------------------------------------- achievements
+    def achievements(self, user: User, body: dict[str, Any] | None = None) -> dict[str, Any]:
+        """``GET /me/achievements`` (and ``POST`` with ``goal_per_week`` or ``leaderboard_hidden``)."""
+        return self.games.achievements(user, body or {})
 
     # ---------------------------------------------------------------- visits
     def visit_open(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
@@ -746,7 +853,7 @@ class StudyService:
     #: operation in the body's ``op`` and ``quiz`` the set in its ``set_id``.
     OPERATIONS = ("me", "assignments", "match", "put_draft", "delete_draft", "submit", "training", "guided_get",
                   "guided_check", "guided_continue", "guided_show_me", "visit_open", "visit_events", "visit_close",
-                  "admin_progress", "admin", "quiz")
+                  "admin_progress", "admin", "quiz", "achievements")
 
     def call(self, operation: str, user: User, body: dict[str, Any] | None) -> dict[str, Any]:
         if operation not in self.OPERATIONS:

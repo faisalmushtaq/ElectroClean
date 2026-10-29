@@ -144,6 +144,13 @@ export class HttpBackend {
 
   me() { return this._request('GET', '/me'); }
 
+  /** The annotator's counters, the facts of their milestones, their goal, the team's progress and the
+   *  anonymised leaderboard (docs/web/api.md, "Achievements"). */
+  achievements() { return this._request('GET', '/me/achievements'); }
+
+  /** Sets the personal goal ({goal_per_week}) or whether to appear on the leaderboard ({leaderboard_hidden}). */
+  setAchievements(body) { return this._request('POST', '/me/achievements', body || {}); }
+
   // ------------------------------------------------------ assignments, opening
   assignments() { return this._request('GET', '/assignments'); }
 

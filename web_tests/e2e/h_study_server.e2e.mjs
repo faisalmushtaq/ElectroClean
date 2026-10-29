@@ -87,7 +87,7 @@ export const tests = [
       await saveAndFinish(page);
       await waitForRoute(page, 'home', 30000);
       await page.waitForSelector('.dialog');
-      assert.match(await page.textContent('.dialog'), /are saved and the recording is complete\.\s*Next: sub-002_task-rest_eeg\.vhdr/);
+      assert.match(await page.textContent('.dialog'), /are saved and the recording is complete\.\s*(Milestone reached: First recording\.\s*)?Next: sub-002_task-rest_eeg\.vhdr/);
       await clickDialogButton(page, 'Back to my recordings');
       assert.match(await page.textContent('main'), /1 of 3 done/);
 

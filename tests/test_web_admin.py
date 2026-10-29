@@ -110,7 +110,9 @@ def test_overview_counts_and_recent_changes(client: TestClient, admin: Api, reco
 def test_settings_are_read_changed_and_checked(client: TestClient, admin: Api) -> None:
     s = admin.admin_ok("settings_get")
     assert set(s["settings"]) == {"filters", "display", "channels", "selection", "logging", "annotation", "loading",
-                                  "discovery"}
+                                  "discovery", "gamification"}
+    assert s["settings"]["annotation"]["allow_revisions"] is True
+    assert s["settings"]["gamification"] == {"enabled": True, "leaderboard": True, "leaderboard_viewed_only": False}
     assert s["settings"]["filters"]["notch_hz"] == 50.0 and s["logging_notice"]
     assert s["settings"]["discovery"]["suffixes"] == ["_eeg.vhdr", "_eeg.edf", "_eeg.bdf"]
     out = admin.admin_ok("settings_update", {
@@ -137,7 +139,10 @@ def test_settings_are_read_changed_and_checked(client: TestClient, admin: Api) -
                        ({"filters": {"highpass_hz": "high"}}, ""),
                        ({"output": {"directory_name": "x"}}, "cannot be changed"),
                        ({"filters": {"colour": "red"}}, "no setting filters.colour"),
-                       ({"filters": 5}, "object")):
+                       ({"filters": 5}, "object"),
+                       ({"annotation": {"allow_revisions": "yes"}}, "annotation.allow_revisions must be true or false"),
+                       ({"gamification": {"enabled": 1}}, "gamification.enabled must be true or false"),
+                       ({"gamification": {"badges": True}}, "no setting gamification.badges")):
         r = admin.admin_error("settings_update", {"settings": bad}, 400, "invalid_settings")
         assert words in r["message"], (bad, r)
     assert admin.admin_ok("settings_get")["settings"]["filters"]["notch_hz"] == 60.0  # unchanged by the refusals

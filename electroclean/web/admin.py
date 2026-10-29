@@ -29,14 +29,15 @@ from electroclean.training.reference import GUIDANCE_LEVELS, NONE_OPTION, USES, 
 from electroclean.web import audit
 from electroclean.web.errors import ApiError
 from electroclean.web.manifest import SCOPE_STUDY, fingerprint_of, manifest_info, set_scope
-from electroclean.web.store import MODES, ROLES, STATUSES, AccountProblem, StoreError, User
+from electroclean.web.store import MODES, ROLES, STATUSES, AccountProblem, StoreError, User, attempt_of, latest_entry
 
 if TYPE_CHECKING:
     from electroclean.app.annotations.model import AnnotationDocument
     from electroclean.web.service import StudyService
 
 #: The blocks of electroclean_study.json's settings that the admin area may read and change.
-SETTINGS_BLOCKS = ("filters", "display", "channels", "selection", "logging", "annotation", "loading", "discovery")
+SETTINGS_BLOCKS = ("filters", "display", "channels", "selection", "logging", "annotation", "loading", "discovery",
+                   "gamification")
 SET_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 EMAIL_RE = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,190}\.[^@\s]{2,63}$")
@@ -323,9 +324,12 @@ class Admin:
                     and e.get("context", "") == i.context_id]
             draft = self.store.draft(person.annotator_id, i.key) or {} if i.status == "in_progress" else {}
             last = max([e.get("completed_at", "") for e in mine] + [draft.get("saved_at", "")])
-            latest = max(mine, key=lambda e: e.get("completed_at", "")) if mine else {}
+            # A revision is a later attempt: the latest attempt by its number gives the annotations and the
+            # date, and the time is that of every saved attempt together (the work the recording took).
+            latest = latest_entry(mine) if mine else {}
             if latest:
-                elapsed = _seconds(latest.get("elapsed_s"))
+                times = [t for e in mine if (t := _seconds(e.get("elapsed_s"))) is not None]
+                elapsed = sum(times) if times else None
             else:
                 elapsed = _seconds((draft.get("draft") or {}).get("elapsed_s")) if draft else None
             n_ann = _seconds(latest.get("n_annotations")) if latest else None
@@ -1250,7 +1254,7 @@ class Admin:
             aid = v.get("annotator_id", "")
             last_visit[aid] = max(last_visit.get(aid, ""), str(v.get("started_at") or ""))
 
-        def daily(rows: list[dict[str, str]]) -> list[int]:
+        def daily(rows: list[dict[str, Any]]) -> list[int]:
             out = [0] * STATS_DAYS
             for e in rows:
                 d = _day(e.get("completed_at"))
@@ -1258,13 +1262,30 @@ class Admin:
                     out[index[d]] += 1
             return out
 
-        def since(rows: list[dict[str, str]], n: int) -> int:
+        def since(rows: list[dict[str, Any]], n: int) -> int:
             first = today - timedelta(days=n - 1)
             return sum(1 for e in rows if (d := _day(e.get("completed_at"))) is not None and first <= d <= today)
 
-        by_person: dict[str, list[dict[str, str]]] = {}
+        # A recording saved again (a revision, or a practice recording repeated) has several attempts: it is
+        # one recording done, on the day of its first save, with the annotations of its latest attempt and
+        # the time of all its attempts together.
+        groups: dict[tuple[str, str, str, str], list[dict[str, str]]] = {}
         for e in entries:
-            by_person.setdefault(e.get("annotator_id", ""), []).append(e)
+            groups.setdefault((e.get("annotator_id", ""), e.get("recording_id", ""), e.get("mode", "standard"),
+                               e.get("context", "")), []).append(e)
+        works = []
+        for rows in groups.values():
+            first = min(rows, key=lambda e: (attempt_of(e), str(e.get("completed_at", ""))))
+            times = [t for e in rows if (t := _seconds(e.get("elapsed_s"))) is not None]
+            works.append({"annotator_id": first.get("annotator_id", ""), "recording_id": first.get("recording_id", ""),
+                          "mode": first.get("mode", "standard"), "context": first.get("context", ""),
+                          "completed_at": first.get("completed_at", ""), "last_at": max(str(e.get("completed_at") or "")
+                                                                                         for e in rows),
+                          "elapsed_s": sum(times) if times else None,
+                          "n_annotations": latest_entry(rows).get("n_annotations")})
+        by_person: dict[str, list[dict[str, Any]]] = {}
+        for w in works:
+            by_person.setdefault(w["annotator_id"], []).append(w)
         recordings: dict[tuple[str, str], dict[str, Any]] = {}
         scopes: dict[tuple[str, str], str] = {}
 
@@ -1305,7 +1326,7 @@ class Admin:
                 draft_s += in_progress_s
             times = [t for e in mine if (t := _seconds(e.get("elapsed_s"))) is not None]
             n_anns = [n for e in mine if (n := _seconds(e.get("n_annotations"))) is not None]
-            last.extend(str(e.get("completed_at") or "") for e in mine)
+            last.extend(str(e.get("last_at") or "") for e in mine)
             people.append({
                 "annotator_id": aid, "display_name": rec.get("display_name", ""), "role": rec.get("role", "annotator"),
                 "status": rec.get("status", "active"), "assigned": len(items), **counts,
@@ -1313,8 +1334,8 @@ class Admin:
                 "time_s": sum(times), "in_progress_s": in_progress_s, "median_s": _median(times),
                 "median_annotations": _median(n_anns), "last_active": max(last) or None,
                 "done_7d": since(mine, 7), "daily": daily(mine)})
-        by_recording: dict[tuple[str, str], list[dict[str, str]]] = {}
-        for e in entries:
+        by_recording: dict[tuple[str, str], list[dict[str, Any]]] = {}
+        for e in works:
             key = (scope_of(e.get("mode", "standard"), e.get("context", "")), e.get("recording_id", ""))
             by_recording.setdefault(key, []).append(e)
         for key, r in recordings.items():
@@ -1324,9 +1345,9 @@ class Admin:
             r.update(median_s=_median(times), median_annotations=_median(n_anns),
                      min_annotations=min(n_anns) if n_anns else None, max_annotations=max(n_anns) if n_anns else None,
                      saved=len(rows))
-        times = [t for e in entries if (t := _seconds(e.get("elapsed_s"))) is not None]
+        times = [t for e in works if (t := _seconds(e.get("elapsed_s"))) is not None]
         remaining = totals["assigned"] - totals["done"]
-        recent = since(entries, PACE_DAYS)
+        recent = since(works, PACE_DAYS)
         pace = recent / PACE_DAYS
         if totals["assigned"] and not remaining:
             projection = {"status": "complete", "date": None}
@@ -1341,9 +1362,9 @@ class Admin:
             "totals": {**totals, "share_done": totals["done"] / totals["assigned"] if totals["assigned"] else None,
                        "remaining": remaining, "annotator_hours": (sum(times) + draft_s) / 3600,
                        "median_minutes": (m / 60 if (m := _median(times)) is not None else None),
-                       "done_7d": since(entries, 7), "done_30d": since(entries, 30),
+                       "done_7d": since(works, 7), "done_30d": since(works, 30),
                        "pace_per_day": pace, "pace_days": PACE_DAYS, "projection": projection},
-            "daily": daily(entries),
+            "daily": daily(works),
             "annotators": people,
             "recordings": sorted(recordings.values(), key=lambda r: (r["scope"] != SCOPE_STUDY, r["scope"],
                                                                      r["recording_id"])),

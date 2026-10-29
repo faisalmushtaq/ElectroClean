@@ -121,8 +121,8 @@ function configStatic() {
 }
 
 // ------------------------------------------- the real study server (electroclean-web demo)
-// Started only when a test needs it (h_study_server) and the project's Python has the server's
-// packages; the test is skipped otherwise.
+// Started only when a test needs it (the *_study_server specs, and tests marked needs: 'study') and the
+// project's Python has the server's packages; the test is skipped otherwise.
 async function studyServer(python) {
   const check = spawn(python, ['-c', 'import fastapi, uvicorn, mne'], { stdio: 'ignore' });
   const usable = await new Promise((r) => check.on('exit', (code) => r(code === 0)));

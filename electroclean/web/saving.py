@@ -15,6 +15,7 @@ from typing import Any
 from electroclean import APP_NAME, __version__
 from electroclean.app.io.export import ExportError
 from electroclean.app.io.locking import LockError
+from electroclean.app.io.naming import next_free_attempt
 from electroclean.app.session.session import AnnotationSession, FinishResult, SessionError, library_versions
 from electroclean.app.session.transaction import ExportCommitError
 from electroclean.app.validation.exports import ValidationError
@@ -25,13 +26,27 @@ class WebSession(AnnotationSession):
     """The desktop's annotation session for a recording annotated in a browser (see the module docstring)."""
 
     def __init__(self, *, client: dict[str, Any] | None = None, server: str = "", session_id: str | None = None,
-                 **kwargs: Any) -> None:
+                 expected_attempt: int | None = None, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.client = dict(client or {})
         self.server = server
+        #: A revision is saved only as the attempt after the one the annotator revised: if another save
+        #: came first (the same revision sent twice, or from two browsers), it is refused.
+        self.expected_attempt = expected_attempt
         if session_id:  # the browser's own session ID, so its interaction log and these results link up
             self.session_id = session_id
             self.lock.info["session_id"] = session_id
+
+    def start(self) -> None:
+        super().start()
+        if self.expected_attempt is None:
+            return
+        final_dir = self.layout.recording_dir(self.annotator_id, self.recording_id, self.mode, self.context_id)
+        found = next_free_attempt(final_dir, self.loaded.files.stem, self.annotator_id)
+        if found != self.expected_attempt:  # checked while holding the recording's lock
+            self.abandon(reason="a newer version was saved in the meantime")
+            raise ApiError(409, "already_revised", f"{self.recording_id} has been saved again since you opened it "
+                           f"(version {found - 1}). Open it again from your history to revise the latest version.")
 
     def source_changes(self) -> list[str]:
         return []

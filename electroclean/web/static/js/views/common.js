@@ -57,12 +57,47 @@ export function appHeader(app, { title = '', admin = false, tools = null } = {})
       h('button.btn.quiet', { type: 'button', 'data-log': 'sign-out', onclick: () => app.signOut() }, 'Sign out')) : null);
 }
 
-export function smallScreenNotice() {
+/**
+ * This page's address to open on another device: without the view's hash, and with the study
+ * server's address when the page did not come from that server (?server=, as choose.js reads it).
+ */
+export function studyLink(app) {
+  try {
+    const url = new URL(location.href);
+    url.hash = '';
+    const b = app && app.backend;
+    if (b && b.kind === 'server' && b.server && !url.searchParams.has('server')) {
+      const base = new URL('.', url.href).href.replace(/\/+$/, '');
+      if (b.server !== base) url.searchParams.set('server', b.server);
+    }
+    return url.href;
+  } catch { return ''; }
+}
+
+/** A mailto: link that sends this page's address to oneself (the mail program asks for the address). */
+export function emailLinkHref(app) {
+  const link = studyLink(app);
+  const study = app && app.me && app.me.study && app.me.study.name ? ` (${app.me.study.name})` : '';
+  return `mailto:?subject=${encodeURIComponent(`ElectroClean${study}: open on a tablet or computer`)}` +
+    `&body=${encodeURIComponent(`Open this link on a tablet or a computer to annotate:\n${link}`)}`;
+}
+
+/**
+ * Shown instead of the views on a phone-sized screen (the gate in app.css), once someone has signed
+ * in: annotating needs a tablet or a computer. It offers to email the page's address and to sign
+ * out; administrators can go on to the admin area, which works on a phone.
+ */
+export function smallScreenNotice(app = null) {
+  const me = app && app.me;
   return h('div.small-screen', { role: 'note' },
     h('div.card', {}, brandMark(40),
       h('h1', {}, 'ElectroClean needs a larger screen'),
-      h('p', {}, 'Annotating EEG needs room for the traces. Please open this page on a tablet such as an iPad, or on a laptop or desktop computer.'),
-      h('p.caption', {}, 'You can still sign in here; your work waits for you on the larger screen.')));
+      h('p', {}, 'Annotating EEG needs room for the traces, so it works on a tablet such as an iPad, or on a laptop or desktop computer. Your work waits for you there.'),
+      me ? h('div.btn-row.center', {},
+        h('a.btn.primary', { href: emailLinkHref(app), 'data-log': 'email-link' }, 'Email me this link'),
+        app.isAdmin ? h('button.btn', { type: 'button', 'data-log': 'admin', onclick: () => app.showAdmin('admin') }, 'Open the admin area') : null,
+        h('button.btn', { type: 'button', 'data-log': 'sign-out', onclick: () => app.signOut() }, 'Sign out')) : null,
+      me && app.isAdmin ? h('p.caption', {}, 'The admin area works on a phone, to check the study\'s progress.') : null));
 }
 
 /** Download files (Blob) through the browser; harmless where downloads are not allowed. */

@@ -117,9 +117,20 @@ export function defaultSettings() {
     channels: { hide: [...DEFAULT_HIDE], types: {} },
     selection: { strategy: 'manual', seed: null },
     logging: { ...DEFAULT_LOGGING },
-    annotation: { min_duration_samples: 1, ...DEFAULT_ANNOTATION, quick_labels: [...DEFAULT_QUICK_LABELS] },
+    annotation: { min_duration_samples: 1, ...DEFAULT_ANNOTATION, allow_revisions: true, quick_labels: [...DEFAULT_QUICK_LABELS] },
     loading: { apply_channel_types_from_bids: true, show_bids_bad_channels: true },
+    gamification: { ...DEFAULT_GAMIFICATION },
   };
+}
+
+/** The game elements of the home page (gamification in electroclean/config/default_settings.json). */
+export const DEFAULT_GAMIFICATION = Object.freeze({ enabled: true, leaderboard: true, leaderboard_viewed_only: false });
+
+/** Settings kept by an earlier version of the demonstration gain the blocks and keys added since. */
+function withNewSettings(settings) {
+  if (!settings.gamification) settings.gamification = { ...DEFAULT_GAMIFICATION };
+  if (settings.annotation && settings.annotation.allow_revisions === undefined) settings.annotation.allow_revisions = true;
+  return settings;
 }
 
 // ------------------------------------------------------------- manifests
@@ -238,6 +249,7 @@ export class DemoAdmin {
 
   get s() {
     if (!this.b.state.admin || this.b.state.admin.version !== 1) this.b.state.admin = initialAdminState(this.b._builtIn());
+    withNewSettings(this.b.state.admin.settings);
     return this.b.state.admin;
   }
 
@@ -299,7 +311,10 @@ export class DemoAdmin {
         channel_colours: st.display.channel_colours || 'off' },
       // a demonstration saved before the comfort settings existed takes their defaults
       annotation: { min_duration_samples: st.annotation.min_duration_samples, quick_labels: [...st.annotation.quick_labels],
-        ...Object.fromEntries(Object.entries(DEFAULT_ANNOTATION).map(([k, d]) => [k, st.annotation[k] ?? d])) },
+        ...Object.fromEntries(Object.entries(DEFAULT_ANNOTATION).map(([k, d]) => [k, st.annotation[k] ?? d])),
+        allow_revisions: st.annotation.allow_revisions !== false },
+      gamification: { enabled: st.gamification.enabled !== false,
+        leaderboard: st.gamification.enabled !== false && st.gamification.leaderboard !== false },
       logging,
       logging_notice: logging.interactions ? this.s.logging_notice : '',
     };
@@ -363,11 +378,13 @@ export class DemoAdmin {
       if (onlyAid && u.annotator_id !== onlyAid) continue;
       for (const a of this.b._assignmentsFor(u.annotator_id)) {
         const key = this.b._key(u.annotator_id, a.rid, a.mode, a.context_id);
-        const subs = this.b.state.submissions.filter((s) => s.key === key);
+        const subs = this.b.state.submissions.filter((s) => s.key === key).sort((x, y) => x.attempt - y.attempt);
         const draft = this.b.state.drafts[key];
         const last = [...subs.map((s) => s.saved_at), draft ? draft.saved_at : ''].filter(Boolean).sort().pop() || null;
+        // the latest attempt by its number; the time of every saved attempt together (a revision adds its own)
         const latest = subs.length ? subs[subs.length - 1] : null;
-        const elapsed = latest ? secondsOf((latest.session || {}).elapsed_s) : draft ? secondsOf(draft.elapsed_s) : null;
+        const times = subs.map((s) => secondsOf((s.session || {}).elapsed_s)).filter((t) => t !== null);
+        const elapsed = latest ? (times.length ? times.reduce((x, y) => x + y, 0) : null) : draft ? secondsOf(draft.elapsed_s) : null;
         out.push({ annotator_id: u.annotator_id, recording_id: a.rid, mode: a.mode, context_id: a.context_id || '',
           status: this.b._status(u.annotator_id, a), attempts: subs.length, last_activity: last, elapsed_s: elapsed,
           n_annotations: latest ? (latest.annotations || []).length : null, saved_at: latest ? latest.saved_at : null });
@@ -1045,7 +1062,21 @@ export class DemoAdmin {
     const today = nowLocalIso().slice(0, 10);
     const days = Array.from({ length: STATS_DAYS }, (_, i) => addDays(today, i - STATS_DAYS + 1));
     const index = new Map(days.map((d, i) => [d, i]));
-    const subs = this.b.state.submissions.filter((s) => counted(s.mode));
+    // A recording saved more than once (a revision, a practice recording repeated) is one recording done, on
+    // the day of its first save, with the annotations of its latest attempt and the time of all its attempts.
+    const groups = new Map();
+    for (const s of this.b.state.submissions.filter((x) => counted(x.mode))) {
+      if (!groups.has(s.key)) groups.set(s.key, []);
+      groups.get(s.key).push(s);
+    }
+    const subs = [...groups.values()].map((list) => {
+      const sorted = [...list].sort((a, b) => a.attempt - b.attempt);
+      const times = sorted.map((x) => secondsOf((x.session || {}).elapsed_s)).filter((t) => t !== null);
+      const first = sorted[0];
+      return { annotator_id: first.annotator_id, recording_id: first.recording_id, mode: first.mode, context_id: first.context_id,
+        saved_at: first.saved_at, last_at: sorted[sorted.length - 1].saved_at, elapsed_s: times.length ? times.reduce((a, b) => a + b, 0) : null,
+        n_annotations: (sorted[sorted.length - 1].annotations || []).length };
+    });
     const daily = (rows) => {
       const out = new Array(STATS_DAYS).fill(0);
       for (const s of rows) { const i = index.get(dayOf(s.saved_at)); if (i !== undefined) out[i] += 1; }
@@ -1055,7 +1086,7 @@ export class DemoAdmin {
       const first = addDays(today, -(n - 1));
       return rows.filter((s) => { const d = dayOf(s.saved_at); return d && d >= first && d <= today; }).length;
     };
-    const elapsedOf = (s) => secondsOf((s.session || {}).elapsed_s);
+    const elapsedOf = (s) => s.elapsed_s;
     const items = this._items().filter((i) => counted(i.mode));
     const totals = { assigned: 0, done: 0, in_progress: 0, todo: 0 };
     const recordings = new Map();
@@ -1092,17 +1123,17 @@ export class DemoAdmin {
         draftS += inProgressS;
       }
       const times = saved.map(elapsedOf).filter((t) => t !== null);
-      last.push(...saved.map((s) => s.saved_at || ''));
+      last.push(...saved.map((s) => s.last_at || ''));
       return {
         annotator_id: aid, display_name: u.display_name || '', role: u.role, status: u.status, assigned: mine.length, ...counts,
         share_done: mine.length ? counts.done / mine.length : null, time_s: times.reduce((a, b) => a + b, 0), in_progress_s: inProgressS,
-        median_s: medianOf(times), median_annotations: medianOf(saved.map((s) => (s.annotations || []).length)),
+        median_s: medianOf(times), median_annotations: medianOf(saved.map((s) => s.n_annotations)),
         last_active: last.filter(Boolean).sort().pop() || null, done_7d: since(saved, 7), daily: daily(saved),
       };
     });
     for (const r of recordings.values()) {
       const rows = subs.filter((s) => s.recording_id === r.recording_id && scopeOf(s.mode, s.context_id) === r.scope);
-      const n = rows.map((s) => (s.annotations || []).length);
+      const n = rows.map((s) => s.n_annotations);
       Object.assign(r, { median_s: medianOf(rows.map(elapsedOf).filter((t) => t !== null)), median_annotations: medianOf(n),
         min_annotations: n.length ? Math.min(...n) : null, max_annotations: n.length ? Math.max(...n) : null, saved: rows.length });
     }

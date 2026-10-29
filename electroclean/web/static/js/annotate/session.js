@@ -5,7 +5,7 @@
 
 import { AnnotationStore } from './store.js';
 import { WorkClock } from './clock.js';
-import { fromDraft, toDraft } from '../viewer/coverage.js';
+import { fromDraft, toDraft, viewedFraction as coverageFraction } from '../viewer/coverage.js';
 import { local, newId, nowLocalIso } from '../util.js';
 import { DEFAULT_ANNOTATION, DEFAULT_HIDE, DEFAULT_SCALINGS } from '../api/demo_catalogue.js';
 
@@ -58,7 +58,8 @@ export function displayChannels(recording, manifest) {
 export class AnnotationSession {
   /**
    * @param {object} o backend, recording, manifest (null in try-out), recordingId, mode, contextId,
-   *   me (GET /me), catalogue (Catalogue), match (POST /match answer), sha256, readOnly
+   *   me (GET /me), catalogue (Catalogue), match (POST /match answer), sha256, readOnly, and for a
+   *   revision of a finished recording `revision` ({version, revises, saved_at, annotations} of POST /match)
    */
   constructor(o) {
     this.backend = o.backend;
@@ -100,8 +101,17 @@ export class AnnotationSession {
     this._dirty = false;
     this._lastRemote = performance.now();
     this._remoteBusy = false;
+    // A revision opens with the annotations of the latest saved version (docs/web/using.md, "History and revisions").
+    this.revision = o.revision && Number.isInteger(o.revision.revises) ? { ...o.revision } : null;
+    if (this.revision) {
+      this.store.reset((this.revision.annotations || []).filter((a) => this.catalogue.has(a.label)));
+      this.savedVersion = JSON.stringify(this.store.toJSON());
+    }
     this.store.addListener(() => { this._dirty = true; this._scheduleLocal(); });
   }
+
+  /** True when the annotations differ from the version being revised. */
+  get changedSinceSaved() { return Boolean(this.revision) && JSON.stringify(this.store.toJSON()) !== this.savedVersion; }
 
   /** Seconds worked on the recording, earlier sessions included and pauses left out. */
   get elapsedS() { return this.clock ? this.clock.elapsedS : this.elapsedBase; }
@@ -113,7 +123,9 @@ export class AnnotationSession {
   }
 
   get localKey() {
-    return localDraftKey(this.backend, this.me && this.me.annotator_id, this.recordingId, this.mode, this.contextId);
+    // A revision's copy is kept apart, so that it is never confused with older unfinished work.
+    const rev = this.revision ? `|revises-${this.revision.revises}` : '';
+    return localDraftKey(this.backend, this.me && this.me.annotator_id, this.recordingId, this.mode, this.contextId) + rev;
   }
 
   /** The parts on screen so far changed (a merged list): kept in the drafts like a change of annotations. */
@@ -133,13 +145,15 @@ export class AnnotationSession {
       elapsed_s: Math.round(this.elapsedS * 10) / 10,
       viewed: toDraft(this.viewed),
       saved_at: nowLocalIso(),
+      ...(this.revision ? { revises: this.revision.revises } : {}),
     };
   }
 
   /** The unfinished work to offer: the newer of the server's draft and this browser's copy. */
   pickDraft(remote) {
     const mine = local.get(this.localKey, null);
-    const candidates = [remote, mine].filter((d) => d && Array.isArray(d.annotations));
+    const rev = this.revision ? this.revision.revises : undefined;
+    const candidates = [remote, mine].filter((d) => d && Array.isArray(d.annotations) && (rev === undefined || d.revises === rev));
     if (!candidates.length) return null;
     candidates.sort((a, b) => String(b.saved_at || '').localeCompare(String(a.saved_at || '')));
     const d = candidates[0];
@@ -213,13 +227,28 @@ export class AnnotationSession {
         screen: { width: screen.width, height: screen.height, pixel_ratio: window.devicePixelRatio || 1 },
         window: { width: window.innerWidth, height: window.innerHeight },
       },
+      ...(this.viewedFraction() !== null ? { viewed_fraction: this.viewedFraction() } : {}),
     };
+  }
+
+  /**
+   * The share of the recording that has been on the screen (0 to 1), from the stretches viewed so far
+   * (coverage.js, as the Recording tab shows it; stretches without data are left out); null in a try-out.
+   * It is sent with the session and feeds the "viewed in full" milestones.
+   */
+  viewedFraction() {
+    if (this.tryOut || !this.recording.durationS) return null;
+    const sf = this.recording.sfreq;
+    const noData = (this.gaps || []).map(([a, b]) => [a / sf, b / sf]);
+    const f = coverageFraction(this.viewed, this.recording.durationS, noData);
+    return Number.isFinite(f) ? Math.round(Math.min(1, Math.max(0, f)) * 10000) / 10000 : null;
   }
 
   async submit(visitId) {
     const result = await this.backend.submit({
       recording_id: this.recordingId, mode: this.mode, context_id: this.contextId,
       annotations: this.store.toJSON(), session: this.sessionInfo(visitId), sha256: this.sha256,
+      ...(this.revision ? { revises: this.revision.revises } : {}),
     });
     this.finished = true;
     this.forgetLocal();

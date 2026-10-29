@@ -60,7 +60,8 @@ Manifest = {                          // what the browser needs to show a regist
 
 Draft = {"annotations": [Annotation], "view": {"start_s": 12.0, "duration_s": 10.0, "first_channel": 0,
          "n_channels": 32, "scale_factor": 1.0}, "elapsed_s": 312.4,
-         "viewed": [[0.0, 64.5], [120.0, 130.0]], "saved_at": "…"}
+         "viewed": [[0.0, 64.5], [120.0, 130.0]], "saved_at": "…",
+         "revises": 1}                // only in the draft of a revision: the version being revised
 ```
 
 A draft's `elapsed_s` is the time worked so far, without the time paused. `viewed` lists the
@@ -113,7 +114,9 @@ password.
     "display": {"duration_s": 10.0, "n_channels": 32, "scalings": {"eeg": 5e-05, "…": 0.0},
                 "channel_colours": "off" | "region" | "side" | "type"},     // the study's default
     "annotation": {"min_duration_samples": 1, "quick_labels": ["Eye-blink-artifact", "…"],
-                   "break_reminder_minutes": 50, "idle_pause_minutes": 3, "coverage_check": "warn" | "off"},
+                   "break_reminder_minutes": 50, "idle_pause_minutes": 3, "coverage_check": "warn" | "off",
+                   "allow_revisions": true},
+    "gamification": {"enabled": true, "leaderboard": true},
     "logging": {"interactions": true, "pointer_hz": 5, "idle_after_s": 30},
     "logging_notice": "This study records how you use ElectroClean …"   // "" when logging is off
   },
@@ -131,13 +134,18 @@ administrator has written one. The three settings for long sessions in
 `annotation` are described in the [administrator guide](../administrator_guide.md): minutes of work before a
 break reminder and minutes without input before the clock pauses itself (0 turns
 either off), and whether Save and Finish first lists the parts not yet viewed.
+`annotation.allow_revisions` says whether a finished study recording may be
+opened again and revised (see "Revisions" below), and `gamification` whether
+the home page shows the game elements and the leaderboard (see
+"Achievements"; `leaderboard` is false whenever `enabled` is).
 
 ## Assignments and opening a recording
 
 `GET /assignments` →
 `{"items": [{"recording_id", "file_name", "format", "mode": "standard" | "guided" | "practice" | "assessment",
 "context_id": "" | "<reference set>", "status": "todo" | "in_progress" | "done", "duration_s",
-"n_channels", "size_bytes", "repeat": false, "elapsed_s", "n_annotations", "completed_at", "draft"}],
+"n_channels", "size_bytes", "repeat": false, "elapsed_s", "n_annotations", "completed_at", "draft",
+"saved": {"version", "first_saved_at", "total_elapsed_s"} | null, "revising": false}],
 "next": "<recording_id>" | null, "next_item": {"recording_id", "mode", "context_id"} | null}`. `next` is the
 recording to do next: unfinished work first, then the training programme's
 next step, then the study's selection strategy (`manual`: the assignment order;
@@ -147,15 +155,23 @@ context. A trainee's list holds the recordings of the programme's unlocked
 stages. `repeat` is true for a practice recording the programme lets the
 trainee annotate again (its `status` is then `todo`).
 
-For the annotator's progress on the home page, a `done` item carries what the
-completion register says of its latest save: `elapsed_s` (the time worked,
-pauses left out), `n_annotations` and `completed_at`; they are null for other
-items. An `in_progress` item carries `draft`, a summary of the unfinished work
-kept with the study: `{"elapsed_s", "n_annotations", "viewed_s", "saved_at"}`,
-where `viewed_s` is the seconds of the recording in the draft's `viewed`
-(overlaps counted once); `draft` is null for other items.
+For the annotator's progress and history on the home page, a `done` item
+carries what the completion register says of its latest attempt (the highest
+attempt number, so a revision once there is one): `elapsed_s` (the time worked
+on that version, pauses left out), `n_annotations` and `completed_at`; they
+are null for other items. `saved` adds what only the history needs, for any
+item saved at least once: `version` (1 for the first save, 2 for its first
+revision, and so on), `first_saved_at`, when the first version was saved, and
+`total_elapsed_s`, the time of every version added up (null where the register
+does not have it); it is null for a recording never saved. `revising` is true
+for a `done` item with a revision under way (its draft is kept; `status` stays
+`done`). An `in_progress` item, and a `done` one being revised, carries
+`draft`, a summary of the unfinished work kept with the study:
+`{"elapsed_s", "n_annotations", "viewed_s", "saved_at"}`, where `viewed_s` is
+the seconds of the recording in the draft's `viewed` (overlaps counted once);
+`draft` is null for other items.
 
-`POST /match` `{"file_name", "size_bytes", "format", "sha256": "<hex>", "sfreq", "n_samples", "ch_names": [...]}` →
+`POST /match` `{"file_name", "size_bytes", "format", "sha256": "<hex>", "sfreq", "n_samples", "ch_names": [...], "revise": false}` →
 
 ```jsonc
 {
@@ -165,7 +181,8 @@ where `viewed_s` is the seconds of the recording in the draft's `viewed`
   "manifest": Manifest | null,          // present for matched and matched_metadata
   "draft": Draft | null,                // unfinished work to continue, if any
   "differences": ["…"],                 // matched_metadata: how the file differs from the study's copy
-  "repeat": false                       // a practice recording being annotated again
+  "repeat": false,                      // a practice recording being annotated again
+  "revision": null | {"version": 2, "revises": 1, "saved_at": "…", "annotations": [Annotation]}
 }
 ```
 
@@ -178,10 +195,20 @@ study. `not_assigned`: a study recording, but not for this annotator now.
 `sha256` and `size_bytes` are required (400 `bad_request` otherwise); the other
 fields are needed only for `matched_metadata`.
 
+With `"revise": true`, a finished study recording that may be revised opens
+again: the answer is `matched` (or `matched_metadata`) with `revision`, which
+gives the version a submission will save (`version`), the version being revised
+(`revises`, the latest), when that was saved, and its annotations, which the
+browser opens with. `draft` is then the revision's own draft, if one was kept
+for that version. Without `revise`, a finished recording answers `done`, and
+its message says that it can be opened from the history to revise it.
+
 `PUT /drafts/{recording_id}?mode=&context=` `Draft` → `{"saved_at": "…"}`.
 The browser sends a draft at most every 30 s while there are changes and when
 the page is hidden. `DELETE` the same path discards it. Drafts of more than
-8 MB are refused (413 `too_large`).
+8 MB are refused (413 `too_large`). The draft of a revision is kept like any
+other and carries `revises`; a done recording takes a draft only when it may
+be revised (409 `already_done` otherwise).
 
 ## Saving
 
@@ -194,8 +221,10 @@ the page is hidden. `DELETE` the same path discards it. Drafts of more than
   "session": {"started_at": "…", "elapsed_s": 912.3, "visit_id": "…", "session_id": "<32 hex>",
               "filters": {"highpass_hz": 1.0, "notch_hz": 50.0, "notch_harmonics": false, "method": "fir"},
               "view": Draft.view,
-              "client": {"user_agent": "…", "screen": {"width": 1920, "height": 1080, "pixel_ratio": 2}}},
-  "sha256": "<hex of the file that was annotated>"
+              "client": {"user_agent": "…", "screen": {"width": 1920, "height": 1080, "pixel_ratio": 2}},
+              "viewed_fraction": 0.97},        // optional: the share of the recording that was on screen
+  "sha256": "<hex of the file that was annotated>",
+  "revises": 1                                 // only for a revision: the version being revised
 }
 ```
 
@@ -207,13 +236,15 @@ its interaction log events carry: the saved `_session.json`, the
 `_annotations.json`, the completion register and the session log then use it as
 the session's ID, so the interaction log and the results of a session carry
 the same ID. Without it, or when a saved result of the annotator already has
-that ID, the server makes one.
+that ID, the server makes one. `session.viewed_fraction` (0 to 1), when the
+browser measures it, is kept with the session's display state and counts
+towards the milestones for recordings viewed in full.
 
 → `{"saved": true, "files": ["…_annotations.json", "…_events.tsv", "…"], "attempt": 1,
 "feedback": PracticeFeedback | null, "guided": GuidedSaved | null, "assessment": AssessmentSaved | null,
-"next": "<recording_id>" | null}`. The server validates every annotation against
+"next": "<recording_id>" | null, "revision": {"version": 2, "revises": 1} | null}`. The server validates every annotation against
 the catalogue and the manifest (422 `invalid_annotation` with the reason),
-refuses a second completion (409 `already_done`), refuses a training recording
+refuses a second completion that is not a revision (409 `already_done`; see "Revisions" below), refuses a training recording
 whose stage is still locked (403 `locked`) and writes the outputs with
 ElectroClean's export code, then discards the draft. A guided recording is
 saved only when every step still matches and nothing extra is marked (422
@@ -221,6 +252,66 @@ saved only when every step still matches and nothing extra is marked (422
 then the current one again). When the file's checksum differs from the
 registered one (`matched_metadata`), the outputs are saved with a warning that
 says so. 409 `busy` means the same recording is being saved by another request.
+
+### Revisions
+
+A finished study recording (mode `standard`) may be saved again when the study
+allows it (`annotation.allow_revisions`, on by default): the submission gives
+`revises`, the version being revised, which must be the latest (409
+`already_revised` otherwise, so that the same revision sent twice, or from two
+browsers, is saved once). The server saves it as the next attempt of the same
+assignment (`…_attempt-02_annotations.json` and its companions) beside the
+earlier files, which stay exactly as they were; the completion register gains
+the new attempt, and the saved `_session.json` and `_annotations.json` record
+`context.revision` = `{"version", "revises_version", "revises_session_id",
+"revises_output_basename"}`. The analyses (agreement, the reference set's
+sources and the results exports) use each annotator's latest attempt. A
+submission of a finished recording without `revises` is still refused (409
+`already_done`), and one with `revises` when the study takes no revisions gets
+409 `revisions_off`. Training recordings keep their own rules (a practice
+recording may be repeated until it is passed; guided and assessment recordings
+are saved once).
+
+## Achievements
+
+`GET /me/achievements` gives the facts that the home page's game elements are
+drawn from (`docs/web/using.md`, "Progress and milestones"); `POST
+/me/achievements` with `{"goal_per_week": 10}` (a whole number from 1 to 200, or
+null for no goal) or `{"leaderboard_hidden": true}` changes them and answers the
+same (400 `bad_request` for other values). When the study has the game elements
+off, both answer `{"enabled": false, "leaderboard_enabled": false}`.
+
+```jsonc
+{
+  "enabled": true, "leaderboard_enabled": true,
+  "counters": {"done": 12, "assigned": 300, "worked_s": 9123.4, "annotations": 418},
+  "completions": [{"first_saved_at": "…", "viewed_fraction": 1.0 | null}],   // one per study recording saved
+  "save_times": ["…"],                  // every save, revisions included (for streaks of days)
+  "viewed_in_full": 9 | null,           // null when no saved recording reported what was viewed
+  "goal": {"per_week": 10 | null},
+  "team": {"done": 640, "assigned": 1200, "people": 6},
+  "leaderboard": null | {
+    "ranked_by": "completed" | "viewed_in_full",
+    "rows": [{"rank": 1, "name": "Steady Heron", "count": 54, "you": false}],   // the top ten
+    "you": {"name": "Merry Otter", "hidden": false, "count": 12, "rank": 4 | null},
+    "people": 6, "min_people": 3
+  }
+}
+```
+
+Only study recordings (mode `standard`) count. `counters.done` counts
+recordings, so a revision adds nothing to it; `worked_s` adds up the time of
+every saved version and `annotations` the annotations of each recording's
+latest version, shown for interest only. A recording counts as viewed in full
+from 99 % of it on screen. The milestones themselves are worked out in the
+browser from these facts (`js/games/milestones.js`). The leaderboard ranks
+people by recordings completed, or by recordings viewed in full when the study
+sets `gamification.leaderboard_viewed_only`; ties share a place. It names people
+only by pseudonyms, an adjective and an animal chosen by an HMAC-SHA256 of the
+annotator ID keyed with a random secret of the study that the server keeps and
+never sends; it leaves out anyone who chose to be hidden, and it has no rows
+until at least `min_people` are on it, so that nobody can tell who the others
+are. No annotator ID is ever part of the answer.
 
 `GuidedSaved = {"summary": {"steps", "stars", "max_stars", "attempts", "failed_attempts", "shown", "time_s"},
 "message": "Recording saved: 14 of 18 stars (4.2 min)."}`.
@@ -376,7 +467,7 @@ study's own recordings have `"self_contained": false` and `"scope": "study"`.
 | op | body | answer |
 | --- | --- | --- |
 | `overview` | `{}` | `{"study": {"study_id", "name"}, "counts": {"recordings", "annotators", "admins", "assignments", "done", "in_progress", "todo"}, "recent": [AuditEntry], "last_saved": [{"annotator_id", "recording_id", "mode", "context_id", "at"}]}` (ten of each; `recordings` counts the study's own, the others the active accounts and their work) |
-| `settings_get` | `{}` | `{"name", "settings": {"filters", "display", "channels", "selection", "logging", "annotation", "loading", "discovery"}, "logging_notice", "logging_notice_is_default"}`: the effective values of the blocks of `electroclean_study.json` that a study may change |
+| `settings_get` | `{}` | `{"name", "settings": {"filters", "display", "channels", "selection", "logging", "annotation", "loading", "discovery", "gamification"}, "logging_notice", "logging_notice_is_default"}`: the effective values of the blocks of `electroclean_study.json` that a study may change |
 | `settings_update` | `{"name"?, "settings"?: {block: {key: value}}, "logging_notice"?}` | as `settings_get`. Each key given replaces that setting; the result is checked with ElectroClean's own settings code and refused with 400 `invalid_settings` and the reason (also for a block or key that cannot be changed). `"logging_notice": ""` goes back to ElectroClean's own notice |
 | `users_list` | `{}` | `{"users": [UserRecord]}` (disabled accounts too) |
 | `user_add` | `{"annotator_id", "display_name"?, "email"?, "role"?: "annotator", "password"?, "invite"?: false, "expires_days"?: 14}` | `{"user": UserRecord, "invite_link": str \| null, "temporary_password": str \| null}`, with `"invite_token", "expires_at"` when `invite` is true. On Firebase `email` is required (400 `email_required`), the Firebase Authentication user is created (or, for a person already in another study of the project, given this study) with the custom claims below, and `invite_link` lets the person choose a password when none is given. On the server a temporary password (three groups of four characters) is made when none is given; with `"invite": true` the account is made with an invitation instead (as `user_invite`), and nobody knows its first password. A password has 8 to 200 characters; a password and `invite` together are 400. 409 `user_exists`, 409 `email_in_use` |
@@ -385,7 +476,7 @@ study's own recordings have `"self_contained": false` and `"scope": "study"`.
 | `user_invite` | `{"annotator_id", "expires_days"?: 14}` | `{"invite_token": str \| null, "invite_link": str \| null, "expires_at": str \| null, "invitation": UserRecord.invitation}`. On the server a new single-use invitation: a random token (32 bytes) kept only as its SHA-256 hash with its expiry (1 to 90 days, 400 otherwise); any earlier invitation of the account stops working. The browser makes the private link from `invite_token`. On Firebase `invite_link` is Firebase Authentication's link to choose a password (the account needs an email address, 409 `no_email`) and its expiry is Firebase's own. 404 `unknown_user`; 409 `disabled` for an account that is switched off. Switching the account off or removing it ends its invitation |
 | `user_invite_revoke` | `{"annotator_id"}` | `{"invitation": UserRecord.invitation}`: the open invitation stops working at once; 409 `no_invitation` when there is none; 422 `cannot_revoke` on Firebase, where a link once made cannot be withdrawn (switch the account off instead) |
 | `user_remove` | `{"annotator_id"}` | `{}`: the account leaves the study with its assignments, programme, drafts and guided progress; its results and logs stay; not oneself (409 `self`). On Firebase the study is taken out of the person's claims, and a Firebase user who takes part in no other study is deleted |
-| `assignments_list` | `{"annotator_id"?}` | `{"items": [{"annotator_id", "recording_id", "mode", "context_id", "status", "attempts", "last_activity", "elapsed_s", "n_annotations", "saved_at"}]}` (what each person is given, the training programme's recordings included). `elapsed_s` is the time of the latest saved attempt, or of the draft while the work is in progress; `n_annotations` and `saved_at` are those of the latest saved attempt (null before one) |
+| `assignments_list` | `{"annotator_id"?}` | `{"items": [{"annotator_id", "recording_id", "mode", "context_id", "status", "attempts", "last_activity", "elapsed_s", "n_annotations", "saved_at"}]}` (what each person is given, the training programme's recordings included). `attempts` counts the saves (a revision is another attempt); `elapsed_s` is the time of every saved attempt together, or of the draft while the work is in progress; `n_annotations` and `saved_at` are those of the latest saved attempt by its number (null before one) |
 | `assign` | `{"annotator_ids": [..], "recording_ids": [..] \| "all": true, "mode"?: "standard", "context_id"?}` | `{"added", "already", "retired"}`: retired recordings are skipped and counted in `retired`. 404 `unknown_user`, 404 `unknown_recording` (not registered in the scope of that mode and set), 400 `not_in_set` (a training recording outside the set), 409 `not_allowed` (the set names its allowed annotators and this person is not one) |
 | `unassign` | `{"annotator_id", "recording_id", "mode"?, "context_id"?}` | `{}`; 409 `done` for a completed item, 404 `not_assigned` |
 | `programme_set` | `{"annotator_id", "set_id": str \| null}` | `{}`; 404 `no_reference_set`, 409 `not_allowed` |
@@ -407,7 +498,7 @@ study's own recordings have `"self_contained": false` and `"scope": "study"`.
 | `quiz_item_add` | `{"set_id", "recording_id", "start_s", "end_s", "correct_label", "accepted_labels"?, "explanation"?, "context_s"?: 2.0, "item_id"?}` | `{"item": QuizItem}`. The recording must be registered in the set's scope (404 `unknown_recording`); the segment lies within it; the labels are the catalogue's, or "No artifact / none of these" when the set offers it (`quiz.include_none_option`). Without `item_id` the next free `q01`, `q02` … is used; an existing `item_id` is replaced |
 | `quiz_item_remove` | `{"set_id", "item_id"}` | `{}`; 404 `unknown_item` |
 | `progress` | `{}` | as `GET /admin/progress` |
-| `stats` | `{"work"?: "study" \| "all"}` | `Stats` (below): how far the study has got and how long the work takes, from the completion register (`elapsed_s`, `n_annotations`, `completed_at`), the drafts, the assignments, the accounts' `last_seen` and the visits. `work` `study` counts the study's own annotation (mode `standard`), `all` training too; 400 otherwise |
+| `stats` | `{"work"?: "study" \| "all"}` | `Stats` (below): how far the study has got and how long the work takes, from the completion register (`elapsed_s`, `n_annotations`, `completed_at`), the drafts, the assignments, the accounts' `last_seen` and the visits. `work` `study` counts the study's own annotation (mode `standard`), `all` training too; 400 otherwise. A recording saved more than once (a revision, or a practice recording repeated) counts as one recording done, on the day of its first save, with the annotations of its latest attempt and the time of all its attempts together; `saved` per recording is the number of people who saved it |
 | `agreement` | `{"annotator_ids"?, "recording_ids"?, "modes"?: ["standard"], "config"?: {..AnalysisConfig fields..}}` | `{"summary": {"n_recordings", "n_comparable_recordings", "annotators", "config", "key_results": [..]}, "report_html": str, "tables": {"<name>.tsv": str}, "warnings": [..]}`, computed on demand with `electroclean.reliability` (the files of `electroclean-agreement`). Annotators and modes are chosen with `annotator_ids` and `modes`, not in `config`; settings it refuses give 400 `invalid_config`; 422 `not_enough` when no recording has two annotators. When the tables would exceed 12 MB, `events_matched.tsv` and `events_unmatched.tsv` are left out with a warning |
 | `activity` | `{"annotator_ids"?}` | `{"report_html": str, "tables": {"visits.tsv": str, "recordings.tsv": str}}`, with `electroclean.activity`; 422 `no_logs` when there are no interaction logs |
 | `competency` | `{"set_id", "annotator_id"}` | `{"report": {..}, "html": str}` (`competency_report`, made again and kept, and `competency_html`); 404 `not_complete` until every assessment recording is saved (also for a set without assessment recordings) |
@@ -566,7 +657,7 @@ generation, region europe-west2) taking and returning the same JSON:
 `ec_me`, `ec_assignments`, `ec_match`, `ec_put_draft`, `ec_delete_draft`,
 `ec_submit`, `ec_training`, `ec_guided_get`, `ec_guided_check`,
 `ec_guided_continue`, `ec_guided_show_me`, `ec_visit_open`, `ec_visit_events`,
-`ec_visit_close`, `ec_quiz` and, for administrators, `ec_admin_progress` and
+`ec_visit_close`, `ec_quiz`, `ec_achievements` and, for administrators, `ec_admin_progress` and
 `ec_admin` (every operation of the admin area, by `op`; it has 2 GB of memory
 and up to 540 s for the analyses and the results zip). Each takes
 `{"study": "<study id>", ...the request body...}` (path parameters such as the
@@ -598,6 +689,7 @@ The fields of each call:
 | `ec_admin` | `{"op", ...the body of `POST /admin/{op}`}` |
 | (none) | `POST /invite/check` and `POST /invite/accept` have no function: on Firebase `user_invite` answers Firebase Authentication's `invite_link` |
 | `ec_quiz` | `{"set_id", ...the body of `POST /quiz/{set_id}`}` |
+| `ec_achievements` | none for `GET /me/achievements`; `{"goal_per_week"}` or `{"leaderboard_hidden"}` for `POST` |
 
 There is no `token` and no beacon on Firebase: the Firebase SDK adds the ID
 token; to send the last events when the page is hidden, call `ec_visit_events`

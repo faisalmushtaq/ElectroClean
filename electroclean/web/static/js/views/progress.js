@@ -43,7 +43,10 @@ export function isToday(iso, now = new Date()) {
 export function progressSummary(items, { drafts = () => null, todayS = 0, now = new Date(), next = null } = {}) {
   const counted = items.filter((i) => !i.repeat || i.status === 'done');
   const done = counted.filter((i) => i.status === 'done');
-  const times = done.map((i) => Number(i.elapsed_s)).filter((x) => Number.isFinite(x) && x > 0);
+  // A revised recording took the time of every version (saved.total_elapsed_s); it was done when first saved.
+  const workS = (i) => Number(i.saved && Number.isFinite(i.saved.total_elapsed_s) ? i.saved.total_elapsed_s : i.elapsed_s);
+  const doneAt = (i) => (i.saved && i.saved.first_saved_at) || i.completed_at;
+  const times = done.map(workS).filter((x) => Number.isFinite(x) && x > 0);
   const totalDoneS = times.reduce((a, b) => a + b, 0);
   // Unfinished work: the newer of the study's draft summary and this browser's copy.
   const unfinished = new Map();
@@ -57,10 +60,10 @@ export function progressSummary(items, { drafts = () => null, todayS = 0, now = 
   }
   const startedS = [...unfinished.values()].reduce((t, d) => t + (d && Number(d.elapsed_s) > 0 ? Number(d.elapsed_s) : 0), 0);
   // The pace: working time per second of recording, over the recordings finished with a time.
-  const timedDone = done.filter((i) => Number(i.elapsed_s) > 0 && Number(i.duration_s) > 0);
+  const timedDone = done.filter((i) => workS(i) > 0 && Number(i.duration_s) > 0);
   let remainingS = null;
   if (timedDone.length >= MIN_FOR_ESTIMATE) {
-    const pace = timedDone.reduce((t, i) => t + Number(i.elapsed_s), 0) / timedDone.reduce((t, i) => t + Number(i.duration_s), 0);
+    const pace = timedDone.reduce((t, i) => t + workS(i), 0) / timedDone.reduce((t, i) => t + Number(i.duration_s), 0);
     remainingS = counted.filter((i) => i.status !== 'done').reduce((t, i) => {
       const d = unfinished.get(i);
       const spent = d && Number(d.elapsed_s) > 0 ? Number(d.elapsed_s) : 0;
@@ -74,7 +77,7 @@ export function progressSummary(items, { drafts = () => null, todayS = 0, now = 
     done: done.length,
     workedS: totalDoneS + startedS,
     medianS: median(times),
-    doneToday: done.filter((i) => isToday(i.completed_at, now)).length,
+    doneToday: done.filter((i) => isToday(doneAt(i), now)).length,
     todayS,
     remainingS: remainingS === null ? null : remainingS,
     basedOn: timedDone.length,

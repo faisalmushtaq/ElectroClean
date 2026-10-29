@@ -23,6 +23,9 @@ import { OpenView } from './views/open.js';
 import { keepOnDevice, dropBrokenCopy, afterFinishOnDevice, offerRemovalAtSignOut } from './views/device.js';
 import { appHeader, downloadFiles, smallScreenNotice } from './views/common.js';
 import { nowLocalIso, session } from './util.js';
+import { newlyReached } from './games/milestones.js';
+import { logMilestones } from './views/home_games.js';
+import { canRevise } from './views/home_list.js';
 
 const VIEWS = ['signin', 'home', 'open', 'annotate', 'review', 'training', 'quiz'];
 /** The admin area's plain hashes (js/admin/model.js lists its sections). */
@@ -74,6 +77,8 @@ export class App {
     this.me = null;
     this.catalogue = null;
     this.assignments = null;
+    this.achievements = null; // GET /me/achievements, for the home page's game elements (null: none)
+    this.celebrate = null; // milestones that the last save reached, shown once on the home page
     this.adminArea = null;
     this.visitId = null;
     this.ws = null;
@@ -81,7 +86,8 @@ export class App {
     this.windowCount = 0;
     this.pathMessage = '';
     this.content = h('div.app-content');
-    this.root.append(this.content, smallScreenNotice());
+    this.notice = smallScreenNotice(this);
+    this.root.append(this.content, this.notice);
     setDialogLogger(logger);
     window.addEventListener('hashchange', () => this._onHash());
   }
@@ -223,10 +229,30 @@ export class App {
   }
 
   async loadAssignments() {
+    const games = this.loadAchievements();
     try { this.assignments = await this.backend.assignments(); } catch (exc) {
       if (exc.status === 401) throw exc;
       this.assignments = { items: [], next: null };
     }
+    await games;
+  }
+
+  /** The facts of the home page's game elements, when the study has them on (null otherwise, or when they cannot be read). */
+  async loadAchievements() {
+    const g = this.me && this.me.study && this.me.study.gamification;
+    if (!g || !g.enabled || this.me.programme || !this.backend.achievements) { this.achievements = null; return null; }
+    try {
+      this.achievements = await this.backend.achievements();
+    } catch (exc) {
+      if (exc.status === 401) throw exc;
+      this.achievements = null; // the home page works without them
+    }
+    return this.achievements;
+  }
+
+  /** Draw the home page again after a change to the goal or the leaderboard (its list keeps its tab, search and page). */
+  refreshGames() {
+    if (this.route === 'home' && !this.ws) this.showHome();
   }
 
   /** True for an account with the role admin (GET /me), who may use the admin area. */
@@ -281,6 +307,10 @@ export class App {
 
   _setRoute(route) {
     this.route = route;
+    // The phone's notice, drawn again for who is signed in now (its link and buttons).
+    const notice = smallScreenNotice(this);
+    this.notice.replaceWith(notice);
+    this.notice = notice;
     document.body.dataset.route = route;
     logger.topWindow = route;
     if (ADMIN_ROUTE.test(route)) this._pauseLog(); else this._resumeLog();
@@ -425,12 +455,13 @@ export class App {
   }
 
   // ============================================================ opening recordings
-  openAssignment(item) {
-    this.openFromComputer(item);
+  /** Open an assigned recording; with `revise`, a finished one, to revise it (docs/web/using.md, "History and revisions"). */
+  openAssignment(item, { revise = false } = {}) {
+    this.openFromComputer(item, { revise });
   }
 
-  openFromComputer(expected) {
-    this.openView = new OpenView(this, { expected });
+  openFromComputer(expected, { revise = false } = {}) {
+    this.openView = new OpenView(this, { expected, revise: Boolean(expected && revise) });
     this._render(this.openView.el, 'open');
   }
 
@@ -479,6 +510,7 @@ export class App {
       m = await this.backend.match({
         file_name: recording.fileName, size_bytes: recording.sizeBytes, format: recording.format === 'synthetic' ? 'edf' : recording.format,
         sha256: fp.hex, sfreq: recording.sfreq, n_samples: recording.nSamples, ch_names: recording.channels.map((c) => c.name),
+        ...(view.revise ? { revise: true } : {}),
       });
     } catch (exc) {
       view.step('match', 'Asking the study', 'failed');
@@ -507,7 +539,12 @@ export class App {
       view.showMessage(m.message, [view.chooseAgainButton(false), back], 'banner');
     } else if (m.status === 'done') {
       view.step('match', 'Already finished', 'done');
-      view.showMessage(m.message, [back, view.chooseAgainButton(false)], 'note');
+      // A finished study recording can be revised from here too, when the study allows it.
+      const item = (this.assignments.items || []).find((i) => i.recording_id === m.recording_id && i.mode === m.mode && (i.context_id || '') === (m.context_id || ''));
+      const revise = item && canRevise(this, item) && !view.revise
+        ? h('button.btn', { type: 'button', 'data-log': 'open-to-revise', onclick: () => { view.revise = true; this._process(recording, view); } }, 'Open to revise')
+        : null;
+      view.showMessage(m.message, [back, revise, view.chooseAgainButton(false)].filter(Boolean), 'note');
     } else {
       view.step('match', m.message || m.status, 'failed');
     }
@@ -535,6 +572,7 @@ export class App {
       session = new AnnotationSession({
         backend: this.backend, recording, manifest: tryOut ? null : match.manifest, recordingId: tryOut ? recording.fileName : match.recording_id,
         mode: tryOut ? 'tryout' : match.mode, contextId: tryOut ? '' : match.context_id, me: this.me, catalogue: this.catalogue, sha256: sha,
+        revision: tryOut ? null : match.revision || null,
       });
     } catch (exc) {
       this.openView && this.openView.showProblem(exc.message, [this.openView.chooseAgainButton()]);
@@ -544,9 +582,15 @@ export class App {
       const draft = session.pickDraft(match.draft);
       if (draft) {
         const n = draft.annotations.length;
-        const yes = await ask('Restore unfinished work?',
-          `${n} annotation(s) and ${friendlyDuration(draft.elapsed_s || 0)} of work on ${session.recordingId}, saved automatically ${friendlyTime(draft.saved_at)}.\n\nRestore it and continue?`,
-          { yes: 'Restore and continue', no: 'Start afresh' });
+        const rev = session.revision;
+        const yes = rev
+          ? await ask('Continue your revision?',
+            `${n} annotation(s) and ${friendlyDuration(draft.elapsed_s || 0)} of revising ${session.recordingId}, saved automatically ${friendlyTime(draft.saved_at)}.\n\n` +
+            `Continue the revision, or start again from version ${rev.revises} as it was saved?`,
+            { yes: 'Continue the revision', no: `Start again from version ${rev.revises}` })
+          : await ask('Restore unfinished work?',
+            `${n} annotation(s) and ${friendlyDuration(draft.elapsed_s || 0)} of work on ${session.recordingId}, saved automatically ${friendlyTime(draft.saved_at)}.\n\nRestore it and continue?`,
+            { yes: 'Restore and continue', no: 'Start afresh' });
         if (yes) {
           const view = session.restore(draft);
           if (view) session.view = view;
@@ -566,7 +610,11 @@ export class App {
       await ws.coach.start();
       ws._refreshState();
     }
-    ws.logOpened({ recording_id: session.recordingId, match: match.status });
+    ws.logOpened({ recording_id: session.recordingId, match: match.status, ...(session.revision ? { revision: session.revision.version } : {}) });
+    if (session.revision) {
+      logger.event('revision_started', { session_id: session.sessionId, recording_id: session.recordingId, version: session.revision.version,
+        revises: session.revision.revises, revises_saved_at: session.revision.saved_at || null, annotations_loaded: session.store.size, resumed: session.resumed });
+    }
   }
 
   // ===================================================================== after
@@ -575,8 +623,12 @@ export class App {
     const fileName = s.recording.fileName;
     ws.destroy();
     this.ws = null;
+    const before = this.achievements;
     await this.loadAssignments();
     await afterFinishOnDevice(this, s.recordingId); // the save is complete and verified by now
+    // Milestones that this save reached: celebrated once on the home page, never in the way of the next recording.
+    const reached = before && this.achievements ? newlyReached(before, this.achievements) : [];
+    if (reached.length) logMilestones(reached);
     if (s.mode === 'practice' && result.feedback) {
       logger.event('practice_scored', { recording: s.recordingId, event_f1: result.feedback.metrics.event_f1, label_accuracy: result.feedback.metrics.label_accuracy,
         passed: result.feedback.passed, missed: result.feedback.flags.filter((f) => f.kind === 'MISSED').length,
@@ -593,13 +645,23 @@ export class App {
     if (this.me.programme) { this.pathMessage = 'Recording saved.'; await this.showTraining(); return; }
     const next = result.next ? (this.assignments.items || []).find((i) => i.recording_id === result.next) : null;
     const demo = this.backend.isDemo ? `\n\n${DEMO_NOTICE}` : '';
+    const milestone = reached.length ? `\n\nMilestone reached: ${reached.map((m) => m.name).join(', ')}.` : '';
+    this.celebrate = reached;
     this.showHome();
+    if (s.revision) {
+      const v = (result.revision && result.revision.version) || s.revision.version;
+      const go = next ? await ask('Revision saved', `Your revision of ${fileName} is saved as version ${v}. Version ${v - 1} is kept as it was.${milestone}${demo}\n\nNext: ${next.file_name}.`,
+        { yes: 'Open next recording', no: 'Back to my recordings' })
+        : await inform('Revision saved', `Your revision of ${fileName} is saved as version ${v}. Version ${v - 1} is kept as it was.${milestone}${demo}`);
+      if (next && go) this.openAssignment(next);
+      return;
+    }
     if (next) {
-      const go = await ask('Saved', `Your annotations of ${fileName} are saved and the recording is complete.${demo}\n\nNext: ${next.file_name}.`,
+      const go = await ask('Saved', `Your annotations of ${fileName} are saved and the recording is complete.${milestone}${demo}\n\nNext: ${next.file_name}.`,
         { yes: 'Open next recording', no: 'Back to my recordings' });
       if (go) this.openAssignment(next);
     } else {
-      await inform('Saved', `Your annotations of ${fileName} are saved and the recording is complete. That was your last recording.${demo}`);
+      await inform('Saved', `Your annotations of ${fileName} are saved and the recording is complete. That was your last recording.${milestone}${demo}`);
     }
   }
 

@@ -160,6 +160,10 @@ async function main() {
       await waitForRoute(page, 'home', 60000);
       await clickDialogButton(page, 'Back to my recordings');
       assert.match(await page.textContent('main'), /1 of 3 done/);
+      // The functions give the history and the achievements (ec_assignments' saved, ec_achievements).
+      assert.match(await page.textContent('.progress-card [data-stat="done"]'), /^1 of 3/);
+      await page.click('.rec-tabs [data-tab="history"]');
+      await page.locator('.recordings-card table.history tbody tr button', { hasText: 'Open to revise' }).waitFor();
       await page.evaluate(() => globalThis.ElectroClean.flushLog());
     }],
     ['a trainee is guided by the functions and a practice recording is scored', async () => {

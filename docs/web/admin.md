@@ -399,7 +399,26 @@ have never been on the screen, with Go to the first and Save anyway (on by defau
 turns the reminder or the pause off. The time annotators work on each recording is research data,
 and it always leaves out the time they were paused, whether they pressed Pause, stopped giving input
 or left the page out of sight for more than ten seconds; the annotators' guide describes what they
-see. **Interaction log** chooses whether the study records
+see.
+
+**Annotation** also chooses whether annotators may revise recordings they have
+finished (on by default; `annotation.allow_revisions`). A revision is saved as a new attempt of the
+same assignment beside the earlier files, which stay exactly as they were; the completion register
+gains the new attempt, and the analyses and exports use each annotator's latest attempt. Switch
+revisions off when the study's design needs each recording to be annotated once and then left.
+
+**Game elements** (`gamification.enabled` and `gamification.leaderboard`, both on by default) add,
+beside the annotator's own progress on the home page, the number of annotations made (for interest
+only), a goal for the week, the team's progress, milestones, and an anonymised
+leaderboard on which each annotator appears under a pseudonym and may choose to be hidden. Rank the
+leaderboard by recordings viewed in full (`gamification.leaderboard_viewed_only`) to reward
+thoroughness over completion. The milestones reward finishing recordings and viewing them in full,
+never speed or the number of annotations, so that nothing pushes annotators to mark more than they
+see. Game elements may still change how people work, so a study that uses them should say so in
+its methods, with the settings it used; switch them off, or the leaderboard alone, when the study
+needs annotators who are not nudged at all.
+
+**Interaction log** chooses whether the study records
 how annotators use ElectroClean (clicks, keys and what is on the screen, never what they type), how
 often the pointer is sampled over the EEG, after how many seconds without input an annotator counts
 as idle, and the notice each annotator reads once after signing in; say there what is recorded and

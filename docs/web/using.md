@@ -15,8 +15,7 @@ sign-in page, type the address and choose Connect; the browser remembers it next
 
 ElectroClean needs a screen the size of a tablet or larger: a computer with a mouse or trackpad and
 a keyboard, or a tablet such as an iPad, held upright or on its side (the section "On an iPad"
-below describes the touch controls). On a phone you can sign in, and the page then asks you to
-continue on a larger screen.
+below describes the touch controls). See "On a phone" below for what a phone shows.
 
 ## Signing in
 
@@ -32,11 +31,11 @@ The record contains clicks, key presses and what is on the screen, never anythin
 
 ## Your recordings
 
-The first page lists the recordings assigned to you, with their status (to do, in progress or done),
-and one black button, Open next recording, for the one to do next. When you have a recording you
-started and did not finish, the button reads Continue where you left off instead, with how much of
-that recording you have viewed, your annotations so far, the time worked and when the draft was last
-kept. Annotators in a training programme go straight to their training path instead (see below).
+The first page has one black button, Open next recording, for the recording to do next. When you
+have a recording you started and did not finish, the button reads Continue where you left off
+instead, with how much of that recording you have viewed, your annotations so far, the time worked
+and when the draft was last kept. Annotators in a training programme go straight to their training
+path instead (see below).
 
 Under it, Your progress shows how many of your recordings are done, with a thin bar, the time you
 have worked in all and the median time per recording, and what you have done today. After your first
@@ -44,6 +43,65 @@ two recordings it also estimates the time left at your own pace so far: the time
 of recording, applied to the recordings still to do, less the time already spent on unfinished ones.
 Recordings differ, so treat it as a guide. All these times leave out the time you were paused. The
 time worked today is counted in the browser you work in, so it covers that browser only.
+
+Below that is the list of the recordings assigned to you. It is made for a study in which each
+annotator has a couple of hundred recordings. Its tabs
+show what is still to do (To do holds every recording you have not finished, started or not, and
+In progress only those you have started), what is done, all of them, and your History, each with
+the number of recordings it holds. A search field finds recordings by their file name, and Sort
+orders the list by the recordings you worked on most recently (unfinished work first), by file
+name, or by length. The list shows 25 recordings at a time, with Previous and Next below it. The
+tab and the order you chose are remembered in this browser.
+
+## History and revisions
+
+The History tab lists every recording you have saved, the most recent first, with when it was
+saved, its version, the number of annotations in it and the time you spent on it. When you spot a
+problem in a recording you have already finished, choose Open to revise beside it (or in the Done
+tab), then open the same file from your computer as you did the first time. Opening a finished
+recording with Open a recording from your computer offers Open to revise as well. The recording opens with
+the annotations you saved most recently, and a blue banner under its name says that you are
+revising it: "Revising version 1. Submitting saves your changes as version 2; version 1 stays as it
+was saved."
+
+Change what needs changing, then choose Submit the revision on the banner. Your changes are saved
+as a new version beside the earlier one, which is kept exactly as it was, and the time you spend
+revising is measured as usual. A revision may fix one place only, so Submit the revision does not
+first list the parts of the recording not yet viewed. Analyses of the study use your latest version. Leave without
+changes on the banner closes the recording and keeps every saved version as it is. A revision you
+close part-way (Close, then Close and revise later) is kept as a draft, and the history says that a
+revision is under way; Continue the revision picks it up again. You can revise a recording more
+than once: each revision builds on the latest version.
+
+Your study may switch revisions off, for example when the study's design needs each recording to be
+annotated once without second thoughts. Saved recordings are then final, and Open to revise does
+not appear. Recordings of the training programme keep the programme's own rules.
+
+## Progress and milestones
+
+Many studies also show Goals and milestones beside your progress (your study can switch them off).
+It shows the whole team's progress through the recordings it was given and the number of
+annotations you have made, for interest only. You can set yourself a goal for the week (a number of
+recordings, counted from Monday), and a bar shows how far you are. Each milestone's badge says what
+it stands for when you point at it or use a screen reader: a number for recordings saved, a number
+over a small calendar for days in a row, a filled disc for recordings viewed in full, and a pie for
+the team's share of the study; reached badges have a solid blue ring, the others a dashed grey one.
+
+Milestones mark your progress through the study: your first recording, then 10, 25, 50, 100, 150,
+200 and 300 recordings; saving recordings on 3, 5 and 10 days in a row; recordings viewed from start
+to end (99 % or more of a recording on the screen, as the Recording tab measures it); and the team reaching a quarter, half,
+three quarters and all of its recordings. When Save and Finish reaches a milestone, the message
+after saving says so, and a short note with the milestone's badge appears above your milestones; it never stands between you and the next recording. Milestones reward finishing
+recordings and looking through them in full. They never reward speed or the number of annotations:
+mark what you see, as many or as few artifacts as there are. The number of annotations is shown for
+interest only, and a revision does not count as a new recording.
+
+The leaderboard ranks the people in your study by the recordings they have completed (or, in some
+studies, by the recordings they viewed in full) and shows the top ten and your own place. Everyone
+appears under a pseudonym made for the study, an adjective and an animal such as "Steady Heron", so
+nobody sees anyone's annotator ID or name; yours is named above the table and highlighted in it. It
+appears once at least three people are on it. Clear Show me on the leaderboard to leave it; you can
+come back at any time.
 
 ## Opening a recording
 
@@ -295,14 +353,24 @@ Press Save and Finish when you have looked through the whole recording. If some 
 second have not been on the screen, ElectroClean first lists them with their times; Go to the first
 takes you to the first of them, and Save anyway goes on, for example when you reviewed them another
 way. Your study may turn this check off. ElectroClean then shows how many annotations of each type you
-are saving and asks you to confirm; once saved, the recording is
-complete and cannot be changed. If you marked nothing, it asks whether to save the recording as
+are saving and asks you to confirm; once saved, the recording is complete. You can still revise it
+later from your history when your study allows revisions (see "History and revisions"); each
+revision is saved as a new version. If you marked nothing, it asks whether to save the recording as
 reviewed with no artifacts found. After saving, it offers the next recording.
 
 Your work is saved as a draft while you annotate, in the browser and with the study, so closing the
 page by accident loses nothing; the time at the top of the view says when the draft was last kept.
 The saved time worked on the recording leaves out every pause. ‹ Close asks whether to close and finish later, which keeps your
 annotations and time, or to discard them.
+
+## On a phone
+
+A phone has no room for the EEG traces, so annotating needs a tablet or a computer. On a phone the
+sign-in page says so, and administrators can still sign in there to check the study's progress in
+the admin area, which works on a phone. If you sign in as an annotator on a phone, the page offers
+Email me this link, which starts an email to yourself with the address of the page (and of your
+study) to open later on a tablet or computer, and Sign out. Your work waits for you on the larger
+screen.
 
 ## The training programme
 

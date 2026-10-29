@@ -253,6 +253,41 @@ their lists and acted on together (assign, retire, bring back, remove; switch
 off or on, new invitation links), with a table of what happened to each;
 removing keeps every recording with results and offers to retire it instead.
 
+Annotators can return to recordings they have finished and revise them. The
+home page's list of recordings has tabs (To do, In progress, Done, All and
+History), a search by file name, sorting by recent work, name or length, and
+pages of 25 rows, so that a couple of hundred recordings stay quick to find on
+a computer or an iPad. The History tab lists what the annotator has saved,
+newest first, with the date, version, number of annotations and time taken,
+and Open to revise opens a recording again with its latest saved annotations
+under a banner that says which version is being revised, with Submit the
+revision and Leave without changes. A revision is saved as a new attempt beside
+the earlier files, which stay untouched; the completion register gains the
+attempt, and the agreement analyses, reference sources and exports use each
+annotator's latest attempt, chosen by attempt number. A study can switch
+revisions off with `annotation.allow_revisions` in its settings. The
+interaction log records `revision_started`, `revision_submitted` and
+`revision_left`.
+
+Beside the annotator's own progress, the home page can show game elements: the
+annotations made (for interest only), a weekly goal they set themselves, the
+whole team's progress, milestones (the first recording and then 10 to 300, days in a row,
+recordings viewed in full, from the coverage of what was on the screen, and
+the team's share of the study) and an
+anonymised leaderboard under pseudonyms made for the study, which each person
+may leave. Milestones reward progress and thoroughness, never speed or the
+number of annotations, and a milestone reached by Save and Finish is
+celebrated briefly without getting in the way. The new `GET` and `POST
+/me/achievements` (`ec_achievements` on Firebase) give the facts, and the
+study settings gain `gamification.enabled`, `gamification.leaderboard` and
+`gamification.leaderboard_viewed_only`, with a reminder to report game
+elements in a study's methods. The log records `milestone_reached`, `goal_set`
+and `leaderboard_visibility`.
+
+On a phone, the sign-in page now says that annotating needs a tablet or a
+computer and that administrators can sign in to check progress; an annotator
+who signs in on a phone is offered Email me this link and Sign out.
+
 ## 1.1.0
 
 The first public release, with stand-alone applications for Windows (64-bit),

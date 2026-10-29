@@ -108,15 +108,38 @@ recording's `_session.json`, `mode`,
 `format`, `filters` and `filter_settings`, `original_events`, `resumed`,
 `annotations_restored`, `window_px`, and in the browser `comfort`, the
 annotator's display choices, and for work that is saved `elapsed_restored_s`, the
-time worked before when a draft was restored, and `viewed_fraction`); `viewer_ready` (the viewer is on screen and
+time worked before when a draft was restored, `viewed_fraction`, and `revision`, the
+version a revision will save); `viewer_ready` (the viewer is on screen and
 the clock starts); `autosave` (`n_annotations`, when a draft is sent to the study); `recording_finished`
 (`session_id`, `n_annotations`, `counts_by_label`, `elapsed_s` as measured by the
 session clock, which in the browser leaves out the time paused, and in the browser also
 `viewed_fraction`, the proportion of the recording that was on the screen, from 0 to 1, leaving out
-stretches without data, `paused_s`, the seconds paused while the recording was open, and
-`n_pauses`); `closed_without_saving` (`n_annotations`); `load_failed`
+stretches without data, `paused_s`, the seconds paused while the recording was open,
+`n_pauses`, and `version` for a revision); `closed_without_saving` (`n_annotations`,
+and in the browser `kept` and, for a revision, `revises`); `load_failed`
 (`recording_id`, `kind`, `reason`); `recording_unavailable` (`recording_id`,
 `reason`).
+
+**Revisions (browser).** An annotator may open a recording they finished and
+submit it again as a new version (docs/web/using.md, "History and revisions").
+`revision_started` (`session_id`, `recording_id`, `version`, the version a
+submission will save, `revises`, the version opened, `revises_saved_at`,
+`annotations_loaded`, `resumed` when a draft of the revision was continued)
+follows its `recording_opened`; `revision_submitted` (`session_id`, `version`,
+`revises`, `n_annotations`, `changed`, whether the annotations differ from the
+version revised, and `elapsed_s`, the time spent revising) follows its
+`recording_finished`; and `revision_left` (`session_id`, `revises`, `changed`,
+`elapsed_s`) records Leave without changes. The time spent revising is measured
+by the session clock as for any recording.
+
+**Milestones and goals (browser).** When the game elements are on
+(docs/web/admin.md, "Study settings"), `milestone_reached` (`milestone`, such
+as `recordings-10`, `streak-3`, `thorough-5` or `team-50`, its `kind`, `name`
+and `target`) records each milestone that a Save and Finish reached, once;
+`goal_set` (`goal_per_week`, or null when the goal was removed) and
+`leaderboard_visibility` (`shown`) record the annotator's own choices. A study
+that reports the effect of game elements can find in these events when each
+annotator saw a milestone.
 
 **Mouse, touch and keys.** `mouse_press`, `mouse_release` and `double_click` (`button`,
 in the browser `pointer`, which is `mouse`, `touch` for a finger or `pen` for a
