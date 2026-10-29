@@ -64,6 +64,18 @@ def test_channel_scopes(store):
     assert t.is_global
 
 
+def test_toggle_channel_keeps_one_channel_and_works_on_the_whole_montage(store):
+    one = store.add_interval("Electrode-pops-artifact", 3, 3.2, ["C3"])
+    with pytest.raises(AnnotationError, match="at least one channel"):
+        store.toggle_channel(one.annotation_id, "C3")  # it would otherwise spread to every channel
+    assert store.get(one.annotation_id).channels == ("C3",)
+    whole = store.add_interval("Movement-artifact", 1, 2)
+    t = store.toggle_channel(whole.annotation_id, "C3")
+    assert t.channels == tuple(c for c in CH if c != "C3")  # every channel but C3
+    t = store.toggle_channel(whole.annotation_id, "C3")
+    assert t.is_global  # every channel again: the whole montage
+
+
 def test_overlapping_different_categories_are_independent(store):
     blink = store.add_interval("Eye-blink-artifact", 10.0, 10.5, ["Fp1", "Fp2"])
     emg = store.add_interval("EMG-artifact", 10.2, 11.0)

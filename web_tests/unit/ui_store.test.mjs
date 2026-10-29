@@ -63,8 +63,11 @@ test('channels, labels, explicit merges and deleting', () => {
   let x = s.toggleChannel(a.annotation_id, 'C4');
   assert.deepEqual(x.channels, ['C3', 'C4']);
   x = s.toggleChannel(a.annotation_id, 'C3');
-  x = s.toggleChannel(a.annotation_id, 'C4');
-  assert.deepEqual(x.channels, []); // no channel left: the whole montage
+  assert.deepEqual(x.channels, ['C4']);
+  // The last channel cannot be taken out: the annotation would otherwise spread to every channel.
+  assert.throws(() => s.toggleChannel(a.annotation_id, 'C4'), /needs at least one channel/);
+  assert.deepEqual(s.get(a.annotation_id).channels, ['C4']);
+  x = s.toggleChannel(a.annotation_id, 'C3');
   const b = s.add('EMG-artifact', 500, 50);
   const c = s.add('EMG-artifact', 700, 50, ['O1']);
   s.setLabelMany([a.annotation_id, b.annotation_id], 'Chewing-artifact');
@@ -78,6 +81,40 @@ test('channels, labels, explicit merges and deleting', () => {
   assert.equal(s.size, 0);
   assert.equal(s.undo(), 'delete 2 annotations');
   assert.equal(s.size, 2);
+});
+
+test('Shift+click on a whole-montage annotation takes that channel out, and putting it back makes it whole again', () => {
+  const s = store();
+  const a = s.add('Eye-blink-artifact', 100, 50);
+  let x = s.toggleChannel(a.annotation_id, 'C3');
+  assert.deepEqual(x.channels, ['Fp1', 'Fp2', 'C4', 'O1', 'O2'], 'every channel but C3');
+  assert.match(s.undoDescription, /toggle channel C3/);
+  x = s.toggleChannel(a.annotation_id, 'C3');
+  assert.deepEqual(x.channels, [], 'every channel again: the whole montage');
+  assert.throws(() => s.toggleChannel(a.annotation_id, 'Cz'), /Unknown channel/);
+  const one = store({ chNames: ['Cz'] });
+  const b = one.add('EMG-artifact', 0, 10);
+  assert.throws(() => one.toggleChannel(b.annotation_id, 'Cz'), /needs at least one channel/, 'a one-channel montage cannot lose its only channel');
+});
+
+test('work brought back replaces everything as one step that Undo takes back', () => {
+  const s = store();
+  const mine = s.add('EMG-artifact', 0, 10);
+  const earlier = [{ annotation_id: 'e'.repeat(32), label: 'Eye-blink-artifact', onset_sample: 5, duration_samples: 5, channels: ['O2', 'Fp1'], created_at: '', modified_at: '' },
+    { annotation_id: 'd'.repeat(32), label: 'Chewing-artifact', onset_sample: 50, duration_samples: 20, channels: [], created_at: '', modified_at: '' }];
+  const seen = [];
+  s.addListener((c) => seen.push(c.action));
+  s.replaceAll(earlier);
+  assert.deepEqual(s.annotations().map((a) => a.annotation_id), ['e'.repeat(32), 'd'.repeat(32)]);
+  assert.deepEqual(s.get('e'.repeat(32)).channels, ['Fp1', 'O2']);
+  assert.deepEqual(seen, ['replace']);
+  assert.equal(s.undoDescription, 'bring back earlier work');
+  assert.equal(s.undo(), 'bring back earlier work');
+  assert.deepEqual(s.annotations().map((a) => a.annotation_id), [mine.annotation_id]);
+  s.redo();
+  assert.equal(s.size, 2);
+  assert.throws(() => s.replaceAll([{ ...earlier[0], label: 'Not-a-type' }]), AnnotationError);
+  assert.equal(s.size, 2, 'nothing changes when the work brought back is not valid');
 });
 
 test('a restored draft replaces everything and clears the history', () => {
