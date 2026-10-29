@@ -147,6 +147,14 @@ async function awkwardService(bytes, { holdMs = 2500 } = {}) {
 async function toOpenView(page) {
   await page.click('[data-log="open-next"]');
   await waitForRoute(page, 'open');
+  // The tick box gives way to a sentence once the browser says it stores nothing (WebKit's private
+  // windows): wait for that answer before touching it.
+  await page.evaluate(async () => {
+    const { deviceStore } = await import('./js/views/device.js');
+    const store = deviceStore(globalThis.ElectroTag);
+    if (store && store.available) await store.usable();
+  });
+  await page.waitForTimeout(50);
   if (await page.locator('[data-log="keep-link"]').count()) await page.uncheck('[data-log="keep-link"]');
 }
 
