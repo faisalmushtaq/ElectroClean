@@ -331,6 +331,10 @@ list keeps Start and End whole ("23.000") in the narrower side panel of a
 Download my results, the Manage link and the Whole montage and Selected
 channels switch are at least 40 pixels tall.
 
+When the demonstration itself cannot be started, the sign-in page says so and
+suggests reloading, instead of reporting that "the study server at undefined"
+does not answer.
+
 ## 1.1.0
 
 The first public release, with stand-alone applications for Windows (64-bit),

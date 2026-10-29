@@ -108,3 +108,15 @@ test('an invitation link is checked and accepted without a sign-in, then signs t
   reply = () => ({ status: 409, body: { error: 'invite_used', message: 'This invitation link has been used already.' } });
   await assert.rejects(() => b.inviteCheck('t'.repeat(43)), (e) => e.code === 'invite_used' && /used already/.test(e.message));
 });
+
+test('the sign-in page names what could not be reached, and never an undefined address', async () => {
+  const { unreachableText } = await import('../../electroclean/web/static/js/api/choose.js');
+  assert.match(unreachableText({ kind: 'server', address: 'https://study.example.org' }), /^The study server at https:\/\/study\.example\.org does not answer\. /);
+  assert.match(unreachableText({ kind: 'server', address: 'https://x.org' }, { code: 'not_electroclean' }), /does not answer as an ElectroClean study server/);
+  assert.match(unreachableText({ kind: 'firebase' }, new Error('offline')), /^The study could not be loaded \(offline\)/);
+  for (const where of [{ kind: 'demo', source: 'none' }, null, { kind: 'server' }]) {
+    const text = unreachableText(where, new Error('boom'));
+    assert.match(text, /^The demonstration could not be started/);
+    assert.doesNotMatch(text, /undefined/);
+  }
+});
