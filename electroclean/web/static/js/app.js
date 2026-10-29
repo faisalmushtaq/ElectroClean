@@ -496,7 +496,7 @@ export class App {
     view.step('fp', 'Checking the file (its fingerprint)…', 'working', 0);
     let fp;
     try {
-      fp = await recording.fingerprint((f) => view.step('fp', `Checking the file (its fingerprint) ${Math.round(f * 100)} %`, 'working', f));
+      fp = await recording.fingerprint((f) => view.step('fp', `Checking the file (its fingerprint) ${Math.round(f * 100)}%`, 'working', f));
     } catch (exc) {
       view.step('fp', 'Checking the file', 'failed');
       view.showProblem(`The file could not be read to the end: ${exc.message}`, [view.chooseAgainButton()]);

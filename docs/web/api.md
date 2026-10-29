@@ -303,7 +303,7 @@ Only study recordings (mode `standard`) count. `counters.done` counts
 recordings, so a revision adds nothing to it; `worked_s` adds up the time of
 every saved version and `annotations` the annotations of each recording's
 latest version, shown for interest only. A recording counts as viewed in full
-from 99 % of it on screen. The milestones themselves are worked out in the
+from 99% of it on screen. The milestones themselves are worked out in the
 browser from these facts (`js/games/milestones.js`). The leaderboard ranks
 people by recordings completed, or by recordings viewed in full when the study
 sets `gamification.leaderboard_viewed_only`; ties share a place. It names people

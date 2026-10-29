@@ -42,9 +42,9 @@ test('the unviewed stretches, the fraction viewed and its text', () => {
   assert.equal(viewedFraction(seen, 70), 38 / 70);
   assert.equal(viewedFraction([[0, 28]], 70, [[28, 70]]), 1);
   assert.equal(viewedFraction([], 0), 1);
-  assert.equal(percentText(38 / 70), '54 %');
-  assert.equal(percentText(0.999), '99 %', 'rounded down: 100 % only when everything is seen');
-  assert.equal(percentText(1), '100 %');
+  assert.equal(percentText(38 / 70), '54%');
+  assert.equal(percentText(0.999), '99%', 'rounded down: 100% only when everything is seen');
+  assert.equal(percentText(1), '100%');
 });
 
 test('the next unviewed stretch comes after the view, then round from the start', () => {

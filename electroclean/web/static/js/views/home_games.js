@@ -27,7 +27,7 @@ export function badgeLabel(m) {
     recordings: `${m.target} recording${m.target === 1 ? '' : 's'} saved`,
     streak: `${m.target} days in a row`,
     thorough: `${m.target} recordings viewed in full`,
-    team: `The team at ${Math.round(m.target * 100)} % of the study`,
+    team: `The team at ${Math.round(m.target * 100)}% of the study`,
   }[m.kind] || m.name;
   return `${what}, ${m.reached ? 'reached' : 'not yet reached'}`;
 }
@@ -75,7 +75,7 @@ export function badge(m) {
   return svg;
 }
 
-function percent(x) { return `${Math.round(x * 100)} %`; }
+function percent(x) { return `${Math.round(x * 100)}%`; }
 
 function bar(share, label) {
   return h('span.progress.games-bar', { role: 'progressbar', 'aria-label': label, 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(Math.round(share * 100)) },

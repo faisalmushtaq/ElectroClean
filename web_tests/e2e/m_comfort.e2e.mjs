@@ -190,7 +190,7 @@ export const tests = [
       await page.waitForFunction(() => globalThis.ElectroClean.ws.s.viewed.length === 1);
       let viewed = await page.evaluate(() => globalThis.ElectroClean.ws.s.viewed);
       assert.deepEqual(viewed, [[0, 10]]);
-      assert.match(await page.textContent('.ws-viewed'), /^Viewed 14 %/);
+      assert.match(await page.textContent('.ws-viewed'), /^Viewed 14%/);
       // On the overview bar: the rest white with a thin grey line above it (calm: no warning colour).
       assert.equal(await overviewPixel(page, 0.9, 1), '#BDB8B0');
       assert.equal(await overviewPixel(page, 0.9, 12), '#FFFFFF');
@@ -209,7 +209,7 @@ export const tests = [
       // What has been seen, away from the view, keeps the overview's warm grey.
       assert.equal(await overviewPixel(page, 0.05, 12), '#F3EFE8');
       await page.click('.tab[data-tab="recording"]');
-      assert.match(await page.textContent('.coverage-text'), /Viewed 27 % of the recording/);
+      assert.match(await page.textContent('.coverage-text'), /Viewed 27% of the recording/);
       await t.screenshot(page, 'comfort_coverage_tab');
       await page.click('.coverage-block [data-log="next-unviewed"]');
       v = (await state(page)).view;
@@ -233,7 +233,7 @@ export const tests = [
       await page.click('.ws-actions button.primary');
       await page.waitForSelector('.dialog.coverage-check');
       const text = (await page.textContent('.dialog.coverage-check')).replace(/\s+/g, ' ');
-      assert.match(text, /You have viewed 68 % of this recording\. This part has not been on the screen yet:/);
+      assert.match(text, /You have viewed 68% of this recording\. This part has not been on the screen yet:/);
       assert.match(text, /0:28 to 0:50 \(22 s\)/);
       await t.screenshot(page, 'comfort_coverage_check');
       await clickDialogButton(page, 'Go to the first part');
@@ -242,7 +242,7 @@ export const tests = [
       await page.waitForFunction(() => globalThis.ElectroClean.ws.s.viewed.length === 2 && globalThis.ElectroClean.ws.s.viewed[0][1] === 37);
       // With everything seen, Save and Finish asks its own question straight away.
       await page.evaluate(() => { const ws = globalThis.ElectroClean.ws; ws.s.noteViewed([[0, 70]]); ws.viewer.setCoverage(ws.s.viewed); ws._refreshCoverage(); });
-      assert.match(await page.textContent('.ws-viewed'), /^Viewed 100 %/);
+      assert.match(await page.textContent('.ws-viewed'), /^Viewed 100%/);
       await page.keyboard.press('u');
       assert.match(await page.textContent('.ws-message'), /Every part of the recording has been on the screen\./);
       await page.click('.ws-actions button.primary');
@@ -283,7 +283,7 @@ export const tests = [
       assert.equal(await page.textContent('.next-card h2'), 'In progress');
       assert.match(await page.textContent('.next-card [data-log="open-next"]'), /Continue where you left off/);
       const facts = await page.textContent('.continue-facts');
-      assert.match(facts, /viewed \d+ %/);
+      assert.match(facts, /viewed \d+%/);
       assert.match(facts, /1 annotation\b/);
       assert.match(facts, /kept today at \d\d:\d\d/);
       await t.screenshot(page, 'comfort_home_continue');
@@ -314,7 +314,7 @@ export const tests = [
       await waitForRoute(page, 'home');
       await studySettings(page, { idle_pause_minutes: 0, break_reminder_minutes: 0, coverage_check: 'off' });
       assert.match(await page.textContent('.progress-card'), /0 of 3\s*recordings done/);
-      assert.match(await page.textContent('.progress-card .card-head'), /0 % done/);
+      assert.match(await page.textContent('.progress-card .card-head'), /0% done/);
       assert.match(await page.textContent('[data-stat="left"]'), /Not estimated yet.*after your first 2 recordings/);
       for (const i of [0, 1]) {
         await openExample(page, i);
@@ -330,7 +330,7 @@ export const tests = [
       for (const i of done) {
         assert.ok(i.elapsed_s > 1 && i.n_annotations === 0 && i.completed_at, JSON.stringify(i));
       }
-      assert.match(await page.textContent('.progress-card .card-head'), /67 % done/);
+      assert.match(await page.textContent('.progress-card .card-head'), /67% done/);
       assert.equal(await page.textContent('[data-stat="worked"] .stat-value'), 'Under a minute');
       assert.equal(await page.textContent('[data-stat="worked"] .caption'), 'worked in all; under a minute per recording (median)');
       // Two quick recordings: the one left takes a few seconds at this pace (progress.test.mjs checks the sums).

@@ -90,7 +90,7 @@ the team's share of the study; reached badges have a solid blue ring, the others
 
 Milestones mark your progress through the study: your first recording, then 10, 25, 50, 100, 150,
 200 and 300 recordings; saving recordings on 3, 5 and 10 days in a row; recordings viewed from start
-to end (99 % or more of a recording on the screen, as the Recording tab measures it); and the team reaching a quarter, half,
+to end (99% or more of a recording on the screen, as the Recording tab measures it); and the team reaching a quarter, half,
 three quarters and all of its recordings. When Save and Finish reaches a milestone, the message
 after saving says so, and a short note with the milestone's badge appears above your milestones; it never stands between you and the next recording. Milestones reward finishing
 recordings and looking through them in full. They never reward speed or the number of annotations:
@@ -280,7 +280,7 @@ ElectroClean keeps track of the parts of the recording that have been on the scr
 is missed in a long recording. A part counts as viewed once it has stayed on the screen for a moment
 while you are working. On the overview bar under the EEG, the parts not yet viewed are white with a
 thin grey line above them, and the parts viewed keep the bar's usual warm grey. The Recording tab
-and the line at the bottom say how much you have viewed, for example "Viewed 64 %"; stretches where
+and the line at the bottom say how much you have viewed, for example "Viewed 64%"; stretches where
 the recording has no data count as viewed, since there is nothing to see there.
 
 Next part not yet viewed, in the Recording tab, or the key U, takes you to the next part you have

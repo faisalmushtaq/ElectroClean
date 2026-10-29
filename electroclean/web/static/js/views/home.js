@@ -61,7 +61,7 @@ function progressCard(p) {
   const today = [p.todayS >= 60 ? `${spanText(p.todayS)} of work in this browser` : 'no work yet in this browser',
     p.doneToday ? `${p.doneToday} recording${p.doneToday === 1 ? '' : 's'} finished` : null].filter(Boolean).join(', ');
   return h('section.card.progress-card', { 'aria-label': 'Your progress' },
-    h('div.card-head', {}, h('h2', {}, 'Your progress'), h('span.caption', {}, `${pc} % done`)),
+    h('div.card-head', {}, h('h2', {}, 'Your progress'), h('span.caption', {}, `${pc}% done`)),
     h('div.progress', { role: 'progressbar', 'aria-label': 'Recordings done', 'aria-valuemin': '0', 'aria-valuemax': String(p.total), 'aria-valuenow': String(p.done) },
       h('div.progress-bar', { style: { width: `${pc}%` } })),
     h('div.stats', {},
