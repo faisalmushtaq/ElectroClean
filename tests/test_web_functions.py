@@ -31,7 +31,8 @@ OPERATIONS = {"et_me": "me", "et_assignments": "assignments", "et_match": "match
               "et_guided_continue": "guided_continue", "et_guided_show_me": "guided_show_me",
               "et_visit_open": "visit_open", "et_visit_events": "visit_events", "et_visit_close": "visit_close",
               "et_admin_progress": "admin_progress", "et_admin": "admin", "et_quiz": "quiz",
-              "et_achievements": "achievements"}
+              "et_achievements": "achievements", "et_problem_report": "problem_report",
+              "et_my_reviews": "my_reviews"}
 
 
 def load_main():

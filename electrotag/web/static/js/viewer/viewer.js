@@ -295,6 +295,8 @@ export class EegViewer {
   setCursor(t) { this.cursorT = t; this.invalidate(['over']); }
   setPrefix(map) { this.prefix = map || {}; this.invalidate(['over']); }
   setLabelColours(map) { this.labelColours = map || {}; this.invalidate(['over']); }
+  /** Review feedback over the EEG: [{onset_sample, duration_samples, outline, current}], drawn in the accent blue (_drawMarkers). */
+  setMarkers(list) { this.markers = Array.isArray(list) ? list : []; this.invalidate(['over']); }
   setEdgeZonesVisible(on) { this.showEdgeZones = Boolean(on); this.invalidate(['under']); }
   /** The parts on screen so far (merged [start_s, end_s]); null hides the coverage. Only the overview changes. */
   setCoverage(list) { this.coverage = list ? list.map((p) => [...p]) : null; this.invalidate(['overview']); }
@@ -788,6 +790,7 @@ export class EegViewer {
       if (tg.a.note) drawNoteGlyph(ctx, tg.x + tg.w / 2 - NOTE_W - 2, y + 4, legibleOnWhite(colour));
       this._tags.push({ id: tg.a.annotation_id, x: tg.x - tg.w / 2, y, w: tg.w, h: TAG_ROW_H - 3 });
     });
+    this._drawMarkers(ctx, x0, x1, y0, y1);
     // the drag in progress
     if (this.dragPreview) {
       const p = this.dragPreview;
@@ -919,6 +922,31 @@ export class EegViewer {
 
   // ------------------------------------------------------------- hit-testing
   /** What is under a point (client coordinates): time, channel, annotation, edge, tag. */
+  /**
+   * The markers of a review (setMarkers): a calm band in the accent blue along the foot of the EEG
+   * under each reviewed stretch, and a dashed outline for a stretch reviewed without an annotation.
+   */
+  _drawMarkers(ctx, x0, x1, y0, y1) {
+    for (const m of this.markers || []) {
+      const xa = this.sampleToX(m.onset_sample);
+      const xb = this.sampleToX(m.onset_sample + m.duration_samples);
+      if (xb < x0 || xa > x1) continue;
+      const a = clamp(xa, x0, x1);
+      const b = clamp(xb, x0, x1);
+      ctx.fillStyle = rgba(COLOURS.accent, m.current ? 0.9 : 0.55);
+      ctx.fillRect(a, y1 - (m.current ? 6 : 4), Math.max(2, b - a), m.current ? 6 : 4);
+      if (m.outline) {
+        ctx.fillStyle = rgba(COLOURS.accent, 0.06);
+        ctx.fillRect(a, y0, Math.max(1, b - a), y1 - y0);
+        ctx.strokeStyle = COLOURS.accent;
+        ctx.lineWidth = m.current ? 2 : 1;
+        ctx.setLineDash([5, 4]);
+        ctx.strokeRect(xa + 0.5, y0 + 0.5, xb - xa, y1 - y0 - 1);
+        ctx.setLineDash([]);
+      }
+    }
+  }
+
   hit(clientX, clientY, { edge = EDGE_PX, trace = 5 } = {}) {
     const r = this.over.getBoundingClientRect();
     const x = clientX - r.left;

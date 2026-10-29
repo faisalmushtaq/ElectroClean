@@ -61,7 +61,8 @@ The overview shows the study at a glance: how many recordings are registered, ho
 and administrators there are, and how much of the assigned work is done, in progress or still to
 do. Below are the latest changes from the study's records and the latest work that annotators
 saved. The buttons take you to the most common jobs: adding recordings, adding an annotator,
-assigning recordings and following progress.
+assigning recordings and following progress. Two further figures count the open problem reports (with the
+recordings that cannot be annotated) and the saved recordings that have been reviewed.
 
 ## Progress
 
@@ -72,7 +73,9 @@ the last 14 days; and a projected finish date at that pace. Until at least three
 been completed in those 14 days the projection says there is not enough work yet. Below the figures,
 a chart shows the recordings completed on each of the last 30 days, for the whole study or for one
 person; move the pointer over it, or focus it and use the arrow keys, to read each day, and open
-The numbers, day by day for the same figures as a table.
+The numbers, day by day for the same figures as a table. Two more figures count the recordings that annotators
+set aside as ones that cannot be annotated, which are kept apart from done and taken from the work
+remaining, and the saved recordings that have been reviewed.
 
 The Annotators tab has a row for each person: what is assigned to them, done, in progress and still
 to do, with the share done as a thin bar; their total time and the median time of a recording; the
@@ -356,7 +359,7 @@ are met; download it as HTML, and its data as JSON.
 
 ## Results
 
-Progress lists each person with their work done, in progress and to do, their training programme's
+Progress lists each person with their work done, in progress and to do (and any that cannot be annotated), their training programme's
 stages and when they were last seen; Work shows their recordings one by one, and Download the table
 (TSV) saves the list. Download all results (zip) gives every result of the study in one file: the
 annotations in ElectroTag's usual folders (an `_annotations.json`, `_events.tsv`,
@@ -365,6 +368,50 @@ training progress and the reports. When the results are too large to send throug
 page gives the command to use instead: on a study server the results are already in the study
 folder's `Annotated_Events`, and on Firebase `electrotag-web export` writes them into the same
 folders (docs/web/firebase.md).
+
+## Reviewing saved work
+
+A lead annotator can spot-check a saved recording, annotation by annotation, and the annotator sees
+the feedback. Choose Review beside a saved study recording in a person's Work (Annotators, then
+the person) or in Results (Work beside the person). Open the recording from this computer, as
+annotators do: the EEG never reaches the study, so the browser checks the file's fingerprint
+against the study's copy and refuses another recording. The recording opens in the annotation view
+in a read-only review mode, with the annotations of the latest saved version drawn as they were
+saved.
+
+The side panel lists those annotations, each with Agree, Caveat and Comment and an optional note
+of up to 300 characters. N and P move from one annotation to the next, A agrees, C adds a caveat, M
+a comment, Delete clears the mark and Enter goes to the note; on an iPad the marks are buttons to
+tap. To point out an artifact that was not annotated, drag across the EEG over the stretch: it is
+listed under Stretches without an annotation with the comment "missed artifact?", which you can
+change. An overall note may go with the review. Save the review keeps it, once however often the
+button is pressed; Back leaves without saving, after asking when something is marked.
+
+A review is a record of its own, with the reviewer, the time, the version reviewed and each item
+(an annotation's ID, or a stretch's start and length, with its mark and note). It never changes the
+annotation files, and a recording can have several reviews, by different people or over time. The
+person's page lists their reviews, Progress counts the reviewed recordings, every review is in the
+audit log, and the results zip holds a TSV and a JSON file for each. The agreement analyses do not
+use reviews. Two settings in Study settings govern them (see below).
+
+## Problems
+
+Annotators can report a problem with a recording instead of saving it as having no artifacts: the
+file will not open, it is the wrong recording, channels are flat, missing or disconnected, or it is
+too noisy or too short to annotate, with an optional note. They either carry on, or mark the
+recording as one that cannot be annotated. Such a recording has the status Cannot be annotated
+(`unusable`): it counts as finished for the annotator's progress, is kept apart from Done in
+Overview, Progress and Results, and is left out of the agreement analyses, whose report says how
+many recordings were left out and why.
+
+Problems, under Data, lists the reports, the open ones first, with filters for open or resolved,
+the reason, the person and the recording, and Download as CSV. Deal with it… beside an open report
+resolves it with a note (for example "replaced the file"), returns the recording to the annotator's
+to-do list, which undoes Cannot be annotated and shows the annotator a short line with your note
+on their home page, or gives it to someone else, who is assigned the recording. Overview and
+Progress count the open reports and the recordings that cannot be annotated. Reports are kept with
+the results (the results zip holds them in `problem_reports/`), are in the audit log and are never
+deleted.
 
 ## Records
 
@@ -426,6 +473,12 @@ finished (on by default; `annotation.allow_revisions`). A revision is saved as a
 same assignment beside the earlier files, which stay exactly as they were; the completion register
 gains the new attempt, and the analyses and exports use each annotator's latest attempt. Switch
 revisions off when the study's design needs each recording to be annotated once and then left.
+
+**Annotation** also chooses whether administrators may review saved recordings
+(`annotation.allow_reviews`, on by default) and whether annotators see the reviews of their work
+(`annotation.show_reviews_to_annotators`, on by default). Switch the second off for blind reviews,
+when the study does not want feedback to change how its annotators work; the reviews are still
+kept and exported.
 
 **Game elements** (`gamification.enabled` and `gamification.leaderboard`, both on by default) add,
 beside the annotator's own progress on the home page, the number of annotations made (for interest

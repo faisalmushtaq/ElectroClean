@@ -24,6 +24,8 @@ from electrotag.app.session.register import CompletionRegister, RegisterError
 from electrotag.config.settings import Settings
 from electrotag.web.accounts import AccountError, AccountExists, Accounts, InvitationProblem
 from electrotag.web.store import (
+    RECORD_ID_RE,
+    RECORD_KINDS,
     AccountProblem,
     Assignment,
     Credentials,
@@ -450,6 +452,16 @@ class FilesStore(Store):
     def study_secret(self, name: str) -> str:
         return self.db.study_secret(name)
 
+    # ------------------------------------------- problem reports and reviews
+    def records(self, kind: str, annotator_id: str | None = None) -> list[dict[str, Any]]:
+        _check_kind(kind)
+        return self.db.records(kind, annotator_id)
+
+    def update_record(self, kind: str, record_id: str, annotator_id: str,
+                      change: Callable[[dict[str, Any] | None], dict[str, Any] | None]) -> dict[str, Any] | None:
+        _check_kind(kind, record_id)
+        return self.db.update_record(kind, record_id, annotator_id, change)
+
     # ------------------------------------------------------------------- quiz
     def quiz_state(self, annotator_id: str, set_id: str) -> dict[str, Any] | None:
         return self.db.quiz_state(annotator_id, set_id)
@@ -509,6 +521,11 @@ class FilesStore(Store):
         return [{"visit_id": v["visit_id"], "annotator_id": v["annotator_id"], "mode": v["mode"],
                  "context_id": v["context_id"], "started_at": v["opened_at"], "closed_at": v["closed_at"] or None,
                  "n_events": int(v["seq"])} for v in self.db.visit_rows(annotator_id, limit)]
+
+
+def _check_kind(kind: str, record_id: str | None = None) -> None:
+    if kind not in RECORD_KINDS or (record_id is not None and not RECORD_ID_RE.match(str(record_id))):
+        raise StoreError(f"Unsuitable record {kind!r} {record_id!r}")
 
 
 def _inside(root: Path, rel: str) -> Path:

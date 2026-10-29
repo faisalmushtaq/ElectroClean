@@ -199,6 +199,10 @@ class Settings:
     # annotation.allow_revisions: an annotator may open a recording they finished, change it and submit
     # it again as a new attempt (the earlier files are kept; analyses use the latest attempt).
     allow_revisions: bool = True
+    # annotation.allow_reviews: an administrator may review a saved recording (Agree, Caveat, Comment per
+    # annotation); annotation.show_reviews_to_annotators: the annotator sees that feedback (off: blind reviews).
+    allow_reviews: bool = True
+    show_reviews_to_annotators: bool = True
     # gamification: the counters, milestones, personal goal and team progress on the home page, and the
     # anonymised leaderboard (ranked by recordings completed, or only those viewed in full).
     gamification_enabled: bool = True
@@ -269,6 +273,8 @@ class Settings:
                 logging_pointer_hz=float(logs.get("pointer_hz", 5.0)),
                 logging_idle_after_s=float(logs.get("idle_after_s", 30.0)),
                 allow_revisions=_flag(ann, "annotation", "allow_revisions", True),
+                allow_reviews=_flag(ann, "annotation", "allow_reviews", True),
+                show_reviews_to_annotators=_flag(ann, "annotation", "show_reviews_to_annotators", True),
                 gamification_enabled=_flag(games, "gamification", "enabled", True),
                 gamification_leaderboard=_flag(games, "gamification", "leaderboard", True),
                 gamification_leaderboard_viewed_only=_flag(games, "gamification", "leaderboard_viewed_only", False),

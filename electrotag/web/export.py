@@ -8,6 +8,8 @@
             completion_register.tsv, session_log.jsonl, annotator-<ID>/..., training/...
             training/<set>/quiz/annotator-<ID>_quiz_<mode>_<session>.json
             training_progress/<set>/annotator-<ID>.json
+            problem_reports/problem_reports.tsv, .json      the problems annotators reported (docs/file_formats.md)
+            reviews/annotator-<ID>/<recording>_attempt-<n>_review-<time>-<id>.tsv, .json   each review of saved work
             interaction_logs/annotator-<ID>/<time>_<mode>.jsonl
 
 The result files are exactly those the desktop application's code wrote when each recording was
@@ -127,6 +129,12 @@ def export_study(store: Any, to: Path | str) -> dict[str, int]:
     for rel, data in sorted(store.result_files()):  # quiz results and other files kept as they were written
         _put(safe_path(layout.root, rel), data, counts)
         counts["other"] += 1
+    from electrotag.web.feedback import feedback_files
+
+    # The problem reports and reviews as they stand now (a report may have been resolved since the last export).
+    for rel, data in sorted(feedback_files(store).items()):
+        atomic_write_bytes(safe_path(layout.root, rel), data)
+        counts["feedback"] = counts.get("feedback", 0) + 1
     return counts
 
 
@@ -151,6 +159,9 @@ def results_zip_file(store: Any) -> Path:
             root = Path(work) / store.settings.output_directory_name
         else:
             root = store.layout.root
+        from electrotag.web.feedback import feedback_files
+
+        extra = {} if getattr(store, "kind", "") == "firestore" else feedback_files(store)
         base = root.name or "Annotated_Events"
         with zipfile.ZipFile(tmp.name, "w", compression=zipfile.ZIP_DEFLATED) as zf:
             if root.is_dir():
@@ -159,6 +170,8 @@ def results_zip_file(store: Any) -> Path:
                     if (rel.parts and rel.parts[0] == INTERNAL_DIR) or not path.is_file():
                         continue
                     zf.write(path, f"{base}/{rel.as_posix()}")
+            for rel, data in sorted(extra.items()):  # the problem reports and reviews (the files store keeps them)
+                zf.writestr(f"{base}/{rel}", data)
             zf.writestr(f"{base}/README.txt", f"Results of the ElectroTag study {store.name}, downloaded "
                         f"{now_local_iso()}.\nAnalyse them with electrotag-agreement and electrotag-activity, as "
                         "for the desktop application.\n")

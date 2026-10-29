@@ -200,3 +200,15 @@ def et_quiz(req: https_fn.CallableRequest) -> Any:
 @https_fn.on_call()
 def et_achievements(req: https_fn.CallableRequest) -> Any:
     return handle("achievements", req)
+
+
+# A problem an annotator reports with a recording (saved once, whatever the number of presses), and
+# the reviews of their saved work (docs/web/api.md, "Problem reports" and "Reviews").
+@https_fn.on_call()
+def et_problem_report(req: https_fn.CallableRequest) -> Any:
+    return handle("problem_report", req)
+
+
+@https_fn.on_call()
+def et_my_reviews(req: https_fn.CallableRequest) -> Any:
+    return handle("my_reviews", req)

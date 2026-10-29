@@ -78,6 +78,45 @@ Your study may switch revisions off, for example when the study's design needs e
 annotated once without second thoughts. Saved recordings are then final, and Open to revise does
 not appear. Recordings of the training programme keep the programme's own rules.
 
+## When a recording cannot be annotated
+
+Sometimes a recording cannot be judged as it is: the file will not open, it is the wrong
+recording, channels are flat, missing or disconnected, or it is too noisy or too short to annotate.
+Saving such a recording as having no artifacts would mix "clean" with "could not be judged", so tell
+the study team instead. Choose Report a problem with this recording… from the More button (the
+three dots) beside the recording in your list, which works even for a file that will not open, or
+from the More button in the header of the annotation view. Choose what is wrong, add a note of up
+to 300 characters if it helps (for example "Fp1 and Fp2 are flat from 2:10 on"), and choose what
+happens next.
+
+Tell the study team and carry on sends the report and leaves everything as it was, so you can go
+on annotating the recording. This recording cannot be annotated sets it aside: the recording
+counts as finished for your progress, is listed with your done recordings as Cannot be annotated,
+and is kept apart from the recordings you saved, so that the study's analyses leave it out. A
+recording opened from the annotation view closes when you set it aside, and the draft of what you
+had marked is kept. Only an unfinished study recording can be set aside; for a recording you have
+saved, or one of the training programme, the report tells the study team and you carry on.
+
+The study team may resolve the report, give the recording to someone else, or give it back to you,
+for example once they have replaced the file. A recording given back returns to your To do list,
+and a short line at the top of your list says so, with the study team's note. A report is kept
+once even when you press its button again, or try again after an answer that was slow to arrive.
+
+## Reviews of your work
+
+A lead annotator may review a recording you have saved, marking each of your annotations Agree,
+Caveat or Comment, sometimes with a note, and adding a comment where an artifact may have been
+missed. The review never changes your saved annotations. Your list and your history then say
+"Reviewed: 2 caveats, 1 comment" under the recording's name.
+
+To read the feedback, choose See the feedback… from the recording's More button and open the same
+file from your computer. Your latest saved version opens to read, with the feedback in the side
+panel and a calm blue mark under each annotation it is about (a dashed blue outline marks a stretch
+without an annotation). N and P, or a tap on an item, go from one item to the next. When the study
+takes revisions, Open to revise starts a revision of the recording, and the feedback stays in the
+side panel while you revise; it is for you to judge what to change. Some studies keep reviews from
+the annotators (blind reviews), and then none of this appears.
+
 ## Progress and milestones
 
 Many studies also show Goals and milestones beside your progress (your study can switch them off).

@@ -525,6 +525,38 @@ are saved with the annotation, listed with each event in the analyses' matched a
 tables, and used in no statistic. The interaction log records only that a note was added, changed or
 removed and its length, as it never records typed text.
 
+## Problem reports and reviews of saved work (29 October 2026)
+
+An annotator who could not judge a recording (a file that would not open, the wrong recording, flat
+or missing channels, one too noisy or too short) used to have two choices: save it as having no
+artifacts, or write to the study team. The first mixes "clean" with "could not be judged" and
+corrupts the agreement data, so an annotator now reports the problem with a reason and an optional
+note, and either carries on or sets the recording aside. A recording set aside has a status of its
+own, `unusable`, rather than a kind of done: it counts as finished for the annotator's progress, so
+nobody is left with work they cannot do, but the study's totals keep it apart from done and take it
+from the work remaining, and the agreement analyses leave it out for every annotator and say how
+many recordings they left out. Leaving it out for everyone is the cautious choice: a recording one
+person found unreadable may hold the very artifacts that make the others disagree, and the study
+team can bring it back by returning it to its annotator's list, which undoes the status. Only an
+unfinished study recording can be set aside; training recordings keep their own rules, and a
+recording already saved keeps its result. Reports are records of their own, never deleted, and the
+interaction log keeps only the reason, the outcome and the length of the note.
+
+A lead annotator can review saved work, annotation by annotation, with Agree, Caveat or Comment and
+a note, and can point to a stretch where an artifact may have been missed. A review is a record of
+its own, beside the version it is about; it never changes the annotation files, and a recording can
+have several reviews by different people or over time, which keeps the saved results exactly as
+the annotator made them and keeps the review's own provenance (who, when, which version). The
+reviewer opens the EEG from their own computer, checked against the manifest, because the EEG never
+reaches the study. The annotator sees the feedback as a calm blue mark beside each annotation, never
+red: the feedback is a colleague's view to weigh, and the annotator decides what to change in a
+revision. A study can keep reviews from the annotators (`annotation.show_reviews_to_annotators`),
+for example to measure agreement before any feedback, or switch reviews off
+(`annotation.allow_reviews`). The agreement analyses do not use reviews, which describe how one
+person judged another's work rather than an annotation of the recording. A report and a review
+each carry an ID the browser makes, so a button pressed twice or a request sent again after a late
+answer keeps one record.
+
 ## Decisions still open
 
 1. **Agreement settings to pre-register:** bin widths, the bin coverage rule,

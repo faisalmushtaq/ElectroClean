@@ -10,6 +10,7 @@
 // token, so a link that was not copied cannot be shown again, and a new one is made instead.
 
 import { h, clear } from '../ui/dom.js';
+import { reviewButton, reviewCount, reviewsCard } from './reviews.js';
 import { icon } from '../views/common.js';
 import {
   INVITE_STATES, MODES, ROLES, STATUS, checkAnnotatorId, checkEmail, csvText, dateText, invitationText, inviteLink, inviteMessage, mailtoHref,
@@ -552,11 +553,16 @@ export class AnnotatorsSection {
       { title: 'Annotations', num: true, sort: (i) => i.n_annotations, render: (i) => (i.n_annotations === null || i.n_annotations === undefined ? '–' : String(i.n_annotations)) },
       { title: 'Saved', sort: (i) => i.saved_at, render: (i) => whenText(i.saved_at, { never: '–' }) },
       { title: 'Attempts', num: true, sort: (i) => i.attempts ?? 0, render: (i) => String(i.attempts ?? 0) },
-      { title: '', cls: 'actions', render: (i) => (i.status === 'done' ? null : this._unassignButton(u.annotator_id, i, msg)) },
+      { title: 'Reviews', num: true, render: (i) => reviewCount(this._reviews, u.annotator_id, i) },
+      { title: '', cls: 'actions', render: (i) => (i.status === 'done' ? reviewButton(this.area, u.annotator_id, i, { route: 'admin-annotators', params: { annotator: u.annotator_id } })
+        : this._unassignButton(u.annotator_id, i, msg)) },
     ], [], { empty: 'Nothing is assigned to this person.', pageSize: 15, sortable: true, caption: `Work of ${u.annotator_id}` });
     const itemsNote = loading();
-    this.area.read('assignments_list', { annotator_id: u.annotator_id })
-      .then((r) => { itemsNote.remove(); items.update(r.items || []); })
+    const reviewsHost = h('div.admin-stack');
+    this._reviews = [];
+    Promise.all([this.area.read('assignments_list', { annotator_id: u.annotator_id }),
+      this.area.read('reviews_list', { annotator_id: u.annotator_id }).catch(() => ({ reviews: [] }))])
+      .then(([r, rv]) => { itemsNote.remove(); this._reviews = rv.reviews || []; items.update(r.items || []); reviewsHost.append(reviewsCard(this._reviews)); })
       .catch((exc) => { itemsNote.remove(); msg.problem(exc); });
 
     const inv = u.invitation || { state: 'none' };
@@ -583,7 +589,8 @@ export class AnnotatorsSection {
       card('Work',
         h('p.caption', {}, 'Each recording given to this person, with the time it was open and not paused in their browser (breaks left out), the annotations saved, when, and how many times.'),
         itemsNote, items,
-        h('div.btn-row', {}, h('button.btn', { type: 'button', onclick: () => this.area.go('assignments', { annotator: u.annotator_id }) }, `Assign recordings to ${u.annotator_id}…`))));
+        h('div.btn-row', {}, h('button.btn', { type: 'button', onclick: () => this.area.go('assignments', { annotator: u.annotator_id }) }, `Assign recordings to ${u.annotator_id}…`))),
+      reviewsHost);
     if (note) msg.show(...note);
     else {
       const heading = this.detailView.querySelector('h2');

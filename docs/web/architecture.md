@@ -81,7 +81,8 @@ and sends the study only their manifests.
 ```
 electrotag/web/                 the server (FastAPI), the service layer it shares with the Firebase
                                   functions (with games.py for the achievements and the
-                                  leaderboard), and the administrator's command, electrotag-web
+                                  leaderboard, feedback.py for problem reports and reviews of
+                                  saved work), and the administrator's command, electrotag-web
 electrotag/web/firebase/        the Cloud Functions (functions/main.py) and the administrator's access
 electrotag/web/static/          the browser application (plain ES modules, no build step)
     index.html, app.css           the page and the application's design system (tokens, components)
