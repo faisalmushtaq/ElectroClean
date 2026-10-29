@@ -25,7 +25,7 @@ import { AnnotationError, endSample } from './store.js';
 import { helpHtml, KEY_HINT, REVIEW_HINT, TOUCH_HINT, TOUCH_REVIEW_HINT, TOUCH_VIEW_HINT } from './help.js';
 import { edgeHalfWidthS } from '../eeg/synthetic.js';
 import { logger, keyName } from '../log/logger.js';
-import { channelsText, clamp, formatHms, local, readableTextColour, UNDO_HINT, CTRL, debounce, touchFirst } from '../util.js';
+import { channelsText, clamp, formatHms, friendlyDuration, local, plural, readableTextColour, UNDO_HINT, CTRL, debounce, touchFirst } from '../util.js';
 import { isTyping } from '../ui/dom.js';
 import { displayCode } from '../catalogue.js';
 import { icon } from '../views/common.js';
@@ -38,6 +38,8 @@ import { mapLayout, projectPositions } from '../viewer/head_map.js';
 import { readElectrodes, sidecarsOf } from '../eeg/electrodes.js';
 import { centredStart, clampTime, parseTimeText } from './goto.js';
 
+export { friendlyDuration, plural };
+
 const MODE_TEXT = { standard: 'Annotation', guided: 'Guided training', practice: 'Practice', assessment: 'Assessment', tryout: 'Try-out', review: 'Practice review',
   reviewing: 'Review', feedback: 'Feedback' };
 /** Views that only show annotations (no toolbar): a practice review, an administrator's review pass, the feedback on saved work. */
@@ -46,9 +48,6 @@ const DRAG_PX = 3;
 const DRAW_ON_TITLE = 'Draw/edit is on: drag across the EEG to mark artifacts and change annotations. Press it to switch to view only, where nothing can change.';
 const DRAWING_OFF = 'View only: annotations cannot be drawn or changed. Press Draw/edit to mark artifacts.';
 const DRAW_OFF_TITLE = 'View only: annotations cannot be drawn or changed. Press Draw/edit to mark artifacts again.';
-
-/** "1 annotation", "3 annotations". */
-export function plural(n, word, many = `${word}s`) { return `${n} ${n === 1 ? word : many}`; }
 
 /** Channel names for a message: "O1, O2 and P3", or the first few and how many more. */
 function namesText(names, shown = 4) {
@@ -64,14 +63,6 @@ function keepFocusOnClick(b) {
 
 /** The undo hint for a message: the keys with a keyboard, the Undo button on a touch screen. */
 const undoHint = () => (touchFirst() ? 'Undo at the top takes it back' : UNDO_HINT);
-
-export function friendlyDuration(s) {
-  s = Math.round(s);
-  if (s < 60) return `${s} s`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m} min ${String(s % 60).padStart(2, '0')} s`;
-  return `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`;
-}
 
 /** A time in the recording as a person reads it: "2:05" or "1:02:05". */
 export function clockText(t) {

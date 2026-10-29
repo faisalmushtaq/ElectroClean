@@ -13,6 +13,20 @@ folder says what each module reproduces of MNE-Python and which tests check
 it, and a unit test keeps the folder free of imports from the rest of the
 application. Registration now takes the label catalogue from its caller.
 
+The browser application loads each part when it is first needed, keeping its
+design without a build step. The sign-in page now loads only itself and the
+chosen back end's client: 16 modules and 130 KB of JavaScript for a study
+server instead of 61 modules and 807 KB, and 28 modules and 430 KB in the
+demonstration instead of 67 modules and 1046 KB, so on a slow 4G connection
+the sign-in form is ready after 2.8 seconds instead of 6.4 (4.5 instead of 7.7
+in the demonstration). The home page, the annotation view, training, the quiz,
+the admin area, the game elements and the EEG readers come with the first view
+that uses them; the readers and the annotation view are fetched in idle time
+after signing in, so opening a recording does not wait. A page says
+"Loading…" while a part is on its way, and a part that cannot be fetched
+gives a plain message with Try again. A test keeps the sign-in page within a
+budget of JavaScript (docs/web/architecture.md, "Loading on demand").
+
 The pages around the annotation view were improved after a usability review.
 The answer to a chosen file now appears just under the drop zone, scrolled into
 view and given the focus, and on a training page it is worded for training

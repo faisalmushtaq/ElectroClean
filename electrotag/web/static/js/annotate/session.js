@@ -9,6 +9,9 @@ import { confidenceMode } from './confidence.js';
 import { addInterval, fromDraft, toDraft, viewedFraction as coverageFraction } from '../viewer/coverage.js';
 import { local, newId, nowLocalIso, session as tabStorage } from '../util.js';
 import { DEFAULT_ANNOTATION, DEFAULT_HIDE, DEFAULT_SCALINGS } from '../api/demo_catalogue.js';
+import { localDraft, localDraftKey } from './local_drafts.js';
+
+export { localDraft, localDraftKey };
 
 const REMOTE_EVERY_MS = 30000;
 /** After a draft that did not reach the study, the next try comes this much later (or at once when the connection returns). */
@@ -16,12 +19,6 @@ const RETRY_MS = 5000;
 
 function hiddenByDefault(name) {
   return DEFAULT_HIDE.some((p) => (p.endsWith('*') ? name.startsWith(p.slice(0, -1)) : name === p));
-}
-
-/** The key of this browser's copy of a draft (also read by the home view, for what it shows of unfinished work). */
-export function localDraftKey(backend, annotatorId, recordingId, mode, contextId) {
-  const where = backend.server || backend.kind;
-  return `electrotag.draft|${where}|${annotatorId || 'anon'}|${recordingId}|${mode}|${contextId || ''}`;
 }
 
 // Work discarded in this tab (Start afresh, Discard and close, Start again from the saved version, Leave
@@ -45,12 +42,6 @@ function keepDiscarded(key, draft) {
 function forgetDiscarded(key) {
   tabStorage.remove(DISCARDED + key);
   discardedInMemory.delete(key);
-}
-
-/** This browser's copy of a draft, or null. */
-export function localDraft(backend, annotatorId, recordingId, mode, contextId) {
-  const d = local.get(localDraftKey(backend, annotatorId, recordingId, mode, contextId), null);
-  return d && Array.isArray(d.annotations) ? d : null;
 }
 
 /** The study's comfort settings (the annotation block of GET /me), with the defaults for any left out. */

@@ -93,6 +93,7 @@ electrotag/web/static/          the browser application (plain ES modules, no bu
     admin.css                     the admin area's own layout, loaded when it is first opened
     js/main.js, js/app.js         start-up; the backend, signing in and the moves between views
     js/catalogue.js, js/util.js   the label catalogue; small helpers
+    js/lazy.js                    the parts of the application loaded at their first use
     js/views/                     sign in (with its illustration, eegart.js and montage.js), the
                                   annotator's recordings (home.js, with their progress in
                                   progress.js, the list, its tabs and history in home_list.js and
@@ -144,6 +145,65 @@ web_tests/unit/                   node --test unit tests of the browser modules
 web_tests/e2e/                    Playwright end-to-end tests
 docs/web/api.md                   the HTTP API (the contract between browser and server)
 ```
+
+## Loading on demand
+
+The application has no build step, so every module is a file of its own that
+the browser fetches when something imports it. The sign-in page loads only
+`main.js`, `app.js`, the sign-in view with what it draws, the dialogs, the
+logger, `lazy.js` and the chosen back end's client (`js/api/http.js` for a
+study server, `firebase.js` with the Firebase SDK for a study on Firebase, or
+the demonstration's own back end). Every other view is a part that `js/lazy.js`
+loads at its first use with a dynamic `import()`: the home page, the open view,
+the annotation view with the EEG viewer, training, the quiz, the practice
+review, the admin area, the game elements and the EEG readers with their
+workers. `lazy.js` keeps each part's promise, so a part is fetched once however
+many callers ask for it, and `app.js` shows a "Loading…" page while a view's
+part is on its way. A part that cannot be loaded (most often because the
+connection was lost) gives a plain message with Try again, which asks for the
+module again under another address (`home.js?attempt=1`), because Chromium
+remembers a module that failed to load for the life of the page. On the way
+from the open view to the annotation view the same message appears among the
+open view's steps, and a reader that cannot be loaded gives the message about
+the connection that the open view already had.
+
+Right after signing in, the first view's part is fetched while the visit and
+the assignments are asked for (the admin area for an administrator, the
+training path for a trainee, the home page otherwise). Once the first view is
+on screen, the readers (for a study; the demonstration's examples need none),
+the open view and the annotation view are fetched in idle time, so that opening
+a recording does not wait for them. The home page leaves the quiz, the
+annotation store and the game elements to their own parts: its quiz card is in
+`training/quiz_card.js`, the drafts it shows are read with
+`annotate/local_drafts.js`, and the game elements' cards come from
+`views/home_games.js`, which is loaded with GET /me/achievements when the study
+has them on.
+
+The table gives what the browser fetched before and after this change, measured
+with Playwright in Chromium on the demonstration served as static files and on
+`electrotag web demo` (KB of uncompressed JavaScript, 1024 bytes each; "after
+idle" includes what is fetched in idle time). The time is until the sign-in
+form can be used, from a cold cache, with the network emulated as slow 4G
+(1.6 Mbit/s, 150 ms round trip).
+
+| Stage | Demonstration, before | Demonstration, after | Study server, before | Study server, after |
+| --- | --- | --- | --- | --- |
+| Sign-in page | 67 modules, 1046 KB | 28 modules, 430 KB | 61 modules, 807 KB | 16 modules, 130 KB |
+| Home page, as it appears | 67 modules, 1046 KB | 47 modules, 588 KB | 61 modules, 807 KB | 35 modules, 280 KB |
+| Home page, after idle | 67 modules, 1046 KB | 64 modules, 966 KB | 72 modules, 969 KB | 67 modules, 866 KB |
+| A recording file read | 80 modules, 1174 KB | 77 modules, 1094 KB | 75 modules, 973 KB | 70 modules, 869 KB |
+| Admin area | 82 modules, 1280 KB | 73 modules, 1159 KB | 88 modules, 1249 KB | 77 modules, 1105 KB |
+| Sign-in usable at slow 4G | 7.7 s | 4.5 s | 6.4 s | 2.8 s |
+
+Opening one of the demonstration's examples fetches nothing more once the home
+page has had its idle moment. Of the demonstration's 430 KB at sign-in, about
+300 KB is its own back end (`js/api/demo.js`, `demo_admin.js`,
+`demo_feedback.js`, `admin/model.js` and `eeg/sha256.js`), which a real study
+never loads.
+
+`web_tests/e2e/v_loading.e2e.mjs` keeps the sign-in page within a budget of
+JavaScript set just above these figures, and checks that no later view's
+module loads with it; a view that creeps back into the sign-in page fails it.
 
 ## The Recording interface (browser)
 

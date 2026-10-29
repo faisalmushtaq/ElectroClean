@@ -336,6 +336,18 @@ server does.
 same files work at the site's root and under `/preview/`, and plain `#name` routes (the admin area's
 sections are `#admin-…`). External scripts come only from fixed, versioned URLs.
 
+**The EEG library and the parts loaded on demand.** Everything that reads, filters, fingerprints
+or registers a recording is in `js/eeg/`, which imports nothing from the rest of the application
+(its README.md lists each module, what it reproduces of MNE-Python and the tests of its parity;
+`web_tests/unit/eeg_imports.test.mjs` enforces the rule). The sign-in page loads only `app.js`, the
+sign-in view and the back end's client; every later view is a part that `js/lazy.js` loads at its
+first use, and `app.js` shows Loading… or a message with Try again around it. A new view should be
+added to the parts in `lazy.js` and reached through `_withParts` in `app.js`, never imported by
+`app.js` directly; `web_tests/e2e/v_loading.e2e.mjs` keeps the sign-in page within a budget of
+JavaScript and will fail otherwise. The demonstration's back end (about 300 KB, with
+`demo_admin.js` and `admin/model.js`) still loads whole at its sign-in; loading its admin half only
+for the administrator would bring the demonstration's sign-in page down to about 315 KB.
+
 **Writing.** The interface text and the documentation are in UK English, with the HED spelling
 *artifact* kept in label names. The documentation is written as prose, in the voice of the existing
 guides. Any literature cited must be checked against the original source before it is added to

@@ -192,6 +192,11 @@ there. A copy is removed only when its files can no longer be read as a recordin
 these parts of the page as soon as you sign in to a study, so this rarely happens. When the study
 cannot be reached to check a file, Try again asks it once more with the file already read.
 
+The page fetches each of its parts (your recordings, the annotation view, training, the quiz, the
+admin area) the first time you need it, and says "Loading…" while one is on its way on a slow
+connection. If a part cannot be fetched, the page says so and offers Try again; your work is safe,
+and reloading the page also helps if Try again does not.
+
 If you worked on the recording before without finishing it, ElectroTag offers to restore your
 unfinished work, with the number of annotations and the time spent. Choose Restore and continue, or
 Start afresh to begin again. A restored draft opens exactly where you left off: the same moment of
