@@ -165,7 +165,6 @@ export class AnnotatorsSection {
         h('button.btn.small', { type: 'button', 'data-log': 'bulk-assign', onclick: () => this.area.go('assignments', { annotators: keys }) }, 'Assign recordings…'),
         run('Switch off', 'user_update', { status: 'disabled' }, () => 'Switched off: they can no longer sign in; their work is kept.', 'bulk-switch-off'),
         run('Switch on', 'user_update', { status: 'active' }, () => 'Switched on: they can sign in again.', 'bulk-switch-on'),
-        h('span.bulk-sep', { 'aria-hidden': 'true' }),
         h('span.bulk-group', {},
           run('New invitation links', 'user_invite', this.area.isFirebase ? {} : { get expires_days() { return Number(days.value); } }, () => 'A new link, below.', 'bulk-invite'),
           this.area.isFirebase ? null : [h('label.form-label.inline', { for: days.id }, 'lasting'), days]),

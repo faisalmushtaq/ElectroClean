@@ -218,7 +218,6 @@ table.admin-list tr.chosen td { background: var(--band); }
 .bulk-bar > p { margin: 0; }
 .bulk-bar .btn-row { margin-top: 8px; }
 .bulk-bar select.field { width: auto; height: 32px; font: var(--t-14); flex: 0 1 140px; }
-.bulk-sep { width: 1px; align-self: stretch; background: var(--rule); margin: 0 4px; }
 /* New invitation links with how long they last, kept together on one line. */
 .bulk-group { display: inline-flex; align-items: center; gap: 8px; }
 .bulk-group .form-label.inline { color: var(--text-secondary); font: var(--t-14); }
