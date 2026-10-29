@@ -216,6 +216,24 @@ def test_invitations_are_audited_without_their_tokens(client: TestClient, admin:
     assert "invite_token" not in text
 
 
+def test_the_access_log_never_holds_an_invitation_token(app, caplog: pytest.LogCaptureFixture) -> None:
+    import logging
+
+    token = "Q" * 43
+    access = logging.getLogger("uvicorn.access")
+    with caplog.at_level(logging.INFO, logger="uvicorn.access"):
+        # as uvicorn writes a request for the page that a link opens
+        access.info('%s - "%s %s HTTP/%s" %d', "10.0.0.5:4242", "GET", f"/?server=x&invite={token}#a", "1.1", 200)
+        access.info('%s - "%s %s HTTP/%s" %d', "10.0.0.5:4242", "GET", f"/?invite={token}", "1.1", 200)
+        access.info("GET /index.html?invite=" + token)  # a message without arguments
+    assert len(caplog.records) == 3 and token not in caplog.text
+    assert "/?server=x&invite=(hidden)#a" in caplog.text
+    from electroclean.web.app import HideInvitations, hide_invitations_in_access_log
+
+    hide_invitations_in_access_log()  # as a second app would: still one filter
+    assert sum(isinstance(f, HideInvitations) for f in access.filters) == 1
+
+
 def test_failed_invitation_attempts_are_limited(client: TestClient) -> None:
     for _ in range(50):
         check(client, "y" * 43)

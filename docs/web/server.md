@@ -144,5 +144,6 @@ annotators' IDs, names, email addresses (when given), notes and password hashes,
 drafts and quiz answers, the interaction logs (times, clicks, keys and what was on screen; never
 typed text or passwords) and the audit log of the administrators' changes (which never holds a
 password or an invitation link). An invitation link's token is kept only as a SHA-256 hash with its
-expiry and the dates it was made and used, so a copy of the study folder lets nobody use a link. Keep it on a computer and in backups that your data protection arrangements allow for
+expiry and the dates it was made and used, so a copy of the study folder lets nobody use a link,
+and the server's access log shows a link that opened the page as `?invite=(hidden)`. Keep it on a computer and in backups that your data protection arrangements allow for
 research data.

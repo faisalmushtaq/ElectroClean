@@ -8,7 +8,8 @@ Security: sign-in returns a bearer token (kept only as a hash; it expires after 
 and on sign-out); every API request except ``GET /health`` must carry ``X-ElectroClean: 1`` (so a
 page on another site cannot send requests with a simple form); CORS answers only the origins in
 ``ELECTROCLEAN_ALLOWED_ORIGINS``; sign-in attempts and requests are rate limited; request bodies are
-limited in size; errors never include a stack trace.
+limited in size; errors never include a stack trace. The token of an invitation link
+(``?invite=…``, when this server also serves the page) is blanked in the access log.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import threading
 import time
 from collections import deque
@@ -62,6 +64,29 @@ def allowed_origins_from_env(value: str | None = None) -> list[str]:
     return [o.strip().rstrip("/") for o in raw.split(",") if o.strip()]
 
 
+_INVITE_IN_ADDRESS = re.compile(r"([?&]invite=)[^&#\s\"]*")
+
+
+class HideInvitations(logging.Filter):
+    """Blanks the token of an invitation link in the access log: the page is opened with
+    ``?invite=<token>``, and the log must not hold a way into somebody's account."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.args, tuple) and any(isinstance(a, str) and "invite=" in a for a in record.args):
+            record.args = tuple(_INVITE_IN_ADDRESS.sub(r"\1(hidden)", a) if isinstance(a, str) else a
+                                for a in record.args)
+        if isinstance(record.msg, str) and "invite=" in record.msg:
+            record.msg = _INVITE_IN_ADDRESS.sub(r"\1(hidden)", record.msg)
+        return True
+
+
+def hide_invitations_in_access_log() -> None:
+    """Install :class:`HideInvitations` on the server's access log (once)."""
+    access = logging.getLogger("uvicorn.access")
+    if not any(isinstance(f, HideInvitations) for f in access.filters):
+        access.addFilter(HideInvitations())
+
+
 class RateLimiter:
     """At most ``limit`` events per ``window_s`` seconds for each key (in memory)."""
 
@@ -100,6 +125,7 @@ def create_app(study_dir: Path | str, *, demo: bool = False, allowed_origins: li
                demo_zip: Path | None = None, static_dir: Path | None = None,
                request_limit_per_minute: int = 1200) -> FastAPI:
     """The server for the study in ``study_dir``."""
+    hide_invitations_in_access_log()
     store = FilesStore(study_dir, demo=demo)
     service = StudyService(store)
     origins = set(allowed_origins if allowed_origins is not None else allowed_origins_from_env())
