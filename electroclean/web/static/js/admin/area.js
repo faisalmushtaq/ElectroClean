@@ -74,7 +74,7 @@ export class AdminArea {
     this.main = h('main.admin-main', { id: 'admin-main' });
     this.find = this._buildFind();
     const demo = this.backend.isDemo
-      ? h('p.note.admin-demo-note', {}, 'Demonstration: everything here is kept in this browser. The analyses, consensus references and the results zip need a study server or Firebase.')
+      ? h('aside.note.admin-demo-note', { 'aria-label': 'Demonstration' }, 'Demonstration: everything here is kept in this browser. The analyses, consensus references and the results zip need a study server or Firebase.')
       : null;
     this.el = h('div.view.admin', { 'data-view': 'admin' }, appHeader(app, { admin: true, tools: this.find }),
       h('div.admin-layout', {}, this.nav, h('div.admin-body', {}, demo, this.main)));

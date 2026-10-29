@@ -37,7 +37,9 @@ needs Playwright with Chromium (`npm install --no-save playwright@1.63.0` and
 WebKit, the engine of Safari on iPads and Macs (`npx playwright install --with-deps
 webkit`); `k_ipad.e2e.mjs` checks the application as an iPad: touch on the EEG
 (in Chromium, which can put several fingers on the screen at once), the layouts
-upright and on its side, a phone's notice and the file pickers. The two Firebase scripts run the functions
+upright and on its side, a phone's notice and the file pickers. `o_landmarks.e2e.mjs` keeps
+the structure that screen readers navigate by: one main landmark on every page, all text inside a
+landmark or a dialog, and a heading for every table column. The two Firebase scripts run the functions
 and the application on Google's Firebase Emulator Suite, with a project ID that
 starts with `demo-` and so never reaches a real Firebase project.
 

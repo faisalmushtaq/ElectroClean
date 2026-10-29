@@ -192,6 +192,9 @@ kbd .ico { width: 12px; height: 12px; }
 
 /* ------------------------------------------------------------------ messages
    A flat block with a hairline frame and a 3-pixel bar in the message's colour. */
+/* Text for screen readers only, such as the heading of a column of buttons. */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
 .banner, .note, .success {
   border: 1px solid var(--hairline); border-left-width: 3px; border-radius: 0; padding: 12px 16px; margin: 0 0 12px;
 }

@@ -32,7 +32,7 @@ export class TrainingSection {
     this.setId = null;
     this.tab = 'references';
     this.msg = messageArea();
-    this.setList = h('div.set-list', { role: 'list' });
+    this.setList = h('div.set-list');
     this.detail = h('div.admin-stack');
     this.el = h('section.admin-section', { 'data-section': 'training' },
       sectionHead('Training', 'Reference sets hold the recordings and the experts\' annotations behind the training programme, the competency assessment and the quiz. Trainees never see a reference until the programme shows it to them.'),
@@ -74,7 +74,7 @@ export class TrainingSection {
     for (const s of this.sets) {
       const counts = ['guided', 'practice', 'assessment'].map((u) => [u, s.recordings.filter((r) => r.use === u).length]).filter(([, n]) => n)
         .map(([u, n]) => `${n} ${u}`).join(', ');
-      this.setList.append(h('button.set-item', { type: 'button', role: 'listitem', 'aria-current': s.set_id === this.setId ? 'true' : null,
+      this.setList.append(h('button.set-item', { type: 'button', 'aria-current': s.set_id === this.setId ? 'true' : null,
         onclick: () => { this.setId = s.set_id; this._renderSetList(); this._renderDetail(); } },
       h('span.set-name', {}, s.name || s.set_id), h('span.caption', {}, `${s.set_id}${counts ? ` · ${counts}` : ' · no recordings yet'}${s.quiz_items ? ` · ${plural(s.quiz_items, 'quiz item')}` : ''}`)));
     }

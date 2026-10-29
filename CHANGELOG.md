@@ -251,6 +251,15 @@ On a phone, the sign-in page now says that annotating needs a tablet or a
 computer and that administrators can sign in to check progress; an annotator
 who signs in on a phone is offered Email me this link and Sign out.
 
+The pages are easier to move around with a screen reader. The annotation view
+is the page's main landmark, the admin area's note about the demonstration is
+a landmark of its own, every column of buttons in a table has a heading that
+screen readers read (Actions), the list of artifact types can take the
+keyboard's focus, and the list of reference sets no longer gives its buttons
+the role of list items. An automated audit (axe-core) of every page of the
+demonstration found nothing after these changes, and a new end-to-end test
+(`o_landmarks.e2e.mjs`) keeps the structure it checked.
+
 ## 1.1.0
 
 The first public release, with stand-alone applications for Windows (64-bit),

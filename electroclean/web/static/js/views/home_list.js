@@ -170,7 +170,7 @@ export function recordingsCard(app) {
     const head = history
       ? h('tr', {}, h('th.name', {}, 'File and when it was saved'), h('th.num.version', {}, 'Version'), h('th.num.opt.count', {}, 'Annotations'),
         h('th.num.opt.time', {}, 'Time'), h('th.act', {}))
-      : h('tr', {}, h('th', {}, 'File'), showMode ? h('th.opt', {}, 'Mode') : null, h('th.num', {}, 'Length'), h('th.num.opt', {}, 'Channels'), h('th', {}, 'Status'), h('th', {}));
+      : h('tr', {}, h('th', {}, 'File'), showMode ? h('th.opt', {}, 'Mode') : null, h('th.num', {}, 'Length'), h('th.num.opt', {}, 'Channels'), h('th', {}, 'Status'), h('th', {}, h('span.sr-only', {}, 'Actions')));
     body.append(h(`table.list${history ? '.history' : ''}`, { 'data-tab': st.tab }, h('thead', {}, head), h('tbody', {}, pg.rows.map(history ? historyRow : listRow))));
     const pages = pager(pg, rows.length);
     if (pages) body.append(pages);

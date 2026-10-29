@@ -212,7 +212,7 @@ export function dataTable(columns, rows = [], {
     const can = sortable && c.title && valueOf(c);
     const on = Boolean(sort && sort.index === i);
     const th = h(`th${c.num ? '.num' : ''}`, { scope: 'col', 'aria-sort': can ? (on ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none') : null });
-    if (!can) { th.append(c.title); return th; }
+    if (!can) { th.append(c.title || h('span.sr-only', {}, 'Actions')); return th; }
     th.append(h(`button.th-sort${on ? '.on' : ''}`, { type: 'button', 'data-col': String(i), title: `Sort by ${c.title.toLowerCase()}`,
       onclick: () => {
         sort = { index: i, dir: on && sort.dir === 'asc' ? 'desc' : 'asc' };

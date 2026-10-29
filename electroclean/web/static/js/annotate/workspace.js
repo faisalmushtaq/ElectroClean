@@ -123,7 +123,7 @@ export class Workspace {
       notchHarmonics: Boolean(f.notch_harmonics),
     };
     this.filtersLocked = Boolean(fl.locked);
-    this.el = h('div.view.annotate', { 'data-view': 'annotate', class: s.revision && this.kind === 'annotate' ? 'revising' : null },
+    this.el = h('main.view.annotate', { 'data-view': 'annotate', class: s.revision && this.kind === 'annotate' ? 'revising' : null },
       this._header(), this._revisionBar(), this.kind === 'review' ? null : this._toolbar(),
       this.main = h('div.ws-main', {}, this.eegHost = h('div.ws-eeg'), this.side = h('aside.ws-side', { 'aria-label': 'Annotations and help' })),
       this._statusBar());

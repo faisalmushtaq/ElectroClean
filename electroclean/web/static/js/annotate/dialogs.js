@@ -12,7 +12,7 @@ import { legibleOnWhite } from '../util.js';
  */
 export function pickType({ title, catalogue, current = null, quick = [], at = null }) {
   const search = h('input.field', { type: 'search', placeholder: 'Type part of a name or code, for example blink or 103', 'aria-label': 'Search the artifact types', autocomplete: 'off', spellcheck: 'false' });
-  const list = h('div.picker-list', { role: 'listbox', 'aria-label': 'Artifact types' });
+  const list = h('div.picker-list', { role: 'listbox', 'aria-label': 'Artifact types', tabindex: '0' });
   const hint = h('p.caption', {}, 'Enter chooses the highlighted type. Group terms, in italics, are for artifacts whose exact type is unclear.');
   let items = [];
   let active = 0;
