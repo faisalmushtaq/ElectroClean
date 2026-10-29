@@ -224,8 +224,13 @@ faster storage from iPadOS 26 and the browser's database before it; check both o
 recording at the same moment can both write its files; on one heavily loaded test run the first
 tab read the copy back while the second was still writing and called it incomplete (it then
 removes the copy and opens the recording from memory, so no work is lost). A per-copy Web Lock
-around writing is the natural fix, but a first attempt made WebKit refuse some reads in the tests,
-so it was taken out again before the push.
+around writing is the natural fix. A first attempt made WebKit refuse some reads in the tests and
+was taken out again. The refusal is most probably the one since found in the device test, which is
+WebKit's own: it refuses every read of a Blob (a kept file, or one held in memory) that starts once
+the page has begun to reload or close, and reports it as an error of the page, which the test
+runner counts. Lists of kept copies now read each description once per page (`DescriptionCache` in
+`js/data/device_store.js`), and the device test lists them throughout a reload to keep it that way,
+so the lock can be tried again, with the device tests in WebKit as the check.
 
 **6b. Loose ends from the EEGNet comparison (29 October).** Confidence, notes, problem reports,
 reviews of saved work, the channel map, the value under the pointer, the overlay and Go to time are

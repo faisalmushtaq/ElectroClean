@@ -1,5 +1,6 @@
 // Recordings kept on this device (js/data/device_store.js): the keys that keep people's copies
-// apart, the choice of storage, what "Remove finished recordings" removes, and full devices. The
+// apart, the choice of storage, what "Remove finished recordings" removes, full devices, and the
+// descriptions that a page reads once (WebKit refuses reads while a page is being left). The
 // storage itself (the Origin Private File System and IndexedDB) is tried in Chromium and WebKit
 // (web_tests/e2e/l_device.e2e.mjs).
 import { test } from 'node:test';
@@ -115,4 +116,29 @@ test('a copy marked in use (in any tab) is kept by Remove; the mark ends with it
   } finally {
     if (had) Object.defineProperty(globalThis, 'navigator', had); else delete globalThis.navigator;
   }
+});
+
+test('a description is read once per page, and again only when its file has been rewritten', async () => {
+  const { DescriptionCache } = await import('../../electrotag/web/static/js/data/device_store.js');
+  const cache = new DescriptionCache();
+  const key = `o/${SHA}`;
+  const meta = makeMeta({ sha256: SHA, recordingId: 'sub-01', fileName: 'r.edf', files: [{ name: 'r.edf', size: 10 }], now: new Date('2026-10-29T09:00:00Z') });
+  const file = { size: 180, lastModified: 1000 };
+  assert.equal(cache.get(key, file), null, 'nothing is known before the first read');
+  cache.set(key, file, meta);
+  assert.deepEqual(cache.get(key, { size: 180, lastModified: 1000 }), meta, 'the same file needs no read');
+  // a copy each time, so that a caller cannot change what is known
+  const got = cache.get(key, file);
+  got.files.push({ name: 'x', size: 1 });
+  assert.deepEqual(cache.get(key, file), meta);
+  meta.recordingId = 'changed by the caller';
+  assert.equal(cache.get(key, file).recordingId, 'sub-01');
+  // rewritten (here or in another tab): changed time or size, so it is read again
+  assert.equal(cache.get(key, { size: 180, lastModified: 2000 }), null);
+  assert.equal(cache.get(key, { size: 181, lastModified: 1000 }), null);
+  assert.equal(cache.get(`o/${SHA2}`, file), null, 'each copy has its own description');
+  cache.set(`o/${SHA2}`, file, null);
+  assert.equal(cache.get(`o/${SHA2}`, file), null, 'a description that is not one is never kept');
+  cache.drop(key);
+  assert.equal(cache.get(key, file), null, 'a removed copy is forgotten');
 });

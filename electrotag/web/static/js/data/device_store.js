@@ -104,6 +104,33 @@ export function makeMeta({ sha256, recordingId, fileName, files, now = new Date(
     files: list, size: list.reduce((a, f) => a + f.size, 0), keptAt: now.toISOString() };
 }
 
+/**
+ * The descriptions of kept copies that this page has already read or written, each with the size
+ * and time of change of its meta.json. WebKit refuses to read any Blob, a file of the Origin Private
+ * File System included, once the page has started to leave (a reload, or a link followed), and
+ * reports each refused read as an error of the page. The file's size and time of change come with
+ * its handle, without a read; so a page reads each description once and lists its copies from
+ * what it knows after that, reading again only when the description has been rewritten (here or in
+ * another tab).
+ */
+export class DescriptionCache {
+  constructor() { this._known = new Map(); }
+
+  static stamp(file) { return `${Number(file.size)}:${Number(file.lastModified)}`; }
+
+  /** The description of the copy at key, if it is known for this version of its file (a copy each time). */
+  get(key, file) {
+    const k = this._known.get(key);
+    return k && k.stamp === DescriptionCache.stamp(file) ? structuredClone(k.meta) : null;
+  }
+
+  set(key, file, meta) {
+    if (meta && typeof meta === 'object') this._known.set(key, { stamp: DescriptionCache.stamp(file), meta: structuredClone(meta) });
+  }
+
+  drop(key) { this._known.delete(key); }
+}
+
 // ---------------------------------------------------------------------------------- storage
 /** The Origin Private File System: ROOT_NAME/<owner>/<sha256>/{files, meta.json}. */
 class OpfsBackend {
@@ -122,7 +149,7 @@ class OpfsBackend {
     for await (const [name, handle] of dir.entries()) {
       if (handle.kind !== 'directory') continue;
       try {
-        const meta = JSON.parse(await (await (await handle.getFileHandle(META)).getFile()).text());
+        const meta = await readMeta(`${owner}/${name}`, handle);
         if (meta && meta.sha256 === name) out.push(meta);
       } catch {
         // No description: a copy being written now (here or in another tab), or one left behind when
@@ -144,22 +171,38 @@ class OpfsBackend {
       await this.remove(owner, meta.sha256).catch(() => {});
       throw e;
     }
+    // The copy is whole; this page knows its description without reading it back.
+    try { described.set(`${owner}/${meta.sha256}`, await (await dir.getFileHandle(META)).getFile(), meta); } catch { /* read when listed */ }
   }
 
   async get(owner, sha256) {
     let dir;
     try { dir = await this._dir(`${owner}/${sha256}`, false); } catch { return null; }
-    const meta = JSON.parse(await (await (await dir.getFileHandle(META)).getFile()).text());
+    const meta = await readMeta(`${owner}/${sha256}`, dir);
     const files = [];
     for (const f of meta.files) files.push(await (await dir.getFileHandle(f.name)).getFile());
     return { meta, files };
   }
 
   async remove(owner, sha256) {
+    described.drop(`${owner}/${sha256}`);
     let dir;
     try { dir = await this._dir(owner, false); } catch { return; }
     try { await dir.removeEntry(sha256, { recursive: true }); } catch (e) { if (e && e.name !== 'NotFoundError') throw e; }
   }
+}
+
+/** The descriptions this page has read or written (see DescriptionCache). */
+const described = new DescriptionCache();
+
+/** The description in a copy's folder: from what this page already knows of it, or read from its file. */
+async function readMeta(key, dirHandle) {
+  const file = await (await dirHandle.getFileHandle(META)).getFile();
+  const known = described.get(key, file);
+  if (known) return known;
+  const meta = JSON.parse(await file.text());
+  described.set(key, file, meta);
+  return meta;
 }
 
 /** A copy's folder without a description whose files have not changed for ten minutes. */
