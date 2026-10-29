@@ -234,8 +234,7 @@ so the lock can be tried again, with the device tests in WebKit as the check.
 
 **6b. Loose ends from the EEGNet comparison (29 October).** Confidence, notes, problem reports,
 reviews of saved work, the channel map, the value under the pointer, the overlay and Go to time are
-in place. The Annotations list in the side panel is narrow, so long labels are cut short, a little
-more so when a rating or a note is shown. Electrode positions from a BIDS `electrodes.tsv` are used only when the
+in place. Electrode positions from a BIDS `electrodes.tsv` are used only when the
 annotator opens it with the recording; recordings opened from a link or kept on the device use
 standard positions.
 

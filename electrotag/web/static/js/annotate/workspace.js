@@ -372,7 +372,7 @@ export class Workspace {
     this.countLabel = h('p.caption.count');
     this.tbody = h('tbody');
     this.table = h('table.ann-table', { 'aria-label': 'Annotations' },
-      h('thead', {}, h('tr', {}, h('th', {}, 'Label'), h('th.code', {}, 'Code'), h('th.num', { title: 'Start, in seconds' }, 'Start'), h('th.num', { title: 'End, in seconds' }, 'End'), h('th', {}, 'Channels'))),
+      h('thead', {}, h('tr', {}, h('th', {}, 'Label', h('span.th-time', { title: 'Start and end, in seconds' }, 'Time (s)')))),
       this.tbody);
     this.tableWrap = h('div.table-wrap', {}, this.table);
     const btn = (label, fn, cls = '') => h(`button.btn${cls}`, { type: 'button', onclick: fn }, label);
@@ -383,10 +383,10 @@ export class Workspace {
     this.btnMerge = btn('Merge', () => this.mergeSelected());
     this.btnMerge.title = 'Merge the selected annotations (same label only) into one interval';
     this.btnDel = btn('Delete', () => this.deleteSelectedRows(), '.destructive');
-    p.append(this.countLabel, this.tableWrap,
+    p.append(h('div.ann-body', {}, this.countLabel, this.tableWrap,
       this.readOnly ? h('div.btn-row', {}, this.btnGoto)
         : h('div.btn-grid', {}, this.btnGoto, this.btnTimes, this.btnLabel, this.btnChans, this.btnMerge, this.btnDel,
-          ...this._confidenceButtons(btn)));
+          ...this._confidenceButtons(btn))));
   }
 
   _recordingPanel() {
@@ -1033,21 +1033,26 @@ export class Workspace {
     anns.forEach((a, i) => {
       const l = this.cat.get(a.label);
       const prefix = (this.prefix && this.prefix[a.annotation_id]) || '';
+      const start = (a.onset_sample / this.sf).toFixed(3);
+      const end = (endSample(a) / this.sf).toFixed(3);
       const tr = h(`tr${sel.has(a.annotation_id) ? '.selected' : ''}`, {
         'data-id': a.annotation_id, 'data-log-text': a.label, 'aria-selected': String(sel.has(a.annotation_id)),
-        title: `${a.label}\n${l.description}`.trim(),
+        title: `${a.label} (${l.value})\n${l.description}`.trim(),
         onclick: (e) => this._rowClick(e, i, anns),
         ondblclick: () => this.jumpTo(a.annotation_id),
       },
-      h('td.label', {}, h('span.swatch', { style: { background: l.colour } }), h('span.label-text', { style: { color: this.labelColours?.[a.annotation_id] || null } }, prefix + a.label),
-        ...this._confidenceMarks(a)),
-      h('td.code', {}, String(l.value)),
-      h('td.num', { title: `${(a.onset_sample / this.sf).toFixed(3)} to ${(endSample(a) / this.sf).toFixed(3)} s, duration ${(a.duration_samples / this.sf).toFixed(3)} s` }, (a.onset_sample / this.sf).toFixed(3)),
-      h('td.num', {}, (endSample(a) / this.sf).toFixed(3)),
-      h('td.chans', { title: a.channels.length ? a.channels.join(', ') : 'Whole montage' }, channelsText(a.channels)));
+      // Two lines, so that the label has the panel's whole width: the label (wrapping at its hyphens
+      // only when even that is too narrow), then the channels, the rating, the note sign and the times.
+      h('td.label', {},
+        h('div.ann-name', {}, h('span.swatch', { style: { background: l.colour } }),
+          h('span.label-text', { style: { color: this.labelColours?.[a.annotation_id] || null } }, prefix + a.label)),
+        h('div.ann-details', {}, h('span.chans', { title: a.channels.length ? a.channels.join(', ') : 'Whole montage' }, channelsText(a.channels)),
+          ...this._confidenceMarks(a),
+          h('span.ann-time', { title: `${start} to ${end} s, duration ${(a.duration_samples / this.sf).toFixed(3)} s` },
+            `${start}–${end}`))));
       this.tbody.appendChild(tr);
     });
-    if (!anns.length) this.tbody.appendChild(h('tr.empty', {}, h('td', { colspan: '5' }, this.readOnly ? 'No annotations.' : 'No annotations yet. Choose a type and drag across the EEG.')));
+    if (!anns.length) this.tbody.appendChild(h('tr.empty', {}, h('td', {}, this.readOnly ? 'No annotations.' : 'No annotations yet. Choose a type and drag across the EEG.')));
     this.tableWrap.scrollTop = scroll;
     const n = anns.length;
     const nCh = anns.filter((a) => a.channels.length).length;
@@ -1798,7 +1803,7 @@ export class Workspace {
     this.btnNote.disabled = !(editable && anns.length === 1);
   }
 
-  /** What the label cell of the Annotations table shows after the label: the rating ("3/5") and a note icon. */
+  /** What a row of the Annotations table shows below the label, after the channels: the rating ("3/5") and a note icon. */
   _confidenceMarks(a) {
     const out = [];
     if (isConfidence(a.confidence)) out.push(h('span.conf-mark', { title: `Confidence ${a.confidence} of 5: ${CONFIDENCE_ANCHORS[a.confidence]}` }, `${a.confidence}/5`));

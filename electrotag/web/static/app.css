@@ -630,6 +630,7 @@ ul.unviewed-list { font-variant-numeric: tabular-nums lining-nums; margin-bottom
 .ws-side.large-text .tab-panel, .ws-side.large-text .tab-panel .caption, .ws-side.large-text .ann-table, .ws-side.large-text .ann-table th,
 .ws-side.large-text table.info, .ws-side.large-text table.info th, .ws-side.large-text .help-text, .ws-side.large-text .coach-scroll,
 .ws-side.large-text .coach-header, .ws-side.large-text .welcome-back, .ws-side.large-text fieldset.viewing legend { font: var(--t-16); }
+.ws-side.large-text .ann-table .ann-details { font: var(--t-14); }
 
 /* the viewer */
 .viewer { flex: 1; display: flex; flex-direction: column; min-height: 0; background: var(--surface); border: 1px solid var(--hairline); border-radius: 0; overflow: hidden; }
@@ -659,25 +660,39 @@ ul.unviewed-list { font-variant-numeric: tabular-nums lining-nums; margin-bottom
 .tab-panel { padding: 16px; overflow: auto; flex: 1; min-height: 0; font: var(--t-14); }
 .count { margin-bottom: 8px; }
 .table-wrap { max-height: 320px; overflow: auto; border: 1px solid var(--hairline); border-radius: 0; background: var(--surface); }
-.tab-panel[data-panel="annotations"] { display: flex; flex-direction: column; }
-.tab-panel[data-panel="annotations"] .table-wrap { max-height: none; flex: 0 1 auto; min-height: 60px; }
+.tab-panel[data-panel="annotations"] { display: flex; flex-direction: column; container: ann-panel / inline-size; }
+.ann-body { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.ann-body > .table-wrap { max-height: none; flex: 0 1 auto; min-height: 60px; }
+/* A wide, short panel (below the EEG on an iPad held upright): the buttons beside the list, so that
+   the list keeps the panel's whole height. */
+@container ann-panel (min-width: 600px) {
+  .ann-body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; grid-template-rows: auto minmax(0, 1fr); column-gap: 16px; }
+  .ann-body > .count { grid-column: 1 / -1; }
+  .ann-body > .table-wrap { grid-column: 1; grid-row: 2; align-self: start; max-height: 100%; min-height: 0; }
+  .ann-body > .btn-grid, .ann-body > .btn-row { grid-column: 2; grid-row: 2; align-self: start; margin-top: 0; }
+}
 .ann-table { width: 100%; border-collapse: collapse; font: var(--t-14); table-layout: fixed; }
 .ann-table th {
   position: sticky; top: 0; background: var(--page); text-align: left; color: var(--text-secondary); padding: 6px 8px;
   font: var(--t-14); border-bottom: 1px solid var(--rule); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.ann-table th:nth-child(1) { width: 34%; }
-.ann-table th:nth-child(2) { width: 12%; }
-.ann-table th:nth-child(3), .ann-table th:nth-child(4) { width: 15%; }
-.ann-table td { padding: 6px 8px; border-bottom: 1px solid var(--hairline); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
-.ann-table td.num, .ann-table th.num { text-align: right; font-variant-numeric: tabular-nums lining-nums; }
-.ann-table td.code { color: var(--text-secondary); font-variant-numeric: tabular-nums lining-nums; }
-.ann-table td.label { display: flex; align-items: center; gap: 8px; }
-.ann-table td.label span:last-child, .ann-table td.label .label-text { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* Each row has two lines, so that the label has the whole width of the panel and is read in full:
+   the label (wrapping at its hyphens only when even that is too narrow, so that nothing is ever cut
+   short), then the channels, the rating, the note sign and, on the right, the start and end. The
+   code of the type is in the row's title. */
+.ann-table th .th-time { float: right; }
+.ann-table td { padding: 4px 8px; border-bottom: 1px solid var(--hairline); cursor: pointer; }
+.ann-table .ann-name { display: flex; align-items: baseline; gap: 8px; }
+.ann-table .label-text { min-width: 0; overflow-wrap: anywhere; }
+.ann-table .ann-details {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; padding-left: 18px;
+  color: var(--text-secondary); font: var(--t-12); font-variant-numeric: tabular-nums lining-nums;
+}
+.ann-table .ann-details .chans { min-width: 0; overflow-wrap: anywhere; }
+.ann-table .ann-time { margin-left: auto; white-space: nowrap; }
 /* Confidence and notes: quiet, in the secondary text colour (never the warning or bad-channel greys). */
-.ann-table td.label .conf-mark { flex: none; margin-left: -4px; color: var(--text-secondary); font: var(--t-12); }
-.ann-table td.label .note-mark .ico { width: 12px; height: 12px; vertical-align: 0; }
-.ann-table td.label .note-mark { flex: none; display: inline-flex; margin-left: -4px; color: var(--text-secondary); }
+.ann-table .note-mark .ico { width: 12px; height: 12px; display: block; }
+.ann-table .note-mark { display: inline-flex; align-self: center; }
 /* The confidence control below the table: 1 to 5 with one press, and Clear; the whole width of the grid. */
 .conf-row { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 4px; }
 .conf-row .conf-caption { flex: 1 1 100%; font: var(--t-12); }
@@ -857,11 +872,6 @@ a.btn { text-decoration: none; }
 }
 @media (max-width: 1440px) {
   .ws-side { width: 360px; }
-  .ann-table .code { display: none; }
-  /* Start and End keep their whole figures (23.000); the label and the channels give way first. */
-  .ann-table th:nth-child(1) { width: 34%; }
-  .ann-table th:nth-child(3), .ann-table th:nth-child(4) { width: 22%; }
-  .ann-table td.num, .ann-table th.num { padding-left: 4px; }
 }
 @media (max-width: 1100px) {
   .home-grid { grid-template-columns: minmax(0, 1fr); }
@@ -882,7 +892,7 @@ a.btn { text-decoration: none; }
   .menu-item { min-height: 44px; }
   .picker-item { padding: 10px 12px; }
   .quiz-option { padding: 8px; }
-  .ann-table td { padding: 10px 8px; }
+  .ann-table td { padding: 6px 8px; }
   .channel-chip { padding: 8px; }
   .flag-list li { padding: 8px 4px; }
   input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; }
