@@ -259,8 +259,14 @@ that file system only from workers). The owner is the backend, the study and
 the annotator; a copy is opened by its fingerprint and checked again as it is
 opened. A probe of a few bytes finds browsers that offer the interfaces but
 store nothing (private windows, and the private profiles of the test runner's
-WebKit, which is why `l_device.e2e.mjs` uses a profile on disk). The panel and
-the choices remembered per annotator are in `js/views/device.js`.
+WebKit, which is why `l_device.e2e.mjs` uses a profile on disk). WebKit refuses
+to read any Blob, a file of the Origin Private File System included, once the
+page has started to leave (a reload, or a link followed), and reports each
+refusal as an error of the page; so each page reads a copy's `meta.json` once,
+keeps what it read or wrote with the file's size and time of change (which come
+with its handle, without a read), and reads it again only when either has
+changed (`DescriptionCache`). The panel and the choices remembered per
+annotator are in `js/views/device.js`.
 
 ### What is read, and how it compares with MNE-Python
 

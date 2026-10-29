@@ -134,6 +134,20 @@ export const tests = [
         await waitForRoute(page, 'home');
         await cloud.close(); // the service is gone: the copy on the device is all there is
 
+        // The page lists its kept copies all the while it is reloaded, as the home page does when it
+        // appears just before a reload. WebKit refuses to read any file once a page starts to leave,
+        // and reports each refusal as an error of the page; the list comes from what the page knows.
+        await page.evaluate(() => {
+          void (async () => {
+            const { deviceStore } = await import('./js/views/device.js');
+            const s = deviceStore(globalThis.ElectroTag);
+            for (;;) {
+              await s.list().catch(() => {});
+              await new Promise((r) => setTimeout(r, 2));
+            }
+          })();
+        });
+        await page.waitForTimeout(100);
         await page.reload();
         await waitForRoute(page, 'home', 30000);
         await page.waitForSelector('.device-line:not([hidden])');

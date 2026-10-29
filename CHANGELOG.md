@@ -175,7 +175,11 @@ used and available, and removes one, the finished ones or all of them; a
 setting removes each recording when it is finished, after Save and Finish has
 saved it. A full device leaves the recording open from memory and offers to
 remove finished recordings, signing out offers to remove the copies, and the
-interaction log records what was kept and removed by size and count only.
+interaction log records what was kept and removed by size and count only. A
+page reads the description of each kept copy once and lists the copies from
+what it knows after that, so Safari, which refuses to read files once a page
+has started to reload or close, stays free of errors when a person reloads the
+home page just as it lists them.
 
 Channels can be coloured by group: Colour channels by, in the Recording tab,
 colours each channel's trace and name by its region (frontal, central,
