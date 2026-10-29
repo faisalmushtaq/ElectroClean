@@ -13,6 +13,9 @@ Everything lives under ``studies/{study_id}``::
         drafts/{annotator_id}_{key}         unfinished work (packed)
         guided/{annotator_id}_{set}_{key}   where a trainee is in a guided recording
         quiz/{annotator_id}_{set}           a quiz's answers so far, and its score once finished
+        annotators/{annotator_id}           the annotator's own record: a personal goal, being hidden from
+                                            the leaderboard, the share of each saved recording viewed
+        private/secrets                     the study's random secrets (the leaderboard's pseudonym key)
         submissions/{annotator_id}_{key}_{attempt}   a saved recording: its register row and its files
         result_files/{key}                  other result files, as written (the quiz results)
         progress/{set}_{annotator_id}       stars, scores and times (training_progress)
@@ -567,6 +570,7 @@ class FirestoreStore(Store):
             for snap in self.doc.collection(name).where(filter=FieldFilter("annotator_id", "==", aid)).stream():
                 self._delete(snap.reference)
         self.doc.collection("assignments").document(aid).delete()
+        self.doc.collection("annotators").document(aid).delete()
         ref.delete()
 
     def _assignment_doc(self, annotator_id: str) -> dict[str, Any]:
@@ -887,6 +891,53 @@ class FirestoreStore(Store):
         """(path below the results folder, contents) of every result file kept (for the export)."""
         return [((s.to_dict() or {}).get("path", ""), base64.b64decode(self._get_blob(s) or ""))
                 for s in self.doc.collection("result_files").stream()]
+
+    # ------------------------------------------- the annotator's own record (games)
+    def annotator_record(self, annotator_id: str) -> dict[str, Any]:
+        snap = self.doc.collection("annotators").document(str(annotator_id).upper()).get()
+        return json.loads((snap.to_dict() or {}).get("record_json") or "{}") if snap.exists else {}
+
+    def annotator_records(self) -> dict[str, dict[str, Any]]:
+        return {s.id: json.loads((s.to_dict() or {}).get("record_json") or "{}")
+                for s in self.doc.collection("annotators").stream()}
+
+    def update_annotator_record(self, annotator_id: str,
+                                change: Callable[[dict[str, Any]], dict[str, Any] | None]) -> dict[str, Any]:
+        from google.cloud import firestore
+
+        aid = str(annotator_id).upper()
+        ref = self.doc.collection("annotators").document(aid)
+
+        @firestore.transactional
+        def update(tx: Any) -> dict[str, Any]:
+            snap = ref.get(transaction=tx)
+            old = json.loads((snap.to_dict() or {}).get("record_json") or "{}") if snap.exists else {}
+            new = change(dict(old))
+            if new is None:
+                return old
+            tx.set(ref, {"annotator_id": aid, "record_json": json.dumps(new), "updated_at": now_local_iso()})
+            return new
+
+        return update(self.client.transaction())
+
+    def study_secret(self, name: str) -> str:
+        import secrets
+
+        from google.cloud import firestore
+
+        ref = self.doc.collection("private").document("secrets")
+
+        @firestore.transactional
+        def get_or_make(tx: Any) -> str:
+            snap = ref.get(transaction=tx)
+            kept = dict((snap.to_dict() or {}).get("values") or {}) if snap.exists else {}
+            if name in kept:
+                return str(kept[name])
+            kept[name] = secrets.token_hex(32)
+            tx.set(ref, {"values": kept, "updated_at": now_local_iso()})
+            return kept[name]
+
+        return get_or_make(self.client.transaction())
 
     # ------------------------------------------------------------------- quiz
     def _quiz_ref(self, annotator_id: str, set_id: str) -> Any:

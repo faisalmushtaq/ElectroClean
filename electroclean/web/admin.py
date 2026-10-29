@@ -34,7 +34,8 @@ if TYPE_CHECKING:
     from electroclean.web.service import StudyService
 
 #: The blocks of electroclean_study.json's settings that the admin area may read and change.
-SETTINGS_BLOCKS = ("filters", "display", "channels", "selection", "logging", "annotation", "loading", "discovery")
+SETTINGS_BLOCKS = ("filters", "display", "channels", "selection", "logging", "annotation", "loading", "discovery",
+                   "gamification")
 SET_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 EMAIL_RE = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,190}\.[^@\s]{2,63}$")

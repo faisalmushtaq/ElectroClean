@@ -81,3 +81,12 @@ test('events can be sent while the page closes (keepalive)', async () => {
   assert.equal(calls[0].keepalive, true);
   assert.deepEqual(JSON.parse(calls[0].body), { events: [{ t: 1, type: 'key' }] });
 });
+
+test('achievements: GET and POST /me/achievements', async () => {
+  reply = () => ({ status: 200, body: { enabled: true } });
+  const b = new HttpBackend('https://s.org');
+  assert.equal((await b.achievements()).enabled, true);
+  await b.setAchievements({ leaderboard_hidden: true });
+  assert.deepEqual([calls[0].method, calls[0].url], ['GET', 'https://s.org/api/v1/me/achievements']);
+  assert.deepEqual([calls[1].method, calls[1].url, JSON.parse(calls[1].body)], ['POST', 'https://s.org/api/v1/me/achievements', { leaderboard_hidden: true }]);
+});

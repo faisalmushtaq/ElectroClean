@@ -99,6 +99,16 @@ CREATE TABLE IF NOT EXISTS audit (
     summary TEXT NOT NULL,
     details TEXT NOT NULL DEFAULT '{}'
 );
+CREATE TABLE IF NOT EXISTS annotator_records (
+    annotator_id TEXT PRIMARY KEY,
+    record TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS study_secrets (
+    name TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
 """
 #: Columns added to the users table after the first version of the server (added to older databases).
 USER_COLUMNS = {"email": "TEXT NOT NULL DEFAULT ''", "notes": "TEXT NOT NULL DEFAULT ''"}
@@ -264,7 +274,8 @@ class Accounts:
         """The account, its sign-ins, assignments, programme, guided progress and quiz state."""
         aid = normalise_id(annotator_id)
         with self._tx() as db:
-            for table in ("users", "tokens", "assignments", "programmes", "guided_state", "quiz_state"):
+            for table in ("users", "tokens", "assignments", "programmes", "guided_state", "quiz_state",
+                          "annotator_records"):
                 db.execute(f"DELETE FROM {table} WHERE annotator_id=?", (aid,))
 
     def authenticate(self, annotator_id: str, password: str) -> User | None:
@@ -469,6 +480,38 @@ class Accounts:
     def delete_guided_states(self, set_id: str) -> None:
         with self._tx() as db:
             db.execute("DELETE FROM guided_state WHERE set_id=?", (set_id,))
+
+    # ------------------------------------------- the annotator's own record (games)
+    def annotator_record(self, annotator_id: str) -> dict[str, Any]:
+        row = self._one("SELECT record FROM annotator_records WHERE annotator_id=?", (annotator_id,))
+        return json.loads(row["record"]) if row else {}
+
+    def annotator_records(self) -> dict[str, dict[str, Any]]:
+        rows = self._all("SELECT annotator_id, record FROM annotator_records")
+        return {r["annotator_id"]: json.loads(r["record"]) for r in rows}
+
+    def update_annotator_record(self, annotator_id: str,
+                                change: Callable[[dict[str, Any]], dict[str, Any] | None]) -> dict[str, Any]:
+        with self._tx() as db:
+            row = db.execute("SELECT record FROM annotator_records WHERE annotator_id=?", (annotator_id,)).fetchone()
+            old = json.loads(row["record"]) if row else {}
+            new = change(dict(old))
+            if new is None:
+                return old
+            db.execute("INSERT OR REPLACE INTO annotator_records (annotator_id, record, updated_at) VALUES (?, ?, ?)",
+                       (annotator_id, json.dumps(new), now_local_iso()))
+            return new
+
+    def study_secret(self, name: str) -> str:
+        """A random secret kept in the database, made the first time it is asked for."""
+        with self._tx() as db:
+            row = db.execute("SELECT value FROM study_secrets WHERE name=?", (name,)).fetchone()
+            if row:
+                return str(row["value"])
+            value = secrets.token_hex(32)
+            db.execute("INSERT INTO study_secrets (name, value, created_at) VALUES (?, ?, ?)",
+                       (name, value, now_local_iso()))
+            return value
 
     # ----------------------------------------------------------------- audit
     def audit_append(self, entry: dict[str, Any]) -> None:

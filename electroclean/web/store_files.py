@@ -33,6 +33,7 @@ from electroclean.web.store import (
     StoreError,
     User,
     generated_password,
+    latest_entry,
 )
 from electroclean.web.study import StudyError, WebStudy
 
@@ -384,7 +385,7 @@ class FilesStore(Store):
                 and e.get("status") == "completed" and e.get("output_dir") and e.get("output_basename")]
         if not mine:
             return {}
-        last = max(mine, key=lambda e: (e.get("completed_at", ""), e.get("output_basename", "")))
+        last = latest_entry(mine)  # by attempt number: a revision is always the latest attempt
         folder = _inside(self.layout.root, last["output_dir"])
         out = {}
         for suffix in OUTPUT_SUFFIXES.values():
@@ -407,6 +408,20 @@ class FilesStore(Store):
             if path.exists():
                 raise ResultExists(f"{rel_path} has already been saved") from exc
             raise
+
+    # ------------------------------------------- the annotator's own record (games)
+    def annotator_record(self, annotator_id: str) -> dict[str, Any]:
+        return self.db.annotator_record(annotator_id)
+
+    def annotator_records(self) -> dict[str, dict[str, Any]]:
+        return self.db.annotator_records()
+
+    def update_annotator_record(self, annotator_id: str,
+                                change: Callable[[dict[str, Any]], dict[str, Any] | None]) -> dict[str, Any]:
+        return self.db.update_annotator_record(annotator_id, change)
+
+    def study_secret(self, name: str) -> str:
+        return self.db.study_secret(name)
 
     # ------------------------------------------------------------------- quiz
     def quiz_state(self, annotator_id: str, set_id: str) -> dict[str, Any] | None:

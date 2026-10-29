@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import re
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -70,6 +71,23 @@ class SavedResult:
     result: FinishResult | None  # None when the files were written but the register update is pending
     files: dict[str, bytes]  # file name -> contents, as written
     attempt: int
+
+
+_ATTEMPT_RE = re.compile(r"_attempt-(\d+)$")
+
+
+def attempt_of(entry: dict[str, Any]) -> int:
+    """The attempt number of a completion register row: 1 for ``..._annotator-A01``, n for ``..._attempt-0n``."""
+    m = _ATTEMPT_RE.search(str(entry.get("output_basename") or ""))
+    return int(m.group(1)) if m else 1
+
+
+def latest_entry(entries: list[dict[str, Any]]) -> dict[str, Any]:
+    """The latest attempt among the register rows of one recording, annotator, mode and context.
+
+    Attempt numbers only grow (each save takes the next free one), so they order the attempts even when
+    the times were written on computers in different time zones."""
+    return max(entries, key=lambda e: (attempt_of(e), str(e.get("completed_at", ""))))
 
 
 def item_key(recording_id: str, mode: str, context_id: str) -> str:
@@ -338,6 +356,27 @@ class Store(ABC):
         """Read, change and write an annotator's quiz state in one step (``change`` returns the new state,
         or None to leave it as it was); returns the state kept."""
 
+    # ------------------------------------------- the annotator's own record (games)
+    @abstractmethod
+    def annotator_record(self, annotator_id: str) -> dict[str, Any]:
+        """What an annotator chose or reached outside their results (a personal goal, being hidden from the
+        leaderboard, how much of each saved recording they viewed): {} when nothing is kept yet."""
+
+    @abstractmethod
+    def annotator_records(self) -> dict[str, dict[str, Any]]:
+        """Every annotator's record, by annotator ID (for the leaderboard)."""
+
+    @abstractmethod
+    def update_annotator_record(self, annotator_id: str,
+                                change: Callable[[dict[str, Any]], dict[str, Any] | None]) -> dict[str, Any]:
+        """Read, change and write an annotator's record in one step (``change`` returns the new record, or
+        None to leave it as it was); returns the record kept."""
+
+    @abstractmethod
+    def study_secret(self, name: str) -> str:
+        """A random secret of the study (64 hexadecimal characters), made the first time it is asked for and
+        kept by the store, never sent to a browser (the key of the leaderboard's pseudonyms)."""
+
     # ------------------------------------------------------------------ audit
     @abstractmethod
     def audit_append(self, entry: dict[str, Any]) -> None:
@@ -380,4 +419,5 @@ def generated_password() -> str:
 
 
 __all__ = ["BY_COMMAND", "MODES", "ROLES", "STATUSES", "AccountProblem", "Assignment", "Credentials", "ResultExists",
-           "SavedResult", "Store", "StoreError", "User", "generated_password", "item_key", "settings_from_overrides"]
+           "SavedResult", "Store", "StoreError", "User", "attempt_of", "generated_password", "item_key", "latest_entry",
+           "settings_from_overrides"]

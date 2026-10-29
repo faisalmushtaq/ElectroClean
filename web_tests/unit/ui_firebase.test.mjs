@@ -124,3 +124,23 @@ test('a read-only call is asked once more after a failure; a call that saves is 
   await assert.rejects(() => b.assignments(), (e) => e.status === 403);
   assert.equal(calls.filter((c) => c.name === 'ec_assignments').length, 1); // a refusal is not repeated
 });
+
+test('achievements: read with a retry, changed without one', async () => {
+  let reads = 0;
+  let writes = 0;
+  const { sdk, calls } = fakeSdk({ handlers: {
+    ec_achievements: (d) => {
+      if (d.goal_per_week !== undefined) { writes += 1; throw new FakeHttpsError('unavailable', 'unavailable', {}); }
+      reads += 1;
+      if (reads === 1) throw new FakeHttpsError('internal', 'internal', {});
+      return { enabled: true };
+    },
+  } });
+  const b = await FirebaseBackend.create({ config: {}, study: 's', sdk });
+  b.retryDelayMs = 1;
+  assert.equal((await b.achievements()).enabled, true);
+  assert.equal(reads, 2);
+  await assert.rejects(() => b.setAchievements({ goal_per_week: 5 }), (e) => e.code === 'network');
+  assert.equal(writes, 1);
+  assert.deepEqual(calls.at(-1).data, { study: 's', goal_per_week: 5 });
+});

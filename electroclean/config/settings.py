@@ -128,6 +128,14 @@ class DisplaySettings:
     overview_mode: str = "empty"
 
 
+def _flag(block: dict[str, Any], name: str, key: str, default: bool) -> bool:
+    """A setting that is on or off: JSON's true or false, nothing else (so that "no" is not read as on)."""
+    value = block.get(key, default)
+    if not isinstance(value, bool):
+        raise SettingsError(f"{name}.{key} must be true or false, not {value!r}")
+    return value
+
+
 @dataclass(frozen=True)
 class Settings:
     """All application settings after merging defaults and study overrides."""
@@ -157,6 +165,14 @@ class Settings:
     logging_interactions: bool = True
     logging_pointer_hz: float = 5.0  # pointer samples per second over the EEG (0: none)
     logging_idle_after_s: float = 30.0  # seconds without input after which the annotator counts as idle
+    # annotation.allow_revisions: an annotator may open a recording they finished, change it and submit
+    # it again as a new attempt (the earlier files are kept; analyses use the latest attempt).
+    allow_revisions: bool = True
+    # gamification: the counters, milestones, personal goal and team progress on the home page, and the
+    # anonymised leaderboard (ranked by recordings completed, or only those viewed in full).
+    gamification_enabled: bool = True
+    gamification_leaderboard: bool = True
+    gamification_leaderboard_viewed_only: bool = False
     raw: dict[str, Any] = field(repr=False, default_factory=dict)
 
     @classmethod
@@ -171,6 +187,9 @@ class Settings:
             ann = data["annotation"]
             chans = data.get("channels", {}) or {}
             logs = data.get("logging", {}) or {}
+            games = data.get("gamification", {}) or {}
+            if not isinstance(games, dict):
+                raise SettingsError("gamification must be a block of settings (enabled, leaderboard, ...)")
             types = chans.get("types", {}) or {}
             if not isinstance(types, dict):
                 raise SettingsError(
@@ -207,6 +226,10 @@ class Settings:
                 logging_interactions=bool(logs.get("interactions", True)),
                 logging_pointer_hz=float(logs.get("pointer_hz", 5.0)),
                 logging_idle_after_s=float(logs.get("idle_after_s", 30.0)),
+                allow_revisions=_flag(ann, "annotation", "allow_revisions", True),
+                gamification_enabled=_flag(games, "gamification", "enabled", True),
+                gamification_leaderboard=_flag(games, "gamification", "leaderboard", True),
+                gamification_leaderboard_viewed_only=_flag(games, "gamification", "leaderboard_viewed_only", False),
                 raw=copy.deepcopy(data),
             )
         except KeyError as exc:  # pragma: no cover - defaults always complete

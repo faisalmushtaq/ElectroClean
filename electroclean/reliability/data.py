@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 
 from electroclean.app.annotations.labels import LabelCatalogue
@@ -103,9 +105,10 @@ def build_dataset(
                     f"Annotator {key[1]} has {len(items)} annotation files for {key[0]}: "
                     + ", ".join(s for s, _ in items)
                 )
-            items.sort(key=lambda sd: (sd[1].created_at, sd[0]))
+            same_mode = len({d.mode for _s, d in items}) == 1
+            items.sort(key=lambda sd: _recency(sd[0], sd[1], by_attempt=same_mode))
             warnings.append(
-                f"{key[1]} annotated {key[0]} {len(items)} times; using the most recent ({items[-1][0]})"
+                f"{key[1]} saved {key[0]} {len(items)} times (revisions or repeats); using the latest ({items[-1][0]})"
             )
         chosen[key] = items[-1]
 
@@ -152,6 +155,39 @@ def build_dataset(
         if excluded:
             g.ch_names = tuple(c for c in g.ch_names if c not in excluded)
     return AgreementDataset(groups=groups, catalogue=catalogue, files=files or [], warnings=warnings)
+
+
+_ATTEMPT_RE = re.compile(r"_attempt-(\d+)_annotations\.json$")
+
+
+def _attempt(source: str, doc: AnnotationDocument) -> int:
+    """The attempt number of a saved file: from its name (``..._attempt-02_annotations.json``), else from
+    the revision it records, else 1."""
+    m = _ATTEMPT_RE.search(source)
+    if m:
+        return int(m.group(1))
+    revision = doc.context.get("revision") if isinstance(doc.context, dict) else None
+    try:
+        return int((revision or {}).get("version", 1))
+    except (TypeError, ValueError, AttributeError):
+        return 1
+
+
+def _instant(stamp: str) -> float:
+    """A saved time as seconds since 1970, so that times written with different UTC offsets compare as the
+    moments they are (their text does not: 10:30+01:00 is earlier than 09:45+00:00)."""
+    try:
+        t = datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
+    except ValueError:
+        return float("-inf")
+    return (t if t.tzinfo else t.replace(tzinfo=timezone.utc)).timestamp()
+
+
+def _recency(source: str, doc: AnnotationDocument, *, by_attempt: bool) -> tuple[float, float, str]:
+    """Sorts one annotator's files of one recording oldest first. Within one mode the attempt number decides
+    (each save takes the next, so a revision always comes after what it revises); then the time saved."""
+    attempt, instant = float(_attempt(source, doc)), _instant(doc.created_at)
+    return (attempt, instant, source) if by_attempt else (instant, attempt, source)
 
 
 def _union_catalogue(a: LabelCatalogue, b: LabelCatalogue) -> LabelCatalogue:

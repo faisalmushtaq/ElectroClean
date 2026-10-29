@@ -55,9 +55,15 @@
   },
   "annotation": {
     "min_duration_samples": 1,
+    "allow_revisions": true,
     "quick_labels": [
       "Eye-blink-artifact", "Horizontal-eye-movement-artifact", "EMG-artifact", "Movement-artifact",
       "Electrode-pops-artifact", "Chewing-artifact", "ECG-artifact", "Line-noise-artifact", "Data-artifact"
     ]
+  },
+  "gamification": {
+    "enabled": true,
+    "leaderboard": true,
+    "leaderboard_viewed_only": false
   }
 }

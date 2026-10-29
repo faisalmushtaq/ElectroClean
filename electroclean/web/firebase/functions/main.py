@@ -193,3 +193,10 @@ def ec_admin(req: https_fn.CallableRequest) -> Any:
 @https_fn.on_call()
 def ec_quiz(req: https_fn.CallableRequest) -> Any:
     return handle("quiz", req)
+
+
+# The annotator's counters, milestones' facts, personal goal, team progress and anonymised
+# leaderboard; with goal_per_week or leaderboard_hidden it also changes them.
+@https_fn.on_call()
+def ec_achievements(req: https_fn.CallableRequest) -> Any:
+    return handle("achievements", req)
