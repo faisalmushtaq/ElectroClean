@@ -134,7 +134,6 @@ function content(area, u, g, reload, policy) {
         const which = select(sets.map((s) => [s.set_id, `${s.name} (${s.n_assessment} assessment recording${s.n_assessment === 1 ? '' : 's'})`]));
         const nameOf = (id) => { const x = sets.find((s) => s.set_id === id); return x && x.name ? x.name : id; };
         const host = h('div.btn-row');
-        const nameOf = (id) => (sets.find((s) => s.set_id === id) || {}).name || id;
         const go = actionButton('Give this assessment', { working: 'Saving…', msg, log: 'training-assessment-set', onClick: async () => {
           if (!(await confirmInline(host, { text: `Give ${u.annotator_id} the assessment of ${nameOf(which.value)}? Their learning stages are carried over as they are: done, or skipped.`, yes: 'Give it', destructive: false }))) return;
           await area.write('training_assessment_set', { annotator_id: u.annotator_id, set_id: which.value });
