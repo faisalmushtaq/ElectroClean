@@ -182,6 +182,53 @@ export const tests = [
     },
   },
   {
+    name: 'Discard and close with the study server: a draft on its way arrives first, and none comes back afterwards',
+    needs: 'study',
+    async run(t) {
+      const { assert } = t;
+      const file = 'sub-002_task-rest_eeg.vhdr';
+      const page = await signInAt(t, 'A02');
+      await waitForRoute(page, 'home');
+      await page.locator('tr', { hasText: file }).locator('button', { hasText: 'Open' }).click();
+      await openFile(t, page, file);
+      await waitForRoute(page, 'annotate', 30000);
+      await waitForTraces(page);
+      await drag(page, await eegPoint(page, 2.0), await eegPoint(page, 2.5));
+      // A draft is held back on its way to the study until after Delete them.
+      let release;
+      const held = new Promise((resolve) => { release = resolve; });
+      const seen = [];
+      await page.route('**/api/v1/drafts/**', async (route) => {
+        const req = route.request();
+        seen.push([req.method(), new URL(req.url()).searchParams.get('session')]);
+        if (req.method() === 'PUT') await held;
+        await route.continue();
+      });
+      const s = await page.evaluate(() => {
+        const ses = globalThis.ElectroTag.ws.s;
+        void ses.saveRemote({ force: true });
+        return { id: ses.sessionId, rid: ses.recordingId };
+      });
+      await page.click('[data-log="close"]');
+      await page.waitForSelector('.dialog');
+      await clickDialogButton(page, 'Discard and close');
+      await clickDialogButton(page, 'Delete them');
+      await page.waitForTimeout(500);
+      assert.deepEqual(seen.map(([m]) => m), ['PUT'], 'the drafts are deleted only once the draft on its way has arrived');
+      release();
+      await waitForRoute(page, 'home');
+      await page.unroute('**/api/v1/drafts/**');
+      assert.deepEqual(seen, [['PUT', null], ['DELETE', s.id]], 'the delete names the session that closes');
+      const item = (await page.evaluate(() => globalThis.ElectroTag.backend.assignments())).items.find((i) => i.recording_id === s.rid);
+      assert.equal(item.draft, null);
+      assert.notEqual(item.status, 'in_progress');
+      // Should a draft of that session still arrive, the study refuses it.
+      assert.equal(await page.evaluate(({ id, rid }) => globalThis.ElectroTag.backend.putDraft(rid, 'standard', '', { annotations: [], session_id: id })
+        .then(() => 'kept', (e) => e.code), s), 'draft_discarded');
+      await page.context().close();
+    },
+  },
+  {
     name: 'the training programme, checked and scored by the server',
     needs: 'study',
     async run(t) {

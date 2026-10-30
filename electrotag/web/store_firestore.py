@@ -11,6 +11,7 @@ Everything lives under ``studies/{study_id}``::
                                             notes, the Firebase Authentication user
         assignments/{annotator_id}          the annotator's recordings and training programme
         drafts/{annotator_id}_{key}         unfinished work (packed)
+        draft_closed/{annotator_id}_{key}   browser sessions that discarded a draft and closed
         guided/{annotator_id}_{set}_{key}   where a trainee is in a guided recording
         quiz/{annotator_id}_{set}           a quiz's answers so far, and its score once finished
         annotators/{annotator_id}           the annotator's own record: a personal goal, being hidden from
@@ -69,6 +70,7 @@ from electrotag.web.manifest import SCHEMA as MANIFEST_SCHEMA
 from electrotag.web.manifest import SCHEMA_VERSION as MANIFEST_VERSION
 from electrotag.web.manifest import fingerprint_of, manifest_key
 from electrotag.web.store import (
+    CLOSED_SESSIONS_KEPT,
     DERIVED_DIR,
     DERIVED_KINDS,
     MODES,
@@ -634,7 +636,7 @@ class FirestoreStore(Store):
         if d.get("uid"):
             leave_study(self.auth_app, d["uid"], self.study_id)
         aid = ref.id
-        for name in ("drafts", "guided", "quiz"):
+        for name in ("drafts", "draft_closed", "guided", "quiz"):
             for snap in self.doc.collection(name).where(filter=FieldFilter("annotator_id", "==", aid)).stream():
                 self._delete(snap.reference)
         self.doc.collection("assignments").document(aid).delete()
@@ -764,8 +766,20 @@ class FirestoreStore(Store):
                        {"annotator_id": annotator_id, "key": key, "recording_id": record.get("recording_id", ""),
                         "saved_at": record.get("saved_at", now_local_iso())}, record)
 
-    def delete_draft(self, annotator_id: str, key: str) -> None:
+    def delete_draft(self, annotator_id: str, key: str, closed_session: str | None = None) -> None:
+        if closed_session:
+            ref = self._draft_ref(annotator_id, key)
+            closed = self.doc.collection("draft_closed").document(ref.id)
+            snap = closed.get()
+            before = ((snap.to_dict() or {}).get("sessions") or []) if snap.exists else []
+            sessions = [s for s in before if s != closed_session]
+            closed.set({"annotator_id": annotator_id, "key": key,
+                        "sessions": (sessions + [closed_session])[-CLOSED_SESSIONS_KEPT:]})
         self._delete(self._draft_ref(annotator_id, key))
+
+    def draft_session_closed(self, annotator_id: str, key: str, session_id: str) -> bool:
+        snap = self.doc.collection("draft_closed").document(self._draft_ref(annotator_id, key).id).get()
+        return snap.exists and session_id in ((snap.to_dict() or {}).get("sessions") or [])
 
     # ---------------------------------------------------------- guided state
     def _guided_ref(self, annotator_id: str, set_id: str, recording_id: str) -> Any:

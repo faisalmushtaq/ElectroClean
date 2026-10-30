@@ -63,7 +63,8 @@ Manifest = {                          // what the browser needs to show a regist
 Draft = {"annotations": [Annotation], "view": {"start_s": 12.0, "duration_s": 10.0, "first_channel": 0,
          "n_channels": 32, "scale_factor": 1.0}, "elapsed_s": 312.4,
          "viewed": [[0.0, 64.5], [120.0, 130.0]], "saved_at": "…",
-         "revises": 1}                // only in the draft of a revision: the version being revised
+         "revises": 1,                // only in the draft of a revision: the version being revised
+         "session_id": "…"}           // sent by the browser, never returned: the session the draft comes from
 ```
 
 An annotation's `confidence` and `note` are checked wherever annotations are sent: a confidence
@@ -269,7 +270,14 @@ its annotations; nothing starts, and no draft is given or kept.
 
 `PUT /drafts/{recording_id}?mode=&context=` `Draft` → `{"saved_at": "…"}`.
 The browser sends a draft at most every 30 s while there are changes and when
-the page is hidden. `DELETE` the same path discards it. Drafts of more than
+the page is hidden, one at a time, and each replaces the one before. `DELETE`
+the same path discards it. A browser session that discards its work and closes
+adds `&session=` with its `session_id` (`et_delete_draft` takes `session_id`):
+the study remembers that session for this recording, and a draft of it that
+was sent before the delete but arrives after it is refused with 409
+`draft_discarded`, so that the work discarded does not come back. A
+`session_id` that is not a string of at most 64 characters is refused (422
+`invalid_draft` in a draft, 400 in a delete). Drafts of more than
 8 MB are refused (413 `too_large`). The draft of a revision is kept like any
 other and carries `revises`; a done recording takes a draft only when it may
 be revised (409 `already_done` otherwise). A recording set aside as one that
@@ -934,7 +942,7 @@ The fields of each call:
 | `et_me`, `et_assignments`, `et_training`, `et_admin_progress` | none |
 | `et_match` | the body of `POST /match` |
 | `et_put_draft` | `{"recording_id", "mode", "context_id", "draft": Draft}` |
-| `et_delete_draft` | `{"recording_id", "mode", "context_id"}` |
+| `et_delete_draft` | `{"recording_id", "mode", "context_id", "session_id"?}` |
 | `et_submit` | the body of `POST /submissions` |
 | `et_guided_get` | `{"recording_id"}` |
 | `et_guided_check`, `et_guided_continue`, `et_guided_show_me` | `{"recording_id", ...the body of the request}` |

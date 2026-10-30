@@ -640,6 +640,12 @@ export class DemoBackend {
       if (!this._canRevise(item)) throw new ApiError(409, 'already_done', `${item.rid} has already been completed`);
       revises = item.saved.version; // the draft of a revision
     }
+    if (draft && typeof draft === 'object' && draft.session_id !== undefined && (typeof draft.session_id !== 'string' || draft.session_id.length > 64)) {
+      throw new ApiError(422, 'invalid_draft', 'draft.session_id must be a short string');
+    }
+    if (draft && draft.session_id && ((this.state.closedSessions || {})[item.key] || []).includes(draft.session_id)) {
+      throw new ApiError(409, 'draft_discarded', 'This draft belongs to work that was discarded when it was closed, so it is not kept.');
+    }
     if (!draft || typeof draft !== 'object' || Array.isArray(draft)) throw new ApiError(400, 'bad_request', 'A draft must be an object');
     const anns = draft.annotations === undefined ? [] : draft.annotations;
     if (!Array.isArray(anns) || anns.some((a) => !a || typeof a !== 'object')) throw new ApiError(422, 'invalid_draft', 'draft.annotations must be a list of annotations');
@@ -658,9 +664,14 @@ export class DemoBackend {
     return { saved_at };
   }
 
-  async deleteDraft(recordingId, mode, contextId) {
+  async deleteDraft(recordingId, mode, contextId, { sessionId = '' } = {}) {
     const aid = this._aid();
-    delete this.state.drafts[this._key(aid, recordingId, mode || 'standard', contextId)];
+    const key = this._key(aid, recordingId, mode || 'standard', contextId);
+    delete this.state.drafts[key];
+    if (sessionId) { // a session that discarded its work and closed: its drafts arriving late are refused
+      const closed = (this.state.closedSessions ||= {});
+      closed[key] = [...(closed[key] || []).filter((x) => x !== sessionId), String(sessionId)].slice(-20);
+    }
     this._save();
     return {};
   }

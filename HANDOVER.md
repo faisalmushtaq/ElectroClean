@@ -328,6 +328,15 @@ tab (`discardDrafts` and `bringBackDiscarded` in `js/annotate/session.js`) so th
 tab can offer it back. The header's buttons are disabled when they cannot act and while paused, and
 take no keyboard focus from a mouse click. `web_tests/e2e/u_interaction.e2e.mjs` checks these rules.
 
+**No draft is written for a session once its view has closed or its work was discarded.** Several
+things save drafts on their own (a local save 1.2 s after a change, the 30 s autosave, the page
+being hidden, the connection returning), and an AnnotationSession outlives its view. So
+`Workspace.destroy` calls `session.close()`, which stops every save of it; drafts go to the study one
+at a time; a discard and Save and Finish wait for the one on its way; and a Discard and close names
+its session in the DELETE, so that the study refuses a late draft of it (409 `draft_discarded`,
+remembered beside the drafts in `<key>.closed` or the Firestore collection `draft_closed`). A new
+way of saving drafts must go through `saveLocal`/`saveRemote`, which check `mayKeepDraft`.
+
 **The browser, the server and the Firebase functions share one contract**,
 [docs/web/api.md](docs/web/api.md), with the annotators' operations, the administrator's operations
 (`POST /api/v1/admin/{op}`, or the callable `et_admin`) and the quiz. A change to a request or

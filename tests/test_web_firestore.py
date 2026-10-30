@@ -319,6 +319,22 @@ def test_export_writes_the_files_store_layout(service: StudyService, recordings:
     assert agreement([str(layout.root), "--out", str(tmp_path / "agreement"), "--no-html"]) == 0
 
 
+def test_a_late_draft_of_a_closed_session_is_refused_and_the_record_leaves_with_the_account(
+        service: StudyService, study: str) -> None:
+    body = {"recording_id": SUB1, "draft": {"annotations": [], "elapsed_s": 9.0, "session_id": "s-closed"}}
+    ok(service, "put_draft", A01, body)
+    ok(service, "delete_draft", A01, {"recording_id": SUB1, "session_id": "s-closed"})
+    assert err(service, "put_draft", A01, body).code == "draft_discarded"
+    key = item_key(SUB1, "standard", "")
+    assert service.store.draft("A01", key) is None and key not in service.store.draft_keys("A01")
+    ok(service, "put_draft", A01, {**body, "draft": {**body["draft"], "session_id": "s-next"}})
+    assert service.store.draft("A01", key) is not None
+    closed = service.store.doc.collection("draft_closed").document(f"A01_{key}")
+    assert closed.get().to_dict()["sessions"] == ["s-closed"]
+    firebase_service(study).store.remove_account("A01")  # the account leaves the study (with Authentication)
+    assert not closed.get().exists
+
+
 def test_large_drafts_are_split_over_documents(service: StudyService) -> None:
     import random
 

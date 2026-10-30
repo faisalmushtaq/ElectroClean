@@ -360,9 +360,9 @@ def create_app(study_dir: Path | str, *, demo: bool = False, allowed_origins: li
 
     @app.delete(p + "/drafts/{recording_id:path}")
     async def delete_draft(request: Request, recording_id: str, mode: str = "standard",
-                           context: str = "") -> JSONResponse:
+                           context: str = "", session: str = "") -> JSONResponse:
         return await authed(request, "delete_draft", {"recording_id": recording_id, "mode": mode,
-                                                      "context_id": context})
+                                                      "context_id": context, "session_id": session})
 
     @app.post(f"{p}/submissions")
     async def submissions(request: Request) -> JSONResponse:
