@@ -132,13 +132,20 @@ def export_study(store: Any, to: Path | str) -> dict[str, int]:
     for rel, data in sorted(store.result_files()):  # quiz results and other files kept as they were written
         _put(safe_path(layout.root, rel), data, counts)
         counts["other"] += 1
-    from electrotag.web.feedback import feedback_files
-
-    # The problem reports and reviews as they stand now (a report may have been resolved since the last export).
-    for rel, data in sorted(feedback_files(store).items()):
+    # The problem reports, reviews and adjudications as they stand now (a report may have been resolved since).
+    for rel, data in sorted(record_files(store).items()):
         atomic_write_bytes(safe_path(layout.root, rel), data)
         counts["feedback"] = counts.get("feedback", 0) + 1
     return counts
+
+
+def record_files(store: Any) -> dict[str, bytes]:
+    """The study's records as result files: problem reports and reviews (feedback.py), adjudications and the library
+    of conflicts (adjudication.py)."""
+    from electrotag.web.adjudication import adjudication_files
+    from electrotag.web.feedback import feedback_files
+
+    return {**feedback_files(store), **adjudication_files(store)}
 
 
 def _export_derived(store: Any, layout: OutputLayout, settings: Any, counts: dict[str, int]) -> None:
@@ -189,9 +196,7 @@ def results_zip_file(store: Any) -> Path:
             root = Path(work) / store.settings.output_directory_name
         else:
             root = store.layout.root
-        from electrotag.web.feedback import feedback_files
-
-        extra = {} if getattr(store, "kind", "") == "firestore" else feedback_files(store)
+        extra = {} if getattr(store, "kind", "") == "firestore" else record_files(store)
         base = root.name or "Annotated_Events"
         with zipfile.ZipFile(tmp.name, "w", compression=zipfile.ZIP_DEFLATED) as zf:
             if root.is_dir():

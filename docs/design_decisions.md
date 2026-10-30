@@ -622,6 +622,43 @@ its frame showing seven electrodes; it now opens with the whole head, the names 
 and + climbs to the full size. Show all reads a long, dense recording in pieces so that the EEG
 appears as it is read with the share read so far, instead of a blank plot for many seconds.
 
+## Screening-style adjudication and the library of conflicts (30 October 2026)
+
+The project lead asked for adjudication that runs as a systematic review's dual screening does:
+two (or k) people annotate independently, the disagreements are listed, and someone settles each.
+The conflicts are found with the agreement analysis's own matching rules (`events_for` and
+`match_events`, one-to-one and preferring the same type, with the study's `review.matching`), so
+that what the queue calls a disagreement is what the agreement figures count as one; matched
+marks are joined across every pair of people, which makes the comparison work for any number of
+annotators. A conflict is named by the people and annotation IDs of its marks, so a decision stays
+attached to its conflict for as long as the versions are the same.
+
+Conflicts are derived, never stored. Starting an adjudication freezes the versions compared (each
+attempt with the SHA-256 of its file) and the matching rules, and only the decisions are kept,
+in one record per unit; the queue, the adjudication view, the annotators' feedback and the
+library all recompute the conflicts from those frozen versions. Nothing can then get out of step,
+and a revision made after the start, or a change to the study's rules, leaves the adjudication's
+meaning as it was. Every decision is saved on its own as it is made, so an adjudicator can stop at
+any time; finishing saves the adjudicated version with the journalled save as a derived version,
+beside the originals, which never change.
+
+Adjudication is not blinded (the project lead's decision of 29 October): an expert adjudicating
+colleagues' work learns more from seeing whose marks differ, and a small study gains nothing from
+hiding names its team knows. Nobody adjudicates their own work, and the record keeps `blinded`
+for a future crowd study. Annotators see the outcome of their own conflicts, without anyone else
+named, because the point of the exercise is consistency and they learn from it; a study can keep
+it from them. Two experts' corrections of the same saved work are adjudicated the same way, so
+that a corrected version always rests on one settled set of marks.
+
+What is adjudicated is a unit: a task (part H3), a recording given to two or more people without a
+task (what a study that simply assigns each recording twice does), or a set of corrections. The
+tasks are read through one small adapter (`task_units`), so that adjudication works before tasks
+exist and needs no change when they do. The library is the same conflicts with their decisions,
+recomputed on each request rather than kept as a copy: it is always current, and only what an
+expert promotes (a quiz item or a snippet, with the conflict it came from) is stored. Recomputing
+costs a few file reads per unit, which is fine for hundreds of recordings; the call looks at no
+more than 500 units.
+
 ## Decisions still open
 
 1. **Agreement settings to pre-register:** bin widths, the bin coverage rule,

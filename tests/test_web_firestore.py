@@ -929,3 +929,88 @@ def test_role_claims_on_firebase(study: str) -> None:
     annotator = sign_in(f"a01-{study}@example.org")
     _, body = callable_("et_expert", {"study": study, "op": "replay_consent_get"}, annotator)
     assert body["error"]["details"]["error"] == "forbidden"
+
+
+# ------------------------------------------------------ adjudication and the library (H4)
+DISAGREE = ([ann("a" * 32, "Eye-blink-artifact", 500, 100, ["Fp1", "Fp2"]), ann("b" * 32, "EMG-artifact", 3000, 250),
+             ann("c" * 32, "Eye-blink-artifact", 5000, 100)],
+            [ann("d" * 32, "Eye-movement-artifact", 500, 100, ["Fp1", "Fp2"]), ann("e" * 32, "EMG-artifact", 3000, 250),
+             ann("f" * 32, "Eye-blink-artifact", 8000, 75)])
+
+
+def test_adjudication_and_the_library_on_firestore(service: StudyService, recordings: Path, tmp_path: Path) -> None:
+    from electrotag.web.adjudication import ADJUDICATED, unit_id_for
+
+    store = service.store
+    ok(service, "submit", A01, submission(recordings, SUB1, DISAGREE[0]))
+    ok(service, "submit", A02, submission(recordings, SUB1, DISAGREE[1]))
+    uid = unit_id_for("recording", SUB1)
+    row = next(u for u in ok(service, "expert", E01, {"op": "adjudication_list"})["units"] if u["unit_id"] == uid)
+    assert (row["status"], row["conflicts"], row["agreed"]) == ("ready", 3, 1)
+    assert [a["annotator_id"] for a in row["annotators"]] == ["A01", "A02"]  # not blinded
+    got = ok(service, "expert", E01, {"op": "adjudication_start", "unit_id": uid})
+    assert got["adjudication"]["state"] == "in_progress" and got["adjudication"]["blinded"] is False
+    # the record is kept by the adjudicator, under the unit's ID
+    assert [r["unit_id"] for r in store.records("adjudications", "E01")] == [uid]
+    assert err(service, "expert", User("E02", roles=("expert",)), {"op": "adjudication_start", "unit_id": uid}).code \
+        == "taken"
+    for c, choice in zip(got["conflicts"], ("B", "none", "all"), strict=True):
+        ok(service, "expert", E01, {"op": "adjudication_decide", "unit_id": uid, "conflict_id": c["conflict_id"],
+                                    "choice": choice, "reason": "seen in the EEG"})
+    fin = ok(service, "expert", E01, {"op": "adjudication_finish", "unit_id": uid})
+    assert fin["version"]["attempt"] == 1 and fin["version"]["n_annotations"] == 3
+    assert [e["recording_id"] for e in store.derived_entries("adjudications", ADJUDICATED)] == [SUB1]
+    assert ok(service, "expert", E01, {"op": "adjudication_finish", "unit_id": uid})["already"] is True
+    outcomes = ok(service, "my_feedback", A01)["adjudications"]["items"][0]["conflicts"]
+    assert [c["decision"]["outcome"] for c in outcomes] == ["other_kept", "none_kept", "all_kept"]
+    lib = ok(service, "expert", E01, {"op": "library_list", "pair": ["Eye-blink-artifact", "Eye-movement-artifact"]})
+    assert lib["total"] == 1 and lib["facets"]["status"] == {"decided": 3}
+    out = ok(service, "expert", E01, {"op": "library_promote", "promote_id": "9" * 32, "to": "snippet",
+                                      "set_id": "example", "entry_id": lib["entries"][0]["entry_id"]})
+    assert out["snippet"]["label"] == "Eye-movement-artifact" and out["snippet"]["source"]["task_id"] == uid
+    assert store.reference_set("example").snippets[0]["source"]["promote_id"] == "9" * 32
+    # the export writes the adjudicated version, the decisions and the library into the results folder
+    dest = tmp_path / "export"
+    assert cli(["export", "--firebase-project", PROJECT, "--study", store.study_id, "--to", str(dest)]) == 0
+    root = dest / "Annotated_Events"
+    assert len(list((root / "derived" / "adjudications" / "annotator-ADJUDICATED").rglob("*_annotations.json"))) == 1
+    assert (root / "adjudications" / f"{uid}.json").is_file()
+    assert len((root / "adjudications" / "decisions.tsv").read_text("utf-8").splitlines()) == 4
+    assert len((root / "library" / "library.tsv").read_text("utf-8").splitlines()) == 4
+
+
+@pytest.mark.skipif(not (AUTH and FUNCTIONS), reason="needs the Auth and Functions emulators")
+def test_adjudication_through_the_expert_function(study: str, recordings: Path) -> None:
+    from electrotag.web.adjudication import unit_id_for
+
+    svc = firebase_service(study)
+    email = f"e01-{study}@example.org"
+    admin_ok(svc, "user_add", {"annotator_id": "E01", "email": email, "roles": ["annotator", "expert"],
+                               "password": "an-expert-password"})
+    ok(svc, "submit", A01, submission(recordings, SUB1, DISAGREE[0]))
+    ok(svc, "submit", A02, submission(recordings, SUB1, DISAGREE[1]))
+    uid = unit_id_for("recording", SUB1)
+    token = sign_in(email, "an-expert-password")
+    status, body = callable_("et_expert", {"study": study, "op": "adjudication_list"}, token)
+    assert status == 200, body
+    assert next(u for u in body["result"]["units"] if u["unit_id"] == uid)["status"] == "ready"
+    _, body = callable_("et_expert", {"study": study, "op": "adjudication_start", "unit_id": uid}, token)
+    conflicts = body["result"]["conflicts"]
+    assert len(conflicts) == 3 and {m["annotator_id"] for m in conflicts[0]["marks"]} == {"A01", "A02"}
+    _, body = callable_("et_expert", {"study": study, "op": "adjudication_finish", "unit_id": uid}, token)
+    assert body["error"]["details"]["error"] == "undecided" and body["error"]["details"]["n"] == 3
+    for c in conflicts:
+        _, body = callable_("et_expert", {"study": study, "op": "adjudication_decide", "unit_id": uid,
+                                          "conflict_id": c["conflict_id"], "choice": "A",
+                                          "reason_code": "clear_artifact"}, token)
+        assert "result" in body, body
+    _, body = callable_("et_expert", {"study": study, "op": "adjudication_finish", "unit_id": uid}, token)
+    assert body["result"]["adjudication"]["state"] == "finished", body
+    _, body = callable_("et_expert", {"study": study, "op": "library_list", "status": "decided"}, token)
+    assert body["result"]["total"] == 3
+    annotator = sign_in(f"a01-{study}@example.org")
+    _, body = callable_("et_expert", {"study": study, "op": "adjudication_list"}, annotator)
+    assert body["error"]["details"]["error"] == "forbidden"
+    _, body = callable_("et_my_feedback", {"study": study}, annotator)
+    assert [c["decision"]["outcome"] for c in body["result"]["adjudications"]["items"][0]["conflicts"]] == [
+        "yours_kept", "yours_kept", "yours_kept"]
