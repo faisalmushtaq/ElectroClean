@@ -80,7 +80,9 @@ export class HandoutsSection {
       this.handoutId = null;
       if (note) this.msg.show(...note);
     }
-    this._buildForm(this.params || {});
+    // A form someone has started filling in stays as it is; an untouched one is drawn again with the lists read now.
+    const p = this.params || {};
+    if (!this._formTouched || p.target || p.group) this._buildForm(p);
     this.params = null;
     await this._loadNotices();
   }
@@ -135,7 +137,9 @@ export class HandoutsSection {
       give.disabled = true;
       give.textContent = 'Hand out';
     };
-    for (const el of [what, people, groups, follow, mode, k, due, title, name, note]) { el.addEventListener('change', stale); el.addEventListener('input', stale); }
+    this._formTouched = false;
+    const touched = () => { this._formTouched = true; stale(); };
+    for (const el of [what, people, groups, follow, mode, k, due, title, name, note]) { el.addEventListener('change', touched); el.addEventListener('input', touched); }
     const preview = actionButton('Preview the hand-out', { working: 'Working it out…', msg, log: 'handout-preview', onClick: async () => {
       msg.clear();
       const body = handoutBody(values(), { today: this.today });
@@ -153,6 +157,7 @@ export class HandoutsSection {
       const r = await this.area.write('handout_create', { ...previewed, request_id: requestId });
       requestId = null;
       previewed = null;
+      this._formTouched = false; // made: the form starts afresh
       const o = r.handout;
       this.handoutId = o.handout_id;
       const tasks = r.tasks ? `, ${plural(r.tasks.created || 0, 'task')}` : '';
