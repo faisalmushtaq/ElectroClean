@@ -285,7 +285,8 @@ def test_a_new_assessment_set_keeps_each_stage_as_it_was_and_every_skip(example:
     rounds = [{"set_id": "first", "set_name": "First set", "status": "not_met", "status_text": "x", "at": "0"}]
     events = [{"event": "assessment_set_assigned", "from_set": "pilot", "from_set_name": "Pilot set", "stages": carried,
                "skips": skips, "earlier_rounds": rounds,
-               "round": {"set_id": "pilot", "set_name": "Pilot set", "status": "not_met", "status_text": "y", "at": "1"}}]
+               "round": {"set_id": "pilot", "set_name": "Pilot set", "status": "not_met", "status_text": "y",
+                         "at": "1"}}]
     st = states(rs, progress(rs, events))
     assert [st[k].status for k in ("tour", "snippets", "guided", "practice")] == [
         "skipped", "completed", "skipped", "not_used"]
