@@ -4,10 +4,16 @@
 // answer's summary.key_results. Pure functions, tested in Node.
 
 export const VERSION_CHOICES = [
-  ['original', 'The originals, as annotated'],
-  ['corrected', 'As the experts corrected them'],
-  ['adjudicated', 'Each annotator against the adjudicated versions'],
+  ['original', 'The originals'],
+  ['corrected', 'As corrected'],
+  ['adjudicated', 'Against the adjudicated'],
 ];
+/** The versions in a sentence (the summary above the report). */
+export const VERSION_WORDS = {
+  original: 'The originals, as annotated',
+  corrected: 'As the experts corrected them',
+  adjudicated: 'Each annotator against the adjudicated versions',
+};
 
 export const UNIT_CHOICES = [
   ['recording', 'Whole recordings'],
@@ -41,8 +47,7 @@ export function versionSummaryRows(summary) {
   const v = s.versions || {};
   const rows = [];
   if (v.used && v.used !== 'original') {
-    const words = Object.fromEntries(VERSION_CHOICES);
-    rows.push(['Versions compared', words[v.used] || v.used]);
+    rows.push(['Versions compared', VERSION_WORDS[v.used] || v.used]);
     const by = Object.entries(v.by || {}).sort(([a], [b]) => a.localeCompare(b)).map(([k, n]) => `${k} ${n}`).join(', ');
     const n = Number(v.replaced) || 0;
     rows.push([v.used === 'adjudicated' ? 'Adjudications used' : 'Saved versions replaced by a correction', `${n}${by ? ` (${by})` : ''}`]);

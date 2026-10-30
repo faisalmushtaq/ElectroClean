@@ -12,7 +12,7 @@ import {
   card, checkbox, checkList, dataTable, docsLink, downloadText, elapsedTimer, field, infoTable, messageArea, numberInput, progressLine, reportFrame, sectionHead, select,
   textInput,
 } from './ui.js';
-import { UNIT_CHOICES, VERSION_CHOICES, compareKeyResults, comparisonTsv, numberText, versionHint, versionSummaryRows } from './versions_model.js';
+import { UNIT_CHOICES, VERSION_CHOICES, VERSION_WORDS, compareKeyResults, comparisonTsv, numberText, versionHint, versionSummaryRows } from './versions_model.js';
 
 /** A link to a part of the reliability guide (docs/reliability_guide.md), for the settings of the analysis. */
 const guide = (anchor, text = 'In the reliability guide') => docsLink(text, 'reliability_guide.md', anchor);
@@ -43,7 +43,6 @@ function comparisonCard(original, answer, versions) {
     return card('Compared with the original versions', h('p.caption', {}, `The originals could not be analysed for the comparison: ${original.failed.message || original.failed}`));
   }
   const rows = compareKeyResults(original.summary, answer.summary);
-  const words = Object.fromEntries(VERSION_CHOICES);
   const table = dataTable([
     { title: 'Annotator pair', key: 'pair', cls: 'nowrap' },
     { title: 'Measure', key: 'measure' },
@@ -54,7 +53,7 @@ function comparisonCard(original, answer, versions) {
   return card('Compared with the original versions',
     h('p.caption', {}, versions === 'adjudicated'
       ? 'The originals compare the annotators with each other; this analysis compares each with the adjudicated versions, so their pairs differ and the mean over pairs is the row to compare. The difference is this analysis minus the originals.'
-      : `The same analysis of the originals and of the versions ${String(words[versions] || versions).toLowerCase()}: the difference is the corrected versions minus the originals.`),
+      : `The same analysis of the originals and of the versions ${String(VERSION_WORDS[versions] || versions).toLowerCase()}: the difference is the corrected versions minus the originals.`),
     table,
     h('div.btn-row.downloads', {}, h('button.btn.small', { type: 'button', 'data-log': 'agreement-compare-download',
       onclick: () => downloadText(`agreement_${versions}_compared.tsv`, comparisonTsv(rows, versions), 'text/tab-separated-values;charset=utf-8') }, 'The comparison (TSV)')));

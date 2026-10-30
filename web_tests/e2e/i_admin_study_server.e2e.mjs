@@ -211,6 +211,8 @@ export const tests = [
       await form.locator('input[data-name="agreement-annotators"][value="A02"]').check();
       await page.selectOption('select[data-field="versions"]', 'corrected');
       assert.ok(await page.isVisible('label.check:has-text("Compare with the original versions")'));
+      await page.locator('select[data-field="versions"]').scrollIntoViewIfNeeded();
+      await t.screenshot(page, 'admin_server_agreement_versions_form');
       await page.click('[data-log="agreement-run"]');
       const compared = page.locator('.admin-card', { hasText: 'Compared with the original versions' });
       await compared.waitFor({ timeout: 240000 });
