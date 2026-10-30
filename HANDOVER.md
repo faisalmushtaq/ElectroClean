@@ -1,7 +1,7 @@
 # Handover notes
 
 These notes are for whoever takes ElectroTag on next, and for the AI assistant they work with.
-They say where the project stands on 29 October 2026, what is still open, and how to carry on
+They say where the project stands on 30 October 2026, what is still open, and how to carry on
 without having to rediscover anything. Instructions written for AI coding assistants are in
 [CLAUDE.md](CLAUDE.md); read both before changing anything.
 
@@ -172,9 +172,9 @@ Firebase tests need Java 21 for Google's emulators; `npx` fetches the Firebase t
 
 | Suite | Command | Where it runs on GitHub |
 | --- | --- | --- |
-| Python (core, agreement, training, activity, the server, the admin and quiz operations, registration, the Firebase store and the functions) | `python -m pytest` (about 370 tests) | *Tests*: Linux on every push; Windows, macOS and Linux for `main`, pull requests into `main` and runs started by hand |
-| Browser modules | `node --test web_tests/unit/*.test.mjs` (about 200 tests; the data tests write their recordings with `scripts/make_web_fixtures.py`, and a parity test checks that the browser's manifests match Python's) | *Browser version tests* |
-| The browser application in Chromium | `ELECTROTAG_PYTHON=python node web_tests/run_e2e.mjs` (48 tests, against the demonstration and against the real `electrotag-web demo`) | *Browser version tests* |
+| Python (core, agreement, training, activity, the server, the admin and quiz operations, registration, the Firebase store and the functions) | `python -m pytest` (about 790 tests) | *Tests*: Linux on every push; Windows, macOS and Linux for `main`, pull requests into `main` and runs started by hand |
+| Browser modules | `node --test web_tests/unit/*.test.mjs` (about 610 tests; the data tests write their recordings with `scripts/make_web_fixtures.py`, and a parity test checks that the browser's manifests match Python's) | *Browser version tests* |
+| The browser application in Chromium | `ELECTROTAG_PYTHON=python node web_tests/run_e2e.mjs` (about 155 tests in 48 files, against the demonstration and against the real `electrotag-web demo`; add `--browser webkit` for Safari's engine, `--only name` for one file) | *Browser version tests* |
 | Firebase on the emulators | `bash scripts/test_firebase_emulators.sh` (the functions and the Firestore store) and `bash scripts/test_web_firebase.sh` (the application signing in, annotating, training, exporting and running the admin area) | *Browser version tests* |
 
 The [testing guide](docs/testing_guide.md) lists the checks that need a person before a study
@@ -233,7 +233,8 @@ channels should be shown.
 
 **4. Data protection for real studies.** The interaction logs are participant data about the
 annotators, a Firebase study keeps the study's records with Google in London, and the audit log
-names the administrators. The "Data protection in brief" sections of
+names the administrators. The sign-up questionnaire adds the annotators' experience, career and,
+where the study keeps them, demographic answers, and their names and contact details (item 6g). The "Data protection in brief" sections of
 [docs/web/firebase.md](docs/web/firebase.md) and [docs/web/server.md](docs/web/server.md) describe
 exactly what is stored; check the arrangements with the university's research data and ethics
 processes before the first real study.
@@ -309,8 +310,8 @@ annotator's own progress also counts those set aside; whether the team's should 
 a choice for the research team.
 
 **6d. The admin area after its usability review (29 October).** Sharing a study's recordings out
-among its annotators, each recording to a chosen number of people, is to be built as "tasks"; until
-then Assignments gives every recording, or those ticked, to the people ticked. An administrator's own
+among its annotators, each recording to a chosen number of people, has since been built as tasks
+(item 6e) and as hand-outs of datasets and collections (item 6f). An administrator's own
 visits are still logged in the mode Annotation (Records marks them as an administrator's), since the
 admin area itself is never logged; give them a mode of their own if the activity analysis should
 tell them apart.
@@ -405,6 +406,23 @@ page's JavaScript is within 2 kB of its budget (`v_loading`: 140 of 142 kB on a 
 480 kB in the demonstration), so the next addition to what it loads should move something behind
 `js/lazy.js` first.
 
+**6i. Where the work of 30 October lives.** The dataset library is `electrotag/web/datasets.py`
+(datasets, collections, groups and hand-outs, kept as records through `store.update_record`, with
+`registration.dataset_id` on each manifest) and `electrotag/web/tracking.py` (the tracking grid, its
+TSV, the `datasets/` folder of the exports and the list of what would be notified), with the admin
+area's `js/admin/datasets.js`, `groups.js` and `handouts.js` and the sandbox's `js/api/demo_library.js`.
+The questionnaire is `electrotag/config/questionnaire.py` (the default questions) and
+`electrotag/web/questionnaire.py` (answers with their history, contacts, the gate on work through
+`GATED_OPERATIONS`, the analyses' tables), with `js/views/questionnaire.js`,
+`js/admin/questionnaire.js` and `js/api/demo_questionnaire.js`. The overlay of everyone's marks is
+`electrotag/web/overlay.py` (the compact answer of `overlay_get`, the crowd's bins, and
+`register_facet` for its filters, which `overlay_facets.py` uses for group and experience) with
+`js/expert/overlay.js`, `js/expert/crowd.js` and `js/api/demo_overlay.js`. From the feedback round,
+the scales, wheel and edge-grabbing rules are in `js/viewer/scales.js`, bad channels in the
+annotation store and the save (`bad_channels` in `_annotations.json`, `_channels.tsv`), the guide in
+`js/guide/`, reopening after a reload in `js/annotate/reopen.js`, and one's own files in
+`js/views/my_files.js` with `GET /me/results/…`.
+
 **7. Housekeeping.** The project's `ruff` settings give only the line length, so a recent `ruff`
 applies many style rules the code was never written to; `ruff check --select E,F,W,B` is the useful
 subset. A shared linting configuration and a lint step in CI would help. Many code comments still
@@ -415,8 +433,9 @@ accurate as history, and can be reworded to name the Python code instead as the 
 
 **The annotation store is the single source of truth**: the interface displays it and sends every
 action to it. **Source EEG files are never written to**, and a recording is marked complete only
-after its five output files have been written, read back and verified (the journalled save in
-`electrotag/app/session/`). **Every change an administrator makes is written to the audit log**,
+after its output files have been written, read back and verified (the journalled save in
+`electrotag/app/session/`): five files, and a sixth, `_channels.tsv`, when the annotator marked
+channels bad. **Every change an administrator makes is written to the audit log**,
 whichever way it is made. Keep all three properties whatever else changes.
 
 **In the annotation view, a key means the same thing whatever the timing**, and nothing that loses
@@ -429,7 +448,7 @@ tab can offer it back. The header's buttons are disabled when they cannot act an
 take no keyboard focus from a mouse click. `web_tests/e2e/u_interaction.e2e.mjs` checks these rules.
 
 **No draft is written for a session once its view has closed or its work was discarded.** Several
-things save drafts on their own (a local save 1.2 s after a change, the 30 s autosave, the page
+things save drafts on their own (a local save 0.3 s after a change and on `pagehide`, the 30 s autosave, the page
 being hidden, the connection returning), and an AnnotationSession outlives its view. So
 `Workspace.destroy` calls `session.close()`, which stops every save of it; drafts go to the study one
 at a time; a discard and Save and Finish wait for the one on its way; and a Discard and close names
@@ -475,10 +494,21 @@ sign-in view and the back end's client; every later view is a part that `js/lazy
 first use, and `app.js` shows Loading… or a message with Try again around it. A new view should be
 added to the parts in `lazy.js` and reached through `_withParts` in `app.js`, never imported by
 `app.js` directly; `web_tests/e2e/v_loading.e2e.mjs` keeps the sign-in page within a budget of
-JavaScript and will fail otherwise. The demonstration's back end (about 315 KB, with
-`demo_admin.js` and `admin/model.js`) still loads whole at its sign-in, which is now 457 KB against
-a budget of 462 KB in `v_loading.e2e.mjs`; loading its admin half only for the administrator would
-bring the demonstration's sign-in page down to about 330 KB.
+JavaScript and will fail otherwise. The demonstration's back end (with
+`demo_admin.js` and `admin/model.js`) still loads whole at its sign-in, which is now 478 KB against
+a budget of 480 KB in `v_loading.e2e.mjs` (a study server's sign-in page is 140 KB against 142 KB);
+loading its admin half only for the administrator would bring the demonstration's down by about
+120 KB and give the next additions room.
+
+**Running the whole suite before a push.** The order that has worked is pytest, the unit tests
+(with `ELECTROTAG_PYTHON` set, or the data tests fail), Chromium, WebKit, then the two Firebase
+scripts, about an hour in all. The emulators take fixed ports, so run one Firebase script at a time
+on a machine: a second one fails at once with "port taken". After an emulator run, function workers
+can outlive it; `ps -eo pid,ppid,args | awk '$2==1 && /functions\/venv/'` lists them, and they are
+safe to stop. A change to `electrotag/config/default_settings.json` needs
+`python web_tests/make_demo_catalogue.py` to rewrite the sandbox's copy (`js/api/demo_catalogue.js`),
+and a new operation needs its calls in `web_tests/unit/api_contract_parity.test.mjs` so that the
+sandbox is checked against the real service.
 
 **Writing.** The interface text and the documentation are in UK English, with the HED spelling
 *artifact* kept in label names. The documentation is written as prose, in the voice of the existing

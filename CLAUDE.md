@@ -28,6 +28,7 @@ ruff check --select E,F,W,B electrotag tests scripts    # the useful lint subset
 node --test web_tests/unit/*.test.mjs                     # browser modules (Node.js 22; give a glob, not a folder)
 ELECTROTAG_PYTHON=python node web_tests/run_e2e.mjs     # the application in Chromium (Playwright), incl. the real server
 ELECTROTAG_PYTHON=python node web_tests/run_e2e.mjs --browser webkit   # the same in WebKit (Safari, iPads)
+ELECTROTAG_PYTHON=python node web_tests/run_e2e.mjs --only x_overlay   # one file of web_tests/e2e
 bash scripts/test_firebase_emulators.sh                   # functions and Firestore store on the emulators (Java 21)
 bash scripts/test_web_firebase.sh                         # the application on the Firebase emulators
 electrotag web demo                                     # the whole system on http://localhost:8000/
@@ -35,7 +36,9 @@ electrotag web demo                                     # the whole system on ht
 
 `run_e2e.mjs` and the unit tests find Python through `ELECTROTAG_PYTHON`, then the repository's
 `.venv`, then `python3`. The emulators use the project ID `demo-electrotag`, which never reaches a
-real Firebase project. `requirements.txt` holds everything the server and the commands need;
+real Firebase project. They take fixed ports, so run one Firebase script at a time on a machine
+("port taken" means another run holds them), and stop the function workers an emulator run can
+leave behind (`ps -eo pid,ppid,args | awk '$2==1 && /functions\/venv/'`). `requirements.txt` holds everything the server and the commands need;
 `requirements-dev.txt` adds the test tools and the Cloud Functions' SDK; the functions themselves
 install `electrotag/web/firebase/functions/requirements.txt`.
 
@@ -44,11 +47,15 @@ install `electrotag/web/firebase/functions/requirements.txt`.
 EEG recordings never leave the computer they are on: the browser reads them, and only manifests
 (fingerprints, timing, channels, events), annotations and interaction logs go to the study. Source
 files are read-only: no code path may write to one. A recording is marked complete only after its
-five output files are written, read back and verified (the journalled save in
+output files (five, and `_channels.tsv` when channels were marked bad) are written, read back and verified (the journalled save in
 `electrotag/app/session/`). The annotation store is the single source of truth; interfaces display
 it and send every action to it. Never commit participant data or real recordings: tests use the
 synthetic recordings of `electrotag/synthetic.py` and `scripts/make_web_fixtures.py` (written to
-`web_tests/fixtures/`, which is ignored). The interaction logs never record typed text or passwords.
+`web_tests/fixtures/`, which is ignored). The interaction logs never record typed text or passwords, and are paused on the sign-up
+questionnaire's page. Names and contact details are kept only in the `contacts` records, apart from
+the questionnaire's answers (which go by annotator ID); they never reach the interaction log, the
+audit log or an analysis, and leave the study only in a results zip an administrator asks for with
+names and contacts included, which is audited.
 Every change an administrator makes is written to the study's audit log; keep it that way for new
 operations.
 
@@ -92,6 +99,26 @@ that save, score, register or count an attempt.
 Registration in the browser (`js/eeg/register.js`) must build the same manifest as the Python
 `electrotag.web.manifest.build_manifest` for the same files and settings; the parity tests compare
 them field by field, so change both together.
+
+The service layer grows through registries rather than edits to one long file. An expert
+operation is a function decorated with `@expert_op(name)` in a module listed in `EXPERT_MODULES`
+(`electrotag/web/expert.py`); its name ends in `_get` or `_list` only if it merely reads, since the
+browser may repeat those. The overlay's filters are `@register_facet(key, title)`
+(`electrotag/web/overlay.py`, used by `overlay_facets.py`), and the annotator's feedback parts
+`@feedback_part`. A new kind of study record is added to `RECORD_KINDS` in `electrotag/web/store.py`
+and written through `store.update_record`, which both stores implement. A new operation that opens
+or saves work must be considered for `GATED_OPERATIONS` in `electrotag/web/questionnaire.py`, which
+waits for the sign-up questionnaire.
+
+The sandbox (`js/api/demo*.js`) answers as the study would, from a copy of the default settings in
+`js/api/demo_catalogue.js`: after a change to `electrotag/config/default_settings.json` or the
+default questionnaire, run `python web_tests/make_demo_catalogue.py`, and give a new operation its
+calls in `web_tests/unit/api_contract_parity.test.mjs`.
+
+The sign-in page loads only what it shows; every other view is a part of `js/lazy.js`, reached
+through `_withParts` in `app.js`. `web_tests/e2e/v_loading.e2e.mjs` holds the sign-in page to a
+budget of JavaScript that is nearly full, so put new code in a part rather than in `app.js`,
+`demo.js` or the modules they import.
 
 ## Writing style for text in the repository
 
