@@ -148,7 +148,9 @@ export function dailyChart(days, counts, what) {
   el.update = (nd, nc, nw) => { state = { days: nd, counts: nc, what: nw }; active = -1; tip.hidden = true; draw(); };
   if (typeof ResizeObserver !== 'undefined') {
     let last = 0;
-    new ResizeObserver(() => { const w = Math.round(plot.clientWidth); if (w && w !== last) { last = w; draw(); } }).observe(plot);
+    // drawn in the next frame: drawing changes the plot's height, which inside the observer's own callback makes
+    // browsers report a ResizeObserver loop
+    new ResizeObserver(() => requestAnimationFrame(() => { const w = Math.round(plot.clientWidth); if (w && w !== last) { last = w; draw(); } })).observe(plot);
   }
   setTimeout(draw, 0);
   return el;
