@@ -13,6 +13,8 @@
             problem_reports/problem_reports.tsv, .json      the problems annotators reported (docs/file_formats.md)
             reviews/annotator-<ID>/<recording>_attempt-<n>_review-<time>-<id>.tsv, .json   each review of saved work
             tasks/tasks.tsv, .json, gold_scores.tsv           the tasks and the known-answer scores
+            datasets/datasets.json, .tsv, collections.json, groups.json, group_members.tsv, handouts.json, .tsv,
+                     tracking.tsv, recording_ratings.tsv     datasets, collections, groups, hand-outs and tracking
             interaction_logs/annotator-<ID>/<time>_<mode>.jsonl
 
 The result files are exactly those the desktop application's code wrote when each recording was
@@ -142,6 +144,11 @@ def export_study(store: Any, to: Path | str) -> dict[str, int]:
     for rel, data in sorted(task_files(store).items()):  # the tasks and the known-answer scores as they stand now
         atomic_write_bytes(safe_path(layout.root, rel), data)
         counts["tasks"] = counts.get("tasks", 0) + 1
+    from electrotag.web.tracking import dataset_files
+
+    for rel, data in sorted(dataset_files(store).items()):  # datasets, hand-outs and tracking as they stand now
+        atomic_write_bytes(safe_path(layout.root, rel), data)
+        counts["datasets"] = counts.get("datasets", 0) + 1
     return counts
 
 
@@ -205,8 +212,10 @@ def results_zip_file(store: Any, *, include_contacts: bool = False) -> Path:
         else:
             root = store.layout.root
         from electrotag.web.tasks import task_files
+        from electrotag.web.tracking import dataset_files
 
-        extra = {} if getattr(store, "kind", "") == "firestore" else {**record_files(store), **task_files(store)}
+        extra = {} if getattr(store, "kind", "") == "firestore" else {**record_files(store), **task_files(store),
+                                                                       **dataset_files(store)}
         base = root.name or "Annotated_Events"
         with zipfile.ZipFile(tmp.name, "w", compression=zipfile.ZIP_DEFLATED) as zf:
             if root.is_dir():
@@ -259,6 +268,9 @@ def results_readme(study_name: str, base: str, when: str) -> str:
         "and _session.json for each recording), the completion register, the interaction logs, the training\n"
         "progress and competency reports, the quiz results, the problem reports, the reviews, and the tasks\n"
         "that shared recordings out with their known-answer scores (tasks/).\n"
+        f"{base}/datasets/ holds the source datasets, collections, groups (with who joined and left) and\n"
+        "hand-outs, who was given, opened and saved each recording and when (tracking.tsv), and how many\n"
+        "people saved each recording (recording_ratings.tsv), as they stood when the file was made.\n"
         f"{base}/derived/ holds the versions made from them (experts' corrections, adjudicated versions), each\n"
         "kind with its own completion register; the originals are never changed.\n"
         f"{base}/questionnaire/ holds the answers to the sign-up questionnaire by annotator ID (answers.tsv, one\n"

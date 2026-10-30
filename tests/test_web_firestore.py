@@ -1514,3 +1514,59 @@ def test_the_questionnaire_through_the_functions(template: Path) -> None:
     assert body["result"]["questionnaire"]["answered"] is True
     _, body = callable_("et_training_stage", {"study": sid, "stage": "tour", "action": "skip"}, token)
     assert body["error"]["details"]["error"] == "no_programme"
+
+
+# ------------------------------------------- tracking and the datasets/ folder of the export (tracking.py)
+def test_tracking_and_its_export_on_firestore(service: StudyService, recordings: Path, tmp_path: Path) -> None:
+    """The statuses of tracking.py from Firestore's own records (the openings by field mask, the drafts, the
+    reports of recordings that cannot be annotated), the cache an instance keeps, and datasets/ in the export."""
+    import csv
+    import io
+
+    from electrotag.web import tracking as tracking_mod
+
+    assert service.tracking.cache_s == tracking_mod.TRACKING_CACHE_S, "Firestore keeps the figures for a while"
+    service.store.put_user("A05", display_name="Annotator five")
+    a05 = User("A05")
+    admin_ok(service, "dataset_create", {"request_id": "a" * 32, "dataset_id": "ds", "name": "DS"})
+    admin_ok(service, "recordings_move", {"recording_ids": [SUB1, SUB2, SUB3], "dataset_id": "ds"})
+    h = admin_ok(service, "handout_create", {"request_id": "b" * 32, "target": {"kind": "dataset", "id": "ds"},
+                                             "people": ["A05"], "mode": "all", "due_at": "2026-11-20"})["handout"]
+    first = admin_ok(service, "tracking_datasets_get", {"kind": "dataset"})
+    assert first["cached"] is False
+    ok(service, "submit", a05, submission(recordings, SUB1, [BLINK]))
+    ok(service, "put_draft", a05, {"recording_id": SUB2, "mode": "standard",
+                                   "draft": {"annotations": [BLINK], "elapsed_s": 4.0}})
+    vid = ok(service, "visit_open", A01, {"mode": "standard"})["visit_id"]
+    ok(service, "visit_events", A01, {"visit_id": vid, "events": [{"type": "recording_opened", "t": 3.0,
+                                                                   "recording": SUB3, "mode": "standard",
+                                                                   "window_no": 1}]})
+    ok(service, "problem_report", A02, {"problem_id": "c" * 32, "recording_id": SUB3, "mode": "standard",
+                                        "context_id": "", "reason": "too_noisy", "note": "", "outcome": "unusable",
+                                        "where": "home"})
+    again = admin_ok(service, "tracking_datasets_get", {"kind": "dataset"})
+    assert again["cached"] is True and again["generated_at"] == first["generated_at"]
+    got = admin_ok(service, "tracking_recordings_get", {"kind": "dataset", "id": "ds", "refresh": True})
+    assert got["cached"] is False
+    cells = {r["recording_id"]: r["cells"] for r in got["rows"]}
+    assert (cells[SUB1]["A05"]["status"], cells[SUB2]["A05"]["status"]) == ("saved", "in_progress")
+    assert (cells[SUB3]["A01"]["status"], cells[SUB3]["A02"]["status"]) == ("opened", "set_aside")
+    assert cells[SUB3]["A05"]["assigned_at"] and cells[SUB3]["A05"]["assigned_by"] == "ADMIN"
+    assert cells[SUB3]["A05"]["handout_id"] == h["handout_id"] and cells[SUB3]["A05"]["due_at"] == "2026-11-20"
+    assert {r["recording_id"]: r["n_rated"] for r in got["rows"]}[SUB1] == 1
+    admin_ok(service, "dataset_update", {"dataset_id": "ds", "licence": "CC0"})
+    assert admin_ok(service, "tracking_datasets_get", {})["cached"] is False, "forgotten after a change"
+    notices = admin_ok(service, "notify_preview_get", {})["notices"]
+    assert [n["kind"] for n in notices] == ["weekly"] and notices[0]["to"] == ["ADMIN"]
+    out = tmp_path / "export"
+    assert cli(["export", "--firebase-project", PROJECT, "--study", service.store.study_id, "--to", str(out)]) == 0
+    folder = out / "Annotated_Events" / "datasets"
+    assert {p.name for p in folder.iterdir()} == {"datasets.json", "datasets.tsv", "collections.json",
+                                                  "groups.json", "group_members.tsv", "handouts.json",
+                                                  "handouts.tsv", "tracking.tsv", "recording_ratings.tsv"}
+    rows = list(csv.DictReader(io.StringIO((folder / "tracking.tsv").read_text()), delimiter="\t"))
+    assert {(r["target_kind"], r["annotator_id"], r["recording_id"], r["status"]) for r in rows} >= {
+        ("dataset", "A05", SUB1, "saved"), ("handout", "A05", SUB2, "in_progress"), ("dataset", "A02", SUB3,
+                                                                                     "set_aside")}
+    assert json.loads((folder / "datasets.json").read_text())["datasets"][1]["licence"] == "CC0"
+    assert cli(["export", "--firebase-project", PROJECT, "--study", service.store.study_id, "--to", str(out)]) == 0

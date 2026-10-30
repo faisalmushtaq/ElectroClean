@@ -66,6 +66,19 @@ unchanged. The public sandbox now does all of this in the browser too: datasets,
 hand-outs in which everyone gets all of it, the tracking grids and the list of what would be notified,
 while a share-out k per recording still needs a study server or Firebase.
 
+The study team can track who has rated which recordings and when. For every dataset, collection and
+hand-out, the admin area's figures give each person's recordings given, opened, in progress, saved,
+revised, set aside and waiting for the training gate, with the overdue ones and the dates, and for any
+one of them a grid of its recordings against people, paged a thousand at a time and filtered by
+status, person, overdue work, ratings or a search, showing each recording's ratings against its
+target. Everything is derived from the study's own records, and a study of 5,000 recordings and ten
+people answers in about a second; on Firebase the figures are kept for up to two minutes and can be
+read again at once. The study sends no email: the admin area lists what would be notified instead
+(datasets and collections newly fully rated, a reminder for each person with overdue work as they
+would read it, and a weekly summary the team can copy). The results zip and `electrotag web export`
+gain a `datasets/` folder with the datasets, collections, groups with their membership history,
+hand-outs and the tracking at that moment (docs/file_formats.md).
+
 Recordings of every channel count up to 256 (and 257, EGI's nets with their reference) have been
 checked in the browser against MNE-Python, through registration, saving, the agreement analysis and
 adjudication, on a new synthetic set (`scripts/make_channel_matrix.py`, 32 recordings in every

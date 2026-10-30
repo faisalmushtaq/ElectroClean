@@ -67,6 +67,8 @@ Annotated_Events/
     adjudications/<unit>.json           each adjudication's record (results zip and export)
     adjudications/decisions.tsv         every decision on a conflict
     library/library.tsv                 every conflict between annotators, decided or not
+    tasks/tasks.{tsv,json}, gold_scores.tsv   the tasks and the known-answer scores (results zip and export)
+    datasets/                           datasets, collections, groups, hand-outs and tracking (results zip and export)
     .electrotag/
         locks/          lock files of sessions and of the register
         staging/        saves in progress (normally empty)
@@ -398,6 +400,60 @@ are `annotator_id`, `full_name`, `email`, `phone`, `institution`, `updated_at` (
 changed them) and `account` (`active`, `disabled` or `removed`); a value that starts with `=`, `+`,
 `-` or `@` is written with an apostrophe before it, so that a spreadsheet does not take it for a
 formula. The README of the zip says the same.
+
+## Datasets, collections, groups, hand-outs and tracking (results zip and export)
+
+The study's source datasets, its collections, its groups and its hand-outs (docs/web/admin.md,
+"Datasets"; docs/web/api.md, "Datasets, collections, groups and hand-outs") are kept as records of the
+study and written below `datasets/` in the results zip and by `electrotag web export`, with the
+tracking of who was given, opened and saved each recording, as they stand at that moment. Every
+file names people by annotator ID only. Datasets, collections and groups that were removed are
+included, with the state `removed`, so that hand-outs made from them can still be read. Nothing here
+changes the annotation files, and a recording's own dataset is also in `study/manifests.json`, as
+`registration.dataset_id` (none for the built-in dataset `study-recordings`).
+
+`datasets/datasets.json` holds every dataset, the built-in one first
+(`{"schema": "electrotag.datasets", "schema_version": 1, "generated_at", "datasets": [...]}`), each with
+its details, its `ratings_target`, its `changes`, and the figures of the admin area at that moment: the
+summary of its recordings (`summary`: counts, formats, sampling rates, channels, duration, size and
+the first and last registration), `ratings` (its recordings by the number of people who saved them),
+`n_rated` and `fully_rated`. `datasets/datasets.tsv` has a row for each, with the columns
+`dataset_id`, `name`, `state`, `default`, `origin`, `licence`, `citation`, `contact`, `path_prefix`,
+`ratings_target`, `n_recordings`, `n_retired`, `formats` (as `edf:120,vhdr:3`), `sfreq` (separated by
+commas), `n_channels_min`, `n_channels_max`, `duration_s`, `size_bytes`, `first_registered_at`,
+`last_registered_at`, `n_handouts` (open ones), `n_rated`, `fully_rated`, `created_at`, `created_by` and
+`updated_at`; the description and notes, which can run over several lines, are in the JSON only.
+
+`datasets/collections.json` holds every collection with its recording IDs in order, the filters it
+was built from (`built_from`), its changes and the same figures (`{"schema": "electrotag.collections",
+"schema_version": 1, "generated_at", "collections": [...]}`). `datasets/groups.json` holds every group
+with the history of who joined and left it, and `datasets/group_members.tsv` has a row for each line
+of that history, with the columns `group_id`, `group_name`, `annotator_id`, `added_at`, `added_by`,
+`removed_at` and `removed_by` (both empty while the person is a member; `removed_by` is
+`account removed` when their account was removed).
+
+`datasets/handouts.json` holds every hand-out, the oldest first, with its target, mode, `k`, people,
+groups, due date, the team's note, state, recipients (with when each was given it and by whom) and
+changes, and under `progress` its figures at that moment (`counts`, `per_person`, `complete`,
+`new_recordings` and `n_tasks`). `datasets/handouts.tsv` has a row for each, with the columns
+`handout_id`, `name`, `title` (what annotators saw), `target_kind`, `target_id`, `target_name`, `mode`,
+`k`, `due_at`, `state`, `handed_out_at`, `handed_out_by`, `people`, `groups`, `follow_groups`,
+`recipients` (IDs separated by commas), `given`, `saved`, `set_aside`, `overdue_people` and `complete`.
+
+`datasets/tracking.tsv` is the long format of the Tracking tab: a row for each target (every dataset,
+collection and hand-out), recording and person that has something to show, with the columns
+`target_kind`, `target_id`, `recording_id`, `file_name`, `dataset_id`, `annotator_id`, `status`
+(`set_aside`, `revised`, `saved`, `locked`, `in_progress`, `opened` or `given`, the first that holds),
+`assigned_at`, `assigned_by`, `handout_id`, `task_id`, `opened_at` (the latest opening),
+`first_saved_at`, `saved_at` (the latest save), `version` (the number of the latest saved version),
+`set_aside_at`, `due_at`, `overdue` (`true` or `false`), `n_rated` (the people who saved the
+recording, across every hand-out) and `generated_at`. A person who was never given a recording and
+never worked on it has no row for it, and a hand-out's rows are the pairs it covers. Dates are empty
+where the study does not know them (for example `assigned_at` of an assignment made on Firebase
+without a hand-out). `datasets/recording_ratings.tsv` has a row for each study recording, with the
+columns `recording_id`, `dataset_id`, `retired`, `n_given` (people who hold it), `n_rated` (people who
+saved it in study mode, a revision counted once) and `n_set_aside` (people who reported that it cannot
+be annotated, which is no rating).
 
 ## Adjudications and the library (results zip and export)
 

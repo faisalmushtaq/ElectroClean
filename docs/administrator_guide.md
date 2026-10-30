@@ -309,6 +309,45 @@ them again, and saved files are never overwritten. When an annotator is allowed
 to annotate a recording again (a practice recording that did not pass, for
 example), the new files are saved as a second attempt (`_attempt-02`).
 
+### Tracking who has rated what
+
+Each source dataset and each collection has a target number of ratings per
+recording, `ratings_target` (2 unless the study team sets another, from 1 to
+20, when making or changing it). A recording counts as rated once that many
+different people have saved it in study mode: a revision counts once for its
+author, a report that the recording cannot be annotated is shown beside the
+ratings and is not one, and the experts' corrections and adjudicated versions
+are never counted. A dataset or collection is fully rated when every recording
+of it that is not retired has met its target, so a recording added later counts
+at once and the dataset is not fully rated until it has its ratings too. The
+target is a property of the dataset or collection, so the same recording can
+be fully rated in a collection that asks for two people and not yet in one that
+asks for three.
+
+The Tracking tab of the Datasets section shows a grid of datasets,
+collections and hand-outs against people, and for any of them a grid of its
+recordings against people with each person's status (given, opened, in
+progress, saved, revised, set aside, locked by the training gate, or not
+given) and the dates behind it. Every figure is derived from the study's own
+records when the grid is asked for: the assignments, the completion register,
+the drafts, the visit index and the reports of recordings that cannot be
+annotated. On Firebase the admin area keeps the figures for up to two minutes
+and says when they were read; Refresh reads them again. A hand-out with a due
+date is overdue for a person from the day after it, by the study's local
+date, while something it gives them is neither saved nor set aside; due dates
+never change the order of work, which `selection.strategy` decides.
+
+The study sends no email. The admin area lists what would be notified
+instead: datasets and collections that became fully rated in the last seven
+days, a reminder for each person with overdue work as they would read it (the
+hand-out's title, how many recordings remain and the due date, never the names
+of recordings or of other people), and a summary of the week that the team can
+copy into a message of its own. The summary names people with overdue work by
+annotator ID and display name, so keep it within the study team. The results
+zip and `electrotag web export` write the datasets, collections, groups,
+hand-outs and the tracking at that moment under `datasets/`
+([file formats](file_formats.md)).
+
 ## Original event codes and artifact codes
 
 Artifact codes (100 to 121 for the specific types, 130 to 136 for the group

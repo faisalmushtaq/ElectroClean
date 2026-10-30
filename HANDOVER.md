@@ -349,6 +349,24 @@ through the operations or from the library, as the expert area has no snippets s
 the viewer can draw the labels of two overlapping marks over each other; and the tour's practice
 recording is made in the browser (a tour recording taken from a set would be a small addition).
 
+**6f. Email notices for datasets and hand-outs (30 October).** The dataset library has due dates,
+overdue flags in the admin area and on the annotator's home page, and the "fully rated" state, but
+sends no email, by the project lead's decision. Email notices wait for two things: a choice of email
+service for the study (the university's relay through SMTP submission, or a provider such as
+SendGrid, Mailgun or Amazon SES), and a check that the study's ethics approval and data protection
+arrangements allow reminders to annotators and summaries to the team that name them. Until then
+the admin area lists what would be notified (`notify_preview_get` in `electrotag/web/tracking.py`:
+datasets and collections newly fully rated, each person's overdue reminder, and a weekly summary the
+team can copy), and `Tracking.notices` is the seam a notifier would send from. The plan for later is
+section 3.3 of the technical design of the dataset library: a `notify` settings block that is off
+until the team turns it on; one `Notifier` with a transport per kind (SMTP for the server, reading
+its settings and password from environment variables only, and the same code in a scheduled Firebase
+function with the password in Secret Manager); each notice reserved under its `notice_id` in the
+`notices` records before it is sent, so that none goes twice; and each send audited without its
+body or any address. Its open questions (the Firebase scheduler's parameters in the pinned
+firebase-functions version, outbound SMTP from Cloud Functions, the provider's sending details) must
+be checked against the official documentation before it is built.
+
 **7. Housekeeping.** The project's `ruff` settings give only the line length, so a recent `ruff`
 applies many style rules the code was never written to; `ruff check --select E,F,W,B` is the useful
 subset. A shared linting configuration and a lint step in CI would help. Many code comments still
