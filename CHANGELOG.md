@@ -32,6 +32,14 @@ after signing in, so opening a recording does not wait. A page says
 gives a plain message with Try again. A test keeps the sign-in page within a
 budget of JavaScript (docs/web/architecture.md, "Loading on demand").
 
+Work deleted with Discard and close could come back as "Restore unfinished work?" the next time
+the recording was opened, when a save of the draft was still waiting or on its way to the study at
+the moment it was deleted (a change made just before Close, or an earlier opening closed to finish
+later a moment before). A recording's view writes no draft once it has closed, a discard waits for a
+draft already on its way and then deletes, and Save and Finish likewise waits for it. The study also
+refuses a draft from a browser session that discarded its work and closed, should one still arrive
+late (409 `draft_discarded`; the delete names the session, see docs/web/api.md).
+
 The pages around the annotation view were improved after a usability review.
 The answer to a chosen file now appears just under the drop zone, scrolled into
 view and given the focus, and on a training page it is worded for training

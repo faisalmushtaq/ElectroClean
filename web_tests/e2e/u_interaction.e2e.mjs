@@ -58,6 +58,8 @@ export const tests = [
       await waitForRoute(page, 'annotate');
       await waitForTraces(page);
       assert.equal((await annotations(page)).length, 3, 'a click beside the question restores');
+      // This session closes to finish later; it is kept, to try its saves again after a later discard.
+      await page.evaluate(() => { globalThis.__earlier = globalThis.ElectroTag.ws.s; });
       await closeLater(page);
       // Start afresh asks a second time; Keep them goes back to the question.
       await page.locator('ul.examples button').nth(0).click();
@@ -88,12 +90,44 @@ export const tests = [
       const ev = await page.evaluate(() => globalThis.ElectroTag.backend.resultsDocument().interaction_logs.flatMap((l) => l.events));
       assert.deepEqual(ev.filter((e) => e.type === 'draft_discarded').map((e) => e.n_annotations), [3]);
       assert.deepEqual(ev.filter((e) => e.type === 'discarded_work_restored').map((e) => [e.n_annotations, e.replaced]), [[3, 0]]);
-      // Discard and close is kept in the tab as well: the next opening offers it.
+      // Discard and close is kept in the tab as well: the next opening offers it. A draft on its way to the
+      // study meanwhile (held back here until after Delete them) arrives before the drafts are deleted.
+      await page.evaluate(() => {
+        const ET = globalThis.ElectroTag;
+        const b = ET.backend;
+        const put = b.putDraft;
+        globalThis.__closing = ET.ws.s;
+        b.putDraft = function held(...args) {
+          b.putDraft = put;
+          return new Promise((resolve) => { globalThis.__release = resolve; }).then(() => put.apply(b, args));
+        };
+        void ET.ws.s.saveRemote({ force: true });
+      });
       await page.click('[data-log="close"]');
       await page.waitForSelector('.dialog');
       await clickDialogButton(page, 'Discard and close');
       await clickDialogButton(page, 'Delete them');
+      await page.waitForTimeout(300);
+      await page.evaluate(() => globalThis.__release());
       await waitForRoute(page, 'home');
+      // No draft is written for a session once it has closed: not by the saves of the earlier session (a
+      // save of it still waiting once brought this work back), nor by the one just closed.
+      assert.deepEqual(await page.evaluate(async () => {
+        const out = [];
+        for (const s of [globalThis.__earlier, globalThis.__closing]) {
+          s._scheduleLocal();
+          s.saveLocal();
+          out.push(await s.saveRemote({ force: true }));
+        }
+        return out;
+      }), [false, false]);
+      await page.waitForTimeout(1500); // longer than a save waits
+      // And the study refuses a draft of the session that discarded its work and closed, should one arrive late.
+      assert.equal(await page.evaluate(async () => {
+        const s = globalThis.__closing;
+        try { await globalThis.ElectroTag.backend.putDraft(s.recordingId, s.mode, s.contextId, { annotations: [], session_id: s.sessionId }); } catch (e) { return e.code; }
+        return 'kept';
+      }), 'draft_discarded');
       await openExample(page, 0);
       assert.equal(await page.locator('.dialog').count(), 0, 'no draft left to restore');
       assert.match(await page.textContent('.discarded-work'), /3 annotations/);

@@ -97,3 +97,84 @@ test('a draft that does not reach the study is noted, tried again a few seconds 
   assert.equal(await s.saveRemote({ force: true }), true);
   assert.deepEqual(b.drafts[0].annotations, b.drafts[1].annotations);
 });
+
+// ------------------------------------------------- no draft after the session has closed
+// This browser's copy of drafts needs a localStorage: Node has none, so one in memory stands in.
+if (!globalThis.localStorage) {
+  const m = new Map();
+  globalThis.localStorage = { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => { m.set(k, String(v)); }, removeItem: (k) => { m.delete(k); } };
+}
+const wait = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
+
+test('no draft is written for a session once it has closed: not by a save still waiting, nor by one asked for later', async () => {
+  const b = fakeBackend();
+  const s = session(b, 'rec-closed');
+  s.store.add('EMG-artifact', 5000, 100); // this browser's copy is kept in a moment
+  s.close();
+  await wait(1400);
+  assert.equal(localStorage.getItem(s.localKey), null, 'the save that was waiting did not happen');
+  s.saveLocal();
+  assert.equal(localStorage.getItem(s.localKey), null);
+  assert.equal(await s.saveRemote({ force: true }), false);
+  assert.equal(b.drafts.length, 0);
+});
+
+test('Discard and close waits for the draft on its way to the study, then deletes, naming the session that closes', async () => {
+  const b = fakeBackend();
+  const order = [];
+  let release;
+  b.putDraft = (rid, mode, ctx, draft) => new Promise((resolve) => { release = resolve; })
+    .then(() => { order.push(['put', draft.session_id]); return { saved_at: 'now' }; });
+  b.deleteDraft = async (rid, mode, ctx, opts = {}) => { order.push(['delete', opts.sessionId || '']); return {}; };
+  const s = session(b, 'rec-on-its-way');
+  s.store.add('EMG-artifact', 5000, 100);
+  const sent = s.saveRemote({ force: true });
+  assert.equal(await s.saveRemote(), false, 'one draft at a time');
+  const discarded = s.discardDrafts({ close: true });
+  s.saveLocal(); // nothing new is written meanwhile
+  assert.equal(localStorage.getItem(s.localKey), null);
+  await wait(50);
+  assert.deepEqual(order, [], 'the delete waits for the draft on its way');
+  release();
+  await discarded;
+  assert.equal(await sent, true);
+  assert.deepEqual(order, [['put', s.sessionId], ['delete', s.sessionId]]);
+  assert.equal(localStorage.getItem(s.localKey), null);
+  assert.equal(await s.saveRemote({ force: true }), false, 'the session has closed');
+  // A draft refused by the study as discarded is not tried again.
+  const t = session(fakeBackend(), 'rec-refused');
+  t.backend.putDraft = async () => { const e = new Error('discarded'); e.status = 409; e.code = 'draft_discarded'; throw e; };
+  t.store.add('EMG-artifact', 5000, 100);
+  assert.equal(await t.saveRemote({ force: true }), false);
+  assert.equal(t.remoteFailing, false);
+});
+
+test('Start afresh names no session, so the work begun afterwards is kept as usual', async () => {
+  const b = fakeBackend();
+  const seen = [];
+  b.deleteDraft = async (rid, mode, ctx, opts) => { seen.push(opts); return {}; };
+  const s = session(b, 'rec-afresh-again');
+  await s.discardDrafts({ draft: { annotations: [], elapsed_s: 0 } });
+  assert.deepEqual(seen, [{}]);
+  s.store.add('EMG-artifact', 5000, 100);
+  assert.equal(await s.saveRemote({ force: true }), true);
+  assert.equal(b.drafts.at(-1).session_id, s.sessionId);
+  assert.ok(localStorage.getItem(s.localKey) === null || !('session_id' in JSON.parse(localStorage.getItem(s.localKey))));
+});
+
+test('Save and Finish waits for a draft on its way, so that no draft reaches the study after the saved result', async () => {
+  const b = fakeBackend();
+  const order = [];
+  let release;
+  b.putDraft = () => new Promise((resolve) => { release = resolve; }).then(() => { order.push('draft'); return { saved_at: 'now' }; });
+  b.submit = async () => { order.push('submit'); return { saved: true, files: [] }; };
+  const s = session(b, 'rec-save');
+  s.store.add('EMG-artifact', 5000, 100);
+  void s.saveRemote({ force: true });
+  const saved = s.submit('v1');
+  await wait(20);
+  assert.deepEqual(order, []);
+  release();
+  await saved;
+  assert.deepEqual(order, ['draft', 'submit']);
+});

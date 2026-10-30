@@ -41,6 +41,8 @@ RECORD_KINDS = ("problems", "reviews", "unusable")
 #: A record's ID: letters, digits, "_" and "-" (the browser makes 32 hexadecimal characters).
 RECORD_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
 ROLES = ("annotator", "admin")
+#: How many closed browser sessions are remembered per draft (Store.delete_draft).
+CLOSED_SESSIONS_KEPT = 20
 STATUSES = ("active", "disabled")
 #: Who changed something, in the audit log, when it was an ``electrotag-web`` command.
 BY_COMMAND = "command"
@@ -317,7 +319,13 @@ class Store(ABC):
     def put_draft(self, annotator_id: str, key: str, record: dict[str, Any]) -> None: ...
 
     @abstractmethod
-    def delete_draft(self, annotator_id: str, key: str) -> None: ...
+    def delete_draft(self, annotator_id: str, key: str, closed_session: str | None = None) -> None:
+        """Delete a draft. ``closed_session`` names the browser session that discarded its work and closed:
+        it is remembered (with the last few before it), so that a draft of it arriving late is refused."""
+
+    @abstractmethod
+    def draft_session_closed(self, annotator_id: str, key: str, session_id: str) -> bool:
+        """True when ``session_id`` was named as ``closed_session`` when this draft was deleted."""
 
     # ---------------------------------------------------------- guided state
     @abstractmethod
