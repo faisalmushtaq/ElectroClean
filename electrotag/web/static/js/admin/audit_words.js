@@ -54,7 +54,8 @@ export const AUDIT_OPS = Object.freeze({
   adjudication_start: 'Adjudication started',
   adjudication_decide: 'Conflict decided',
   adjudication_finish: 'Adjudication finished',
-  library_promote: 'Added to the library',
+  adjudication_reopen: 'Adjudication reopened',
+  library_promote: 'Library entry made into training material',
 });
 
 /**
