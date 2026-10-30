@@ -29,6 +29,7 @@ import httpx  # noqa: E402
 from electrotag.web.cli import main as cli  # noqa: E402
 from electrotag.web.errors import ApiError  # noqa: E402
 from electrotag.web.firebase import firestore_client  # noqa: E402
+from electrotag.web.questionnaire import prefill_example  # noqa: E402
 from electrotag.web.service import StudyService  # noqa: E402
 from electrotag.web.store import StoreError, User, item_key  # noqa: E402
 from electrotag.web.store_firestore import FirestoreStore  # noqa: E402
@@ -92,8 +93,6 @@ def new_study(template: Path, with_users: bool = True) -> str:
         run_cli("assign", "A01", "--all", "--study", sid)
         run_cli("assign", "A02", "--all", "--study", sid)
         run_cli("assign", "T01", "--programme", "example", "--study", sid)
-        from electrotag.web.questionnaire import prefill_example
-
         for u in (A01, A02, T01):  # they have answered the sign-up questionnaire (the functions check it)
             prefill_example(store, u.annotator_id, u.display_name)
     return sid
@@ -855,6 +854,12 @@ def test_admin_and_quiz_callables(study: str) -> None:
     a07 = sign_in(email, "a-seventh-password")
     _, body = callable_("et_me", {"study": study}, a07)
     assert body["result"]["annotator_id"] == "A07" and body["result"]["quizzes"] == []
+    # the sign-up questionnaire first, through its function, before the quiz opens
+    _, body = callable_("et_quiz", {"study": study, "set_id": "example", "action": "get"}, a07)
+    assert body["error"]["details"]["error"] == "questionnaire_required"
+    _, body = callable_("et_questionnaire", {"study": study, "answers": QUESTIONNAIRE,
+                                             "contacts": {"full_name": "Seven", "email": email}}, a07)
+    assert body["result"]["changed"] is True, body
     # the quiz
     _, body = callable_("et_admin", {"study": study, "op": "quiz_item_add", "set_id": "example",
                                      "recording_id": GUIDED1, "start_s": 4.0, "end_s": 4.4,
@@ -1051,6 +1056,7 @@ def test_role_claims_on_firebase(study: str) -> None:
     email = f"e01-{study}@example.org"
     out = admin_ok(svc, "user_add", {"annotator_id": "E01", "email": email, "roles": ["annotator", "expert"],
                                      "password": "an-expert-password"})
+    prefill_example(svc.store, "E01", "Expert one")  # E01 has answered the sign-up questionnaire
     assert out["user"]["roles"] == ["expert", "annotator"]
     user = auth.get_user_by_email(email, app=app)
     assert user.custom_claims["roles"] == {study: ["expert", "annotator"]} and user.custom_claims["role"] == "expert"
@@ -1147,6 +1153,7 @@ def test_a_correction_through_et_expert(study: str, recordings: Path) -> None:
     email = f"e01-{study}@example.org"
     admin_ok(svc, "user_add", {"annotator_id": "E01", "email": email, "roles": ["annotator", "expert"],
                                "password": "an-expert-password"})
+    prefill_example(svc.store, "E01", "Expert one")  # E01 has answered the sign-up questionnaire
     a01 = sign_in(f"a01-{study}@example.org")
     _, body = callable_("et_submit", {"study": study, **submission(recordings, SUB1, [BLINK, EMG])}, a01)
     assert body["result"]["saved"] is True, body
@@ -1261,6 +1268,7 @@ def test_adjudication_through_the_expert_function(study: str, recordings: Path) 
     email = f"e01-{study}@example.org"
     admin_ok(svc, "user_add", {"annotator_id": "E01", "email": email, "roles": ["annotator", "expert"],
                                "password": "an-expert-password"})
+    prefill_example(svc.store, "E01", "Expert one")  # E01 has answered the sign-up questionnaire
     ok(svc, "submit", A01, submission(recordings, SUB1, DISAGREE[0]))
     ok(svc, "submit", A02, submission(recordings, SUB1, DISAGREE[1]))
     uid = unit_id_for("recording", SUB1)
