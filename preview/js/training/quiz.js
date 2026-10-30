@@ -161,9 +161,14 @@ export class QuizView {
   /**
    * @param {object} app the application (backend, me, catalogue, goBack)
    * @param {string} setId
+   * @param {object} [o] from the training path's snippets: `shared`, the recordings already open there
+   *   (recording_id -> {recording, channels, manifest}), used without opening them again when they are the
+   *   study's same copies, and `onLeave`, which goes back there instead of app.goBack()
    */
-  constructor(app, setId) {
+  constructor(app, setId, { shared = null, onLeave = null } = {}) {
     this.app = app;
+    this.shared = shared;
+    this.onLeave = onLeave;
     this.backend = app.backend;
     this.setId = setId;
     this.catalogue = app.catalogue;
@@ -227,7 +232,20 @@ export class QuizView {
       this._showFinished();
       return;
     }
+    this._borrow();
     this.next();
+  }
+
+  /** The recordings the snippets have open already, when they are the study's same copies: lent, never closed here. */
+  _borrow() {
+    for (const [rid, o] of (this.shared instanceof Map ? this.shared : new Map())) {
+      const m = this._manifest(rid);
+      const want = m && m.fingerprint ? String(m.fingerprint.hex || '').toLowerCase() : '';
+      const have = o.manifest && o.manifest.fingerprint ? String(o.manifest.fingerprint.hex || '').toLowerCase() : '';
+      if (!want || want !== have || this.opened.has(rid)) continue;
+      this.opened.set(rid, { recording: o.recording, channels: o.channels, manifest: m, owned: false });
+      logger.event('quiz_recording_reused', { recording_id: rid });
+    }
   }
 
   /** The items still to answer, and which recordings they need (in order). */
@@ -630,7 +648,8 @@ export class QuizView {
       rows.length ? h('table.list.quiz-categories', {}, h('thead', {}, h('tr', {}, h('th', {}, 'Main artifact type'), h('th.num', {}, 'Segments'), h('th.num', {}, 'Correct'))),
         h('tbody', {}, rows)) : null,
       h('p.caption', {}, 'Your answers are saved with the study. The quiz tests recognising artifact types; the annotation of whole recordings is assessed separately.'),
-      h('div.btn-row', {}, h('button.btn.primary', { type: 'button', 'data-log': 'quiz-done', onclick: () => this.leave() }, this.app.me && this.app.me.programme && this.app._fromTraining ? 'Back to my training path' : 'Back to my recordings'))));
+      h('div.btn-row', {}, h('button.btn.primary', { type: 'button', 'data-log': 'quiz-done', onclick: () => this.leave() },
+        this.onLeave ? 'Back to the examples' : this.app.me && this.app.me.programme && this.app._fromTraining ? 'Back to my training path' : 'Back to my recordings'))));
   }
 
   _showFinished() {
@@ -680,7 +699,8 @@ export class QuizView {
 
   leave() {
     this.destroy();
-    this.app.goBack();
+    if (this.onLeave) this.onLeave();
+    else this.app.goBack();
   }
 
   _closeRecordings() {

@@ -19,10 +19,16 @@ export const SECTIONS = Object.freeze([
   { key: 'records', route: 'admin-records', title: 'Records', group: 'study' },
   { key: 'annotators', route: 'admin-annotators', title: 'Annotators', group: 'people' },
   { key: 'assignments', route: 'admin-assignments', title: 'Assignments', group: 'people' },
+  { key: 'tasks', route: 'admin-tasks', title: 'Tasks', group: 'people' },
   { key: 'training', route: 'admin-training', title: 'Training', group: 'people' },
   { key: 'recordings', route: 'admin-recordings', title: 'Recordings', group: 'data' },
   { key: 'problems', route: 'admin-problems', title: 'Problems', group: 'data' },
   { key: 'settings', route: 'admin-settings', title: 'Study settings', group: 'config' },
+]);
+
+/** Links of the admin menu to the expert area, which administrators may use too: {group, route, title}. */
+export const EXPERT_LINKS = Object.freeze([
+  { group: 'study', route: 'expert-queue', title: 'Adjudication' },
 ]);
 
 export function sectionsOf(group) {
@@ -60,7 +66,8 @@ export function routeForSection(key) {
 
 // --------------------------------------------------------------------- words
 export const MODES = Object.freeze({ standard: 'Annotation', guided: 'Guided training', practice: 'Practice', assessment: 'Assessment' });
-export const STATUS = Object.freeze({ todo: 'To do', in_progress: 'In progress', done: 'Done', unusable: 'Cannot be annotated' });
+export const STATUS = Object.freeze({ todo: 'To do', in_progress: 'In progress', done: 'Done', unusable: 'Cannot be annotated',
+  locked: 'Locked until the assessment is passed' });
 export const USES = Object.freeze({
   guided: 'Guided: learn with the experts',
   practice: 'Practice: on their own, with feedback',
@@ -72,13 +79,49 @@ export const GUIDANCE = Object.freeze({
   show: 'Show each artifact',
   find: 'Name each artifact, trainee finds it',
   find_unnamed: 'Only say an artifact follows',
+  correct: 'Correct the marks (an exercise made first)',
 });
 export const SELECTION = Object.freeze({
   random: 'Random order',
   seeded: 'Reproducible order (with a seed)',
   manual: 'Assignment order',
 });
-export const ROLES = Object.freeze({ annotator: 'Annotator', admin: 'Administrator' });
+/** The roles a person can be given (electrotag/web/store.py ROLES); one person may hold several. */
+export const ROLES = Object.freeze({ annotator: 'Annotator', expert: 'Expert', admin: 'Administrator' });
+/** The order of precedence: a person's primary role (the older single role) is the first they hold. */
+export const ROLE_ORDER = Object.freeze(['admin', 'expert', 'annotator', 'participant']);
+const KNOWN_ROLES = new Set(ROLE_ORDER);
+
+/** A person's roles in ROLE_ORDER, from a list, a comma-separated text or the older single role (as parse_roles). */
+export function parseRoles(value, fallback = 'annotator') {
+  const items = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',').map((x) => x.trim()) : [];
+  const out = ROLE_ORDER.filter((r) => items.includes(r) && KNOWN_ROLES.has(r));
+  return out.length ? out : fallback ? [fallback] : [];
+}
+
+/** The first of the roles in ROLE_ORDER ("annotator" when there is none), as primary_role. */
+export function primaryRole(roles) {
+  return ROLE_ORDER.find((r) => (roles || []).includes(r)) || 'annotator';
+}
+
+/** The roles of an account record: its `roles`, or the older single `role`. */
+export function rolesOf(u) {
+  return parseRoles(u && Array.isArray(u.roles) && u.roles.length ? u.roles : u && u.role);
+}
+
+/** "an annotator and expert", "an administrator": the roles as the audit log's summaries say them (roles_text). */
+export function rolesText(roles) {
+  const words = { annotator: 'annotator', expert: 'expert', admin: 'administrator', participant: 'participant' };
+  const names = ['annotator', 'expert', 'admin', 'participant'].filter((r) => (roles || []).includes(r)).map((r) => words[r]);
+  const list = names.length ? names : ['annotator'];
+  const joined = list.length === 1 ? list[0] : `${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}`;
+  return `${/^[aeiou]/.test(joined) ? 'an' : 'a'} ${joined}`;
+}
+
+/** The roles as words for a page: "Annotator, Expert". */
+export function roleWords(roles) {
+  return ['admin', 'expert', 'annotator'].filter((r) => (roles || []).includes(r)).map((r) => ROLES[r]).join(', ') || ROLES.annotator;
+}
 export const METHOD_NAMES = Object.freeze({
   single_expert: "one expert's annotations",
   annotator: "one person's saved annotations",
@@ -92,45 +135,6 @@ export const CHANNEL_TYPES = Object.freeze(['eeg', 'eog', 'ecg', 'emg', 'misc', 
 export const SCALING_TYPES = Object.freeze(['eeg', 'eog', 'ecg', 'emg', 'misc']);
 /** The study's starting choice of channel colours (display.channel_colours; js/viewer/channel_colours.js). */
 export const CHANNEL_COLOUR_CHOICES = Object.freeze([['off', 'None: every trace in ink'], ['region', 'By region of the head'], ['side', 'By side of the head'], ['type', 'By channel type']]);
-
-/** What each audited operation did, for the records' filter and table. */
-export const AUDIT_OPS = Object.freeze({
-  settings_update: 'Study settings changed',
-  user_add: 'Account added',
-  user_update: 'Account changed',
-  user_reset_password: 'Password reset',
-  user_invite: 'Invitation link made',
-  user_invite_revoke: 'Invitation link withdrawn',
-  user_remove: 'Account removed',
-  assign: 'Recordings assigned',
-  unassign: 'Assignment removed',
-  programme_set: 'Training programme changed',
-  recordings_register: 'Recordings added',
-  recording_update: 'Recording changed',
-  recording_remove: 'Recording removed',
-  set_create: 'Reference set created',
-  set_update: 'Reference set changed',
-  set_delete: 'Reference set deleted',
-  set_add_reference: 'Reference added',
-  set_recording_update: 'Use or guidance changed',
-  set_remove_recording: 'Recording removed from a set',
-  set_guided_note: 'Guided note changed',
-  set_example_create: 'Example set created',
-  quiz_item_add: 'Quiz item added',
-  quiz_item_remove: 'Quiz item removed',
-  register: 'Recordings registered (command)',
-  init: 'Study created (command)',
-  problem_report: 'Problem reported',
-  problem_resolve: 'Problem resolved',
-  problem_return: 'Recording returned to its annotator',
-  problem_reassign: 'Recording given to someone else',
-  review_save: 'Review saved',
-});
-
-export function opText(op) {
-  const t = AUDIT_OPS[op] || String(op || '').replace(/_/g, ' ');
-  return t.charAt(0).toUpperCase() + t.slice(1);
-}
 
 function settingValueText(v) {
   if (typeof v === 'boolean') return v ? 'on' : 'off';
@@ -654,7 +658,8 @@ export function progressCounts(items) {
   const c = { assigned: 0, done: 0, in_progress: 0, todo: 0, unusable: 0 };
   for (const i of items || []) {
     c.assigned += 1;
-    if (i.status in c) c[i.status] += 1;
+    const st = i.status === 'locked' ? 'todo' : i.status; // locked: to do once the trainee has passed the assessment
+    if (st in c) c[st] += 1;
   }
   return c;
 }
@@ -663,9 +668,10 @@ export function progressCounts(items) {
 export function programmeText(p) {
   if (!p) return '';
   if (p.error) return p.message || p.error;
-  const names = { guided: 'Guided', practice: 'Practice', assessment: 'Assessment' };
-  return (p.stages || []).filter((s) => s.status !== 'not_used' && s.total)
-    .map((s) => `${names[s.key] || s.key} ${s.done} of ${s.total}${s.status === 'completed' ? ' (completed)' : s.status === 'locked' ? ' (locked)' : ''}`)
+  const names = { tour: 'Tour', snippets: 'Snippets', guided: 'Guided', practice: 'Practice', assessment: 'Assessment' };
+  const state = { completed: ' (completed)', locked: ' (locked)', skipped: ' (skipped)' };
+  return (p.stages || []).filter((s) => s.status !== 'not_used' && (s.total || s.status === 'skipped'))
+    .map((s) => (s.total ? `${names[s.key] || s.key} ${s.done} of ${s.total}${state[s.status] || ''}` : `${names[s.key] || s.key} skipped`))
     .join(' · ') || 'Not started';
 }
 

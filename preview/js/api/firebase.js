@@ -9,13 +9,24 @@
 // The Firebase SDK is loaded (as ES modules from gstatic.com) only when this backend is used, so
 // the demonstration and server modes never load it.
 
-import { ADMIN_OP, ApiError } from './http.js';
+import { ADMIN_OP, ApiError, EXPERT_OP, isExpertRead } from './http.js';
+
+export { isExpertRead };
 
 /** The admin operations that only read (docs/web/api.md, "Administration"), which may be retried. */
 const ADMIN_READS = new Set(['overview', 'progress', 'stats', 'audit', 'visits', 'sets_list', 'quiz_items', 'set_guided_notes']);
 
 export function isAdminRead(op) {
   return ADMIN_READS.has(op) || /_(list|get)$/.test(String(op));
+}
+
+/** The roles the claims give in a study: the list written now, or the older single role (role_in in Python). */
+export function claimedRoles(claims, study) {
+  const r = claims && claims.roles && typeof claims.roles === 'object' ? claims.roles[study] : undefined;
+  const list = Array.isArray(r) ? r : typeof r === 'string' ? [r] : [(claims && claims.role) || 'annotator'];
+  const order = ['admin', 'expert', 'annotator', 'participant'];
+  const out = order.filter((x) => list.includes(x));
+  return out.length ? out : ['annotator'];
 }
 
 export const FIREBASE_VERSION = '12.19.0';
@@ -145,7 +156,7 @@ export class FirebaseBackend {
     try { claims = (await user.getIdTokenResult()).claims || {}; } catch { /* read from et_me below */ }
     return {
       annotator_id: claims.annotator_id || '', display_name: user.displayName || '', role: claims.role || 'annotator',
-      email: user.email || String(email).trim(),
+      roles: claimedRoles(claims, this.study), email: user.email || String(email).trim(),
     };
   }
 
@@ -216,6 +227,9 @@ export class FirebaseBackend {
   /** The reviews of the annotator's saved work: a read, so asked again once after a failure. */
   myReviews() { return this._call('et_my_reviews', {}, { retry: true }); }
 
+  /** The corrections of the annotator's work and the outcomes of its conflicts: a read. */
+  myFeedback() { return this._call('et_my_feedback', {}, { retry: true }); }
+
   training() { return this._call('et_training', {}, { retry: true }); }
 
   guided(recordingId) { return this._call('et_guided_get', { recording_id: recordingId }, { retry: true }); }
@@ -225,6 +239,11 @@ export class FirebaseBackend {
   guidedContinue(recordingId, body) { return this._call('et_guided_continue', { recording_id: recordingId, ...body }); }
 
   guidedShowMe(recordingId, body) { return this._call('et_guided_show_me', { recording_id: recordingId, ...body }); }
+
+  /** Skip, finish or resume a stage of the training path: it saves, so it is never asked a second time. */
+  trainingStage(body) { return this._call('et_training_stage', body || {}); }
+
+  trainingSnippets() { return this._call('et_training_snippets', {}, { retry: true }); }
 
   /** The short-segment quiz: only "get" reads, so only it is asked again; an answer is never repeated. */
   quiz(setId, body) {
@@ -248,6 +267,16 @@ export class FirebaseBackend {
   admin(op, body = {}) {
     if (!ADMIN_OP.test(String(op))) return Promise.reject(new ApiError(400, 'bad_request', 'That is not an operation of the admin area.'));
     return this._call('et_admin', { ...(body || {}), op }, { retry: isAdminRead(op) });
+  }
+
+  /**
+   * One operation of the expert area: et_expert with {op, ...body}. Only an operation that reads (its name ends in
+   * _get or _list: isExpertRead) is asked again after a failure; one that saves (a correction, a decision) is never
+   * repeated, because the first attempt may have been carried out.
+   */
+  expert(op, body = {}) {
+    if (!EXPERT_OP.test(String(op))) return Promise.reject(new ApiError(400, 'bad_request', 'That is not an operation of the expert area.'));
+    return this._call('et_expert', { ...(body || {}), op }, { retry: isExpertRead(op) });
   }
 
   get canDownloadRecordings() { return false; }

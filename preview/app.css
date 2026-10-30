@@ -110,9 +110,13 @@
   --i-pause: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='square'%3E%3Cpath d='M5.5 3.5v9M10.5 3.5v9'/%3E%3C/svg%3E");
   --i-play: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linejoin='round'%3E%3Cpath d='M5 3.5v9l7-4.5z'/%3E%3C/svg%3E");
   --i-skip-forward: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='square'%3E%3Cpath d='M2.5 8h8M7 4l4 4-4 4M13.5 3.5v9'/%3E%3C/svg%3E");
+  --i-lock: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linejoin='round'%3E%3Cpath d='M3.5 7.5h9v6h-9z'/%3E%3Cpath d='M5.5 7.5V5a2.5 2.5 0 0 1 5 0v2.5'/%3E%3C/svg%3E");
   --i-note: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linejoin='round'%3E%3Cpath d='M3.5 2.5h6l3 3v8h-9z'/%3E%3Cpath d='M9.5 2.5v3h3M5.5 8.5h5M5.5 11h3.5'/%3E%3C/svg%3E");
   --i-more: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='black'%3E%3Ccircle cx='3.5' cy='8' r='1.25'/%3E%3Ccircle cx='8' cy='8' r='1.25'/%3E%3Ccircle cx='12.5' cy='8' r='1.25'/%3E%3C/svg%3E");
   --i-star-empty: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1' stroke-linejoin='round'%3E%3Cpath d='M8 2.6l1.6 3.7 4 .4-3 2.6.9 3.9L8 11.1l-3.5 2.1.9-3.9-3-2.6 4-.4z'/%3E%3C/svg%3E");
+  --i-step-back: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='square' stroke-linejoin='round'%3E%3Cpath d='M4.5 3.5v9'/%3E%3Cpath d='M12 3.5v9L6 8z'/%3E%3C/svg%3E");
+  --i-step-forward: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='square' stroke-linejoin='round'%3E%3Cpath d='M11.5 3.5v9'/%3E%3Cpath d='M4 3.5v9l6-4.5z'/%3E%3C/svg%3E");
+  --i-to-start: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='square' stroke-linejoin='round'%3E%3Cpath d='M3.5 3.5v9'/%3E%3Cpath d='M8.5 4.5 5 8l3.5 3.5M12.5 4.5 9 8l3.5 3.5'/%3E%3C/svg%3E");
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -180,8 +184,12 @@ kbd .ico { width: 12px; height: 12px; }
 .ico-pause { --i: var(--i-pause); }
 .ico-play { --i: var(--i-play); }
 .ico-skip-forward { --i: var(--i-skip-forward); }
+.ico-lock { --i: var(--i-lock); }
 .ico-note { --i: var(--i-note); }
 .ico-more { --i: var(--i-more); }
+.ico-step-back { --i: var(--i-step-back); }
+.ico-step-forward { --i: var(--i-step-forward); }
+.ico-to-start { --i: var(--i-to-start); }
 .stars { display: inline-flex; gap: 2px; vertical-align: -2px; margin-right: 8px; color: var(--ink); }
 .stars .ico { width: 14px; height: 14px; }
 
@@ -500,6 +508,73 @@ ul.examples b { font-weight: 400; color: var(--ink); }
 .stage p { margin: 0; }
 .next-text { margin-bottom: 12px; }
 .training .btn.primary.wide { width: auto; min-width: 264px; }
+
+/* the five-stage path (js/training/path.js): one row per stage, in order, with its actions at the right */
+ol.stages.path { grid-template-columns: minmax(0, 1fr); list-style: none; padding: 0; margin: 24px 0 16px; }
+ol.stages.path > li { display: flex; min-width: 0; }
+ol.stages.path .stage {
+  flex: 1; display: grid; grid-template-columns: minmax(200px, 280px) minmax(0, 1fr) 168px; align-items: start; gap: 8px 32px;
+  padding: 20px 24px;
+}
+.stage-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.stage-side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.next-step { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin: 24px 0 0; }
+.next-step .next-text { margin: 0; }
+.next-step .btn-row { margin: 0; }
+.stage.skipped { background: var(--band); }
+.stage-extra:empty { display: none; }
+.gate-card { display: flex; align-items: flex-start; gap: 12px; margin: 16px 0 0; background: var(--band); }
+.gate-card .ico { width: 20px; height: 20px; flex: none; margin-top: 2px; }
+.gate-card p { margin: 0; }
+/* once the assessment is finished: how it went, in a heading's voice, with the lock and why under it */
+.next-words { display: flex; flex-direction: column; gap: 8px; min-width: 0; max-width: 760px; }
+.next-outcome { margin: 0; font: var(--t-28); letter-spacing: -0.03em; color: var(--ink); font-variation-settings: var(--display); }
+.next-step.waiting .gate-line, .next-step.passed .gate-line { margin: 0; }
+.next-step.waiting, .next-step.passed { align-items: flex-end; }
+/* the earlier rounds of the assessment, under its card's text; watching an expert, flush with the text */
+.stage-rounds { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.stage-extra { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.stage-extra .watch-slot .btn.quiet { padding-left: 0; padding-right: 0; height: auto; min-height: 32px; }
+@media (max-width: 899px) {
+  ol.stages.path .stage { grid-template-columns: minmax(0, 1fr); padding: 16px; }
+  .stage-side { flex-direction: row; align-items: center; justify-content: space-between; }
+}
+
+/* the snippets of "Meet the artifacts" (js/training/snippets.js), in the quiz's frame */
+@media (min-width: 1101px) { .view.snippets .snippet-side { width: 400px; } }
+.snippet-text { display: flex; flex-direction: column; gap: 4px; }
+.snippet-text p { margin: 0; }
+.snippet-label { display: flex; align-items: center; gap: 8px; margin: 0; font: var(--t-20); letter-spacing: -0.02em; color: var(--ink); font-variation-settings: var(--display); }
+.snippet-section { margin: 8px 0 4px; color: var(--text-secondary); font: var(--t-14); }
+.snippet-type { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 4px 8px; padding: 4px 0; }
+.snippet-type-name { min-width: 0; overflow-wrap: anywhere; }
+.snippet-dots { grid-column: 2; display: flex; flex-wrap: wrap; gap: 4px; }
+.snippet-dot {
+  min-width: 28px; height: 28px; padding: 0 8px; border: 1px solid var(--border); border-radius: var(--pill); background: var(--surface);
+  color: var(--ink); font: var(--t-14); font-variant-numeric: tabular-nums lining-nums; cursor: pointer;
+}
+.snippet-dot.seen { background: var(--accent-soft); border-color: var(--accent-soft); color: var(--accent-hover); }
+.snippet-dot.current { border-color: var(--ink); outline: 1px solid var(--ink); }
+@media (hover: hover) { .snippet-dot:hover { background: var(--hover); } }
+.snippet-actions { display: flex; flex-direction: column; gap: 8px; }
+.snippet-actions .btn.wide { width: 100%; }
+.snippet-quiz-result { margin: 0; }
+/* the side scrolls as a whole, so that the index of examples keeps its full height on a short screen */
+.view.quiz.snippets .snippet-side { overflow-y: auto; }
+.view.quiz.snippets .snippet-side > * { flex: none; }
+.view.quiz.snippets .snippet-side .quiz-scroll { min-height: auto; overflow: visible; }
+/* held upright or narrow: the EEG on top, the example and the whole index under it, the page scrolling */
+@media (max-width: 1024px) and (orientation: portrait), (max-width: 799px) {
+  .view.quiz.snippets .quiz-body { overflow-y: auto; }
+  .view.quiz.snippets .quiz-main { flex: none; }
+  .view.quiz.snippets .quiz-eeg { flex: none; height: 58vh; height: 58dvh; min-height: 320px; }
+  .view.quiz.snippets .quiz-side.snippet-side { height: auto; overflow: visible; }
+}
+
+/* a study recording that waits for the competency assessment (js/views/home_list.js) */
+.locked-why { display: block; }
+.gate-line { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 8px; }
+.gate-line .ico { width: 16px; height: 16px; flex: none; margin-top: 4px; }
 
 /* ------------------------------------------------------------ annotation view */
 /* The view fills the window. The EEG and the side panel keep a minimum height (--main-min): in a
@@ -1257,3 +1332,84 @@ button.review-line { text-align: left; font: var(--t-14); }
 .map-box { position: absolute; border: 1px solid var(--accent); background: rgba(43, 67, 146, 0.08); pointer-events: none; }
 .map-note { margin: 8px 0 0; }
 .dialog.wide:has(.channel-map-block:not([hidden])) { max-width: 760px; }
+/* An expert's correction (js/expert/correction_pass.js), the annotator's view of one (correction_feedback.js) and the
+   replay of a session (js/replay/player.js), in the annotation view. A change without the reason the study asks for is
+   outlined in the warning colour; a correction is shown to the annotator in the accent blue, never red. */
+.view.annotate.correcting .ws-side > .review-host, .view.annotate.replaying .ws-side > .review-host { max-height: 72%; }
+.correction-pass, .replay-panel { overflow-y: auto; min-height: 0; }
+.correction-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 8px; }
+.correction-progress { margin: 0; }
+.correction-row .review-item-head { flex: 1 1 100%; flex-wrap: wrap; }
+.correction-text { flex: 1 1 160px; min-width: 0; }
+.correction-row.needs-reason { outline: 2px solid var(--warning-bar); outline-offset: -2px; background: var(--warning-bg); }
+.reason-chips { display: flex; flex: 1 1 100%; flex-wrap: wrap; gap: 4px; padding: 0; background: transparent; }
+.reason-chips .seg { display: inline-flex; align-items: center; gap: 6px; background: var(--fill); }
+@media (hover: hover) { .reason-chips .seg:hover:not(:disabled):not([aria-checked="true"]) { background: var(--fill-hover); } }
+.reason-chips .seg[aria-checked="true"] { background: var(--accent-soft); color: var(--accent); }
+/* A reason's key on its chip (its number), and the keys named in the replay's labels: left out on a touch screen. */
+.key-hint { color: var(--text-secondary); font-variant-numeric: tabular-nums lining-nums; }
+.reason-chips .seg[aria-checked="true"] .key-hint { color: inherit; }
+@media (pointer: coarse) {
+  .key-hint, .review-keys:empty { display: none; }
+  .reason-chips .seg, .replay-speeds .seg { height: 40px; min-width: 40px; }
+  .correction-feedback-row { min-height: 40px; }
+}
+.correction-others { margin: 8px 0; }
+.correction-feedback .feedback-chip { border-color: var(--accent); color: var(--accent); }
+.replay-bar { display: flex; flex-direction: column; gap: 8px; padding: 8px 8px 0 0; }
+.replay-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.replay-play { min-width: 88px; }
+.replay-time { font: var(--t-14); color: var(--text-secondary); font-variant-numeric: tabular-nums lining-nums; margin: 0 8px; }
+.replay-speeds .seg { padding: 0 8px; font-variant-numeric: tabular-nums lining-nums; }
+.replay-scrub { position: relative; height: 24px; cursor: pointer; touch-action: none; }
+.replay-track { position: absolute; left: 0; right: 0; top: 10px; height: 4px; background: var(--hairline); }
+.replay-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--ink); }
+.replay-handle { position: absolute; top: -6px; width: 16px; height: 16px; margin-left: -8px; border-radius: 50%; background: var(--ink); }
+.replay-tick { position: absolute; top: -6px; width: 2px; height: 16px; margin-left: -1px; background: var(--accent); }
+.replay-idle { position: absolute; top: 0; bottom: 0; background: var(--text-disabled); }
+.replay-seg { position: absolute; top: -8px; width: 1px; height: 20px; background: var(--ink); }
+.replay-toggle { display: inline-flex; align-items: center; gap: 4px; font: var(--t-14); }
+.replay-caption { margin: 0; min-height: 24px; font: var(--t-16); color: var(--ink); }
+.replay-segments, .replay-recent { list-style: none; margin: 8px 0; padding: 0; }
+.replay-segments li.current { color: var(--accent); font-weight: 600; }
+.replay-recent li { padding: 4px 0; border-bottom: 1px solid var(--hairline); font: var(--t-14); }
+.replay-recent li.change { color: var(--accent); }
+.replay-at { color: var(--text-secondary); font-variant-numeric: tabular-nums lining-nums; }
+.replay-end { margin: 8px 0; }
+.replay-times { color: var(--text-secondary); font-variant-numeric: tabular-nums lining-nums; }
+.watch-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.watch-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--hairline); }
+.corrected-line { text-align: left; }
+/* The experts' disagreements over a correction, as they were settled (js/expert/settled.js): on the home page's
+   history and in the annotator's view of the correction, in calm blue. */
+.settled-card { margin: 4px 0 0; font: var(--t-14); }
+.settled-card summary { align-items: flex-start; color: var(--accent); }
+.settled-card summary .caption { color: var(--text-secondary); }
+.settled-list { margin: 8px 0 0; padding-left: 24px; }
+.settled-open { text-align: left; }
+.settled-row { padding: 4px 0; }
+.settled-row .block { display: block; }
+.settled-row .outcome-head b { color: var(--accent); }
+.key-sheet table.keys { border-collapse: collapse; }
+.key-sheet table.keys td { padding: 4px 16px 4px 0; vertical-align: top; font: var(--t-14); }
+.key-sheet table.keys td:first-child { width: 1%; white-space: nowrap; }
+.key-sheet table.keys th { padding: 16px 0 4px; text-align: left; font: var(--t-16); font-weight: 600; }
+.key-sheet table.keys tr:first-child th { padding-top: 0; }
+@media (pointer: coarse) { .replay-scrub { height: 40px; } .replay-track { top: 18px; } }
+
+/* Correct the marks (js/training/correct.js, js/admin/planted.js, js/expert/planted.js) */
+.planted-items { list-style: none; margin: 8px 0 12px; padding: 0; }
+.planted-item { display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--hairline); font: var(--t-14); }
+.planted-item .ico { flex: none; margin-top: 2px; }
+.planted-item.fixed .ico { background-color: var(--accent); }
+.planted-item.not-fixed .ico { background-color: var(--warning-text); }
+.planted-item .planted-text { flex: 1 1 auto; min-width: 0; }
+.planted-item .btn { flex: none; }
+.planted-item.current { background: var(--hover); outline: 1px solid var(--hairline); }
+.corrections-review .planted-items { margin-top: 4px; }
+.planted-panel .coach-buttons { flex-wrap: wrap; gap: 8px; }
+.planted-recordings { list-style: none; margin: 0; padding: 0; }
+.planted-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--hairline); }
+.planted-row > span:first-child { flex: 1 1 auto; min-width: 0; }
+.planted-row:last-child { border-bottom: 0; }
+.planted-dialog .planted-items { max-height: 50vh; overflow-y: auto; }

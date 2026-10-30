@@ -166,6 +166,7 @@ table.admin-info th { width: 1%; }
 .radio-col .caption.block { font: var(--t-12); }
 .admin-checks { border: 1px solid var(--hairline); border-radius: 0; padding: 8px 12px 12px; margin: 0 0 12px; min-width: 0; }
 .admin-checks legend { padding: 0 4px; font: var(--t-14); color: var(--text-secondary); }
+.admin-checks > .caption { margin: 8px 0 0; }
 .check-tools { flex-wrap: wrap; margin-bottom: 8px; }
 .check-tools .field { flex: 1 1 160px; width: auto; }
 .check-list { max-height: 240px; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0 12px; }
@@ -313,6 +314,13 @@ th.num .th-sort { flex-direction: row-reverse; }
 @media (prefers-reduced-motion: reduce) { .admin-progress.indeterminate .progress-bar { animation: none; width: 100% !important; opacity: 0.5; } }
 
 /* ------------------------------------------------------------------ reports */
+/* a trainee's earlier rounds of the assessment on their Training path card (js/admin/training_gate.js) */
+.gate-rounds h3 { margin: 8px 0 4px; }
+.gate-round-list { list-style: none; margin: 0; padding: 0; }
+.gate-round-list > li { padding: 8px 0; border-bottom: 1px solid var(--hairline); }
+.gate-round-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.gate-round-report:empty { display: none; }
+.gate-round-report .btn-row { margin: 8px 0 0; }
 .report-frame { display: block; width: 100%; height: 72vh; min-height: 420px; border: 1px solid var(--hairline); border-radius: 0; background: #FFFFFF; margin-top: 12px; }
 .downloads { margin-bottom: 4px; }
 
@@ -360,6 +368,8 @@ th.num .th-sort { flex-direction: row-reverse; }
   table.admin-list td[data-title=""]::before { content: none; }
   table.admin-list td.actions { justify-content: flex-end; }
   table.admin-list td > * { min-width: 0; }
+  /* A long status ("Locked until the assessment is passed") wraps inside its pill rather than running out of the card. */
+  table.admin-list td .chip { height: auto; min-height: 24px; padding-block: 2px; white-space: normal; }
   .field.num { max-width: none; }
   .report-frame { height: 60vh; }
 }
@@ -398,3 +408,26 @@ th.num .th-sort { flex-direction: row-reverse; }
 
 /* Add an account, under the list: its fields side by side, three to a row on a wide screen. */
 .form-grid.add-account { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+/* An account's roles: three boxes side by side, in a row of their own (never cut short). */
+.role-boxes .check-list { max-height: none; overflow: visible; }
+
+/* Tasks: the share-out's options in one row, its times side by side, the preview, and each task's people. */
+.row.wrap.tasks-times > .admin-field { flex: 0 1 200px; }
+.tasks-preview { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.tasks-preview:empty { display: none; }
+.tasks-summary { margin: 0; font: var(--t-16); }
+.tasks-sub { margin: 8px 0 0; }
+.task-people { list-style: none; margin: 0; padding: 0; }
+.task-people li { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.task-letter {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 4px;
+  border: 1px solid var(--border); border-radius: var(--pill); font: var(--t-12); color: var(--text-secondary);
+}
+.task-actions { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.task-change { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.task-change select.field { width: auto; }
+
+/* Snippet authoring (js/admin/snippets.js): the stretch on the EEG, as trainees will see it. */
+.snippet-preview { margin: 0 0 16px; }
+.admin-snippet-eeg { height: 440px; padding: 8px; border: 1px solid var(--hairline); background: var(--page); }
+@media (max-width: 640px) { .admin-snippet-eeg { height: 360px; padding: 4px; } }
