@@ -24,8 +24,8 @@ async function demo(id = 'ADMIN', storage = memory()) {
 test('the menu: four groups, every section in one, and what was folded read back safely', () => {
   assert.deepEqual(m.GROUPS.map((g) => g.title), ['Study', 'People', 'Data', 'Settings']);
   assert.deepEqual(m.sectionsOf('study').map((s) => s.title), ['Overview', 'Progress', 'Results', 'Analyses', 'Records']);
-  assert.deepEqual(m.sectionsOf('people').map((s) => s.title), ['Annotators', 'Assignments', 'Tasks', 'Training', 'Questionnaire']);
-  assert.deepEqual(m.sectionsOf('data').map((s) => s.title), ['Recordings', 'Problems']);
+  assert.deepEqual(m.sectionsOf('people').map((s) => s.title), ['Annotators', 'Groups', 'Assignments', 'Hand-outs', 'Tasks', 'Training', 'Questionnaire']);
+  assert.deepEqual(m.sectionsOf('data').map((s) => s.title), ['Datasets', 'Recordings', 'Problems']);
   assert.deepEqual(m.sectionsOf('config').map((s) => s.title), ['Study settings']);
   for (const s of m.SECTIONS) assert.ok(m.GROUPS.some((g) => g.key === s.group), s.key);
   assert.equal(m.groupOf('progress'), 'study');

@@ -81,6 +81,10 @@ recordings that cannot be annotated) and the saved recordings that have been rev
 opens the section behind it: Open problems opens Problems, Reviewed the list of reviews in Results,
 and so on.
 
+While hand-outs are open, a line under the figures says how many people have overdue work and across
+how many open hand-outs, with a warning chip when anyone is late, and See the hand-outs opens the
+Hand-outs section. Hand out recordings, among the buttons, opens it too.
+
 ## Progress
 
 Progress shows how far the study has got and how long the work takes, in three tabs. The study tab
@@ -239,6 +243,23 @@ the audit log. Either way the round that ended stays listed under Earlier rounds
 with its result and its competency report (See the report, and Download the report), as it was when
 the round ended.
 
+## Groups
+
+Groups gather people whom the study team hands recordings out to together, such as Leeds RAs or
+Experts. The section is under People. New group asks for a name, an optional description for the
+study team and the first members, ticked in a list that shows each person's name beside their ID once
+they have given it in the sign-up questionnaire. A group's page shows its members, the history of who
+joined and who left and when, and its details, which can be changed, archived (an archived group can
+be given nothing new) or removed. A group that an open hand-out names is removed only once that
+hand-out is withdrawn; archive it instead to keep it on record.
+
+Tick and untick members, then Save the members. Someone taken out keeps everything they were given.
+When an open hand-out of the kind "everyone gets all of it" follows the group, the page first says
+what adding people would give them, for example "Adding A12 gives them 2 hand-outs that follow this
+group (240 recordings).", and offers Add and give or Add only. The group's page also lists which open
+hand-outs follow it, and Hand out to this group… opens the hand-out form with the group chosen. When
+an account is removed, its rows in every group's history are closed as removed with the account.
+
 ## Questionnaire
 
 Annotators and experts answer the sign-up questionnaire at their first sign-in, before any recording,
@@ -260,11 +281,92 @@ identifies people, so the page says so and asks before downloading it; keep it a
 data, share it only with the study team, and delete it when it is no longer needed. Each download is
 noted in the audit log. The questions themselves are edited in Study settings.
 
+## Datasets
+
+Datasets hold the study's recordings by where they came from, and show how far each set has been
+rated. The section is the first under Data and has three tabs: Datasets, Collections and Tracking.
+Annotators never see anything kept here; a recording reaches them through a hand-out (below), which
+they know only by its title.
+
+**Source datasets.** Each study recording belongs to one source dataset, such as "Youth low-density
+2026" or "OpenNeuro ds003420". The built-in dataset, Study recordings, holds the recordings
+registered before datasets existed and those added without choosing one. The list shows each
+dataset with its number of recordings, formats, channels, total length, how many of its recordings
+have met its target of ratings (a bar with the words under it), its open hand-outs and its state.
+New dataset asks for its name and, optionally, an ID (made from the name when left empty, and fixed
+after), a description, its origin or address, its licence, a citation, a contact, notes, a path
+prefix and its target of ratings. A dataset's page shows these details with a summary worked out
+from its recordings: how many there are and how many are retired, their formats, sampling rates and
+numbers of channels, their total length and size, when the first and the last were added, and how
+many people have rated them. The details can be changed there; the path prefix is fixed once the
+dataset has recordings. Archive keeps a dataset on record while it takes no new recordings and
+cannot be handed out again; Remove is offered for a dataset without recordings or open hand-outs.
+
+**The target of ratings.** Each dataset and each collection has a number of ratings to reach for every
+recording: 2 unless you choose otherwise, from 1 to 20. A recording counts as rated once that many
+different people have saved it in study mode, whoever gave it to them; a person's revisions count
+once, and a report that the recording cannot be annotated is shown beside the ratings without being
+one. A dataset or collection is fully rated when every recording of it in use has met the target,
+and the lists mark it so. Recordings added later count at once, so a fully rated dataset that gains
+recordings is no longer fully rated until they are rated too.
+
+**Path prefixes.** A recording's ID is its path inside the folder it was registered from, so two
+BIDS datasets would both have `sub-001/eeg/...`. The study refuses to register a recording under an
+ID that belongs to a recording of another dataset, even when replacing, and the Recordings section
+says so before anything is sent. A dataset with a path prefix, such as `ds003420`, puts it in front of
+every recording ID registered into it (`ds003420/sub-001/eeg/...`), which keeps the two apart.
+Opening a recording matches its fingerprint and file name, so annotators open their files as before.
+
+**The recordings of a dataset.** Its page lists its recordings with their format, length, channels,
+how many people have been given each and how many have rated it against the target. Tick recordings
+to move them to another dataset (Move to) or to add them to a collection (Add to, which offers the
+collections in use and A new collection…). Hand out this dataset… opens the hand-out form with the
+dataset chosen, Add recordings to it… opens Recordings with the dataset chosen for adding, and Who
+has rated what opens its recordings in Tracking. Its hand-outs are listed at the foot of the page.
+
+**Collections.** A collection is a hand-picked, ordered list of study recordings drawn from any
+datasets, such as "Pilot: 20 hard recordings", with a target of ratings of its own. Make one by
+ticking recordings on a dataset's page and choosing A new collection…, or with Build from filters on
+the Collections tab: choose the datasets, part of a file name, a format, a range of lengths in
+minutes and "rated by at most" a number of people, and optionally a random sample of a number of the
+matches. The sample is drawn with a seed, shown in its field, so the same filters and seed draw the
+same recordings again. The form says how many recordings match and lists them before Make a
+collection of these; retired recordings are left out, and a collection holds at most 2,000. The
+filters are kept with the collection, and its list of recordings is what counts. A collection's
+page shows its recordings in order, with Move up, Move down and Take out of the collection for each,
+and its details, which can be changed, archived or removed (once no open hand-out names it). A
+retired recording stays in a collection and is given to nobody new; a recording whose registration
+is removed leaves every collection.
+
+### Tracking
+
+The Tracking tab shows who has what. Choose its rows: Datasets, Collections or Hand-outs. Each row
+shows how many of its recordings in use have met the target of ratings, then one column for each
+person who has been given something of it, headed by their ID with their name beside it where the
+study has it. A cell such as "38 of 40" counts what the person has saved of what they were given, with
+an Overdue chip when a hand-out with a passed due date still leaves them work, or Done; hover the cell
+for the rest: revisions, recordings set aside, in progress, opened or locked until the competency
+assessment is passed, when the first recording was given, when the last was saved, and the due date.
+Filter the rows by person, by Overdue only and by whether they are complete, and sort by any column.
+The line above the table says when the figures were worked out ("Figures from 10:42"); on Firebase
+they are kept for up to two minutes to spare the study's reads, and Refresh works them out again.
+
+Choose a row's name to see its recordings one by one: each cell says where one person stands with
+one recording (Not given, Given, Opened, In progress, Locked, Saved, Revised v2 or Set aside), with
+the dates in its title: when it was given and by whom, opened, first and last saved, set aside, and
+the due date. Ratings shows the different people who saved it against the target. Filter by status,
+person, Overdue only or file name; a long dataset comes 1,000 recordings at a time, with Load the
+next. Download as a table (CSV) gathers every page with the same filters into one file, one row for
+each recording and person, with the columns `target_kind`, `target_id`, `recording_id`, `file_name`,
+`dataset_id`, `annotator_id`, `status`, `assigned_at`, `assigned_by`, `handout_id`, `task_id`,
+`opened_at`, `first_saved_at`, `saved_at`, `version`, `set_aside_at`, `due_at`, `overdue`, `n_rated`
+and `ratings_target`. The table names people by their IDs only, like the study's other research files.
+
 ## Recordings
 
 The Recordings section lists the registered recordings: those of the study and those of each
-reference set. Filter the list by where the recordings are, by whether they are in use or retired,
-or by name. Manage shows a recording's details (its format, length, channels, file size and
+reference set. Filter the list by where the recordings are, by the dataset a study recording belongs
+to (Datasets, above), by whether they are in use or retired, or by name. Manage shows a recording's details (its format, length, channels, file size and
 fingerprint, who added it, when and how, and what was found when it was added) with the notes the
 study team keeps about it.
 
@@ -294,8 +396,12 @@ study checks this as well, whichever way the recordings are sent.
 When the files have been read, a table shows what was found: each recording's ID, format, number of
 channels and length, with anything the checks noticed (an unusual amplitude, for example), and the
 files that could not be read with the reason. Choose where the recordings go, the study or one of
-the reference sets, then Add; its button counts the recordings that will be added, leaving out those
-registered already (unless Replace is ticked) and copies. Assign them…, afterwards, opens
+the reference sets, and for the study the dataset they come from (Dataset, with New dataset… to make
+one there with its name and path prefix), then Add; its button counts the recordings that will be
+added, leaving out those registered already (unless Replace is ticked), copies, and recordings whose
+IDs belong to a recording of another dataset. Those are marked with that dataset's name before
+anything is sent, since the study leaves them as they are even when replacing; a new dataset with a
+path prefix keeps the two apart. With a prefix, the table shows the IDs as they will be registered. Assign them…, afterwards, opens
 Assignments with the new recordings chosen. Only the descriptions are sent, in small groups. The answer lists the
 recordings added, replaced and skipped, with the reason for each skipped one. A recording that is
 registered already is skipped unless you tick Replace; even then, a recording that someone has
@@ -342,6 +448,62 @@ Finished work stays with their results. A recording that its annotator set aside
 be annotated has See the report instead, since it is settled through the problem report (Problems):
 returned to their list, or given to someone else. Trainees'
 recordings come from their training programme, which you change on their page in Annotators.
+
+## Hand-outs
+
+A hand-out gives a dataset or a collection to people and groups. The section is under People. The
+form has four steps. What: the dataset or collection, listed with its recordings in use. Who: people,
+ticked one by one (All leaves out the same accounts as in Tasks), and groups, with Also give it to
+people who join these groups later. How: Everyone gets all of it, where each person is given every
+recording in use, or Shared out, where each recording goes to a number of the people chosen as
+independent tasks, through the Tasks section's own share-out. When and what annotators see: an
+optional due date, the title annotators see, a name for the study team and a note for the study team.
+
+**What annotators see.** Annotators see a hand-out by its title alone: their home page groups their
+recordings under it and shows its due date. The title starts as the dataset's name for a source
+dataset, and as "Recordings due 20 November" (or "Recordings to annotate" without a due date) for a
+collection, so that a collection's name, such as "Pilot: 20 hard recordings", never reaches the
+people annotating it and cannot colour their work. The field shows the title that would be used; type
+another to change it. The names, descriptions and notes of datasets and collections, and the team's
+note on a hand-out, stay in the admin area.
+
+**Preview, then Hand out.** Preview the hand-out works out what it would do without doing it. For
+Everyone gets all of it, a sentence such as "40 recordings to 3 people: 118 new assignments; 2
+recordings that people hold already stay as they are, with this hand-out's due date.", each person's
+new recordings and those they hold already, and the recordings left out with the reason (retired,
+for example). A recording someone holds already keeps its place in their list and takes the
+hand-out's due date. For a share-out, the preview is the Tasks section's own, with each person's
+share and how evenly the pairs of annotators share recordings; a recording that has an open task
+already is left out, so a second share-out of the same recordings needs the first one's tasks closed.
+Hand out is ready once the preview is shown, and a change to the choices asks for the preview again.
+The hand-out is made once, however often the button is pressed or however late the answer arrives.
+
+**Due dates and overdue work.** A due date is a day. From the day after it, by the study's own date,
+a person who still has recordings of the hand-out that are neither saved nor set aside is overdue:
+the hand-out's row, its page, the tracking grids and Overview mark it, and the annotator's home page
+shows a Due card with the overdue chip. Due dates never change the order of work, which the study's
+selection setting decides.
+
+**Every hand-out.** The list shows each hand-out by its name, with the title annotators see under it,
+what it gives, how, to how many people, its due date with how many people are overdue, its progress
+("30 of 80 saved, 2 set aside") and its state, with a chip when recordings have been added to its
+dataset or collection since. Filter it by state, Overdue only or a search of names and titles. A
+hand-out's page lists each person's part (given, saved, set aside, left to do, and whether they are
+overdue), and offers: change the due date or the title; Give the 12 new recordings, for recordings
+added since it was handed out, which wait until you give them; add people (for Everyone gets all of
+it); Who has rated what, which opens it in Tracking; and Withdraw…, which takes back only what
+nobody has started. Saved work, drafts and recordings set aside stay with the people who have them,
+and the hand-out stays on record as withdrawn.
+
+### What would be notified
+
+ElectroTag sends no email yet. At the foot of the section, What would be notified lists what a notice
+would say if it did, worked out from the study as it is now: datasets and collections newly fully
+rated, people with overdue work, and a weekly summary of the open hand-outs. Each notice shows who it
+would go to and its text, with Copy the text to paste it into an email of your own. Nothing on the
+page is sent. Sending notices by email waits for the study to choose an email service and to check
+that its ethics approval and data protection arrangements allow reminders to annotators and summaries
+that name them.
 
 ## Tasks
 

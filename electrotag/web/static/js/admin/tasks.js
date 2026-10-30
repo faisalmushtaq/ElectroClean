@@ -16,6 +16,43 @@ import {
   savedText, skippedPart, statusKind, statusText,
 } from './tasks_model.js';
 
+/**
+ * A share-out's preview (tasks_preview_get) drawn in `host`: the sentence, the pairs, the warnings, each
+ * person's share, the tasks and what is left out. The Hand-outs section draws its k-per-recording preview
+ * with it too, so that the two read the same.
+ */
+export function showTasksPreview(host, p) {
+  clear(host);
+  const s = previewSummary(p);
+  host.append(h('p.tasks-summary', { role: 'status' }, s.sentence));
+  if (s.pairs) host.append(h('p.caption.tasks-pairs', {}, s.pairs));
+  if (s.warnings.length) host.append(h('div.banner.tasks-warnings', { role: 'note' }, s.warnings.map((w) => h('p', {}, w))));
+  if (s.people.length) {
+    host.append(dataTable([
+      { title: 'Annotator', key: 'annotator_id', render: (r) => h('b', {}, r.annotator_id) },
+      { title: 'Open tasks now', key: 'open_before', num: true },
+      { title: 'New tasks', key: 'new', num: true },
+      { title: 'Already theirs', key: 'linked', num: true },
+      { title: 'Open tasks after', key: 'total', num: true },
+      ...(s.people.some(personNote) ? [{ title: 'Note', render: (r) => personNote(r) || '–' }] : []),
+    ], s.people, { caption: 'Each person\'s share', pageSize: 50, sortable: true }));
+  }
+  if (p.tasks && p.tasks.length) {
+    host.append(h('h3.tasks-sub', {}, 'The tasks'), dataTable([
+      { title: 'Recording', render: (t) => recordingName(t.recording_id, t.file_name) },
+      { title: 'Part', render: (t) => partText(t.window) },
+      { title: 'Annotators', render: (t) => t.annotators.join(', ') },
+    ], p.tasks, { caption: 'The tasks the share-out makes', pageSize: 10 }));
+  }
+  if (p.skipped && p.skipped.length) {
+    host.append(h('h3.tasks-sub', {}, 'Left out'), dataTable([
+      { title: 'Recording', render: (x) => recordingName(x.recording_id) },
+      { title: 'Part', render: (x) => skippedPart(x) },
+      { title: 'Why', render: (x) => SKIPPED[x.reason] || x.reason },
+    ], p.skipped, { caption: 'Recordings and parts left out', pageSize: 10 }));
+  }
+}
+
 export class TasksSection {
   constructor(area) {
     this.area = area;
@@ -166,37 +203,7 @@ export class TasksSection {
       one, many, adopt, h('div.btn-row', {}, preview, create), msg, previewHost);
   }
 
-  _showPreview(host, p) {
-    clear(host);
-    const s = previewSummary(p);
-    host.append(h('p.tasks-summary', { role: 'status' }, s.sentence));
-    if (s.pairs) host.append(h('p.caption.tasks-pairs', {}, s.pairs));
-    if (s.warnings.length) host.append(h('div.banner.tasks-warnings', { role: 'note' }, s.warnings.map((w) => h('p', {}, w))));
-    if (s.people.length) {
-      host.append(dataTable([
-        { title: 'Annotator', key: 'annotator_id', render: (r) => h('b', {}, r.annotator_id) },
-        { title: 'Open tasks now', key: 'open_before', num: true },
-        { title: 'New tasks', key: 'new', num: true },
-        { title: 'Already theirs', key: 'linked', num: true },
-        { title: 'Open tasks after', key: 'total', num: true },
-        ...(s.people.some(personNote) ? [{ title: 'Note', render: (r) => personNote(r) || '–' }] : []),
-      ], s.people, { caption: 'Each person\'s share', pageSize: 50, sortable: true }));
-    }
-    if (p.tasks && p.tasks.length) {
-      host.append(h('h3.tasks-sub', {}, 'The tasks'), dataTable([
-        { title: 'Recording', render: (t) => recordingName(t.recording_id, t.file_name) },
-        { title: 'Part', render: (t) => partText(t.window) },
-        { title: 'Annotators', render: (t) => t.annotators.join(', ') },
-      ], p.tasks, { caption: 'The tasks the share-out makes', pageSize: 10 }));
-    }
-    if (p.skipped && p.skipped.length) {
-      host.append(h('h3.tasks-sub', {}, 'Left out'), dataTable([
-        { title: 'Recording', render: (x) => recordingName(x.recording_id) },
-        { title: 'Part', render: (x) => skippedPart(x) },
-        { title: 'Why', render: (x) => SKIPPED[x.reason] || x.reason },
-      ], p.skipped, { caption: 'Recordings and parts left out', pageSize: 10 }));
-    }
-  }
+  _showPreview(host, p) { showTasksPreview(host, p); }
 
   // ---------------------------------------------------------------- the list
   _buildTable() {

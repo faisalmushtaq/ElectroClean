@@ -27,12 +27,16 @@ import { SettingsSection } from './settings.js';
 import { ProblemsSection } from './problems.js';
 import { TasksSection } from './tasks.js';
 import { QuestionnaireSection } from './questionnaire.js';
+import { DatasetsSection } from './datasets.js';
+import { GroupsSection } from './groups.js';
+import { HandoutsSection } from './handouts.js';
 
 const KINDS = {
   overview: OverviewSection, progress: ProgressSection, annotators: AnnotatorsSection, recordings: RecordingsSection,
   assignments: AssignmentsSection, training: TrainingSection, analyses: AnalysesSection, results: ResultsSection,
   records: RecordsSection, settings: SettingsSection, problems: ProblemsSection, tasks: TasksSection,
   questionnaire: QuestionnaireSection, // the sign-up questionnaire's answers and the contacts list
+  datasets: DatasetsSection, groups: GroupsSection, handouts: HandoutsSection, // datasets, groups and hand-outs
 };
 
 const CSS_HREF = new URL('../../admin.css', import.meta.url).href;

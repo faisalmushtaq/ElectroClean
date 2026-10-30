@@ -4,10 +4,11 @@
 // with MNE-Python), shows what it found and what failed, and sends only the manifests. The EEG
 // never leaves this computer. Several recordings chosen in the list are assigned, retired, brought
 // back into use or removed together; removing deletes only a registration, and a recording with
-// saved results is always kept.
+// saved results is always kept. Study recordings are added into a dataset (Datasets), chosen in the
+// adding card; an ID that belongs to a recording of another dataset is pointed out before anything is sent.
 
 import { h, clear } from '../ui/dom.js';
-import { CAN_CHOOSE_FOLDER, acceptFiles } from '../util.js';
+import { CAN_CHOOSE_FOLDER, acceptFiles, newId } from '../util.js';
 import {
   bytesText, chunkManifests, durationText, duplicatesOf, failureText, formatName, manifestSummary, mergeRegisterResults, plural, progressText, scopeText,
   whenText,
@@ -16,6 +17,7 @@ import {
   STILL_RUNNING, actionButton, put, card, checkbox, chip, confirmInline, dataTable, eachInTurn, oneAtATime, field, infoTable, messageArea, progressLine, recordingName, resultsTable,
   sectionHead, select, textArea, textInput,
 } from './ui.js';
+import { DEFAULT_DATASET_ID, collisionsOf, datasetBody, prefixed } from './datasets_model.js';
 
 /** The module that reads recordings for the register (js/eeg/register.js); tests may replace it. */
 export async function loadRegisterModule() {
@@ -33,6 +35,7 @@ export class RecordingsSection {
     this.area = area;
     this.recordings = [];
     this.sets = [];
+    this.datasets = [];
     this.job = null; // 'reading' | 'registering' while one runs: they cannot be started twice
     this.found = null; // {manifests, failures} from the builder, waiting to be registered
     this.msg = messageArea();
@@ -48,7 +51,9 @@ export class RecordingsSection {
   async show(params) {
     this.msg.clear();
     if (params.scope) this.filters.scope.value = params.scope;
+    if (params.dataset) { this._wantDataset = params.dataset; this.addScope.value = 'study'; }
     await this.reload();
+    if (params.dataset) setTimeout(() => this.addCard.scrollIntoView({ block: 'start' }), 0);
     if (params.recording) {
       const r = this.recordings.find((x) => x.recording_id === params.recording && (!params.scope || x.scope === params.scope));
       if (r) this.openDetail(r);
@@ -60,10 +65,12 @@ export class RecordingsSection {
     const turn = (this._turn = (this._turn || 0) + 1);
     this.listNote.textContent = 'Loading…';
     try {
-      const [r, s] = await Promise.all([this.area.read('recordings_list'), this.area.read('sets_list').catch(() => ({ sets: [] }))]);
+      const [r, s, d] = await Promise.all([this.area.read('recordings_list'), this.area.read('sets_list').catch(() => ({ sets: [] })),
+        this.area.read('datasets_list').catch(() => ({ datasets: [] }))]);
       if (turn !== this._turn) return;
       this.recordings = r.recordings || [];
       this.sets = s.sets || [];
+      this.datasets = d.datasets || [];
       this.listNote.textContent = '';
     } catch (exc) {
       this.listNote.textContent = '';
@@ -71,6 +78,7 @@ export class RecordingsSection {
       return;
     }
     this._fillScopes();
+    this._fillDatasets();
     this._filter();
     if (this.detailKey) this._renderDetail();
   }
@@ -88,6 +96,68 @@ export class RecordingsSection {
     }
   }
 
+  /** The name of a dataset by its ID ('' and null are the built-in one). */
+  _datasetName(id) {
+    const d = this.datasets.find((x) => x.dataset_id === (id || DEFAULT_DATASET_ID));
+    return d ? d.name || d.dataset_id : id || 'Study recordings';
+  }
+
+  _fillDatasets() {
+    const f = this.filters.dataset;
+    const keep = f.value;
+    clear(f);
+    f.append(h('option', { value: '' }, 'Every dataset'), ...this.datasets.map((d) => h('option', { value: d.dataset_id }, d.name || d.dataset_id)));
+    f.value = this.datasets.some((d) => d.dataset_id === keep) ? keep : '';
+    f.hidden = !this.datasets.length || this.filters.scope.value.startsWith('set:');
+    const a = this.addDataset;
+    const want = this._wantDataset || a.value || '';
+    this._wantDataset = null;
+    clear(a);
+    const active = this.datasets.filter((d) => d.state !== 'archived');
+    a.append(...active.map((d) => h('option', { value: d.dataset_id }, d.name || d.dataset_id)),
+      h('option', { value: '__new' }, 'New dataset…'));
+    a.value = active.some((d) => d.dataset_id === want) ? want : (active[0] ? active[0].dataset_id : '__new');
+    this._datasetChanged();
+  }
+
+  /** The dataset chosen for adding, with its prefix ({id, prefix}), or null outside the study. */
+  _target() {
+    if ((this.addScope.value || 'study') !== 'study') return null;
+    const d = this.datasets.find((x) => x.dataset_id === this.addDataset.value);
+    return { id: d ? d.dataset_id : DEFAULT_DATASET_ID, prefix: d ? d.path_prefix || '' : '' };
+  }
+
+  _datasetChanged() {
+    const study = (this.addScope.value || 'study') === 'study';
+    this.datasetField.hidden = !study || !this.datasets.length;
+    this.newDatasetHost.hidden = !study || !this.datasets.length || this.addDataset.value !== '__new';
+    if (!this.newDatasetHost.hidden && !this.newDatasetHost.childNodes.length) this._newDatasetForm();
+    if (this.found) this._showReview();
+  }
+
+  /** Make a dataset without leaving the page, then choose it for the recordings being added. */
+  _newDatasetForm() {
+    const host = this.newDatasetHost;
+    clear(host);
+    const msg = messageArea();
+    const name = textInput({ placeholder: 'For example OpenNeuro ds003420', maxlength: 120 });
+    const prefix = textInput({ placeholder: 'Optional, for example ds003420' });
+    let requestId = null;
+    const make = actionButton('Make the dataset', { kind: 'small primary', working: 'Making it…', msg, log: 'register-dataset-create', onClick: async () => {
+      const body = datasetBody({ name: name.value, path_prefix: prefix.value }, { creating: true });
+      requestId = requestId || newId();
+      const r = await this.area.write('dataset_create', { ...body, request_id: requestId });
+      requestId = null;
+      this._wantDataset = r.dataset.dataset_id;
+      clear(host);
+      await this.reload();
+      this.addMsg.show('success', `Made the dataset ${r.dataset.name}; the recordings will be added to it. Its licence, citation and other details are on the Datasets page.`);
+    } });
+    host.append(h('div.ds-inline-new', {}, h('div.form-grid', {}, field('Name of the new dataset', name),
+      field('Path prefix', prefix, { hint: 'Put in front of each recording ID, so that its sub-001 keeps apart from another dataset\'s.' })),
+    h('div.btn-row', {}, make), msg));
+  }
+
   // ------------------------------------------------------------------ list
   _buildList() {
     const scope = select([['', 'Everywhere'], ['study', 'The study']]);
@@ -96,14 +166,17 @@ export class RecordingsSection {
     status.setAttribute('aria-label', 'Status');
     const search = textInput({ type: 'search', placeholder: 'Search by name or ID' });
     search.setAttribute('aria-label', 'Search the recordings');
-    this.filters = { scope, status, search };
-    for (const f of [scope, status, search]) f.addEventListener('input', () => this._filter());
+    const dataset = select([['', 'Every dataset']]);
+    dataset.setAttribute('aria-label', 'Dataset');
+    this.filters = { scope, dataset, status, search };
+    for (const f of [scope, dataset, status, search]) f.addEventListener('input', () => this._filter());
     this.listNote = h('p.caption', { role: 'status' });
     this.bulkBar = h('div.bulk-bar', { hidden: true, role: 'region', 'aria-label': 'Act on the recordings chosen' });
     this.bulkResult = h('div.admin-stack.bulk-result');
     this.table = dataTable([
       { title: 'Recording', sort: (r) => r.file_name || r.recording_id, render: (r) => recordingName(r.recording_id, r.file_name) },
       { title: 'Where', sort: (r) => scopeText(r.scope, this.sets), render: (r) => scopeText(r.scope, this.sets) },
+      { title: 'Dataset', sort: (r) => (r.scope === 'study' ? this._datasetName(r.dataset_id) : ''), render: (r) => (r.scope === 'study' ? this._datasetName(r.dataset_id) : h('span.caption', {}, '–')) },
       { title: 'Length', num: true, sort: (r) => r.duration_s, render: (r) => durationText(r.duration_s) },
       { title: 'Channels', num: true, sort: (r) => r.n_channels, render: (r) => String(r.n_channels ?? '') },
       { title: 'Done', num: true, sort: (r) => r.done ?? 0, render: (r) => `${r.done ?? 0} of ${r.assigned ?? 0}` },
@@ -112,7 +185,7 @@ export class RecordingsSection {
       { title: '', cls: 'actions', render: (r) => h('button.btn.small', { type: 'button', onclick: () => this.openDetail(r) }, 'Manage') },
     ], [], { empty: 'No recordings match. Add some from this computer.', rowKey: (r) => `${r.scope}|${r.recording_id}`, caption: 'Recordings',
       sortable: true, selectable: true, onSelect: (keys) => this._bulkBar(keys) });
-    this.listCard = card('Registered recordings', h('div.row.filters', {}, scope, status, search), this.listNote, this.table, this.bulkBar, this.bulkResult);
+    this.listCard = card('Registered recordings', h('div.row.filters', {}, scope, dataset, status, search), this.listNote, this.table, this.bulkBar, this.bulkResult);
   }
 
   /** The recordings of the list's keys ("scope|recording ID"). */
@@ -184,10 +257,13 @@ export class RecordingsSection {
   }
 
   _filter() {
-    const { scope, status, search } = this.filters;
+    const { scope, dataset, status, search } = this.filters;
     const q = search.value.trim().toLowerCase();
+    dataset.hidden = !this.datasets.length || scope.value.startsWith('set:');
+    const did = dataset.hidden ? '' : dataset.value;
     this.table.setEmpty(this.recordings.length ? 'No recordings match the filters.' : 'No recordings are registered yet. Add some from this computer.');
     this.table.update(this.recordings.filter((r) => (!scope.value || r.scope === scope.value) &&
+      (!did || (r.scope === 'study' && (r.dataset_id || DEFAULT_DATASET_ID) === did)) &&
       (!status.value || (status.value === 'retired') === Boolean(r.retired)) &&
       (!q || `${r.recording_id} ${r.file_name || ''}`.toLowerCase().includes(q))), { keepPage: true });
   }
@@ -234,7 +310,9 @@ export class RecordingsSection {
       h('div.card-head', {}, h('h2', {}, r.file_name || r.recording_id), close),
       msg,
       infoTable([
-        ['Recording ID', r.recording_id], ['Where', scopeText(r.scope, this.sets)], ['Format', formatName(r.format)],
+        ['Recording ID', r.recording_id], ['Where', scopeText(r.scope, this.sets)],
+        r.scope === 'study' ? ['Dataset', h('button.link', { type: 'button', onclick: () => this.area.go('datasets', { dataset: r.dataset_id || DEFAULT_DATASET_ID }) }, this._datasetName(r.dataset_id))] : null,
+        ['Format', formatName(r.format)],
         ['Length', `${durationText(r.duration_s)} at ${r.sfreq} Hz (${Number(r.n_samples || 0).toLocaleString('en-GB')} samples)`],
         ['Channels', String(r.n_channels ?? '')], ['File size', bytesText(r.size_bytes)],
         ['Fingerprint', h('code.fingerprint', {}, r.sha256 || '–')],
@@ -253,6 +331,11 @@ export class RecordingsSection {
   _buildAdd() {
     this.addMsg = messageArea();
     this.addScope = select([['study', 'The study']], 'study');
+    this.addScope.addEventListener('change', () => this._datasetChanged());
+    this.addDataset = select([['', 'Study recordings']]);
+    this.addDataset.addEventListener('change', () => this._datasetChanged());
+    this.datasetField = field('Dataset', this.addDataset, { hint: 'The source dataset the recordings come from. Its details and licence are on the Datasets page.' });
+    this.newDatasetHost = h('div.ds-new-host', { hidden: true });
     this.replace = checkbox('Replace recordings that are registered already (their description is updated)');
     const folderInput = h('input', { type: 'file', multiple: true, webkitdirectory: true, hidden: true, 'data-log': 'register-folder',
       onchange: () => { const f = [...folderInput.files]; folderInput.value = ''; if (f.length) this.read(f); } });
@@ -267,7 +350,9 @@ export class RecordingsSection {
       h('p', {}, 'Choose the dataset folder (or the files of some recordings). This browser reads each recording, works out its fingerprint and describes its channels, events and timing; only these descriptions are sent to the study, never the EEG.'),
       h('p.caption', {}, 'The folder you choose is the dataset folder: recording IDs are the paths inside it, for example sub-001/eeg/sub-001_task-rest_eeg.vhdr. BIDS sidecar files (channels.tsv, events.tsv) beside a recording are read too.'),
       CAN_CHOOSE_FOLDER ? null : h('p.note', {}, 'On an iPad, choose the files of the recordings: their names become their IDs. Choosing a whole dataset folder, with its paths, needs a computer.'),
-      field('Add them to', this.addScope, { hint: 'Recordings for a reference set are only offered for training, never for study annotation.' }),
+      h('div.form-grid', {}, field('Add them to', this.addScope, { hint: 'Recordings for a reference set are only offered for training, never for study annotation.' }),
+        this.datasetField),
+      this.newDatasetHost,
       this.replace,
       h('div.btn-row', {}, this.folderBtn, this.filesBtn), folderInput, filesInput,
       this.progress, this.addMsg, this.review);
@@ -277,6 +362,7 @@ export class RecordingsSection {
     this.job = job;
     for (const b of [this.folderBtn, this.filesBtn]) b.disabled = Boolean(job);
     this.addScope.disabled = job === 'registering';
+    this.addDataset.disabled = job === 'registering';
     if (this.registerBtn) this.registerBtn.disabled = Boolean(job);
   }
 
@@ -321,11 +407,19 @@ export class RecordingsSection {
     const { manifests, failures } = this.found;
     const rows = manifests.map((m) => ({ m, s: manifestSummary(m) }));
     const scope = this.addScope.value || 'study';
-    const known = new Set(this.recordings.filter((r) => r.scope === scope).map((r) => r.recording_id));
+    const target = this._target();
+    const prefix = target ? target.prefix : '';
+    // IDs registered already in another dataset: the study skips them even with Replace (a prefix keeps them apart).
+    const elsewhere = target ? collisionsOf(manifests, this.recordings.filter((r) => r.scope === 'study'), target.id, prefix) : new Map();
+    const known = new Set(this.recordings.filter((r) => r.scope === scope && !elsewhere.has(r.recording_id)).map((r) => r.recording_id));
+    const isKnown = (rid) => known.has(prefixed(rid, prefix)) && !elsewhere.has(rid);
     // Byte-identical copies, of a registered recording or of another one found here: skipped unless confirmed.
-    const same = duplicatesOf(manifests, this.recordings.filter((r) => r.scope === scope));
+    // (compared under the IDs they will have: a prefix makes a copy of a registered recording another ID)
+    const same = new Map([...duplicatesOf(manifests.map((m) => ({ ...m, recording_id: prefixed(m.recording_id, prefix) })),
+      this.recordings.filter((r) => r.scope === scope))].map(([rid, other]) => [prefix && rid.startsWith(`${prefix}/`) ? rid.slice(prefix.length + 1) : rid, other]));
     const table = dataTable([
-      { title: 'Recording', render: ({ s }) => h('span', {}, recordingName(s.recordingId), known.has(s.recordingId) ? h('span.chip.warning', {}, 'registered already') : null,
+      { title: 'Recording', render: ({ s }) => h('span', {}, recordingName(prefixed(s.recordingId, prefix)), isKnown(s.recordingId) ? h('span.chip.warning', {}, 'registered already') : null,
+        elsewhere.has(s.recordingId) ? h('span.chip.warning', { 'data-elsewhere': elsewhere.get(s.recordingId) }, `in the dataset ${this._datasetName(elsewhere.get(s.recordingId))}`) : null,
         same.has(s.recordingId) ? h('span.chip.warning', { 'data-duplicate': same.get(s.recordingId) }, `same file as ${same.get(s.recordingId)}`) : null) },
       { title: 'Format', render: ({ s }) => formatName(s.format) },
       { title: 'Channels', num: true, render: ({ s }) => `${s.nChannels}${s.nHidden ? ` (+${s.nHidden} hidden)` : ''}` },
@@ -336,7 +430,7 @@ export class RecordingsSection {
     this.registerBtn = h('button.btn.primary', { type: 'button', 'data-log': 'register', onclick: () => this.register() });
     // The button counts what will be added: recordings registered already only with Replace, copies only when ticked.
     const count = () => {
-      const n = manifests.filter((m) => (this.replace.input.checked || !known.has(m.recording_id)) && (this.allowCopies.input.checked || !same.has(m.recording_id))).length;
+      const n = manifests.filter((m) => !elsewhere.has(m.recording_id) && (this.replace.input.checked || !isKnown(m.recording_id)) && (this.allowCopies.input.checked || !same.has(m.recording_id))).length;
       this.registerBtn.textContent = n ? `Add ${plural(n, 'recording')}` : 'Nothing to add';
       this.registerBtn.disabled = !n;
     };
@@ -346,7 +440,12 @@ export class RecordingsSection {
     const again = h('button.btn', { type: 'button', onclick: () => { this.found = null; clear(this.review); this.addMsg.clear(); } }, 'Start again');
     put(this.review, 
       h('h3', {}, `Found ${plural(manifests.length, 'recording')}`),
+      target && this.datasets.length ? h('p.caption', {}, `Into the dataset ${this._datasetName(target.id)}${prefix ? `, with their IDs starting ${prefix}/` : ''}.`) : null,
       table,
+      elsewhere.size ? h('div.banner.elsewhere', { role: 'status' },
+        h('p', {}, h('b', {}, `${plural(elsewhere.size, 'recording')} ${elsewhere.size === 1 ? 'has' : 'have'} the ID of a recording in another dataset`),
+          ', so the study leaves them as they are, even when replacing. If they are different recordings (two BIDS datasets that both have sub-001, for example), '
+          + 'add them to a new dataset with a path prefix, which keeps the two apart.')) : null,
       same.size ? h('div.banner.duplicates', { role: 'status' },
         h('p', {}, h('b', {}, `${plural(same.size, 'recording')} ${same.size === 1 ? 'is' : 'are'} the same file as another`),
           ' (the same fingerprint), under another ID. Each would be assigned and annotated as a separate recording, which inflates the counts and the agreement, so copies are skipped.'),
@@ -363,6 +462,12 @@ export class RecordingsSection {
     this._setJob('registering');
     this.addMsg.clear();
     const scope = this.addScope.value || 'study';
+    const target = this._target();
+    if (target && this.datasets.length && this.addDataset.value === '__new') {
+      this._setJob(null);
+      this.addMsg.show('error', 'Make the new dataset first, or choose one of the list.');
+      return;
+    }
     const manifests = this.found.manifests.map((m) => ({ ...m, scope }));
     const groups = chunkManifests(manifests);
     const results = [];
@@ -371,6 +476,7 @@ export class RecordingsSection {
       for (const group of groups) {
         this.progress.set(sent / manifests.length, `Adding ${sent + 1}–${sent + group.length} of ${manifests.length}…`);
         const body = { scope, manifests: group, replace: this.replace.input.checked };
+        if (target && this.datasets.length) body.dataset_id = target.id;
         if (this.allowCopies && this.allowCopies.input.checked) body.allow_duplicates = true;
         results.push(await this.area.write('recordings_register', body));
         sent += group.length;

@@ -14,6 +14,14 @@ test('the sections have plain hashes', () => {
   assert.equal(m.sectionForRoute('admin'), 'overview');
   assert.equal(m.routeForSection('settings'), 'admin-settings');
   for (const s of m.SECTIONS) assert.match(s.route, /^admin(-[a-z]+)?$/);
+  // datasets first among the data; groups and hand-outs among the people
+  assert.equal(m.sectionForRoute('admin-datasets'), 'datasets');
+  assert.equal(m.routeForSection('groups'), 'admin-groups');
+  assert.equal(m.routeForSection('handouts'), 'admin-handouts');
+  assert.deepEqual(m.sectionsOf('data').map((s) => s.key), ['datasets', 'recordings', 'problems']);
+  const people = m.sectionsOf('people').map((s) => s.key);
+  assert.ok(people.indexOf('groups') === people.indexOf('annotators') + 1, people.join(' '));
+  assert.ok(people.indexOf('handouts') > people.indexOf('assignments') && people.indexOf('handouts') < people.indexOf('tasks'), people.join(' '));
 });
 
 test('numbers and identifiers are checked in plain words', () => {
