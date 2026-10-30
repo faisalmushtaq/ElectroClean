@@ -40,7 +40,7 @@ import { centredStart, clampTime, parseTimeText } from './goto.js';
 
 export { friendlyDuration, plural };
 
-const MODE_TEXT = { standard: 'Annotation', guided: 'Guided training', practice: 'Practice', assessment: 'Assessment', tryout: 'Try-out', review: 'Practice review',
+const MODE_TEXT = { standard: 'Annotation', guided: 'Guided training', practice: 'Practice', assessment: 'Assessment', tryout: 'Try-out', tour: 'Platform tour', review: 'Practice review',
   reviewing: 'Review', feedback: 'Feedback' };
 /** Views that only show annotations (no toolbar): a practice review, an administrator's review pass, the feedback on saved work. */
 const VIEW_ONLY_KINDS = ['review', 'reviewing', 'feedback'];
@@ -201,8 +201,9 @@ export class Workspace {
       this.closeBtn = h('button.btn.quiet.back', { type: 'button', 'data-log': 'close', onclick: () => this.close() },
         icon('arrow-left'), this.kind === 'review' ? 'Training path' : this.kind === 'reviewing' ? 'Back' : 'Close'),
       h('div.ws-name', {}, h('h1', { title: s.recordingId }, s.recording.fileName),
-        h('span.chip', { class: this.kind === 'tryout' ? 'warning' : 'active' }, MODE_TEXT[this.kind === 'annotate' ? s.mode : this.kind] || s.mode)),
-      this.kind === 'tryout' ? h('span.ws-banner', {}, 'This file is not part of the study, so nothing you mark is saved.') : null);
+        h('span.chip', { class: this.kind === 'tryout' || this.kind === 'tour' ? 'warning' : 'active' }, MODE_TEXT[this.kind === 'annotate' ? s.mode : this.kind] || s.mode)),
+      this.kind === 'tryout' ? h('span.ws-banner', {}, 'This file is not part of the study, so nothing you mark is saved.')
+        : this.kind === 'tour' ? h('span.ws-banner', {}, 'A practice recording for the tour: nothing you mark is kept.') : null);
     const actions = h('div.ws-actions');
     this.actionsEl = actions; // a review pass and the feedback view add their own forward action (review_pass.js)
     if (!this.readOnly) {
@@ -230,6 +231,11 @@ export class Workspace {
       actions.append(this.saveBtn);
     } else if (this.kind === 'tryout') {
       actions.append(h('button.btn.primary', { type: 'button', onclick: () => this.downloadTryOut() }, 'Download my annotations'));
+    } else if (this.kind === 'tour') {
+      // the platform tour (js/training/tour.js): its Save and Finish is the tour's last step
+      this.saveBtn = h('button.btn.primary', { type: 'button', 'data-log': 'tour-save', title: 'In a study: check and save your annotations, then mark the recording complete',
+        onclick: () => this.coach && this.coach.saveAndFinish() }, 'Save and Finish');
+      actions.append(this.saveBtn);
     } else if (this.kind === 'review') {
       actions.append(h('button.btn.primary', { type: 'button', onclick: () => this.close() }, 'Back to my training path'));
     }
@@ -2616,6 +2622,11 @@ export class Workspace {
     if (this.kind === 'reviewing' || this.kind === 'feedback') {
       if (this.review && this.review.beforeClose && !(await this.review.beforeClose())) return false;
       this.app.leaveRecording(this, `${this.kind}_closed`);
+      return true;
+    }
+    if (this.kind === 'tour') {
+      if (this.coach && this.coach.beforeClose && !(await this.coach.beforeClose())) return false;
+      this.app.leaveRecording(this, 'tour_closed');
       return true;
     }
     if (this.kind === 'tryout') {

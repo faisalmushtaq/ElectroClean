@@ -181,7 +181,8 @@ logger, `lazy.js` and the chosen back end's client (`js/api/http.js` for a
 study server, `firebase.js` with the Firebase SDK for a study on Firebase, or
 the demonstration's own back end). Every other view is a part that `js/lazy.js`
 loads at its first use with a dynamic `import()`: the home page, the open view,
-the annotation view with the EEG viewer, training, the quiz, the practice
+the annotation view with the EEG viewer, training (with the platform tour and
+the snippets of the training path as parts of their own), the quiz, the practice
 review, the admin area, the expert area, the purposes someone's saved work is
 opened for (`views/purposes.js`), the game elements and the EEG readers with
 their workers. `lazy.js` keeps each part's promise, so a part is fetched once however

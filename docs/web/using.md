@@ -633,10 +633,36 @@ EEG.
 
 ## The training programme
 
-Trainees see their training path: three stages, each with its progress and result, and one button to
-continue. Until the training is complete, signing in opens the training path. When the path takes
-you to a recording, the page for opening it names the stage the recording is for; your study team
-sends you the training recordings. In the first stage, Learn with the experts, a coach on the right
+Trainees see their training path: five stages, each with its progress and result, and above them one
+button to continue with the next step. Until the training is complete, signing in opens the training
+path. The stages are Find your way around (a tour of ElectroTag), Meet the artifacts (examples of
+each type), Learn with the experts, On your own and the Competency assessment. Each stage opens when
+the one before it is finished or skipped. A stage your study lets you skip has Skip this stage: it
+asks first, then marks the stage Skipped, and Do it after all brings it back whenever you like. The
+study notes every skip, with its time, and the competency report lists the stages skipped. The
+assessment can never be skipped. When the path takes you to a recording, the page for opening it
+names the stage the recording is for; your study team sends you the training recordings.
+
+The tour, Find your way around, opens a practice recording that ElectroTag makes in the browser, so no
+file is needed and nothing you mark is kept. A panel on the right takes you through six steps, each
+naming the keys and buttons to use: moving through the recording with the arrow keys, marking an
+outlined blink (its number key, then a drag across it), marking muscle activity on its channels
+only (Selected channels and the channel names at the left of the EEG), taking a change back with
+Ctrl+Z (⌘Z on a Mac) or Undo, saying how sure you are (select a mark, press D and a number from 1 to
+5) and Save and Finish. Each step is ticked when you have done it, and Next step (or Enter) goes on;
+Skip this step goes on without it. Save and Finish at the last step ends the tour and takes you back
+to your training path. Close leaves the tour after asking; you can take it again from the path.
+
+Meet the artifacts shows short examples of each type of artifact from your training set: the
+experts' marks on the recordings you learn with, and any examples your study team added. Open your
+copies of the recordings it names, as for the quiz (the demonstration offers its own copies). Each
+example shows a few seconds of EEG with the artifact outlined on the channels it is on, its type, the
+type's description and the experts' note. Previous and Next step through them, and the list under
+them, by family and type, jumps to any; the ones you have looked at are marked. Take the recognition
+check opens the set's quiz. I have looked at them: finish this stage completes the stage (some
+studies ask for the recognition check to be finished first, and say so).
+
+In the third stage, Learn with the experts, a coach on the right
 takes you through the experts' annotations of a recording one at a time. In the first recording the
 experts' annotation is outlined with a dashed line for you to copy; in the next you find each
 artifact on the screen yourself. For each one the coach says what to do with the controls in front
@@ -655,7 +681,7 @@ one when you used Show me. Save and Finish becomes available once every artifact
 each step took counts only while the recording is open: if you close it and come back later, the
 step's time carries on from your last action on it.
 
-In the second stage, On your own, you annotate a practice recording without help. After you save it,
+In the fourth stage, On your own, you annotate a practice recording without help. After you save it,
 ElectroTag shows your result in plain words: whether you reached the pass mark, your score, and what
 the score is made of, for example "You found 7 of the experts' 8 artifacts and made 3 marks they did
 not make." The score is highest when you find every artifact the experts marked, with the right
@@ -671,12 +697,21 @@ not pass, your training path offers a practice recording again: when there are s
 practised longest ago, so that you do not repeat answers you have just seen; with only one, the same
 recording.
 
-The third stage, the Competency assessment, unlocks when you have passed the practice. You annotate
+The last stage, the Competency assessment, unlocks when you have passed the practice (or skipped
+the stages before it). You annotate
 its recordings as in the second stage but without feedback, and nothing tells you how you did until
 every recording of the assessment is saved. Then the training path shows the result: Criteria met,
 Criteria not met yet (and your study administrator goes through the results with you before you try
 again), or Result to come, when the study team has to judge it. A stage that your programme does not
 use is marked Not included.
+
+Most studies keep their own recordings locked until you pass the assessment. Until then your
+recordings are listed on your home page as Locked, with "Opens once you pass the competency
+assessment" under the file name, and a line with a lock on your training path and your home page
+says why; they open by themselves once you pass. If your assessment did not meet the criteria, your
+study team goes through the results with you, then either reopens your training (your path then
+shows the stages to do again; what you save from then on counts, and what you saved before is kept)
+or gives you a new assessment. Experts and administrators never wait.
 
 Once every stage is done, ElectroTag opens on your home page when you sign in, with Open next
 recording for the study's own work and a line that takes you back to your training path. The

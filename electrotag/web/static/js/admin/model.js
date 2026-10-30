@@ -60,7 +60,8 @@ export function routeForSection(key) {
 
 // --------------------------------------------------------------------- words
 export const MODES = Object.freeze({ standard: 'Annotation', guided: 'Guided training', practice: 'Practice', assessment: 'Assessment' });
-export const STATUS = Object.freeze({ todo: 'To do', in_progress: 'In progress', done: 'Done', unusable: 'Cannot be annotated' });
+export const STATUS = Object.freeze({ todo: 'To do', in_progress: 'In progress', done: 'Done', unusable: 'Cannot be annotated',
+  locked: 'Locked until the assessment is passed' });
 export const USES = Object.freeze({
   guided: 'Guided: learn with the experts',
   practice: 'Practice: on their own, with feedback',

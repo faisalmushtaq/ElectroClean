@@ -203,11 +203,22 @@ You cannot take away your own administrator role, switch off your own account or
 administrator does that. A person keeps at least one role, and the participant role of a later crowd
 study cannot be given yet.
 
-The person's page also chooses their training programme (a trainee works through the chosen
-reference set's guided recordings, then its practice recordings, then its assessment) and lists
-their work: each recording given to them, with its status, the time it took, the annotations saved,
-when it was saved and how many times. The time is the time the recording was open in their browser
-and not paused. From the same page you can make a private invitation link for the person.
+The person's page also chooses their training programme (a trainee works through the five stages of
+the training path: a tour of the platform, examples of each artifact type, the chosen reference set's
+guided recordings, then its practice recordings, then its assessment) and lists their work: each
+recording given to them, with its status, the time it took, the annotations saved, when it was saved
+and how many times. The time is the time the recording was open in their browser and not paused. A
+study recording waiting for the trainee's competency assessment is listed as Locked until the
+assessment is passed. From the same page you can make a private invitation link for the person.
+
+For a trainee, Training path shows each stage as they see it, whether their study recordings are open
+and, under What happened to the stages, every stage they skipped, took up again or finished, with
+when. After an assessment that did not meet the criteria it offers the two ways on. Reopen the
+training sends the trainee back to learning with the experts or to practice: they work through the
+stages from there again and retake the assessment, and only what they save from then on counts
+(everything saved before is kept). Give this assessment enrols them in another reference set with
+assessment recordings, its learning stages counted as done. Each asks first, and both are written to
+the audit log.
 
 ## Recordings
 
@@ -371,6 +382,18 @@ the correct answer and any other answers to accept (where the study's catalogue 
 group term, such as Eye-artifact for an eye blink, one tick accepts that too), and an explanation
 shown after each answer when the quiz gives feedback. Annotators allowed to use the set are offered
 its quiz.
+
+### Snippets
+
+Snippets are the short examples trainees look through in the second stage of their training path,
+Meet the artifacts. The tab lists the set's own snippets, then those made from the guided recordings:
+one for each of the experts' annotations there, with its guided note as the explanation (change the
+notes with Edit the guided notes under Recordings and references). Add a snippet takes a recording
+of the set, the type, where the artifact starts and ends, how much EEG to show on each side (2 s
+unless you choose up to 10 s), the channels it is on (none for the whole montage) and an
+explanation of up to 1000 characters. A snippet is at most 60 s long. Practice and assessment
+recordings are never offered, because a snippet of one would show trainees its answers. Remove takes
+a snippet out after asking. Experts can add and remove snippets too.
 
 ### The example training set
 
@@ -591,12 +614,12 @@ withdraws that agreement in the expert area. Replays use the interaction log for
 checking work, so say so in the study's information for participants and check that the ethics
 approval covers it.
 
-**The training path** (the `training` block) chooses the stages a trainee may skip (the tour, the
+**Training policy** (the `training` block) chooses the stages a trainee may skip (the tour, the
 snippets, learning with the experts and practice; the blind competency assessment never), what real
 study work waits for (a passed assessment, by default, a finished one, or nothing; experts and
 administrators never wait), whether the path begins with a tour of the platform, and whether the
-snippets stage needs its recognition check finished. The study keeps these choices now, and the
-five-stage training path follows them once it is in place.
+snippets stage needs its recognition check finished. Every skip is noted in the trainee's progress
+and listed in their competency report. A change applies at once.
 
 **Interaction log** chooses whether the study records
 how annotators use ElectroTag (clicks, keys and what is on the screen, never what they type), how

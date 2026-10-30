@@ -32,6 +32,22 @@ button. Its first page explains the area and lets each expert agree, or no longe
 watching replays of their sessions; the corrections, replays, adjudication, library and training
 material of the next parts appear in its menu as they are added.
 
+The training path now has five stages: Find your way around, a hands-on tour of the annotation view on
+a practice recording made in the browser (each step, from moving through the recording to Save and
+Finish, names its keys and is ticked when it is done, and nothing is kept); Meet the artifacts, a
+gallery of short examples of each artifact type from the set, with the experts' notes, followed by
+the set's quiz as a recognition check; then Learn with the experts, On your own and the Competency
+assessment as before. A trainee may skip any stage but the assessment, as the study's training policy
+allows (Study settings, Training policy), after a question, and take a skipped stage up again with Do
+it after all; every skip is kept with the trainee's progress, logged, and listed in the competency
+report. Real study work now waits for a passed assessment by default: a trainee's study recordings
+are listed as Locked, with the reason on the home page and the training path, and the study refuses
+to open, save or set them aside until the assessment is met (experts and administrators never wait).
+After an assessment that did not meet the criteria, the study team reopens the training or gives a
+new assessment set from the trainee's page in People, each audited. Training has a Snippets tab for
+the study team's own examples, which experts can add too; practice and assessment recordings never
+give snippets. On the training path the next step and its button now come first, above the stages.
+
 A changed copy of a recording that is also in a training set (a set made from the study's own
 recordings) is now matched by its name and shape, as any other changed copy is; the study's copy and
 the set's copy were counted as two recordings, so the file was refused as looking like several.

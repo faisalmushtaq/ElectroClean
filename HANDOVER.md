@@ -185,8 +185,12 @@ and why it is marked on those channels; real sets need the experts' own explanat
 admin area's Guided notes. The words trainees read about their practice score and the training path
 are built twice, in `electrotag/training/programme.py` for the study and in
 `js/training/scoring.js` for the demonstration, and `web_tests/practice_parity.py` keeps them the
-same. Real study recordings can still be opened before training is complete; making a passed
-assessment a condition for study work belongs to the planned five-stage training path.
+same, as `js/training/stages.js` and `web_tests/unit/api_contract_parity.test.mjs` keep the five
+stages' rules and words. Study recordings now wait for a passed assessment (the study's training
+policy can change that), so a real study needs a set with assessment recordings and competency
+criteria before its trainees can annotate; without criteria every result is "not determined" and the
+recordings stay locked until the study team reopens the training, gives a new assessment set or
+switches the gate off.
 
 **2. Versions and releases.** `__version__` is still `1.1.0`, and the *Unreleased* section of
 [CHANGELOG.md](CHANGELOG.md) describes everything since. With the desktop applications gone there is
@@ -298,7 +302,16 @@ later parts need (derived versions in `Annotated_Events/derived/`, saved attempt
 competency status, each visit's index of recordings and its log in pages, and the task of an
 assignment). Corrections and replays, tasks, adjudication and the library, the staged training
 path and the analyses of derived versions follow, each adding its own modules and one line to the
-registries; `docs/web/api.md` has a section waiting for each. The project lead decided that experts
+registries; `docs/web/api.md` has a section waiting for each. The staged training path is in
+place: the tour (`js/training/tour.js`), the snippets (`js/training/snippets.js`, the study team's in
+the set's `reference_set.json`), skipping and resuming stages, and the competency gate of study work
+(`electrotag/web/training_path.py`). Its hooks for the parts still to come are registries: a guided
+recording whose guidance another part handles, such as "correct the marks", registers in
+`GUIDANCE_KINDS` (`electrotag/web/coach.py`) and `GUIDANCE_PANELS` (`js/training/coach.js`), and the
+replay part's "Watch an expert" adds a line to `WATCH_EXPERT` in `js/training/path.js`. The tour's
+practice recording is made in the browser; a tour recording taken from a set is left for later. The
+sandbox's training set has no assessment, so the gate is always open there; the end-to-end test of
+the gate runs against the real study server. The project lead decided that experts
 and administrators may replay any annotator's session and that trainees may watch an expert's
 session only with that expert's consent (a flag each expert sets in the expert area, audited). This
 uses the interaction logs for a new purpose: the study's ethics approval may need an amendment
@@ -376,8 +389,8 @@ first use, and `app.js` shows Loading… or a message with Try again around it. 
 added to the parts in `lazy.js` and reached through `_withParts` in `app.js`, never imported by
 `app.js` directly; `web_tests/e2e/v_loading.e2e.mjs` keeps the sign-in page within a budget of
 JavaScript and will fail otherwise. The demonstration's back end (about 315 KB, with
-`demo_admin.js` and `admin/model.js`) still loads whole at its sign-in, which is now 447 KB against
-a budget of 455 KB in `v_loading.e2e.mjs`; loading its admin half only for the administrator would
+`demo_admin.js` and `admin/model.js`) still loads whole at its sign-in, which is now 457 KB against
+a budget of 462 KB in `v_loading.e2e.mjs`; loading its admin half only for the administrator would
 bring the demonstration's sign-in page down to about 330 KB.
 
 **Writing.** The interface text and the documentation are in UK English, with the HED spelling

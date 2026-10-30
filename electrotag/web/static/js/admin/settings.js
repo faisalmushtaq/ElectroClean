@@ -345,12 +345,15 @@ export class SettingsSection {
         h('h3', {}, 'Replays'),
         replays, traineesWatch,
         h('p.caption', {}, 'Each expert decides for their own sessions in the expert area, and every change is in the audit log. Replays use the interaction log for teaching and checking work: say so in the study\'s information for participants, and check that the ethics approval covers it.')),
-      card('The training path',
-        h('p.caption', {}, 'The stages a trainee may skip. The blind competency assessment is never skipped.'),
+      card('Training policy',
+        h('p.caption', {}, 'The training path has five stages: a tour of the platform, examples of each artifact type, learning with '
+          + 'the experts, practice on one\'s own and the blind competency assessment. Choose the stages a trainee may skip; the '
+          + 'assessment is never skipped, and every skip is noted in the trainee\'s progress and their competency report.'),
         h('div.radio-col.skip-stages', { role: 'group', 'aria-label': 'Stages that may be skipped' }, skipBoxes),
         field('Real study work waits', gate, { hint: 'Experts and administrators never wait.' }),
         tour, snippetsQuiz,
-        h('p.caption', {}, 'These choices apply once the five-stage training path is in place; until then the study keeps them.')),
+        h('p.caption', {}, 'While study work waits, a trainee\'s study recordings are listed as locked, with the reason. After an '
+          + 'assessment that does not meet the criteria, reopen the training or give a new assessment on the trainee\'s page in People.')),
       card('Interaction log',
         interactions,
         h('div.form-grid', {}, field('Pointer samples per second over the EEG', pointer, { hint: '0 records none.' }), field('Idle after (seconds without input)', idle)),

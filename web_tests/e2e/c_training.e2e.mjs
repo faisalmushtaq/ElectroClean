@@ -1,6 +1,11 @@
-// The training programme in the demonstration: guided steps (a wrong attempt, then the match),
-// Show me, saving, and a practice recording with its review.
-import { pressSave, signIn, waitForRoute, waitForTraces, state, eegPoint, drag, annotations, clickDialogButton } from './helpers.mjs';
+// The training programme: its five stages in the demonstration (skipping the tour and the snippets
+// with a question each, the tour done step by step, the snippets' gallery), guided steps (a wrong
+// attempt, then the match), Show me, saving, a practice recording with its review, and on the real
+// study server the competency gate: a study recording stays locked until the assessment is met.
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { pressSave, signIn, waitForRoute, waitForTraces, state, eegPoint, drag, annotations, clickDialogButton, skipFirstStages } from './helpers.mjs';
 
 async function coachText(page) { return page.textContent('.coach'); }
 
@@ -39,9 +44,27 @@ export const tests = [
       const page = await t.newPage();
       await signIn(page, 'T01');
       await waitForRoute(page, 'training');
-      assert.match(await page.textContent('main.training'), /Learn with the experts/);
-      assert.match(await page.textContent('main.training'), /Unlocks when you complete the stage before/);
+      const path0 = await page.textContent('main.training');
+      for (const title of ['Find your way around', 'Meet the artifacts', 'Learn with the experts', 'On your own', 'Competency assessment']) {
+        assert.match(path0, new RegExp(title));
+      }
+      assert.match(path0, /Unlocks when you finish or skip the stage before/);
+      assert.equal(await page.textContent('main.training .btn.primary'), 'Start the tour');
       await t.screenshot(page, 'training_path');
+      // T01 skips the tour and the snippets: each asks first, and says so on its card
+      await page.click('main.training [data-log="skip-tour"]');
+      await page.waitForSelector('.dialog');
+      assert.match(await page.textContent('.dialog'), /You can do it after all at any time/);
+      await t.screenshot(page, 'training_skip_question');
+      await clickDialogButton(page, 'Keep it');
+      assert.equal(await page.locator('main.training [data-stage="tour"]').getAttribute('data-status'), 'available');
+      await skipFirstStages(page);
+      const tour = await page.locator('[data-stage="tour"]').textContent();
+      assert.match(tour, /Skipped/);
+      assert.match(tour, /You skipped this stage\. You can still do it: choose Do it after all\./);
+      assert.equal(await page.locator('[data-stage="tour"] [data-log="resume-tour"]').count(), 1);
+      assert.match(await page.textContent('main.training .success'), /You skipped Meet the artifacts\./);
+      await t.screenshot(page, 'training_path_skipped');
 
       // Recording 1 (show): the experts' blink is outlined.
       await startNext(page);
@@ -147,7 +170,8 @@ export const tests = [
       await page.evaluate(() => globalThis.ElectroTag.flushLog());
       const events = await page.evaluate(() => globalThis.ElectroTag.backend.resultsDocument().interaction_logs[0].events.map((e) => e.type));
       for (const kind of ['guided_step_started', 'guided_check', 'guided_show_me', 'guided_step_completed', 'guided_recording_completed',
-        'practice_scored', 'practice_review_opened', 'review_item_jumped', 'training_path_opened', 'stage_started']) {
+        'practice_scored', 'practice_review_opened', 'review_item_jumped', 'training_path_opened', 'stage_started', 'stage_skipped',
+        'stage_skip_cancelled']) {
         assert.ok(events.includes(kind), `no ${kind} event; got ${[...new Set(events)].join(', ')} (${events.length})`);
       }
     },
@@ -159,6 +183,7 @@ export const tests = [
       const page = await t.newPage();
       await signIn(page, 'T01');
       await waitForRoute(page, 'training');
+      await skipFirstStages(page);
       await startNext(page);
       for (let n = 1; n <= 6; n++) {
         await waitForCoach(page, new RegExp(`Step ${n} of 6`));
@@ -218,6 +243,7 @@ export const tests = [
         const b = globalThis.ElectroTag.backend;
         const { TRAINING_SET } = await import('./js/api/demo.js');
         const { truthAnnotations, demoSpecs } = await import('./js/eeg/synthetic.js');
+        for (const stage of ['tour', 'snippets']) await b.trainingStage({ stage, action: 'skip' });
         for (const g of TRAINING_SET.guided) {
           const anns = [];
           for (let s = 1; ; s++) {
@@ -251,6 +277,11 @@ export const tests = [
       const page = await t.newPage({ width: 1180, height: 820, ipad: true });
       await signIn(page, 'T01');
       await waitForRoute(page, 'training');
+      await page.evaluate(async () => { // the first two stages skipped behind the scenes; the skip itself is tested above
+        for (const stage of ['tour', 'snippets']) await globalThis.ElectroTag.backend.trainingStage({ stage, action: 'skip' });
+        await globalThis.ElectroTag.showTraining();
+      });
+      await page.waitForSelector('main.training [data-stage="snippets"][data-status="skipped"]');
       await startNext(page);
       await waitForCoach(page, /Mark this Eye-blink-artifact/);
       const body = await page.evaluate(() => document.querySelector('.coach-body').innerText);
@@ -259,6 +290,247 @@ export const tests = [
       assert.match(body, /^3\. Drag one finger across the EEG from the start of the outline to its end\.$/m);
       assert.doesNotMatch(body, /Press|click|\bM\b/);
       await t.screenshot(page, 'guided_ipad');
+    },
+  },
+  {
+    name: 'the platform tour: each step is done for real, with the keys and controls it names',
+    async run(t) {
+      const { assert } = t;
+      const page = await t.newPage();
+      await signIn(page, 'T01');
+      await waitForRoute(page, 'training');
+      await page.click('main.training [data-log="training-continue"]');
+      await waitForRoute(page, 'annotate');
+      await waitForTraces(page);
+      await page.waitForSelector('.coach.tour');
+      const tourText = () => page.textContent('.coach.tour');
+      const waitDone = async () => page.waitForFunction(() => !document.querySelector('.coach.tour [data-log="tour-next"]').disabled, null, { timeout: 10000 });
+      assert.match(await tourText(), /Tour +· +Step 1 of 6/);
+      assert.match(await page.textContent('.ws-banner'), /nothing you mark is kept/);
+      await t.screenshot(page, 'tour_start');
+      // 1. moving: on and back
+      assert.equal(await page.locator('.coach.tour [data-log="tour-next"]').isDisabled(), true, 'a step is done before it goes on');
+      await page.keyboard.press('ArrowRight');
+      await page.waitForTimeout(300);
+      await page.keyboard.press('ArrowLeft');
+      await waitDone();
+      await page.keyboard.press('Enter');
+      // 2. the type with its key, then a drag across the outlined blink
+      await page.waitForFunction(() => /Step 2 of 6/.test(document.querySelector('.coach.tour').textContent));
+      const body2 = await page.evaluate(() => document.querySelector('.coach.tour .coach-body').innerText);
+      const key = /^1\. Press (\d) \(or click \1 next to Draw as\) to choose Eye-blink-artifact\.$/m.exec(body2);
+      assert.ok(key, body2);
+      await page.keyboard.press(key[1]);
+      await drag(page, await eegPoint(page, 3.0), await eegPoint(page, 3.4));
+      await waitDone();
+      assert.match(await tourText(), /Done\. Press Next step \(Enter\) to go on\./);
+      await t.screenshot(page, 'tour_marked');
+      await page.keyboard.press('Enter');
+      // 3. the channels: Selected channels, the names at the left, then the drag
+      await page.waitForFunction(() => /Step 3 of 6/.test(document.querySelector('.coach.tour').textContent));
+      const body3 = await page.evaluate(() => document.querySelector('.coach.tour .coach-body').innerText);
+      assert.match(body3, /click the channel names T7 and T8 at the left of the EEG/);
+      const emgKey = /^1\. Press (\d) \(or click \1 next to Draw as\) to choose EMG-artifact\.$/m.exec(body3);
+      await page.keyboard.press(emgKey[1]);
+      await page.keyboard.press('c');
+      for (const ch of ['T7', 'T8']) {
+        const p = await eegPoint(page, 0, ch);
+        await page.mouse.click(p.x - 40, p.y);
+      }
+      await drag(page, await eegPoint(page, 6.55, 'T7'), await eegPoint(page, 7.95, 'T7'));
+      await waitDone();
+      await page.keyboard.press('Enter');
+      // 4. undo
+      await page.waitForFunction(() => /Step 4 of 6/.test(document.querySelector('.coach.tour').textContent));
+      const before = (await annotations(page)).length;
+      await page.keyboard.press('Control+z');
+      await waitDone();
+      assert.equal((await annotations(page)).length, before - 1);
+      await page.keyboard.press('Enter');
+      // 5. confidence: select the blink, D, a number
+      await page.waitForFunction(() => /Step 5 of 6/.test(document.querySelector('.coach.tour').textContent));
+      await page.keyboard.press('c'); // back to the whole montage
+      const mid = await eegPoint(page, 3.2);
+      await page.mouse.click(mid.x, mid.y);
+      await page.keyboard.press('d');
+      await page.keyboard.press('4');
+      await waitDone();
+      assert.equal((await annotations(page))[0].confidence, 4);
+      await page.keyboard.press('Enter');
+      // 6. Save and Finish: here it ends the tour, and the study is told
+      await page.waitForFunction(() => /Step 6 of 6/.test(document.querySelector('.coach.tour').textContent));
+      await t.screenshot(page, 'tour_save');
+      await page.click('[data-log="tour-save"]');
+      await waitForRoute(page, 'training');
+      assert.match(await page.textContent('main.training .success'), /Tour finished/);
+      assert.equal(await page.locator('[data-stage="tour"]').getAttribute('data-status'), 'completed');
+      assert.equal(await page.textContent('main.training .btn.primary'), 'See the artifacts');
+      await page.evaluate(() => globalThis.ElectroTag.flushLog());
+      const events = await page.evaluate(() => globalThis.ElectroTag.backend.resultsDocument().interaction_logs[0].events);
+      const steps = events.filter((e) => e.type === 'tour_step');
+      assert.deepEqual(steps.map((e) => [e.step, e.completed_by]), [['move', 'action'], ['mark', 'action'], ['channels', 'action'],
+        ['undo', 'action'], ['confidence', 'action'], ['save', 'action']]);
+      assert.ok(events.some((e) => e.type === 'tour_finished'));
+      // nothing of the tour was saved
+      assert.equal(await page.evaluate(() => globalThis.ElectroTag.backend.state.submissions.length), 0);
+    },
+  },
+  {
+    name: 'Meet the artifacts: the examples by type with the experts\' notes, then the stage is done',
+    async run(t) {
+      const { assert } = t;
+      const page = await t.newPage();
+      await signIn(page, 'T01');
+      await waitForRoute(page, 'training');
+      await page.click('main.training [data-log="skip-tour"]');
+      await clickDialogButton(page, 'Skip this stage');
+      await page.waitForSelector('main.training [data-stage="tour"][data-status="skipped"]');
+      assert.match(await page.locator('[data-stage="snippets"]').textContent(), /12 examples of the experts' artifacts, with their notes, then a quick recognition check\./);
+      await page.click('main.training [data-log="training-continue"]');
+      await page.waitForSelector('.view.snippets [data-log="snippets-use-examples"]');
+      await t.screenshot(page, 'snippets_open');
+      await page.click('[data-log="snippets-use-examples"]');
+      await page.waitForSelector('.snippet-label');
+      await page.waitForFunction(() => globalThis.ElectroTag.snippetsView && globalThis.ElectroTag.snippetsView.viewer
+        && globalThis.ElectroTag.snippetsView.viewer.stats.traceMs > 0, null, { timeout: 15000 });
+      assert.match(await page.textContent('.snippet-position'), /Example 1 of 12/);
+      assert.match(await page.textContent('.snippet-note'), /^The experts' note: Simulated example\./);
+      await t.screenshot(page, 'snippets_gallery');
+      await page.click('[data-log="snippet-next"]');
+      assert.match(await page.textContent('.snippet-position'), /Example 2 of 12/);
+      await page.locator('.snippet-type', { hasText: 'EMG-artifact' }).locator('.snippet-dot').first().click();
+      assert.match(await page.textContent('.snippet-label'), /EMG-artifact/);
+      assert.match(await page.textContent('.snippet-where'), /on F7, T7, F8 and T8|on F7, F8, T7 and T8/);
+      assert.equal(await page.locator('.snippet-dot.seen').count(), 3);
+      await page.click('[data-log="snippets-done"]');
+      await waitForRoute(page, 'training');
+      assert.match(await page.textContent('main.training .success'), /Meet the artifacts is done/);
+      assert.equal(await page.locator('[data-stage="snippets"]').getAttribute('data-status'), 'completed');
+      assert.match(await page.textContent('main.training .btn.primary'), /Start recording 1 of 2/);
+      await page.evaluate(() => globalThis.ElectroTag.flushLog());
+      const kinds = await page.evaluate(() => globalThis.ElectroTag.backend.resultsDocument().interaction_logs[0].events.map((e) => e.type));
+      assert.equal(kinds.filter((k) => k === 'snippet_viewed').length, 3);
+      assert.ok(kinds.includes('snippets_done') && kinds.includes('stage_skipped'));
+    },
+  },
+  {
+    name: 'on a study server, a study recording stays locked until the competency assessment is met',
+    needs: 'study',
+    async run(t) {
+      const { assert } = t;
+      const call = async (token, method, p, body) => {
+        const r = await fetch(`${t.study.base}api/v1${p}`, { method, body: body ? JSON.stringify(body) : undefined,
+          headers: { 'Content-Type': 'application/json', 'X-ElectroTag': '1', ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+        const j = await r.json();
+        if (!r.ok) throw new Error(`${method} ${p}: ${r.status} ${JSON.stringify(j)}`);
+        return j;
+      };
+      const login = async (id, password) => (await call(null, 'POST', '/login', { annotator_id: id, password })).token;
+      const SUB1 = 'sub-001/eeg/sub-001_task-rest_eeg.vhdr';
+      const SUB3 = 'sub-003/eeg/sub-003_task-rest_eeg.edf';
+      const edf = path.join(t.study.dir, 'recordings', 'study', SUB3);
+      const sha = crypto.createHash('sha256').update(fs.readFileSync(edf)).digest('hex');
+      const emg = { annotation_id: 'e'.repeat(32), label: 'EMG-artifact', onset_sample: 1280, duration_samples: 256, channels: [],
+        created_at: '2026-10-30T10:00:00.000+00:00', modified_at: '2026-10-30T10:00:00.000+00:00' };
+      // The study team: an expert's saved annotations become the reference of an assessment set for a new trainee.
+      const admin = await login('ADMIN', 'electrotag');
+      const op = (name, body) => call(admin, 'POST', `/admin/${name}`, body);
+      await op('assign', { annotator_ids: ['E01'], recording_ids: [SUB3] });
+      const e01 = await login('E01', 'electrotag');
+      await call(e01, 'POST', '/submissions', { recording_id: SUB3, mode: 'standard', context_id: '', annotations: [emg], session: { elapsed_s: 30 }, sha256: sha });
+      await op('set_create', { set_id: 'gate-check', name: 'Gate check' });
+      await op('set_add_reference', { set_id: 'gate-check', recording_id: SUB3, recording_scope: 'study', use: 'assessment', source: { kind: 'annotator', annotator_id: 'E01' } });
+      await op('set_update', { set_id: 'gate-check', criteria: { criteria: [{ metric: 'event_f1', threshold: 0.5, scope: 'overall' }], min_reference_events: 1, categories: null } });
+      await op('user_add', { annotator_id: 'T05', display_name: 'Trainee five', password: 'trainee five' });
+      await op('programme_set', { annotator_id: 'T05', set_id: 'gate-check' });
+      await op('assign', { annotator_ids: ['T05'], recording_ids: [SUB1] });
+
+      const page = await t.newPage({ url: t.study.base });
+      await signIn(page, 'T05', 'trainee five');
+      await waitForRoute(page, 'training');
+      assert.match(await page.textContent('main.training .gate-card'), /^Your study recordings open once you pass the competency assessment at the end of your training path\.$/);
+      // T05 skips the tour; the set has nothing else before its assessment
+      await page.click('main.training [data-log="skip-tour"]');
+      await clickDialogButton(page, 'Skip this stage');
+      await page.waitForSelector('main.training [data-stage="tour"][data-status="skipped"]');
+      assert.equal(await page.textContent('main.training .btn.primary'), 'Start the assessment');
+      await t.screenshot(page, 'training_gate_path');
+      // the home page: the study recording is locked, and says why
+      await page.click('[data-log="training-back"]');
+      await waitForRoute(page, 'home');
+      const row = page.locator('.recordings-card tr', { hasText: 'sub-001_task-rest_eeg.vhdr' });
+      assert.match(await row.textContent(), /Locked/);
+      assert.match(await row.textContent(), /Opens once you pass the competency assessment\./);
+      assert.equal(await row.locator('button', { hasText: /^Open/ }).count(), 0);
+      await t.screenshot(page, 'training_gate_home');
+      // opened from the computer all the same, it is refused with the reason and the way on
+      await page.click('.recordings-card button:has-text("Open a recording from your computer")');
+      await waitForRoute(page, 'open');
+      const sub1 = path.join(t.study.dir, 'recordings', 'study', 'sub-001', 'eeg');
+      await page.setInputFiles('input[data-log="file-input"]', fs.readdirSync(sub1).filter((f) => /\.(vhdr|vmrk|eeg)$/.test(f)).map((f) => path.join(sub1, f)));
+      await page.waitForSelector('main [data-log="training-path"]', { timeout: 30000 });
+      assert.match(await page.textContent('main'), /Your study recordings open once you pass the competency assessment/);
+      await t.screenshot(page, 'training_gate_open');
+      // the assessment, saved well: its result is met, and the recording opens
+      await page.click('main [data-log="training-path"]');
+      await waitForRoute(page, 'training');
+      await page.click('main.training [data-log="training-continue"]');
+      await waitForRoute(page, 'open');
+      await page.setInputFiles('input[data-log="file-input"]', [edf]);
+      await waitForRoute(page, 'annotate', 30000);
+      await waitForTraces(page);
+      await page.evaluate(() => globalThis.ElectroTag.ws.store.add('EMG-artifact', 1280, 256, []));
+      await pressSave(page);
+      await clickDialogButton(page, 'Save and Finish');
+      await waitForRoute(page, 'training', 30000);
+      assert.match(await page.locator('[data-stage="assessment"]').textContent(), /Criteria met/);
+      assert.equal(await page.locator('main.training .gate-card').count(), 0);
+      await page.click('[data-log="training-back"]');
+      await waitForRoute(page, 'home');
+      assert.equal(await page.locator('.recordings-card tr', { hasText: 'sub-001_task-rest_eeg.vhdr' }).locator('button', { hasText: /^Open/ }).count(), 1);
+      // the skip is in T05's progress, kept by the study
+      const prog = JSON.parse(fs.readFileSync(path.join(t.study.dir, 'study', 'Annotated_Events', 'training_progress', 'gate-check', 'annotator-T05.json'), 'utf8'));
+      assert.deepEqual(prog.events.map((e) => [e.event, e.stage]), [['stage_skipped', 'tour']]);
+    },
+  },
+  {
+    name: 'the study team sees a trainee\'s skips, adds a snippet and finds the training policy',
+    async run(t) {
+      const { assert } = t;
+      const page = await t.newPage();
+      await signIn(page, 'T01');
+      await waitForRoute(page, 'training');
+      await skipFirstStages(page);
+      await page.click('[data-log="sign-out"]');
+      await signIn(page, 'ADMIN');
+      await page.evaluate(() => globalThis.ElectroTag.showAdmin('admin-annotators', { annotator: 'T01' }));
+      await page.waitForSelector('.gate-stages');
+      const card = await page.locator('.admin-card', { hasText: 'Training path' }).textContent();
+      assert.match(card, /Study recordings open/);
+      assert.match(card, /Find your way around: skipped/);
+      await page.click('.admin-card summary:has-text("What happened to the stages")');
+      assert.match(await page.textContent('.gate-events'), /Find your way around skipped, /);
+      await t.screenshot(page, 'admin_trainee_path');
+      // Training, Snippets: the guided recordings' snippets, and one of the team's own
+      await page.evaluate(() => globalThis.ElectroTag.showAdmin('admin-training'));
+      await page.click('.admin-tabs [data-tab="snippets"]');
+      await page.waitForSelector('.admin-card:has-text("Add a snippet") form');
+      const form = page.locator('.admin-card', { hasText: 'Add a snippet' });
+      await form.locator('select').nth(1).selectOption('EMG-artifact');
+      const inputs = form.locator('input.field');
+      await inputs.nth(0).fill('9.2');
+      await inputs.nth(1).fill('10.8');
+      await inputs.nth(3).fill('F7, F8, T7, T8');
+      await form.locator('textarea').fill('Fast, spiky activity over the temples: muscle.');
+      await page.click('[data-log="snippet-add"]');
+      await page.waitForSelector('.admin-msg .success');
+      assert.match(await page.textContent('.admin-section'), /Added the snippet s01/);
+      assert.match(await page.locator('.admin-card', { hasText: 'Snippets of this set' }).textContent(), /EMG-artifact.*9\.20–10\.80 s.*F7, F8, T7, T8/s);
+      await t.screenshot(page, 'admin_snippets');
+      // Study settings: the training policy
+      await page.evaluate(() => globalThis.ElectroTag.showAdmin('admin-settings'));
+      await page.waitForSelector('.admin-card:has-text("Training policy")');
+      assert.match(await page.locator('.admin-card', { hasText: 'Training policy' }).textContent(), /every skip is noted/);
     },
   },
 ];

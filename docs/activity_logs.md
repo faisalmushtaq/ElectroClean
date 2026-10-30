@@ -328,8 +328,24 @@ by `quiz_finished`).
 **Training.** The training programme records its own events in the same log,
 with names starting `guided_`, `practice_`, `assessment_`, `training_` or
 `stage_`. On the training path: `training_path_opened` (the state of each
-stage and the next step), `stage_started`, `stage_completed` and
-`training_path_left`. In a guided recording, with the `recording` and
+stage and the next step), `stage_started`, `stage_completed`,
+`training_path_left`, and for the five stages of the path `stage_skipped`
+(`set_id`, `stage`, and `policy`, the stages the study let trainees skip at the
+time), `stage_skip_cancelled` (the question answered with Keep it) and
+`stage_resumed` (`set_id`, `stage`: Do it after all). The study also keeps each
+skip, taking up again and finished tour or snippets in the trainee's progress
+file, with its time. The platform tour, which opens a practice recording made in
+the browser (its `recording_opened` has `segment` `tour`), records
+`tour_started` (`n_steps`), `tour_step` for each step (`step`: `move`, `mark`,
+`channels`, `undo`, `confidence` or `save`; `index`; `completed_by`: `action`
+when the tour saw it done, `next` when it was skipped; and `seconds` on it),
+`tour_finished` and `tour_left` (closed during the tour, with the step reached);
+its marks are logged as in any annotation view. The snippets of *Meet the
+artifacts* record `snippets_opened` (`set_id`, `n_snippets`, `n_recordings`),
+`snippets_recording_checked` (`recording_id`, `file_name`, `matched`),
+`snippet_viewed` (`snippet_id`, `label`, `recording_id`, `n_seen`,
+`n_snippets`), `snippets_quiz_opened`, `snippets_done` and `snippets_left` (each
+with how many were seen). In a guided recording, with the `recording` and
 `window_no`: `guided_step_started` (the experts' annotation for the step:
 `target_label`, `target_onset_s`, `target_offset_s`, `target_channels`, and the
 `guidance` level), `guided_check` after every change (`matched`, `problems`

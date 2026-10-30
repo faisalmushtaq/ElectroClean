@@ -4,7 +4,7 @@
 // check before Save and Finish), resuming a draft where it was left, the annotator's progress on the
 // home page, the study's settings in the admin area, display comfort, a pause in guided training,
 // and the Pause button on an iPad.
-import { clickDialogButton, drag, eegPoint, openExample, pressSave, signIn, state, waitForRoute, waitForTraces } from './helpers.mjs';
+import { clickDialogButton, drag, eegPoint, openExample, pressSave, signIn, state, waitForRoute, waitForTraces, skipFirstStages } from './helpers.mjs';
 
 /** Change the demonstration's study settings (annotation block) and read GET /me again. */
 async function studySettings(page, annotation) {
@@ -406,6 +406,7 @@ export const tests = [
       const page = await t.newPage({ width: 1600, height: 950 });
       await signIn(page, 'T01');
       await waitForRoute(page, 'training');
+      await skipFirstStages(page);
       await page.locator('main.training .btn.primary').click();
       await waitForRoute(page, 'open');
       await page.locator('.example-card button').click();
