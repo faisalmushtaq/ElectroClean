@@ -131,7 +131,10 @@ python -m pytest tests/test_real_eeg.py -s
 `data_readers.test.mjs` then reads every recording below the folder in the browser's code and with
 MNE-Python (`web_tests/register_parity.py --describe`) and compares the names, types, sampling rate,
 length, annotations, triggers and values at the edges and at random places, as it does for the test
-recordings; a recording MNE-Python cannot read must be refused by the browser too.
+recordings; a signal stored at a lower rate than the others (Sleep-EDF's respiration, temperature and
+EMG at 1 Hz beside EEG at 100 Hz) is compared at its own sample times, where both give the stored value,
+because between them MNE-Python's FFT resampling and the browser's straight lines differ by up to half
+the signal's range. A recording MNE-Python cannot read must be refused by the browser too.
 `data_register.test.mjs` registers each dataset folder in the browser and with Python and compares the
 manifests field by field, and `tests/test_real_eeg.py` registers each one with Python and checks the
 manifests against MNE-Python's reading and the study server's checks. The files are only read. On

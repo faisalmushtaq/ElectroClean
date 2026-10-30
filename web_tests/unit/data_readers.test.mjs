@@ -86,12 +86,22 @@ function readerTests(name, openIt, expOf, lowerNames, options = {}) {
         for (const w of exp.windows) for (const v of w.values[c]) m = Math.max(m, Math.abs(v));
         return m;
       });
-      const check = (got, want, c, where) => {
+      // options.lowerFactors (real recordings): each lower-rate channel's factor to the recording's rate;
+      // such a channel is compared at its own sample times only, where both readers give the stored
+      // value (between them MNE's FFT resampling and the browser's straight lines can differ by much
+      // more than 5% of the range for a signal sampled at 1 Hz)
+      const factors = options.lowerFactors || null;
+      const check = (got, want, c, where, first = 0) => {
+        let only = null;
         if (lower.has(c)) {
-          for (let i = 0; i < want.length; i++) assert.ok(Math.abs(got[i] - want[i]) <= 0.05 * range[c], `${where} ${exp.ch_names[c]}: ${got[i]} vs ${want[i]}`);
-          return;
+          if (!factors) {
+            for (let i = 0; i < want.length; i++) assert.ok(Math.abs(got[i] - want[i]) <= 0.05 * range[c], `${where} ${exp.ch_names[c]}: ${got[i]} vs ${want[i]}`);
+            return;
+          }
+          only = factors[exp.ch_names[c]];
         }
         for (let i = 0; i < want.length; i++) {
+          if (only && (first + i) % only !== 0) continue;
           const tol = Math.abs(want[i]) * 2 ** -24 * 1.001 + 1e-300;
           assert.ok(Math.abs(got[i] - want[i]) <= tol, `${where} ${exp.ch_names[c]}[${i}]: ${got[i]} vs ${want[i]}`);
         }
@@ -102,12 +112,12 @@ function readerTests(name, openIt, expOf, lowerNames, options = {}) {
         assert.equal(r.nSamples, w.n);
         assert.equal(r.data.length, exp.ch_names.length);
         assert.ok(r.data.every((d) => d instanceof Float32Array && d.length === w.n));
-        w.values.forEach((row, c) => check(r.data[c], row, c, `window ${w.start}`));
+        w.values.forEach((row, c) => check(r.data[c], row, c, `window ${w.start}`, w.start));
       }
       // single samples, read one at a time and in a single request
       for (const [k, idx] of exp.samples.indices.entries()) {
         const r = await rec.readWindow({ startSample: idx, nSamples: 1 });
-        exp.samples.values.forEach((vals, c) => check([r.data[c][0]], [vals[k]], c, `sample ${idx}`));
+        exp.samples.values.forEach((vals, c) => check([r.data[c][0]], [vals[k]], c, `sample ${idx}`, idx));
       }
     } finally {
       rec.close();
@@ -311,6 +321,6 @@ if (REAL) {
       return;
     }
     readerTests(label, async () => openRecording(await filesOf(exp.paths), { worker: false }), () => exp, exp.lower_rate,
-      { timeout: 30 * 60 * 1000 });
+      { timeout: 30 * 60 * 1000, lowerFactors: exp.lower_rate_factor || {} });
   });
 }

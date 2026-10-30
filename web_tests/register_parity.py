@@ -153,6 +153,7 @@ def describe_files(jobs: list[dict]) -> list[dict]:
                 warnings.simplefilter("ignore")
                 raw = read_raw(path, fmt)
             lower: list[str] = []
+            factors: dict[str, float] = {}
             if fmt == "brainvision":
                 head = read_vhdr_header(path)
                 files = [path, path.parent / (head.marker_file or ""), path.parent / (head.data_file or "")]
@@ -162,14 +163,21 @@ def describe_files(jobs: list[dict]) -> list[dict]:
                 h = read_edf_header(path)
                 top = max(h.samples_per_record)
                 lower = [lab for lab, n in zip(h.labels, h.samples_per_record, strict=False) if 0 < n < top]
+                factors = {lab: top / n for lab, n in zip(h.labels, h.samples_per_record, strict=False) if 0 < n < top}
             n = int(raw.n_times)
-            w = min(n, 64)
+            # a signal at a lower rate needs windows long enough to show its range (30 s), which the
+            # tests' tolerance for it is relative to (MNE resamples it with an FFT, the browser linearly)
+            w = min(n, int(30 * raw.info["sfreq"]) if lower else 64)
             rng = np.random.default_rng(1)
             idx = sorted({0, n - 1, *map(int, rng.integers(0, n, 16))})
+            if lower:  # and samples at the slower signals' own times, where both give the stored value
+                step = int(round(max(factors.values())))
+                idx = sorted(set(idx) | {int(k) * step for k in rng.integers(0, max(1, n // step), 32)})
             info = describe(raw, fmt, data_file, files, filters=[], windows=[(0, w), (n // 2, n // 2 + w), (n - w, n)],
                             sample_idx=idx)
             info["paths"] = [str(f) for f in files]
             info["lower_rate"] = [c for c in raw.ch_names if c in lower]
+            info["lower_rate_factor"] = {c: factors[c] for c in info["lower_rate"]}
             out.append(info)
         except Exception as exc:  # noqa: BLE001 - the browser must refuse what MNE cannot read
             out.append({"error": f"{type(exc).__name__}: {exc}", "paths": [str(path)]})
