@@ -63,6 +63,7 @@ Annotated_Events/
         session_log.jsonl
         annotator-A01/sub-001/eeg/sub-001_task-rest_eeg_annotator-A01[_attempt-02]_….{tsv,json,txt}
     derived/adjudications/              adjudicated versions of tasks, laid out the same way
+    corrections/corrections.{tsv,json}  every change of every correction, with its reason (results zip and export)
     .electrotag/
         locks/          lock files of sessions and of the register
         staging/        saves in progress (normally empty)
@@ -89,6 +90,15 @@ number counts the corrections of that person's work on the recording. The
 comes from in `session.context.derived` (its kind, who made it, and the saved
 attempt it was made from). The originals are never changed, and the analyses
 (`electrotag-agreement` and the admin area's) leave derived versions out.
+
+A correction's `session.context.derived` is `{"kind": "correction",
+"correction_id", "corrected_from": {"annotator_id", "attempt", "session_id",
+"output_basename", "annotations_sha256"}, "corrector_id", "corrector_name",
+"changes", "overall_note"}`, where `annotations_sha256` is the SHA-256 of the
+corrected attempt's `_annotations.json` and each change is as in
+`corrections/corrections.json` below. Its `annotator.display_name` is "A01
+corrected by E01", its session ID is the `correction_id`, and its time is the
+expert's.
 
 ## `…_events.tsv`
 
@@ -290,6 +300,36 @@ each item with the columns `review_id`, `reviewed_at`, `reviewer_id`,
 `label`, `onset_sample`, `duration_samples`, `onset_s`, `offset_s`,
 `channels`, `status` and `note`, and a last row with `item` and `status`
 `overall` for the overall note. The agreement analyses do not read reviews.
+
+## Corrections (results zip and export)
+
+Experts' corrections of saved work are kept by the study as records and
+written into the results with the results zip or `electrotag web export`;
+the corrected versions themselves are the five files in
+`derived/corrections/` (see "Output folder"). `corrections/corrections.json`
+holds every saved correction
+(`{"schema": "electrotag.corrections", "schema_version": 1, "corrections": [...]}`):
+`correction_id`, `annotator_id` (whose work it is), `recording_id`,
+`corrected_from` (the attempt corrected: `attempt`, `session_id`,
+`output_basename`, `annotations_sha256`), `corrector_id`, `corrector_name`,
+`corrected_at`, `elapsed_s` (the expert's time), `number` (the correction's
+attempt number in `derived/corrections/`), `output_basename`, `counts`
+(`added`, `removed`, `changed`), `overall_note`, `earlier_corrections` (the
+other experts' corrections of the same attempt saved before it) and `changes`.
+Each change has `annotation_id`, `change` (`added`, `removed` or `changed`),
+`fields` (for a changed mark, which of `label`, `onset`, `end`, `channels`,
+`confidence` and `note` changed), `before` and `after` (the mark as saved and
+as corrected: `annotation_id`, `label`, `onset_sample`, `duration_samples`,
+`channels`, `confidence`, `note`; null for an added or removed mark), `reason`
+(`missed`, `not_artifact`, `wrong_type`, `boundaries`, `channels`,
+`split_merge`, `other`, or empty where the study asks for none) and `note` (up
+to 300 characters). `corrections/corrections.tsv` has a row for each change,
+with the columns `correction_id`, `corrected_at`, `corrector_id`,
+`annotator_id`, `recording_id`, `attempt`, `number`, `change`,
+`annotation_id`, `fields`, `before_label`, `before_onset_sample`,
+`before_duration_samples`, `before_channels`, `after_label`,
+`after_onset_sample`, `after_duration_samples`, `after_channels`, `reason` and
+`note`, and a row with `change` `overall` for an overall note.
 
 ## `completion_register.tsv`
 

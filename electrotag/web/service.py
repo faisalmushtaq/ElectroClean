@@ -49,8 +49,9 @@ MAX_ELAPSED_S = 7 * 24 * 3600.0
 MAX_VIEWED = 5000
 #: What annotators are told when the study records how they use ElectroTag (as on the desktop).
 LOGGING_NOTICE = ("This study records how you use ElectroTag (times, clicks, keys and what is on screen) for "
-                  "research. It never records what you type, such as notes or passwords. Ask the study team if "
-                  "you have questions.")
+                  "research. The study team can replay a session from this record, step by step, and an expert's "
+                  "sessions may be shown to trainees when the expert agrees. It never records what you type, such as "
+                  "notes or passwords. Ask the study team if you have questions.")
 
 __all__ = ["ApiError", "StudyService", "WorkItem", "annotation_dict", "parse_annotations"]
 log = logging.getLogger("electrotag.web")
@@ -308,6 +309,7 @@ class StudyService:
             "review": {"show_corrections_to_annotators": s.review.show_corrections_to_annotators,
                        "show_outcomes_to_annotators": s.review.show_outcomes_to_annotators},
             "training": {"skippable": list(s.training.skippable), "gate": s.training.gate},
+            "replay": {"enabled": s.replay.enabled, "trainees_watch_experts": s.replay.trainees_watch_experts},
             "logging": self.logging_info(),
             "logging_notice": (self.store.logging_notice or LOGGING_NOTICE) if s.logging_interactions else "",
         }

@@ -1397,8 +1397,17 @@ export class DemoBackend {
   async myFeedback() {
     this._aid();
     const r = (this._admin.s.settings || {}).review || {};
-    return { corrections: { shown: r.show_corrections_to_annotators !== false, items: [] },
-      adjudications: { shown: r.show_outcomes_to_annotators !== false, items: [] } };
+    const shown = { corrections: r.show_corrections_to_annotators !== false, adjudications: r.show_outcomes_to_annotators !== false };
+    const items = async (part) => {
+      if (!shown[part]) return [];
+      if (!this.experts) {
+        const { DemoExpert } = await loadPart('demoExpert');
+        this.experts = this.experts || new DemoExpert(this);
+      }
+      return this.experts.feedback(part);
+    };
+    return { corrections: { shown: shown.corrections, items: await items('corrections') },
+      adjudications: { shown: shown.adjudications, items: await items('adjudications') } };
   }
 
   /** POST /training/stage: checked as coach.py checks it; the five-stage path comes later (501 not_offered). */

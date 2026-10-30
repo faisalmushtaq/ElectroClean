@@ -4,3 +4,6 @@
 .expert-nav ul { margin-top: 0; }
 .expert-chip { margin-left: 2px; }
 .expert-card .btn-row { margin-top: 8px; }
+/* Saved work (js/expert/work.js): the filters above the table. */
+.work-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.work-filters .field { width: auto; min-width: 160px; }

@@ -32,6 +32,26 @@ button. Its first page explains the area and lets each expert agree, or no longe
 watching replays of their sessions; the corrections, replays, adjudication, library and training
 material of the next parts appear in its menu as they are added.
 
+Experts can now correct saved work and replay how it was done. Saved work, in the expert area,
+lists the latest saved version of each person's study recordings; Correct opens one from the
+expert's computer in the annotation view, with the original drawn as dashed outlines, a panel that
+lists every change from it (added, removed, or changed in type, times or channels) with reason chips
+and a short note, and Submit the correction, which saves a new version credited to the expert as a
+derived version (`derived/corrections/`), never changing the original and saved once however often
+it is pressed. Which changes need a reason follows the study's `review.reason_required`. When two
+experts correct the same version both corrections are kept and counted, for the adjudication to
+compare. Annotators see "Corrected by …" in their list and history and open the corrected version
+beside their own, with each change and its reason, when the study shows corrections to them. Replay
+plays a person's sessions on a recording back from the interaction log, with play, pause, speed,
+steps by event or by change, a scrubber, Skip pauses and Follow the annotator, and says at the end
+whether the replay matches the saved version. Experts and administrators may replay anyone; trainees
+watch only the sessions of experts who agreed to it, through Watch an expert at work on the home
+page, and the study checks this for every request. The browser now logs a snapshot of the
+annotations a recording opens with (`annotations_snapshot`), sends the session's ID with each save,
+and logs work brought back in a tab; the logging notice says that sessions can be replayed. The
+results zip and the export hold `corrections/corrections.tsv` and `.json`, and the demonstration does
+all of this in the browser.
+
 A changed copy of a recording that is also in a training set (a set made from the study's own
 recordings) is now matched by its name and shape, as any other changed copy is; the study's copy and
 the set's copy were counted as two recordings, so the file was refused as looking like several.

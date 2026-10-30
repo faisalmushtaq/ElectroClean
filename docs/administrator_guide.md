@@ -588,7 +588,10 @@ work with the reasons given. `k_default` is the number of annotators, from 2 to
 `show_outcomes_to_annotators` shows annotators the decisions on the conflicts
 in their work (who else marked what is never said). `reason_required` says
 when an adjudicator gives a reason for a decision: `always`, `edited_or_none`
-(only when they keep neither version or edit a mark) or `never`. `matching`
+(only when they keep neither version or edit a mark) or `never`; for an
+expert's correction the same choice asks for a reason for every change, for
+each changed or removed mark (an added mark speaks for itself), or for none.
+`matching`
 holds the rules by which two marks count as the same, as in the agreement
 analysis: the criterion (`iou`, `tolerance` or `iou_and_tolerance`), the overlap
 needed (from 0, any overlap, to just below 1), the onset and offset tolerances

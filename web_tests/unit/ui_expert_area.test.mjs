@@ -14,7 +14,9 @@ const { expertOps } = await import('../../electrotag/web/static/js/api/demo_expe
 
 test('the expert area has its routes, and only experts and administrators use it', () => {
   assert.ok(EXPERT_ROUTE.test('expert') && EXPERT_ROUTE.test('expert-work') && !EXPERT_ROUTE.test('experts') && !EXPERT_ROUTE.test('admin'));
-  assert.deepEqual(EXPERT_SECTIONS.map((s) => s.key), ['overview']);
+  // the overview first, then one line per part of the expert work (each part adds its own)
+  assert.equal(EXPERT_SECTIONS[0].key, 'overview');
+  assert.ok(EXPERT_SECTIONS.some((s) => s.key === 'work' && s.route === 'expert-work'), 'Saved work (corrections and replay)');
   assert.equal(expertSectionForRoute('expert'), 'overview');
   assert.equal(expertSectionForRoute('expert-nothing'), null);
   assert.equal(routeForExpertSection('overview'), 'expert');
@@ -33,7 +35,7 @@ test('the expert area has its routes, and only experts and administrators use it
 });
 
 test('a recording is opened for its purpose; an unknown purpose says so', async () => {
-  assert.deepEqual(Object.keys(PURPOSES), ['review']);
+  for (const k of ['review', 'correct', 'replay', 'corrected']) assert.equal(typeof PURPOSES[k], 'function', k);
   const seen = [];
   registerPurpose('try', async (app, args) => { seen.push(args.target.recording_id); });
   assert.throws(() => registerPurpose('try', async () => {}), /registered twice/);
@@ -73,7 +75,9 @@ test('the sandbox reads the roles of a request as admin.py does', () => {
   assert.throws(() => rolesFrom({ roles: [] }, { required: true }), (e) => e.code === 'bad_request');
   assert.throws(() => rolesFrom({ roles: ['wizard'] }, { required: true }), (e) => e.code === 'bad_request');
   assert.throws(() => rolesFrom({ role: 'annotator', roles: ['admin'] }, { required: true }), /say different things/);
-  assert.deepEqual(Object.keys(expertOps()).sort(), ['replay_consent_get', 'replay_consent_set']);
+  const ops = Object.keys(expertOps());
+  for (const op of ['replay_consent_get', 'replay_consent_set', 'work_list', 'saved_attempt_get', 'correction_save', 'corrections_list', 'correction_get',
+    'my_correction_get', 'replay_index_get', 'replay_events_get', 'teaching_list']) assert.ok(ops.includes(op), op);
   assert.throws(() => expertOps([{ a_get: () => {} }, { a_get: () => {} }]), /given twice/);
 });
 
