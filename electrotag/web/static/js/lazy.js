@@ -43,6 +43,7 @@ const PARTS = Object.freeze({
   snippets: './training/snippets.js',
   viewer: './viewer/viewer.js',
   reopen: './annotate/reopen.js',
+  myFiles: './views/my_files.js',
 });
 
 const pending = new Map(); // name -> the promise of its module

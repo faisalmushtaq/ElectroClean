@@ -299,6 +299,25 @@ def test_saving_writes_the_desktop_outputs(client: TestClient, recordings: Path,
     assert again.status_code == 409 and again.json()["error"] == "already_done"
 
 
+def test_an_annotator_downloads_their_own_saved_files(client: TestClient, recordings: Path, study: Path) -> None:
+    api = Api(client, "A01")
+    missing = api.get(f"/me/results/{SUB1}")
+    assert missing.status_code == 404 and missing.json()["error"] == "not_saved"
+    api.ok("post", "/submissions", submission(recordings, SUB1, [BLINK, EMG]))
+    r = api.ok("get", f"/me/results/{SUB1}")
+    assert r["version"] == 1 and r["mode"] == "standard" and r["file_name"] == "sub-001_task-rest_eeg_annotator-A01.zip"
+    folder = study / "Annotated_Events" / "annotator-A01" / "sub-001" / "eeg"
+    assert [f["name"] for f in r["files"]] == sorted(p.name for p in folder.iterdir())
+    for f in r["files"]:  # exactly the files the study keeps
+        assert f["text"] == (folder / f["name"]).read_text(encoding="utf-8")
+    assert api.ok("get", f"/me/results/{SUB1}?version=1") == r
+    assert api.get(f"/me/results/{SUB1}?version=2").json()["error"] == "not_saved"
+    assert api.get(f"/me/results/{SUB1}?version=0").status_code == 400
+    assert api.get(f"/me/results/{SUB1}?mode=lunch").status_code == 400
+    # only one's own: another annotator has nothing saved of it
+    assert Api(client, "A02").get(f"/me/results/{SUB1}").status_code == 404
+
+
 def test_the_browsers_session_id_links_logs_and_results(client: TestClient, recordings: Path, study: Path) -> None:
     api = Api(client, "A01")
     sid = "a1" * 16

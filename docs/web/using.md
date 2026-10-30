@@ -92,6 +92,20 @@ Your study may switch revisions off, for example when the study's design needs e
 annotated once without second thoughts. Saved recordings are then final, and Open to revise does
 not appear. Recordings of the training programme keep the programme's own rules.
 
+### Your own files
+
+You can download your annotations of any recording you have saved, as the same files the study
+keeps: the events table in the BIDS format (`_events.tsv`, one row for each of your annotations
+beside the recording's own events, with its type, time, channels, your rating and your note), its
+description (`_events.json`), your annotations with your ratings and notes as a JSON document
+(`_annotations.json`), and the session details (`_session.json` and `_time_viewed.txt`). The Saved
+dialog after Save and Finish offers them at once: Download my annotations (zip) saves the files as
+one small zip file, and As separate files saves each on its own, while the dialog stays open. Later,
+Download beside a recording in the History tab saves the zip of its latest version, and the
+recording's More menu (the three dots) offers both forms. Each download holds only your own work. In
+the sandbox the files are made in your browser in the same formats, and they say that they come from
+the demonstration.
+
 ## When a recording cannot be annotated
 
 Sometimes a recording cannot be judged as it is: the file will not open, it is the wrong

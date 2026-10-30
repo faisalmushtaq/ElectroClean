@@ -908,6 +908,41 @@ class StudyService:
         """``GET /me/reviews``: the reviews of the annotator's saved work, when the study shows them."""
         return self.feedback.my_reviews(user, body or {})
 
+    # ------------------------------------------------- one's own saved files
+    def my_results(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        """``GET /me/results/{recording_id}``: the annotator's own saved files of one recording (the latest version,
+        or ``version``), exactly as the study keeps them: the ``_events.tsv``, ``_events.json``,
+        ``_annotations.json`` (with the ratings and notes), ``_session.json`` and ``_time_viewed.txt``."""
+        rid, mode = body.get("recording_id"), body.get("mode") or "standard"
+        if not isinstance(rid, str) or not rid or mode not in MODES:
+            raise ApiError(400, "bad_request", "recording_id and mode are needed")
+        ctx = str(body.get("context_id") or "") if mode != "standard" else ""
+        version = body.get("version")
+        if version in (None, ""):
+            version = None
+        else:
+            try:
+                version = int(version)
+            except (TypeError, ValueError):
+                version = 0
+            if isinstance(body.get("version"), bool) or version < 1:
+                raise ApiError(400, "bad_request", "version must be a whole number from 1")
+        entries = [e for e in self.store.completion_entries(user.annotator_id)
+                   if e.get("recording_id") == rid and e.get("mode", "standard") == mode
+                   and e.get("context", "") == ctx and e.get("status") == "completed"]
+        if version is None and entries:
+            version = attempt_of(latest_entry(entries))
+        entry = next((e for e in entries if attempt_of(e) == version), None)
+        files = self.store.saved_files(user.annotator_id, rid, mode, ctx, version) if entry else {}
+        if not files:
+            raise ApiError(404, "not_saved", f"You have no saved annotations of {rid}"
+                           + (f" in version {body.get('version')}" if body.get("version") not in (None, "") else "")
+                           + ". Only recordings you finished with Save and Finish can be downloaded.")
+        out = [{"name": n, "text": files[n].decode("utf-8")} for n in sorted(files)]
+        base = str(entry.get("output_basename") or rid)
+        return {"recording_id": rid, "mode": mode, "context_id": ctx, "version": version,
+                "file_name": f"{base}.zip", "files": out}
+
     # ---------------------------------------------------------------- visits
     def visit_open(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
         return self.visits.open(user, body)
@@ -1010,7 +1045,7 @@ class StudyService:
     OPERATIONS = ("me", "assignments", "match", "put_draft", "delete_draft", "submit", "training", "guided_get",
                   "guided_check", "guided_continue", "guided_show_me", "visit_open", "visit_events", "visit_close",
                   "admin_progress", "admin", "quiz", "achievements", "problem_report", "my_reviews", "expert",
-                  "my_feedback", "training_stage", "training_snippets")
+                  "my_feedback", "training_stage", "training_snippets", "my_results")
 
     def call(self, operation: str, user: User, body: dict[str, Any] | None) -> dict[str, Any]:
         if operation not in self.OPERATIONS:

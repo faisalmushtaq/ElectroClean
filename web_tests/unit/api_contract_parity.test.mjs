@@ -61,6 +61,7 @@ export const ALLOWED = [
     'any', 'agreement figures the sandbox does not compute; the review shows only the score, the share found and the share of the right type'],
   ['.*practice submit.*', 'feedback\\.per_category', 'any', 'the scores by type, which the review does not show'],
   ['.*', 'manifest\\.gaps|recordings\\..*\\.gaps', 'any', "the sandbox's third example has a stretch without data at its end, which its EDF file cannot hold"],
+  ['my results', 'files\\[\\]\\.text', 'any', "the files as each side writes them: the sandbox's annotations, session and sidecar say that it is a demonstration; the events.tsv is compared on its own"],
   ['.*', '(.*\\.)?corrected_at', 'type', 'times: each side stamps its own'],
   ['.*', '(.*\\.)?corrected_from\\.annotations_sha256', 'type', 'the checksum of the saved _annotations.json file, which only the server writes'],
   ['expert replay_events_get.*', 'events\\[\\]\\.(t|wall|choose_recording|reference_set|assessment_kind)', 'any',
@@ -237,6 +238,11 @@ async function script(call) {
   await call('submit (outside the recording)', (s) => s.b.submit({ recording_id: r1, mode: 'standard', context_id: '', annotations: [{ ...B1, onset_sample: 10 ** 7 }], session: { elapsed_s: 60 }, sha256: s.mem.sha[RIDS.indexOf(r1)] }));
   await call('submit', async (s) => s.b.submit({ recording_id: r1, mode: 'standard', context_id: '', annotations: [B1, E1],
     session: { elapsed_s: 60, viewed_fraction: 1 }, sha256: s.mem.sha[0] }));
+  // one's own saved files (GET /me/results): their names, and the events.tsv row for row; the other files say what each side keeps
+  await call('my results (not saved)', (s) => s.b.myResults(r2));
+  await call('my results (no such version)', (s) => s.b.myResults(r1, 'standard', '', 2));
+  await call('my results', (s) => s.b.myResults(r1));
+  await call('my results: the events.tsv', async (s) => (await s.b.myResults(r1)).files.find((f) => f.name.endsWith('_events.tsv')).text);
   await call('submit again', (s) => s.b.submit({ recording_id: r1, mode: 'standard', context_id: '', annotations: [B1], session: { elapsed_s: 5 }, sha256: s.mem.sha[RIDS.indexOf(r1)] }));
   await call('match a finished recording', async (s) => s.b.match(await matchBody(r1)));
   await call('match to revise', async (s) => s.b.match(await matchBody(r1, { revise: true })));

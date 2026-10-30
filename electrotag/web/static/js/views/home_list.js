@@ -11,7 +11,7 @@
 import { h, clear } from '../ui/dom.js';
 import { formatHms, local } from '../util.js';
 import { spanText } from './progress.js';
-import { feedbackCaption, moreButton, returnedLine } from './home_feedback.js';
+import { downloadSaved, feedbackCaption, moreButton, returnedLine } from './home_feedback.js';
 import { inform } from '../ui/dialog.js';
 
 export const PAGE_SIZE = 25;
@@ -263,6 +263,11 @@ export function recordingsCard(app) {
       h('td.actions', {}, h('span.row-actions', {}, action(it), moreButton(app, it))));
   };
 
+  // One's own saved files of the latest version (views/my_files.js); the button waits while they are fetched.
+  const downloadButton = (it) => h('button.btn.small.quiet', { type: 'button', 'data-log': 'download-mine', title: 'Download the files the study keeps of your saved annotations',
+    'aria-label': `Download my annotations of ${it.file_name}`,
+    onclick: async (e) => { const b = e.currentTarget; b.disabled = true; try { await downloadSaved(app, it); } finally { b.disabled = false; } } }, 'Download');
+
   const historyRow = (it) => {
     const s = savedOf(it) || {};
     return h('tr', { 'data-id': it.recording_id, 'data-log-text': it.file_name },
@@ -272,7 +277,7 @@ export function recordingsCard(app) {
       h('td.num', {}, String(s.version || 1)),
       h('td.num.opt', {}, s.n_annotations === null || s.n_annotations === undefined ? 'n/a' : String(s.n_annotations)),
       h('td.num.opt', {}, s.elapsed_s === null || s.elapsed_s === undefined ? 'n/a' : spanText(s.elapsed_s)),
-      h('td.actions', {}, h('span.row-actions', {}, action(it), moreButton(app, it))));
+      h('td.actions', {}, h('span.row-actions', {}, action(it), downloadButton(it), moreButton(app, it))));
   };
 
   const pager = (pg, total) => {

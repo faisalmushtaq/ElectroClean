@@ -361,6 +361,24 @@ submission of a finished recording without `revises` is still refused (409
 recording may be repeated until it is passed; guided and assessment recordings
 are saved once).
 
+### Your own saved files
+
+`GET /me/results/{recording_id}?mode=&context=&version=` (`et_my_results`,
+with `{"recording_id", "mode", "context_id", "version"}`) gives the caller their
+own files of one saved version of a recording, the latest unless `version` (a
+whole number from 1) names another: `{"recording_id", "mode", "context_id",
+"version", "file_name": "<output basename>.zip", "files": [{"name", "text"}]}`,
+the `_annotations.json`, `_events.json`, `_events.tsv`, `_session.json` and
+`_time_viewed.txt` exactly as the study keeps them, sorted by name. The browser
+offers them as one zip file (made in the page, `js/data/zip.js`) or as separate
+files. Only the caller's own work is given: a recording they have not saved, or
+a version they do not have, is 404 `not_saved`; a bad `mode` or `version` is
+400 `bad_request`. It is a read, so the browser may ask again after a failure.
+The sandbox makes the same files in the browser (`js/api/demo_export.js`): its
+`_events.tsv` row for row as the server writes it (the parity test compares
+them), and the other files with the same names and contents of its own, which
+say that they come from the demonstration.
+
 ## Problem reports
 
 An annotator who cannot judge a recording reports it instead of saving it as
@@ -1535,7 +1553,7 @@ generation, region europe-west2) taking and returning the same JSON:
 `et_submit`, `et_training`, `et_guided_get`, `et_guided_check`,
 `et_guided_continue`, `et_guided_show_me`, `et_visit_open`, `et_visit_events`,
 `et_visit_close`, `et_quiz`, `et_achievements`, `et_problem_report`, `et_my_reviews`,
-`et_my_feedback`, `et_training_stage`, `et_training_snippets`, for experts and
+`et_my_feedback`, `et_my_results`, `et_training_stage`, `et_training_snippets`, for experts and
 administrators `et_expert` (every operation of the expert area, by `op`) and,
 for administrators, `et_admin_progress` and `et_admin` (every operation of the
 admin area, by `op`; it has 2 GB of memory and up to 540 s for the analyses and
@@ -1573,6 +1591,7 @@ The fields of each call:
 | `et_problem_report` | the body of `POST /problems` (never repeated by the browser; the same `problem_id` is kept once) |
 | `et_my_reviews` | none (`GET /me/reviews`) |
 | `et_my_feedback` | none (`GET /me/feedback`) |
+| `et_my_results` | `{"recording_id", "mode", "context_id", "version"}` (`GET /me/results/{recording_id}`; a read, asked again after a failure) |
 | `et_training_stage` | the body of `POST /training/stage` (never repeated by the browser) |
 | `et_training_snippets` | none (`GET /training/snippets`) |
 | `et_expert` | `{"op", ...the body of `POST /expert/{op}`}`; only an `op` ending in `_get` or `_list` is asked again after a failure |

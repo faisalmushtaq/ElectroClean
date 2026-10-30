@@ -1062,23 +1062,27 @@ export class App {
     }
     const next = result.next ? (this.assignments.items || []).find((i) => i.recording_id === result.next) : null;
     const demo = this.backend.isDemo ? `\n\n${DEMO_NOTICE}` : '';
+    // The files just saved, offered to keep (views/my_files.js); the dialog says nothing of them if the part cannot load.
+    const files = await loadPart('myFiles').catch(() => null);
+    const version = (result.revision && result.revision.version) || result.attempt || null;
+    const extra = files ? files.savedDownload(this, { recording_id: s.recordingId, mode: s.mode, context_id: s.contextId }, version) : null;
     const milestone = reached.length ? `\n\nMilestone reached: ${reached.map((m) => m.name).join(', ')}.` : '';
     this.celebrate = reached;
     this.showHome();
     if (s.revision) {
       const v = (result.revision && result.revision.version) || s.revision.version;
       const go = next ? await ask('Revision saved', `Your revision of ${fileName} is saved as version ${v}. Version ${v - 1} is kept as it was.${milestone}${demo}\n\nNext: ${next.file_name}.`,
-        { yes: 'Open next recording', no: 'Back to my recordings' })
-        : await inform('Revision saved', `Your revision of ${fileName} is saved as version ${v}. Version ${v - 1} is kept as it was.${milestone}${demo}`);
+        { yes: 'Open next recording', no: 'Back to my recordings', extra })
+        : await inform('Revision saved', `Your revision of ${fileName} is saved as version ${v}. Version ${v - 1} is kept as it was.${milestone}${demo}`, { extra });
       if (next && go) this.openAssignment(next);
       return;
     }
     if (next) {
       const go = await ask('Saved', `Your annotations of ${fileName} are saved and the recording is complete.${milestone}${demo}\n\nNext: ${next.file_name}.`,
-        { yes: 'Open next recording', no: 'Back to my recordings' });
+        { yes: 'Open next recording', no: 'Back to my recordings', extra });
       if (go) this.openAssignment(next);
     } else {
-      await inform('Saved', `Your annotations of ${fileName} are saved and the recording is complete. That was your last recording.${milestone}${demo}`);
+      await inform('Saved', `Your annotations of ${fileName} are saved and the recording is complete. That was your last recording.${milestone}${demo}`, { extra });
     }
   }
 

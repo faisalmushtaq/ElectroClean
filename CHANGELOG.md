@@ -5,6 +5,14 @@ Each section below describes the changes in one version of ElectroTag;
 
 ## Unreleased
 
+Annotators can download their own annotations of a saved recording, as the files the study keeps:
+the BIDS `_events.tsv` and its `_events.json`, the `_annotations.json` with their ratings and notes,
+and the session details, as one small zip file or as separate files. The Saved dialog after Save and
+Finish offers them, and so do Download in the History and the recording's More menu, for any saved
+version. A new read operation, `GET /me/results/{recording_id}` (`et_my_results` on Firebase), gives
+only the caller's own files; the sandbox makes the same files in the browser, its `_events.tsv` row
+for row as the server writes it.
+
 Reloading the page while annotating no longer loses any work. The browser's copy of a draft is now
 written 0.3 s after a change (it was 1.2 s) and again, synchronously, when the page is hidden,
 reloaded or closed, and after a reload the recording that was open opens again with its work restored
