@@ -1469,3 +1469,4 @@ button.review-line { text-align: left; font: var(--t-14); }
   .guide-eeg { height: 220px; }
 }
 .picker-about { flex: none; white-space: nowrap; }
+table.history .row-actions { flex-wrap: wrap; row-gap: 4px; }
