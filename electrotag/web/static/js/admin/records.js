@@ -3,7 +3,8 @@
 // visits (each time someone used the application, with the number of interaction events logged).
 
 import { h, clear } from '../ui/dom.js';
-import { AUDIT_OPS, MODES, auditSummary, filterAudit, opText, rolesOf, whenText } from './model.js';
+import { MODES, filterAudit, rolesOf, whenText } from './model.js';
+import { AUDIT_OPS, auditSummary, opText } from './audit_words.js';
 import { actionButton, card, dataTable, messageArea, sectionHead, select } from './ui.js';
 
 const PAGE = 50;

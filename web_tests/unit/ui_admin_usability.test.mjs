@@ -15,6 +15,7 @@ globalThis.sessionStorage = globalThis.sessionStorage || store();
 globalThis.localStorage = globalThis.localStorage || store();
 
 const m = await import('../../electrotag/web/static/js/admin/model.js');
+const audit = await import('../../electrotag/web/static/js/admin/audit_words.js');
 const { DemoBackend } = await import('../../electrotag/web/static/js/api/demo.js');
 const { docsUrl, DOCS_BASE } = await import('../../electrotag/web/static/js/ui/docs.js');
 const { annotatorSays, reviewStatusText } = await import('../../electrotag/web/static/js/annotate/review_pass.js');
@@ -64,10 +65,10 @@ test('the settings used are the file electrotag-agreement --config reads, with t
 
 test('the audit log names every kind of change, in words, with the value before and after', () => {
   for (const op of ['problem_report', 'problem_resolve', 'problem_return', 'problem_reassign', 'review_save']) {
-    assert.ok(m.AUDIT_OPS[op], op);
-    assert.match(m.opText(op), /^[A-Z]/);
+    assert.ok(audit.AUDIT_OPS[op], op);
+    assert.match(audit.opText(op), /^[A-Z]/);
   }
-  assert.equal(m.opText('something_new'), 'Something new');
+  assert.equal(audit.opText('something_new'), 'Something new');
   assert.equal(m.settingChangeText('annotation.allow_reviews', true, false), 'allow reviews (annotation) from on to off');
   assert.equal(m.settingChangeText('display.duration_s', 10, 20), 'duration s (display) from 10 to 20');
   assert.equal(m.settingChangeText('channels.hide', [], ['COUNTER']), 'hide (channels) from nothing to COUNTER');

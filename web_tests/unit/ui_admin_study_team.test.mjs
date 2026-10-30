@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
-const m = await import('../../electrotag/web/static/js/admin/model.js');
+const m = await import('../../electrotag/web/static/js/admin/audit_words.js');
 const { gateText } = await import('../../electrotag/web/static/js/admin/training_gate.js');
 
 const WEB = new URL('../../electrotag/web/', import.meta.url).pathname;

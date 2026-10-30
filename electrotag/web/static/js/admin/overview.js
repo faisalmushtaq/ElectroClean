@@ -1,7 +1,8 @@
 // Overview: the study in numbers, the latest changes from the audit log and the latest saved work.
 
 import { h, clear } from '../ui/dom.js';
-import { MODES, auditSummary, opText, routeForSection, whenText } from './model.js';
+import { MODES, routeForSection, whenText } from './model.js';
+import { auditSummary, opText } from './audit_words.js';
 import { card, dataTable, loading, messageArea, recordingName, sectionHead } from './ui.js';
 
 export class OverviewSection {
