@@ -48,9 +48,9 @@ async function checkHome(t, page, { other = false, n = 2 } = {}) {
   assert.equal(await page.innerText('.due-card h2'), 'Due');
   // the To do tab, grouped: the overdue hand-out first, then the later one, then the rest
   await page.click('[data-tab="todo"]');
-  const groups = await page.locator('table.list.grouped tr.group-row').allInnerTexts();
+  const groups = await page.locator('.recordings-card table.list.grouped tr.group-row').allInnerTexts();
   assert.deepEqual(groups.map((g) => g.trim().replace(/ \d+ \w+$/, ' <date>')), ['Pilot recordings', 'Recordings due <date>', ...(other ? ['Other recordings'] : [])]);
-  const rows = page.locator('table.list.grouped tbody tr:not(.group-row)');
+  const rows = page.locator('.recordings-card table.list.grouped tbody tr:not(.group-row)');
   const texts = await rows.allInnerTexts();
   assert.deepEqual(texts.map((x) => /Overdue/.test(x)), texts.map((_x, i) => i < n), `the recordings of the overdue hand-out, and only they, carry the badge: ${texts.join(' | ')}`);
   const body = await page.innerText('body');
@@ -61,11 +61,11 @@ async function checkHome(t, page, { other = false, n = 2 } = {}) {
   await page.locator('.due-line', { hasText: 'Pilot recordings' }).locator('button', { hasText: 'Show these' }).click();
   await page.waitForSelector('.rec-filter');
   assert.match(await page.innerText('.rec-filter'), /^Showing Pilot recordings only\. Show every recording$/);
-  assert.equal(await page.locator('table.list tbody tr:not(.group-row)').count(), n);
+  assert.equal(await page.locator('.recordings-card table.list tbody tr:not(.group-row)').count(), n);
   await t.screenshot(page, 'home_due_show');
   await page.click('[data-log="recordings-show-all"]');
   await page.waitForFunction(() => !document.querySelector('.rec-filter'));
-  assert.equal(await page.locator('table.list tbody tr:not(.group-row)').count(), texts.length);
+  assert.equal(await page.locator('.recordings-card table.list tbody tr:not(.group-row)').count(), texts.length);
 }
 
 export const tests = [
