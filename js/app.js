@@ -1,8 +1,8 @@
 // The application: which backend, signing in, the views and the moves between them.
 //
-// Views are addressed by a plain hash (#signin, #home, #open, #annotate, #review, #training, and
-// for administrators #admin and #admin-<section>), so the page also works where only such a hash
-// survives (an embedded preview).
+// Views are addressed by a plain hash (#signin, #home, #open, #annotate, #review, #training, for
+// experts #expert and #expert-<section>, and for administrators #admin and #admin-<section>), so the
+// page also works where only such a hash survives (an embedded preview).
 //
 // The sign-in page loads only this module, what it shows and the chosen back end's client; every
 // other view is a part loaded at its first use (js/lazy.js), with a Loading… page while it comes
@@ -22,6 +22,8 @@ import { loadPart, loadParts, partNow, preloadParts } from './lazy.js';
 const VIEWS = ['signin', 'home', 'open', 'annotate', 'review', 'training', 'quiz'];
 /** The admin area's plain hashes (js/admin/model.js lists its sections). */
 const ADMIN_ROUTE = /^admin(-[a-z]+)?$/;
+/** The expert area's plain hashes (js/expert/sections.js lists its sections; the same rule as its EXPERT_ROUTE). */
+const EXPERT_ROUTE = /^expert(-[a-z]+)?$/;
 /** The token of a private invitation link, kept for the browser tab until it is used. */
 const INVITE_KEY = 'electrotag.invite';
 
@@ -104,6 +106,7 @@ export class App {
     this.reviews = null; // GET /me/reviews: the feedback on the annotator's saved work ({shown, reviews}, or null)
     this.celebrate = null; // milestones that the last save reached, shown once on the home page
     this.adminArea = null;
+    this.expertArea = null;
     this.visitId = null;
     this.ws = null;
     this.route = null;
@@ -120,7 +123,7 @@ export class App {
   async boot() {
     // A bookmarked section of the admin area opens again once its administrator has signed in.
     const asked = (location.hash || '').replace(/^#/, '');
-    if (ADMIN_ROUTE.test(asked)) this._adminReturn = asked;
+    if (ADMIN_ROUTE.test(asked) || EXPERT_ROUTE.test(asked)) this._adminReturn = asked;
     const invite = takeInvite();
     this._render(h('main.page.loading', {}, h('p.subtitle', {}, 'Starting ElectroTag…')), 'signin');
     let where;
@@ -258,7 +261,9 @@ export class App {
     // Administrators start in the admin area (or where a reload left them); they can still annotate.
     const back = this._adminReturn;
     this._adminReturn = null;
-    if (this.isAdmin && (ADMIN_ROUTE.test(want) || !want || want === 'signin')) await this.showAdmin(ADMIN_ROUTE.test(want) ? want : back || 'admin');
+    const expertWanted = [want, back].find((r) => EXPERT_ROUTE.test(r || ''));
+    if (this.isExpert && expertWanted && (EXPERT_ROUTE.test(want) || !want || want === 'signin')) await this.showExpert(expertWanted);
+    else if (this.isAdmin && (ADMIN_ROUTE.test(want) || !want || want === 'signin')) await this.showAdmin(ADMIN_ROUTE.test(want) ? want : (ADMIN_ROUTE.test(back || '') ? back : 'admin'));
     else if (this.inTraining() && (!want || want === 'signin' || want === 'training' || quiet)) await this.showTraining();
     else this.showHome();
   }
@@ -329,8 +334,17 @@ export class App {
     if (this.route === 'home' && !this.ws) this.showHome();
   }
 
-  /** True for an account with the role admin (GET /me), who may use the admin area. */
-  get isAdmin() { return Boolean(this.me && this.me.role === 'admin'); }
+  /** The roles of the account signed in (GET /me: roles, or the older single role). */
+  get roles() {
+    if (!this.me) return [];
+    return Array.isArray(this.me.roles) && this.me.roles.length ? this.me.roles : [this.me.role || 'annotator'];
+  }
+
+  /** True for an account with the role admin, who may use the admin area. */
+  get isAdmin() { return this.roles.includes('admin'); }
+
+  /** True for an expert or an administrator, who may use the expert area. */
+  get isExpert() { return this.roles.includes('expert') || this.isAdmin; }
 
   /** Read GET /me again, after the admin area changed the study's settings. */
   async refreshMe() {
@@ -347,6 +361,7 @@ export class App {
       await offerRemovalAtSignOut(this);
     } catch { /* the part could not be loaded: signing out goes on without the offer */ }
     this.adminArea = null;
+    this.expertArea = null;
     await logger.end('sign_out');
     await this.backend.logout();
     this.me = null;
@@ -357,7 +372,7 @@ export class App {
   sessionExpired() {
     if (this._expiring) return;
     this._expiring = true;
-    if (ADMIN_ROUTE.test(this.route || '')) this._adminReturn = this.route;
+    if (ADMIN_ROUTE.test(this.route || '') || EXPERT_ROUTE.test(this.route || '')) this._adminReturn = this.route;
     if (this.ws) {
       this.ws.s.saveLocal();
       this.ws.destroy();
@@ -365,6 +380,7 @@ export class App {
     }
     this.me = null;
     this.adminArea = null;
+    this.expertArea = null;
     this._adminLogPaused = false;
     logger.enabled = false;
     this.showSignin({ error: 'Your sign-in has ended. Sign in again to continue; your unsaved work is kept in this browser.' });
@@ -380,6 +396,17 @@ export class App {
     if (this.quizView && this.quizView.el !== el) {
       this.quizView.destroy(); // the quiz's answers are with the study; its recordings are closed
       this.quizView = null;
+    }
+    if (this.snippetsView && this.snippetsView.el !== el) {
+      this.snippetsView.destroy(); // the training path's snippets (js/training/snippets.js): their recordings are closed
+      this.snippetsView = null;
+    }
+    // the snippets wait, with their recordings open, while the recognition check is taken from them; anything
+    // else shown (a Loading… page aside) closes them
+    const waiting = this.suspendedSnippets;
+    if (waiting && route !== null && waiting.el !== el && !(this.quizView && this.quizView.el === el)) {
+      waiting.destroy();
+      this.suspendedSnippets = null;
     }
     clear(this.content);
     this.content.appendChild(el);
@@ -450,7 +477,7 @@ export class App {
     document.title = { signin: 'ElectroTag – sign in', home: 'ElectroTag – your recordings', open: 'ElectroTag – open a recording',
       annotate: `ElectroTag – ${this.ws ? this.ws.s.recording.fileName : 'annotate'}`, review: 'ElectroTag – practice review',
       training: 'ElectroTag – training programme', quiz: 'ElectroTag – quiz' }[route]
-      || (ADMIN_ROUTE.test(route) ? 'ElectroTag – admin' : 'ElectroTag');
+      || (ADMIN_ROUTE.test(route) ? 'ElectroTag – admin' : EXPERT_ROUTE.test(route) ? 'ElectroTag – expert work' : 'ElectroTag');
   }
 
   // The interaction log records annotating; what an administrator does in the admin area is not
@@ -474,7 +501,7 @@ export class App {
   async _onHash() {
     if (this._settingHash) { this._settingHash = false; return; }
     const want = (location.hash || '').replace(/^#/, '');
-    if (want === this.route || (!VIEWS.includes(want) && !ADMIN_ROUTE.test(want))) return;
+    if (want === this.route || (!VIEWS.includes(want) && !ADMIN_ROUTE.test(want) && !EXPERT_ROUTE.test(want))) return;
     if (this.ws) {
       // Back or forward while a recording is open: the same as its Close button.
       this._settingHash = true;
@@ -484,6 +511,7 @@ export class App {
     }
     if (!this.me) { if (want !== 'signin') this.showSignin(); return; }
     if (ADMIN_ROUTE.test(want)) { if (this.isAdmin) this.showAdmin(want); else this.showHome(); return; }
+    if (EXPERT_ROUTE.test(want)) { if (this.isExpert) this.showExpert(want); else this.showHome(); return; }
     if (want === 'quiz') {
       if (this.quizSetId) this.showQuiz(this.quizSetId, { fromTraining: this._fromTraining });
       else this.showHome();
@@ -529,17 +557,39 @@ export class App {
     });
   }
 
+  /**
+   * The expert area (js/expert/area.js, loaded the first time it is needed): `route` is #expert or
+   * #expert-<section>. For experts and administrators; anyone else goes home.
+   */
+  async showExpert(route = 'expert', params = null) {
+    if (!this.isExpert) { this.showHome(); return; }
+    await this._withParts(['expert', 'expertSections'], EXPERT_ROUTE.test(route) ? route : 'expert', async ({ ExpertArea }, { expertSectionForRoute }) => {
+      const section = expertSectionForRoute(route);
+      if (!section) route = 'expert';
+      if (!this.expertArea || this.expertArea.backend !== this.backend || this.expertArea.annotatorId !== this.me.annotator_id) {
+        this.expertArea = new ExpertArea(this);
+        await this.expertArea.ready();
+      }
+      if (EXPERT_ROUTE.test(this.route || '') && this.content.contains(this.expertArea.el)) this._setRoute(route);
+      else this._render(this.expertArea.el, route);
+      await this.expertArea.show(section || 'overview', params);
+    });
+  }
+
   async reloadHome() {
     await this.loadAssignments();
     this.showHome();
   }
 
-  /** The short-segment quiz of a reference set (one of me.quizzes). */
-  showQuiz(setId, { fromTraining = false } = {}) {
+  /**
+   * The short-segment quiz of a reference set (one of me.quizzes). From the snippets (the recognition check),
+   * `shared` lends it the recordings already open there and `onLeave` goes back to them.
+   */
+  showQuiz(setId, { fromTraining = false, shared = null, onLeave = null } = {}) {
     this._fromTraining = Boolean(fromTraining);
     this.quizSetId = setId;
     return this._withParts(['quiz'], 'quiz', ({ QuizView }) => {
-      const view = new QuizView(this, setId);
+      const view = new QuizView(this, setId, { shared, onLeave });
       if (this.quizView) this.quizView.destroy();
       this.quizView = view;
       this._render(view.el, 'quiz');
@@ -564,7 +614,7 @@ export class App {
         next_stage: data.next ? data.next.stage : null, next_recording: data.next ? data.next.recording_id : null, message });
       this._fromTraining = true;
       const page = trainingPath(data, {
-        annotatorId: this.me.annotator_id, message,
+        app: this, annotatorId: this.me.annotator_id, message, // the path opens the tour and the snippets itself
         onContinue: (next) => {
           logger.event('stage_started', { stage: next.stage, recording: next.recording_id, repeat: Boolean(next.repeat) });
           const item = (this.assignments.items || []).find((i) => i.recording_id === next.recording_id && i.mode === next.stage) ||
@@ -640,47 +690,14 @@ export class App {
       note: `${aid}${target.display_name ? ` (${target.display_name})` : ''} saved version ${target.attempt}. Open the recording from this computer: its fingerprint is checked against the study's copy, then the saved annotations are shown read only, ready to review.` } });
   }
 
-  /** The file for a review is the study's copy (its fingerprint), or one the reviewer confirms is the same recording. */
-  async _openForReview(recording, fp, view) {
-    const t = view.purpose.target;
-    const m = t.manifest || {};
-    const want = m.fingerprint || {};
-    view.step('match', 'Comparing it with the study\'s copy…');
-    if (!(want.hex === fp.hex && (!want.size_bytes || Number(want.size_bytes) === Number(recording.sizeBytes)))) {
-      const same = recording.fileName === m.file_name && Number(recording.sfreq) === Number(m.sfreq) && Number(recording.nSamples) === Number(m.n_samples);
-      if (!same) {
-        view.step('match', 'Not the recording that was annotated', 'failed');
-        view.showProblem(`This file is not ${t.file_name}: its fingerprint differs from the study's copy. Choose the file that ${t.annotator_id} annotated.`, [view.chooseAgainButton()]);
-        return;
-      }
-      const go = await showDialog({ title: 'Not exactly the study\'s copy', logText: 'review fingerprint differs',
-        body: h('p.dialog-text', {}, `This file has the name, sampling rate and length of ${t.file_name}, but its fingerprint differs from the study's copy, so its contents are not exactly the same. Review with it only if you are sure it is the same recording.`),
-        buttons: [{ label: 'Choose another file', value: false }, { label: 'Review with it anyway', value: true, kind: 'primary' }], cancelValue: false });
-      if (!go || !this._stillOpen(view)) { if (this._stillOpen(view)) view.showMessage('Choose the study\'s copy of the recording.', [view.chooseAgainButton()]); return; }
-    }
-    view.step('match', `This is ${t.file_name}: version ${t.attempt} of ${t.annotator_id}`, 'done');
-    const parts = await this._openingParts(['session', 'workspace', 'reviewPass'], () => this._openForReview(recording, fp, view));
+  /**
+   * Someone's saved work opened for a purpose (an administrator's review, the expert area's corrections,
+   * replays, adjudications ...): js/views/purposes.js checks the file against the study's copy and opens it.
+   */
+  async _openForPurpose(recording, fp, view) {
+    const parts = await this._openingParts(['purposes'], () => this._openForPurpose(recording, fp, view));
     if (!parts || !this._stillOpen(view)) return;
-    const [{ AnnotationSession }, { Workspace }, { ReviewPass, savedReviewMessage }] = parts;
-    let session;
-    try {
-      session = new AnnotationSession({ backend: this.backend, recording, manifest: m, recordingId: t.recording_id, mode: 'standard', contextId: '',
-        me: this.me, catalogue: this.catalogue, sha256: fp.hex, readOnly: true });
-      session.store.reset((t.annotations || []).filter((a) => this.catalogue.has(a.label)));
-    } catch (exc) {
-      view.showProblem(exc.message, [view.chooseAgainButton()]);
-      return;
-    }
-    if (this.ws) this.ws.destroy();
-    const ws = new Workspace(this, session, { kind: 'reviewing' });
-    ws.reviewBack = view.purpose.back;
-    this.ws = ws;
-    this._render(ws.el, 'admin-review');
-    ws.mount(this.content);
-    new ReviewPass(ws, { target: t, backend: this.backend, onSaved: async (review) => { // eslint-disable-line no-new
-      await savedReviewMessage(review);
-      if (this.ws === ws) this.leaveRecording(ws, 'review saved');
-    } });
+    await parts[0].openForPurpose(this, recording, fp, view);
   }
 
   /** The annotator's read-only view of a reviewed recording, with Open to revise when the study allows it. */
@@ -786,7 +803,7 @@ export class App {
     if (!this._stillOpen(view)) return;
     if (!(await this._checkKeptCopy(recording, fp, view))) return;
     view.step('fp', 'Checked the file', 'done');
-    if (view.purpose && view.purpose.kind === 'review') { await this._openForReview(recording, fp, view); return; }
+    if (view.purpose && view.purpose.target) { await this._openForPurpose(recording, fp, view); return; }
     view.step('match', this.backend.isDemo ? 'Looking it up in the demonstration study…' : 'Asking the study whether this is one of your recordings…');
     let m;
     try {
@@ -797,6 +814,13 @@ export class App {
         ...(view.purpose && view.purpose.kind === 'feedback' ? { view_saved: true } : {}),
       });
     } catch (exc) {
+      if (exc.code === 'training_required' && this._stillOpen(view)) {
+        // a study recording, while study work waits for the competency assessment (js/training/path.js)
+        view.step('match', 'A study recording: locked until you pass your assessment', 'failed');
+        view.showProblem(exc.message, [h('button.btn.primary', { type: 'button', 'data-log': 'training-path', onclick: () => this.showTraining() },
+          'Go to my training path'), view.chooseAgainButton(false)]);
+        return;
+      }
       view.step('match', 'Asking the study', 'failed');
       if (exc.status !== 401 && this._stillOpen(view)) {
         // Asking is a read: the person may ask again with the file already read and checked.
@@ -1012,6 +1036,7 @@ export class App {
       await this.openReview(s, result.feedback);
       return;
     }
+    if (s.mode === 'guided' && ws.coach && typeof ws.coach.afterSaved === 'function') { await ws.coach.afterSaved(this, result); return; }
     if (s.mode === 'guided') {
       const g = ws.coach && ws.coach.summary;
       const coach = partNow('coach');
@@ -1019,7 +1044,13 @@ export class App {
       await this.showTraining();
       return;
     }
-    if (this.me.programme && s.contextId === this.me.programme.set_id) { this.pathMessage = 'Recording saved.'; await this.showTraining(); return; }
+    if (this.me.programme && s.contextId === this.me.programme.set_id) {
+      // the last assessment recording: the training path says how it went (passed, or waiting for the study team)
+      const a = s.mode === 'assessment' ? result.assessment : null;
+      this.pathMessage = a && a.complete ? 'Your last assessment recording is saved.' : 'Recording saved.';
+      await this.showTraining();
+      return;
+    }
     const next = result.next ? (this.assignments.items || []).find((i) => i.recording_id === result.next) : null;
     const demo = this.backend.isDemo ? `\n\n${DEMO_NOTICE}` : '';
     const milestone = reached.length ? `\n\nMilestone reached: ${reached.map((m) => m.name).join(', ')}.` : '';
@@ -1089,6 +1120,7 @@ export class App {
       viewerStats: ws ? { ...ws.viewer.stats } : null, currentLabel: ws ? ws.currentLabel : null, scope: ws ? ws.scope : null,
       loggedEvents: logger.sent + logger.queue.length, at: nowLocalIso(),
       admin: this.adminArea && ADMIN_ROUTE.test(this.route || '') ? this.adminArea.debugState() : null,
+      expert: this.expertArea && EXPERT_ROUTE.test(this.route || '') ? this.expertArea.debugState() : null, roles: this.roles,
     };
   }
 }

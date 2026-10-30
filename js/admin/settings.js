@@ -3,15 +3,20 @@
 // channels to hide and channel types by name pattern, how the next recording is chosen, the types
 // on the number keys, the shortest annotation, whether finished recordings may be revised, the
 // comfort of long sessions (break reminders, the pause after a while without input, the check of what
-// has been viewed before Save and Finish), the game elements of the home page, and the interaction
-// log with its notice.
+// has been viewed before Save and Finish), the game elements of the home page, corrections and the
+// adjudication of disagreements with their matching rules, who may watch replays of sessions, the
+// training path's policy (the stages a trainee may skip and what real study work waits for), and the
+// interaction log with its notice.
 //
 // The answer to Save appears in the bar that stays at the foot of the window, with the field to
 // correct focused; the bar says when there are unsaved changes, and leaving the section or the
 // page with unsaved changes asks first.
 
 import { h, clear } from '../ui/dom.js';
-import { CHANNEL_COLOUR_CHOICES, CHANNEL_TYPES, SCALING_TYPES, SELECTION, deepCopy, fromMicrovolts, mergeSettings, parseNumber, settingsProblems, toMicrovolts } from './model.js';
+import {
+  CHANNEL_COLOUR_CHOICES, CHANNEL_TYPES, MATCH_CRITERIA, SCALING_TYPES, SELECTION, deepCopy, fromMicrovolts, mergeSettings, parseNumber, settingsProblems, toMicrovolts,
+} from './model.js';
+import { REASON_RULES, SKIPPABLE_STAGES, TRAINING_GATES, expertSettingsProblems } from './settings_checks.js';
 import { actionButton, card, checkbox, confirmInline, field, loading, messageArea, numberInput, radios, sectionHead, select, textArea, textInput } from './ui.js';
 
 /** A number from a field, or an error that names the field and knows which control to focus. */
@@ -107,6 +112,10 @@ export class SettingsSection {
     const an = st.annotation || {};
     const ld = st.loading || {};
     const gm = st.gamification || {};
+    const rv = st.review || {};
+    const mt = rv.matching || {};
+    const tr = st.training || {};
+    const rp = st.replay || {};
 
     const name = textInput({ value: this.data.name || '', name: 'study_name' });
     // filters
@@ -176,6 +185,32 @@ export class SettingsSection {
     games.input.addEventListener('change', syncGames);
     board.input.addEventListener('change', syncGames);
     syncGames();
+    // corrections, adjudication and replays
+    const corrections = checkbox('Let experts correct saved work, as new versions linked to the original', rv.corrections !== false);
+    const showCorrections = checkbox('Show annotators the corrections of their work, with the reasons given', rv.show_corrections_to_annotators !== false);
+    const showOutcomes = checkbox('Show annotators the decisions on the conflicts in their work (who else marked what is never said)', rv.show_outcomes_to_annotators !== false);
+    const kDefault = numberInput({ value: rv.k_default ?? 2, min: 2, max: 6, step: 1 });
+    kDefault.name = 'k_default';
+    const reasons = select(Object.entries(REASON_RULES), rv.reason_required || 'always');
+    const criterion = select(Object.entries(MATCH_CRITERIA), mt.match_criterion || 'iou');
+    const overlap = numberInput({ value: mt.iou_threshold ?? 0.2, min: 0, max: 0.99, step: 0.05 });
+    const onsetTol = numberInput({ value: mt.onset_tolerance_s ?? 0.5, min: 0, max: 60, step: 0.1 });
+    const offsetTol = numberInput({ value: mt.offset_tolerance_s ?? 0.5, min: 0, max: 60, step: 0.1 });
+    const channelShare = numberInput({ value: mt.channel_jaccard ?? 0.5, min: 0, max: 1, step: 0.05 });
+    const goldMin = numberInput({ value: rv.gold_min_items ?? 3, min: 1, max: 100, step: 1 });
+    const replays = checkbox('Let experts and administrators replay annotators\' sessions step by step, from the interaction log', rp.enabled !== false);
+    const traineesWatch = checkbox('Let trainees watch the sessions of experts who have agreed to it', rp.trainees_watch_experts !== false);
+    // the training path
+    const skippable = new Set(Array.isArray(tr.skippable) ? tr.skippable : Object.keys(SKIPPABLE_STAGES));
+    const skipBoxes = Object.entries(SKIPPABLE_STAGES).map(([stage, text]) => {
+      const box = checkbox(text, skippable.has(stage));
+      box.input.dataset.stage = stage;
+      return box;
+    });
+    const gate = select(Object.entries(TRAINING_GATES), tr.gate || 'met');
+    gate.name = 'training_gate';
+    const tour = checkbox('Begin the training path with a tour of the platform on a practice recording', tr.tour !== false);
+    const snippetsQuiz = checkbox('Count the snippets stage as done only once its recognition check is finished', tr.snippets_quiz_required === true);
     // logging
     const interactions = checkbox('Record how annotators use ElectroTag (clicks, keys and what is on the screen; never what they type)', lg.interactions !== false);
     const pointer = numberInput({ value: lg.pointer_hz ?? 5, min: 0, max: 60, step: 1 });
@@ -208,10 +243,22 @@ export class SettingsSection {
           allow_reviews: reviews.input.checked, show_reviews_to_annotators: showReviews.input.checked,
           confidence: confidence.value() },
         gamification: { enabled: games.input.checked, leaderboard: board.input.checked, leaderboard_viewed_only: boardFull.input.checked },
+        review: { corrections: corrections.input.checked, show_corrections_to_annotators: showCorrections.input.checked,
+          k_default: numberOf(kDefault, 'Annotators per task', { min: 2, max: 6, integer: true }),
+          show_outcomes_to_annotators: showOutcomes.input.checked, reason_required: reasons.value,
+          // in the order the study keeps them, so that an unchanged block is not sent again
+          matching: { ...mt, match_criterion: criterion.value, iou_threshold: numberOf(overlap, 'Overlap needed', { min: 0, max: 0.99 }),
+            onset_tolerance_s: numberOf(onsetTol, 'Start tolerance', { min: 0, max: 60 }), offset_tolerance_s: numberOf(offsetTol, 'End tolerance', { min: 0, max: 60 }),
+            channel_jaccard: numberOf(channelShare, 'Share of channels in common', { min: 0, max: 1 }) },
+          gold_min_items: numberOf(goldMin, 'Known-answer recordings before accuracy counts', { min: 1, max: 100, integer: true }) },
+        replay: { enabled: replays.input.checked, trainees_watch_experts: traineesWatch.input.checked },
+        training: { skippable: skipBoxes.filter((b) => b.input.checked).map((b) => b.input.dataset.stage), gate: gate.value,
+          tour: tour.input.checked, snippets_quiz_required: snippetsQuiz.input.checked },
         logging: { interactions: interactions.input.checked, pointer_hz: numberOf(pointer, 'Pointer samples per second', { min: 0, max: 60 }),
           idle_after_s: numberOf(idle, 'Idle after', { min: 5, max: 3600 }) },
       };
-      const problems = settingsProblems(mergeSettings(st, wanted), labels.map((l) => l.label));
+      const merged = mergeSettings(st, wanted);
+      const problems = [...settingsProblems(merged, labels.map((l) => l.label)), ...expertSettingsProblems(merged)];
       if (problems.length) throw new Error(problems[0]);
       return wanted;
     };
@@ -281,6 +328,32 @@ export class SettingsSection {
         games, board, boardFull,
         h('p.caption', {}, 'Milestones reward finishing recordings and viewing them in full, never speed or the number of annotations.'),
         h('p.caption.games-warning', {}, 'Game elements may change how annotators work. If they are on, say so in the study\'s methods.')),
+      card('Corrections and adjudication',
+        h('p.caption', {}, 'An expert\'s correction is a new version of the saved work, credited to the expert; the original never changes, and the analyses use the originals. '
+          + 'These choices apply to the expert area\'s corrections, tasks and adjudication as the study offers them.'),
+        corrections, showCorrections, showOutcomes,
+        h('div.form-grid', {},
+          field('Annotators per task', kDefault, { hint: 'When the study shares recordings out as tasks: between 2 and 6.' }),
+          field('A reason for each decision', reasons),
+          field('Known-answer recordings before accuracy counts', goldMin, { hint: 'A person\'s measured accuracy on known-answer tasks weighs their marks once this many are scored.' })),
+        h('h3', {}, 'When two marks are the same'),
+        h('p.caption', {}, 'The rules that find disagreements between annotators, as in the agreement analysis.'),
+        h('div.form-grid', {},
+          field('Matched', criterion), field('Overlap needed', overlap, { hint: 'From 0 (any overlap) to just below 1.' }),
+          field('Start tolerance (s)', onsetTol), field('End tolerance (s)', offsetTol),
+          field('Share of channels in common', channelShare, { hint: 'Below it, two marks differ in their channels. From 0 to 1.' })),
+        h('h3', {}, 'Replays'),
+        replays, traineesWatch,
+        h('p.caption', {}, 'Each expert decides for their own sessions in the expert area, and every change is in the audit log. Replays use the interaction log for teaching and checking work: say so in the study\'s information for participants, and check that the ethics approval covers it.')),
+      card('Training policy',
+        h('p.caption', {}, 'The training path has five stages: a tour of the platform, examples of each artifact type, learning with '
+          + 'the experts, practice on one\'s own and the blind competency assessment. Choose the stages a trainee may skip; the '
+          + 'assessment is never skipped, and every skip is noted in the trainee\'s progress and their competency report.'),
+        h('fieldset.admin-checks.skip-stages', {}, h('legend', {}, 'Trainees may skip'), h('div.radio-col', {}, skipBoxes)),
+        field('Real study work waits', gate, { hint: 'Experts and administrators never wait.' }),
+        tour, snippetsQuiz,
+        h('p.caption', {}, 'While study work waits, a trainee\'s study recordings are listed as locked, with the reason. After an '
+          + 'assessment that does not meet the criteria, reopen the training or give a new assessment on the trainee\'s page in People.')),
       card('Interaction log',
         interactions,
         h('div.form-grid', {}, field('Pointer samples per second over the EEG', pointer, { hint: '0 records none.' }), field('Idle after (seconds without input)', idle)),

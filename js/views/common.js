@@ -43,18 +43,27 @@ export function starIcons(stars, maxStars) {
   return out;
 }
 
-/** The header bar. Administrators also get the way into the admin area (or, inside it, back to their recordings). */
-export function appHeader(app, { title = '', admin = false, tools = null } = {}) {
+/**
+ * The header bar. Administrators also get the way into the admin area, and experts into the expert area
+ * (or, inside either, back to their recordings).
+ */
+export function appHeader(app, { title = '', admin = false, expert = false, tools = null } = {}) {
   const me = app.me;
   const study = me && me.study ? me.study.name : app.backend && app.backend.health ? app.backend.health.study : '';
-  const switcher = app.isAdmin
-    ? h('button.btn.quiet.admin-switch', { type: 'button', 'data-log': admin ? 'leave-admin' : 'admin',
-      onclick: () => (admin ? app.showHome() : app.showAdmin('admin')) }, admin ? 'My recordings' : 'Admin')
-    : null;
+  const switcher = admin || expert
+    ? [h('button.btn.quiet.admin-switch', { type: 'button', 'data-log': admin ? 'leave-admin' : 'leave-expert', onclick: () => app.showHome() }, 'My recordings'),
+      // an administrator in the expert area goes back to the admin area in one press
+      expert && app.isAdmin ? h('button.btn.quiet.admin-switch', { type: 'button', 'data-log': 'expert-to-admin', onclick: () => app.showAdmin('admin') }, 'Admin') : null]
+    : app.isAdmin
+      ? h('button.btn.quiet.admin-switch', { type: 'button', 'data-log': 'admin', onclick: () => app.showAdmin('admin') }, 'Admin')
+      : app.isExpert
+        ? h('button.btn.quiet.admin-switch', { type: 'button', 'data-log': 'expert', onclick: () => app.showExpert('expert') }, 'Expert work')
+        : null;
   return h('header.app-header', {},
     h('div.brand', {}, brandMark(26), h('span.brand-name', {}, 'ElectroTag'),
       study && !(app.backend && app.backend.isDemo) ? h('span.brand-study', {}, study) : null, title ? h('span.brand-study', {}, title) : null,
       admin ? h('span.chip.active.admin-chip', {}, 'Admin') : null,
+      expert ? h('span.chip.active.admin-chip', {}, 'Expert') : null,
       app.backend && app.backend.isDemo ? h('span.chip.warning', {}, 'Demonstration') : null),
     tools,
     me ? h('div.who', {},

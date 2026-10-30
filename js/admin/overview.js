@@ -1,7 +1,8 @@
 // Overview: the study in numbers, the latest changes from the audit log and the latest saved work.
 
 import { h, clear } from '../ui/dom.js';
-import { MODES, opText, routeForSection, whenText } from './model.js';
+import { MODES, routeForSection, whenText } from './model.js';
+import { auditSummary, opText } from './audit_words.js';
 import { card, dataTable, loading, messageArea, recordingName, sectionHead } from './ui.js';
 
 export class OverviewSection {
@@ -12,7 +13,7 @@ export class OverviewSection {
     this.recent = dataTable([
       { title: 'When', render: (e) => whenText(e.at) },
       { title: 'Who', render: (e) => e.by },
-      { title: 'What', render: (e) => h('span', {}, h('span.caption.block', {}, opText(e.op)), e.summary) },
+      { title: 'What', render: (e) => h('span', {}, h('span.caption.block', {}, opText(e.op)), auditSummary(e, this.recentEntries || [])) },
     ], [], { empty: 'Nothing has been changed yet.', pageSize: 10 });
     this.saved = dataTable([
       { title: 'When', render: (r) => whenText(r.at) },
@@ -50,14 +51,15 @@ export class OverviewSection {
     clear(this.tiles);
     this.tiles.append(
       tile(c.recordings, 'Recordings', 'registered for the study', 'recordings'),
-      tile(c.annotators, 'Annotators', `and ${c.admins ?? 0} administrator${c.admins === 1 ? '' : 's'}`, 'annotators'),
+      tile(c.annotators, 'Annotators', `${c.experts ? `${c.experts} expert${c.experts === 1 ? '' : 's'} ` : ''}and ${c.admins ?? 0} administrator${c.admins === 1 ? '' : 's'}`, 'annotators'),
       tile(c.assignments, 'Assigned', 'of every kind, training included (Progress counts each kind apart)', 'assignments'),
       tile(c.done, 'Done', c.assignments ? `${Math.round((100 * (c.done || 0)) / c.assignments)}% of the assigned` : '', 'progress'),
       tile(c.in_progress, 'In progress', '', 'progress'),
       tile(c.todo, 'To do', '', 'progress'),
       tile(c.problems_open, 'Open problems', c.unusable ? `${c.unusable} cannot be annotated` : 'reported by annotators', 'problems'),
       tile(c.reviewed, 'Reviewed', 'saved recordings with a review', 'results'));
-    this.recent.update(o.recent || []);
+    this.recentEntries = o.recent || [];
+    this.recent.update(this.recentEntries);
     this.saved.update(o.last_saved || []);
   }
 }

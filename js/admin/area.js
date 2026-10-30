@@ -13,7 +13,7 @@
 import { h, clear } from '../ui/dom.js';
 import { appHeader, icon } from '../views/common.js';
 import { local } from '../util.js';
-import { GROUPS, SECTIONS, findMatches, foldedGroups, groupOf, routeForSection, sectionsOf } from './model.js';
+import { EXPERT_LINKS, GROUPS, SECTIONS, findMatches, foldedGroups, groupOf, routeForSection, sectionsOf } from './model.js';
 import { OverviewSection } from './overview.js';
 import { ProgressSection } from './progress.js';
 import { AnnotatorsSection } from './annotators.js';
@@ -25,11 +25,12 @@ import { ResultsSection } from './results.js';
 import { RecordsSection } from './records.js';
 import { SettingsSection } from './settings.js';
 import { ProblemsSection } from './problems.js';
+import { TasksSection } from './tasks.js';
 
 const KINDS = {
   overview: OverviewSection, progress: ProgressSection, annotators: AnnotatorsSection, recordings: RecordingsSection,
   assignments: AssignmentsSection, training: TrainingSection, analyses: AnalysesSection, results: ResultsSection,
-  records: RecordsSection, settings: SettingsSection, problems: ProblemsSection,
+  records: RecordsSection, settings: SettingsSection, problems: ProblemsSection, tasks: TasksSection,
 };
 
 const CSS_HREF = new URL('../../admin.css', import.meta.url).href;
@@ -75,7 +76,7 @@ export class AdminArea {
     this.main = h('main.admin-main', { id: 'admin-main' });
     this.find = this._buildFind();
     const demo = this.backend.isDemo
-      ? h('aside.note.admin-demo-note', { 'aria-label': 'Demonstration' }, 'Demonstration: everything here is kept in this browser. The analyses, consensus references and the results zip need a study server or Firebase.')
+      ? h('aside.note.admin-demo-note', { 'aria-label': 'Demonstration' }, 'Demonstration: everything here is kept in this browser. The analyses, consensus references, tasks and the results zip need a study server or Firebase.')
       : null;
     // The first Tab stop: straight to the section shown, past the header and the menu.
     const skip = h('button.skip-link', { type: 'button', 'data-log': 'admin-skip', onclick: () => {
@@ -109,6 +110,8 @@ export class AdminArea {
         onclick: () => this.fold(g.key, !this.folds[g.key]) }, icon('chevron-down'), h('span', {}, g.title));
       const list = h('ul', { id: listId }, sectionsOf(g.key).map((s) => h('li', {},
         h('a.admin-nav-link', { href: `#${s.route}`, 'data-section': s.key, 'data-n': String(SECTIONS.indexOf(s) + 1).padStart(2, '0') }, s.title))));
+      // the expert area's parts that administrators run too (they open in the expert area)
+      for (const x of EXPERT_LINKS.filter((l) => l.group === g.key)) list.append(h('li', {}, h('a.admin-nav-link.to-expert', { href: `#${x.route}`, 'data-expert': x.route, title: 'Opens in the expert area' }, x.title, icon('arrow-up-right'))));
       const el = h('div.admin-group', { 'data-group': g.key }, toggle, list);
       this.groupEls.set(g.key, { el, toggle, list });
       nav.append(el);

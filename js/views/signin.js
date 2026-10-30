@@ -61,11 +61,12 @@ export function signinView(app, { message = '', error = '' } = {}) {
   else studyLine = h('p.subtitle', {}, `Study: ${(b.health && b.health.study) || 'ElectroTag study'}`, h('br'), h('span.caption', {}, b.server || 'this site'));
 
   const demoHint = b && b.isDemo ? h('div.note.demo-hint', {},
-    h('p', {}, 'Sign in as ', h('b', {}, 'A01'), ' to annotate, as ', h('b', {}, 'T01'), ' to follow the training programme, or as ',
-      h('b', {}, 'ADMIN'), ' to run the study in the admin area. The password is ', h('b', {}, 'demo'), '.'),
+    h('p', {}, 'Sign in as ', h('b', {}, 'A01'), ' to annotate, as ', h('b', {}, 'T01'), ' to follow the training programme, as ',
+      h('b', {}, 'E01'), ' for the expert area, or as ', h('b', {}, 'ADMIN'), ' to run the study in the admin area. The password is ', h('b', {}, 'demo'), '.'),
     h('div.btn-row', {},
       h('button.btn.small', { type: 'button', onclick: () => { idField.value = 'A01'; pw.value = 'demo'; pw.focus(); } }, 'Fill in A01'),
       h('button.btn.small', { type: 'button', onclick: () => { idField.value = 'T01'; pw.value = 'demo'; pw.focus(); } }, 'Fill in T01'),
+      h('button.btn.small', { type: 'button', onclick: () => { idField.value = 'E01'; pw.value = 'demo'; pw.focus(); } }, 'Fill in E01'),
       h('button.btn.small', { type: 'button', onclick: () => { idField.value = 'ADMIN'; pw.value = 'demo'; pw.focus(); } }, 'Fill in ADMIN'))) : null;
 
   // Where the study is: the address of a study server (not for Firebase, which config.json names).

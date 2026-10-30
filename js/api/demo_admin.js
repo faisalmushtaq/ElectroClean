@@ -14,14 +14,16 @@ import { CATALOGUE, DEFAULT_ANNOTATION, DEFAULT_SETTINGS } from './demo_catalogu
 import { ApiError } from './http.js';
 import { sha256Hex } from '../eeg/sha256.js';
 import { newId, nowLocalIso } from '../util.js';
+import { loadPart } from '../lazy.js';
 import {
   checkAnnotatorId, checkEmail, criteriaFromRows, criteriaRows, deepCopy, mergeSettings,
-  METRICS, plural, settingChangeText, settingsProblems,
+  METRICS, parseRoles, plural, primaryRole, rolesOf, rolesText, settingChangeText, settingsProblems,
 } from '../admin/model.js';
 
 export const ADMIN_ID = 'ADMIN';
 export const DEMO_LOGGING_NOTICE = 'This demonstration records how you use ElectroTag (times, clicks, keys and what is on ' +
-  'screen) and keeps the record in this browser only. It never records what you type, such as notes or passwords. ' +
+  'screen) and keeps the record in this browser only, where the demonstration\'s experts can replay a session from it. ' +
+  'It never records what you type, such as notes or passwords. ' +
   "In a real study the record goes to the study team, as the study's information sheet explains.";
 const MANIFEST_SCHEMA = 'electrotag.web_manifest';
 const MAX_MANIFEST_BYTES = 8 * 1024 * 1024;
@@ -47,6 +49,20 @@ const SERVER_ONLY = {
   set_remove_recording: 'take recordings out of a reference set',
   quiz_item_add: 'add segments to a quiz',
   quiz_item_remove: 'remove segments from a quiz',
+  // Tasks (electrotag/web/tasks.py): the share-out, the windows, the letters and the known-answer scores are the
+  // server's own code, and the sandbox's recordings are given to A01 whole.
+  tasks_preview_get: 'work out a share-out of recordings among annotators (tasks)',
+  tasks_create: 'share recordings out among annotators as tasks',
+  tasks_list: 'list the tasks that share recordings out',
+  task_update: 'change a task',
+  task_remove: 'remove a task',
+  quality_list: "measure annotators' accuracy on known answers",
+  // Correct the marks (electrotag/web/correct_marks.py): exercises are made with the study's Python code; the
+  // sandbox's ready-made one is in the expert area (demo_planted.js).
+  set_planted_get: 'look at correct-the-marks exercises here (the expert area has the sandbox\'s ready-made one)',
+  set_planted_make: 'make correct-the-marks exercises (the expert area has the sandbox\'s ready-made one to try)',
+  set_planted_from: 'make correct-the-marks exercises (the expert area has the sandbox\'s ready-made one to try)',
+  set_planted_remove: 'remove correct-the-marks exercises',
 };
 
 const bad = (message, code = 'bad_request', status = 400) => new ApiError(status, code, message);
@@ -70,6 +86,40 @@ const INVITE_PROBLEMS = {
 /** Why an administrator's account is not given an invitation link (electrotag/web/admin.py, ADMIN_NOT_INVITED). */
 const ADMIN_NOT_INVITED = 'Invitation links are for annotators: a link sent by email must not open the admin area. Give an administrator a password instead (a temporary one, or one you choose).';
 const inviteProblem = (reason) => new ApiError(INVITE_PROBLEMS[reason][0], `invite_${reason}`, INVITE_PROBLEMS[reason][1]);
+/** The roles that can be given, those kept for later, and the IDs that are never accounts (electrotag/web/store.py). */
+const GIVEN_ROLES = ['annotator', 'expert', 'admin'];
+const RESERVED_ROLES = ['participant'];
+const RESERVED_IDS = ['ADJUDICATED', 'REFERENCE'];
+
+/**
+ * The roles a request asks for, as admin.py roles_from: `roles` (a list), `role` (one, the older form) or both when
+ * they agree; null when neither is given and none is required.
+ */
+export function rolesFrom(body, { required }) {
+  const { role, roles } = body;
+  const given = (v) => v !== undefined && v !== null;
+  if (!given(role) && !given(roles)) return required ? ['annotator'] : null;
+  let asked = [];
+  if (given(roles)) {
+    if (!Array.isArray(roles) || !roles.length || !roles.every((r) => typeof r === 'string')) {
+      throw bad('roles must be a list of at least one role (annotator, expert, admin)');
+    }
+    asked = [...roles];
+  }
+  if (given(role)) {
+    if (typeof role !== 'string') throw bad('role must be one of annotator, expert, admin');
+    if (!asked.length) asked = [role];
+  }
+  for (const r of [...asked, ...(typeof role === 'string' ? [role] : [])]) {
+    if (RESERVED_ROLES.includes(r)) throw bad(`The role '${r}' is kept for a later kind of study and cannot be given yet.`, 'role_not_offered');
+    if (!GIVEN_ROLES.includes(r)) throw bad('role must be one of annotator, expert, admin');
+  }
+  const kept = parseRoles(asked);
+  if (given(roles) && given(role) && role !== primaryRole(kept)) {
+    throw bad(`role (${role}) and roles (${kept.join(', ')}) say different things: role is the first of the roles, in the order admin, expert, annotator; give roles alone`);
+  }
+  return kept;
+}
 
 /** A random invitation token (32 bytes, URL-safe base64), as the study server makes them. */
 export function inviteToken() {
@@ -188,9 +238,35 @@ export function manifestProblem(m) {
 export const EXAMPLE_PROVENANCE = Object.freeze({ method: 'single_expert', experts: ['EXAMPLE'], adjudicator: '', sources: [], placeholder: true,
   source: 'simulated recording; ground truth used as reference' });
 
+/** The sandbox's built-in expert, who also annotates (added to a sandbox made before experts existed). */
+export function builtInExpert() {
+  return { annotator_id: 'E01', display_name: 'Demo expert', email: null, role: 'expert', roles: ['expert', 'annotator'], status: 'active',
+    created_at: BUILT_IN_AT, last_seen: null, notes: '', programme: null, builtin: true };
+}
+
+/** The version of the sandbox's admin state: 2 since accounts hold a set of roles and the expert E01 exists. */
+export const ADMIN_STATE_VERSION = 2;
+
+/** A sandbox kept by an earlier version brought up to date: roles as sets, E01, and the newer settings blocks. */
+export function upgradeAdminState(s) {
+  if (!s || typeof s !== 'object') return s;
+  for (const u of s.users || []) {
+    if (!Array.isArray(u.roles) || !u.roles.length) u.roles = rolesOf(u);
+    u.role = primaryRole(u.roles);
+  }
+  if ((s.version || 1) < 2 && !(s.users || []).some((u) => u.annotator_id === 'E01')) (s.users || (s.users = [])).push(builtInExpert());
+  const defaults = defaultSettings();
+  s.settings = s.settings || {};
+  for (const [block, values] of Object.entries(defaults)) {
+    if (!s.settings[block] || typeof s.settings[block] !== 'object') s.settings[block] = deepCopy(values);
+  }
+  s.version = ADMIN_STATE_VERSION;
+  return s;
+}
+
 export function initialAdminState({ recordings, trainingSet }) {
   const user = (annotator_id, display_name, role, programme = null) => ({
-    annotator_id, display_name, email: null, role, status: 'active', created_at: BUILT_IN_AT, last_seen: null, notes: '',
+    annotator_id, display_name, email: null, role, roles: [role], status: 'active', created_at: BUILT_IN_AT, last_seen: null, notes: '',
     programme, builtin: true,
   });
   const record = (scope, r) => ({
@@ -204,13 +280,14 @@ export function initialAdminState({ recordings, trainingSet }) {
     ...trainingSet.practice.map((rid) => ({ recording_id: rid, use: 'practice', guidance: 'auto' })),
   ];
   return {
-    version: 1,
+    version: ADMIN_STATE_VERSION,
     name: 'Demonstration',
     settings: defaultSettings(),
     logging_notice: DEMO_LOGGING_NOTICE,
     users: [
       user('A01', 'Demo annotator', 'annotator'),
       user('T01', 'Demo trainee', 'annotator', trainingSet.set_id),
+      builtInExpert(),
       user(ADMIN_ID, 'Demo administrator', 'admin'),
     ],
     passwords: {},
@@ -245,6 +322,7 @@ export class DemoAdmin {
 
   get s() {
     if (!this.b.state.admin) this.b.state.admin = initialAdminState(this.b._builtIn());
+    else if (this.b.state.admin.version !== ADMIN_STATE_VERSION) upgradeAdminState(this.b.state.admin);
     return this.b.state.admin;
   }
 
@@ -314,6 +392,10 @@ export class DemoAdmin {
         'show_reviews_to_annotators'].map((k) => [k, deepCopy(st.annotation[k])])),
       gamification: { enabled: st.gamification.enabled !== false,
         leaderboard: st.gamification.enabled !== false && st.gamification.leaderboard !== false },
+      review: { show_corrections_to_annotators: (st.review || {}).show_corrections_to_annotators !== false,
+        show_outcomes_to_annotators: (st.review || {}).show_outcomes_to_annotators !== false },
+      training: { skippable: [...((st.training || {}).skippable || [])], gate: (st.training || {}).gate || 'met' },
+      replay: { enabled: (st.replay || {}).enabled !== false, trainees_watch_experts: (st.replay || {}).trainees_watch_experts !== false },
       logging,
       logging_notice: logging.interactions ? this.s.logging_notice : '',
     };
@@ -339,7 +421,7 @@ export class DemoAdmin {
   _actor() {
     const aid = this.b._aid();
     const u = this.user(aid);
-    if (!u || u.role !== 'admin' || u.status !== 'active') throw new ApiError(403, 'forbidden', 'Only study administrators can use the admin area');
+    if (!u || !rolesOf(u).includes('admin') || u.status !== 'active') throw new ApiError(403, 'forbidden', 'Only study administrators can use the admin area');
     return aid;
   }
 
@@ -393,9 +475,11 @@ export class DemoAdmin {
 
   _userRecord(u, items) {
     const mine = items.filter((i) => i.annotator_id === u.annotator_id);
-    return { annotator_id: u.annotator_id, display_name: u.display_name || '', email: u.email || null, role: u.role, status: u.status,
+    return { annotator_id: u.annotator_id, display_name: u.display_name || '', email: u.email || null, role: primaryRole(rolesOf(u)), roles: rolesOf(u), status: u.status,
       created_at: u.created_at, last_seen: u.last_seen || null, notes: u.notes || '', assigned: mine.length,
-      done: mine.filter((i) => i.status === 'done').length, programme: u.programme || null, invitation: this._invitationOut(u.annotator_id) };
+      done: mine.filter((i) => i.status === 'done').length, programme: u.programme || null,
+      study_locked: false, // the sandbox's training set has no assessment, so nobody's study work waits for one
+      invitation: this._invitationOut(u.annotator_id) };
   }
 
   // ------------------------------------------------------------- invitations
@@ -446,7 +530,8 @@ export class DemoAdmin {
       // A used invitation keeps the hash of its token, so that the link can say it was used.
       if ((inv.hash && inv.hash === hash) || (inv.state === 'accepted' && inv.used_hash === hash)) {
         const u = this.user(aid);
-        return u && u.status === 'active' && u.role !== 'admin' ? { aid, inv, u } : null;
+        // an administrator by their roles or their primary role: either is enough to refuse the link
+        return u && u.status === 'active' && !rolesOf(u).includes('admin') && u.role !== 'admin' ? { aid, inv, u } : null;
       }
     }
     return null;
@@ -531,8 +616,9 @@ export class DemoAdmin {
       study: { study_id: 'demo', name: this.s.name },
       counts: {
         recordings: this.s.recordings.filter((r) => r.scope === 'study').length,
-        annotators: this._people.filter((u) => u.role === 'annotator').length,
-        admins: this._people.filter((u) => u.role === 'admin').length,
+        annotators: this._people.filter((u) => rolesOf(u).includes('annotator')).length,
+        experts: this._people.filter((u) => rolesOf(u).includes('expert')).length,
+        admins: this._people.filter((u) => rolesOf(u).includes('admin')).length,
         assignments: items.length,
         done: items.filter((i) => i.status === 'done').length,
         in_progress: items.filter((i) => i.status === 'in_progress').length,
@@ -552,7 +638,7 @@ export class DemoAdmin {
       logging_notice_is_default: this.s.logging_notice === DEMO_LOGGING_NOTICE };
   }
 
-  op_settings_update(body) {
+  async op_settings_update(body) {
     const changed = [];
     if (body.settings !== undefined) {
       if (!body.settings || typeof body.settings !== 'object') throw bad('The settings must be given by block (filters, display, ...).', 'invalid_settings');
@@ -560,7 +646,8 @@ export class DemoAdmin {
       const unknown = Object.keys(body.settings).find((k) => !known.includes(k));
       if (unknown) throw bad(`The settings block '${unknown}' cannot be changed here; these can: ${known.join(', ')}`, 'invalid_settings');
       const next = mergeSettings(this.s.settings, body.settings);
-      const problems = settingsProblems(next, LABEL_NAMES);
+      const { expertSettingsProblems } = await loadPart('settingsChecks');
+      const problems = [...settingsProblems(next, LABEL_NAMES), ...expertSettingsProblems(next)];
       if (problems.length) throw bad(problems[0], 'invalid_settings');
       for (const [block, values] of Object.entries(body.settings)) {
         for (const [key, value] of Object.entries(values || {})) {
@@ -598,14 +685,17 @@ export class DemoAdmin {
     let id;
     let email;
     try { id = checkAnnotatorId(body.annotator_id); email = checkEmail(body.email); } catch (exc) { throw bad(exc.message); }
+    const roles = rolesFrom(body, { required: true });
+    if (RESERVED_IDS.includes(id)) {
+      throw bad(`${id} is kept for ElectroTag's own versions (the adjudicated version and training references) and cannot be an account; choose another ID.`, 'reserved_id');
+    }
     if (this.user(id)) throw conflict('user_exists', `${id} already has an account in this study.`);
-    const role = body.role || 'annotator';
-    if (!['annotator', 'admin'].includes(role)) throw bad('The role is annotator or admin.');
+    const role = primaryRole(roles);
     let temporary = null;
     let password = body.password ? String(body.password) : '';
     const invite = body.invite === true;
     if (invite && password) throw bad('Give a password or ask for an invitation link, not both');
-    if (invite && role === 'admin') throw conflict('admin_account', ADMIN_NOT_INVITED);
+    if (invite && roles.includes('admin')) throw conflict('admin_account', ADMIN_NOT_INVITED);
     const days = invite ? this._inviteDays(body) : INVITE_DAYS;
     if (password && (password.length < 8 || password.length > 200)) throw bad('A password must have 8 to 200 characters');
     // With an invitation nobody knows the first password: the person chooses their own.
@@ -613,12 +703,12 @@ export class DemoAdmin {
     else if (!password) { temporary = makePassword(); password = temporary; }
     const salt = newId().slice(0, 16);
     this.s.passwords[id] = { salt, hash: passwordHash(password, salt) };
-    const u = { annotator_id: id, display_name: String(body.display_name || '').trim(), email, role, status: 'active',
+    const u = { annotator_id: id, display_name: String(body.display_name || '').trim(), email, role, roles, status: 'active',
       created_at: nowLocalIso(), last_seen: null, notes: '', programme: null };
     this.s.users.push(u);
     const inv = invite ? this._makeInvitation(id, days) : null;
-    this._audit('user_add', `Added ${id}${u.display_name ? ` (${u.display_name})` : ''} as ${role === 'admin' ? 'an administrator' : 'an annotator'}` +
-      (inv ? ` with an invitation link (until ${inv.expires_at.slice(0, 10)})` : ''), { annotator_id: id, display_name: u.display_name, role, email, invited: invite, expires_at: inv ? inv.expires_at : null });
+    this._audit('user_add', `Added ${id}${u.display_name ? ` (${u.display_name})` : ''} as ${rolesText(roles)}` +
+      (inv ? ` with an invitation link (until ${inv.expires_at.slice(0, 10)})` : ''), { annotator_id: id, display_name: u.display_name, role, roles, email, invited: invite, expires_at: inv ? inv.expires_at : null });
     const out = { user: this._userRecord(u, this._items(id)), invite_link: null, temporary_password: temporary };
     if (inv) Object.assign(out, { invite_token: inv.invite_token, expires_at: inv.expires_at });
     return out;
@@ -626,7 +716,7 @@ export class DemoAdmin {
 
   op_user_invite(body) {
     const u = this._userOr404(body.annotator_id);
-    if (u.role === 'admin') throw conflict('admin_account', ADMIN_NOT_INVITED);
+    if (rolesOf(u).includes('admin')) throw conflict('admin_account', ADMIN_NOT_INVITED);
     const inv = this._makeInvitation(u.annotator_id, this._inviteDays(body));
     this._audit('user_invite', `Made an invitation link for ${u.annotator_id} (until ${inv.expires_at.slice(0, 10)}); any earlier link stops working`,
       { annotator_id: u.annotator_id, expires_at: inv.expires_at });
@@ -642,28 +732,31 @@ export class DemoAdmin {
 
   op_user_update(body) {
     const u = this._userOr404(body.annotator_id);
-    const { role, status } = body;
-    if (role !== undefined && role !== null && !['annotator', 'admin'].includes(role)) throw bad('role must be one of annotator, admin');
+    const { status } = body;
+    const roles = rolesFrom(body, { required: false });
     if (status !== undefined && status !== null && !['active', 'disabled'].includes(status)) throw bad('status must be one of active, disabled');
-    if (u.annotator_id === this.b.annotatorId && (role === 'annotator' || status === 'disabled')) {
+    if (u.annotator_id === this.b.annotatorId && ((roles && !roles.includes('admin')) || status === 'disabled')) {
       throw conflict('self', 'You cannot take away your own administrator role or disable your own account; ask another administrator.');
     }
+    const before = rolesOf(u);
+    const newRoles = roles && roles.join(',') !== before.join(',') ? roles : null;
     const name = body.display_name === undefined || body.display_name === null ? null : String(body.display_name).trim();
     const notes = body.notes === undefined || body.notes === null ? null : String(body.notes).trim().slice(0, 5000);
     const said = [];
-    if (role && role !== u.role) said.push(role === 'admin' ? 'made them an administrator' : 'made them an annotator');
+    if (newRoles) said.push(`made them ${rolesText(newRoles)}`);
     if (status && status !== u.status) said.push(status === 'disabled' ? 'disabled the account' : 'enabled the account');
     if (name !== null && name !== (u.display_name || '')) said.push(`renamed them '${name}'`);
     if (notes !== null && notes !== (u.notes || '')) said.push('changed the notes');
     // Nothing to change (an account switched off already, say): nothing is written or audited.
     if (!said.length) return { user: this._userRecord(u, this._items(u.annotator_id)), changed: false };
-    if (role) u.role = role;
+    if (newRoles) { u.roles = newRoles; u.role = primaryRole(newRoles); }
     if (status) u.status = status;
     if (name !== null) u.display_name = name;
     if (notes !== null) u.notes = notes;
     // An invitation is for annotators who may sign in: a link must not open the admin area, nor a switched-off account.
-    if (u.role === 'admin' || u.status === 'disabled') this._endInvitation(u.annotator_id, 'revoked');
-    this._audit('user_update', `${u.annotator_id}: ${said.join(', ')}`, { annotator_id: u.annotator_id, display_name: name, role: role ?? null, status: status ?? null, notes });
+    if (rolesOf(u).includes('admin') || u.status === 'disabled') this._endInvitation(u.annotator_id, 'revoked');
+    this._audit('user_update', `${u.annotator_id}: ${said.join(', ')}`, { annotator_id: u.annotator_id, display_name: name,
+      role: newRoles ? primaryRole(newRoles) : null, roles: newRoles, status: status ?? null, notes });
     return { user: this._userRecord(u, this._items(u.annotator_id)), changed: true };
   }
 
@@ -685,7 +778,7 @@ export class DemoAdmin {
     delete this.s.passwords[u.annotator_id];
     delete this._invites[u.annotator_id];
     for (const set of this.s.sets) set.allowed_annotators = set.allowed_annotators.filter((x) => x !== u.annotator_id);
-    this._audit('user_remove', `Removed ${u.annotator_id} from the study (their results and logs stay)`, { annotator_id: u.annotator_id, display_name: u.display_name, role: u.role });
+    this._audit('user_remove', `Removed ${u.annotator_id} from the study (their results and logs stay)`, { annotator_id: u.annotator_id, display_name: u.display_name, role: u.role, roles: rolesOf(u) });
     return {};
   }
 
@@ -906,7 +999,8 @@ export class DemoAdmin {
       throw bad('In the demonstration, the training set keeps its two recordings to learn with and one to practise on; a study server or Firebase lets you change how a recording is used.', 'demo_limit', 422);
     }
     if (body.guidance === undefined || body.guidance === null) throw bad('Nothing to change: give use or guidance');
-    if (!['auto', 'show', 'find', 'find_unnamed'].includes(body.guidance)) throw bad('guidance must be one of auto, show, find, find_unnamed');
+    if (body.guidance === 'correct') throw needsServer('give trainees a correct-the-marks exercise (the expert area has one to try)');
+    if (!['auto', 'show', 'find', 'find_unnamed'].includes(body.guidance)) throw bad('guidance must be one of auto, show, find, find_unnamed, correct');
     if (r.use !== 'guided') warnings.push('How much help a recording gives matters only for guided recordings.');
     r.guidance = body.guidance;
     changes.push(`guidance ${body.guidance}`);
@@ -941,7 +1035,8 @@ export class DemoAdmin {
 
   // ------------------------------------------------------------------- quiz
   op_quiz_items(body) {
-    return { items: deepCopy(this._quizItems(this._setOr404(body.set_id))) };
+    // the sandbox's quiz is on its guided recordings, whose use cannot change here: nothing is withheld (admin.py op_quiz_items)
+    return { items: deepCopy(this._quizItems(this._setOr404(body.set_id))), withheld: [] };
   }
 
   // --------------------------------------------------------------- progress

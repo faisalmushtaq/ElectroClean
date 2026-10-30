@@ -10,6 +10,14 @@ import { session } from '../util.js';
 const TOKEN_KEY = 'electrotag.token';
 /** The names of the admin area's operations: lower-case letters and underscores (overview, user_add, ...). */
 export const ADMIN_OP = /^[a-z][a-z_]{0,40}$/;
+/** The names of the expert area's operations, made the same way (work_list, correction_save, ...). */
+export const EXPERT_OP = ADMIN_OP;
+
+/** An expert operation that only reads (its name ends in _get or _list), which may be asked again after a failure;
+ *  every other one saves and is never repeated (electrotag/web/expert.py, is_read). */
+export function isExpertRead(op) {
+  return /_(list|get)$/.test(String(op));
+}
 
 export class ApiError extends Error {
   constructor(status, code, message, body = null) {
@@ -158,6 +166,9 @@ export class HttpBackend {
   /** GET /me/reviews: the reviews of the annotator's saved work ({shown, reviews}). */
   myReviews() { return this._request('GET', '/me/reviews'); }
 
+  /** GET /me/feedback: the corrections of the annotator's saved work and the outcomes of its conflicts. */
+  myFeedback() { return this._request('GET', '/me/feedback'); }
+
   // ------------------------------------------------------ assignments, opening
   assignments() { return this._request('GET', '/assignments'); }
 
@@ -187,6 +198,12 @@ export class HttpBackend {
 
   guidedShowMe(recordingId, body) { return this._request('POST', `/training/guided/${idPath(recordingId)}/show-me`, body); }
 
+  /** POST /training/stage {stage, action}: skip, finish or resume a stage of the training path (saves). */
+  trainingStage(body) { return this._request('POST', '/training/stage', body || {}); }
+
+  /** GET /training/snippets: the artifact snippets of the trainee's set. */
+  trainingSnippets() { return this._request('GET', '/training/snippets'); }
+
   // -------------------------------------------------------------------- quiz
   /** The short-segment quiz of a reference set: body {action: "get" | "answer" | "finish", ...}. */
   quiz(setId, body) { return this._request('POST', `/quiz/${encodeURIComponent(setId)}`, body); }
@@ -209,6 +226,12 @@ export class HttpBackend {
   admin(op, body = {}) {
     if (!ADMIN_OP.test(String(op))) return Promise.reject(new ApiError(400, 'bad_request', 'That is not an operation of the admin area.'));
     return this._request('POST', `/admin/${op}`, body || {});
+  }
+
+  /** One operation of the expert area: POST /expert/{op} with a JSON body (docs/web/api.md, "Experts"). */
+  expert(op, body = {}) {
+    if (!EXPERT_OP.test(String(op))) return Promise.reject(new ApiError(400, 'bad_request', 'That is not an operation of the expert area.'));
+    return this._request('POST', `/expert/${op}`, body || {});
   }
 
   // ----------------------------------------------------------------- downloads

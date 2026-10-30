@@ -14,14 +14,30 @@ import {
   actionButton, card, checkbox, checkList, chip, confirmInline, dataTable, downloadBase64, downloadText, field, loading, messageArea,
   numberInput, radios, recordingName, sectionHead, select, tabBar, textArea, textInput,
 } from './ui.js';
+import { snippetsTab } from './snippets.js';
 
 const TABS = [
   { key: 'references', title: 'Recordings and references' },
   { key: 'settings', title: 'Settings' },
   { key: 'criteria', title: 'Competency criteria' },
   { key: 'quiz', title: 'Quiz' },
+  { key: 'snippets', title: 'Snippets' }, // the training path's examples of each artifact type (snippets.js)
 ];
 const DISAGREEMENT_COLUMNS = ['kind', 'label', 'onset_s', 'offset_s', 'experts_marking', 'experts_not_marking', 'note'];
+
+/**
+ * Why a quiz is held back (quiz_items' withheld): some of its segments come from a recording that is now a
+ * practice or assessment recording, so trainees are not offered it and it is no recognition check.
+ */
+export function quizWithheldNote(withheld) {
+  if (!withheld.length) return [];
+  const ids = withheld.map((w) => w.item_id);
+  return [h('div.banner', { role: 'note', 'data-log': 'quiz-withheld' },
+    h('p', {}, h('b', {}, 'Trainees are not offered this quiz, and it is left out of the recognition check of Meet the artifacts. '),
+      `${ids.length === 1 ? `Item ${ids[0]} comes` : `Items ${ids.join(', ')} come`} from a recording that is now a practice or assessment recording, `
+      + 'so they would show trainees the answers they are scored against. Remove them to offer the quiz again.'),
+    h('ul', {}, withheld.map((w) => h('li.caption', {}, `${w.item_id}: ${w.message}`))))];
+}
 
 export class TrainingSection {
   constructor(area) {
@@ -141,6 +157,7 @@ export class TrainingSection {
     if (this.tab === 'settings') this.body.append(this._settingsTab(s));
     else if (this.tab === 'criteria') this.body.append(this._criteriaTab(s));
     else if (this.tab === 'quiz') this.body.append(this._quizTab(s));
+    else if (this.tab === 'snippets') this.body.append(snippetsTab(this.area, s));
     else this.body.append(this._referencesTab(s));
   }
 
@@ -177,6 +194,16 @@ export class TrainingSection {
     syncGuidance();
     const notesHost = h('div.admin-stack');
     const notesBtn = actionButton('Edit the guided notes', { working: 'Loading…', msg, onClick: () => this._guidedNotes(notesHost, s, r) });
+    // Correct the marks (js/admin/planted.js): an exercise made from a guided recording's reference
+    const plantedHost = h('div.admin-stack');
+    const plantedBtn = actionButton('Correct the marks…', { working: 'Loading…', msg, log: 'planted-manage', onClick: async () => {
+      const { plantedPanel, startPlantedTry } = await import('./planted.js');
+      const b = this.area.app.backend;
+      clear(plantedHost);
+      plantedHost.append(plantedPanel({ api: { read: (op, x) => b.expert(op, x), write: (op, x) => b.expert(op, x) }, setId: s.set_id, recordingId: r.recording_id,
+        onTry: (target) => startPlantedTry(this.area.app, target, { route: 'expert-planted', params: { recording: r.recording_id } }),
+        onChanged: () => {} }));
+    } });
     const removeHost = h('div.btn-row');
     removeHost.append(h('button.btn.destructive', { type: 'button', onclick: async () => {
       if (!(await confirmInline(removeHost, { text: `Remove ${r.recording_id} from ${s.name || s.set_id}? Its reference goes with it.`, yes: 'Remove it' }))) return;
@@ -196,6 +223,10 @@ export class TrainingSection {
         'what the artifact looks like here and why it is marked on these channels. The example set\'s notes describe only the ' +
         'simulation; replace them with your experts\' explanations when you use real recordings.'),
       h('div.btn-row', {}, notesBtn), notesHost,
+      r.use === 'guided' ? h('h3', {}, 'Correct the marks') : null,
+      r.use === 'guided' ? h('p.caption', {}, 'An exercise instead of the step-by-step coach: a copy of the experts\' marks with deliberate mistakes, '
+        + 'which trainees put right. Make it here, then choose Correct the marks under How much help the guided recording gives.') : null,
+      r.use === 'guided' ? h('div.btn-row', {}, plantedBtn) : null, plantedHost,
       h('h3', {}, 'Remove'), removeHost));
     host.querySelector('h3').tabIndex = -1;
     host.querySelector('h3').focus({ preventScroll: false });
@@ -230,7 +261,8 @@ export class TrainingSection {
       ['annotator', 'Someone\'s saved annotations', 'An expert annotates the recording in this study (in Annotation mode), and their saved work becomes the reference.'],
       ['document', 'An annotation file', 'An ElectroTag _annotations.json, for example one saved in another ElectroTag study.'],
       ['consensus', 'A consensus of several annotators', 'Where enough of them agree, sample by sample, for each artifact type.'],
-      ['adjudicated', 'An adjudicated consensus', 'An adjudicator\'s saved annotations, made after reviewing the experts\' disagreements.'],
+      ['adjudication', 'A finished adjudication', 'The adjudicated version of a whole recording, from the expert area\'s adjudication queue: the marks the annotators agreed on and the adjudicator\'s decision on each conflict.'],
+      ['adjudicated', 'An adjudicator\'s own annotations', 'Someone\'s saved annotations (in Annotation mode), made as the reference after they reviewed the experts\' disagreements themselves, outside the adjudication queue.'],
     ];
     const kind = radios(`source-${s.set_id}`, kinds, 'annotator');
     const people = this.users.map((u) => [u.annotator_id, `${u.annotator_id}${u.display_name ? ` · ${u.display_name}` : ''}`]);
@@ -267,20 +299,50 @@ export class TrainingSection {
     const adjudicator = select(people);
     const adjExperts = checkList(this.users.map((u) => ({ value: u.annotator_id, text: u.annotator_id, extra: u.display_name || '' })), { legend: 'Experts whose disagreements were adjudicated', name: 'adj-experts' });
     const adjudicatedPart = h('div.source-part', {}, field('Adjudicator', adjudicator, { hint: 'Their saved annotations (in Annotation mode) are the reference.' }), adjExperts);
-    const parts = { annotator: annotatorPart, document: documentPart, consensus: consensusPart, adjudicated: adjudicatedPart };
-    const sync = () => { for (const [k, el] of Object.entries(parts)) el.hidden = kind.value() !== k; };
+    // a finished adjudication of the queue (the expert operation adjudication_list, read when this is chosen)
+    const unit = select([['', 'Loading…']]);
+    const unitInfo = h('p.caption', { role: 'status' });
+    let units = null;
+    const loadUnits = async () => {
+      if (units) return;
+      units = [];
+      try {
+        const got = await this.area.app.backend.expert('adjudication_list', { status: 'adjudicated' });
+        units = (got.units || []).filter((u) => !u.window);
+        unit.replaceChildren(...(units.length ? units.map((u) => h('option', { value: u.unit_id },
+          `${u.file_name}: ${(u.annotators || []).map((a) => a.annotator_id).join(', ')}${u.kind === 'corrections' ? ' (corrections)' : ''}, by ${u.adjudicator_id}`))
+          : [h('option', { value: '' }, 'No adjudication of a whole recording is finished yet')]));
+        syncUnit();
+      } catch (exc) {
+        unit.replaceChildren(h('option', { value: '' }, 'Not available'));
+        unitInfo.textContent = exc.message;
+      }
+    };
+    const syncUnit = () => {
+      const u = (units || []).find((x) => x.unit_id === unit.value);
+      unitInfo.textContent = u ? `The recording is ${u.recording_id} (from the study); finished ${String(u.finished_at || '').slice(0, 10)}.` : '';
+    };
+    unit.addEventListener('change', syncUnit);
+    const adjudicationPart = h('div.source-part', {}, field('Adjudication', unit, { hint: 'Only adjudications of a whole recording can be references; the recording chosen above is replaced by the adjudication\'s own.' }), unitInfo);
+    const parts = { annotator: annotatorPart, document: documentPart, consensus: consensusPart, adjudication: adjudicationPart, adjudicated: adjudicatedPart };
+    const sync = () => { for (const [k, el] of Object.entries(parts)) el.hidden = kind.value() !== k; if (kind.value() === 'adjudication') loadUnits(); };
     kind.addEventListener('change', sync);
     sync();
     const notes = textArea({ rows: 2, placeholder: 'optional: who the experts are, how they worked' });
     const add = actionButton('Add the reference', { kind: 'primary', working: 'Adding…', msg, log: 'set-add-reference', onClick: async () => {
       msg.clear();
       clear(out);
-      if (!recording.value) throw new Error('Choose the recording first (add it on the Recordings page if it is not listed).');
-      if (!use.value()) throw new Error('Choose how the recording is used: guided, practice or assessment.');
-      const [scope, rid] = [recording.value.slice(0, recording.value.indexOf('|')), recording.value.slice(recording.value.indexOf('|') + 1)];
-      let source;
       const k = kind.value();
-      if (k === 'annotator') {
+      const chosenUnit = k === 'adjudication' ? (units || []).find((x) => x.unit_id === unit.value) : null;
+      if (k === 'adjudication' && !chosenUnit) throw new Error('Choose a finished adjudication.');
+      if (!chosenUnit && !recording.value) throw new Error('Choose the recording first (add it on the Recordings page if it is not listed).');
+      if (!use.value()) throw new Error('Choose how the recording is used: guided, practice or assessment.');
+      const [scope, rid] = chosenUnit ? ['study', chosenUnit.recording_id]
+        : [recording.value.slice(0, recording.value.indexOf('|')), recording.value.slice(recording.value.indexOf('|') + 1)];
+      let source;
+      if (k === 'adjudication') {
+        source = { kind: 'adjudication', task_id: chosenUnit.unit_id };
+      } else if (k === 'annotator') {
         if (!who.value) throw new Error('Choose whose annotations to use.');
         source = { kind: 'annotator', annotator_id: who.value, mode: mode.value, context_id: mode.value === 'standard' ? '' : ctx.value.trim() };
       } else if (k === 'document') {
@@ -306,7 +368,7 @@ export class TrainingSection {
       field('Recording', recording),
       h('fieldset.admin-fieldset', {}, h('legend', {}, 'Used for'), use),
       h('fieldset.admin-fieldset', {}, h('legend', {}, 'The reference comes from'), kind),
-      annotatorPart, documentPart, consensusPart, adjudicatedPart,
+      annotatorPart, documentPart, consensusPart, adjudicationPart, adjudicatedPart,
       field('Notes about the reference', notes),
       h('div.btn-row', {}, add), msg, out);
   }
@@ -435,7 +497,12 @@ export class TrainingSection {
       } },
     ], [], { empty: 'No quiz items yet.', pageSize: 20, caption: 'Quiz items' });
     const note = loading();
-    this.area.read('quiz_items', { set_id: s.set_id }).then((r) => { note.remove(); table.update(r.items || []); }).catch((exc) => { note.remove(); msg.problem(exc); });
+    const withheldHost = h('div.quiz-withheld');
+    this.area.read('quiz_items', { set_id: s.set_id }).then((r) => {
+      note.remove();
+      table.update(r.items || []);
+      withheldHost.replaceChildren(...quizWithheldNote(r.withheld || []));
+    }).catch((exc) => { note.remove(); msg.problem(exc); });
     // a new item
     const recs = this.recordings.filter((r) => r.scope === `set:${s.set_id}` || r.scope === 'study');
     const recording = select(recs.map((r) => [r.recording_id, `${r.recording_id} (${scopeText(r.scope, this.sets)})`]));
@@ -477,8 +544,11 @@ export class TrainingSection {
       await this.reload(['success', `Added the quiz item ${(r.item && r.item.item_id) || ''}.`]);
     } });
     return h('div.admin-stack', {},
-      card('Quiz items', h('p.caption', {}, 'Short segments that annotators allowed to use the set classify: which artifact type is the main one in the shaded segment?'), note, table, msg),
+      card('Quiz items', h('p.caption', {}, 'Short segments that annotators allowed to use the set classify: which artifact type is the main one in the shaded segment? '
+        + 'Trainees take the quiz as the recognition check of Meet the artifacts.'), withheldHost, note, table, msg),
       card('Add a quiz item',
+        h('p.caption', {}, 'A segment comes from a guided recording, or another recording that no set uses for practice or assessment: '
+          + 'the experts\' annotations of those are the answers trainees are scored against, so a segment of one is refused.'),
         h('div.row.wrap', {}, field('Recording', recording), field('Item ID', itemId)),
         h('div.row.wrap', {}, field('Start (s)', start), field('End (s)', end), field('Context shown (s)', context, { hint: 'EEG shown before and after the segment.' })),
         field('Correct answer', correct), acceptGroup, others, field('Explanation', explanation),

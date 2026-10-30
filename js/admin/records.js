@@ -3,7 +3,8 @@
 // visits (each time someone used the application, with the number of interaction events logged).
 
 import { h, clear } from '../ui/dom.js';
-import { AUDIT_OPS, MODES, filterAudit, opText, whenText } from './model.js';
+import { MODES, filterAudit, rolesOf, whenText } from './model.js';
+import { AUDIT_OPS, auditSummary, opText } from './audit_words.js';
 import { actionButton, card, dataTable, messageArea, sectionHead, select } from './ui.js';
 
 const PAGE = 50;
@@ -17,14 +18,15 @@ export class RecordsSection {
     this.msg = messageArea();
     this.by = select([['', 'Everyone']]);
     this.by.setAttribute('aria-label', 'Changed by');
-    this.op = select([['', 'Every kind of change'], ...Object.entries(AUDIT_OPS)]);
+    // the kinds of change in alphabetical order of their titles, so that each is easy to find
+    this.op = select([['', 'Every kind of change'], ...Object.entries(AUDIT_OPS).sort((a, b) => a[1].localeCompare(b[1]))]);
     this.op.setAttribute('aria-label', 'Kind of change');
     for (const f of [this.by, this.op]) f.addEventListener('input', () => this._filter());
     this.auditNote = h('p.caption', { role: 'status' });
     this.audit = dataTable([
       { title: 'When', render: (e) => whenText(e.at) },
       { title: 'Who', render: (e) => e.by },
-      { title: 'Change', render: (e) => h('span', {}, h('span.caption.block', {}, opText(e.op)), e.summary || '') },
+      { title: 'Change', render: (e) => h('span', {}, h('span.caption.block', {}, opText(e.op)), auditSummary(e, this.entries)) },
       { title: 'Details', render: (e) => (e.details && Object.keys(e.details).length
         ? h('details.audit-details', {}, h('summary', {}, 'Show'), h('pre', {}, JSON.stringify(e.details, null, 2))) : '–') },
     ], [], { empty: 'No changes match.', pageSize: PAGE, caption: 'Audit log' });
@@ -56,7 +58,7 @@ export class RecordsSection {
     this.msg.clear();
     try {
       const u = await this.area.read('users_list');
-      this.admins = new Set((u.users || []).filter((x) => x.role === 'admin').map((x) => x.annotator_id));
+      this.admins = new Set((u.users || []).filter((x) => rolesOf(x).includes('admin')).map((x) => x.annotator_id));
       const keep = this.visitWho.value;
       clear(this.visitWho);
       this.visitWho.append(h('option', { value: '' }, 'Everyone'), ...(u.users || []).map((x) => h('option', { value: x.annotator_id }, x.annotator_id)));

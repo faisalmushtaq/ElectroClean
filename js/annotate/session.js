@@ -356,7 +356,8 @@ export class AnnotationSession {
       await this._settleRemote(); // a draft on its way arrives before the saved result, never after it
       result = await this.backend.submit({
         recording_id: this.recordingId, mode: this.mode, context_id: this.contextId,
-        annotations: this.store.toJSON(), session: this.sessionInfo(visitId), sha256: this.sha256,
+        // the session's ID goes with it, so that the saved files and the interaction log of this session carry the same ID
+        annotations: this.store.toJSON(), session: { ...this.sessionInfo(visitId), session_id: this.sessionId }, sha256: this.sha256,
         ...(this.revision ? { revises: this.revision.revises } : {}),
       });
     } finally {
