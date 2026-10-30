@@ -166,6 +166,7 @@ table.admin-info th { width: 1%; }
 .radio-col .caption.block { font: var(--t-12); }
 .admin-checks { border: 1px solid var(--hairline); border-radius: 0; padding: 8px 12px 12px; margin: 0 0 12px; min-width: 0; }
 .admin-checks legend { padding: 0 4px; font: var(--t-14); color: var(--text-secondary); }
+.admin-checks > .caption { margin: 8px 0 0; }
 .check-tools { flex-wrap: wrap; margin-bottom: 8px; }
 .check-tools .field { flex: 1 1 160px; width: auto; }
 .check-list { max-height: 240px; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0 12px; }

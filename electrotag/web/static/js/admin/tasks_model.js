@@ -4,7 +4,7 @@
 // and known answers").
 
 import { clockText } from '../viewer/bounds.js';
-import { plural } from './model.js';
+import { plural, rolesOf } from './model.js';
 
 /** How many annotators a task may have (electrotag/web/tasks.py K_MIN, K_MAX) and the shortest window. */
 export const K_MIN = 2;
@@ -58,6 +58,46 @@ export function partText(window) {
 /** The part of a recording a skipped row names: "Whole recording" or "From 0:40". */
 export function skippedPart(x) {
   return x && typeof x.start_s === 'number' ? `From ${clockText(x.start_s)}` : 'Whole recording';
+}
+
+/**
+ * One account in the list of annotators to share among: its line of words, and whether All ticks it.
+ * All leaves out switched-off accounts, accounts without the annotator role (an expert who only
+ * adjudicates cannot adjudicate a task they annotated) and trainees whose study work is locked until
+ * they pass the competency assessment (their tasks would wait in Collecting); each can still be ticked
+ * by hand, and the preview then warns.
+ */
+export function poolEntry(u) {
+  const roles = rolesOf(u);
+  const off = u.status === 'disabled';
+  const notAnnotator = !roles.includes('annotator');
+  const locked = Boolean(u.study_locked);
+  return {
+    value: u.annotator_id, text: u.annotator_id, notInAll: off || notAnnotator || locked,
+    extra: [u.display_name, off ? 'switched off' : '', roles.includes('expert') ? (notAnnotator ? 'expert only, no annotator role' : 'expert') : '',
+      notAnnotator && !roles.includes('expert') ? 'no annotator role' : '', locked ? 'trainee, study work locked' : ''].filter(Boolean).join(' · '),
+  };
+}
+
+/** Why a person in the preview's table has a note: their study work is locked, or they have no annotator role. */
+export function personNote(r) {
+  return [r.study_locked ? 'Trainee: study work locked until the assessment is passed' : '',
+    r.annotates === false ? 'No annotator role' : ''].filter(Boolean).join('. ');
+}
+
+/**
+ * How evenly the tasks spread over the pairs of annotators once the share-out is made (the preview's
+ * `pairs`, which counts the study's earlier tasks too), in one sentence: "After this share-out, each of
+ * the 45 pairs of annotators shares 4 or 5 tasks (25 share 4, 20 share 5): …".
+ */
+export function pairsText(pairs) {
+  if (!pairs || !pairs.n_pairs) return '';
+  const { n_pairs: n, least, most } = pairs;
+  const howMany = least === most ? `${least}` : most - least === 1 ? `${least} or ${most}` : `${least} to ${most}`;
+  const counts = Object.entries(pairs.counts || {}).map(([shared, k]) => [Number(shared), k]).sort((a, b) => a[0] - b[0]);
+  const detail = counts.length > 1 && counts.length <= 4 ? ` (${counts.map(([shared, k]) => `${k} share ${shared}`).join(', ')})` : '';
+  const who = n === 1 ? 'the pair of annotators shares' : `each of the ${n} pairs of annotators shares`;
+  return `After this share-out, ${who} ${howMany} ${howMany === '1' ? 'task' : 'tasks'}${detail}: pairwise agreement compares each pair on what they share.`;
 }
 
 const number = (v) => (v === '' || v === null || v === undefined ? NaN : Number(v));
@@ -129,7 +169,8 @@ export function previewSummary(p) {
   if (n && people.length > 1) sentence += least === most ? ` Everyone gets ${least}.` : ` Each person gets ${least} to ${most}.`;
   const nSkipped = (p.skipped || []).length;
   if (nSkipped) sentence += ` ${plural(nSkipped, 'recording or part', 'recordings or parts')} left out (below).`;
-  return { people, least, most, balanced: least === most, skipped, sentence, n, recordings };
+  const pairs = n ? pairsText(p.pairs) : '';
+  return { people, least, most, balanced: least === most, skipped, sentence, n, recordings, pairs, warnings: [...(p.warnings || [])] };
 }
 
 /** The tasks the list shows: by status, by person (in the task) and by a search of the recording's name. */

@@ -706,6 +706,7 @@ UserRecord = {"annotator_id": "A03", "display_name": "Annotator three", "email":
               "role": "annotator" | "expert" | "admin" /* the primary role */,
               "roles": ["annotator"] /* "Roles" above */, "status": "active" | "disabled", "created_at": "…",
               "last_seen": "…" | null, "notes": "", "assigned": 12, "done": 4, "programme": "<set_id>" | null,
+              "study_locked": false /* a trainee whose study work waits for the competency assessment */,
               "invitation": {"state": "none" | "invited" | "accepted" | "expired" | "revoked",
                              "invited_at": "…" | null, "expires_at": "…" | null, "ended_at": "…" | null}}
 RecordingRecord = {"scope": "study" | "set:<set_id>", "recording_id": "sub-001/eeg/sub-001_task-rest_eeg.vhdr",
@@ -1138,7 +1139,7 @@ The administrative operations (`POST /admin/{op}`, `et_admin` on Firebase):
 
 | op | body | answer |
 | --- | --- | --- |
-| `tasks_preview_get` | `{"annotator_ids": [pool], "recording_ids": [..] \| "all": true, "k"?: review.k_default, "window"?: {"start_s", "end_s"}, "windows"?: {"length_s", "overlap_s"?: 0}, "gold"?: {"set_id"}, "adopt"?: false}` | `{"tasks": [{"task_id": null, "recording_id", "file_name", "window", "k", "annotators", "holders", "gold"}], "skipped": [{"recording_id", "reason", "start_s"?}], "per_annotator": [{"annotator_id", "open_before", "new", "linked"}], "created", "assigned", "k"}`: what `tasks_create` would make, without making anything (a read: the browser may ask again) |
+| `tasks_preview_get` | `{"annotator_ids": [pool], "recording_ids": [..] \| "all": true, "k"?: review.k_default, "window"?: {"start_s", "end_s"}, "windows"?: {"length_s", "overlap_s"?: 0}, "gold"?: {"set_id"}, "adopt"?: false}` | `{"tasks": [{"task_id": null, "recording_id", "file_name", "window", "k", "annotators", "holders", "gold"}], "skipped": [{"recording_id", "reason", "start_s"?}], "per_annotator": [{"annotator_id", "open_before", "new", "linked", "annotates", "study_locked"}], "created", "assigned", "k", "pairs": null \| {"n_pairs", "least", "most", "counts": {"<shared>": pairs}}, "warnings": ["…"]}`: what `tasks_create` would make, without making anything (a read: the browser may ask again) |
 | `tasks_create` | as `tasks_preview_get`, with `"request_id": "<32 hex>"`, `"batch"?` (a name of up to 80 characters) and `"notes"?` | `{"tasks": [TaskOut], "created", "assigned", "skipped", "per_annotator", "already": false}`. The same `request_id` again makes nothing more (`already: true`, the tasks it made, and any of their assignments still missing). Audited (`tasks_create`) |
 | `tasks_list` | `{"status"?, "recording_id"?, "annotator_id"?, "gold"?: bool}` | `{"tasks": [TaskOut], "counts": {status: n}}`, oldest first; removed tasks are not listed |
 | `task_update` | `{"task_id", "add_annotator"?, "remove_annotator"?, "state"?: "open" \| "closed", "notes"?}` | `{"task": TaskOut}`. Both people in one request replace one by the other. Audited |
@@ -1152,10 +1153,20 @@ recording the same stretch; `windows` cuts each into consecutive parts of
 `length_s` (at least 2 s) that overlap by `overlap_s` (less than half a
 part), and a remainder shorter than half a part joins the part before it. Each
 task goes to the k people of the pool with the fewest open tasks they have not
-saved yet, counting the tasks made earlier in the same request, with ties
-broken by a fixed order (SHA-256 of the recording, the window's start and the
-person), so the same request on the same study gives the same share-out and
-200 recordings with k = 2 among 10 people give each person 40. People who
+saved yet, counting the tasks made earlier in the same request; among people
+equally free, to the group whose pairs have shared the fewest tasks so far (the
+study's tasks that are not known answers, and those made earlier in the same
+request), looking one step ahead to leave the others a pair that has shared
+few; the last ties are broken by a fixed order (SHA-256 of the recording, the
+window's start and the person). The same request on the same study gives the
+same share-out, and 200 recordings among 10 people give each person 40 with
+k = 2 (each of the 45 pairs sharing 4 or 5) and 60 with k = 3 (13 or 14).
+`pairs` counts, for every pair of the pool, the tasks they would share after
+the share-out, the study's earlier tasks that are not known answers included
+(null for known answers). `annotates` is false for someone without the
+annotator role, and `study_locked` true for a trainee whose study work waits
+for the competency assessment (`training_gate`); `warnings` names, in plain
+words, the chosen people of either kind who would be given tasks. People who
 already hold the whole recording without a task come first for a task of the
 whole recording, and their assignment joins the task (`holders`, `linked`);
 they are left out of a window's task, which would shut them out of the rest of

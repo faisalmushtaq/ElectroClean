@@ -311,20 +311,32 @@ dual screening of a systematic review: each recording, or each part of one, goes
 differences between their versions are the task's conflicts, which experts adjudicate. Known-answer
 recordings can be mixed in to measure each person's accuracy. The section is under People.
 
-**Sharing out.** Choose the annotators to share among (All ticks the active annotators; switched-off
-accounts and administrators who do not annotate are ticked one by one), the recordings (every
+**Sharing out.** Choose the annotators to share among. All ticks the active accounts with the
+annotator role whose study work is open. It leaves out switched-off accounts, accounts without the
+annotator role (an expert who only adjudicates, or an administrator who does not annotate) and
+trainees whose study work is locked until they pass the competency assessment, and the list marks
+each of them (for example "trainee, study work locked" or "expert only, no annotator role"). Tick any
+of them by hand if you mean to: the preview then warns that a locked trainee's tasks wait in Collecting
+until they pass, and that someone given tasks cannot adjudicate them. Then choose the recordings (every
 recording of the study, or those you tick), how many annotators each recording goes to (Study
 settings, Corrections and adjudication, sets the starting number), and the part of each recording: the
 whole recording, one stretch of each (from and to, in seconds), or consecutive parts of a length you
 choose, which may overlap. A share-out can have a name, such as Pilot round, to find its tasks by
 later. Preview the share-out works out what would be made without making anything: a sentence such
-as "200 tasks, each to 2 people: 400 new assignments. Everyone gets 40.", each person's open tasks
-now, their new ones and their total after it, the tasks themselves, and what is left out and why.
-Make the tasks is ready once the preview is shown, and any change to the choices asks for the
+as "200 tasks, each to 2 people: 400 new assignments. Everyone gets 40.", how evenly the pairs of
+annotators would share tasks (for example "After this share-out, each of the 45 pairs of annotators
+shares 4 or 5 tasks", counting the study's earlier tasks too), any warnings about the people
+chosen, each person's open tasks now, their new ones and their total after it, the tasks
+themselves, and what is left out and why. Make the tasks is ready once the preview is shown, and any change to the choices asks for the
 preview again. The tasks are made once, however often the button is pressed or the answer is late.
 
-Each task goes to the people with the fewest open tasks, so the work is shared evenly, and ties are
-settled by a fixed order, so the same choices give the same share-out. Someone who already has the
+Each task goes to the people with the fewest open tasks, so the work is shared evenly. Among people
+equally free, it goes to those who have shared the fewest tasks with each other so far, counting the
+study's earlier tasks too, so that every pair of annotators shares about as many recordings: pairwise
+agreement compares each pair on the recordings they share, and a pair with few in common gives a
+less certain figure. With 10 annotators and 200 recordings, each person gets 40 and each of the 45
+pairs shares 4 or 5 when every recording goes to two people (13 or 14 when it goes to three). The
+last ties are settled by a fixed order, so the same choices give the same share-out. Someone who already has the
 whole recording comes first for a task of the whole recording, and their assignment joins the task;
 they are left out of a task for a part of it, which would shut them out of the rest. Nobody holds two
 parts of one recording, so a recording cut into many parts needs at least k people for each part. A

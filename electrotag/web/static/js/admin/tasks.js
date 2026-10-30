@@ -7,13 +7,13 @@
 
 import { h, clear } from '../ui/dom.js';
 import { newId } from '../util.js';
-import { plural, rolesOf, setLabel } from './model.js';
+import { plural, setLabel } from './model.js';
 import {
   actionButton, card, checkbox, checkList, chip, confirmInline, dataTable, field, messageArea, numberInput, recordingName, sectionHead, select, textInput,
 } from './ui.js';
 import {
-  K_MAX, K_MIN, PARTS, PERSON, SKIPPED, STATUS, changeChoices, filterTasks, partText, percent, previewSummary, requestBody, savedText, skippedPart,
-  statusKind, statusText,
+  K_MAX, K_MIN, PARTS, PERSON, SKIPPED, STATUS, changeChoices, filterTasks, partText, percent, personNote, poolEntry, previewSummary, requestBody,
+  savedText, skippedPart, statusKind, statusText,
 } from './tasks_model.js';
 
 export class TasksSection {
@@ -77,10 +77,13 @@ export class TasksSection {
   // ------------------------------------------------------------- share out
   _buildForm() {
     clear(this.formHost);
-    const people = checkList(this.users.map((u) => ({ value: u.annotator_id, text: u.annotator_id,
-      notInAll: u.status === 'disabled' || (rolesOf(u).includes('admin') && !rolesOf(u).includes('annotator')),
-      extra: [u.display_name, u.status === 'disabled' ? 'switched off' : '', rolesOf(u).includes('expert') ? 'expert' : ''].filter(Boolean).join(' · ') })),
-    { legend: 'Annotators to share among', name: 'task-people', empty: 'Add accounts on the Annotators page first.' });
+    const entries = this.users.map(poolEntry);
+    const people = checkList(entries,
+      { legend: 'Annotators to share among', name: 'task-people', empty: 'Add accounts on the Annotators page first.' });
+    if (entries.some((e) => e.notInAll)) {
+      people.append(h('p.caption', {}, 'All leaves out switched-off accounts, accounts without the annotator role and trainees whose study work is '
+        + 'locked until they pass the competency assessment. Tick any of them by hand if you mean to; the preview then warns.'));
+    }
     const all = checkbox('Every recording of the study (retired ones are left out)', true);
     const recs = checkList(this.recordings.map((r) => ({ value: r.recording_id, text: r.file_name || r.recording_id.split('/').pop(),
       extra: [r.retired ? 'retired' : '', r.assigned ? `given to ${plural(r.assigned, 'person', 'people')}` : ''].filter(Boolean).join(' · ') })),
@@ -167,6 +170,8 @@ export class TasksSection {
     clear(host);
     const s = previewSummary(p);
     host.append(h('p.tasks-summary', { role: 'status' }, s.sentence));
+    if (s.pairs) host.append(h('p.caption.tasks-pairs', {}, s.pairs));
+    if (s.warnings.length) host.append(h('div.banner.tasks-warnings', { role: 'note' }, s.warnings.map((w) => h('p', {}, w))));
     if (s.people.length) {
       host.append(dataTable([
         { title: 'Annotator', key: 'annotator_id', render: (r) => h('b', {}, r.annotator_id) },
@@ -174,6 +179,7 @@ export class TasksSection {
         { title: 'New tasks', key: 'new', num: true },
         { title: 'Already theirs', key: 'linked', num: true },
         { title: 'Open tasks after', key: 'total', num: true },
+        ...(s.people.some(personNote) ? [{ title: 'Note', render: (r) => personNote(r) || '–' }] : []),
       ], s.people, { caption: 'Each person\'s share', pageSize: 50, sortable: true }));
     }
     if (p.tasks && p.tasks.length) {
