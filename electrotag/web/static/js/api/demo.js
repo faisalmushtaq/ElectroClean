@@ -713,7 +713,7 @@ export class DemoBackend {
     return annotations.map((a) => ({ ...a, channels: info.ch_names.filter((c) => (a.channels || []).includes(c)), confidence: a.confidence ?? null, note: (a.note || '').trim() }));
   }
 
-  /** As service.py parse_bad_channels: the channels marked bad for the whole recording, shown ones only, in recording order. */
+  /** As service.py parse_bad_channels. */
   _badChannels(list, info) {
     if (list === undefined || list === null) return [];
     if (!Array.isArray(list) || list.some((c) => typeof c !== 'string')) throw new ApiError(422, 'invalid_annotation', 'bad_channels must be a list of channel names');
@@ -1383,7 +1383,6 @@ export class DemoBackend {
           scope: a.channels.length ? 'channels' : 'whole_montage', created_at: a.created_at, modified_at: a.modified_at,
           confidence: a.confidence ?? null, note: a.note || '',
         })),
-        // the channels the annotator marked bad for the whole recording (docs/file_formats.md, schema 1.2.0)
         bad_channels: [...(s.bad_channels || [])],
       };
     });

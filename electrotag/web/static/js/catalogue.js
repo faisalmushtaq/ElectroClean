@@ -12,12 +12,7 @@ export function displayCode(code) {
   return c.charAt(0) + c.slice(1).toLowerCase();
 }
 
-/**
- * The type for an artifact that is visible but whose type cannot be told: HED's Data-artifact (code 130),
- * the parent of every artifact term, shown as "Uncertain / needs review". It is one key away (0, and its
- * own button in the toolbar), and a mark of it needs an expert's review: the expert area lists such marks
- * (electrotag/app/annotations/labels.py UNCERTAIN_LABEL).
- */
+/** Uncertain / needs review: HED's Data-artifact, on key 0 (labels.py UNCERTAIN_LABEL). */
 export const UNCERTAIN_LABEL = 'Data-artifact';
 export const UNCERTAIN_TEXT = 'Uncertain / needs review';
 
@@ -57,7 +52,7 @@ export class Catalogue {
     return l ? l.colour : '#808080';
   }
 
-  /** "Eye-blink-artifact  (103)" and, for group terms, "– exact type unclear" (for the uncertain type, what it is for). */
+  /** "Eye-blink-artifact  (103)" and, for group terms, "– exact type unclear". */
   labelText(label) {
     const l = this.get(label);
     if (l.label === UNCERTAIN_LABEL) return `${l.label}  (${l.value})  – ${UNCERTAIN_TEXT.toLowerCase()}`;
@@ -82,10 +77,7 @@ export class Catalogue {
     return this.labels.filter((l) => !l.is_group).map((l) => l.label);
   }
 
-  /**
-   * The types on keys 1 to 9: the study's choice (unknown names left out), else the first specific types.
-   * The uncertain type is left out: it has its own key (0) and button.
-   */
+  /** The types on keys 1 to 9: the study's choice (unknown names and the uncertain type left out), else the first specific types. */
   quickLabels(chosen) {
     const ok = (chosen || []).filter((n) => this.has(n) && n !== UNCERTAIN_LABEL).slice(0, 9);
     return ok.length ? ok : this.specificLabels().slice(0, 9);

@@ -395,7 +395,7 @@ export function settingsProblems(s, labels = null) {
   if (labels) for (const l of q) if (!labels.includes(l)) out.push(`${l} is not one of the artifact types.`);
   if ('allow_revisions' in a && typeof a.allow_revisions !== 'boolean') out.push('Whether finished recordings may be revised is on or off.');
   if ('allow_reviews' in a && typeof a.allow_reviews !== 'boolean') out.push('Whether saved recordings may be reviewed is on or off.');
-  if ('merge_overlapping' in a && typeof a.merge_overlapping !== 'boolean') out.push('Whether overlapping marks of one type are joined is on or off.');
+  if ('merge_overlapping' in a && typeof a.merge_overlapping !== 'boolean') out.push('Joining overlapping marks is on or off.');
   if ('show_reviews_to_annotators' in a && typeof a.show_reviews_to_annotators !== 'boolean') out.push('Whether annotators see the reviews of their work is on or off.');
   const g = s.gamification || {};
   for (const k of ['enabled', 'leaderboard', 'leaderboard_viewed_only']) {

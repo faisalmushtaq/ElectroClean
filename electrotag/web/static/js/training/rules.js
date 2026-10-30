@@ -185,7 +185,7 @@ export function instruction(label, guidance) {
 /** The first step of marking `label`: its number key or button, or the type finder. */
 export function chooseTypeText(label, quickKeys) {
   const key = (quickKeys || {})[label];
-  if (label === 'Data-artifact') return 'Press **0** (or click **Uncertain** in the toolbar) to choose Data-artifact, the type for an artifact whose type cannot be told.';
+  if (label === 'Data-artifact') return 'Press **0** (or click **Uncertain**) to choose Data-artifact.';
   if (key) return `Press **${key}** (or click **${key}** next to Draw as) to choose ${label}.`;
   return `Press **/**, type ${label} and press **Enter** to choose it.`;
 }
