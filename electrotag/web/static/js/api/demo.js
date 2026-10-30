@@ -35,6 +35,11 @@ import { isConfidence, noteProblem } from '../annotate/confidence.js';
 
 const STATE_KEY = 'electrotag.demo.v2';
 /** The admin operations of the training path, which come with demo_training_stages.js. */
+/** The sandbox's calls that wait for the sign-up questionnaire (questionnaire.py GATED_OPERATIONS), and the admin
+ *  operations that come with its part (demo_questionnaire.js, loaded at its first use). */
+const QUESTIONNAIRE_GATED = ['match', 'putDraft', 'submit', 'training', 'guided', 'guidedCheck', 'guidedContinue', 'guidedShowMe',
+  'trainingStage', 'trainingSnippets', 'quiz', 'expert'];
+const QUESTIONNAIRE_ADMIN_OPS = ['questionnaire_get', 'questionnaire_summary', 'contacts_download', 'users_list'];
 const TRAINING_ADMIN_OPS = ['snippets_list', 'snippet_add', 'snippet_remove', 'training_gate_get', 'training_reopen', 'training_assessment_set'];
 const TOKEN_KEY = 'electrotag.demo.token';
 export const DEMO_PASSWORD = 'demo';
@@ -213,6 +218,12 @@ export class DemoBackend {
     this._admin = new DemoAdmin(this);
     this.feedback = new DemoFeedback(this); // problem reports and reviews (demo_feedback.js)
     this.experts = null; // the expert area's operations (demo_expert.js), loaded at the first expert call
+    // The sign-up questionnaire (demo_questionnaire.js): work waits until it is answered, as on a study server.
+    this.questionnaires = null;
+    for (const name of QUESTIONNAIRE_GATED) {
+      const call = this[name].bind(this);
+      this[name] = async (...args) => { (await this._questionnairePart()).require(); return call(...args); };
+    }
     const saved = tokens.get(TOKEN_KEY, null);
     const user = saved ? this._admin.user(saved.annotator_id) : null;
     this.annotatorId = user && user.status === 'active' ? user.annotator_id : null;
@@ -293,6 +304,7 @@ export class DemoBackend {
       catalogue: CATALOGUE,
       programme: this._inProgramme(aid) ? { set_id: TRAINING_SET.set_id, name: this._exampleSet().name, complete: !this._nextStep(aid).stage } : null,
       training_gate: this._gate(),
+      questionnaire: (await this._questionnairePart()).status(aid),
       quizzes: this._quizAllowed(aid) ? [{ set_id: QUIZ.set_id, name: this._exampleSet().name, n_items: QUIZ.items.length,
         n_answered: Object.keys(quiz.answers).length, finished: Boolean(quiz.finished), feedback: QUIZ.feedback }] : [],
     };
@@ -805,6 +817,25 @@ export class DemoBackend {
 
   // ------------------------------------------------------------ achievements
   /** GET /me/achievements (docs/web/api.md, "Achievements"), from the sandbox's own state. */
+  /** GET /me/questionnaire: the sign-up questionnaire, the answers and contact details (demo_questionnaire.js). */
+  async questionnaire() { this._aid(); return JSON.parse(JSON.stringify((await this._questionnairePart()).view())); }
+
+  /** The sign-up questionnaire's part of the sandbox, loaded at its first use (js/lazy.js, part demoQuestionnaire). */
+  async _questionnairePart() {
+    if (!this.questionnaires) {
+      const { DemoQuestionnaire } = await loadPart('demoQuestionnaire');
+      this.questionnaires = this.questionnaires || new DemoQuestionnaire(this);
+    }
+    return this.questionnaires;
+  }
+
+  /** POST /me/questionnaire: saves the answers and contact details. */
+  async saveQuestionnaire(body) {
+    this._aid();
+    const sent = JSON.parse(JSON.stringify({ answers: null, ...(body || {}) })); // as it would travel
+    return JSON.parse(JSON.stringify((await this._questionnairePart()).save(sent)));
+  }
+
   async achievements() { return this._achievements({}); }
 
   /** POST /me/achievements: the personal goal ({goal_per_week}) or being hidden from the leaderboard. */
@@ -1402,6 +1433,7 @@ export class DemoBackend {
   /** The admin area's operations (docs/web/api.md, "Administration"), in this browser: demo_admin.js. */
   async admin(op, body = {}) {
     if (TRAINING_ADMIN_OPS.includes(op)) await this._trainingPart(); // its operations come with it (demo_training_stages.js)
+    if (QUESTIONNAIRE_ADMIN_OPS.includes(op)) await this._questionnairePart(); // and these with demo_questionnaire.js
     return this._admin.run(op, body || {});
   }
 

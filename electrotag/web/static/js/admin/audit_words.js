@@ -70,6 +70,10 @@ export const AUDIT_OPS = Object.freeze({
   handout_create: 'Recordings handed out',
   handout_update: 'Hand-out changed',
   handout_withdraw: 'Hand-out withdrawn',
+  // the sign-up questionnaire (questionnaire.py): never what was changed, only that it was
+  contacts_changed: 'Contact details changed',
+  contacts_download: 'Contacts list downloaded',
+  results_zip_contacts: 'Results downloaded with names and contact details',
 });
 
 /**

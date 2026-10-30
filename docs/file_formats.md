@@ -369,6 +369,36 @@ known-answer task they saved, with the columns `annotator_id`, `task_id`, `recor
 `event_recall` and `scored_at`. The scores compare the saved annotations with the set's reference as
 the practice feedback does, within the task's part of the recording when it has one.
 
+## The sign-up questionnaire (results zip and export)
+
+The answers to the sign-up questionnaire (docs/web/using.md, "Before your first recording") are
+written below `questionnaire/` in the results zip and by `electrotag web export`, by annotator ID and
+with no name or contact detail.
+
+`questionnaire/answers.tsv` has a row for each set of answers a person gave, the oldest first for each
+person, with the columns `annotator_id`, `questionnaire_version` (the version of the questions
+answered: `q-` and ten hexadecimal digits of the SHA-256 of their wording and options),
+`answered_at` (local time with its UTC offset), `current` (`true` for the person's answers now,
+`false` for an earlier set), then a column named after each question's `id`, the current questions
+first and then any asked only in an earlier version, with `<id>_other` beside a question that asks for
+the person's own words. An answer is the option chosen, the options chosen separated by `; `, the
+text given, `prefer_not_to_say`, or `n/a` when the question was not answered (or not asked in that
+version).
+
+`questionnaire/answers.json` holds the same as JSON: `{"schema": "electrotag.questionnaire_answers",
+"schema_version": 1, "generated_at", "current_version", "prefer_not_to_say": "prefer_not_to_say",
+"definitions": {version: [question]}, "people": [{"annotator_id", "history": [{"at", "version",
+"answers": {id: answer}, "other": {id: text}}]}]}`, where `definitions` gives the wording, options and
+groups of each version answered (the format of the `questionnaire` setting) and a `multi` answer is a
+list.
+
+`contacts.csv`, at the top of the results zip, is there only when the administrator ticked Include
+names and contact details. It identifies people, so keep it apart from the research data. Its columns
+are `annotator_id`, `full_name`, `email`, `phone`, `institution`, `updated_at` (when the person last
+changed them) and `account` (`active`, `disabled` or `removed`); a value that starts with `=`, `+`,
+`-` or `@` is written with an apostrophe before it, so that a spreadsheet does not take it for a
+formula. The README of the zip says the same.
+
 ## Adjudications and the library (results zip and export)
 
 The adjudications are kept by the study and written into the results when the
@@ -602,3 +632,5 @@ skipped in the new one.
 | `confidence_sensitivity.tsv` | When any mark was rated: positive agreement, Cohen's kappa (sample by sample, pooled) and event F1 per category, mode and pair, for all marks (`*_all`) and without the marks rated 1 or 2 (`*_without_low_confidence`; unrated marks kept) |
 | `confidence_calibration.tsv` | When any mark was rated: per annotator (and all together) and rating, the marks and the share found by another annotator (a mark of the same type matching it, time only, at the main threshold) |
 | `confusion_time_weighted.tsv` | Time where one annotator used one label and the other another |
+| `questionnaire_at_annotation.tsv` | In the admin area, once anyone has answered the sign-up questionnaire: for each recording and annotator, the answers current when their version was saved (`recording_id`, `rater`, `mode`, `annotated_at`, `questionnaire_version`, `answered_at`, `answered_after`, then the questions as in `questionnaire/answers.tsv`); `answered_after` is `true` when the person first answered only after the work, whose earliest answers are then given |
+| `agreement_by_experience.tsv` | In the admin area: the pairwise Cohen's kappa and positive agreement of each recording (exact, time only, from `timeresolved_pairwise.tsv`), averaged by the two annotators' answers to "How many EEG datasets have you analysed?" at the time (`datasets_analysed_bands`, `category`, `n_comparisons`, `mean_cohen_kappa`, `mean_positive_agreement`) |

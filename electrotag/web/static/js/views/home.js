@@ -141,6 +141,7 @@ export function homeView(app) {
     h('main.page', {},
       h('h1', {}, `Hello${app.me && app.me.display_name ? `, ${app.me.display_name}` : ''}`),
       guideLine(),
+      questionnaireLine(app),
       h('div.home-grid', {},
         h('div.col', {}, nextCard, outcomesHost(app), expertCard(app), !training && items.length ? progressCard(p) : null, programme && !training && !waiting ? trainingDoneCard(app) : null,
           list, quizCard(app)),
@@ -151,6 +152,23 @@ export function homeView(app) {
 function games(app) {
   const part = app.achievements ? partNow('games') : null;
   return part ? part.gameCards(app) : [];
+}
+
+/**
+ * The sign-up questionnaire (js/views/questionnaire.js): when it was answered, with the way to change the answers;
+ * before it is answered, the way to answer it (the study refuses work until then).
+ */
+export function questionnaireLine(app) {
+  const q = app.me && app.me.questionnaire;
+  if (!q || !q.asked) return null;
+  if (!q.answered) {
+    return h('p.banner.q-home', { role: 'status' }, 'Your recordings, training and expert work open once you have answered the short sign-up questionnaire. ',
+      h('button.link', { type: 'button', 'data-log': 'questionnaire-open', onclick: () => app.showQuestionnaire({ first: true, then: () => app.showHome() }) }, 'Answer the questionnaire'));
+  }
+  const d = q.answered_at ? new Date(q.answered_at) : null;
+  const when = d && !Number.isNaN(d.getTime()) ? ` on ${d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}` : '';
+  return h('p.caption.q-home', {}, `You answered the sign-up questionnaire${when}${q.missing ? `; the study team has added ${q.missing === 1 ? 'a question' : `${q.missing} questions`} since` : ''}. `,
+    h('button.link', { type: 'button', 'data-log': 'questionnaire-open', onclick: () => app.showQuestionnaire() }, q.missing ? 'Answer the new questions' : 'See or change my answers'));
 }
 
 /** Where the annotators' guide is read (docs/web/using.md, in a new tab). */

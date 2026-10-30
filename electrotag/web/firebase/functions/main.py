@@ -230,6 +230,13 @@ def et_achievements(req: https_fn.CallableRequest) -> Any:
     return handle("achievements", req)
 
 
+# The sign-up questionnaire: the questions, the caller's answers and contact details; with answers it saves
+# them (docs/web/api.md, "The sign-up questionnaire").
+@https_fn.on_call()
+def et_questionnaire(req: https_fn.CallableRequest) -> Any:
+    return handle("questionnaire", req)
+
+
 # A problem an annotator reports with a recording (saved once, whatever the number of presses), and
 # the reviews of their saved work (docs/web/api.md, "Problem reports" and "Reviews").
 @https_fn.on_call()

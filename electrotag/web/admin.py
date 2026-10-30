@@ -42,6 +42,7 @@ if TYPE_CHECKING:
 #: The blocks of electrotag_study.json's settings that the admin area may read and change.
 SETTINGS_BLOCKS = ("filters", "display", "channels", "selection", "logging", "annotation", "loading", "discovery",
                    "gamification", "review", "training", "replay")
+SETTINGS_BLOCKS += ("questionnaire",)  # the sign-up questionnaire (electrotag/web/questionnaire.py)
 SET_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 EMAIL_RE = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,190}\.[^@\s]{2,63}$")
@@ -94,6 +95,10 @@ DATASET_WRITES = ("dataset_create", "dataset_update", "dataset_remove", "recordi
 TRACKING_READS = ("tracking_datasets_get", "tracking_recordings_get", "notify_preview_get")
 READ_ONLY += DATASET_READS + TRACKING_READS
 OPERATIONS += DATASET_READS + TRACKING_READS + DATASET_WRITES
+# The sign-up questionnaire (electrotag/web/questionnaire.py): a person's answers and contact details, everyone's
+# answers, and the contacts list (written to the audit log, as it names people).
+READ_ONLY += ("questionnaire_get", "questionnaire_summary")
+OPERATIONS += ("questionnaire_get", "questionnaire_summary", "contacts_download")
 
 
 # ------------------------------------------------------------------ checking input
@@ -653,7 +658,9 @@ class Admin:
     # --------------------------------------------------------------- users
     def op_users_list(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
         invitations = self.store.invitations()
-        return {"users": [self.user_out(r, invitations) for r in self.store.user_records()]}
+        users = [self.user_out(r, invitations) for r in self.store.user_records()]
+        self.service.questionnaire.add_to_users(users)  # full_name and questionnaire, for the study team only
+        return {"users": users}
 
     def op_user_add(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
         aid = _aid(body.get("annotator_id"))
@@ -1630,7 +1637,12 @@ class Admin:
         return self.service.analyses.competency(body)
 
     def op_results_zip(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
-        return self.service.analyses.results_zip(body)
+        include = _bool(body, "include_contacts") or False
+        out = self.service.analyses.results_zip({**body, "include_contacts": include})
+        if include:  # a file that names people: written to the audit log
+            self._audit(user, "results_zip_contacts", "Downloaded the results with the names and contact details "
+                        "(contacts.csv)", include_contacts=True)
+        return out
 
     # ------------------------------------------------------------ the record
     def op_audit(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
@@ -1708,6 +1720,16 @@ class Admin:
         from electrotag.web.correct_marks import remove
 
         return remove(self.service, user, body)
+
+    # ------------------------------------------- the sign-up questionnaire (electrotag/web/questionnaire.py)
+    def op_questionnaire_get(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.service.questionnaire.admin_get(user, body)
+
+    def op_questionnaire_summary(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.service.questionnaire.admin_summary(user, body)
+
+    def op_contacts_download(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.service.questionnaire.contacts_list(user, body)
 
 
 # ------------------------------------------- datasets, collections, groups and hand-outs (electrotag/web/datasets.py)

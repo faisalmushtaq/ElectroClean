@@ -148,8 +148,9 @@ opened from a Dropbox or OneDrive link goes straight from that service to the an
 and neither the file nor the link reaches the server. Copies that annotators keep on their
 device, to open a recording again without downloading it, stay in their browser's storage for
 the site until they remove them or the browser clears the site's data. The study folder holds the
-annotators' IDs, names, email addresses (when given), notes and password hashes, their results,
-drafts and quiz answers, the interaction logs (times, clicks, keys and what was on screen; never
+annotators' IDs, names, email addresses (when given), notes and password hashes, their answers to the
+sign-up questionnaire (by annotator ID, with every earlier set) and, kept apart from them, the full
+name and contact details they gave, their results, drafts and quiz answers, the interaction logs (times, clicks, keys and what was on screen; never
 typed text or passwords) and the audit log of the administrators' changes (which never holds a
 password or an invitation link). An invitation link's token is kept only as a SHA-256 hash with its
 expiry and the dates it was made and used, so a copy of the study folder lets nobody use a link,

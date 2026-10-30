@@ -142,7 +142,9 @@ password.
   "programme": null | {"set_id": "example", "name": "…", "complete": false},  // in a training programme; complete when every stage is done
   "training_gate": {"open": true, "reason": "" | "training_required", "message": "…",
                     "result": "" | "not_met" | "not_determined"},  // see "Training stages"
-  "quizzes": [{"set_id": "example", "name": "…", "n_items": 4, "n_answered": 0, "finished": false, "feedback": "immediate"}]
+  "quizzes": [{"set_id": "example", "name": "…", "n_items": 4, "n_answered": 0, "finished": false, "feedback": "immediate"}],
+  "questionnaire": {"enabled": true, "asked": true, "answered": false, "answered_at": null,
+                    "version": null, "current_version": "q-6a87a71e67", "missing": 0}  // see "The sign-up questionnaire"
 }
 ```
 
@@ -509,6 +511,75 @@ reference is revealed only for practice recordings, after they are saved, and
 only when the reference set allows the review (`review`; otherwise `flags` and
 `reference` are empty). Numbers that cannot be computed are null.
 
+## The sign-up questionnaire
+
+Annotators and experts answer a short questionnaire about their experience of
+EEG, their career stage and field and, where the study keeps them, a few
+demographic questions, with their full name and contact details, once, before
+any work. Until they have answered, the study refuses `match`, drafts
+(`PUT /drafts`), `submit`, the training programme (`GET /training`, the guided
+calls, `POST /training/stage`, `GET /training/snippets`), the quiz and every
+operation of the expert area with 403 `questionnaire_required` and a sentence
+that says so. Someone whose only role is `admin` is never asked, and nobody is
+when the study's setting `questionnaire.enabled` is false. `GET /me` says
+where the person stands in `questionnaire`: `asked`, `answered`, when
+(`answered_at`) and to which version of the questions (`version`), the
+version asked now (`current_version`) and how many of the questions marked
+required now have no answer in the latest set (`missing`, which grows when the
+study team adds a required question; the gate stays open, and the home page
+offers the new questions).
+
+`GET /me/questionnaire` gives the questions, the person's current answers and
+their contact details:
+
+```jsonc
+{
+  "enabled": true, "asked": true,
+  "groups": [{"key": "experience", "title": "Your experience of EEG"}, …],   // the groups that have questions
+  "questions": [{"id": "datasets_analysed", "group": "experience", "text": "How many EEG datasets have you analysed?",
+                 "type": "choice" | "multi" | "text", "required": true,
+                 "options": ["0", "1–2", "3–10", "11–30", "31–100", "Over 100"],   // not for text
+                 "other_option": "Other",   // the option that asks for the person's own words, when there is one
+                 "help": "…"}],
+  "version": "q-6a87a71e67",               // "q-" and 10 hexadecimal digits of the SHA-256 of the questions' JSON
+  "prefer_not": {"value": "prefer_not_to_say", "label": "Prefer not to say"},
+  "answers": {"datasets_analysed": "3–10", "eeg_systems": ["BioSemi"], "age_band": "prefer_not_to_say", …},
+  "other": {"artifact_training": "A summer school"},
+  "answered_at": "…" | null, "answered_version": "q-…" | null, "n_versions": 2,
+  "contacts": {"fields": [{"key": "full_name", "title": "Full name", "level": "required" | "optional"}, …],
+               "values": {"full_name": "…", "email": "…", "phone": "", "institution": ""}}
+}
+```
+
+Every question offers "Prefer not to say" (`prefer_not.value`), which
+ElectroTag adds itself: a `choice` question takes one of its options or it, a
+`multi` question a list of its options or `["prefer_not_to_say"]` alone, a
+`text` question text on one line of at most 200 characters or it. Before the
+first answer the email address is filled in from the account. The contact
+details asked are the study's (`questionnaire.contacts`: each `required`,
+`optional` or `off`).
+
+`POST /me/questionnaire {"answers": {...}, "other"?: {...}, "contacts": {...}}`
+saves them and answers as `GET`, with `changed` (whether anything was kept)
+and `n_answered`. The answers become the person's current ones as a new entry
+of their history, with its date and the version of the questions; the same
+answers sent again change nothing, so a request that arrives twice is
+harmless, but the browser never repeats it by itself. The words given with
+an option that asks for them (`other`) are kept only with that option chosen.
+Refusals are 422: `questionnaire_incomplete` for a required question left
+unanswered or a required contact detail left empty (the message names the
+question), `unknown_question` for a question the study does not ask (the
+questions changed while the page was open), and `invalid_answers` for an
+answer that is not one of the options, "Prefer not to say" chosen with other
+answers, an email address or phone number that cannot be one, or text over
+its length; 409 `questionnaire_off` when the study does not ask it.
+
+The answers are kept by annotator ID as research data (the record kind
+`questionnaires`); the name and contact details are kept apart (`contacts`)
+and reach no research file. The audit log notes only that someone's details
+changed (`contacts_changed`), and the interaction log only that the
+questionnaire was answered (`questionnaire_answered`, with `n_answered`).
+
 ## Training programme
 
 `GET /training` → `{"set_id", "name", "description", "stages": [{"key": "tour" | "snippets" | "guided" | "practice" |
@@ -734,6 +805,8 @@ UserRecord = {"annotator_id": "A03", "display_name": "Annotator three", "email":
               "study_locked": false /* a trainee whose study work waits for the competency assessment */,
               "invitation": {"state": "none" | "invited" | "accepted" | "expired" | "revoked",
                              "invited_at": "…" | null, "expires_at": "…" | null, "ended_at": "…" | null}}
+           /* users_list adds "full_name" (from the sign-up questionnaire's contact details, "" before them) and
+              "questionnaire_answered", for the study team's own lists */
 RecordingRecord = {"scope": "study" | "set:<set_id>", "recording_id": "sub-001/eeg/sub-001_task-rest_eeg.vhdr",
               "file_name", "format", "sfreq", "n_samples", "duration_s", "n_channels", "size_bytes",
               "sha256", "registered_at", "registered_by", "registered_via": "browser" | "command",
@@ -764,7 +837,7 @@ study's own recordings have `"self_contained": false` and `"scope": "study"`.
 | op | body | answer |
 | --- | --- | --- |
 | `overview` | `{}` | `{"study": {"study_id", "name"}, "counts": {"recordings", "annotators", "experts", "admins", "assignments", "done", "in_progress", "todo", "unusable", "problems_open", "reviewed"}, "recent": [AuditEntry], "last_saved": [{"annotator_id", "recording_id", "mode", "context_id", "at"}]}` (ten of each; `recordings` counts the study's own, the others the active accounts and their work, each account under every role it holds; `problems_open` the open problem reports and `reviewed` the annotator's recordings with at least one review) |
-| `settings_get` | `{}` | `{"name", "settings": {"filters", "display", "channels", "selection", "logging", "annotation", "loading", "discovery", "gamification", "review", "training", "replay"}, "logging_notice", "logging_notice_is_default"}`: the effective values of the blocks of `electrotag_study.json` that a study may change (`review`, `training` and `replay` are described in the administrator guide) |
+| `settings_get` | `{}` | `{"name", "settings": {"filters", "display", "channels", "selection", "logging", "annotation", "loading", "discovery", "gamification", "review", "training", "replay", "questionnaire"}, "logging_notice", "logging_notice_is_default"}`: the effective values of the blocks of `electrotag_study.json` that a study may change (`review`, `training`, `replay` and `questionnaire` are described in the administrator guide) |
 | `settings_update` | `{"name"?, "settings"?: {block: {key: value}}, "logging_notice"?}` | as `settings_get`. Each key given replaces that setting; the result is checked with ElectroTag's own settings code and refused with 400 `invalid_settings` and the reason (also for a block or key that cannot be changed). `"logging_notice": ""` goes back to ElectroTag's own notice |
 | `users_list` | `{}` | `{"users": [UserRecord]}` (disabled accounts too) |
 | `user_add` | `{"annotator_id", "display_name"?, "email"?, "roles"?: ["annotator"], "role"?, "password"?, "invite"?: false, "expires_days"?: 14}` | `{"user": UserRecord, "invite_link": str \| null, "temporary_password": str \| null}`, with `"invite_token", "expires_at"` when `invite` is true. On Firebase `email` is required (400 `email_required`), the Firebase Authentication user is created (or, for a person already in another study of the project, given this study) with the custom claims below, and `invite_link` lets the person choose a password when none is given. On the server a temporary password (three groups of four characters) is made when none is given; with `"invite": true` the account is made with an invitation instead (as `user_invite`), and nobody knows its first password. A password has 8 to 200 characters; a password and `invite` together are 400; `invite` for an administrator is 409 `admin_account`. `roles` lists the account's roles; the older `role` alone gives one; with both, `role` must be the primary role of `roles` (400 otherwise). An unknown role is 400 `bad_request`, `participant` 400 `role_not_offered`, the IDs `ADJUDICATED` and `REFERENCE` 400 `reserved_id`. 409 `user_exists`, 409 `email_in_use` |
@@ -796,10 +869,13 @@ study's own recordings have `"self_contained": false` and `"scope": "study"`.
 | `quiz_item_remove` | `{"set_id", "item_id"}` | `{}`; 404 `unknown_item` |
 | `progress` | `{}` | as `GET /admin/progress` |
 | `stats` | `{"work"?: "study" \| "all"}` | `Stats` (below): how far the study has got and how long the work takes, from the completion register (`elapsed_s`, `n_annotations`, `completed_at`), the drafts, the assignments, the accounts' `last_seen` and the visits. `work` `study` counts the study's own annotation (mode `standard`), `all` training too; 400 otherwise. A recording saved more than once (a revision, or a practice recording repeated) counts as one recording done, on the day of its first save, with the annotations of its latest attempt and the time of all its attempts together; `saved` per recording is the number of people who saved it |
-| `agreement` | `{"annotator_ids"?, "recording_ids"?, "modes"?: ["standard"], "versions"?: "original", "unit"?: "recording", "config"?: {..AnalysisConfig fields..}}` | `{"summary": {"n_recordings", "n_comparable_recordings", "annotators", "config", "key_results": [..], "unusable": {"recordings_left_out", "recording_ids", "assignments"}, "versions", "unit"}, "report_html": str, "tables": {"<name>.tsv": str}, "warnings": [..], "settings_file": {"config": {..AnalysisConfig..}, "recording_ids": [..] \| null, "exclude_recording_ids": [..], "command": str}}`, computed on demand with `electrotag.reliability` (the files of `electrotag-agreement`). Annotators and modes are chosen with `annotator_ids` and `modes`, not in `config`; settings it refuses give 400 `invalid_config`; 422 `not_enough` when no recording has two annotators. When the tables would exceed 12 MB, `events_matched.tsv` and `events_unmatched.tsv` are left out with a warning; `annotation_notes.tsv` (every annotation with a note: `recording_id`, `annotator_id`, `mode`, `annotation_id`, `label`, `onset_s`, `duration_s`, `channels`, `confidence`, `note`) is always sent. `settings_file` is the file `electrotag-agreement --config` reads, so that `command` (`electrotag-agreement Annotated_Events --config agreement_settings.json`) repeats the analysis on the results zip with the same recordings and the same numbers. A study recording that any annotator set aside as one that cannot be annotated is left out for every annotator, with a warning and a paragraph at the top of the report that give the counts (`summary.unusable`). `versions` and `unit` choose the corrected or adjudicated versions and windows compared on their own (see "Derived versions in the analyses" below) |
-| `activity` | `{"annotator_ids"?}` | `{"report_html": str, "tables": {"visits.tsv": str, "recordings.tsv": str}}`, with `electrotag.activity`; 422 `no_logs` when there are no interaction logs |
+| `agreement` | `{"annotator_ids"?, "recording_ids"?, "modes"?: ["standard"], "versions"?: "original", "unit"?: "recording", "config"?: {..AnalysisConfig fields..}}` | `{"summary": {"n_recordings", "n_comparable_recordings", "annotators", "config", "key_results": [..], "unusable": {"recordings_left_out", "recording_ids", "assignments"}, "versions", "unit"}, "report_html": str, "tables": {"<name>.tsv": str}, "warnings": [..], "settings_file": {"config": {..AnalysisConfig..}, "recording_ids": [..] \| null, "exclude_recording_ids": [..], "command": str}}`, computed on demand with `electrotag.reliability` (the files of `electrotag-agreement`). Annotators and modes are chosen with `annotator_ids` and `modes`, not in `config`; settings it refuses give 400 `invalid_config`; 422 `not_enough` when no recording has two annotators. When the tables would exceed 12 MB, `events_matched.tsv` and `events_unmatched.tsv` are left out with a warning; `annotation_notes.tsv` (every annotation with a note: `recording_id`, `annotator_id`, `mode`, `annotation_id`, `label`, `onset_s`, `duration_s`, `channels`, `confidence`, `note`) is always sent. `settings_file` is the file `electrotag-agreement --config` reads, so that `command` (`electrotag-agreement Annotated_Events --config agreement_settings.json`) repeats the analysis on the results zip with the same recordings and the same numbers. A study recording that any annotator set aside as one that cannot be annotated is left out for every annotator, with a warning and a paragraph at the top of the report that give the counts (`summary.unusable`). `versions` and `unit` choose the corrected or adjudicated versions and windows compared on their own (see "Derived versions in the analyses" below). Once anyone has answered the sign-up questionnaire, the tables also hold `questionnaire_at_annotation.tsv`, the answers current when each annotator's version of each recording was saved (`recording_id`, `rater`, `mode`, `annotated_at`, then as `questionnaire_at_visit.tsv` below), joinable to the other tables by recording and annotator ID, and `agreement_by_experience.tsv`, the time-resolved pairwise agreement of each recording (exact, time only) averaged by the two annotators' answers to "How many EEG datasets have you analysed?" at the time (`datasets_analysed_bands`, `category`, `n_comparisons`, `mean_cohen_kappa`, `mean_positive_agreement`) |
+| `activity` | `{"annotator_ids"?}` | `{"report_html": str, "tables": {"visits.tsv": str, "recordings.tsv": str, "questionnaire_at_visit.tsv"?: str}}`, with `electrotag.activity`; 422 `no_logs` when there are no interaction logs. `questionnaire_at_visit.tsv` (once anyone has answered the sign-up questionnaire) gives the answers current when each visit started: `visit_id`, `annotator_id`, `started_at`, `questionnaire_version`, `answered_at`, `answered_after` (true when the person's first answers came only after the visit, whose earliest answers are then given), and a column for each question (with `<id>_other` for the words given with "Other") |
+| `questionnaire_get` | `{"annotator_id"}` | `{"annotator_id", "asked", "answered", "questions", "version", "history": [{"at", "version", "answers", "other"}], "definitions": {version: [question]}, "contacts": {"full_name", "email", "phone", "institution", "updated_at"} \| null, "prefer_not"}`: a person's answers to the sign-up questionnaire, newest first, with the wording of each version they answered, and their contact details |
+| `questionnaire_summary` | `{}` | `{"questions", "version", "rows": [{"annotator_id", "answered_at", "version", "n_changes", "answers", "other", "removed"?}], "counts": {question id: {answer: n}}, "not_answered": [annotator_id], "enabled", "demographics", "demographics_note", "prefer_not"}`: everyone's current answers by annotator ID (and those of removed accounts, with `removed`); `counts` counts each option, "Prefer not to say", and `answered` for text; `not_answered` lists the active accounts that are asked and have not answered |
+| `contacts_download` | `{}` | `{"columns", "rows": [{"annotator_id", "full_name", "email", "phone", "institution", "updated_at", "account": "active" \| "disabled" \| "removed"}], "csv", "warning", "file_name"}`: everyone's name and contact details; written to the audit log ("Downloaded the contact details of 4 people"), never repeated by the browser |
 | `competency` | `{"set_id", "annotator_id"}` | `{"report": {..}, "html": str}` (`competency_report`, made again and kept, and `competency_html`); 404 `not_complete` until every assessment recording is saved (also for a set without assessment recordings) |
-| `results_zip` | `{}` | `{"file_name", "base64", "size_bytes"}`: the results folder as `GET /admin/results.zip` gives it, quiz results, problem reports and reviews included (docs/file_formats.md), with the study's settings (`study/electrotag_study.json`), its audit log (`study/audit_log.jsonl`, oldest first), its recordings' manifests (`study/manifests.json`) and a `README.txt`; 413 `too_large` (with `size_bytes`) above 25,000,000 bytes (use `electrotag-web export`) |
+| `results_zip` | `{"include_contacts"?: false}` | `{"file_name", "base64", "size_bytes"}`: the results folder as `GET /admin/results.zip` gives it, quiz results, problem reports, reviews and the sign-up questionnaire's answers by annotator ID (`questionnaire/answers.tsv` and `.json`) included (docs/file_formats.md); with `include_contacts` also `contacts.csv`, everyone's name and contact details, a file that identifies people, and an entry in the audit log (`results_zip_contacts`); with the study's settings (`study/electrotag_study.json`), its audit log (`study/audit_log.jsonl`, oldest first), its recordings' manifests (`study/manifests.json`) and a `README.txt`; 413 `too_large` (with `size_bytes`) above 25,000,000 bytes (use `electrotag-web export`) |
 | `problems_list` | `{"state"?: "open" \| "resolved", "reason"?, "annotator_id"?, "recording_id"?}` | `{"problems": [ProblemReport], "counts": {"open", "resolved", "unusable"}, "reasons": {code: text}}`, newest first; `counts` are of every report, and `unusable` the assignments set aside now |
 | `problem_resolve` | `{"problem_id", "note"?}` | `{"problem": ProblemReport}`; 404 `unknown_problem`, 409 `already_resolved` |
 | `problem_return` | `{"problem_id", "note"?}` | `{"problem": ProblemReport}`: the recording goes back on the annotator's to-do list (the status `unusable` is undone) and the report is resolved as `returned`; the annotator sees the note. 409 `not_unusable` when the recording is not set aside |
@@ -1586,7 +1662,7 @@ generation, region europe-west2) taking and returning the same JSON:
 `et_me`, `et_assignments`, `et_match`, `et_put_draft`, `et_delete_draft`,
 `et_submit`, `et_training`, `et_guided_get`, `et_guided_check`,
 `et_guided_continue`, `et_guided_show_me`, `et_visit_open`, `et_visit_events`,
-`et_visit_close`, `et_quiz`, `et_achievements`, `et_problem_report`, `et_my_reviews`,
+`et_visit_close`, `et_quiz`, `et_achievements`, `et_questionnaire`, `et_problem_report`, `et_my_reviews`,
 `et_my_feedback`, `et_training_stage`, `et_training_snippets`, for experts and
 administrators `et_expert` (every operation of the expert area, by `op`) and,
 for administrators, `et_admin_progress` and `et_admin` (every operation of the
@@ -1622,6 +1698,7 @@ The fields of each call:
 | (none) | `POST /invite/check` and `POST /invite/accept` have no function: on Firebase `user_invite` answers Firebase Authentication's `invite_link` |
 | `et_quiz` | `{"set_id", ...the body of `POST /quiz/{set_id}`}` |
 | `et_achievements` | none for `GET /me/achievements`; `{"goal_per_week"}` or `{"leaderboard_hidden"}` for `POST` |
+| `et_questionnaire` | none for `GET /me/questionnaire` (asked again after a failure); the body of `POST /me/questionnaire` to save (never repeated by the browser) |
 | `et_problem_report` | the body of `POST /problems` (never repeated by the browser; the same `problem_id` is kept once) |
 | `et_my_reviews` | none (`GET /me/reviews`) |
 | `et_my_feedback` | none (`GET /me/feedback`) |

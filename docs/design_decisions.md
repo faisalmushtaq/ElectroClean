@@ -709,6 +709,71 @@ bar drew every one of them at each change of view (about 100 ms); the overview n
 for each pixel column with events, worked out once, and the EEG finds the events on screen by
 bisection, which took a redraw of that recording from about 150 ms to 30.
 
+## The sign-up questionnaire and contact details (30 October 2026)
+
+The project lead asked for basic demographics and measures of experience from everyone who annotates
+or acts as an expert, including how many datasets they have analysed on a log-like scale, and then
+for their names and contact details, which the study team needs. The decisions: the questionnaire is
+asked once, at the first sign-in of annotators and experts, before any recording, training or expert
+work opens; administrators who do not annotate are not asked; every question offers "Prefer not to
+say"; people can change their answers later, with each change kept with its date, and the analyses
+use the answers current at the time of each piece of work. The default questions come in three
+groups (experience of EEG, career stage and field, demographics), the study team edits them per study,
+and the demographic group can be switched off, with a note in the admin area that a study should keep
+it only where its ethics approval covers it. Names and contact details are seen by administrators
+only, and the research files stay pseudonymised.
+
+**The gate is the server's, beside the training gate.** The competency gate of the training path
+(`electrotag/web/training_path.py`) refuses study recordings one by one, because training recordings
+stay open. The questionnaire comes before all work, so its gate is simpler and sits at one place: the
+service's dispatcher (`StudyService.call`) refuses the operations that are work (`match`, drafts,
+`submit`, the training programme and its stages, the quiz and the whole expert channel) with 403
+`questionnaire_required` while someone who is asked has not answered. The HTTP routes and the
+Firebase functions both pass through it, so neither can be got round, and what is not work (the home
+page's list, `GET /me`, the visit's log, the questionnaire itself) stays open, so that the browser can
+always show why. A person who has answered once is remembered by the service (an answer is never
+taken away), which saves a read on every draft. The browser shows the questionnaire before its first
+view and pauses the interaction log while it is on screen, as for the admin area, because the log
+would otherwise record the options chosen; it records only `questionnaire_answered` with the number
+of questions answered once they are saved.
+
+**The definition is a settings block.** The study team edits the questions as it edits every other
+setting: the block `questionnaire` of the study's settings (`enabled`, `demographics`, `questions`,
+`contacts`), checked by `electrotag/config/questionnaire.py` when the settings are read, edited in
+Study settings and kept with the study's other settings in both stores. The default questions are in
+`default_settings.json` itself, so that `settings_get` shows them for editing and the sandbox's copy
+of the defaults carries them. "Prefer not to say" is never part of a definition: ElectroTag adds it to
+every question, so that no study can forget it. A version names each wording (`q-` and ten
+hexadecimal digits of the SHA-256 of the questions' JSON), and each person's record keeps the
+wording of every version they answered, so that the results say what each answer was an answer to
+even after the questions change. A required question added later does not stop people who answered
+before, because closing their work in the middle of a study would cost more than the answer; their
+home page offers the new questions.
+
+**Answers and identities are two records.** The answers are a record of their own per person
+(`questionnaires`, by annotator ID) and the name and contact details another (`contacts`), both kept
+with the store's `update_record`, which both stores already provide in one transaction. The answers'
+record holds the history; the contacts' record only the current details, since an old phone number
+is of no use to anyone. Everything that leaves the study as research data (the results zip, the
+export, the analyses) reads only the first, so a pseudonymised export cannot touch a name. Names
+reach a file only as `contacts.csv`, at the top of the zip and only when the administrator ticks
+Include names and contact details; that download and every download of the contacts list are written
+to the audit log, which otherwise notes only that someone's details changed. The admin area's lists
+of people show the full name beside the ID (`users_list` adds `full_name`), and the person's page
+shows the details, for the study team; the leaderboard, the expert area and the analyses keep to IDs
+and pseudonyms. A value of the contacts list that starts with `=`, `+`, `-` or `@` gets an apostrophe,
+as the admin area's other CSV files do, so that a spreadsheet does not run it as a formula.
+
+**The analyses take the answers at the time of the work.** The agreement analysis adds
+`questionnaire_at_annotation.tsv` (the answers current when each annotator's version of each recording
+was saved) and the activity analysis `questionnaire_at_visit.tsv` (at the start of each visit), both
+joinable to the other tables by annotator ID. For work saved before someone first answered (a study
+that began before the questionnaire existed), the earliest answers are given and marked
+`answered_after`. Agreement by experience band was simple to add: `agreement_by_experience.tsv`
+averages each recording's pairwise kappa and positive agreement by the two annotators' answers to
+"How many EEG datasets have you analysed?" at the time. A study that wants another breakdown joins
+the tables itself.
+
 ## Decisions still open
 
 1. **Agreement settings to pre-register:** bin widths, the bin coverage rule,

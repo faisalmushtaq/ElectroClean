@@ -165,6 +165,9 @@ class Analyses:
                                     "zip and The settings used (JSON), and run " + agreement_command() + ".")
         # The annotators' notes, small enough to send whatever the size of the other tables.
         tables["annotation_notes.tsv"] = notes_table(result)
+        from electrotag.web.questionnaire import agreement_tables
+
+        tables.update(agreement_tables(self.store, result))  # the answers current at each annotation, by annotator ID
         record = result.settings_record
         # The settings in the form electrotag-agreement --config reads, with the recordings chosen and those set
         # aside, so that the command analyses the same recordings and gives the same numbers.
@@ -239,6 +242,9 @@ class Analyses:
                 path = Path(tmp) / f"{name}.tsv"
                 write_tsv(path, rows, columns)
                 out_tables[f"{name}.tsv"] = path.read_text(encoding="utf-8")
+            from electrotag.web.questionnaire import activity_table
+
+            out_tables.update(activity_table(self.store, tables.visits))  # the answers current at each visit
         html = report_html(tables, files={"visits": "visits.tsv", "recordings": "recordings.tsv"})
         return {"report_html": html, "tables": out_tables}
 
@@ -269,7 +275,7 @@ class Analyses:
     def results_zip(self, body: dict[str, Any]) -> dict[str, Any]:
         from electrotag.web.export import MAX_RESULTS_ZIP, results_zip_file
 
-        path = results_zip_file(self.store)
+        path = results_zip_file(self.store, include_contacts=body.get("include_contacts") is True)
         try:
             size = path.stat().st_size
             if size > MAX_RESULTS_ZIP:

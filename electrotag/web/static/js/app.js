@@ -19,7 +19,7 @@ import { appHeader, downloadFiles, smallScreenNotice } from './views/common.js';
 import { friendlyDuration, nowLocalIso, plural, session } from './util.js';
 import { loadPart, loadParts, partNow, preloadParts } from './lazy.js';
 
-const VIEWS = ['signin', 'home', 'open', 'annotate', 'review', 'training', 'quiz'];
+const VIEWS = ['signin', 'home', 'open', 'annotate', 'review', 'training', 'quiz', 'questionnaire'];
 /** The admin area's plain hashes (js/admin/model.js lists its sections). */
 const ADMIN_ROUTE = /^admin(-[a-z]+)?$/;
 /** The expert area's plain hashes (js/expert/sections.js lists its sections; the same rule as its EXPERT_ROUTE). */
@@ -261,11 +261,52 @@ export class App {
     // Administrators start in the admin area (or where a reload left them); they can still annotate.
     const back = this._adminReturn;
     this._adminReturn = null;
+    // The sign-up questionnaire comes before any work (js/views/questionnaire.js); then the way on as usual.
+    const q = this.me.questionnaire;
+    if (q && q.asked && !q.answered) {
+      await this.showQuestionnaire({ first: true, then: () => this._land(want, back, quiet) });
+      return;
+    }
+    await this._land(want, back, quiet);
+  }
+
+  /** Where a person starts once signed in: the expert or admin area, the training path or home. */
+  async _land(want, back, quiet) {
+    if (want === 'questionnaire') { await this.showQuestionnaire(); return; }
     const expertWanted = [want, back].find((r) => EXPERT_ROUTE.test(r || ''));
     if (this.isExpert && expertWanted && (EXPERT_ROUTE.test(want) || !want || want === 'signin')) await this.showExpert(expertWanted);
     else if (this.isAdmin && (ADMIN_ROUTE.test(want) || !want || want === 'signin')) await this.showAdmin(ADMIN_ROUTE.test(want) ? want : (ADMIN_ROUTE.test(back || '') ? back : 'admin'));
     else if (this.inTraining() && (!want || want === 'signin' || want === 'training' || quiet)) await this.showTraining();
     else this.showHome();
+  }
+
+  /**
+   * The sign-up questionnaire (js/views/questionnaire.js): `first` at the first sign-in, when `then` is the way on
+   * once it is saved; otherwise opened from home to change the answers. The interaction log is paused while it is
+   * shown and records only that it was answered, with the number of questions answered.
+   */
+  async showQuestionnaire({ first = false, then = null } = {}) {
+    loadPart('questionnaire').catch(() => {}); // fetched while the study is asked
+    let data;
+    try {
+      data = await this.backend.questionnaire();
+    } catch (exc) {
+      if (exc.status === 401) return;
+      this._render(h('div.view', {}, appHeader(this), h('main.page', {}, h('h1', {}, 'A few questions before you start'),
+        h('p.banner', { role: 'alert' }, `The questionnaire could not be loaded: ${exc.message}`),
+        h('div.btn-row', {}, h('button.btn.primary', { type: 'button', onclick: () => this.showQuestionnaire({ first, then }) }, 'Try again')))), 'questionnaire');
+      return;
+    }
+    await this._withParts(['questionnaire'], 'questionnaire', ({ questionnaireView }) => {
+      const onSaved = async (answer, nAnswered) => {
+        this._resumeLog();
+        logger.event('questionnaire_answered', { n_answered: nAnswered }); // never an answer, nor anything typed
+        if (this.me) this.me.questionnaire = { ...(this.me.questionnaire || {}), answered: true, answered_at: answer.answered_at, version: answer.answered_version, missing: 0 };
+        if (then) await then();
+        else this.showHome();
+      };
+      this._render(questionnaireView(this, data, { first, onSaved, onLeave: () => this.showHome() }), 'questionnaire');
+    });
   }
 
   /** A trainee with stages still to do (once training is complete, home and its next recording come first). */
@@ -469,24 +510,27 @@ export class App {
     this.notice = notice;
     document.body.dataset.route = route;
     logger.topWindow = route;
-    if (ADMIN_ROUTE.test(route)) this._pauseLog(); else this._resumeLog();
+    if (ADMIN_ROUTE.test(route)) this._pauseLog();
+    else if (route === 'questionnaire') this._pauseLog(null); // its answers never reach the log
+    else this._resumeLog();
     if (location.hash !== `#${route}`) {
       this._settingHash = true;
       location.hash = route;
     }
     document.title = { signin: 'ElectroTag – sign in', home: 'ElectroTag – your recordings', open: 'ElectroTag – open a recording',
       annotate: `ElectroTag – ${this.ws ? this.ws.s.recording.fileName : 'annotate'}`, review: 'ElectroTag – practice review',
-      training: 'ElectroTag – training programme', quiz: 'ElectroTag – quiz' }[route]
+      training: 'ElectroTag – training programme', quiz: 'ElectroTag – quiz', questionnaire: 'ElectroTag – about you' }[route]
       || (ADMIN_ROUTE.test(route) ? 'ElectroTag – admin' : EXPERT_ROUTE.test(route) ? 'ElectroTag – expert work' : 'ElectroTag');
   }
 
   // The interaction log records annotating; what an administrator does in the admin area is not
   // part of it (only that the area was opened and left).
-  _pauseLog() {
+  _pauseLog(opened = 'admin_area_opened') {
     if (this._adminLogPaused || !logger.enabled) return;
-    logger.event('admin_area_opened', {});
+    if (opened) logger.event(opened, {});
     logger.enabled = false;
     this._adminLogPaused = true;
+    this._pausedFor = opened;
   }
 
   _resumeLog() {
@@ -494,7 +538,7 @@ export class App {
     this._adminLogPaused = false;
     if (this.me && this.visitId) {
       logger.enabled = true;
-      logger.event('admin_area_closed', {});
+      if (this._pausedFor) logger.event('admin_area_closed', {});
     }
   }
 
@@ -518,6 +562,7 @@ export class App {
       return;
     }
     if (want === 'home') this.showHome();
+    else if (want === 'questionnaire') this.showQuestionnaire();
     else if (want === 'training' && this.me.programme) this.showTraining();
     else if (want === 'open') this.openFromComputer(null);
     else if (want === 'signin') this.showHome();

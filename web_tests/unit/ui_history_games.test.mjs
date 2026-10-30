@@ -11,6 +11,10 @@ import { fileURLToPath } from 'node:url';
 import { DemoBackend, demoPseudonym, leaderboardOf } from '../../electrotag/web/static/js/api/demo.js';
 import { ADJECTIVES, ANIMALS } from '../../electrotag/web/static/js/games/words.js';
 import { PAGE_SIZE, pageOf, savedOf, visibleItems } from '../../electrotag/web/static/js/views/home_list.js';
+import { EXAMPLE_ANSWERS } from '../../electrotag/web/static/js/api/demo_questionnaire.js';
+/** A visitor's new account answers the sign-up questionnaire first (demo_questionnaire.js), as in a study. */
+const answerQuestionnaire = (b) => b.saveQuestionnaire({ answers: EXAMPLE_ANSWERS, contacts: { full_name: 'Test person', email: 'test@example.org' } });
+
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -143,6 +147,7 @@ test('achievements in the demonstration: counters, goal, team and a leaderboard 
   await submit(b, rids[1], []);
   for (const [id, n] of [['B01', 3], ['B02', 1], ['B03', 2]]) {
     await as(b, id, 'password-1234');
+    await answerQuestionnaire(b);
     for (const rid of rids.slice(0, n)) await submit(b, rid, []);
   }
   await as(b, 'A01');

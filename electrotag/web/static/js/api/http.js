@@ -159,6 +159,12 @@ export class HttpBackend {
   /** Sets the personal goal ({goal_per_week}) or whether to appear on the leaderboard ({leaderboard_hidden}). */
   setAchievements(body) { return this._request('POST', '/me/achievements', body || {}); }
 
+  /** GET /me/questionnaire: the sign-up questionnaire's questions, the annotator's answers and contact details. */
+  questionnaire() { return this._request('GET', '/me/questionnaire'); }
+
+  /** POST /me/questionnaire {answers, other, contacts}: saves them (never repeated by itself after a failure). */
+  saveQuestionnaire(body) { return this._request('POST', '/me/questionnaire', body || {}); }
+
   // ------------------------------------------- problem reports and reviews
   /** POST /problems: a problem with a recording; `problem_id` makes a second sending of the same report harmless. */
   reportProblem(body) { return this._request('POST', '/problems', body); }

@@ -21,6 +21,15 @@ SUB1 = "sub-001/eeg/sub-001_task-rest_eeg.vhdr"
 SUB2 = "sub-002/eeg/sub-002_task-rest_eeg.vhdr"
 
 
+@pytest.fixture(autouse=True)
+def _questionnaire_answered(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The sign-up questionnaire's gate (electrotag/web/questionnaire.py) is tested where a test is marked
+    ``questionnaire`` (tests/test_web_questionnaire.py); the other tests, written about other things, act as people who
+    have answered it. The Firebase functions run in their own processes, where everyone is asked as in a study."""
+    if request.node.get_closest_marker("questionnaire") is None:
+        monkeypatch.setattr("electrotag.web.questionnaire.Questionnaire.answered", lambda self, user: True)
+
+
 @pytest.fixture
 def dataset(tmp_path: Path):
     """A fresh two-subject synthetic dataset (60 s, 250 Hz) per test."""

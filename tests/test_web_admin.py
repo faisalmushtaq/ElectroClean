@@ -111,7 +111,7 @@ def test_overview_counts_and_recent_changes(client: TestClient, admin: Api, reco
 def test_settings_are_read_changed_and_checked(client: TestClient, admin: Api) -> None:
     s = admin.admin_ok("settings_get")
     assert set(s["settings"]) == {"filters", "display", "channels", "selection", "logging", "annotation", "loading",
-                                  "discovery", "gamification", "review", "training", "replay"}
+                                  "discovery", "gamification", "review", "training", "replay", "questionnaire"}
     assert s["settings"]["annotation"]["allow_revisions"] is True
     assert s["settings"]["gamification"] == {"enabled": True, "leaderboard": True, "leaderboard_viewed_only": False}
     assert s["settings"]["filters"]["notch_hz"] == 50.0 and s["logging_notice"]
@@ -620,7 +620,8 @@ def test_analyses_on_demand(client: TestClient, admin: Api, recordings: Path, st
                                                                    "recording": SUB1}, {"t": 2.0, "type": "key"}]})
     a01.ok("post", f"/visits/{v['visit_id']}/close", {"reason": "done"})
     act = admin.admin_ok("activity", {})
-    assert "<html" in act["report_html"].lower() and set(act["tables"]) == {"visits.tsv", "recordings.tsv"}
+    assert "<html" in act["report_html"].lower()
+    assert set(act["tables"]) == {"visits.tsv", "recordings.tsv", "questionnaire_at_visit.tsv"}
     assert "A01" in act["tables"]["visits.tsv"]
     admin.admin_error("activity", {"annotator_ids": ["A02"]}, 422, "no_logs")
     # visits

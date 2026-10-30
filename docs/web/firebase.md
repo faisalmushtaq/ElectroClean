@@ -113,7 +113,7 @@ On Windows the environment's Python is `electrotag\web\firebase\functions\venv\S
 Before uploading, the deployment copies the ElectroTag code the functions need into their folder
 (`scripts/vendor_functions.py`, which needs only Python itself). The first deployment takes several
 minutes, because Google switches on the services the functions use; later ones are quicker. When it
-ends, the console's **Functions** page lists ElectroTag's twenty-four functions, whose names start with `et_`, all in
+ends, the console's **Functions** page lists ElectroTag's twenty-five functions, whose names start with `et_`, all in
 europe-west2; `et_admin`, which answers the admin area, has more memory and time than the others
 for the analyses, and `et_expert`, which answers the expert area, a little more than the rest for
 saving experts' corrections. Deploy again after updating ElectroTag (or use the GitHub workflow at the end of
@@ -279,8 +279,10 @@ published `config.json`).
 
 Firestore holds, for each study: the registrations of the recordings (checksums, timing, channel
 names, events; no EEG), the training sets' expert annotations, the annotators' IDs, names, email
-addresses, roles and the administrators' notes about them, their drafts, their saved results,
-training progress and quiz answers, the interaction logs (times, clicks, keys and what was on
+addresses, roles and the administrators' notes about them, their answers to the sign-up
+questionnaire (by annotator ID, with every earlier set) and, kept apart from them, the full name and
+contact details they gave (collections `questionnaires` and `contacts`), their drafts, their saved
+results, training progress and quiz answers, the interaction logs (times, clicks, keys and what was on
 screen; never typed text or passwords) and the audit log of the administrators' changes (which
 never holds a password or a password link). Firebase Authentication holds each
 person's email address and a hash of their password. Everything is in Google's London region, in a
