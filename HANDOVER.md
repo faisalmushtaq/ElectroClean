@@ -49,6 +49,12 @@ its disagreements listed, an adjudicated consensus), competency criteria, the qu
 and activity analyses and competency reports, progress, every result as one zip file, the study's
 settings, and an audit log of every change an administrator makes.
 
+Since 30 October the study team also has experts: accounts with the expert role correct others'
+saved work, replay sessions, adjudicate disagreements between annotators in a queue built like a
+systematic-review screening tool, and keep a library of the conflicts; recordings can be shared out
+as tasks, k annotators each; and trainees follow a five-stage path from a tour of the platform to a
+blind assessment that opens study work (item 6e below).
+
 The desktop application has been removed from the branch, with its stand-alone applications, the
 launchers, the self-test and Qt. The Python core stays: it loads recordings with MNE-Python, writes
 and verifies the result files, and runs the agreement, training and activity analyses, and the
@@ -291,59 +297,57 @@ admin area itself is never logged; give them a mode of their own if the activity
 tell them apart.
 
 **6e. Experts, corrections, replays, adjudication and staged training (30 October).** The project
-lead's request of 29 October (experts who view and correct others' work, replays of sessions,
-screening-style adjudication with a library of conflicts, and a five-stage training path) is being
-built in parts. The foundation is in place: accounts hold a set of roles (annotator, expert,
-admin; participant reserved for a later crowd study), the expert channel (`POST /expert/{op}`,
-`et_expert`, `electrotag/web/expert.py` with its registry `EXPERT_OPS`), the expert area's shell
-(`js/expert/area.js`, sections in `js/expert/sections.js`) and the purposes a recording is opened for
-(`js/views/purposes.js`), the study settings `review`, `training` and `replay`, and the storage the
-later parts need (derived versions in `Annotated_Events/derived/`, saved attempts by number, the
-competency status, each visit's index of recordings and its log in pages, and the task of an
-assignment). Corrections and replays, tasks, adjudication and the library, the staged training
-path and the analyses of derived versions follow, each adding its own modules and one line to the
-registries; `docs/web/api.md` has a section waiting for each. The staged training path is in
-place: the tour (`js/training/tour.js`), the snippets (`js/training/snippets.js`, the study team's in
-the set's `reference_set.json`), skipping and resuming stages, and the competency gate of study work
-(`electrotag/web/training_path.py`). Its hooks for the parts still to come are registries: a guided
-recording whose guidance another part handles, such as "correct the marks", registers in
-`GUIDANCE_KINDS` (`electrotag/web/coach.py`) and `GUIDANCE_PANELS` (`js/training/coach.js`), and the
-replay part's "Watch an expert" adds a line to `WATCH_EXPERT` in `js/training/path.js`. "Correct the
-marks" is in place on those hooks (`electrotag/training/planted.py`, `electrotag/web/correct_marks.py`,
-`js/training/correct.js`; made in the expert area's Correct the marks), and the analyses compare the
-corrected and adjudicated versions (`electrotag/reliability/versions.py`). Two things are left there:
-the admin area's consensus form does not yet offer the weights by known-answer accuracy that the
-operation takes (`weights` of the consensus Source), and the sandbox can only try its one ready-made
-exercise, not give it to trainees. The tour's
-practice recording is made in the browser; a tour recording taken from a set is left for later. The
-sandbox's training set has no assessment, so the gate is always open there; the end-to-end test of
-the gate runs against the real study server. The project lead decided that experts
-and administrators may replay any annotator's session and that trainees may watch an expert's
-session only with that expert's consent (a flag each expert sets in the expert area, audited). This
-uses the interaction logs for a new purpose: the study's ethics approval may need an amendment
-before replays are used. ElectroTag's own logging notice now says that the study team can replay a
-session and that an expert's sessions may be shown to trainees when the expert agrees; a study that
-wrote a notice of its own should add the same.
+lead's request of 29 October is built: experts who view and correct others' work, replays of
+sessions, screening-style adjudication with a library of conflicts, tasks that share recordings out
+k at a time, and a five-stage training path. It was built in six parts on one foundation and then
+put through a hands-on usability review of the expert's side and of the trainee's path and the
+study team's screens, whose findings were fixed before it reached `main`. Where each piece lives:
 
-Corrections and replays are in place (`electrotag/web/corrections.py`, `replay.py`; `js/expert/`
-and `js/replay/`): an expert corrects saved work from Saved work in the expert area, with a reason
-for each change, as a derived version; the annotator sees the changes in their history; and a
-replay plays a session back from the interaction log, which since 30 October holds a snapshot of the
-annotations a session opens with (older logs replay from the end of the session before). When two
-experts correct the same version both corrections are kept and counted; comparing them in the
-adjudication queue, and the "correction pending adjudication" state of the analyses, belong to the
-adjudication and analysis parts, which find them with `corrections.corrections_of`. Trainees reach
-the experts' sessions they may watch through "Watch an expert at work" (`js/replay/watch.js`), for now
-on the home page's training card. A trainee needs the recording's file on their own computer to
-watch, as for any replay: a study that wants to teach with replays should give trainees the files of
-the recordings the experts' sessions were on. Since the expert review of 30 October, trainees see an
-expert only on teaching recordings (`replay.teaching_recording`): the guided recordings of a
-training set with its own recordings, never a study recording, nor a practice or assessment
-recording, so that watching never touches the independence of anyone's annotations. A study that
-wants teaching replays therefore has an expert who consents annotate those guided recordings as
-training work on the set. The annotator of a version two experts corrected sees neither correction
-until the adjudication of their disagreements is finished, then the adjudicated version
-(`corrections.standing_of`).
+The foundation is a set of roles per account (annotator, expert, admin; participant reserved for a
+later crowd study), the expert channel (`POST /expert/{op}`, `et_expert`, `electrotag/web/expert.py`
+with its registry `EXPERT_OPS`, and operations open to everyone that check permission themselves),
+the expert area (`js/expert/area.js`, sections in `js/expert/sections.js`), the purposes a recording
+is opened for (`js/views/purposes.js`), the settings blocks `review`, `training` and `replay`, and the
+storage for derived versions (`Annotated_Events/derived/corrections|adjudications/`, five files and
+a register of their own, so that an original is never changed). Corrections
+(`electrotag/web/corrections.py`, `js/expert/correction_pass.js`) are derived versions with a reason
+for each change; the annotator sees them in their history. Replays (`electrotag/web/replay.py`,
+`js/replay/`) play a session back from the interaction log. Tasks (`electrotag/web/tasks.py`,
+`js/admin/tasks.js`) share recordings, or parts of them, among annotators k at a time, balanced per
+person and per pair, with known-answer tasks scored for quality. Adjudication
+(`electrotag/reliability/conflicts.py`, `electrotag/web/adjudication.py`, `js/expert/queue.js`,
+`adjudicate.js`) works through units (a task, a recording two or more people saved without a task, or
+two or more experts' corrections of one version) conflict by conflict, with the annotators named,
+keys for every choice, reasons, reopening, and an adjudicated version that can become a training
+reference; the library (`electrotag/web/library.py`, `js/expert/library.js`) is derived from the
+conflicts and decisions. The training path (`electrotag/web/training_path.py`, `js/training/`) runs
+the tour, Meet the artifacts, Learn with the experts (with Correct the marks,
+`electrotag/training/planted.py`), On your own and the blind assessment, with skipping as the study
+allows, and gates study work until the assessment is passed. The analyses
+(`electrotag/reliability/versions.py`) compare the original, corrected and adjudicated versions.
+
+The project lead's decisions, which the code follows: experts and administrators may replay any
+annotator's session; trainees may watch an expert only with that expert's consent (a flag each
+expert sets, audited), and only on teaching recordings (`replay.teaching_recording`: the guided
+recordings of a training set with its own recordings, never a study recording nor the same file as
+any set's practice or assessment recording), so that watching never touches the independence of
+anyone's annotations. Adjudication is not blinded, and nobody adjudicates work they annotated. When
+two experts correct the same version, their disagreements go to adjudication, and the annotator sees
+the settled version once it is finished (`corrections.standing_of`). Real study work opens when the
+assessment is passed; after "not met" the study team reopens the training or gives a new assessment
+set, and earlier rounds and skips stay on the record. Nothing that would show a trainee the answers
+they are scored against (a quiz item, a snippet, a library promote or a replay of a practice or
+assessment recording) is offered (`training_path.reveals_answers`). The replays use the interaction
+logs for a new purpose: the study's ethics approval may need an amendment before they are used.
+ElectroTag's own logging notice says so; a study that wrote a notice of its own should add the same.
+
+Left for later: the admin area's consensus form does not yet offer the weights by known-answer
+accuracy that the operation takes (`weights` of the consensus Source); the sandbox can try its one
+ready-made Correct the marks exercise but not give it to trainees, and answers tasks and
+adjudication with "needs a study server", since they are computed in Python; experts add snippets
+through the operations or from the library, as the expert area has no snippets screen of its own;
+the viewer can draw the labels of two overlapping marks over each other; and the tour's practice
+recording is made in the browser (a tour recording taken from a set would be a small addition).
 
 **7. Housekeeping.** The project's `ruff` settings give only the line length, so a recent `ruff`
 applies many style rules the code was never written to; `ruff check --select E,F,W,B` is the useful
