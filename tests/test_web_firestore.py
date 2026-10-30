@@ -37,6 +37,7 @@ from tests.web_helpers import (  # noqa: E402
     GUIDED2,
     PRACTICE1,
     SUB1,
+    SUB2,
     SUB3,
     ann,
     as_wire,
@@ -631,6 +632,81 @@ def test_invitations_and_stats_on_firebase(study: str) -> None:
     stats = admin_ok(svc, "stats")
     assert len(stats["days"]) == 30 and {"assigned", "done", "projection"} <= set(stats["totals"])
     assert "A08" in {p["annotator_id"] for p in stats["annotators"]}
+
+
+def test_tasks_windows_and_known_answers_on_firestore(service: StudyService, recordings: Path) -> None:
+    """docs/web/api.md, "Tasks, windows and known answers": the same as tests/test_web_tasks.py on Firestore."""
+    import base64
+    import io
+    import zipfile
+
+    for aid in ("A05", "A06"):
+        service.store.put_user(aid, display_name=f"Annotator {aid}")
+    a05, a06 = User("A05"), User("A06")
+    p = admin_ok(service, "tasks_preview_get", {"recording_ids": [SUB1], "annotator_ids": ["A01", "A05"], "k": 2})
+    assert p["tasks"][0]["holders"] == ["A01"] and p["assigned"] == 1
+    whole = admin_ok(service, "tasks_create", {"request_id": "1" * 32, "recording_ids": [SUB1],
+                                               "annotator_ids": ["A01", "A05"], "k": 2})["tasks"][0]
+    again = admin_ok(service, "tasks_create", {"request_id": "1" * 32, "recording_ids": [SUB1],
+                                               "annotator_ids": ["A01", "A05"], "k": 2})
+    assert again["already"] is True and [t["task_id"] for t in again["tasks"]] == [whole["task_id"]]
+    part = admin_ok(service, "tasks_create", {"request_id": "2" * 32, "recording_ids": [SUB3],
+                                              "annotator_ids": ["A05", "A06"], "k": 2,
+                                              "window": {"start_s": 20, "end_s": 40}})["tasks"][0]
+    items = {i["recording_id"]: i for i in ok(service, "assignments", a05)["items"]}
+    assert items[SUB1]["task"] == {"task_id": whole["task_id"], "window": None}
+    assert items[SUB3]["task"]["window"] == {"start_sample": 2560, "end_sample": 5120, "start_s": 20.0, "end_s": 40.0}
+    assert ok(service, "match", a05, match_body(recordings, SUB3))["task"] == items[SUB3]["task"]
+    assert next(i for i in ok(service, "assignments", A01)["items"] if i["recording_id"] == SUB1)["task"]["task_id"] \
+        == whole["task_id"], "A01 had SUB1 already: the assignment joins the task"
+    outside = ann("c" * 32, "EMG-artifact", 100, 50)
+    inside = ann("d" * 32, "EMG-artifact", 3000, 250)
+    e = err(service, "put_draft", a05, {"recording_id": SUB3, "mode": "standard", "draft": {"annotations": [outside]}})
+    assert e.code == "outside_window" and e.extra["annotation_ids"] == ["c" * 32]
+    assert err(service, "submit", a05, submission(recordings, SUB3, [inside, outside])).code == "outside_window"
+    ok(service, "submit", a05, submission(recordings, SUB3, [inside]))
+    listed = {t["task_id"]: t for t in admin_ok(service, "tasks_list")["tasks"]}
+    assert listed[part["task_id"]]["status"] == "collecting" and listed[part["task_id"]]["counts"]["saved"] == 1
+    assert sorted(listed[part["task_id"]]["letters"].values()) == ["A", "B"]
+    # changing and removing: saved work stays
+    assert admin_err(service, "task_update", {"task_id": part["task_id"], "remove_annotator": "A05",
+                                              "add_annotator": "A02"}).code == "has_results"
+    assert admin_err(service, "task_remove", {"task_id": part["task_id"]}).code == "has_results"
+    admin_ok(service, "task_remove", {"task_id": whole["task_id"]})
+    a01 = next(i for i in ok(service, "assignments", A01)["items"] if i["recording_id"] == SUB1)
+    assert a01["task"] is None, "A01 keeps SUB1, as before the task"
+    assert all(i["recording_id"] != SUB1 for i in ok(service, "assignments", a05)["items"])
+    # known answers, scored after the save
+    ok(service, "submit", A02, submission(recordings, SUB2, [BLINK, EMG]))
+    admin_ok(service, "set_create", {"set_id": "known", "name": "Known answers"})
+    admin_ok(service, "set_add_reference", {"set_id": "known", "recording_id": SUB2, "use": "practice",
+                                            "source": {"kind": "annotator", "annotator_id": "A02"}})
+    gold = admin_ok(service, "tasks_create", {"request_id": "3" * 32, "recording_ids": [SUB2],
+                                              "annotator_ids": ["A06"], "gold": {"set_id": "known"}})["tasks"][0]
+    assert gold["status"] == "gold"
+    ok(service, "submit", a06, submission(recordings, SUB2, [BLINK, EMG]))
+    q = {r["annotator_id"]: r for r in admin_ok(service, "quality_list")["annotators"]}
+    assert q["A06"]["n_gold"] == 1 and q["A06"]["mean_event_f1"] == 1.0
+    z = admin_ok(service, "results_zip")
+    names = zipfile.ZipFile(io.BytesIO(base64.b64decode(z["base64"]))).namelist()
+    assert {"Annotated_Events/tasks/tasks.tsv", "Annotated_Events/tasks/gold_scores.tsv"} <= set(names)
+
+
+@pytest.mark.skipif(not (AUTH and FUNCTIONS), reason="needs the Auth and Functions emulators")
+def test_tasks_through_the_functions(study: str) -> None:
+    admin = sign_in(f"admin-{study}@example.org")
+    _, body = callable_("et_admin", {"study": study, "op": "tasks_preview_get", "all": True,
+                                     "annotator_ids": ["A01", "A02"], "adopt": True}, admin)
+    assert body["result"]["created"] == 3, body
+    _, body = callable_("et_admin", {"study": study, "op": "tasks_create", "request_id": "4" * 32,
+                                     "recording_ids": [SUB3], "annotator_ids": ["A01", "A02"], "adopt": True}, admin)
+    tid = body["result"]["tasks"][0]["task_id"]
+    a01 = sign_in(f"a01-{study}@example.org")
+    _, body = callable_("et_assignments", {"study": study}, a01)
+    linked = {i["recording_id"]: i["task"] for i in body["result"]["items"]}
+    assert linked[SUB3] == {"task_id": tid, "window": None} and linked[SUB1] is None
+    _, body = callable_("et_admin", {"study": study, "op": "tasks_list"}, a01)
+    assert body["error"]["details"]["error"] == "forbidden"
 
 
 # ------------------------------------------------- sign-in, callables, rules

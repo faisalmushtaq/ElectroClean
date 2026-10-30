@@ -517,6 +517,17 @@ not seen after the screen, coming round from the start when there are none furth
 second of what you saw before it. On an iPad it is the last of the buttons under the EEG. What you
 have viewed is kept with your draft, so it is still there when you continue later.
 
+## A part of a recording
+
+The study team may give you only part of a recording, so that several people each annotate a
+different stretch of a long one. The top of the annotation view then names your part, for example
+Your part: 0:20 to 0:40, and the rest of the recording is hatched on the EEG and on the overview
+bar. The view stays within your part, with a second either side so that you can judge an artifact
+at its edge. Mark only inside your part: a mark that runs past its edge stops at the edge, and one
+outside it is not made, with a message that says so. How much you have viewed, and Next part not yet
+viewed, count your part alone. Everything else works as for a whole recording, and Save and Finish
+saves your part.
+
 ## Pausing and breaks
 
 Annotating a recording takes a long time, and the time you work on each recording is part of the

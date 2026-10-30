@@ -63,7 +63,7 @@ training programme: you can change its pass mark, its guided matching, how much 
 recording gives and the experts' notes, and T01 sees the change. Reference sets of your own and
 their quizzes need a study server or Firebase, and so does what needs ElectroTag's Python code: the
 agreement and activity analyses, competency reports, consensus and adjudicated references, the
-example set's files and the results as one zip file. The demonstration says so when you try, and
+example set's files, the results as one zip file, and tasks (sharing recordings out, below). The demonstration says so when you try, and
 suggests the local demonstration server
 (`electrotag-web demo`, where ADMIN has the password electrotag), which runs every part of the
 admin area on your own computer.
@@ -291,6 +291,63 @@ Finished work stays with their results. A recording that its annotator set aside
 be annotated has See the report instead, since it is settled through the problem report (Problems):
 returned to their list, or given to someone else. Trainees'
 recordings come from their training programme, which you change on their page in Annotators.
+
+## Tasks
+
+Tasks share recordings out so that several people annotate each one independently, as in the
+dual screening of a systematic review: each recording, or each part of one, goes to k annotators
+(2 to 6), who meet it as one more recording in their own list. Once all of them have saved it, the
+differences between their versions are the task's conflicts, which experts adjudicate. Known-answer
+recordings can be mixed in to measure each person's accuracy. The section is under People.
+
+**Sharing out.** Choose the annotators to share among (All ticks the active annotators; switched-off
+accounts and administrators who do not annotate are ticked one by one), the recordings (every
+recording of the study, or those you tick), how many annotators each recording goes to (Study
+settings, Corrections and adjudication, sets the starting number), and the part of each recording: the
+whole recording, one stretch of each (from and to, in seconds), or consecutive parts of a length you
+choose, which may overlap. A share-out can have a name, such as Pilot round, to find its tasks by
+later. Preview the share-out works out what would be made without making anything: a sentence such
+as "200 tasks, each to 2 people: 400 new assignments. Everyone gets 40.", each person's open tasks
+now, their new ones and their total after it, the tasks themselves, and what is left out and why.
+Make the tasks is ready once the preview is shown, and any change to the choices asks for the
+preview again. The tasks are made once, however often the button is pressed or the answer is late.
+
+Each task goes to the people with the fewest open tasks, so the work is shared evenly, and ties are
+settled by a fixed order, so the same choices give the same share-out. Someone who already has the
+whole recording comes first for a task of the whole recording, and their assignment joins the task;
+they are left out of a task for a part of it, which would shut them out of the rest. Nobody holds two
+parts of one recording, so a recording cut into many parts needs at least k people for each part. A
+recording that already has an open task is left out. Tick Turn recordings already given to two or
+more of these people into tasks to make tasks of assignments as they are, for example those of a
+study that began before tasks existed: each such recording becomes a task of the people who have it.
+
+**Parts of a recording.** An annotator given a part sees it named at the top (Your part: 0:20 to
+0:40), with the rest of the recording hatched; the view stays within the part and a second either
+side, a mark outside it is refused with a plain message, and what counts as viewed is the part
+alone. The study refuses a draft or a save with a mark outside the part as well.
+
+**Known answers.** Choose a reference set under Known answers to make known-answer tasks: each
+recording of the selection that has a reference in that set goes to every annotator chosen, and
+nothing in the annotator's list or view tells it apart from other work. Use a set kept for this,
+with references the study trusts and no trainees enrolled in it, since its recordings would
+otherwise be familiar. After each save the annotations are compared with the reference, as practice
+feedback compares them, and Accuracy on known answers lists each person's number of known answers
+saved, their mean score (F1, the balance of artifacts found and marks that match) and how often they
+chose the right type. Once a person has saved as many known answers as the study's settings ask
+(Corrections and adjudication), a weight appears for combining their marks with other people's. Known-answer
+tasks are never adjudicated.
+
+**Every task** lists the tasks with their recording, part, people (each with their letter and where
+they stand), how many have saved, and the status: Collecting while some have still to save; All
+saved once everyone has (Conflicts to resolve or Agreed once the conflicts are counted); Being
+adjudicated and Adjudicated as the experts work through it; Known answer for a known-answer task.
+Filter by status or person, or search the recordings and the share-out names. Change people takes
+someone out, puts someone in, or replaces one by the other; someone who has saved stays. Close takes
+the recording from the lists of those who have not saved it and keeps every saved result; Reopen gives
+it back. Remove takes away a task that nobody has saved yet, with its assignments (someone who had
+the recording before the task keeps it). Every change goes into the audit log, and the results zip
+holds every task and the known-answer scores (docs/file_formats.md). The demonstration shows the
+section and says that sharing out needs a study server or Firebase.
 
 ## Training
 

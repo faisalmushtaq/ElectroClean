@@ -64,6 +64,9 @@ export const ALLOWED = [
   ['.*', '(.*\\.)?corrected_from\\.annotations_sha256', 'type', 'the checksum of the saved _annotations.json file, which only the server writes'],
   ['expert replay_events_get.*', 'events\\[\\]\\.(t|wall|choose_recording|reference_set|assessment_kind)', 'any',
     "the visit's log as each side keeps it: the server writes the desktop's visit_started and times log_closed by its clock"],
+
+  // Until the sandbox's own answers (js/api/demo.js) carry `task: null`, the browser reads a missing task as none.
+  ['.*', '(items\\[\\]\\.)?task', 'any', 'the sandbox makes no tasks (they need the study server: demo_admin.js SERVER_ONLY), so its items and matches have none'],
 ];
 
 // ------------------------------------------------------------------ comparison

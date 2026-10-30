@@ -215,6 +215,7 @@ class WorkItem:
     result: dict[str, str] | None = None  # the completion register's row of the latest attempt, when done
     saved: dict[str, Any] | None = None  # the history's figures of every saved attempt (games.saved_summary)
     revising: bool = False  # done, with a revision under way (its draft is kept)
+    task_id: str = ""  # the task the assignment belongs to (electrotag/web/tasks.py), "" for none
 
     @property
     def key(self) -> str:
@@ -261,6 +262,9 @@ class StudyService:
         from electrotag.web.expert import Expert
 
         self.expert = Expert(self)
+        from electrotag.web.tasks import Tasks
+
+        self.tasks = Tasks(self)
 
     # ----------------------------------------------------------------- basics
     @property
@@ -358,7 +362,8 @@ class StudyService:
         items: list[WorkItem] = []
         seen: set[tuple[str, str, str]] = set()
 
-        def add(rid: str, mode: str, ctx: str, position: int, source: str, repeat: bool = False) -> None:
+        def add(rid: str, mode: str, ctx: str, position: int, source: str, repeat: bool = False,
+                task_id: str = "") -> None:
             ctx = ctx if mode != "standard" else ""
             key = (rid, mode, ctx)
             if key in seen:
@@ -378,7 +383,7 @@ class StudyService:
                 status = "todo"
             # the latest attempt by its number (a revision is always the latest), whatever the clocks said
             item = WorkItem(rid, mode, ctx, m, status, position, repeat, source,
-                            latest_entry(saved[key]) if key in saved else None)
+                            latest_entry(saved[key]) if key in saved else None, task_id=task_id)
             if key in saved:
                 from electrotag.web.games import saved_summary
 
@@ -391,7 +396,7 @@ class StudyService:
             for rid, mode, repeat in self.coach.programme_recordings(user, set_id):
                 add(rid, mode, set_id, 0, "programme", repeat)
         for a in self.store.assignments(aid):
-            add(a.recording_id, a.mode, a.context_id, a.position, "assignment")
+            add(a.recording_id, a.mode, a.context_id, a.position, "assignment", task_id=a.task_id)
         return items
 
     def _next(self, user: User, items: list[WorkItem]) -> WorkItem | None:
@@ -422,6 +427,7 @@ class StudyService:
         items = self.work_items(user)
         nxt = self._next(user, items)
         problems = self.feedback.latest_problems(user.annotator_id)
+        tasks = self.tasks.by_id() if any(i.task_id for i in items) else {}
         out = []
         for i in items:
             d = i.to_dict()
@@ -432,6 +438,7 @@ class StudyService:
             d["revising"] = i.revising
             p = problems.get(i.key)
             d["problem"] = self.feedback.problem_out(p, mine=True) if p is not None else None
+            d["task"] = self.tasks.item_task(i, tasks)  # {task_id, window} of a task (docs/web/api.md), or null
             out.append(d)
         return {"items": out,
                 "next": nxt.recording_id if nxt is not None else None,
@@ -499,7 +506,8 @@ class StudyService:
     @staticmethod
     def _answer(status: str, message: str, **fields: Any) -> dict[str, Any]:
         out = {"status": status, "message": message, "recording_id": None, "mode": None, "context_id": None,
-               "manifest": None, "draft": None, "differences": [], "repeat": False, "revision": None, "saved": None}
+               "manifest": None, "draft": None, "differences": [], "repeat": False, "revision": None, "saved": None,
+               "task": None}
         out.update(fields)
         return out
 
@@ -562,6 +570,7 @@ class StudyService:
                                     "to read, with the feedback on it.", recording_id=viewable.recording_id,
                                     mode=viewable.mode, context_id=viewable.context_id,
                                     manifest=self.public_manifest(viewable.manifest), differences=differences,
+                                    task=self.tasks.item_task(viewable),
                                     saved={"version": int((viewable.saved or {}).get("version") or 1),
                                            "saved_at": (viewable.saved or {}).get("saved_at"),
                                            "annotations": self.saved_annotations(user, viewable)})
@@ -583,7 +592,8 @@ class StudyService:
                    "recording.")
         return self._answer(status, message, recording_id=chosen.recording_id, mode=chosen.mode,
                             context_id=chosen.context_id, manifest=self.public_manifest(chosen.manifest),
-                            draft=(draft or {}).get("draft"), differences=differences, repeat=chosen.repeat)
+                            draft=(draft or {}).get("draft"), differences=differences, repeat=chosen.repeat,
+                            task=self.tasks.item_task(chosen))
 
     def public_manifest(self, m: dict[str, Any]) -> dict[str, Any]:
         return public_manifest(m, self.settings.display.scalings)
@@ -621,7 +631,7 @@ class StudyService:
                    "recording.")
         return self._answer(status, message, recording_id=item.recording_id, mode=item.mode,
                             context_id=item.context_id, manifest=self.public_manifest(item.manifest), draft=draft,
-                            differences=differences,
+                            differences=differences, task=self.tasks.item_task(item),
                             revision={"version": version + 1, "revises": version,
                                       "saved_at": (item.saved or {}).get("saved_at"),
                                       "annotations": self.saved_annotations(user, item)})
@@ -658,6 +668,7 @@ class StudyService:
             raise ApiError(422, "invalid_draft", "draft.annotations must be a list of annotations")
         for i, a in enumerate(anns, start=1):  # kept as sent; checked in full when the recording is saved
             confidence_and_note(a, f"draft annotation {i}", "invalid_draft")
+        self.tasks.check_item(item, anns)  # a task's window: nothing outside it (422 outside_window)
         view = draft.get("view")
         if view is not None and not isinstance(view, dict):
             raise ApiError(422, "invalid_draft", "draft.view must be an object")
@@ -767,6 +778,7 @@ class StudyService:
         loaded.warnings.extend(warnings)
         anns = parse_annotations(body.get("annotations"), loaded.info, self.store.catalogue,
                                  self.settings.min_duration_samples)
+        self.tasks.check_item(item, anns)  # a task's window: nothing outside it (422 outside_window)
         context: dict[str, Any] = {}
         if revision is not None:
             context["revision"] = dict(revision)  # in the saved _annotations.json and _session.json
@@ -818,6 +830,11 @@ class StudyService:
                 self.games.record_viewed(user, rid, item.mode, item.context_id, viewed)
             except Exception:  # noqa: BLE001 - the results are saved; a lost coverage figure only affects a badge
                 log.exception("The share viewed of %s could not be kept", rid)
+        if item.task_id:
+            try:  # a known-answer task is scored now; quality_list scores any save whose scoring was interrupted
+                self.tasks.after_save(user, item, saved)
+            except Exception:  # noqa: BLE001 - the results are saved; the score is made again when asked for
+                log.exception("The known-answer score of %s could not be kept", rid)
         if item.mode == "practice" and rs is not None:
             out["feedback"] = self.coach.practice_result(user, rs, rid, saved.session.build_document(), elapsed,
                                                          loaded.info.timing.sfreq)
