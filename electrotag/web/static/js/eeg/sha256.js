@@ -565,21 +565,34 @@ export async function sha256Blob(blob, options = {}) {
   const size = blob.size;
   const useNative = options.native !== false && !onChunk && hasNativeSha256() && size <= nativeLimitBytes();
   if (useNative) {
+    let ticker = null;
     try {
-      // read in pieces (for the progress), then hash in one go
+      // Read in pieces (for the progress), then hash in one go. Hashing takes about as long as
+      // reading (in Chromium on a 2026 laptop, 1.4 s to read 444 MB and 1.8 s to hash it), and the
+      // browser says nothing while it hashes, so the second half of the progress is an estimate from
+      // the time the reading took, which never reaches the end before the hash is ready.
+      const t0 = Date.now();
       const all = new Uint8Array(size);
       for (let off = 0; off < size; ) {
         const piece = new Uint8Array(await blob.slice(off, Math.min(size, off + chunkBytes)).arrayBuffer());
         if (piece.length === 0) throw new Error("The file could not be read to the end");
         all.set(piece, off);
         off += piece.length;
-        if (onProgress) onProgress(0.9 * (off / size));
+        if (onProgress) onProgress(0.5 * (off / size));
+      }
+      if (onProgress) {
+        const expected = Math.max(50, 1.3 * (Date.now() - t0));
+        const t1 = Date.now();
+        ticker = setInterval(() => onProgress(0.5 + 0.49 * (1 - Math.exp(-(Date.now() - t1) / expected))), 100);
       }
       const digest = await globalThis.crypto.subtle.digest("SHA-256", all);
+      if (ticker) clearInterval(ticker);
+      ticker = null;
       if (onProgress) onProgress(1);
       return toHex(new Uint8Array(digest));
     } catch {
       // fall back to the streaming implementation (not enough memory, or crypto.subtle refused)
+      if (ticker) clearInterval(ticker);
     }
   }
   const hash = new Sha256();

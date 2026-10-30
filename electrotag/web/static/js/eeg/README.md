@@ -85,7 +85,7 @@ refusals); `data_dsp.test.mjs` the FFT and the filter designs with a direct tran
 `data_sha256.test.mjs` the fingerprints with the FIPS 180-4 examples and `node:crypto`;
 `data_recording.test.mjs` the `Recording` interface; and `data_perf.test.mjs` the times on a large
 recording (`--perf`). `data_register.test.mjs` compares the manifests field by field with those
-`web_tests/register_parity.py` builds with the Python core (`scripts/make_channel_matrix.py` adds 31
+`web_tests/register_parity.py` builds with the Python core (`scripts/make_channel_matrix.py` adds 32
 recordings of 1 to 257 channels in every format and edge case to the readers' and registration's
 recordings, and `ELECTROTAG_REAL_EEG` adds a folder of real ones), and `data_register_py.test.mjs` checks
 `pyfmt.js` and `pyjson.js` against Python itself on a corpus of values. `ui_synthetic.test.mjs`

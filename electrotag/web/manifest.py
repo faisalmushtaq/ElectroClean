@@ -55,6 +55,44 @@ def manifest_key(scope: str, recording_id: str) -> str:
 
 
 # --------------------------------------------------------------- original events
+#: The original events a study keeps for one recording (js/eeg/register.js keeps the same): at most this many
+#: events, and at most this many characters in their cells. Some systems write a marker on every sample that
+#: a trigger is held high (ds003420 of OpenNeuro has 185,443 markers in 7 minutes), which would make a
+#: registration too large to send or to store.
+MAX_KEPT_EVENTS = 10_000
+MAX_KEPT_EVENT_TEXT = 1_000_000
+
+
+def _thousands(n: int) -> str:
+    return f"{n:,}"
+
+
+def keep_events(events: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
+    """The original events a manifest keeps: all of them while they fit (MAX_KEPT_EVENTS events of at most
+    MAX_KEPT_EVENT_TEXT characters), else the first ones that fit, with a warning that says so in plain words
+    (None when every event is kept)."""
+    rows = events.get("rows") or []
+    keep, text = 0, 0
+    for row in rows:
+        text += sum(len(cell) for cell in row)
+        if keep == MAX_KEPT_EVENTS or text > MAX_KEPT_EVENT_TEXT:
+            break
+        keep += 1
+    n = len(rows)
+    if keep == n:
+        return events, None
+    kept = {**events, "rows": rows[:keep], "onset_s": events["onset_s"][:keep], "sample": events["sample"][:keep]}
+    onsets = [t for t in kept["onset_s"] if t is not None]
+    until = f", up to {max(onsets):.3f} s into the recording" if onsets else ""
+    return kept, (
+        f"The recording has {_thousands(n)} original events, more than a study keeps for one recording (at most "
+        f"{_thousands(MAX_KEPT_EVENTS)} events with {_thousands(MAX_KEPT_EVENT_TEXT)} characters of text), so the "
+        f"study keeps the first {_thousands(keep)}{until}: the viewer shows those and the saved files list them. "
+        "A trigger held for many samples can be written as one event per sample; the recording itself is unchanged "
+        "and holds them all."
+    )
+
+
 def events_to_dict(ev: OriginalEvents, root: Path | None = None) -> dict[str, Any]:
     d = dataclasses.asdict(ev)
     path = ev.path
@@ -125,6 +163,8 @@ def build_manifest(loaded: Any, *, scope: str = SCOPE_STUDY) -> dict[str, Any]:
     if not eeg_fp.get("sha256"):
         raise ManifestError(f"{info.recording_id}: the data file's checksum was not computed")
     amp = loaded.amplitude_report
+    original, too_many = keep_events(events_to_dict(loaded.original_events, root))
+    warnings = list(loaded.warnings) + ([too_many] if too_many else [])
     return {
         "schema": SCHEMA,
         "schema_version": SCHEMA_VERSION,
@@ -154,7 +194,7 @@ def build_manifest(loaded: Any, *, scope: str = SCOPE_STUDY) -> dict[str, Any]:
         "channel_types": {c: types.get(c, "eeg") for c in info.ch_names},
         "bad_channels": bads,
         "fingerprint": _plain(loaded.fingerprint),
-        "original_events": events_to_dict(loaded.original_events, root),
+        "original_events": original,
         "events_sidecar": _plain(loaded.events_sidecar),
         "event_report": _plain(loaded.event_report.to_dict()),
         "channel_report": _plain(loaded.channel_report.to_dict()),
@@ -165,7 +205,7 @@ def build_manifest(loaded: Any, *, scope: str = SCOPE_STUDY) -> dict[str, Any]:
         },
         "acquisition_gaps": [[int(a), int(b)] for a, b in loaded.acquisition_gaps],
         "discontinuity_samples": [int(s) for s in loaded.discontinuity_samples],
-        "warnings": list(loaded.warnings),
+        "warnings": warnings,
         "notes": list(loaded.notes),
     }
 

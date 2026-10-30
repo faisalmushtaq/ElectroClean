@@ -7,7 +7,7 @@ Each section below describes the changes in one version of ElectroTag;
 
 Recordings of every channel count up to 256 (and 257, EGI's nets with their reference) have been
 checked in the browser against MNE-Python, through registration, saving, the agreement analysis and
-adjudication, on a new synthetic set (`scripts/make_channel_matrix.py`, 31 recordings in every
+adjudication, on a new synthetic set (`scripts/make_channel_matrix.py`, 32 recordings in every
 format, rate, naming scheme and edge case) and on 18 public recordings of 2 to 257 channels. Four
 differences were put right. A channel that holds only zeros (an EGI reference or an unused BioSemi
 EXG channel) now filters to zeros in the browser, as in MNE-Python, so the amplitude check leaves it
@@ -19,7 +19,14 @@ does. On Firebase, a record of the expert work that would not fit in one documen
 adjudication of a 256-channel recording with many edited marks, say) is now kept compressed instead of
 being refused. The agreement analysis by channel counts only the time bins near each channel's marks,
 with exactly the same results, which halves its time on high-density recordings (five real recordings
-of up to 256 channels with 200 annotations each: 30 s instead of 68 s). `ELECTROTAG_REAL_EEG` runs the readers, registration and Python checks on a folder of
+of up to 256 channels with 200 annotations each: 30 s instead of 68 s). A registration now keeps at most 10,000 original events of a recording (and 1,000,000 characters of their
+text), the first ones, and says so in its warnings: an EGI recording that writes a marker on every
+sample of a held trigger (185,443 in 7 minutes) could not be registered before, because its
+registration came to 13 MB. While the browser hashes a file that it has read into memory, its
+progress now moves on (an estimate from the time the reading took) instead of resting at 90%.
+The reliability guide says how channel selections are compared in the tables, in event matching and in
+adjudication, where two marks agree on channels when their Jaccard index reaches
+`review.matching.channel_jaccard` (0.5 by default). `ELECTROTAG_REAL_EEG` runs the readers, registration and Python checks on a folder of
 real recordings; the testing guide says how, and lists the recordings used.
 
 Accounts can now hold several roles: annotator, expert and administrator, as an expert who also

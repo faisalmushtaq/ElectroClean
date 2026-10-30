@@ -686,6 +686,8 @@ export async function buildManifest(recording, options = {}) {
     }
     progress("fingerprint", 1);
 
+    const kept = keepEvents(original);
+    if (kept.warning) warnings.push(kept.warning);
     const manifest = {
       schema: SCHEMA,
       schema_version: SCHEMA_VERSION,
@@ -715,7 +717,7 @@ export async function buildManifest(recording, options = {}) {
       channel_types: Object.fromEntries(shownChannels.map((c) => [c, viewTypes.get(c) || "eeg"])),
       bad_channels: bads,
       fingerprint,
-      original_events: original,
+      original_events: kept.events,
       events_sidecar: eventsSidecar.merged,
       event_report: eventReport,
       channel_report: channelReport,
@@ -737,6 +739,56 @@ export async function buildManifest(recording, options = {}) {
   } finally {
     rec.close();
   }
+}
+
+/**
+ * The original events a study keeps for one recording (MAX_KEPT_EVENTS and MAX_KEPT_EVENT_TEXT in
+ * electrotag/web/manifest.py): some systems write a marker on every sample a trigger is held high, which
+ * would make a registration too large to send or to store.
+ */
+export const MAX_KEPT_EVENTS = 10000;
+export const MAX_KEPT_EVENT_TEXT = 1000000;
+
+/** Python's format(n, ","). */
+function thousands(n) {
+  return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+/** Python's len() of a str: its code points. */
+function pyLen(s) {
+  let n = 0;
+  for (const _ of s) n++;
+  return n;
+}
+
+/**
+ * keep_events of electrotag/web/manifest.py: every event while they fit, else the first ones that fit
+ * and a warning in the same words.
+ * @param {object} events an OriginalEvents record
+ * @returns {{events: object, warning: string | null}}
+ */
+export function keepEvents(events) {
+  const rows = events.rows || [];
+  let keep = 0;
+  let text = 0;
+  for (const row of rows) {
+    for (const cell of row) text += pyLen(cell);
+    if (keep === MAX_KEPT_EVENTS || text > MAX_KEPT_EVENT_TEXT) break;
+    keep++;
+  }
+  const n = rows.length;
+  if (keep === n) return { events, warning: null };
+  const kept = { ...events, rows: rows.slice(0, keep), onset_s: events.onset_s.slice(0, keep), sample: events.sample.slice(0, keep) };
+  let last = null;
+  for (const t of kept.onset_s) if (t !== null && t !== undefined && (last === null || t > last)) last = t;
+  const until = last !== null ? `, up to ${pyFixed(last, 3)} s into the recording` : "";
+  const warning =
+    `The recording has ${thousands(n)} original events, more than a study keeps for one recording (at most ` +
+    `${thousands(MAX_KEPT_EVENTS)} events with ${thousands(MAX_KEPT_EVENT_TEXT)} characters of text), so the ` +
+    `study keeps the first ${thousands(keep)}${until}: the viewer shows those and the saved files list them. ` +
+    "A trigger held for many samples can be written as one event per sample; the recording itself is unchanged " +
+    "and holds them all.";
+  return { events: kept, warning };
 }
 
 /** The dataset of a recording given without one (its own files, in one folder). */

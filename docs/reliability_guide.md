@@ -272,6 +272,22 @@ channels remain in the analysis is left out entirely (it covers no analysed
 channel-seconds and takes no part in event matching); it still counts in
 time-only mode.
 
+The same channel selections are judged in three ways, each suited to its purpose. On a 256-channel
+recording, take one annotator's mark on 120 channels that lie within another annotator's mark on 180
+channels at the same time. The time-and-channel tables count the 120 shared channels as agreement and
+the other 60 as one annotator's channel-seconds alone, so partial overlap lowers the agreement in
+proportion. Event matching pairs the two marks, because they share channels, and reports their channel
+Jaccard index (120 / 180 = 0.67) among the matched events. Adjudication, which lists what an expert
+should look at, treats two marks of one place as agreeing on channels when their Jaccard index reaches
+the study's `review.matching.channel_jaccard`, 0.5 by default, so this pair is agreed and goes into the
+adjudicated version as one mark, on the channels that more than half of the marks cover (with two
+annotators, the 120 marked by both).
+A whole-montage mark covers every shown channel, so against a mark on 180 of 256 channels its index is
+0.70 and the pair agrees; against 100 of 256 channels (0.39), against 80 of 180 (0.44) or against a
+disjoint set the expert sees a channel conflict. A study whose experts should look at every difference
+in the channels sets `channel_jaccard` higher, up to 1, which asks for the same channels exactly; the
+setting is frozen with each adjudication when it starts.
+
 ## 4. Category disagreements
 
 `confusion_time_weighted.tsv` gives, for each pair of annotators, the time

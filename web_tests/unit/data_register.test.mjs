@@ -305,3 +305,18 @@ test("registration can be stopped between recordings", async () => {
   });
   assert.equal(out.manifests.length + out.failures.length, 1);
 });
+
+test("a manifest keeps at most 10,000 original events, and their text counted as Python counts it", async () => {
+  const { keepEvents, MAX_KEPT_EVENTS, MAX_KEPT_EVENT_TEXT } = await import("../../electrotag/web/static/js/eeg/register.js");
+  const many = { rows: Array.from({ length: 12000 }, (_, k) => ["trigger", "D249", String(k)]), onset_s: Array.from({ length: 12000 }, (_, k) => k / 1000), sample: Array.from({ length: 12000 }, (_, k) => k) };
+  const a = keepEvents(many);
+  assert.equal(a.events.rows.length, MAX_KEPT_EVENTS);
+  assert.equal(a.events.sample.length, MAX_KEPT_EVENTS);
+  assert.match(a.warning, /^The recording has 12,000 original events, more than a study keeps for one recording \(at most 10,000 events with 1,000,000 characters of text\), so the study keeps the first 10,000, up to 9\.999 s into the recording/);
+  // an emoji is one character for Python (one code point), two UTF-16 units for JavaScript
+  const wide = { rows: Array.from({ length: 3000 }, () => ["\u{1F600}".repeat(500)]), onset_s: Array(3000).fill(null), sample: Array(3000).fill(null) };
+  const b = keepEvents(wide);
+  assert.equal(b.events.rows.length, MAX_KEPT_EVENT_TEXT / 500);
+  assert.match(b.warning, /keeps the first 2,000: the viewer/);
+  assert.equal(keepEvents({ rows: [["a"]], onset_s: [0], sample: [0] }).warning, null);
+});

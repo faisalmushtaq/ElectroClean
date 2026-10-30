@@ -11,7 +11,7 @@ export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..")
 export const FIXTURES = join(ROOT, "web_tests", "fixtures");
 export const DATA = join(ROOT, "electrotag", "web", "static", "js", "data");
 /** Must equal FIXTURE_VERSION in scripts/make_web_fixtures.py. */
-export const FIXTURE_VERSION = 5;
+export const FIXTURE_VERSION = 6;
 
 /** The Python that writes the fixtures: ELECTROTAG_PYTHON, the repository's .venv, or python3. */
 export function fixturePython() {

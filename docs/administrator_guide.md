@@ -78,9 +78,16 @@ sampling rates from 100 to 16384 Hz, on synthetic recordings of every format and
 recordings ([testing guide](testing_guide.md), "Real recordings"). The study's checks of a
 registration accept up to 4096 channels. An EDF file may hold signals at different rates; the slower
 ones (a respiration or temperature signal, say) are shown at the recording's rate, interpolated, and
-the browser names them when the recording opens. A registration is at most 2 MB, which leaves room for about
-29,000 original events (each takes about 70 bytes; a 256-channel recording with few events takes
-8 to 20 kB, or 30 kB with long channel names). A save holds at most 20,000 annotations; an annotation
+the browser names them when the recording opens. A registration keeps at most 10,000 of a recording's original
+events, with at most 1,000,000 characters of text in their rows; a recording with more keeps the
+first ones that fit, and the registration's warnings say how many the recording has, how many the
+study keeps and up to what time. The viewer shows the events kept and the saved files list them; the
+recording itself is unchanged. This matters for systems that write a marker on every sample a trigger
+is held high: OpenNeuro's ds003420, an EGI recording of 7 minutes, has 185,443 such markers in its
+`.vmrk` file, which would otherwise make a registration of 13 MB. Its `events.tsv`, which takes
+precedence when it is registered with the recording, holds the events themselves, so keep the BIDS
+sidecars beside the recordings. A registration is at most 2 MB in all; 10,000 events take about
+0.75 MB, and a 256-channel recording with few events 8 to 20 kB (30 kB with long channel names). A save holds at most 20,000 annotations; an annotation
 that names every channel of a 256-channel recording takes about 2 kB, so even thousands of them fit
 in one save. Large values are kept compressed on Firebase and split over several documents when
 they would not fit in one, so a 256-channel study keeps its manifests, drafts, saves and adjudications

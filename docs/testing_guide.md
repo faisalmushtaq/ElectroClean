@@ -93,7 +93,7 @@ from it. Create a dataset with
 demonstration's recordings and the example training set are made with the same
 code.
 
-`scripts/make_channel_matrix.py` writes a covering set of 31 recordings across channel counts,
+`scripts/make_channel_matrix.py` writes a covering set of 32 recordings across channel counts,
 formats and edge cases, from one channel to 257: EDF, EDF+, BDF and BrainVision (INT_16 and
 IEEE_FLOAT_32, multiplexed and vectorized) at 128, 160, 250, 256, 500, 512, 1000 and 2048 Hz, named
 in the 10-20, 10-10 and 10-05 systems, as BioSemi's A1 to H32, as EGI's E1 to E256 with Cz, with VREF
@@ -101,7 +101,8 @@ or with neither, as plain numbers, as bipolar pairs, with spaces, in mixed case,
 long names in other scripts, with EOG, ECG, EMG, respiration, temperature and trigger channels. Its
 edge cases are the ones that have broken readers before: signals at different rates in one EDF, an
 EDF+ annotation signal, recordings of three and of 64 samples, data records of 0.04 and 2.5 s, an
-empty physical range, channels that hold only zeros, duplicate names in EDF and in BrainVision, and
+empty physical range, channels that hold only zeros, a marker on every sample of a held trigger (10,500
+of them), duplicate names in EDF and in BrainVision, and
 headers that are empty, announce no signals, give a number that is not a number or a size that
 disagrees with their signals. The cases are chosen so that each value of each dimension appears at
 least once, which keeps the set to about 12 MB, so `make_web_fixtures.py` writes it at test time into
@@ -167,7 +168,15 @@ so the amplitude check counted a dead channel that MNE-Python leaves out (ds0025
 column of ds006171's `events.tsv` holds digits of other scripts, which Python's `int()` reads and the
 browser did not; and the browser worded two refusals of a broken header differently from Python.
 A BrainVision header that gives one name to several channels is now refused by both, in plain words,
-because MNE-Python cannot read it.
+because MNE-Python cannot read it. Registered without its `events.tsv`, ds003420 brought 185,443
+BrainVision markers (EGI's DIN markers, one on every sample a trigger is held), a registration of
+13 MB that the study refused; a registration now keeps the first 10,000 events and says so
+([administrator guide](administrator_guide.md)). ds004408 gets an amplitude warning of about 44 V
+(70 V without the display filters) in both readers: its float32 samples are about 4 x 10^10 with a
+resolution of 0.1 µV, so the values in the file are about a million times too large (its header was
+written by pybv, and its `channels.tsv` gives the unit as V, which suggests volts given where
+microvolts were expected). The warning is right; the file is at fault, and MNE-Python reads the same
+values.
 
 ## Coverage of the required tests
 
@@ -280,7 +289,14 @@ took 29 s at 690 MB, and a filtered 10-second window of all 256 channels took 2.
 helper workers. Python's `hashlib` took 7 s. Registering it with `electrotag web register` took 207 s
 and needed 5.6 GB of temporary disk space for the memory-mapped display copy (8 bytes for every sample
 of every shown channel), which it removes afterwards; the admin area builds the same manifest in the
-browser, which filters only the short windows that the amplitude check reads. On the real recordings
+browser, which filters only the short windows that the amplitude check reads. Opening the 444 MB BDF of ds006171 in Chromium with its fingerprint took 3.9 s: the reading worker
+scanned it in 2.1 s while the helper worker read it into memory (1.4 s) and hashed it with the
+browser's own SHA-256 (1.8 s, about 245 MB/s on this machine; reading in 64 MB pieces instead of 8 MB
+changed nothing). The streamed JavaScript SHA-256, used for files larger than the browser's own can
+take in one piece (1 GB at most), ran at 49 MB/s in Chromium and 86 MB/s in Node.js. Through the whole
+application (choosing the file, matching it with the study and drawing the first screen), the first
+opening of ds003420 (432 MB) took 13.7 s, with the file read from disk for the first time, and a second
+opening 5.4 s. On the real recordings
 above, registration in the browser took 0.2 to 12 s per recording and with Python 0.3 to 54 s (the
 256-channel BrainVision recording of ds003420, 432 MB). Saving 60 annotations on 256 channels took
 0.1 s, and 200 annotations 0.3 s; each adjudication decision on a 256-channel recording took 0.1 s.

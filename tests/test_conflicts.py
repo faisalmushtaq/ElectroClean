@@ -230,3 +230,27 @@ def test_the_cases_of_the_usability_review() -> None:
     c = next(x for x in clusters(docs) if x.is_conflict)
     assert [outcome_for(c, {"choice": "B"}, x) for x in "ABC"] == ["none_kept", "yours_kept", "none_kept"]
     assert [outcome_for(c, {"choice": "all"}, x) for x in "ABC"] == ["all_kept", "other_kept", "all_kept"]
+
+
+def test_on_256_channels_marks_agree_on_channels_when_their_jaccard_index_reaches_the_rule() -> None:
+    """review.matching.channel_jaccard (0.5 by default) decides: 120 of the other's 180 channels (0.67) and the
+    whole montage against 180 of 256 (0.70) agree; 80 of 180 (0.44), 100 of 256 against the whole montage (0.39)
+    and disjoint sets are channel conflicts. docs/reliability_guide.md ("3. Channels") says so."""
+    ch = tuple(f"E{i}" for i in range(1, 257))
+    info = RecordingInfo("sub-01/eeg/hd.edf", RecordingTiming(SF, 6000), ch)
+
+    def kinds(mine: tuple[str, ...], theirs: tuple[str, ...], jaccard: float = 0.5) -> tuple[str, ...]:
+        docs = {"A": AnnotationDocument(info, "A01", [a("a1", EMG, 5, 7, mine)], CAT),
+                "B": AnnotationDocument(info, "A02", [a("b1", EMG, 5, 7, theirs)], CAT)}
+        (c,) = find_clusters(docs, ch_names=ch, sfreq=SF, unit_id="t-256",
+                             rules=ConflictRules(channel_jaccard=jaccard))
+        return c.kinds
+
+    assert kinds(ch[:120], ch[:180]) == ()
+    assert kinds((), ch[:180]) == ()
+    assert kinds(ch[:80], ch[:180]) == ("channels",)
+    assert kinds((), ch[:100]) == ("channels",)
+    assert kinds(ch[:128], ch[128:]) == ("channels",)
+    # a study that wants the same channels to the last one says so with a higher threshold
+    assert kinds(ch[:120], ch[:180], jaccard=0.9) == ("channels",)
+    assert kinds(ch[:180], ch[:180], jaccard=1.0) == ()

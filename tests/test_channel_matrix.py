@@ -98,7 +98,37 @@ def test_every_readable_case_is_registered_with_all_its_channels_and_samples(dat
             assert len(m["original_events"]["rows"]) == len(case.annotations), case.id
         assert m["fingerprint"]["eeg"]["sha256"], case.id
         # far below what a study keeps for one manifest
-        assert len(json.dumps(m)) < 100_000, case.id
+        assert len(json.dumps(m)) < (1_000_000 if case.id == "e_many_markers" else 100_000), case.id
+
+
+def test_a_marker_on_every_sample_keeps_the_first_events_and_says_so(registered: Any) -> None:
+    from electrotag.web.manifest import MAX_KEPT_EVENTS
+
+    m = next(x for x in registered.manifests if x["recording_id"].startswith("e_many_markers/"))
+    ev = m["original_events"]
+    assert len(ev["rows"]) == len(ev["onset_s"]) == len(ev["sample"]) == MAX_KEPT_EVENTS
+    assert ev["sample"][:3] == [2000, 2001, 2002]
+    assert m["event_report"]  # counted over every marker, before the study keeps the first ones
+    assert m["warnings"][-1].startswith(
+        "The recording has 10,500 original events, more than a study keeps for one recording (at most 10,000 events "
+        "with 1,000,000 characters of text), so the study keeps the first 10,000, up to 11.999 s into the recording: "
+        "the viewer shows those and the saved files list them.")
+    assert len(json.dumps(m)) < 1_000_000
+
+
+def test_events_with_long_rows_are_kept_while_their_text_fits() -> None:
+    from electrotag.web.manifest import MAX_KEPT_EVENT_TEXT, keep_events
+
+    rows = [["1.0", "0", "x" * 500, str(k)] for k in range(3000)]
+    events = {"rows": rows, "onset_s": [float(k) for k in range(3000)], "sample": list(range(3000))}
+    kept, warning = keep_events(events)
+    total, fits = 0, 0
+    for r in rows:
+        total += sum(len(c) for c in r)
+        fits += total <= MAX_KEPT_EVENT_TEXT
+    assert len(kept["rows"]) == fits == 1970 and kept["sample"] == list(range(fits))
+    assert warning and "so the study keeps the first 1,970, up to 1969.000 s into the recording" in warning
+    assert keep_events({"rows": rows[:10], "onset_s": [0.0] * 10, "sample": [0] * 10})[1] is None
 
 
 def test_broken_recordings_are_refused_in_plain_words(registered: Any) -> None:

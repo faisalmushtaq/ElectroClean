@@ -32,7 +32,7 @@ sys.path.insert(0, str(ROOT))
 import numpy as np  # noqa: E402
 
 #: Bump when fixtures or expected values change; the tests regenerate older fixtures.
-FIXTURE_VERSION = 5
+FIXTURE_VERSION = 6
 
 DEFAULT_OUT = ROOT / "web_tests" / "fixtures"
 HIDE = [

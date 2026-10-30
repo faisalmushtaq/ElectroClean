@@ -69,3 +69,15 @@ test("fixture files hash as hashlib does", async () => {
     assert.equal(await sha256Blob(blob, { native: false, chunkBytes: 65536 + 3 }), exp.sha256, name);
   }
 });
+
+test("the browser's own SHA-256 reports progress while it reads and while it hashes, and ends at 1", async () => {
+  const bytes = new Uint8Array(48 * 1024 * 1024);
+  for (let i = 0; i < bytes.length; i += 4096) bytes[i] = i & 0xff;
+  const seen = [];
+  const hex = await sha256Blob(new Blob([bytes]), { chunkBytes: 1 << 20, onProgress: (f) => seen.push(f) });
+  assert.equal(hex, createHash("sha256").update(bytes).digest("hex"));
+  assert.equal(seen.at(-1), 1);
+  assert.ok(seen.some((f) => f > 0 && f <= 0.5), "reading");
+  for (let i = 1; i < seen.length; i++) assert.ok(seen[i] >= seen[i - 1], `progress goes back: ${seen[i - 1]} then ${seen[i]}`);
+  assert.ok(seen.slice(0, -1).every((f) => f < 1), "1 only once the hash is ready");
+});
