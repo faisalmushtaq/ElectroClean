@@ -9,19 +9,18 @@ import { confidenceMode } from './confidence.js';
 import { addInterval, fromDraft, toDraft, viewedFraction as coverageFraction } from '../viewer/coverage.js';
 import { local, newId, nowLocalIso, session as tabStorage } from '../util.js';
 import { DEFAULT_ANNOTATION, DEFAULT_HIDE, DEFAULT_SCALINGS } from '../api/demo_catalogue.js';
+import { localDraft, localDraftKey } from './local_drafts.js';
+
+export { localDraft, localDraftKey };
 
 const REMOTE_EVERY_MS = 30000;
 /** After a draft that did not reach the study, the next try comes this much later (or at once when the connection returns). */
 const RETRY_MS = 5000;
+/** A discard or Save and Finish waits at most this long for a draft still on its way to the study. */
+const SETTLE_MS = 15000;
 
 function hiddenByDefault(name) {
   return DEFAULT_HIDE.some((p) => (p.endsWith('*') ? name.startsWith(p.slice(0, -1)) : name === p));
-}
-
-/** The key of this browser's copy of a draft (also read by the home view, for what it shows of unfinished work). */
-export function localDraftKey(backend, annotatorId, recordingId, mode, contextId) {
-  const where = backend.server || backend.kind;
-  return `electrotag.draft|${where}|${annotatorId || 'anon'}|${recordingId}|${mode}|${contextId || ''}`;
 }
 
 // Work discarded in this tab (Start afresh, Discard and close, Start again from the saved version, Leave
@@ -45,12 +44,6 @@ function keepDiscarded(key, draft) {
 function forgetDiscarded(key) {
   tabStorage.remove(DISCARDED + key);
   discardedInMemory.delete(key);
-}
-
-/** This browser's copy of a draft, or null. */
-export function localDraft(backend, annotatorId, recordingId, mode, contextId) {
-  const d = local.get(localDraftKey(backend, annotatorId, recordingId, mode, contextId), null);
-  return d && Array.isArray(d.annotations) ? d : null;
 }
 
 /** The study's comfort settings (the annotation block of GET /me), with the defaults for any left out. */
@@ -128,7 +121,9 @@ export class AnnotationSession {
     this.restored = 0;
     this._dirty = false;
     this._lastRemote = performance.now();
-    this._remoteBusy = false;
+    this._remotePut = null; // the draft on its way to the study, if any
+    this._discarding = false; // the drafts are being deleted: nothing is written meanwhile
+    this.closed = false; // the view has closed, or its work was discarded: no draft is written for it again
     this.remoteFailing = false; // the last draft sent did not reach the study
     this.submitting = false; // Save and Finish is waiting for the study's answer: no draft is sent meanwhile
     // A revision opens with the annotations of the latest saved version (docs/web/using.md, "History and revisions").
@@ -202,14 +197,18 @@ export class AnnotationSession {
     return draft.view || null;
   }
 
+  /** Drafts may be written: never once the session has closed, nor while its drafts are deleted. */
+  get mayKeepDraft() { return this.canSave && !this.closed && !this._discarding; }
+
   _scheduleLocal() {
-    if (!this.canSave) return;
+    if (!this.mayKeepDraft) return;
     clearTimeout(this._localTimer);
     this._localTimer = setTimeout(() => this.saveLocal(), 1200);
   }
 
   saveLocal() {
-    if (!this.canSave || this.submitting) return;
+    clearTimeout(this._localTimer); // this save replaces one waiting
+    if (!this.mayKeepDraft || this.submitting) return;
     if (local.set(this.localKey, this.draftPayload()) && this.onSaved) this.onSaved('browser', new Date());
   }
 
@@ -221,18 +220,28 @@ export class AnnotationSession {
   /** Send the draft to the server when something changed (at most every 30 s unless forced). */
   async saveRemote({ force = false, keepalive = false } = {}) {
     // While Save and Finish waits for its answer, a draft that arrived after it would linger beside the saved result.
-    if (!this.canSave || this._remoteBusy || this.submitting) return false;
+    if (!this.mayKeepDraft || this.submitting) return false;
+    if (this._remotePut) {
+      // One draft at a time, so that they reach the study in order: a forced one goes once the one before has arrived.
+      if (!force) return false;
+      await this._settleRemote();
+      if (!this.mayKeepDraft || this.submitting || this._remotePut) return false;
+    }
     if (!force && (!this._dirty || performance.now() - this._lastRemote < REMOTE_EVERY_MS)) return false;
-    this._remoteBusy = true;
-    const payload = this.draftPayload();
+    // The session's id goes with the draft: once its work is discarded and closed, the study refuses a draft
+    // of it that arrives late (409 draft_discarded), instead of keeping it again.
+    const payload = { ...this.draftPayload(), session_id: this.sessionId };
+    const put = this.backend.putDraft(this.recordingId, this.mode, this.contextId, payload, { keepalive });
+    this._remotePut = put;
     try {
-      await this.backend.putDraft(this.recordingId, this.mode, this.contextId, payload, { keepalive });
+      await put;
       this._dirty = false;
       this._lastRemote = performance.now();
       this.remoteFailing = false;
       if (this.onSaved) this.onSaved('study', new Date());
       return true;
-    } catch {
+    } catch (exc) {
+      if (exc && exc.code === 'draft_discarded') return false; // this work was discarded: nothing to send again
       // The study did not get it (no connection, or it failed once): the browser's copy is kept, and the
       // draft goes again with the next change, the next tick after 30 s, or when the connection returns.
       // A draft replaces the one before, so sending it again is harmless.
@@ -241,8 +250,23 @@ export class AnnotationSession {
       if (this.onSaved) this.onSaved('study_failed', new Date());
       return false;
     } finally {
-      this._remoteBusy = false;
+      if (this._remotePut === put) this._remotePut = null;
     }
+  }
+
+  /** Wait for a draft on its way to the study (at most SETTLE_MS: a later one is refused by the study, see saveRemote). */
+  async _settleRemote() {
+    const put = this._remotePut;
+    if (!put) return;
+    let timer;
+    await Promise.race([put.catch(() => {}), new Promise((resolve) => { timer = setTimeout(resolve, SETTLE_MS); })]);
+    clearTimeout(timer);
+  }
+
+  /** The view of this session has closed: no draft is written for it any more, in this browser or with the study. */
+  close() {
+    this.closed = true;
+    clearTimeout(this._localTimer);
   }
 
   /**
@@ -250,14 +274,24 @@ export class AnnotationSession {
    * to restore, or else what is open now) is set aside in this tab first, so that it can be brought back
    * (bringBackDiscarded); nothing is set aside when there was nothing to lose.
    */
-  async discardDrafts({ draft = null } = {}) {
+  async discardDrafts({ draft = null, close = false } = {}) {
     if (this.tryOut) return;
     const work = draft || this.draftPayload();
     const worth = draft ? draft.annotations.length || (draft.elapsed_s || 0) > 5
       : this.revision ? this.changedSinceSaved : this.store.size > 0;
-    if (worth) keepDiscarded(this.localKey, work);
-    this.forgetLocal();
-    try { await this.backend.deleteDraft(this.recordingId, this.mode, this.contextId); } catch { /* nothing to delete */ }
+    if (close) this.close();
+    // No draft may be written once it is deleted: nothing new starts, and one already on its way arrives first.
+    this._discarding = true;
+    clearTimeout(this._localTimer);
+    try {
+      if (worth) keepDiscarded(this.localKey, work);
+      await this._settleRemote();
+      local.remove(this.localKey);
+      // Closing: the study also refuses any draft of this session that might still arrive.
+      try { await this.backend.deleteDraft(this.recordingId, this.mode, this.contextId, close ? { sessionId: this.sessionId } : {}); } catch { /* nothing to delete */ }
+    } finally {
+      this._discarding = false;
+    }
   }
 
   /** The work set aside in this tab for this recording (discardDrafts), or null. */
@@ -319,6 +353,7 @@ export class AnnotationSession {
     this.submitting = true;
     let result;
     try {
+      await this._settleRemote(); // a draft on its way arrives before the saved result, never after it
       result = await this.backend.submit({
         recording_id: this.recordingId, mode: this.mode, context_id: this.contextId,
         annotations: this.store.toJSON(), session: this.sessionInfo(visitId), sha256: this.sha256,

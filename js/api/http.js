@@ -168,8 +168,9 @@ export class HttpBackend {
     return this._request('PUT', `/drafts/${idPath(recordingId)}${q}`, draft, { keepalive });
   }
 
-  deleteDraft(recordingId, mode, contextId) {
-    const q = `?mode=${encodeURIComponent(mode)}&context=${encodeURIComponent(contextId || '')}`;
+  /** `sessionId`: the session discarding its work and closing; the study then refuses its drafts that arrive late. */
+  deleteDraft(recordingId, mode, contextId, { sessionId = '' } = {}) {
+    const q = `?mode=${encodeURIComponent(mode)}&context=${encodeURIComponent(contextId || '')}${sessionId ? `&session=${encodeURIComponent(sessionId)}` : ''}`;
     return this._request('DELETE', `/drafts/${idPath(recordingId)}${q}`);
   }
 

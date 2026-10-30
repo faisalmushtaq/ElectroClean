@@ -1,6 +1,6 @@
 // Recordings: the study's register. A list to filter by scope and status, a page per recording
 // (notes, retire, remove), and adding recordings from this computer: the browser reads the files
-// chosen (js/data/register.js builds each recording's manifest, as electrotag-web register does
+// chosen (js/eeg/register.js builds each recording's manifest, as electrotag-web register does
 // with MNE-Python), shows what it found and what failed, and sends only the manifests. The EEG
 // never leaves this computer. Several recordings chosen in the list are assigned, retired, brought
 // back into use or removed together; removing deletes only a registration, and a recording with
@@ -17,9 +17,9 @@ import {
   sectionHead, select, textArea, textInput,
 } from './ui.js';
 
-/** The module that reads recordings for the register (js/data/register.js); tests may replace it. */
+/** The module that reads recordings for the register (js/eeg/register.js); tests may replace it. */
 export async function loadRegisterModule() {
-  return import('../data/register.js');
+  return import('../eeg/register.js');
 }
 
 /** What removing a recording takes with it, asked before it is removed. */
@@ -290,8 +290,11 @@ export class RecordingsSection {
     this.progress.set(null, `Reading ${plural(files.length, 'file')}…`);
     try {
       let mod;
+      let catalogue;
       try {
         mod = await loadRegisterModule();
+        // Event codes are compared with ElectroTag's own catalogue, as electrotag-web register does.
+        catalogue = (await import('../api/demo_catalogue.js')).CATALOGUE;
       } catch {
         throw new Error('This copy of ElectroTag cannot read recordings for the register yet. Update it, or register the recordings with the command electrotag-web register.');
       }
@@ -299,7 +302,7 @@ export class RecordingsSection {
       try { settings = (await this.area.read('settings_get')).settings || {}; } catch { /* the builder's defaults */ }
       const scope = this.addScope.value || 'study';
       const out = await mod.buildManifests(files, {
-        settings, scope,
+        settings, scope, catalogue,
         onProgress: (p) => { const { text, fraction } = progressText(p); this.progress.set(fraction, text); },
       });
       this.found = { manifests: out.manifests || [], failures: out.failures || [] };

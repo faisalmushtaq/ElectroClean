@@ -7,11 +7,11 @@ import { appHeader } from './common.js';
 import { docsUrl } from '../ui/docs.js';
 import { ask } from '../ui/dialog.js';
 import { formatHms, local } from '../util.js';
-import { quizCard } from '../training/quiz.js';
+import { quizCard } from '../training/quiz_card.js';
 import { deviceHomeLine } from './device.js';
 import { recordingsCard } from './home_list.js';
-import { gameCards } from './home_games.js';
-import { localDraft } from '../annotate/session.js';
+import { partNow } from '../lazy.js';
+import { localDraft } from '../annotate/local_drafts.js';
 import { todayKey } from '../annotate/clock.js';
 import { percentText } from '../viewer/coverage.js';
 import { MIN_FOR_ESTIMATE, progressSummary, roundEstimate, spanText, todayText } from './progress.js';
@@ -137,7 +137,13 @@ export function homeView(app) {
       h('div.home-grid', {},
         h('div.col', {}, nextCard, !training && items.length ? progressCard(p) : null, programme && !training ? trainingDoneCard(app) : null,
           list, quizCard(app)),
-        sideColumn([...gameCards(app), demo]))));
+        sideColumn([...games(app), demo]))));
+}
+
+/** The game elements' cards (home_games.js, loaded with GET /me/achievements when the study has them on). */
+function games(app) {
+  const part = app.achievements ? partNow('games') : null;
+  return part ? part.gameCards(app) : [];
 }
 
 /** Where the annotators' guide is read (docs/web/using.md, in a new tab). */
