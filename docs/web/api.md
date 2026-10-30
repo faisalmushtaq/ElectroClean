@@ -1041,6 +1041,15 @@ with `overdue` false), and the answer gains `"due": [{"handout_id", "title",
 date, earliest first. Neither carries dataset or collection names, nor the
 team's note.
 
+The sandbox answers every operation of this section in the browser
+(`js/api/demo_library.js`), on its own recordings and accounts, except a
+hand-out with `"mode": "k"`, whose share-out needs the server's Tasks: its
+preview and creation are answered 501 `needs_server`. The contract parity test
+(`web_tests/unit/api_contract_parity.test.mjs`) sends every read and write of
+this section, with their refusals, to the study server and to the sandbox and
+compares the answers, and checks that neither tells an annotator a dataset's or
+collection's name or details.
+
 ### The short-segment quiz (annotators)
 
 A reference set with quiz items offers its quiz to the annotators allowed to

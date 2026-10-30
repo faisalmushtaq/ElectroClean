@@ -617,6 +617,18 @@ Python configuration. What a visitor cannot use in a sandbox, and what needs
 Python, is left out, and the stand-in answers it with an error that says a
 study server or Firebase is needed.
 
+The study team's datasets, collections, groups and hand-outs, with the
+tracking grids and the list of what would be notified, are in
+`js/api/demo_library.js`, which follows `electrotag/web/datasets.py` and
+`tracking.py` and is a part of its own (`demoLibrary`): `demo_admin.js` loads
+it at the first of these operations, and from then on also sends it the
+overview, the recordings list and registration, and the removal of a recording
+or an account, which datasets change. `demo.js` asks it to add each item's
+hand-out and the due list to GET /assignments only once the sandbox has a
+hand-out, so a visit that never uses them never loads it and the sign-in page
+stays within its budget. A hand-out shared out k per recording needs the
+server's Tasks, so the stand-in answers it with `needs_server`.
+
 The stand-in has limits that a visitor may notice. Its three recordings are
 simulated, its accounts and their work live in this browser only, its quiz
 puts the segments in an order of its own, its practice review gives the score,

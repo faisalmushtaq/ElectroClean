@@ -53,7 +53,8 @@ test('only administrators can use the admin area; ADMIN is a built-in account', 
   const o = await b.admin('overview');
   // T01's training recordings are not counted while their stages are locked behind the tour, as on the server
   // E01, the built-in expert, annotates too: each account counts under every role it holds
-  assert.deepEqual(o.counts, { recordings: 3, annotators: 3, experts: 1, admins: 1, assignments: 3, done: 0, in_progress: 0, todo: 3, unusable: 0, problems_open: 0, reviewed: 0 });
+  assert.deepEqual(o.counts, { recordings: 3, annotators: 3, experts: 1, admins: 1, assignments: 3, done: 0, in_progress: 0, todo: 3, unusable: 0, problems_open: 0, reviewed: 0,
+    overdue: 0, handouts_open: 0 });
   assert.deepEqual(o.recent, []);
   await assert.rejects(() => b.admin('no_such_operation'), (e) => e.status === 404);
 });
