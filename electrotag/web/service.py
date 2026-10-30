@@ -216,6 +216,7 @@ class WorkItem:
     saved: dict[str, Any] | None = None  # the history's figures of every saved attempt (games.saved_summary)
     revising: bool = False  # done, with a revision under way (its draft is kept)
     task_id: str = ""  # the task the assignment belongs to (electrotag/web/tasks.py), "" for none
+    handout_id: str = ""  # the hand-out that gave the assignment or was linked to it (datasets.py), "" for none
 
     @property
     def key(self) -> str:
@@ -373,7 +374,7 @@ class StudyService:
         seen: set[tuple[str, str, str]] = set()
 
         def add(rid: str, mode: str, ctx: str, position: int, source: str, repeat: bool = False,
-                task_id: str = "") -> None:
+                task_id: str = "", handout_id: str = "") -> None:
             ctx = ctx if mode != "standard" else ""
             key = (rid, mode, ctx)
             if key in seen:
@@ -393,7 +394,8 @@ class StudyService:
                 status = "todo"
             # the latest attempt by its number (a revision is always the latest), whatever the clocks said
             item = WorkItem(rid, mode, ctx, m, status, position, repeat, source,
-                            latest_entry(saved[key]) if key in saved else None, task_id=task_id)
+                            latest_entry(saved[key]) if key in saved else None, task_id=task_id,
+                            handout_id=handout_id)
             if key in saved:
                 from electrotag.web.games import saved_summary
 
@@ -406,7 +408,8 @@ class StudyService:
             for rid, mode, repeat in self.coach.programme_recordings(user, set_id):
                 add(rid, mode, set_id, 0, "programme", repeat)
         for a in self.store.assignments(aid):
-            add(a.recording_id, a.mode, a.context_id, a.position, "assignment", task_id=a.task_id)
+            add(a.recording_id, a.mode, a.context_id, a.position, "assignment", task_id=a.task_id,
+                handout_id=a.handout_id)
         # Real study work waits for the competency assessment (electrotag/web/training_path.py): a study recording
         # not yet saved is "locked" while the gate is closed, so it is never the next one and cannot be opened.
         gated = [i for i in items if self.training_path.gated(i) and i.status in ("todo", "in_progress")]
@@ -456,7 +459,11 @@ class StudyService:
             d["problem"] = self.feedback.problem_out(p, mine=True) if p is not None else None
             d["task"] = self.tasks.item_task(i, tasks)  # {task_id, window} of a task (docs/web/api.md), or null
             out.append(d)
-        return {"items": out,
+        # the hand-outs of the study team (datasets.py): titles and due dates only, never a dataset's details
+        per_item, due = self.datasets.annotator_view(user, items)
+        for i, d in zip(items, out, strict=True):
+            d["handout"] = per_item.get(i.key)
+        return {"items": out, "due": due,
                 "next": nxt.recording_id if nxt is not None else None,
                 "next_item": ({"recording_id": nxt.recording_id, "mode": nxt.mode, "context_id": nxt.context_id}
                               if nxt is not None else None)}

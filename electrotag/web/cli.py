@@ -158,8 +158,13 @@ def cmd_register(a: argparse.Namespace) -> int:
 
     store = open_store(a)
     print(f"Registering the recordings in {a.dataset} (each is opened and checked with ElectroTag's loader):")
-    reg = register_dataset(a.dataset, store, check_filters=not a.no_filter_check, include_sets=not a.no_sets)
-    _audit_registration(store, reg, f"from the folder {Path(a.dataset).name}")
+    try:
+        reg = register_dataset(a.dataset, store, check_filters=not a.no_filter_check, include_sets=not a.no_sets,
+                               dataset_id=a.dataset_id)
+    except ValueError as exc:
+        raise CommandError(str(exc)) from exc
+    _audit_registration(store, reg, f"from the folder {Path(a.dataset).name}"
+                        + (f" into the dataset {a.dataset_id}" if a.dataset_id else ""))
     return _report_registration(reg)
 
 
@@ -509,6 +514,9 @@ def build_parser(prog: str = "electrotag-web") -> argparse.ArgumentParser:
     _store_args(s)
     s.add_argument("--no-filter-check", action="store_true", help="skip checking the display filters on each file")
     s.add_argument("--no-sets", action="store_true", help="leave out the dataset's training reference sets")
+    s.add_argument("--dataset", dest="dataset_id", metavar="ID",
+                   help="the study's source dataset to register the recordings into (made in the admin area's "
+                        "Datasets; by default the built-in 'study-recordings')")
     s.set_defaults(func=cmd_register)
 
     s = sub.add_parser("export-manifests", help="register a dataset into a file, to import where the study is")

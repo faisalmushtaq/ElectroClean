@@ -873,8 +873,10 @@ class Tasks:
                 "per_annotator": p["per_annotator"], "created": len(p["planned"]), "assigned": p["assigned"],
                 "k": p["k"], "pairs": p["pairs"], "warnings": p["warnings"]}
 
-    def op_create(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
-        """``tasks_create``: make the tasks and their assignments, once per ``request_id``."""
+    def op_create(self, user: User, body: dict[str, Any], *, handout_id: str = "") -> dict[str, Any]:
+        """``tasks_create``: make the tasks and their assignments, once per ``request_id``. A hand-out shared out k
+        per recording (electrotag/web/datasets.py) passes its ``handout_id``, kept in each task and its
+        assignments."""
         from electrotag.web.admin import _text
 
         rid = body.get("request_id")
@@ -884,8 +886,7 @@ class Tasks:
         notes = _text(body, "notes", limit=1000)
         done = [t for t in self.all() if t.get("request_id") == rid]
         if done:  # sent again (a late answer): the same tasks, and any assignment still missing is made
-            for t in done:
-                self._assign(t)
+            self._assign_many(done)
             seen = _Seen()
             return {"tasks": [self.out(t, seen) for t in done], "created": len(done), "assigned": 0,
                     "skipped": [], "per_annotator": [], "already": True}
@@ -902,9 +903,11 @@ class Tasks:
                       "letters": letters_for(secret, tid, list(x.annotators)), "gold": x.gold, "blinded": False,
                       "state": "open", "adopted": list(x.holders), "created_at": now, "created_by": user.annotator_id,
                       "request_id": rid, "batch": batch, "notes": notes, "changes": []}
+            if handout_id:
+                record["handout_id"] = handout_id
             made.append(self.store.update_record("tasks", tid, "", lambda old, r=record: r if old is None else None)
                         or record)
-        assigned = sum(self._assign(t) for t in made)
+        assigned = self._assign_many(made)
         n_gold = sum(1 for t in made if t.get("gold"))
         what = (f"{audit.count(len(made), 'known-answer task')} from {p['gold'].set_id}" if p["gold"] is not None
                 else f"{audit.count(len(made), 'task')}" + ("" if p["k"] is None else f" of {p['k']} annotators"))
@@ -919,13 +922,20 @@ class Tasks:
         return {"tasks": [self.out(t, seen, count_conflicts=False) for t in made], "created": len(made),
                 "assigned": assigned, "skipped": p["skipped"], "per_annotator": p["per_annotator"], "already": False}
 
-    def _assign(self, task: dict[str, Any]) -> int:
-        """The task's assignments (an assignment of the recording without a task is linked to it)."""
-        added = 0
-        for aid in task.get("annotators", []):
-            added += self.store.assign(aid, [task["recording_id"]], mode="standard", context_id="",
-                                       task_id=task["task_id"])
-        return added
+    def _assign_many(self, tasks: list[dict[str, Any]]) -> int:
+        """The tasks' assignments (an assignment of the recording without a task is linked to it), one store call per
+        person (one transaction each on Firestore) rather than
+        one per person per task; the tasks of one hand-out carry its ID into the assignments."""
+        from electrotag.web.store import TooManyAssignments
+
+        by: dict[tuple[str, str], list[tuple[str, str]]] = {}
+        for t in tasks:
+            for aid in t.get("annotators", []):
+                by.setdefault((aid, str(t.get("handout_id") or "")), []).append((t["recording_id"], t["task_id"]))
+        try:
+            return sum(self.store.assign_many(aid, items, handout_id=hid) for (aid, hid), items in by.items())
+        except TooManyAssignments as exc:
+            raise ApiError(413, "too_many_assignments", f"{exc} Give them fewer recordings.") from exc
 
     def op_list(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
         """``tasks_list``: every task, with its people and derived status, filtered."""

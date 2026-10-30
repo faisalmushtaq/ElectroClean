@@ -241,3 +241,38 @@ def test_the_register_command_records_how_recordings_came(tmp_path: Path) -> Non
     assert [(e["op"], e["by"]) for e in entries] == [("recordings_register", "command"), ("study_create", "command")]
     assert "electrotag-web" in entries[0]["summary"] and str(tmp_path) not in json.dumps(entries)
     store.close()
+
+
+def test_the_register_command_registers_into_a_dataset(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """``electrotag-web register --dataset``: into a source dataset (with its prefix); an ID that belongs to another
+    dataset's recording is left as it is; an unknown dataset is refused in plain words."""
+    from electrotag.synthetic import write_edf_recording
+    from electrotag.web.cli import main as cli
+    from electrotag.web.datasets import DEFAULT_DATASET_ID
+    from electrotag.web.service import StudyService
+    from electrotag.web.store import User
+    from electrotag.web.store_files import FilesStore
+
+    write_edf_recording(tmp_path / "data" / "sub-001" / "eeg", "sub-001_task-rest", duration_s=10.0, seed=4)
+    study = tmp_path / "study"
+    assert cli(["init-study", "--study-dir", str(study), "--study", "s"]) == 0
+    store = FilesStore(study)
+    admin = User("ADMIN", "", roles=("admin",))
+    service = StudyService(store)
+    for n, body in ((1, {"dataset_id": "plain", "name": "Plain"}),
+                    (2, {"dataset_id": "on", "name": "OpenNeuro", "path_prefix": "ds003420"})):
+        service.admin("dataset_create", admin, {"request_id": f"{n:032x}", **body})
+    store.close()
+    rid = "sub-001/eeg/sub-001_task-rest_eeg.edf"
+    assert cli(["register", str(tmp_path / "data"), "--study-dir", str(study), "--dataset", "plain"]) == 0
+    assert cli(["register", str(tmp_path / "data"), "--study-dir", str(study)]) == 1, "the ID is plain's"
+    assert "Registered already in the dataset plain" in capsys.readouterr().err
+    assert cli(["register", str(tmp_path / "data"), "--study-dir", str(study), "--dataset", "on"]) == 0
+    assert cli(["register", str(tmp_path / "data"), "--study-dir", str(study), "--dataset", "nope"]) == 2
+    assert "no dataset 'nope'" in capsys.readouterr().err
+    store = FilesStore(study)
+    got = {m["recording_id"]: m["registration"].get("dataset_id", DEFAULT_DATASET_ID) for m in store.manifests()}
+    assert got == {rid: "plain", f"ds003420/{rid}": "on"}
+    entries, _next = store.audit_page(None, 10)
+    assert "into the dataset on" in entries[0]["summary"]
+    store.close()

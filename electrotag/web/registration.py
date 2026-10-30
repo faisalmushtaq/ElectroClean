@@ -99,23 +99,54 @@ def collect(dataset_root: Path | str, settings: Any, catalogue: Any, *, check_fi
     return reg
 
 
-def store_registration(store: Store, reg: Registration, *, by: str = "command", via: str = "command") -> None:
-    """Store the reference sets and manifests; a recording registered again keeps its notes and retirement."""
+def store_registration(store: Store, reg: Registration, *, by: str = "command", via: str = "command",
+                       dataset_id: str | None = None) -> None:
+    """Store the reference sets and manifests; a recording registered again keeps its notes and retirement.
+
+    The study's own recordings go into the source dataset ``dataset_id`` (the built-in default dataset when it is
+    None; electrotag/web/datasets.py): its ``path_prefix`` is put in front of their IDs, and a recording whose ID
+    belongs to another dataset's recording is left out (it moves to ``reg.failed`` with the reason)."""
+    from electrotag.web.datasets import DEFAULT_DATASET_ID, Datasets
+    from electrotag.web.errors import ApiError
+    from electrotag.web.manifest import SCOPE_STUDY, prefix_manifest
+    from electrotag.web.service import StudyService
+
+    datasets = Datasets(StudyService(store)) if dataset_id else None
+    target, prefix = DEFAULT_DATASET_ID, ""
+    if datasets is not None:
+        try:
+            target, prefix = datasets.registration_target(dataset_id)
+        except ApiError as exc:
+            raise ValueError(exc.message) from exc
     for definition, files in reg.reference_sets:
         store.add_reference_set(definition, files)
+    kept = []
     for m in reg.manifests:
-        old = dict((store.manifest(m["scope"], m["recording_id"]) or {}).get("registration") or {})
+        if m["scope"] == SCOPE_STUDY and prefix:
+            m = prefix_manifest(m, prefix)
+        old = store.manifest(m["scope"], m["recording_id"])
+        if m["scope"] == SCOPE_STUDY:
+            problem = Datasets.collision(old, target)
+            if problem:
+                reg.failed.append((m["recording_id"], problem))
+                continue
+        old_reg = dict((old or {}).get("registration") or {})
         m["registration"] = {"registered_at": now_local_iso(), "registered_by": by, "registered_via": via,
-                             "notes": old.get("notes", ""), "retired": bool(old.get("retired", False))}
+                             "notes": old_reg.get("notes", ""), "retired": bool(old_reg.get("retired", False))}
+        if m["scope"] == SCOPE_STUDY and target != DEFAULT_DATASET_ID:
+            m["registration"]["dataset_id"] = target
         store.add_manifest(m)
+        kept.append(m)
+    reg.manifests[:] = kept
 
 
 def register_dataset(dataset_root: Path | str, store: Store, *, check_filters: bool = True, include_sets: bool = True,
-                     say: Say = print) -> Registration:
-    """Register every recording (and reference set) of a dataset in the study held by ``store``."""
+                     say: Say = print, dataset_id: str | None = None) -> Registration:
+    """Register every recording (and reference set) of a dataset folder in the study held by ``store``, into the
+    source dataset ``dataset_id`` (the built-in one when None)."""
     reg = collect(dataset_root, store.settings, store.catalogue, check_filters=check_filters,
                   include_sets=include_sets, say=say)
-    store_registration(store, reg)
+    store_registration(store, reg, dataset_id=dataset_id)
     return reg
 
 

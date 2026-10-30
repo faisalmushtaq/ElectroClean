@@ -81,6 +81,28 @@ and sends the study only their manifests.
   register), so that the originals never change and a derived version is never
   anyone's attempt (`Store.save_derived`, `derived_entries`, `derived_files`).
 
+**Datasets and hand-outs** (`electrotag/web/datasets.py`) are kept as records
+like the tasks: `datasets` (the details of a source dataset), `collections`,
+`groups` and `handouts`, each written with `Store.update_record` and never
+deleted. A study recording's dataset is one field of its manifest,
+`registration.dataset_id`; a recording without it is in the built-in dataset
+`study-recordings`, which has a record only once someone edits it. A hand-out
+that gives everyone all of its target makes ordinary assignments that carry
+its ID (`Assignment.handout_id`, kept beside `task_id`); a hand-out shared out
+k per recording passes its request to the Tasks section's own `plan` and
+`op_create`. The stores add what this needs at the scale of thousands of
+recordings: `assign_many` gives one person many recordings in one step (one
+Firestore transaction, where a share-out once made one transaction per person
+per task), and refuses with `TooManyAssignments` before a person's Firestore
+document of assignments would pass about 850 kB; `manifest_heads` lists the
+recordings' small fields (on Firestore with a field mask, so that no blob is
+read, filling in once the fields of manifests registered before them); and
+`opened_index` lists every opening of a recording from the visit index. Who has
+what, how far each person has got and whether a hand-out is overdue are derived
+from the assignments, the completion register, the drafts, the visit index and
+the reports of recordings that cannot be annotated (`datasets.Progress`), and
+annotators see a hand-out only by its title.
+
 **Roles.** Each account holds a set of roles, `annotator`, `expert` and
 `admin` (`electrotag/web/store.py`: `ROLES`, with `participant` reserved for a
 later crowd study), and keeps the first of them as its primary `role`.

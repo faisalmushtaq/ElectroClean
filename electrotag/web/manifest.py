@@ -14,6 +14,7 @@ application. Only :func:`build_manifest` (registration) needs MNE-Python.
 
 from __future__ import annotations
 
+import copy
 import dataclasses
 import hashlib
 import json
@@ -470,3 +471,34 @@ def opened_at(started_at: str, opened_t: Any) -> str:
         return (start + timedelta(seconds=float(opened_t or 0.0))).isoformat(timespec="milliseconds")
     except (TypeError, ValueError):
         return str(started_at or "")
+
+
+def prefix_manifest(m: dict[str, Any], prefix: str) -> dict[str, Any]:
+    """A copy of a manifest with ``prefix/`` in front of its recording ID and of every path in it (the paths
+    inside the dataset: ``relative_path``, ``files.*``, ``fingerprint.*.path``, ``original_events.path``), for a
+    dataset with a ``path_prefix`` whose IDs would otherwise collide with another dataset's. Opening a recording
+    matches on its fingerprint and file name, so nothing that reads the annotator's files changes."""
+    prefix = str(prefix or "").strip("/")
+    if not prefix or not isinstance(m, dict):
+        return m
+    out = copy.deepcopy(m)
+
+    def put(value: Any) -> Any:
+        return f"{prefix}/{value}" if isinstance(value, str) and value else value
+
+    for key in ("recording_id", "relative_path"):
+        if key in out:
+            out[key] = put(out[key])
+    files = out.get("files")
+    if isinstance(files, dict):
+        for key, value in list(files.items()):
+            if key == "stem":
+                continue
+            files[key] = [put(v) for v in value] if isinstance(value, list) else put(value)
+    for fp in (out.get("fingerprint") or {}).values() if isinstance(out.get("fingerprint"), dict) else []:
+        if isinstance(fp, dict) and "path" in fp:
+            fp["path"] = put(fp["path"])
+    ev = out.get("original_events")
+    if isinstance(ev, dict) and ev.get("path"):
+        ev["path"] = put(ev["path"])
+    return out

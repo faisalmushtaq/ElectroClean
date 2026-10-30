@@ -325,8 +325,22 @@ class FilesStore(Store):
         return self.db.assignments(annotator_id)
 
     def assign(self, annotator_id: str, recording_ids: list[str], *, mode: str = "standard",
-               context_id: str = "", task_id: str = "") -> int:
-        return self.db.assign(annotator_id, recording_ids, mode=mode, context_id=context_id, task_id=task_id)
+               context_id: str = "", task_id: str = "", handout_id: str = "") -> int:
+        return self.db.assign(annotator_id, recording_ids, mode=mode, context_id=context_id, task_id=task_id,
+                              handout_id=handout_id)
+
+    # ----------------------------------------------- datasets and hand-outs (datasets.py)
+    def assign_many(self, annotator_id: str, items: list[tuple[str, str]], *, handout_id: str = "") -> int:
+        return self.db.assign_many(annotator_id, items, handout_id=handout_id)
+
+    def unlink_handout(self, handout_id: str) -> int:
+        return self.db.unlink_handout(handout_id)
+
+    def opened_index(self) -> list[dict[str, Any]]:
+        from electrotag.web.manifest import opened_at
+
+        return [{"annotator_id": r["annotator_id"], "recording_id": r["recording_id"], "mode": r["mode"],
+                 "opened_at": opened_at(r["opened_at"], r["opened_t"])} for r in self.db.opened_rows()]
 
     def unassign_item(self, annotator_id: str, recording_id: str, mode: str, context_id: str) -> bool:
         return self.db.unassign_item(annotator_id, recording_id, mode, context_id)

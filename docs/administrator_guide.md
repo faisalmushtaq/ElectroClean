@@ -100,6 +100,17 @@ minutes and 5.6 GB of temporary disk space. The admin area registers the same re
 browser in about half a minute, as it filters only the windows the amplitude check reads; prefer it
 for long high-density recordings, or check that the computer's temporary folder has the space.
 
+A study's recordings can be kept in source datasets, which the admin area's
+Datasets section makes. `electrotag web register --dataset <ID>` registers a
+folder into one of them; without it, the recordings go into the built-in
+dataset `study-recordings`. A recording ID is its path inside the dataset
+folder, so two BIDS datasets both name their first recording
+`sub-001/eeg/...`: a recording whose ID belongs to another dataset's recording
+is left as it is and reported, even when replacing. Give the second dataset a
+path prefix when making it (such as `ds003420`), and its recordings are
+registered as `ds003420/sub-001/eeg/...`, apart from the first. The prefix is
+fixed once the dataset holds recordings.
+
 The original events come from the BIDS `events.tsv` when there is one.
 Otherwise the annotations stored in an EDF+ or BDF+ file are used, or the
 BrainVision markers, and when the file has none of these, the triggers on its

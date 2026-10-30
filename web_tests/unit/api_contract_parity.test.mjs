@@ -68,6 +68,13 @@ export const ALLOWED = [
 
   // Until the sandbox's own answers (js/api/demo.js) carry `task: null`, the browser reads a missing task as none.
   ['.*', '(items\\[\\]\\.)?task', 'any', 'the sandbox makes no tasks (they need the study server: demo_admin.js SERVER_ONLY), so its items and matches have none'],
+
+  // Datasets and hand-outs (docs/web/api.md, "Datasets, collections, groups and hand-outs"): until the sandbox's
+  // stand-in (js/api/demo_library.js) answers them, the browser reads a missing hand-out, due list, dataset or count
+  // as none.
+  ['.*', 'items\\[\\]\\.handout|due', 'any', "the sandbox's items carry no hand-out until its stand-in for hand-outs is built"],
+  ['admin overview', 'counts\\.(overdue|handouts_open)', 'any', 'the sandbox has no hand-outs yet, so nothing is overdue'],
+  ['admin (recordings_list|recording_update)', 'recordings?(\\[\\])?\\.dataset_id', 'any', "the sandbox's recordings are all in the built-in dataset"],
 ];
 
 // ------------------------------------------------------------------ comparison

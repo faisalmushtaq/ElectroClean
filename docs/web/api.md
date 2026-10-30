@@ -898,8 +898,10 @@ row outside the recording is kept, as the loader keeps it with a warning);
 `amplitude.suggested_scalings` are positive; reports and sidecars are plain
 JSON objects of limited size; and the result can be used to show the recording
 and to write result files. The server records `registration`
-(`{"registered_at", "registered_by", "registered_via", "notes", "retired"}`) in
-the stored manifest itself; a browser's `registration` is ignored.
+(`{"registered_at", "registered_by", "registered_via", "notes", "retired",
+"dataset_id"?}`, the last for a recording of a source dataset other than the
+built-in one) in the stored manifest itself; a browser's `registration` is
+ignored.
 
 **The example training set.** `set_example_create` makes ElectroTag's example
 set (`electrotag/training/examples.py`: three simulated recordings, two for

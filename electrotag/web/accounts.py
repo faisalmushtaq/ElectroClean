@@ -162,7 +162,7 @@ CREATE INDEX IF NOT EXISTS visit_recordings_by_recording ON visit_recordings (re
 #: Columns added to the tables after the first version of the server (added to older databases).
 USER_COLUMNS = {"email": "TEXT NOT NULL DEFAULT ''", "notes": "TEXT NOT NULL DEFAULT ''",
                 "roles": "TEXT NOT NULL DEFAULT ''"}
-ASSIGNMENT_COLUMNS = {"task_id": "TEXT NOT NULL DEFAULT ''"}
+ASSIGNMENT_COLUMNS = {"task_id": "TEXT NOT NULL DEFAULT ''", "handout_id": "TEXT NOT NULL DEFAULT ''"}
 #: ``indexed``: 1 for a visit whose recordings are kept in visit_recordings as its events arrive.
 VISIT_COLUMNS = {"indexed": "INTEGER NOT NULL DEFAULT 0"}
 _INDEX_COLUMNS = ("window_no", "recording_id", "session_id", "mode", "context_id", "first_seq", "last_seq",
@@ -517,26 +517,44 @@ class Accounts:
 
     # ---------------------------------------------------------- assignments
     def assign(self, annotator_id: str, recording_ids: list[str], *, mode: str = "standard",
-               context_id: str = "", task_id: str = "") -> int:
-        aid = normalise_id(annotator_id)
+               context_id: str = "", task_id: str = "", handout_id: str = "") -> int:
         if mode not in MODES:
             raise AccountError(f"The mode must be one of {', '.join(MODES)}")
         if mode != "standard" and not context_id:
             raise AccountError("Training assignments need a reference set (--set)")
+        return self._assign(annotator_id, [(rid, task_id) for rid in recording_ids], mode=mode,
+                            context_id=context_id if mode != "standard" else "", handout_id=handout_id)
+
+    def assign_many(self, annotator_id: str, items: list[tuple[str, str]], *, handout_id: str = "") -> int:
+        """Study assignments ``(recording_id, task_id)`` of one person in one transaction (as :meth:`assign`)."""
+        return self._assign(annotator_id, list(items), mode="standard", context_id="", handout_id=handout_id)
+
+    def _assign(self, annotator_id: str, items: list[tuple[str, str]], *, mode: str, context_id: str,
+                handout_id: str) -> int:
+        aid = normalise_id(annotator_id)
         with self._tx() as db:
             start = db.execute("SELECT COALESCE(MAX(position), 0) FROM assignments WHERE annotator_id=?",
                                (aid,)).fetchone()[0]
             n = 0
-            ctx = context_id if mode != "standard" else ""
-            for i, rid in enumerate(recording_ids, start=1):
+            for rid, task_id in items:
                 cur = db.execute("INSERT OR IGNORE INTO assignments (annotator_id, recording_id, mode, context_id, "
-                                 "position, created_at, task_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                                 (aid, rid, mode, ctx, start + i, now_local_iso(), task_id))
+                                 "position, created_at, task_id, handout_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                 (aid, rid, mode, context_id, start + n + 1, now_local_iso(), task_id, handout_id))
                 n += cur.rowcount
-                if task_id and not cur.rowcount:  # an assignment made before its task: linked to it
+                if cur.rowcount:
+                    continue
+                key = (aid, rid, mode, context_id)
+                if task_id:  # an assignment made before its task: linked to it
                     db.execute("UPDATE assignments SET task_id=? WHERE annotator_id=? AND recording_id=? AND mode=? "
-                               "AND context_id=? AND task_id=''", (task_id, aid, rid, mode, ctx))
+                               "AND context_id=? AND task_id=''", (task_id, *key))
+                if handout_id:  # and one made before its hand-out, likewise
+                    db.execute("UPDATE assignments SET handout_id=? WHERE annotator_id=? AND recording_id=? AND "
+                               "mode=? AND context_id=? AND handout_id=''", (handout_id, *key))
         return n
+
+    def unlink_handout(self, handout_id: str) -> int:
+        with self._tx() as db:
+            return db.execute("UPDATE assignments SET handout_id='' WHERE handout_id=?", (handout_id,)).rowcount
 
     def unassign(self, annotator_id: str, recording_ids: list[str] | None = None) -> int:
         aid = normalise_id(annotator_id)
@@ -578,7 +596,7 @@ class Accounts:
             rows = self._all("SELECT * FROM assignments WHERE annotator_id=? ORDER BY position",
                              (str(annotator_id).upper(),))
         return [Assignment(r["annotator_id"], r["recording_id"], r["mode"], r["context_id"], r["position"],
-                           r["task_id"] or "") for r in rows]
+                           r["task_id"] or "", r["handout_id"] or "", r["created_at"] or "") for r in rows]
 
     # ----------------------------------------------------------- programmes
     def enrol(self, annotator_id: str, set_id: str) -> None:
@@ -641,6 +659,13 @@ class Accounts:
             return None
         return [{k: r[k] for k in _INDEX_COLUMNS}
                 for r in self._all("SELECT * FROM visit_recordings WHERE visit_id=? ORDER BY first_seq", (visit_id,))]
+
+    def opened_rows(self) -> list[dict[str, Any]]:
+        """Every opening of a recording in the indexed visits: annotator, recording, mode, the visit's start and
+        the seconds into it (visits opened before the index existed are left out: when they opened is unknown)."""
+        return [dict(r) for r in self._all(
+            "SELECT v.annotator_id, r.recording_id, r.mode, v.opened_at, r.opened_t FROM visit_recordings r "
+            "JOIN visits v USING (visit_id) WHERE v.indexed=1")]
 
     def close_visit(self, visit_id: str) -> None:
         with self._tx() as db:

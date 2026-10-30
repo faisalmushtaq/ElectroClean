@@ -27,8 +27,9 @@ from typing import TYPE_CHECKING, Any
 from electrotag.app.common import now_local_iso
 from electrotag.training.reference import GUIDANCE_LEVELS, NONE_OPTION, USES, ReferenceSet, ReferenceSetError
 from electrotag.web import audit
+from electrotag.web.datasets import DEFAULT_DATASET_ID
 from electrotag.web.errors import ApiError
-from electrotag.web.manifest import SCOPE_STUDY, fingerprint_of, manifest_info, set_scope
+from electrotag.web.manifest import SCOPE_STUDY, dataset_of, fingerprint_of, manifest_info, prefix_manifest, set_scope
 from electrotag.web.store import (
     KNOWN_ROLES, MODES, RESERVED_IDS, RESERVED_ROLES, ROLES, STATUSES, AccountProblem, StoreError, User, attempt_of,
     item_key, latest_entry, parse_roles, primary_role, roles_text,
@@ -489,6 +490,7 @@ class Admin:
                 "size_bytes": size, "sha256": sha, "registered_at": reg.get("registered_at") or m.get("created_at", ""),
                 "registered_by": reg.get("registered_by", ""), "registered_via": reg.get("registered_via", "command"),
                 "notes": reg.get("notes", ""), "retired": bool(reg.get("retired", False)),
+                "dataset_id": (reg.get("dataset_id") or DEFAULT_DATASET_ID) if m["scope"] == SCOPE_STUDY else None,
                 "assigned": assigned.get(key, 0), "done": done.get(key, 0), "warnings": list(m.get("warnings", []))}
 
     def set_record(self, rs: ReferenceSet) -> dict[str, Any]:
@@ -558,6 +560,7 @@ class Admin:
                 counts["assignments"] += 1
                 counts["todo" if i.status == "locked" else i.status] += 1  # locked: to do once training is passed
         counts.update(self._feedback_counts())
+        counts.update(self.service.datasets.overview_counts())  # overdue people and open hand-outs (datasets.py)
         recent, _next = self.store.audit_page(None, 10)
         saved = sorted(self._entries(), key=lambda e: e.get("completed_at", ""), reverse=True)[:10]
         return {"study": {"study_id": self.store.study_id, "name": self.store.name}, "counts": counts,
@@ -772,9 +775,10 @@ class Admin:
             raise ApiError(409, "self", "You cannot remove your own account; ask another administrator.")
         rec = self._user_record(aid)
         self.store.remove_account(aid)
+        groups = self.service.datasets.account_removed(aid)  # their membership of groups ends (datasets.py)
         self._audit(user, "user_remove", f"Removed {aid} from the study (their results and logs stay)",
                     annotator_id=aid, display_name=rec.get("display_name", ""), role=rec.get("role"),
-                    roles=list(_rec_roles(rec)))
+                    roles=list(_rec_roles(rec)), groups=groups)
         return {}
 
     # --------------------------------------------------------- assignments
@@ -877,6 +881,9 @@ class Admin:
         scope = self._scope(body.get("scope"), default=None) if body.get("scope") is not None else None
         counts = self._counts()
         ms = [m for m in self.store.manifests() if scope is None or m["scope"] == scope]
+        if body.get("dataset_id") is not None:  # one dataset's recordings (datasets.py)
+            did = self.service.datasets.need_dataset(body.get("dataset_id"))["dataset_id"]
+            ms = [m for m in ms if m["scope"] == SCOPE_STUDY and (dataset_of(m) or DEFAULT_DATASET_ID) == did]
         ms.sort(key=lambda m: (m["scope"] != SCOPE_STUDY, m["scope"], m["recording_id"]))
         return {"recordings": [self.recording_record(m, counts) for m in ms]}
 
@@ -891,6 +898,11 @@ class Admin:
             raise ApiError(413, "too_large", f"At most {MAX_MANIFESTS} recordings can be registered at once; send "
                            "the rest in another request")
         replace_ = _bool(body, "replace") or False
+        # The source dataset the recordings go into (datasets.py): its prefix is applied before the check, and an ID
+        # that belongs to another dataset's recording is never touched.
+        if body.get("dataset_id") not in (None, "") and scope != SCOPE_STUDY:
+            raise _bad("Only the study's own recordings (scope 'study') go into datasets")
+        dataset_id, prefix = self.service.datasets.registration_target(body.get("dataset_id"))
         # A byte-identical copy of a registered recording would be assigned and annotated as another recording,
         # inflating the counts and the agreement: it is skipped unless the administrator confirms it.
         duplicates_ok = _bool(body, "allow_duplicates") or False
@@ -902,6 +914,7 @@ class Admin:
         seen: set[str] = set()
         prints: dict[tuple[str, int], str] = {}
         for raw in manifests:
+            raw = prefix_manifest(raw, prefix) if prefix and isinstance(raw, dict) else raw
             rid = raw.get("recording_id") if isinstance(raw, dict) and isinstance(raw.get("recording_id"), str) else ""
             try:
                 m = check_manifest(raw, scope=scope, suffixes=suffixes)
@@ -914,6 +927,10 @@ class Admin:
                 continue
             seen.add(rid)
             old = self.store.manifest(scope, rid)
+            other = self.service.datasets.collision(old, dataset_id) if scope == SCOPE_STUDY else ""
+            if other:
+                skipped.append({"recording_id": rid, "reason": other})
+                continue
             if old is not None and not replace_:
                 skipped.append({"recording_id": rid, "reason": "Already registered (choose to replace it to "
                                 "register it again)"})
@@ -936,14 +953,17 @@ class Admin:
             m["registration"] = {"registered_at": now_local_iso(), "registered_by": user.annotator_id,
                                  "registered_via": "browser", "notes": old_reg.get("notes", ""),
                                  "retired": bool(old_reg.get("retired", False))}
+            if scope == SCOPE_STUDY and dataset_id != DEFAULT_DATASET_ID:
+                m["registration"]["dataset_id"] = dataset_id
             self.store.add_manifest(m)
             (replaced if old is not None else added).append(rid)
         if added or replaced:
             extra = (f", replaced {audit.count(len(replaced), 'recording')}" if replaced else "") + (
                 f", {len(skipped)} not registered" if skipped else "")
             self._audit(user, "recordings_register", f"Registered {audit.count(len(added), 'new recording')}"
-                        f"{extra} in {scope}", scope=scope, added=added, replaced=replaced,
-                        skipped=[s["recording_id"] for s in skipped])
+                        f"{extra} in {scope}" + (f" (dataset {dataset_id})" if scope == SCOPE_STUDY else ""),
+                        scope=scope, added=added, replaced=replaced, skipped=[s["recording_id"] for s in skipped],
+                        dataset_id=dataset_id if scope == SCOPE_STUDY else None)
         return {"added": added, "replaced": replaced, "skipped": skipped}
 
     def _manifest(self, body: dict[str, Any]) -> tuple[str, str, dict[str, Any]]:
@@ -986,11 +1006,14 @@ class Admin:
                 raise ApiError(409, "has_results", f"The reference set {rs.set_id} uses {rid}; remove it from the "
                                "set first.")
         self.store.remove_manifest(scope, rid)
+        collections: list[str] = []
         if scope == SCOPE_STUDY:
             self.store.remove_assignments(recording_id=rid, modes=("standard",))
+            collections = self.service.datasets.remove_from_collections(user, rid)  # it leaves every collection
         else:
             self.store.remove_assignments(recording_id=rid, context_id=scope[4:])
-        self._audit(user, "recording_remove", f"Removed {rid} from {scope}", scope=scope, recording_id=rid)
+        self._audit(user, "recording_remove", f"Removed {rid} from {scope}", scope=scope, recording_id=rid,
+                    collections=collections)
         return {}
 
     # ------------------------------------------------------- reference sets

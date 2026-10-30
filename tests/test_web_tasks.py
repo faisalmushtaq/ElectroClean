@@ -473,3 +473,27 @@ def test_only_administrators_and_the_results_hold_the_tasks(admin: Api, client: 
     text = zipfile.ZipFile(io.BytesIO(base64.b64decode(z["base64"]))).read(
         next(n for n in names if n.endswith("tasks/tasks.tsv"))).decode()
     assert text.splitlines()[0].split("\t") == list(tasks_mod.TASK_COLUMNS) and "Pilot" in text
+
+
+def test_a_share_out_makes_one_store_call_per_person(app: Any, admin: Api, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The assignments of a share-out go to the store in one call per person (one transaction each on Firestore),
+    rather than one per person per task; the second request with the same ID makes none."""
+    rids = add_copies(app, 30)
+    store = app.state.store
+    calls: list[tuple[str, int]] = []
+    real = store.assign_many
+
+    def counting(aid: str, items: list[tuple[str, str]], *, handout_id: str = "") -> int:
+        calls.append((aid, len(items)))
+        return real(aid, items, handout_id=handout_id)
+
+    monkeypatch.setattr(store, "assign_many", counting)
+    monkeypatch.setattr(store, "assign", lambda *a, **k: pytest.fail("one assignment at a time"))
+    out = create(admin, 1, recording_ids=rids, annotator_ids=POOL, k=2)
+    assert out["assigned"] == 60
+    assert sorted(a for a, _n in calls) == POOL and sum(n for _a, n in calls) == 60
+    calls.clear()
+    assert create(admin, 1, recording_ids=rids, annotator_ids=POOL, k=2)["already"] is True
+    assert len(calls) == len(POOL), "sent again: one call each, adding nothing"
+    assert {a.task_id for a in store.assignments() if a.recording_id in rids} == {t["task_id"] for t in
+                                                                                  store.records("tasks")}

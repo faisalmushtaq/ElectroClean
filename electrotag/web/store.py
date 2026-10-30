@@ -234,6 +234,10 @@ class StoreError(RuntimeError):
     """The store cannot be used (for example a study that does not exist)."""
 
 
+class TooManyAssignments(StoreError):
+    """One person would hold more assignments than the store can keep for them (a Firestore document's size)."""
+
+
 class ResultExists(StoreError):
     """A result file is kept already under that name (result files are never replaced)."""
 
@@ -675,6 +679,7 @@ def generated_password() -> str:
 
 __all__ = ["BY_COMMAND", "DERIVED_DIR", "DERIVED_KINDS", "KNOWN_ROLES", "MODES", "PRIVILEGED_ROLES", "RECORD_ID_RE",
            "RECORD_KINDS", "RESERVED_IDS", "RESERVED_ROLES", "ROLES", "ROLE_ORDER", "STATUSES", "AccountProblem",
-           "Assignment", "Credentials", "Invitation", "ResultExists", "SavedResult", "Store", "StoreError", "User",
+           "Assignment", "Credentials", "Invitation", "ResultExists", "SavedResult", "Store", "StoreError",
+           "TooManyAssignments", "User",
            "attempt_of", "generated_password", "index_rows", "item_key", "latest_entry", "page_of", "parse_roles",
            "primary_role", "roles_text", "settings_from_overrides"]

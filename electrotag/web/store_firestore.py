@@ -69,7 +69,7 @@ from electrotag.app.common import now_local_iso
 from electrotag.web.errors import ApiError
 from electrotag.web.manifest import SCHEMA as MANIFEST_SCHEMA
 from electrotag.web.manifest import SCHEMA_VERSION as MANIFEST_VERSION
-from electrotag.web.manifest import fingerprint_of, manifest_key
+from electrotag.web.manifest import fingerprint_of, manifest_head, manifest_key, opened_at
 from electrotag.web.store import (
     CLOSED_SESSIONS_KEPT,
     DERIVED_DIR,
@@ -86,6 +86,7 @@ from electrotag.web.store import (
     SavedResult,
     Store,
     StoreError,
+    TooManyAssignments,
     User,
     index_rows,
     item_key,
@@ -104,6 +105,24 @@ STUDY_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 ID_RE = re.compile(r"^[A-Z0-9][A-Z0-9_-]{0,31}$")
 AUDIT_ID_RE = re.compile(r"^[0-9]{13}-[0-9a-f]{8}$")
 BLOB_LIMIT = 900_000  # bytes kept in one document before splitting
+#: The most a person's assignments document may hold (Firestore keeps at most 1 MiB in a document), and about how
+#: many recordings that is, for the message.
+ASSIGNMENTS_LIMIT, ASSIGNMENTS_ABOUT = 850_000, 6_000
+#: The small fields of a manifest's document read by :meth:`FirestoreStore.manifest_heads` (``heads_v`` marks a
+#: document that has them; one registered before them is filled in once).
+HEADS_VERSION = 1
+HEAD_ROW = ("recording_id", "file_name", "format", "dataset_id", "retired", "registered_at", "sfreq", "n_samples",
+            "n_channels", "size_bytes")
+#: Where each field of a head row is in the document (the document's own ``registered_at`` is when it was written).
+HEAD_DOC = {k: ("head_registered_at" if k == "registered_at" else k) for k in HEAD_ROW}
+HEAD_FIELDS = [*HEAD_DOC.values(), "heads_v"]
+HEAD_DEFAULTS: dict[str, Any] = {"file_name": "", "format": "", "dataset_id": "", "retired": False,
+                                 "registered_at": "", "sfreq": 0.0, "n_samples": 0, "n_channels": 0, "size_bytes": 0}
+
+
+def assignments_size(items: list[dict[str, Any]]) -> int:
+    """About how many bytes a person's assignments take in their Firestore document."""
+    return len(json.dumps(items, separators=(",", ":"))) + 32 * len(items) + 200
 CACHE_S = 30.0
 #: Chunks not used by their document for this long are left over from an interrupted write.
 STALE_CHUNK_S = 600.0
@@ -412,8 +431,12 @@ class FirestoreStore(Store):
             raise StoreError(f"Manifest version {m.get('schema_version')} is not supported")
         sha, size = fingerprint_of(m)
         ref = self.doc.collection("manifests").document(manifest_key(m["scope"], m["recording_id"]))
+        head = manifest_head(m)
         self._put_blob(ref, {"scope": m["scope"], "recording_id": m["recording_id"], "file_name": m["file_name"],
-                             "fp_sha256": sha, "fp_size": size, "registered_at": now_local_iso()}, m)
+                             "fp_sha256": sha, "fp_size": size, "registered_at": now_local_iso(),
+                             # the small fields that the dataset pages and tracking read without the blob
+                             **{HEAD_DOC[k]: head[k] for k in HEAD_ROW if k not in ("recording_id", "file_name")},
+                             "heads_v": HEADS_VERSION}, m)
         self._forget_memo()
 
     # --------------------------------------------------------- reference sets
@@ -678,19 +701,33 @@ class FirestoreStore(Store):
         for aid, d in docs:
             for i, a in enumerate(d.get("items", []), start=1):
                 out.append(Assignment(aid, a["recording_id"], a.get("mode", "standard"), a.get("context_id", ""),
-                                      int(a.get("position", i)), str(a.get("task_id") or "")))
+                                      int(a.get("position", i)), str(a.get("task_id") or ""),
+                                      str(a.get("handout_id") or "")))
         return out
 
     def assign(self, annotator_id: str, recording_ids: list[str], *, mode: str = "standard",
-               context_id: str = "", task_id: str = "") -> int:
-        from google.cloud import firestore
-
-        aid = str(annotator_id).upper()
+               context_id: str = "", task_id: str = "", handout_id: str = "") -> int:
         if mode not in MODES:
             raise StoreError(f"The mode must be one of {', '.join(MODES)}")
         if mode != "standard" and not context_id:
             raise StoreError("Training assignments need a reference set")
-        ctx = context_id if mode != "standard" else ""
+        return self._assign(annotator_id, [(rid, task_id) for rid in recording_ids], mode=mode,
+                            context_id=context_id if mode != "standard" else "", handout_id=handout_id)
+
+    # ----------------------------------------------- datasets and hand-outs (datasets.py)
+    def assign_many(self, annotator_id: str, items: list[tuple[str, str]], *, handout_id: str = "") -> int:
+        return self._assign(annotator_id, list(items), mode="standard", context_id="", handout_id=handout_id)
+
+    def _assign(self, annotator_id: str, pairs: list[tuple[str, str]], *, mode: str, context_id: str,
+                handout_id: str) -> int:
+        """Add ``(recording_id, task_id)`` assignments to the person's one document, in one transaction. New items
+        leave out ``mode`` and ``context_id`` when they are ``standard`` and "" (every reader takes those as the
+        defaults), so that a person's document stays small; :class:`TooManyAssignments` when it would grow past
+        :data:`ASSIGNMENTS_LIMIT` bytes."""
+        from google.cloud import firestore
+
+        aid = str(annotator_id).upper()
+        ctx = context_id
         ref = self.doc.collection("assignments").document(aid)
 
         @firestore.transactional
@@ -698,25 +735,103 @@ class FirestoreStore(Store):
             snap = ref.get(transaction=tx)
             d = (snap.to_dict() or {}) if snap.exists else {}
             items = list(d.get("items", []))
-            have = {(a["recording_id"], a.get("mode", "standard"), a.get("context_id", "")) for a in items}
+            where = {(a["recording_id"], a.get("mode", "standard"), a.get("context_id", "")): a for a in items}
             n = 0
-            for rid in recording_ids:
-                if (rid, mode, ctx) not in have:
-                    item = {"recording_id": rid, "mode": mode, "context_id": ctx, "position": len(items) + 1}
+            changed = False
+            for rid, task_id in pairs:
+                a = where.get((rid, mode, ctx))
+                if a is None:
+                    item: dict[str, Any] = {"recording_id": rid, "position": len(items) + 1}
+                    if mode != "standard" or ctx:
+                        item.update(mode=mode, context_id=ctx)
                     if task_id:
                         item["task_id"] = task_id
+                    if handout_id:
+                        item["handout_id"] = handout_id
                     items.append(item)
-                    have.add((rid, mode, ctx))
+                    where[(rid, mode, ctx)] = item
                     n += 1
-                elif task_id:  # an assignment made before its task: linked to it
-                    for a in items:
-                        if ((a["recording_id"], a.get("mode", "standard"), a.get("context_id", "")) == (rid, mode, ctx)
-                                and not a.get("task_id")):
-                            a["task_id"] = task_id
+                    changed = True
+                    continue
+                if task_id and not a.get("task_id"):  # an assignment made before its task: linked to it
+                    a["task_id"] = task_id
+                    changed = True
+                if handout_id and not a.get("handout_id"):  # and one made before its hand-out, likewise
+                    a["handout_id"] = handout_id
+                    changed = True
+            if not changed:
+                return 0
+            if n and assignments_size(items) > ASSIGNMENTS_LIMIT:
+                raise TooManyAssignments(f"{aid} would hold more recordings than one Firebase study can keep for "
+                                         f"one person (about {ASSIGNMENTS_ABOUT:,}).")
             tx.set(ref, {**d, "items": items, "updated_at": now_local_iso()})
             return n
 
         return update(self.client.transaction())
+
+    def unlink_handout(self, handout_id: str) -> int:
+        from google.cloud import firestore
+
+        total = 0
+        for snap in self.doc.collection("assignments").stream():
+            if not any(a.get("handout_id") == handout_id for a in (snap.to_dict() or {}).get("items", [])):
+                continue
+            ref = snap.reference
+
+            @firestore.transactional
+            def update(tx: Any, ref: Any = ref) -> int:
+                s2 = ref.get(transaction=tx)
+                d = (s2.to_dict() or {}) if s2.exists else {}
+                items = list(d.get("items", []))
+                n = 0
+                for a in items:
+                    if a.get("handout_id") == handout_id:
+                        a.pop("handout_id", None)
+                        n += 1
+                if n:
+                    tx.set(ref, {**d, "items": items, "updated_at": now_local_iso()})
+                return n
+
+            total += update(self.client.transaction())
+        return total
+
+    def manifest_heads(self, scope: str = "study") -> list[dict[str, Any]]:
+        """From the manifests' small top-level fields (a field mask: no blobs are read). A manifest registered
+        before those fields existed is read once in full, and its fields are written back."""
+        from google.cloud.firestore_v1.base_query import FieldFilter
+
+        q = self.doc.collection("manifests").where(filter=FieldFilter("scope", "==", scope)).select(HEAD_FIELDS)
+        out, stale = [], []
+        for snap in q.stream():
+            d = snap.to_dict() or {}
+            if d.get("heads_v") == HEADS_VERSION:
+                out.append({k: d.get(HEAD_DOC[k], HEAD_DEFAULTS.get(k)) for k in HEAD_ROW})
+            else:
+                stale.append(snap.reference)
+        batch, n = self.client.batch(), 0
+        for ref in stale:
+            m = self._get_blob(ref.get())
+            head = manifest_head(m)
+            out.append(head)
+            batch.update(ref, {**{HEAD_DOC[k]: head[k] for k in HEAD_ROW if k != "recording_id"},
+                               "heads_v": HEADS_VERSION})
+            n += 1
+            if n % 500 == 0:
+                batch.commit()
+                batch = self.client.batch()
+        if n % 500:
+            batch.commit()
+        return sorted(out, key=lambda h: h["recording_id"])
+
+    def opened_index(self) -> list[dict[str, Any]]:
+        out = []
+        for snap in self.doc.collection("visits").select(["annotator_id", "opened_at", "recordings"]).stream():
+            d = snap.to_dict() or {}
+            for r in d.get("recordings") or []:
+                out.append({"annotator_id": d.get("annotator_id", ""), "recording_id": r.get("recording_id", ""),
+                            "mode": r.get("mode", "standard"),
+                            "opened_at": opened_at(d.get("opened_at", ""), r.get("opened_t"))})
+        return out
 
     def unassign(self, annotator_id: str, recording_ids: list[str] | None = None) -> int:
         ref = self.doc.collection("assignments").document(str(annotator_id).upper())

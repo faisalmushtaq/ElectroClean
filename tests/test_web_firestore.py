@@ -1321,3 +1321,115 @@ def test_agreement_of_the_derived_versions_over_firestore(service: StudyService,
     rows = adj["tables"]["adjudication.tsv"].splitlines()
     row = dict(zip(rows[0].split("\t"), rows[1].split("\t"), strict=True))
     assert row["unit_id"] == uid and row["adjudicator"] == "E01" and row["kept_one"] == str(len(got["conflicts"]))
+
+
+# ------------------------------------------- datasets, collections, groups and hand-outs (datasets.py)
+def test_assign_many_is_one_transaction_and_guards_the_document_size(service: StudyService,
+                                                                     monkeypatch: pytest.MonkeyPatch) -> None:
+    from electrotag.web import store_firestore
+    from electrotag.web.store import TooManyAssignments
+
+    store = service.store
+    store.put_user("A07", display_name="Annotator seven")
+    real = store.client.transaction
+    made: list[int] = []
+
+    def counting() -> Any:
+        made.append(1)
+        return real()
+
+    monkeypatch.setattr(store.client, "transaction", counting)
+    assert store.assign_many("A07", [(SUB1, ""), (SUB2, "t-000000000001")], handout_id="h-0000000001") == 2
+    assert len(made) == 1, "one transaction for the whole list"
+    store.assign("A07", [SUB3])
+    assert store.assign_many("A07", [(SUB3, "")], handout_id="h-0000000002") == 0
+    got = {a.recording_id: a for a in store.assignments("A07")}
+    assert (got[SUB2].task_id, got[SUB2].handout_id, got[SUB2].assigned_at) == ("t-000000000001", "h-0000000001", "")
+    assert got[SUB3].handout_id == "h-0000000002", "an assignment made before its hand-out is linked to it"
+    raw = store.doc.collection("assignments").document("A07").get().to_dict()["items"]
+    assert all("mode" not in i and "context_id" not in i for i in raw), "study items leave out the defaults"
+    assert store.unlink_handout("h-0000000001") == 2 and not got[SUB3].task_id
+    assert {a.handout_id for a in store.assignments("A07")} == {"", "h-0000000002"}
+    monkeypatch.setattr(store_firestore, "ASSIGNMENTS_LIMIT", 900)
+    with pytest.raises(TooManyAssignments):
+        store.assign_many("A07", [(f"sub-9{i:02d}/eeg/x_eeg.edf", "") for i in range(20)])
+    assert len(store.assignments("A07")) == 3, "nothing was written"
+    admin_ok(service, "dataset_create", {"request_id": "1" * 32, "dataset_id": "ds", "name": "DS"})
+    admin_ok(service, "recordings_move", {"recording_ids": [SUB1, SUB2, SUB3], "dataset_id": "ds"})
+    store.put_user("A08", display_name="Annotator eight")
+    monkeypatch.setattr(store_firestore, "ASSIGNMENTS_LIMIT", 850_000)
+    store.assign("A08", [f"sub-8{i:02d}/eeg/x_eeg.edf" for i in range(10)])
+    raw = store.doc.collection("assignments").document("A08").get().to_dict()["items"]
+    monkeypatch.setattr(store_firestore, "ASSIGNMENTS_LIMIT", store_firestore.assignments_size(raw) + 60)
+    e = admin_err(service, "handout_create", {"request_id": "2" * 32, "target": {"kind": "dataset", "id": "ds"},
+                                              "people": ["A08"], "mode": "all"})
+    assert (e.status, e.code) == (413, "too_many_assignments") and "A08" in e.message
+
+
+def test_manifest_heads_read_no_blobs_and_fill_in_older_manifests(service: StudyService) -> None:
+    from google.cloud import firestore
+
+    store = service.store
+    heads = {h["recording_id"]: h for h in store.manifest_heads("study")}
+    assert set(heads) == {SUB1, SUB2, SUB3} and heads[SUB3]["format"] == "edf" and heads[SUB3]["n_channels"] > 0
+    assert heads[SUB3]["size_bytes"] > 0 and heads[SUB3]["dataset_id"] == "" and heads[SUB3]["registered_at"]
+    # a manifest registered before the small fields existed
+    snap = next(s for s in store.doc.collection("manifests").stream()
+                if (s.to_dict() or {}).get("recording_id") == SUB3)
+    snap.reference.update({k: firestore.DELETE_FIELD for k in ("heads_v", "format", "n_channels", "dataset_id")})
+    again = {h["recording_id"]: h for h in store.manifest_heads("study")}
+    assert again[SUB3] == heads[SUB3]
+    assert snap.reference.get().to_dict()["heads_v"] == 1, "written back once"
+    admin_ok(service, "dataset_create", {"request_id": "3" * 32, "dataset_id": "pilot", "name": "Pilot"})
+    admin_ok(service, "recordings_move", {"recording_ids": [SUB1], "dataset_id": "pilot"})
+    assert {h["recording_id"]: h["dataset_id"] for h in store.manifest_heads("study")}[SUB1] == "pilot"
+
+
+def test_hand_outs_on_firestore(service: StudyService, recordings: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The same as tests/test_web_datasets.py on Firestore: an "all" hand-out with a due date, a group that a person
+    joins, a k share-out, the annotator's view, the openings and a withdrawal."""
+    from electrotag.web import datasets as datasets_mod
+
+    for aid in ("A05", "A06"):
+        service.store.put_user(aid, display_name=f"Annotator {aid}")
+    a05, a06 = User("A05"), User("A06")
+    admin_ok(service, "dataset_create", {"request_id": "4" * 32, "dataset_id": "ds", "name": "Kakapo dataset",
+                                         "notes": "Kea notes"})
+    admin_ok(service, "recordings_move", {"recording_ids": [SUB1, SUB2], "dataset_id": "ds"})
+    gid = admin_ok(service, "group_create", {"request_id": "5" * 32, "name": "RAs", "members": ["A05"]})["group"][
+        "group_id"]
+    made = admin_ok(service, "handout_create", {"request_id": "6" * 32, "target": {"kind": "dataset", "id": "ds"},
+                                                "groups": [gid], "mode": "all", "due_at": "2026-11-20",
+                                                "follow_groups": True})
+    h = made["handout"]
+    assert made["added"] == 2 and h["counts"]["given"] == 2
+    assert {a.handout_id for a in service.store.assignments("A05")} == {h["handout_id"]}
+    given = admin_ok(service, "group_update", {"group_id": gid, "add": ["A06"]})["given"]
+    assert given == [{"handout_id": h["handout_id"], "annotator_id": "A06", "added": 2}]
+    ok(service, "submit", a05, submission(recordings, SUB1, [BLINK]))
+    vid = ok(service, "visit_open", a06, {"mode": "standard"})["visit_id"]
+    ok(service, "visit_events", a06, {"visit_id": vid, "events": [{"type": "recording_opened", "t": 3.0,
+                                                                   "recording": SUB2, "mode": "standard",
+                                                                   "window_no": 1}]})
+    assert any(o["recording_id"] == SUB2 and o["annotator_id"] == "A06" for o in service.store.opened_index())
+    monkeypatch.setattr(datasets_mod, "now_local_iso", lambda: "2026-11-21T09:00:00.000+00:00")
+    listed = admin_ok(service, "handouts_list", {"overdue": True})["handouts"]
+    per = {p["annotator_id"]: p for p in listed[0]["per_person"]}
+    assert (per["A05"]["remaining"], per["A06"]["remaining"]) == (1, 2) and listed[0]["counts"]["opened"] == 1
+    mine = ok(service, "assignments", a05)
+    assert mine["due"] == [{"handout_id": h["handout_id"], "title": "Kakapo dataset", "due_at": "2026-11-20",
+                            "total": 2, "remaining": 1, "overdue": True}]
+    text = json.dumps([mine, ok(service, "me", a05)])
+    assert "Kea notes" not in text and '"ds"' not in text
+    assert admin_ok(service, "overview")["counts"]["overdue"] == 2
+    out = admin_ok(service, "handout_withdraw", {"handout_id": h["handout_id"]})
+    assert (out["removed"], out["kept"]) == (3, 1), "only A05's saved recording stays"
+    # a k share-out of a collection, through Tasks
+    c = admin_ok(service, "collection_create", {"request_id": "7" * 32, "name": "C", "recording_ids": [SUB3]})[
+        "collection"]
+    made = admin_ok(service, "handout_create", {"request_id": "8" * 32, "target": {"kind": "collection",
+                                                                                  "id": c["collection_id"]},
+                                                "people": ["A05", "A06"], "mode": "k", "k": 2})
+    assert made["handout"]["n_tasks"] == 1 and made["tasks"]["created"] == 1
+    assert {a.handout_id for a in service.store.assignments() if a.recording_id == SUB3 and
+            a.annotator_id in ("A05", "A06")} == {made["handout"]["handout_id"]}

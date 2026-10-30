@@ -5,6 +5,24 @@ Each section below describes the changes in one version of ElectroTag;
 
 ## Unreleased
 
+The study team can keep the study's recordings in source datasets ("Youth low-density 2026",
+"OpenNeuro ds003420") with their description, origin, licence, citation, contact and notes, gather
+recordings from any datasets into collections, make groups of people, and hand a dataset or a
+collection out to people and groups: everyone gets all of it, or the recordings are shared out k per
+recording through the Tasks section's own share-out. A hand-out can have a due date, after which the
+admin area and the annotator's list mark the work that is still open as overdue, and it can follow its
+groups, so that someone who joins a group later is given what the group already has. Annotators see a
+hand-out only by a title the team chooses (the dataset's name, or "Recordings due 20 November" for a
+collection); the names, descriptions and notes of datasets and collections stay in the admin area.
+Each dataset and collection has a target number of ratings per recording (two unless the team chooses
+otherwise), and counts as fully rated once every recording still in use has been saved by that many
+people. A recording ID that belongs to another dataset's recording is no longer registered over it,
+and a dataset can carry a path prefix that keeps two BIDS datasets' `sub-001` apart;
+`electrotag web register --dataset` registers into a dataset from the command line. Sharing recordings
+out as tasks now writes each person's assignments in one step, which on Firebase makes a large
+share-out far quicker. This part covers the study's records and operations
+(docs/web/api.md, "Datasets, collections, groups and hand-outs").
+
 Recordings of every channel count up to 256 (and 257, EGI's nets with their reference) have been
 checked in the browser against MNE-Python, through registration, saving, the agreement analysis and
 adjudication, on a new synthetic set (`scripts/make_channel_matrix.py`, 32 recordings in every
