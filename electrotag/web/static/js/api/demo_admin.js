@@ -395,7 +395,8 @@ export class DemoAdmin {
       review: { show_corrections_to_annotators: (st.review || {}).show_corrections_to_annotators !== false,
         show_outcomes_to_annotators: (st.review || {}).show_outcomes_to_annotators !== false },
       training: { skippable: [...((st.training || {}).skippable || [])], gate: (st.training || {}).gate || 'met' },
-      replay: { enabled: (st.replay || {}).enabled !== false, trainees_watch_experts: (st.replay || {}).trainees_watch_experts !== false },
+      replay: { enabled: (st.replay || {}).enabled !== false, trainees_watch_experts: (st.replay || {}).trainees_watch_experts !== false,
+        trainees_see_crowd: (st.replay || {}).trainees_see_crowd === true },
       logging,
       logging_notice: logging.interactions ? this.s.logging_notice : '',
     };

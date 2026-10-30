@@ -132,7 +132,7 @@ password.
     "gamification": {"enabled": true, "leaderboard": true},
     "review": {"show_corrections_to_annotators": true, "show_outcomes_to_annotators": true},
     "training": {"skippable": ["tour", "snippets", "guided", "practice"], "gate": "met" | "completed" | "off"},
-    "replay": {"enabled": true, "trainees_watch_experts": true},
+    "replay": {"enabled": true, "trainees_watch_experts": true, "trainees_see_crowd": false},
     "logging": {"interactions": true, "pointer_hz": 5, "idle_after_s": 30},
     "logging_notice": "This study records how you use ElectroTag …"   // "" when logging is off
   },
@@ -1365,6 +1365,80 @@ who left it unmarked.
 
 The sandbox cannot find conflicts (that needs the study's Python code), so it answers each of
 these operations with 501 `needs_server`.
+
+### The overlay of everyone's marks
+
+`overlay_get` gives the browser everyone's saved marks on one recording, for the view that
+shows up to eight people in lanes of their own and everyone else as a crowd
+(docs/web/admin.md, "Everyone's marks on one recording"). It reads, so the browser may ask it
+again after a failure. It is one of the operations open to everyone, and checks for itself who
+may see what: experts and administrators see everyone, by ID and name; anyone else (a trainee)
+sees an unnamed crowd only, and only while the study's `replay.trainees_see_crowd` is on (it is
+off by default), on a **teaching recording**, the rule of replays: a recording of a
+self-contained training set used for learning with the experts, which can never be study work
+nor give a practice or assessment recording's answers away. Elsewhere the answer is 403
+`forbidden`, with words for the person.
+
+| op | body | answer | saves? |
+| --- | --- | --- | --- |
+| `overlay_get` | `{"recording_id", "mode"?: "standard", "context_id"?, "include"?: ["corrected", "adjudicated"], "detail"?: [annotator IDs, at most 8], "offset"?: 0, "limit"?: 500}` | below | read |
+| `overlay_teaching_list` | `{}` | `{"shown": bool, "recordings": [{"recording_id", "file_name", "mode", "context_id", "n_people", "yours"}]}`: the teaching recordings someone has saved, for a trainee to choose from; nothing while `replay.trainees_see_crowd` is off | read |
+
+The answer of `overlay_get` holds every person's latest saved version of the recording (in the
+mode and training set asked for; a training recording needs its `context_id`), compactly:
+
+```text
+{"recording_id", "file_name", "mode", "context_id", "manifest": {…as the open view needs it…},
+ "sfreq": 250.0, "n_samples": 17500, "channels": ["Fp1", "Fp2", …],
+ "anonymous": false,                      // true for a trainee: "Person 1", "Person 2", … and no names, roles or IDs
+ "labels": ["Eye-blink-artifact", "EMG-artifact"],
+ "sets": ["", "0-1", "40-71,90"],         // channel sets as runs of indexes into channels; "" is the whole montage
+ "people": [{"annotator_id": "A01", "display_name": "Annotator one", "roles": ["annotator"], "you": false,
+             "source": "saved", "of": null, "by": null, "attempt": 2, "saved_at": "…", "n_marks": 2,
+             "facets": {"group": ["Leeds RAs"]},
+             "marks": [0, 500, 100, 1, 0,  1, 2500, 250, 0, 3],   // five whole numbers a mark
+             "ids": ["…", "…"]}],                                  // only for the people named in detail
+ "derived": [{"annotator_id": "A01~E01", "display_name": "A01 corrected by E01", "source": "corrected",
+              "of": "A01", "by": "E01", …the same fields…}],
+ "facets": [{"key": "group", "title": "Group", "values": ["Leeds RAs", "Pilot"]}],
+ "crowd": {"bin_s": 1, "n_bins": 70, "n_people": 3, "marking": [0, 2, …], "whole": [0, 1, …]},
+ "total": 3, "offset": 0, "next_offset": null}
+```
+
+Each mark is five whole numbers: its type (an index into `labels`), the samples since the
+person's previous mark's onset (for the first, since the start of the recording), its duration
+in samples, its channel set (an index into `sets`) and its confidence (0 when none was given).
+The marks of a person are in order of onset, then duration, type and ID. The annotation IDs come
+only for the people named in `detail` (those the view shows in lanes), which keeps the answer to
+about 350 kB for 300 people with 50 marks each on a 256-channel recording; the study server
+compresses an answer of the expert area from 64 kB on for a browser that accepts it, which brings
+that one to about 120 kB. People come in pages of `limit` (at most 500), in order of their ID (of
+when they saved, for a trainee); `next_offset` is where the next page starts, or null. Each page
+has tables (`labels`, `sets`) of its own.
+
+`crowd`, on the first page only, counts everyone whatever the page: for each time bin of
+`bin_s` whole seconds (one second, or as many as keep the bins to 1,000), how many people marked
+anything in it (`marking`) and how many marked the whole montage (`whole`), a person's several
+marks in a bin counting once. The browser counts the same way when it filters the crowd
+(`js/expert/crowd.js` `binCounts`, checked on the same cases as the server).
+
+`include` offers derived versions as well, never counted in the crowd: `corrected` the
+corrections of each person's latest version (one for each expert who corrected it, as
+`<annotator>~<expert>`), and `adjudicated` the latest adjudicated version of the recording (as
+`ADJUDICATED`). They come on the first page. A trainee is given neither, and no `detail`,
+`facets` or roles.
+
+**Facets.** Other parts of the study describe people for the view's filters (groups of people,
+experience bands) with `electrotag.web.overlay.register_facet(key, title)`, a function
+`(service, annotator_ids) -> {annotator_id: value or [values]}`. Each facet comes in `facets`
+with its values, and on each person under its key; a study without any has none.
+
+The answer reads each saved version once and keeps it in memory, since a saved version never
+changes. 400 `bad_request` for a body it cannot use (an `include` it does not know, more than
+eight people in `detail`, a training mode without its `context_id`), and 404
+`unknown_recording` for a recording the study does not hold. The sandbox answers both operations
+over its own saved work (`js/api/demo_overlay.js`); it has no adjudicated versions, and none of
+its recordings is a teaching recording.
 
 ### Derived versions in the analyses
 

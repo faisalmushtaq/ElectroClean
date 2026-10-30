@@ -91,6 +91,7 @@
   },
   "replay": {
     "enabled": true,
-    "trainees_watch_experts": true
+    "trainees_watch_experts": true,
+    "trainees_see_crowd": false
   }
 }

@@ -1166,6 +1166,41 @@ def test_a_correction_through_et_expert(study: str, recordings: Path) -> None:
     assert body["error"]["details"]["error"] == "forbidden"
 
 
+def test_everyones_marks_on_firestore(service: StudyService, recordings: Path) -> None:
+    """overlay_get reads everyone's latest saved version from Firestore, with the correction offered as a lane."""
+    store = service.store
+    store.put_user("E01", display_name="Expert one", roles=["expert", "annotator"])
+    ok(service, "submit", A01, submission(recordings, SUB1, [EMG]))
+    ok(service, "submit", A01, {**submission(recordings, SUB1, [BLINK, EMG]), "revises": 1})
+    ok(service, "expert", E01, {"op": "correction_save", **_correction(
+        recordings, "9" * 32, [BLINK], {EMG["annotation_id"]: "not_artifact"}), "attempt": 2})
+    got = ok(service, "expert", E01, {"op": "overlay_get", "recording_id": SUB1, "include": ["corrected"],
+                                      "detail": ["A01"]})
+    assert [(p["annotator_id"], p["attempt"], p["n_marks"]) for p in got["people"]] == [("A01", 2, 2)]
+    assert got["people"][0]["ids"] == [BLINK["annotation_id"], EMG["annotation_id"]]
+    assert [(d["annotator_id"], d["n_marks"]) for d in got["derived"]] == [("A01~E01", 1)]
+    assert got["crowd"]["n_people"] == 1 and got["labels"] == ["Eye-blink-artifact", "EMG-artifact"]
+    assert err(service, "expert", A01, {"op": "overlay_get", "recording_id": SUB1}).code == "forbidden"
+
+
+@pytest.mark.skipif(not (AUTH and FUNCTIONS), reason="needs the Auth and Functions emulators")
+def test_everyones_marks_through_et_expert(study: str, recordings: Path) -> None:
+    svc = firebase_service(study)
+    email = f"e01-{study}@example.org"
+    admin_ok(svc, "user_add", {"annotator_id": "E01", "email": email, "roles": ["annotator", "expert"],
+                               "password": "an-expert-password"})
+    a01 = sign_in(f"a01-{study}@example.org")
+    _, body = callable_("et_submit", {"study": study, **submission(recordings, SUB1, [BLINK, EMG])}, a01)
+    assert body["result"]["saved"] is True, body
+    _, body = callable_("et_expert", {"study": study, "op": "overlay_get", "recording_id": SUB1}, a01)
+    assert body["error"]["details"]["error"] == "forbidden"
+    expert = sign_in(email, "an-expert-password")
+    _, body = callable_("et_expert", {"study": study, "op": "overlay_get", "recording_id": SUB1}, expert)
+    got = body["result"]
+    assert [(p["annotator_id"], p["n_marks"]) for p in got["people"]] == [("A01", 2)], body
+    assert got["sets"] == ["", "0-1"] and got["crowd"]["n_people"] == 1
+
+
 # ------------------------------------------------------ adjudication and the library (H4)
 DISAGREE = ([ann("a" * 32, "Eye-blink-artifact", 500, 100, ["Fp1", "Fp2"]), ann("b" * 32, "EMG-artifact", 3000, 250),
              ann("c" * 32, "Eye-blink-artifact", 5000, 100)],

@@ -14,6 +14,7 @@ limited in size; errors never include a stack trace. The token of an invitation 
 
 from __future__ import annotations
 
+import gzip
 import json
 import logging
 import os
@@ -42,6 +43,8 @@ from electrotag.web.store_files import FilesStore
 log = logging.getLogger("electrotag.web")
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 MAX_BODY = 16 * 1024 * 1024
+#: Expert answers from this size on are compressed for a browser that accepts it (the overlay of everyone's marks).
+GZIP_FROM = 64 * 1024
 PAGES_ORIGIN = "https://faisalmushtaq.github.io"
 BEACON_PATHS = ("/events", "/close")
 
@@ -277,6 +280,13 @@ def create_app(study_dir: Path | str, *, demo: bool = False, allowed_origins: li
         token = await run_in_threadpool(store.db.issue_token, user)
         return session_answer(user, token)
 
+    def compressed(request: Request, response: JSONResponse) -> Response:
+        body = bytes(response.body)
+        if len(body) < GZIP_FROM or "gzip" not in request.headers.get("accept-encoding", "").lower():
+            return response
+        return Response(gzip.compress(body, compresslevel=5), status_code=response.status_code,
+                        media_type="application/json", headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"})
+
     def session_answer(user: User, token: str) -> JSONResponse:
         return JSONResponse({"token": token, "expires_in_s": TOKEN_IDLE_S, "annotator_id": user.annotator_id,
                              "display_name": user.display_name, "role": user.role, "roles": list(user.roles)})
@@ -433,9 +443,10 @@ def create_app(study_dir: Path | str, *, demo: bool = False, allowed_origins: li
         return await authed(request, "admin", {**await body_of(request), "op": op})
 
     @app.post(p + "/expert/{op}")
-    async def expert_op(request: Request, op: str) -> JSONResponse:
-        """Every operation of the expert area (docs/web/api.md, "Experts")."""
-        return await authed(request, "expert", {**await body_of(request), "op": op})
+    async def expert_op(request: Request, op: str) -> Response:
+        """Every operation of the expert area (docs/web/api.md, "Experts"); a large answer (the overlay of everyone's
+        marks) is compressed for a browser that accepts it."""
+        return compressed(request, await authed(request, "expert", {**await body_of(request), "op": op}))
 
     @app.post(p + "/quiz/{set_id:path}")
     async def quiz(request: Request, set_id: str) -> JSONResponse:

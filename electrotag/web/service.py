@@ -317,7 +317,8 @@ class StudyService:
             "review": {"show_corrections_to_annotators": s.review.show_corrections_to_annotators,
                        "show_outcomes_to_annotators": s.review.show_outcomes_to_annotators},
             "training": {"skippable": list(s.training.skippable), "gate": s.training.gate},
-            "replay": {"enabled": s.replay.enabled, "trainees_watch_experts": s.replay.trainees_watch_experts},
+            "replay": {"enabled": s.replay.enabled, "trainees_watch_experts": s.replay.trainees_watch_experts,
+                       "trainees_see_crowd": s.replay.trainees_see_crowd},
             "logging": self.logging_info(),
             "logging_notice": (self.store.logging_notice or LOGGING_NOTICE) if s.logging_interactions else "",
         }
