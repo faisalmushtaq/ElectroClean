@@ -890,11 +890,128 @@ are described here when they are offered.
 
 ### Tasks, windows and known answers
 
-Tasks share recordings, or stretches of them, out among k annotators, with
-known-answer items mixed in; their administrative operations (`tasks_create`,
-`tasks_list`, `task_update`, `task_remove`, `quality_list`) and what
-`GET /assignments` says of a task are described here when they are offered.
-An assignment made for a task carries its `task_id`.
+A **task** shares one study recording, or one window of it, out among k
+annotators (2 to 6, `review.k_default` unless the request says otherwise),
+who annotate it independently in the ordinary way: a task makes an ordinary
+assignment for each of its people, carrying the task's ID
+(`electrotag/web/tasks.py`). An assignment made without a task behaves
+exactly as before. One person holds at most one task of a recording, since an
+assignment is one per person, recording, mode and context, so the windows of
+one recording go to different people. A task is kept as a record:
+
+```jsonc
+Task = {"schema": "electrotag.task", "schema_version": 1, "task_id": "t-<12 hex>",
+  "recording_id", "file_name", "scope": "study",
+  "window": null | {"start_sample": 2560, "end_sample": 5120},   // half-open, whole samples
+  "k": 2, "annotators": ["A03", "A07"], "letters": {"A03": "B", "A07": "A"},
+  "gold": null | {"set_id": "known"}, "blinded": false,
+  "state": "open" | "closed" | "removed", "adopted": ["A03"],     // who had the recording before the task
+  "created_at", "created_by", "request_id", "batch": "", "notes": "",
+  "changes": [{"at", "by", "added"?, "removed"?, "state"?, "notes"?}]}
+TaskOut = {"task_id", "recording_id", "file_name",
+  "window": null | {"start_sample", "end_sample", "start_s", "end_s"},
+  "k", "annotators", "letters", "gold", "blinded", "state": "open" | "closed",
+  "created_at", "created_by", "batch", "notes", "status": Status,
+  "people": [{"annotator_id", "letter", "attempt": 1 | null, "saved_at": "…" | null,
+              "status": "todo" | "in_progress" | "done" | "unusable" | "closed"}],
+  "counts": {"annotators", "saved", "in_progress", "unusable"},
+  "conflicts": 3 | null,          // once all have saved and the conflicts are counted
+  "adjudication": null | {"adjudicator_id", "state": "in_progress" | "finished", "conflicts", "decided"}}
+```
+
+Each annotator has a **letter** (A, B, ...) that stays theirs for the task's
+life: the order comes from a keyed hash of the study's own secret, the task and
+the person, so it says nothing about who was chosen first, and someone put in
+later takes the next free letter. `blinded` is false (adjudicators see who made
+each mark); it is kept for a later crowd study. **Statuses** are worked out
+each time, never stored:
+
+| Status | When |
+| --- | --- |
+| `collecting` | fewer than k of the task's people have saved it |
+| `saved` | all have saved; the conflicts are not counted (no adjudication part registered) |
+| `ready` | all have saved, and their versions conflict (`conflicts` > 0) |
+| `agreed` | all have saved, without a conflict |
+| `adjudicating` | an expert has started adjudicating it |
+| `adjudicated` | the adjudication is finished |
+| `gold` | a known-answer task (never adjudicated) |
+
+**What an annotator receives.** Each item of `GET /assignments` and the answer
+of `POST /match` (for the item it opens) carry `task`: null, or
+`{"task_id", "window": {"start_sample", "end_sample", "start_s", "end_s"} | null}`.
+Nothing in it says whether a task is a known answer. With a window, `PUT
+/drafts` and `POST /submissions` refuse an annotation that is not wholly inside
+it with 422 `outside_window`, naming the first in the message and every one in
+`annotation_ids`; the browser hatches the rest of the recording, keeps the view
+within the window and a second either side, refuses marks outside it, and
+counts what has been viewed (`viewed_fraction`, the coverage check before Save
+and Finish) within the window only.
+
+**Known answers.** A task whose `gold` names a reference set is a known-answer
+task: it goes to every person chosen (k does not apply), and the recording
+must have a reference in that set (a set's own copy of the recording must be
+the same file). After each save the annotations are compared with the
+reference, within the window when there is one, as practice feedback compares
+them (`electrotag.training.assessment.practice_feedback`), and the score is
+kept as a record of kind `gold`, `{aid}_{task_id}`:
+`{"schema": "electrotag.gold_score", "task_id", "annotator_id", "recording_id", "set_id", "window", "attempt",
+"event_f1", "label_accuracy", "event_precision", "event_recall", "scored_at", "per_category", "attempts": [..]}`.
+The annotator is told nothing of it. A save whose scoring was interrupted is
+scored when `quality_list` is next asked for.
+
+The administrative operations (`POST /admin/{op}`, `et_admin` on Firebase):
+
+| op | body | answer |
+| --- | --- | --- |
+| `tasks_preview_get` | `{"annotator_ids": [pool], "recording_ids": [..] \| "all": true, "k"?: review.k_default, "window"?: {"start_s", "end_s"}, "windows"?: {"length_s", "overlap_s"?: 0}, "gold"?: {"set_id"}, "adopt"?: false}` | `{"tasks": [{"task_id": null, "recording_id", "file_name", "window", "k", "annotators", "holders", "gold"}], "skipped": [{"recording_id", "reason", "start_s"?}], "per_annotator": [{"annotator_id", "open_before", "new", "linked"}], "created", "assigned", "k"}`: what `tasks_create` would make, without making anything (a read: the browser may ask again) |
+| `tasks_create` | as `tasks_preview_get`, with `"request_id": "<32 hex>"`, `"batch"?` (a name of up to 80 characters) and `"notes"?` | `{"tasks": [TaskOut], "created", "assigned", "skipped", "per_annotator", "already": false}`. The same `request_id` again makes nothing more (`already: true`, the tasks it made, and any of their assignments still missing). Audited (`tasks_create`) |
+| `tasks_list` | `{"status"?, "recording_id"?, "annotator_id"?, "gold"?: bool}` | `{"tasks": [TaskOut], "counts": {status: n}}`, oldest first; removed tasks are not listed |
+| `task_update` | `{"task_id", "add_annotator"?, "remove_annotator"?, "state"?: "open" \| "closed", "notes"?}` | `{"task": TaskOut}`. Both people in one request replace one by the other. Audited |
+| `task_remove` | `{"task_id"}` | `{}`: the task and its unfinished assignments go (an assignment someone had before the task is given back without it); the record stays, marked removed. Audited |
+| `quality_list` | `{}` | `{"annotators": [{"annotator_id", "n_gold", "mean_event_f1", "mean_label_accuracy", "weight": 0.83 \| null}], "min_items"}`: everyone in a known-answer task, with their mean scores over the known answers they saved; `weight` (the mean event F1) once they have saved `review.gold_min_items` of them, null before |
+
+**How recordings are shared out.** `all` takes every study recording that is
+not retired (one that is, given by name, is `skipped` as `retired`). A
+recording with an open task is skipped (`has_task`). `window` gives every
+recording the same stretch; `windows` cuts each into consecutive parts of
+`length_s` (at least 2 s) that overlap by `overlap_s` (less than half a
+part), and a remainder shorter than half a part joins the part before it. Each
+task goes to the k people of the pool with the fewest open tasks they have not
+saved yet, counting the tasks made earlier in the same request, with ties
+broken by a fixed order (SHA-256 of the recording, the window's start and the
+person), so the same request on the same study gives the same share-out and
+200 recordings with k = 2 among 10 people give each person 40. People who
+already hold the whole recording without a task come first for a task of the
+whole recording, and their assignment joins the task (`holders`, `linked`);
+they are left out of a window's task, which would shut them out of the rest of
+the recording. A recording or window for which fewer than k people are free is
+skipped as `too_few_annotators`. With `gold`, every person chosen gets each
+task, and a recording without a reference in the set is skipped
+(`no_gold_reference`, or `gold_mismatch` when the set's copy is another
+file). With `adopt: true`, each recording already given to two to six of the
+chosen people (without a task) becomes a task of exactly those people, with
+their assignments joined to it (`fewer_than_two` and `too_many_annotators`
+otherwise; `window`, `windows` and `gold` cannot be given with it).
+
+**Changing a task.** A person put in gets the recording (409 `task_conflict`
+when they hold it for another task, 409 `already_in_task`, 409 `closed` for a
+closed task unless the same request reopens it); a person taken out loses
+their unfinished assignment, and is refused once they have saved it (409
+`has_results`). A task keeps 2 to 6 people (409 `too_few`, 400 `k_too_large`);
+a known-answer task at least one. Closing a task takes its recording from the
+lists of those who have not saved it and keeps every saved result with the
+task; reopening gives it back to them. `task_remove` is refused once anyone has
+saved the task (409 `has_results`): close it instead. Other errors: 400
+`bad_request` (with the reason), 400 `k_too_large` (k above the people
+chosen), 400 `too_many` (more than 5000 tasks at once), 404 `unknown_user`,
+404 `unknown_recording`, 404 `unknown_task`, 404 `no_reference_set`, 409
+`disabled` (a switched-off account).
+
+The results zip and `electrotag web export` hold the tasks
+(`tasks/tasks.tsv` and `tasks/tasks.json`, removed ones included) and the
+known-answer scores (`tasks/gold_scores.tsv`; docs/file_formats.md). The
+sandbox answers these operations with 501 `needs_server`: sharing out, the
+letters and the scoring are the study server's own code.
 
 ### Adjudication and the library
 

@@ -291,6 +291,29 @@ each item with the columns `review_id`, `reviewed_at`, `reviewer_id`,
 `channels`, `status` and `note`, and a last row with `item` and `status`
 `overall` for the overall note. The agreement analyses do not read reviews.
 
+## Tasks and known-answer scores (results zip and export)
+
+The tasks that shared recordings out among annotators (docs/web/admin.md, "Tasks") are kept by the
+study and written below `tasks/` in the results zip and by `electrotag web export`, as they stand at
+that moment, removed tasks included. They never change the annotation files: each annotator's work
+on a task is saved and named as any other recording of theirs.
+
+`tasks/tasks.tsv` has a row for each task, the oldest first, with the columns `task_id`,
+`recording_id`, `file_name`, `start_sample` and `end_sample` (the task's part of the recording,
+half-open and in whole samples; empty for the whole recording), `k` (the number of annotators),
+`annotators` (their IDs, separated by commas), `letters` (each annotator's letter, as `A03=B,A07=A`),
+`gold_set` (the reference set of a known-answer task, empty otherwise), `state` (`open`, `closed`
+or `removed`), `batch` (the share-out's name), `created_at`, `created_by` and `notes`.
+`tasks/tasks.json` holds the same tasks as JSON (`{"schema": "electrotag.tasks", "schema_version": 1,
+"tasks": [...]}`), each with the people who had the recording before the task (`adopted`) and the
+changes made to it (`changes`: who was put in or taken out, and when it was closed or reopened).
+
+`tasks/gold_scores.tsv`, when there are known-answer tasks, has a row for each person and
+known-answer task they saved, with the columns `annotator_id`, `task_id`, `recording_id`, `set_id`,
+`attempt` (the version scored, the latest), `event_f1`, `label_accuracy`, `event_precision`,
+`event_recall` and `scored_at`. The scores compare the saved annotations with the set's reference as
+the practice feedback does, within the task's part of the recording when it has one.
+
 ## `completion_register.tsv`
 
 | Column | Meaning |
