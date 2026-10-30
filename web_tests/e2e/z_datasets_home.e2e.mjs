@@ -15,6 +15,19 @@ const hex = (n) => n.toString(16).padStart(32, '0');
 /** What the study team keeps to itself: none of it may appear on the annotator's page. */
 const TEAM_ONLY = ['Secret pilot', 'hard ones', 'Only the team reads this', 'A private note', 'Recorded at the clinic'];
 
+/** A study recording's manifest (docs/web/api.md) for registering on the study server. */
+function manifest(rid, sha) {
+  return {
+    schema: 'electrotag.web_manifest', schema_version: '1.0.0', scope: 'study', recording_id: rid, relative_path: rid, format: 'edf',
+    format_name: 'EDF', file_name: rid.split('/').pop(), files: { stem: rid.split('/').pop().replace(/_eeg\.edf$/, ''), path: rid },
+    timing: { sfreq: 100, n_samples: 6000, first_samp: 0, meas_date: null, duration_s: 60 }, ch_names: ['Fp1', 'Fp2', 'Cz', 'HEOG'],
+    hidden_channels: [], trigger_channels: [], channel_types: { Fp1: 'eeg', Fp2: 'eeg', Cz: 'eeg', HEOG: 'eog' }, bad_channels: [],
+    fingerprint: { eeg: { path: rid, size: 48256, sha256: sha } },
+    original_events: { source: 'none', path: null, columns: [], rows: [], onset_s: [], sample: [] },
+    amplitude: { suggested_scalings: {}, warnings: [] }, warnings: [], notes: [],
+  };
+}
+
 /** The hand-outs both back ends get: a dataset (`inDataset` of the recordings), overdue, and a collection of the first, due later. */
 async function handOut(call, rids, aid, inDataset) {
   await call('dataset_create', { request_id: hex(0xd1), dataset_id: 'pilot-ds', name: 'Pilot recordings', description: 'Recorded at the clinic', notes: 'Only the team reads this' });
@@ -108,7 +121,11 @@ export const tests = [
       const admin = (await api(null, '/login', { annotator_id: 'ADMIN', password: PASSWORD })).token;
       const call = (op, body) => api(admin, `/admin/${op}`, body);
       await call('user_add', { annotator_id: 'Q41', display_name: 'Hand-out annotator', password: PASSWORD });
-      const rids = (await call('recordings_list', { scope: 'study' })).recordings.filter((r) => !r.retired).map((r) => r.recording_id);
+      // three recordings of this test's own (the earlier specs retire and remove the study's examples); the
+      // annotator never opens them, so their manifests need no files
+      const rids = [1, 2, 3].map((n) => `handout-e2e/sub-h${n}/eeg/sub-h${n}_task-rest_eeg.edf`);
+      const reg = await call('recordings_register', { scope: 'study', manifests: rids.map((rid, n) => manifest(rid, String(n + 1).repeat(64))) });
+      if (reg.added.length !== 3) throw new Error(JSON.stringify(reg.skipped));
       await handOut(call, rids, 'Q41', [rids[2]]);
       await call('assign', { annotator_ids: ['Q41'], recording_ids: [rids[1]] }); // given without a hand-out
       const page = await t.newPage({ url: t.study.base, width: 1440, height: 1000 });
