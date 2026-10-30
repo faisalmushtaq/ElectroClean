@@ -15,6 +15,7 @@ import { icon, starIcons } from '../views/common.js';
 import { minutesText } from './coach.js';
 import { quizCard } from './quiz_card.js';
 import { STAGE_TEXT as TEXTS, STAGE_TITLES as TITLES } from './stages.js';
+import { watchExpertEntry } from '../replay/watch.js';
 
 export const STAGE_TEXT = TEXTS;
 export const STAGE_TITLES = TITLES;
@@ -23,8 +24,8 @@ export const LOCKED_TEXT = 'Unlocks when you finish or skip the stage before.';
 
 /** Lines other parts of the training add to a stage's card: (app, stage, data) => Node | string | null. */
 export const STAGE_LINES = { tour: [], snippets: [], guided: [], practice: [], assessment: [] };
-/** The slot for watching an expert's session, on "Learn with the experts" (filled by the replay part). */
-export const WATCH_EXPERT = [];
+/** The slot for watching an expert's session, on "Learn with the experts": the replay part's way in (js/replay/watch.js). */
+export const WATCH_EXPERT = [(app) => (app ? watchExpertEntry(app) : null)];
 
 const CHIPS = {
   locked: ['Locked', ''], available: ['Ready', 'active'], in_progress: ['In progress', 'active'],

@@ -19,6 +19,7 @@ export const SECTIONS = Object.freeze([
   { key: 'records', route: 'admin-records', title: 'Records', group: 'study' },
   { key: 'annotators', route: 'admin-annotators', title: 'Annotators', group: 'people' },
   { key: 'assignments', route: 'admin-assignments', title: 'Assignments', group: 'people' },
+  { key: 'tasks', route: 'admin-tasks', title: 'Tasks', group: 'people' },
   { key: 'training', route: 'admin-training', title: 'Training', group: 'people' },
   { key: 'recordings', route: 'admin-recordings', title: 'Recordings', group: 'data' },
   { key: 'problems', route: 'admin-problems', title: 'Problems', group: 'data' },

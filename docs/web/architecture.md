@@ -104,7 +104,8 @@ reads; every other one saves, and the browser never repeats it by itself.
 electrotag/web/                 the server (FastAPI), the service layer it shares with the Firebase
                                   functions (with games.py for the achievements and the
                                   leaderboard, feedback.py for problem reports and reviews of
-                                  saved work), and the administrator's command, electrotag web
+                                  saved work, tasks.py for tasks, their windows and known answers),
+                                  and the administrator's command, electrotag web
 electrotag/web/firebase/        the Cloud Functions (functions/main.py) and the administrator's access
 electrotag/web/static/          the browser application (plain ES modules, no build step)
     index.html, app.css           the page and the application's design system (tokens, components)
@@ -141,6 +142,7 @@ electrotag/web/static/          the browser application (plain ES modules, no bu
     js/viewer/                    drawing the EEG, axes, overview, navigation; touch.js for two
                                   fingers, long presses and double taps on a touch screen;
                                   coverage.js for the parts of a recording viewed so far;
+                                  bounds.js for a task's part of a recording;
                                   head_map.js for where electrodes go on the channel map
     js/annotate/                  the annotation view (workspace.js), the annotation store, the
                                   dialogs, the help, the session with its drafts, clock.js,
@@ -154,9 +156,9 @@ electrotag/web/static/          the browser application (plain ES modules, no bu
                                   sections and routes, to which each part of the expert work adds a line)
     js/admin/                     the admin area (area.js: the grouped menu and Find) and its
                                   sections: overview, progress (with chart.js, its SVG chart),
-                                  recordings, annotators (with invitations), assignments, training,
-                                  analyses, results, records and settings; model.js holds its rules
-                                  without the page, ui.js its pieces
+                                  recordings, annotators (with invitations), assignments, tasks
+                                  (with tasks_model.js), training, analyses, results, records and
+                                  settings; model.js holds its rules without the page, ui.js its pieces
     js/ui/                        dialogs, menus, building elements, the colours for the canvas,
                                   each annotator's display comfort (comfort.js)
     js/log/                       the interaction logger
@@ -570,8 +572,8 @@ invitation links, assignments, recordings added from the computer, settings,
 the training set's pass mark, matching, guidance and notes, problem reports,
 reviews, progress and the records) and answers the rest (reference sets of
 one's own and their quizzes, the agreement, activity and competency analyses,
-consensus references and the results zip) with an error that says they need a
-study server or Firebase.
+consensus references, tasks and the results zip) with an error that says they
+need a study server or Firebase.
 
 ### The sandbox's stand-in for the server
 

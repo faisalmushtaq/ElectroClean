@@ -32,6 +32,41 @@ button. Its first page explains the area and lets each expert agree, or no longe
 watching replays of their sessions; the corrections, replays, adjudication, library and training
 material of the next parts appear in its menu as they are added.
 
+Experts can now correct saved work and replay how it was done. Saved work, in the expert area,
+lists the latest saved version of each person's study recordings; Correct opens one from the
+expert's computer in the annotation view, with the original drawn as dashed outlines, a panel that
+lists every change from it (added, removed, or changed in type, times or channels) with reason chips
+and a short note, and Submit the correction, which saves a new version credited to the expert as a
+derived version (`derived/corrections/`), never changing the original and saved once however often
+it is pressed. Which changes need a reason follows the study's `review.reason_required`. When two
+experts correct the same version both corrections are kept and counted, for the adjudication to
+compare. Annotators see "Corrected by …" in their list and history and open the corrected version
+beside their own, with each change and its reason, when the study shows corrections to them. Replay
+plays a person's sessions on a recording back from the interaction log, with play, pause, speed,
+steps by event or by change, a scrubber, Skip pauses and Follow the annotator, and says at the end
+whether the replay matches the saved version. Experts and administrators may replay anyone; trainees
+watch only the sessions of experts who agreed to it, through Watch an expert at work on their
+training path (the Learn with the experts stage), and the study checks this for every request. The browser now logs a snapshot of the
+annotations a recording opens with (`annotations_snapshot`), sends the session's ID with each save,
+and logs work brought back in a tab; the logging notice says that sessions can be replayed. The
+results zip and the export hold `corrections/corrections.tsv` and `.json`, and the demonstration does
+all of this in the browser.
+
+Administrators can now share recordings out as tasks, in a new Tasks section of the admin area
+(under People): each recording, or each part of one, goes to 2 to 6 annotators who annotate it
+independently, so that their disagreements can be adjudicated. Choose the people, the recordings,
+how many people each goes to and the part of each recording (the whole of it, one stretch, or
+consecutive parts), then preview the share-out (each person's share, and what is left out and why)
+before making it once. The work is shared evenly and the same choices give the same share-out; people
+who already have a recording come first for it, and recordings already given to several people can be
+turned into tasks as they are. An annotator given part of a recording sees the rest hatched, the view
+stays within the part, and a mark outside it is refused, by the study too (422 `outside_window`).
+Known-answer recordings from a reference set can be mixed in: everyone chosen gets them, nothing tells
+them apart, each save is scored against the reference, and the section lists each person's accuracy on
+them. Tasks can be changed (a person replaced), closed, reopened or removed, without any saved result
+being lost; the results zip and the export hold them under `tasks/` (docs/file_formats.md). The
+demonstration says that tasks need a study server or Firebase.
+
 The training path now has five stages: Find your way around, a hands-on tour of the annotation view on
 a practice recording made in the browser (each step, from moving through the recording to Save and
 Finish, names its keys and is ticked when it is done, and nothing is kept); Meet the artifacts, a

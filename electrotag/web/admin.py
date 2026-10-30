@@ -66,14 +66,16 @@ STATS_WORK = ("study", "all")
 #: Operations that only read (every other one appends an audit entry).
 READ_ONLY = ("overview", "settings_get", "users_list", "assignments_list", "recordings_list", "sets_list",
              "set_guided_notes", "quiz_items", "progress", "stats", "agreement", "activity", "competency",
-             "results_zip", "audit", "visits", "problems_list", "reviews_list", "saved_attempt_get")
+             "results_zip", "audit", "visits", "problems_list", "reviews_list", "saved_attempt_get",
+             "tasks_list", "tasks_preview_get", "quality_list")
 OPERATIONS = READ_ONLY + (
     "settings_update", "user_add", "user_update", "user_reset_password", "user_invite", "user_invite_revoke",
     "user_remove", "assign", "unassign",
     "programme_set", "recordings_register", "recording_update", "recording_remove", "set_create", "set_update",
     "set_delete", "set_add_reference", "set_recording_update", "set_remove_recording", "set_guided_note",
     "set_example_create", "quiz_item_add", "quiz_item_remove", "problem_resolve", "problem_return",
-    "problem_reassign", "review_save")
+    "problem_reassign", "review_save",
+    "tasks_create", "task_update", "task_remove")
 # The training path (electrotag/web/training_path.py): the snippets of a set, a trainee's path and the gate, and
 # what the study team does after an assessment that did not meet the criteria.
 READ_ONLY += ("snippets_list", "training_gate_get")
@@ -1560,6 +1562,25 @@ class Admin:
         limit = int(_number(body, "limit", minimum=1, maximum=1000, default=100))
         aid = _aid(body.get("annotator_id")) if body.get("annotator_id") is not None else None
         return {"visits": self.store.visit_records(aid, limit)}
+
+    # ------------------------------------------------- tasks (electrotag/web/tasks.py)
+    def op_tasks_preview_get(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.service.tasks.op_preview(user, body)
+
+    def op_tasks_create(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.service.tasks.op_create(user, body)
+
+    def op_tasks_list(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.service.tasks.op_list(user, body)
+
+    def op_task_update(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.service.tasks.op_update(user, body)
+
+    def op_task_remove(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.service.tasks.op_remove(user, body)
+
+    def op_quality_list(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.service.tasks.op_quality(user, body)
 
     # ------------------------------------------------------- the training path
     # (electrotag/web/training_path.py; the snippets are the expert channel's operations too)

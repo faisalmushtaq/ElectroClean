@@ -315,8 +315,22 @@ the gate runs against the real study server. The project lead decided that exper
 and administrators may replay any annotator's session and that trainees may watch an expert's
 session only with that expert's consent (a flag each expert sets in the expert area, audited). This
 uses the interaction logs for a new purpose: the study's ethics approval may need an amendment
-before replays are used, and the logging notice should then say that sessions can be replayed by the
-study team and experts' sessions shown to trainees with their consent.
+before replays are used. ElectroTag's own logging notice now says that the study team can replay a
+session and that an expert's sessions may be shown to trainees when the expert agrees; a study that
+wrote a notice of its own should add the same.
+
+Corrections and replays are in place (`electrotag/web/corrections.py`, `replay.py`; `js/expert/`
+and `js/replay/`): an expert corrects saved work from Saved work in the expert area, with a reason
+for each change, as a derived version; the annotator sees the changes in their history; and a
+replay plays a session back from the interaction log, which since 30 October holds a snapshot of the
+annotations a session opens with (older logs replay from the end of the session before). When two
+experts correct the same version both corrections are kept and counted; comparing them in the
+adjudication queue, and the "correction pending adjudication" state of the analyses, belong to the
+adjudication and analysis parts, which find them with `corrections.corrections_of`. Trainees reach
+the experts' sessions they may watch through "Watch an expert at work" (`js/replay/watch.js`), for now
+on the home page's training card. A trainee needs the recording's file on their own computer to
+watch, as for any replay: a study that wants to teach with replays should give trainees the files of
+the recordings the experts' sessions were on.
 
 **7. Housekeeping.** The project's `ruff` settings give only the line length, so a recent `ruff`
 applies many style rules the code was never written to; `ruff check --select E,F,W,B` is the useful

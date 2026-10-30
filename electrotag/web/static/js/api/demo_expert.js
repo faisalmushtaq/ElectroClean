@@ -11,6 +11,7 @@ import { ApiError } from './http.js';
 import { needsServer } from './demo_admin.js';
 import { rolesOf } from '../admin/model.js';
 import { nowLocalIso } from '../util.js';
+import { CORRECTION_FEEDBACK, CORRECTION_OPEN_OPS, CORRECTION_OPS } from './demo_corrections.js';
 import { SNIPPET_EXPERT_OPS } from './demo_training_stages.js';
 
 /** Replay consent: whether trainees may watch replays of the caller's own sessions (expert.py, the same names). */
@@ -38,8 +39,14 @@ const CONSENT_OPS = {
 /** The parts of the expert work in the sandbox: one line each. */
 const PARTS = [
   CONSENT_OPS,
+  CORRECTION_OPS, // corrections of saved work and replays (demo_corrections.js)
   SNIPPET_EXPERT_OPS, // the training path's snippets (demo_training_stages.js)
 ];
+
+/** Operations that people without the expert role may ask for too (expert.py OPEN_OPS); each checks the rest itself. */
+export const OPEN_EXPERT = new Set([...CORRECTION_OPEN_OPS]);
+/** What GET /me/feedback lists, by part (expert.py FEEDBACK_PARTS): (expert) => [item]. */
+export const FEEDBACK_PARTS = { ...CORRECTION_FEEDBACK };
 
 /** Operations of the expert area that the sandbox answers with needsServer (their part has no stand-in). */
 export const SERVER_ONLY_EXPERT = {};
@@ -85,11 +92,17 @@ export class DemoExpert {
   }
 
   async run(op, body = {}) {
-    this.actor();
+    if (OPEN_EXPERT.has(op)) this.b._aid(); else this.actor();
     if (SERVER_ONLY_EXPERT[op]) throw needsServer(SERVER_ONLY_EXPERT[op]);
     const fn = OPS[op];
     if (typeof fn !== 'function') throw new ApiError(404, 'not_found', `This study does not offer the expert operation '${op}'`);
     const out = await fn(this, body && typeof body === 'object' ? body : {});
     return JSON.parse(JSON.stringify(out));
+  }
+
+  /** The items of one part of GET /me/feedback (corrections, adjudications), or [] for a part not offered here. */
+  feedback(part) {
+    const fn = FEEDBACK_PARTS[part];
+    return fn ? JSON.parse(JSON.stringify(fn(this))) : [];
   }
 }

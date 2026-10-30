@@ -132,6 +132,7 @@ password.
     "gamification": {"enabled": true, "leaderboard": true},
     "review": {"show_corrections_to_annotators": true, "show_outcomes_to_annotators": true},
     "training": {"skippable": ["tour", "snippets", "guided", "practice"], "gate": "met" | "completed" | "off"},
+    "replay": {"enabled": true, "trainees_watch_experts": true},
     "logging": {"interactions": true, "pointer_hz": 5, "idle_after_s": 30},
     "logging_notice": "This study records how you use ElectroTag …"   // "" when logging is off
   },
@@ -161,9 +162,11 @@ and `gamification` whether
 the home page shows the game elements and the leaderboard (see
 "Achievements"; `leaderboard` is false whenever `enabled` is). `review` says
 whether the annotator is shown the corrections of their work and the outcomes
-of the conflicts in it (`GET /me/feedback`), and `training` which stages of the
-training path may be skipped and what real study work waits for (the study
-settings `review` and `training` of the [administrator guide](../administrator_guide.md)). `training_gate`
+of the conflicts in it (`GET /me/feedback`), `training` which stages of the
+training path may be skipped and what real study work waits for, and `replay`
+whether sessions are replayed and whether trainees may watch experts' sessions
+(the study settings `review`, `training` and `replay` of the
+[administrator guide](../administrator_guide.md)). `training_gate`
 says whether the person's study recordings are open, and if not why, in a
 sentence for the person (see "Training stages" below).
 
@@ -940,8 +943,9 @@ Experts (accounts with the role `expert`) and administrators work in the
 function `et_expert` with `{"study", "op", ...the body}` (1 GB of memory and up
 to 300 s, for saving corrections and adjudicated versions); in the service
 layer it is `StudyService.expert.run(op, user, body)` (`electrotag/web/expert.py`).
-Anyone else gets 403 `forbidden`, and an `op` the study does not offer 404
-`not_found`. An operation whose name ends in `_get` or `_list` only reads, and
+Anyone else gets 403 `forbidden` (a few operations are open to everyone and
+check the rest themselves: "Corrections and replay" below), and an `op` the
+study does not offer 404 `not_found`. An operation whose name ends in `_get` or `_list` only reads, and
 the browser may ask it once more after a failure; every other operation saves,
 is never repeated by the browser, gives the same state when the same request
 reaches the study twice, and writes an entry to the audit log. Expert work in
@@ -963,18 +967,225 @@ attempt, completion or time; the analyses use the originals.
 
 ### Corrections and replay
 
-The operations with which an expert corrects someone's saved work and replays
-how a session went (`work_list`, `saved_attempt_get`, `correction_save`,
-`corrections_list`, `correction_get`, `replay_index_get` and `replay_events_get`)
-are described here when they are offered.
+An expert corrects someone's saved study attempt by changing, adding and
+removing its marks, with a reason for each change; the correction is a derived
+version (above), credited to the expert, and the attempt it corrects never
+changes. A replay plays back how a person worked on a recording, from the
+interaction log. The operations are in `electrotag/web/corrections.py` and
+`electrotag/web/replay.py`.
+
+| op | body | answer | saves? |
+| --- | --- | --- | --- |
+| `work_list` | `{"annotator_id"?, "recording_id"?, "corrected"?: bool, "limit"?: 200}` (at most 1000) | `{"items": [{"annotator_id", "display_name", "recording_id", "file_name", "attempt", "saved_at", "n_annotations", "corrections", "task_id": null, "own": bool}], "total", "corrections_on": bool}`: the latest saved attempt of each person and study recording, newest first; `corrections` counts the corrections of that attempt, and `own` marks the caller's own work | read |
+| `saved_attempt_get` | `{"annotator_id", "recording_id", "attempt"?}` | `{"annotator_id", "display_name", "recording_id", "file_name", "mode", "context_id", "attempt", "latest", "attempts": [1, 2], "saved_at", "manifest", "annotations": [Annotation], "reviews": [Review], "corrections": [Correction], "own", "corrections_on", "reason_required", "reasons": {code: words}}`: one saved attempt (the latest by default) with what the correction view needs. 404 `no_saved_annotations`, `unknown_recording`; 409 `not_for_training` | read |
+| `correction_save` | `{"correction_id": "<32 hex>", "annotator_id", "recording_id", "attempt", "annotations": [Annotation], "changes": [{"annotation_id", "reason", "note"?}], "overall_note"?, "session": Submission.session, "sha256"}` | `{"correction": Correction, "already": bool, "files": ["…_annotations.json", …]}`. Errors: 409 `corrections_off`, `own_work`, `not_latest`, `busy`, `conflict`; 422 `no_changes`, `reason_missing` (with `annotation_ids`), `invalid_annotation`, `invalid_session`; 400 `bad_request` (an unknown reason, a note over 300 characters, an overall note over 1000). Audited (`correction_save`) | **save** |
+| `corrections_list` | `{"annotator_id"?, "recording_id"?, "corrector_id"?}` | `{"corrections": [Correction]}`, newest first | read |
+| `correction_get` | `{"correction_id"}` | Correction with `"annotations"` (the corrected version), `"original"` (the attempt corrected), `"manifest"`, and each change's `reason_text`. 404 `not_found` | read |
+| `my_correction_get` | `{"correction_id"}` | as `correction_get`, for the annotator whose work was corrected (anyone may ask; another person's correction is 404 `not_found`, and 403 `forbidden` when the study keeps corrections from its annotators); without `output_basename`, `session_id`, `state` and `elapsed_s` | read |
+| `replay_index_get` | `{"annotator_id", "recording_id", "mode"?: "standard", "context_id"?, "attempt"?}` | `{"logging": bool, "annotator_id", "display_name", "recording_id", "mode", "context_id", "file_name", "manifest", "segments": [Segment], "saved": {"attempt", "saved_at", "annotations"} \| null}`: the person's sessions on the recording, oldest first, and the saved version to compare the end of the replay with (the latest, or `attempt`) | read |
+| `replay_events_get` | `{"visit_id", "window_no"?, "from_seq"?: 0, "limit"?: 4000 (at most 10000), "pointer"?: true}` | `{"header": {"started_at", "logging", "screens"}, "events": [event with seq], "next_seq": int \| null}`: one page of a segment's events (of the whole visit without `window_no`), in order; `pointer: false` leaves the pointer's positions out. 404 `unknown_visit`, `unknown_segment` | read |
+| `teaching_list` | `{}` | `{"shown": bool, "sessions": [{"annotator_id", "display_name", "recording_id", "file_name", "attempt", "saved_at", "n_annotations"}]}`: what a trainee may watch, the saved study recordings of the experts who agree to it with a session in the log; `shown` false (and no sessions) when the study shows trainees no experts' sessions | read |
+
+```jsonc
+Correction = {"correction_id", "state": "saved", "annotator_id", "recording_id", "file_name", "mode": "standard", "context_id": "",
+  "corrected_from": {"annotator_id", "attempt", "session_id", "output_basename", "annotations_sha256"},
+  "corrector_id": "E01", "corrector_name", "corrected_at", "elapsed_s", "number": 1, "output_basename", "session_id",
+  "changes": [Change], "counts": {"added", "removed", "changed"}, "overall_note", "summary": "1 added, 1 changed",
+  "attempt": 1, "n_corrections_of_version": 1}
+Change = {"annotation_id", "change": "added" | "removed" | "changed",
+  "fields": ["label", "onset", "end", "channels", "confidence", "note"],    // what changed, for "changed"
+  "before": Mark | null, "after": Mark | null,                              // Mark: an Annotation without its times
+  "reason": "missed" | "not_artifact" | "wrong_type" | "boundaries" | "channels" | "split_merge" | "other" | "",
+  "note": "≤300 characters"}
+Segment = {"visit_id", "window_no", "session_id", "started_at", "ended_at", "outcome": "finished" | "closed_without_saving" | "not_finished",
+  "attempt": 1 | null, "n_events", "first_seq", "last_seq", "has_snapshot": bool}
+```
+
+**The difference and its reasons.** The server works out what changed itself,
+from the saved attempt and the annotations sent, matched by `annotation_id`: a
+correction keeps the IDs of the marks it changes, a mark with a new ID is
+added, and one left out is removed (channels in another order are the same
+channels). `changes` gives the reason and an optional note for each change the
+server finds; reasons for anything else are ignored. The study's
+`review.reason_required` says which changes need one: `always` every change,
+`edited_or_none` the changed and removed marks, `never` none (422
+`reason_missing` lists the changes still without one). The browser's
+`js/expert/diff.js` is the same function, and both are tested with
+`web_tests/unit/correction_diff_cases.json`.
+
+**Saved once.** The browser makes `correction_id` at the first press of Submit
+and sends it again after an answer that came too late. A request first writes
+a `pending` record with that ID, then looks for a version with that ID as its
+session's ID in the corrections' register before it saves anything, and marks
+the record `saved` last, so that the same correction sent twice, or a request
+that stopped half-way, saves one version; a second request while the first
+is saving is 409 `busy`, and the same ID from another expert is 409 `conflict`.
+Only the latest attempt is corrected (409 `not_latest` when the annotator has
+saved again since the expert opened it), and nobody corrects their own work
+(409 `own_work`: they revise it). The saved version is the five files in
+`Annotated_Events/derived/corrections/` (docs/file_formats.md), whose
+`_annotations.json` and `_session.json` carry `context.derived` =
+`{"kind": "correction", "correction_id", "corrected_from", "corrector_id", "corrector_name", "changes", "overall_note"}`;
+its `annotator_id` is the person whose work it is, its display name "A01
+corrected by E01", its session ID the `correction_id`, and its time the
+expert's.
+
+**Two corrections of the same work.** Each expert's correction of the same
+attempt is kept; `n_corrections_of_version` says how many experts' corrections
+that attempt has (an expert who corrects it again counts with their latest),
+and the audit log's summary says when the corrections go to adjudication,
+where their disagreements are decided. In the service layer
+`corrections_of(service, annotator_id, recording_id, attempt=None, *, latest_per_corrector=True)`
+gives those records, oldest first.
+
+**Feedback.** `GET /me/feedback`'s `corrections.items` are the corrections of
+the caller's saved work, newest first, as Correction without
+`output_basename`, `session_id`, `state` and `elapsed_s` and with
+`corrected_from` reduced to `{"attempt"}`, each change with its `reason_text`,
+and `of_latest` true when the correction is of the caller's latest attempt.
+
+**Replays.** A segment is one recording opened in one window of a visit, from
+its `recording_opened` to its `recording_finished` or `closed_without_saving`
+(the visit index). Its `attempt` is the saved attempt whose session ID it
+carries (the browser sends `session.session_id` with each save), or, for logs
+written before that, the n-th finished segment is the n-th attempt. Since the
+browser logs `annotations_snapshot` when a session opens with annotations
+already present (`has_snapshot`), a replay starts from it; a segment logged
+before that starts from where the one before ended.
+
+**Who may watch, and the open operations.** `my_correction_get`,
+`replay_index_get`, `replay_events_get` and `teaching_list` may be asked by
+anyone signed in to the study (`expert.OPEN_OPS`); each checks the rest itself.
+Experts and administrators replay anyone while `replay.enabled` is on (409
+`replays_off` otherwise). Anyone else may watch only the sessions of a person
+who holds the expert role and agrees to teaching with their sessions
+(`replay_consent_set`), and only while `replay.enabled` and
+`replay.trainees_watch_experts` are both on; otherwise 403 `forbidden`.
 
 ### Tasks, windows and known answers
 
-Tasks share recordings, or stretches of them, out among k annotators, with
-known-answer items mixed in; their administrative operations (`tasks_create`,
-`tasks_list`, `task_update`, `task_remove`, `quality_list`) and what
-`GET /assignments` says of a task are described here when they are offered.
-An assignment made for a task carries its `task_id`.
+A **task** shares one study recording, or one window of it, out among k
+annotators (2 to 6, `review.k_default` unless the request says otherwise),
+who annotate it independently in the ordinary way: a task makes an ordinary
+assignment for each of its people, carrying the task's ID
+(`electrotag/web/tasks.py`). An assignment made without a task behaves
+exactly as before. One person holds at most one task of a recording, since an
+assignment is one per person, recording, mode and context, so the windows of
+one recording go to different people. A task is kept as a record:
+
+```jsonc
+Task = {"schema": "electrotag.task", "schema_version": 1, "task_id": "t-<12 hex>",
+  "recording_id", "file_name", "scope": "study",
+  "window": null | {"start_sample": 2560, "end_sample": 5120},   // half-open, whole samples
+  "k": 2, "annotators": ["A03", "A07"], "letters": {"A03": "B", "A07": "A"},
+  "gold": null | {"set_id": "known"}, "blinded": false,
+  "state": "open" | "closed" | "removed", "adopted": ["A03"],     // who had the recording before the task
+  "created_at", "created_by", "request_id", "batch": "", "notes": "",
+  "changes": [{"at", "by", "added"?, "removed"?, "state"?, "notes"?}]}
+TaskOut = {"task_id", "recording_id", "file_name",
+  "window": null | {"start_sample", "end_sample", "start_s", "end_s"},
+  "k", "annotators", "letters", "gold", "blinded", "state": "open" | "closed",
+  "created_at", "created_by", "batch", "notes", "status": Status,
+  "people": [{"annotator_id", "letter", "attempt": 1 | null, "saved_at": "…" | null,
+              "status": "todo" | "in_progress" | "done" | "unusable" | "closed"}],
+  "counts": {"annotators", "saved", "in_progress", "unusable"},
+  "conflicts": 3 | null,          // once all have saved and the conflicts are counted
+  "adjudication": null | {"adjudicator_id", "state": "in_progress" | "finished", "conflicts", "decided"}}
+```
+
+Each annotator has a **letter** (A, B, ...) that stays theirs for the task's
+life: the order comes from a keyed hash of the study's own secret, the task and
+the person, so it says nothing about who was chosen first, and someone put in
+later takes the next free letter. `blinded` is false (adjudicators see who made
+each mark); it is kept for a later crowd study. **Statuses** are worked out
+each time, never stored:
+
+| Status | When |
+| --- | --- |
+| `collecting` | fewer than k of the task's people have saved it |
+| `saved` | all have saved; the conflicts are not counted (no adjudication part registered) |
+| `ready` | all have saved, and their versions conflict (`conflicts` > 0) |
+| `agreed` | all have saved, without a conflict |
+| `adjudicating` | an expert has started adjudicating it |
+| `adjudicated` | the adjudication is finished |
+| `gold` | a known-answer task (never adjudicated) |
+
+**What an annotator receives.** Each item of `GET /assignments` and the answer
+of `POST /match` (for the item it opens) carry `task`: null, or
+`{"task_id", "window": {"start_sample", "end_sample", "start_s", "end_s"} | null}`.
+Nothing in it says whether a task is a known answer. With a window, `PUT
+/drafts` and `POST /submissions` refuse an annotation that is not wholly inside
+it with 422 `outside_window`, naming the first in the message and every one in
+`annotation_ids`; the browser hatches the rest of the recording, keeps the view
+within the window and a second either side, refuses marks outside it, and
+counts what has been viewed (`viewed_fraction`, the coverage check before Save
+and Finish) within the window only.
+
+**Known answers.** A task whose `gold` names a reference set is a known-answer
+task: it goes to every person chosen (k does not apply), and the recording
+must have a reference in that set (a set's own copy of the recording must be
+the same file). After each save the annotations are compared with the
+reference, within the window when there is one, as practice feedback compares
+them (`electrotag.training.assessment.practice_feedback`), and the score is
+kept as a record of kind `gold`, `{aid}_{task_id}`:
+`{"schema": "electrotag.gold_score", "task_id", "annotator_id", "recording_id", "set_id", "window", "attempt",
+"event_f1", "label_accuracy", "event_precision", "event_recall", "scored_at", "per_category", "attempts": [..]}`.
+The annotator is told nothing of it. A save whose scoring was interrupted is
+scored when `quality_list` is next asked for.
+
+The administrative operations (`POST /admin/{op}`, `et_admin` on Firebase):
+
+| op | body | answer |
+| --- | --- | --- |
+| `tasks_preview_get` | `{"annotator_ids": [pool], "recording_ids": [..] \| "all": true, "k"?: review.k_default, "window"?: {"start_s", "end_s"}, "windows"?: {"length_s", "overlap_s"?: 0}, "gold"?: {"set_id"}, "adopt"?: false}` | `{"tasks": [{"task_id": null, "recording_id", "file_name", "window", "k", "annotators", "holders", "gold"}], "skipped": [{"recording_id", "reason", "start_s"?}], "per_annotator": [{"annotator_id", "open_before", "new", "linked"}], "created", "assigned", "k"}`: what `tasks_create` would make, without making anything (a read: the browser may ask again) |
+| `tasks_create` | as `tasks_preview_get`, with `"request_id": "<32 hex>"`, `"batch"?` (a name of up to 80 characters) and `"notes"?` | `{"tasks": [TaskOut], "created", "assigned", "skipped", "per_annotator", "already": false}`. The same `request_id` again makes nothing more (`already: true`, the tasks it made, and any of their assignments still missing). Audited (`tasks_create`) |
+| `tasks_list` | `{"status"?, "recording_id"?, "annotator_id"?, "gold"?: bool}` | `{"tasks": [TaskOut], "counts": {status: n}}`, oldest first; removed tasks are not listed |
+| `task_update` | `{"task_id", "add_annotator"?, "remove_annotator"?, "state"?: "open" \| "closed", "notes"?}` | `{"task": TaskOut}`. Both people in one request replace one by the other. Audited |
+| `task_remove` | `{"task_id"}` | `{}`: the task and its unfinished assignments go (an assignment someone had before the task is given back without it); the record stays, marked removed. Audited |
+| `quality_list` | `{}` | `{"annotators": [{"annotator_id", "n_gold", "mean_event_f1", "mean_label_accuracy", "weight": 0.83 \| null}], "min_items"}`: everyone in a known-answer task, with their mean scores over the known answers they saved; `weight` (the mean event F1) once they have saved `review.gold_min_items` of them, null before |
+
+**How recordings are shared out.** `all` takes every study recording that is
+not retired (one that is, given by name, is `skipped` as `retired`). A
+recording with an open task is skipped (`has_task`). `window` gives every
+recording the same stretch; `windows` cuts each into consecutive parts of
+`length_s` (at least 2 s) that overlap by `overlap_s` (less than half a
+part), and a remainder shorter than half a part joins the part before it. Each
+task goes to the k people of the pool with the fewest open tasks they have not
+saved yet, counting the tasks made earlier in the same request, with ties
+broken by a fixed order (SHA-256 of the recording, the window's start and the
+person), so the same request on the same study gives the same share-out and
+200 recordings with k = 2 among 10 people give each person 40. People who
+already hold the whole recording without a task come first for a task of the
+whole recording, and their assignment joins the task (`holders`, `linked`);
+they are left out of a window's task, which would shut them out of the rest of
+the recording. A recording or window for which fewer than k people are free is
+skipped as `too_few_annotators`. With `gold`, every person chosen gets each
+task, and a recording without a reference in the set is skipped
+(`no_gold_reference`, or `gold_mismatch` when the set's copy is another
+file). With `adopt: true`, each recording already given to two to six of the
+chosen people (without a task) becomes a task of exactly those people, with
+their assignments joined to it (`fewer_than_two` and `too_many_annotators`
+otherwise; `window`, `windows` and `gold` cannot be given with it).
+
+**Changing a task.** A person put in gets the recording (409 `task_conflict`
+when they hold it for another task, 409 `already_in_task`, 409 `closed` for a
+closed task unless the same request reopens it); a person taken out loses
+their unfinished assignment, and is refused once they have saved it (409
+`has_results`). A task keeps 2 to 6 people (409 `too_few`, 400 `k_too_large`);
+a known-answer task at least one. Closing a task takes its recording from the
+lists of those who have not saved it and keeps every saved result with the
+task; reopening gives it back to them. `task_remove` is refused once anyone has
+saved the task (409 `has_results`): close it instead. Other errors: 400
+`bad_request` (with the reason), 400 `k_too_large` (k above the people
+chosen), 400 `too_many` (more than 5000 tasks at once), 404 `unknown_user`,
+404 `unknown_recording`, 404 `unknown_task`, 404 `no_reference_set`, 409
+`disabled` (a switched-off account).
+
+The results zip and `electrotag web export` hold the tasks
+(`tasks/tasks.tsv` and `tasks/tasks.json`, removed ones included) and the
+known-answer scores (`tasks/gold_scores.tsv`; docs/file_formats.md). The
+sandbox answers these operations with 501 `needs_server`: sharing out, the
+letters and the scoring are the study server's own code.
 
 ### Adjudication and the library
 

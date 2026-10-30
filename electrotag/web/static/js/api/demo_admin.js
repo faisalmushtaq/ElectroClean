@@ -22,7 +22,8 @@ import {
 
 export const ADMIN_ID = 'ADMIN';
 export const DEMO_LOGGING_NOTICE = 'This demonstration records how you use ElectroTag (times, clicks, keys and what is on ' +
-  'screen) and keeps the record in this browser only. It never records what you type, such as notes or passwords. ' +
+  'screen) and keeps the record in this browser only, where the demonstration\'s experts can replay a session from it. ' +
+  'It never records what you type, such as notes or passwords. ' +
   "In a real study the record goes to the study team, as the study's information sheet explains.";
 const MANIFEST_SCHEMA = 'electrotag.web_manifest';
 const MAX_MANIFEST_BYTES = 8 * 1024 * 1024;
@@ -48,6 +49,14 @@ const SERVER_ONLY = {
   set_remove_recording: 'take recordings out of a reference set',
   quiz_item_add: 'add segments to a quiz',
   quiz_item_remove: 'remove segments from a quiz',
+  // Tasks (electrotag/web/tasks.py): the share-out, the windows, the letters and the known-answer scores are the
+  // server's own code, and the sandbox's recordings are given to A01 whole.
+  tasks_preview_get: 'work out a share-out of recordings among annotators (tasks)',
+  tasks_create: 'share recordings out among annotators as tasks',
+  tasks_list: 'list the tasks that share recordings out',
+  task_update: 'change a task',
+  task_remove: 'remove a task',
+  quality_list: "measure annotators' accuracy on known answers",
 };
 
 const bad = (message, code = 'bad_request', status = 400) => new ApiError(status, code, message);
@@ -380,6 +389,7 @@ export class DemoAdmin {
       review: { show_corrections_to_annotators: (st.review || {}).show_corrections_to_annotators !== false,
         show_outcomes_to_annotators: (st.review || {}).show_outcomes_to_annotators !== false },
       training: { skippable: [...((st.training || {}).skippable || [])], gate: (st.training || {}).gate || 'met' },
+      replay: { enabled: (st.replay || {}).enabled !== false, trainees_watch_experts: (st.replay || {}).trainees_watch_experts !== false },
       logging,
       logging_notice: logging.interactions ? this.s.logging_notice : '',
     };

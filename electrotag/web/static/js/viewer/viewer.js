@@ -10,7 +10,8 @@
 // passed as 'longpress' and a double tap as 'dblclick'; a second finger cancels what the first began
 // ('cancel'). The overview also shows which parts of the recording have not been on screen yet
 // (setCoverage), and the annotator's display comfort (setComfort) sets the thickness of the traces
-// and the size of the channel names.
+// and the size of the channel names. A task's part of the recording (setBounds) keeps the view inside
+// it, with the rest of the recording hatched on the EEG and on the overview.
 
 import { h } from '../ui/dom.js';
 import { clamp, hexToRgb, legibleOnWhite, rgba } from '../util.js';
@@ -18,9 +19,11 @@ import { COLOURS, FONT } from '../ui/theme.js';
 import { CHANNEL_COUNTS, DURATIONS, OVERLAY_SPAN, axisFormat, axisTitle, decimateColumns, layoutTags, meanOf, niceStep, overlayAlpha, overlayGain, stepOption, tickLabel, voltsText } from './geometry.js';
 import { LONG_PRESS_MS, TAP_SLOP_PX, edgePx, isDoubleTap, pinchView, twoFingers } from './touch.js';
 import { complement, mergeIntervals } from './coverage.js';
+import { clampView, outsideStretches, viewSpan } from './bounds.js';
 import { nameEvery, namePx, traceWidths } from '../ui/comfort.js';
 import { icon } from '../views/common.js';
 import { confidenceFill, confidenceTagText } from '../annotate/confidence.js';
+import { layerMarks, normaliseLayers, pointerSpot } from './layers.js';
 
 const GUTTER = 92;
 const TAG_ROW_H = 20;
@@ -103,6 +106,8 @@ export class EegViewer {
     this.annotations = [];
     this.selected = new Set();
     this.ghost = null;
+    this.layers = []; // read-only marks beside the annotations, such as a correction's original (setLayers)
+    this.replayPointer = null; // where a replayed session's pointer is (setReplayPointer)
     this.flash = null;
     this.markStart = null;
     this.dragPreview = null;
@@ -118,6 +123,7 @@ export class EegViewer {
     this.onWheelNav = null;
     this.onNextUnviewed = null;
     this.coverage = null; // merged [start_s, end_s] on screen so far, or null when not shown
+    this.bounds = null; // a task's part of the recording (bounds.js boundsOf), or null for all of it
     this.comfort = { trace: 'normal', names: 'normal' };
     this.stats = { traceMs: 0, readMs: 0, renders: 0 };
     this.readProgress = null; // the share of a read in pieces done so far (0 to 1), or null
@@ -261,6 +267,7 @@ export class EegViewer {
     const v = { ...this.view, ...changes };
     v.durationS = clamp(v.durationS, Math.min(0.5, this.durationTotal), this.durationTotal);
     v.startS = clamp(v.startS, 0, Math.max(0, this.durationTotal - v.durationS));
+    if (this.bounds) Object.assign(v, clampView(v, this.bounds, this.durationTotal));
     v.nChannels = clamp(Math.round(v.nChannels), 1, this.channels.length);
     v.firstChannel = clamp(Math.round(v.firstChannel), 0, Math.max(0, this.channels.length - v.nChannels));
     v.scaleFactor = clamp(v.scaleFactor, 1 / 64, 64);
@@ -278,6 +285,22 @@ export class EegViewer {
   stepDuration(dir, cause) { return this.setView({ durationS: stepOption(DURATIONS, this.view.durationS, dir, Math.max(this.durationTotal, 1)) }, cause); }
   stepChannels(dir, cause) { return this.setView({ nChannels: stepOption(CHANNEL_COUNTS, this.view.nChannels, dir, this.channels.length) }, cause); }
   scaleBy(f, cause) { return this.setView({ scaleFactor: this.view.scaleFactor * f }, cause); }
+
+  /** The longest stretch the view may show: the whole recording, or a task's part of it with its context. */
+  get spanS() {
+    const [lo, hi] = viewSpan(this.bounds, this.durationTotal);
+    return hi - lo;
+  }
+
+  /**
+   * A task's part of the recording ({startS, endS, startSample, endSample, text} of bounds.js, or null):
+   * the view is kept inside it and its context, and the rest is hatched. The view moves inside at once.
+   */
+  setBounds(bounds) {
+    this.bounds = bounds || null;
+    this.invalidate();
+    this.setView({}, 'bounds');
+  }
 
   /** Bring an interval (and its channels) into view, centred when it fits. */
   showInterval(onsetSample, durationSamples, channels = []) {
@@ -301,6 +324,21 @@ export class EegViewer {
   setGhost(g) { this.ghost = g; this.invalidate(['under', 'over']); }
   setMarkStart(t, colour) { this.markStart = t === null ? null : { t, colour }; this.invalidate(['over']); }
   setDragPreview(p) { this.dragPreview = p; this.invalidate(['over']); }
+
+  /** Read-only layers of marks drawn as outlines beside the annotations (layers.js): [{id, annotations, style, prefix, visible}]. */
+  setLayers(layers) { this.layers = normaliseLayers(layers); this.invalidate(['over']); }
+
+  /** Show or hide one layer (true when it is now shown). */
+  toggleLayer(id, on = null) {
+    const l = this.layers.find((x) => x.id === id);
+    if (!l) return false;
+    l.visible = on === null ? !l.visible : Boolean(on);
+    this.invalidate(['over']);
+    return l.visible;
+  }
+
+  /** The replay's pointer: a small ring at {t, channel}, or null to hide it. */
+  setReplayPointer(p) { this.replayPointer = p && Number.isFinite(p.t) ? { t: p.t, channel: p.channel || null } : null; this.invalidate(['over']); }
   setCursor(t) { this.cursorT = t; this.invalidate(['over']); }
   setPrefix(map) { this.prefix = map || {}; this.invalidate(['over']); }
   setLabelColours(map) { this.labelColours = map || {}; this.invalidate(['over']); }
@@ -561,6 +599,21 @@ export class EegViewer {
       }
     };
     for (const [a, b] of this.gaps) zone(a, b, '#6E6E73', 'No recorded data', 1);
+    // outside a task's part of the recording: hatched, with its edges drawn
+    for (const [a, b] of outsideStretches(this.bounds, this.durationTotal)) {
+      const wide = clamp(this.tToX(b), x0, x1) - clamp(this.tToX(a), x0, x1) > 160; // named only where the name fits clear of the traces' start
+      zone(a * this.sfreq, b * this.sfreq, '#6E6E73', wide ? 'Outside your part' : '', 1.4);
+    }
+    if (this.bounds) {
+      ctx.strokeStyle = COLOURS.text_secondary;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (const t of [this.bounds.startS, this.bounds.endS]) {
+        const x = Math.round(this.tToX(t)) + 0.5;
+        if (x >= x0 && x <= x1) { ctx.moveTo(x, y0); ctx.lineTo(x, y1); }
+      }
+      ctx.stroke();
+    }
     if (this.showEdgeZones) for (const [a, b] of this.edgeZones) zone(a, b, COLOURS.hatch, '', 0.55);
     // annotations
     for (const a of this._visibleAnnotations()) {
@@ -902,6 +955,7 @@ export class EegViewer {
       this._tags.push({ id: tg.a.annotation_id, x: tg.x - tg.w / 2, y, w: tg.w, h: TAG_ROW_H - 3 });
     });
     this._drawMarkers(ctx, x0, x1, y0, y1);
+    this._drawLayers(ctx);
     // the drag in progress
     if (this.dragPreview) {
       const p = this.dragPreview;
@@ -1008,6 +1062,44 @@ export class EegViewer {
     ctx.strokeRect(x0 + 0.5, y0 + 0.5, x1 - x0 - 1, y1 - y0 - 1);
   }
 
+  /** The layers' marks as dashed outlines with their prefix ("Original: …"), and the replay's pointer. */
+  _drawLayers(ctx) {
+    const { x0, x1, y0, y1 } = this;
+    const s0 = this.view.startS * this.sfreq;
+    const s1 = (this.view.startS + this.view.durationS) * this.sfreq;
+    ctx.font = `11px ${FONT}`;
+    for (const { layer, a } of layerMarks(this.layers, this.annotations, s0, s1)) {
+      const colour = this.catalogue.colourFor(a.label);
+      const xa = clamp(this.sampleToX(a.onset_sample), x0, x1);
+      const xb = clamp(this.sampleToX(end(a)), x0, x1);
+      ctx.strokeStyle = colour;
+      ctx.lineWidth = 1.5;
+      if (layer.style === 'dashed') ctx.setLineDash([5, 4]);
+      for (const [ya, yb] of this._rowSpans(a.channels)) ctx.strokeRect(xa + 0.5, ya + 1.5, Math.max(1, xb - xa - 1), yb - ya - 3);
+      ctx.setLineDash([]);
+      // its name at the foot of the outline, as much of it as fits: "Original: Eye-blink-artifact", "Original", or nothing
+      const text = [`${layer.prefix}${a.label}`, layer.prefix.replace(/[:\s]+$/, '')].find((x) => x && ctx.measureText(x).width + 12 <= xb - xa);
+      if (text) {
+        const w = ctx.measureText(text).width + 8;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.fillRect(xa + 2, y1 - 20, w, 16);
+        ctx.fillStyle = legibleOnWhite(colour);
+        ctx.textAlign = 'left';
+        ctx.fillText(text, xa + 6, y1 - 8);
+      }
+    }
+    const spot = pointerSpot(this.replayPointer, this.visibleRows(), this);
+    if (spot) {
+      ctx.strokeStyle = COLOURS.accent;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(spot.x, clamp(spot.y, y0 + 8, y1 - 8), 7, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = rgba(COLOURS.accent, 0.18);
+      ctx.fill();
+    }
+  }
+
   _renderOverview() {
     const canvas = this.overviewCanvas;
     const ctx = canvas.getContext('2d');
@@ -1019,7 +1111,7 @@ export class EegViewer {
     ctx.fillRect(0, 0, W, H);
     // What has not been on screen yet: white, with a thin grey line along the top (a calm mark, not a warning).
     if (this.coverage) {
-      const gaps = this.gaps.map(([a, b]) => [a / this.sfreq, b / this.sfreq]);
+      const gaps = [...this.gaps.map(([a, b]) => [a / this.sfreq, b / this.sfreq]), ...outsideStretches(this.bounds, this.durationTotal)];
       const ts = (t) => (t / this.durationTotal) * W;
       for (const [a, b] of complement(mergeIntervals([...this.coverage, ...gaps]), this.durationTotal)) {
         const xa = Math.floor(ts(a));
@@ -1032,6 +1124,13 @@ export class EegViewer {
     }
     const tx = (s) => (s / this.nSamples) * W;
     for (const [a, b] of this.gaps) hatch(ctx, tx(a), 0, Math.max(1, tx(b) - tx(a)), H, COLOURS.hatch, 6);
+    for (const [a, b] of outsideStretches(this.bounds, this.durationTotal)) {
+      const xa = (a / this.durationTotal) * W;
+      const w = Math.max(1, ((b - a) / this.durationTotal) * W);
+      ctx.fillStyle = rgba('#6E6E73', 0.16);
+      ctx.fillRect(xa, 0, w, H);
+      hatch(ctx, xa, 0, w, H, rgba('#6E6E73', 0.55), 5);
+    }
     ctx.fillStyle = COLOURS.event;
     for (const e of this.events) ctx.fillRect(Math.round(tx(e.onset_sample)), H - 6, 1, 6);
     for (const a of this.annotations) {

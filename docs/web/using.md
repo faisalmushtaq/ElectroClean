@@ -131,6 +131,24 @@ takes revisions, Open to revise starts a revision of the recording, and the feed
 side panel while you revise; it is for you to judge what to change. Some studies keep reviews from
 the annotators (blind reviews), and then none of this appears.
 
+## Corrections of your work
+
+An expert of the study may correct a recording you have saved: change a mark's type, its start or
+end or its channels, remove a mark or add one you missed, with a reason for each change, such as
+Missed artifact, Wrong type or Start or end, and sometimes a short note. A correction is a new
+version of your work, credited to the expert; the version you saved stays exactly as it was, and
+your list does not change. Your list and your history then say "Corrected by Expert one: 3 changes"
+under the recording's name.
+
+To see the correction, choose that line and open the same file from your computer. The corrected
+version opens to read, with your own marks drawn as dashed outlines where they differ from it, and
+the side panel lists each change with the expert's reason and note, in the order of the recording,
+in calm blue. N and P, or a click on a change, go from one change to the next. When the study takes
+revisions and the correction is of your latest version, Open to revise starts a revision of your
+work; it is for you to judge what to change. When two experts corrected the same version, the panel
+says so: the study compares their corrections and decides where they disagree. Some studies keep
+corrections from the annotators, and then none of this appears.
+
 ## Progress and milestones
 
 Many studies also show Goals and milestones beside your progress (your study can switch them off).
@@ -499,6 +517,17 @@ not seen after the screen, coming round from the start when there are none furth
 second of what you saw before it. On an iPad it is the last of the buttons under the EEG. What you
 have viewed is kept with your draft, so it is still there when you continue later.
 
+## A part of a recording
+
+The study team may give you only part of a recording, so that several people each annotate a
+different stretch of a long one. The top of the annotation view then names your part, for example
+Your part: 0:20 to 0:40, and the rest of the recording is hatched on the EEG and on the overview
+bar. The view stays within your part, with a second either side so that you can judge an artifact
+at its edge. Mark only inside your part: a mark that runs past its edge stops at the edge, and one
+outside it is not made, with a message that says so. How much you have viewed, and Next part not yet
+viewed, count your part alone. Everything else works as for a whole recording, and Save and Finish
+saves your part.
+
 ## Pausing and breaks
 
 Annotating a recording takes a long time, and the time you work on each recording is part of the
@@ -716,6 +745,21 @@ or gives you a new assessment. Experts and administrators never wait.
 Once every stage is done, ElectroTag opens on your home page when you sign in, with Open next
 recording for the study's own work and a line that takes you back to your training path. The
 recordings of your training are counted on the training path, apart from the study's.
+
+### Watching an expert at work
+
+When the study shows experts' sessions to trainees, Watch an expert at work, on the Learn with the
+experts stage of your training path, lists the recordings you may watch: those of experts who agreed to
+their sessions being used for teaching. Watch, then open the recording's file from your computer as
+you would to annotate it (your study team gives you the files for this), and the expert's session
+plays back on the EEG: the view moves as theirs did, a small blue ring shows their pointer, their
+annotations appear as they made them, and a line under the EEG says what they did ("Pressed M: Mark
+start, then end", "Created Eye-blink-artifact by dragging on the EEG"). Space plays and pauses, - and
+= change the speed, the , and . keys step from one event to the next, < and > from one change of the
+annotations to the next, and Home goes back to the start; Skip pauses (I) shortens the moments
+when nothing happened, and when you move through the EEG yourself, Follow again (F) goes back to
+the expert's view. Notes and anything the expert typed are never recorded, so a note shows only its
+length. Back returns to your home page.
 
 ## The short-segment quiz
 

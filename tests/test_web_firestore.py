@@ -37,6 +37,7 @@ from tests.web_helpers import (  # noqa: E402
     GUIDED2,
     PRACTICE1,
     SUB1,
+    SUB2,
     SUB3,
     ann,
     as_wire,
@@ -681,6 +682,81 @@ def test_invitations_and_stats_on_firebase(study: str) -> None:
     assert "A08" in {p["annotator_id"] for p in stats["annotators"]}
 
 
+def test_tasks_windows_and_known_answers_on_firestore(service: StudyService, recordings: Path) -> None:
+    """docs/web/api.md, "Tasks, windows and known answers": the same as tests/test_web_tasks.py on Firestore."""
+    import base64
+    import io
+    import zipfile
+
+    for aid in ("A05", "A06"):
+        service.store.put_user(aid, display_name=f"Annotator {aid}")
+    a05, a06 = User("A05"), User("A06")
+    p = admin_ok(service, "tasks_preview_get", {"recording_ids": [SUB1], "annotator_ids": ["A01", "A05"], "k": 2})
+    assert p["tasks"][0]["holders"] == ["A01"] and p["assigned"] == 1
+    whole = admin_ok(service, "tasks_create", {"request_id": "1" * 32, "recording_ids": [SUB1],
+                                               "annotator_ids": ["A01", "A05"], "k": 2})["tasks"][0]
+    again = admin_ok(service, "tasks_create", {"request_id": "1" * 32, "recording_ids": [SUB1],
+                                               "annotator_ids": ["A01", "A05"], "k": 2})
+    assert again["already"] is True and [t["task_id"] for t in again["tasks"]] == [whole["task_id"]]
+    part = admin_ok(service, "tasks_create", {"request_id": "2" * 32, "recording_ids": [SUB3],
+                                              "annotator_ids": ["A05", "A06"], "k": 2,
+                                              "window": {"start_s": 20, "end_s": 40}})["tasks"][0]
+    items = {i["recording_id"]: i for i in ok(service, "assignments", a05)["items"]}
+    assert items[SUB1]["task"] == {"task_id": whole["task_id"], "window": None}
+    assert items[SUB3]["task"]["window"] == {"start_sample": 2560, "end_sample": 5120, "start_s": 20.0, "end_s": 40.0}
+    assert ok(service, "match", a05, match_body(recordings, SUB3))["task"] == items[SUB3]["task"]
+    assert next(i for i in ok(service, "assignments", A01)["items"] if i["recording_id"] == SUB1)["task"]["task_id"] \
+        == whole["task_id"], "A01 had SUB1 already: the assignment joins the task"
+    outside = ann("c" * 32, "EMG-artifact", 100, 50)
+    inside = ann("d" * 32, "EMG-artifact", 3000, 250)
+    e = err(service, "put_draft", a05, {"recording_id": SUB3, "mode": "standard", "draft": {"annotations": [outside]}})
+    assert e.code == "outside_window" and e.extra["annotation_ids"] == ["c" * 32]
+    assert err(service, "submit", a05, submission(recordings, SUB3, [inside, outside])).code == "outside_window"
+    ok(service, "submit", a05, submission(recordings, SUB3, [inside]))
+    listed = {t["task_id"]: t for t in admin_ok(service, "tasks_list")["tasks"]}
+    assert listed[part["task_id"]]["status"] == "collecting" and listed[part["task_id"]]["counts"]["saved"] == 1
+    assert sorted(listed[part["task_id"]]["letters"].values()) == ["A", "B"]
+    # changing and removing: saved work stays
+    assert admin_err(service, "task_update", {"task_id": part["task_id"], "remove_annotator": "A05",
+                                              "add_annotator": "A02"}).code == "has_results"
+    assert admin_err(service, "task_remove", {"task_id": part["task_id"]}).code == "has_results"
+    admin_ok(service, "task_remove", {"task_id": whole["task_id"]})
+    a01 = next(i for i in ok(service, "assignments", A01)["items"] if i["recording_id"] == SUB1)
+    assert a01["task"] is None, "A01 keeps SUB1, as before the task"
+    assert all(i["recording_id"] != SUB1 for i in ok(service, "assignments", a05)["items"])
+    # known answers, scored after the save
+    ok(service, "submit", A02, submission(recordings, SUB2, [BLINK, EMG]))
+    admin_ok(service, "set_create", {"set_id": "known", "name": "Known answers"})
+    admin_ok(service, "set_add_reference", {"set_id": "known", "recording_id": SUB2, "use": "practice",
+                                            "source": {"kind": "annotator", "annotator_id": "A02"}})
+    gold = admin_ok(service, "tasks_create", {"request_id": "3" * 32, "recording_ids": [SUB2],
+                                              "annotator_ids": ["A06"], "gold": {"set_id": "known"}})["tasks"][0]
+    assert gold["status"] == "gold"
+    ok(service, "submit", a06, submission(recordings, SUB2, [BLINK, EMG]))
+    q = {r["annotator_id"]: r for r in admin_ok(service, "quality_list")["annotators"]}
+    assert q["A06"]["n_gold"] == 1 and q["A06"]["mean_event_f1"] == 1.0
+    z = admin_ok(service, "results_zip")
+    names = zipfile.ZipFile(io.BytesIO(base64.b64decode(z["base64"]))).namelist()
+    assert {"Annotated_Events/tasks/tasks.tsv", "Annotated_Events/tasks/gold_scores.tsv"} <= set(names)
+
+
+@pytest.mark.skipif(not (AUTH and FUNCTIONS), reason="needs the Auth and Functions emulators")
+def test_tasks_through_the_functions(study: str) -> None:
+    admin = sign_in(f"admin-{study}@example.org")
+    _, body = callable_("et_admin", {"study": study, "op": "tasks_preview_get", "all": True,
+                                     "annotator_ids": ["A01", "A02"], "adopt": True}, admin)
+    assert body["result"]["created"] == 3, body
+    _, body = callable_("et_admin", {"study": study, "op": "tasks_create", "request_id": "4" * 32,
+                                     "recording_ids": [SUB3], "annotator_ids": ["A01", "A02"], "adopt": True}, admin)
+    tid = body["result"]["tasks"][0]["task_id"]
+    a01 = sign_in(f"a01-{study}@example.org")
+    _, body = callable_("et_assignments", {"study": study}, a01)
+    linked = {i["recording_id"]: i["task"] for i in body["result"]["items"]}
+    assert linked[SUB3] == {"task_id": tid, "window": None} and linked[SUB1] is None
+    _, body = callable_("et_admin", {"study": study, "op": "tasks_list"}, a01)
+    assert body["error"]["details"]["error"] == "forbidden"
+
+
 # ------------------------------------------------- sign-in, callables, rules
 def sign_in(email: str, password: str = PASSWORD) -> str:
     r = httpx.post(f"http://{AUTH}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=fake-key",
@@ -987,4 +1063,86 @@ def test_role_claims_on_firebase(study: str) -> None:
     assert body["result"]["corrections"] == {"shown": True, "items": []}
     annotator = sign_in(f"a01-{study}@example.org")
     _, body = callable_("et_expert", {"study": study, "op": "replay_consent_get"}, annotator)
+    assert body["error"]["details"]["error"] == "forbidden"
+
+
+# ------------------------------------------------------ corrections and replays (H2)
+def _correction(recordings: Path, cid: str, annotations: list[dict[str, Any]], reasons: dict[str, str],
+                attempt: int = 1) -> dict[str, Any]:
+    sub = submission(recordings, SUB1, annotations)
+    return {"correction_id": cid, "annotator_id": "A01", "recording_id": SUB1, "attempt": attempt,
+            "annotations": annotations, "sha256": sub["sha256"], "session": sub["session"],
+            "changes": [{"annotation_id": k, "reason": r} for k, r in reasons.items()]}
+
+
+def test_corrections_and_replays_on_firestore(service: StudyService, recordings: Path, tmp_path: Path) -> None:
+    from electrotag.app.io.naming import OutputLayout
+    from electrotag.app.session.register import CompletionRegister
+
+    store = service.store
+    store.put_user("E01", display_name="Expert one", roles=["expert", "annotator"])
+    sid = "5" * 32
+    v = ok(service, "visit_open", A01, {"client": {}})["visit_id"]
+    ctx = {"recording": SUB1, "window_no": 1}
+    ok(service, "visit_events", A01, {"visit_id": v, "events": [
+        {"t": 1.0, "type": "recording_opened", **ctx, "session_id": sid, "mode": "standard"},
+        {"t": 2.0, "type": "annotation_created", **ctx, "annotations": [
+            {"id": BLINK["annotation_id"], "label": BLINK["label"], "onset_s": 500 / 256, "offset_s": 600 / 256,
+             "channels": BLINK["channels"]}]},
+        {"t": 3.0, "type": "recording_finished", **ctx, "session_id": sid}]})
+    sub = submission(recordings, SUB1, [BLINK, EMG])
+    sub["session"]["session_id"] = sid
+    ok(service, "submit", A01, sub)
+    before = store.saved_files("A01", SUB1, "standard", "")
+    body = _correction(recordings, "6" * 32, [{**BLINK, "label": "Eye-artifact"}],
+                       {BLINK["annotation_id"]: "wrong_type", EMG["annotation_id"]: "not_artifact"})
+    assert err(service, "expert", E01, {"op": "correction_save", **body, "changes": []}).code == "reason_missing"
+    out = ok(service, "expert", E01, {"op": "correction_save", **body})
+    assert out["already"] is False and out["correction"]["counts"] == {"added": 0, "removed": 1, "changed": 1}
+    assert ok(service, "expert", E01, {"op": "correction_save", **body})["already"] is True
+    assert [e["session_id"] for e in store.derived_entries("corrections", "A01")] == ["6" * 32]
+    assert store.saved_files("A01", SUB1, "standard", "") == before, "the original never changes"
+    got = ok(service, "expert", E01, {"op": "correction_get", "correction_id": "6" * 32})
+    assert [a["label"] for a in got["annotations"]] == ["Eye-artifact"] and len(got["original"]) == 2
+    fb = ok(service, "my_feedback", A01)["corrections"]["items"]
+    assert [c["corrector_id"] for c in fb] == ["E01"] and fb[0]["changes"][0]["reason_text"] == "Wrong type"
+    assert ok(service, "expert", A01, {"op": "my_correction_get", "correction_id": "6" * 32})["corrector_id"] == "E01"
+    # the replay: the segment from the Firestore visit index, with the attempt by the session's ID
+    idx = ok(service, "expert", E01, {"op": "replay_index_get", "annotator_id": "A01", "recording_id": SUB1})
+    assert [(s["visit_id"], s["attempt"], s["outcome"]) for s in idx["segments"]] == [(v, 1, "finished")]
+    page = ok(service, "expert", E01, {"op": "replay_events_get", "visit_id": v, "window_no": 1})
+    assert [e["type"] for e in page["events"]] == ["recording_opened", "annotation_created", "recording_finished"]
+    assert err(service, "expert", A01, {"op": "replay_index_get", "annotator_id": "A01",
+                                        "recording_id": SUB1}).code == "forbidden"
+    # the export writes the correction's tree
+    root = store.results_tree(tmp_path / "tree")
+    assert len(CompletionRegister(OutputLayout(root / "derived" / "corrections")).entries()) == 1
+
+
+@pytest.mark.skipif(not (AUTH and FUNCTIONS), reason="needs the Auth and Functions emulators")
+def test_a_correction_through_et_expert(study: str, recordings: Path) -> None:
+    svc = firebase_service(study)
+    email = f"e01-{study}@example.org"
+    admin_ok(svc, "user_add", {"annotator_id": "E01", "email": email, "roles": ["annotator", "expert"],
+                               "password": "an-expert-password"})
+    a01 = sign_in(f"a01-{study}@example.org")
+    _, body = callable_("et_submit", {"study": study, **submission(recordings, SUB1, [BLINK, EMG])}, a01)
+    assert body["result"]["saved"] is True, body
+    expert = sign_in(email, "an-expert-password")
+    _, body = callable_("et_expert", {"study": study, "op": "work_list"}, expert)
+    assert [(i["annotator_id"], i["attempt"]) for i in body["result"]["items"]] == [("A01", 1)], body
+    req = {"study": study, "op": "correction_save",
+           **_correction(recordings, "7" * 32, [BLINK], {EMG["annotation_id"]: "not_artifact"})}
+    _, body = callable_("et_expert", req, expert)
+    assert body["result"]["correction"]["counts"]["removed"] == 1 and body["result"]["already"] is False, body
+    _, body = callable_("et_expert", req, expert)
+    assert body["result"]["already"] is True
+    _, body = callable_("et_expert", {**req, "correction_id": "8" * 32, "changes": []}, expert)
+    assert body["error"]["details"]["error"] == "reason_missing"
+    assert body["error"]["details"]["annotation_ids"] == [EMG["annotation_id"]]
+    _, body = callable_("et_my_feedback", {"study": study}, a01)
+    assert body["result"]["corrections"]["items"][0]["correction_id"] == "7" * 32
+    _, body = callable_("et_expert", {"study": study, "op": "my_correction_get", "correction_id": "7" * 32}, a01)
+    assert len(body["result"]["original"]) == 2
+    _, body = callable_("et_expert", {"study": study, "op": "correction_get", "correction_id": "7" * 32}, a01)
     assert body["error"]["details"]["error"] == "forbidden"
