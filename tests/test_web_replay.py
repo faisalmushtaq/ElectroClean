@@ -250,3 +250,26 @@ def test_trainees_never_watch_an_expert_on_study_work(client: TestClient, admin:
     # experts and administrators still replay every session
     assert expert_ok(admin, "replay_index_get", {"annotator_id": "E01", "recording_id": SUB2})["segments"]
     assert expert_ok(admin, "replay_events_get", {"visit_id": ve})["events"]
+
+
+def test_a_teaching_recording_that_another_set_scores_trainees_on(client: TestClient, admin: Api, recordings: Path,
+                                                                   monkeypatch: pytest.MonkeyPatch) -> None:
+    """A guided recording whose file another set uses for practice or assessment is never shown for teaching: a
+    replay of it would give that set's answers away."""
+    e01, t01 = Api(client, "E01"), Api(client, "T01")
+    expert_ok(e01, "replay_consent_set", {"teaching": True})
+    teaching_sessions(client, admin, recordings, e01)
+    assert [s["recording_id"] for s in expert_ok(t01, "teaching_list")["sessions"]] == [GUIDED1]
+    service = client.app.state.service
+    asked = []
+
+    def answer_sets(rid: str, scope: str = "study") -> list[tuple[str, str]]:
+        asked.append((rid, scope))
+        return [("other-set", "assessment")] if rid == GUIDED1 else []
+
+    monkeypatch.setattr(service.training_path, "answer_sets", answer_sets)
+    assert expert_ok(t01, "teaching_list")["sessions"] == []
+    expert_error(t01, "replay_index_get", {"annotator_id": "E01", "recording_id": GUIDED1, "mode": "practice",
+                                           "context_id": "example"}, 403, "forbidden")
+    assert any(r == GUIDED1 for r, _s in asked)
+

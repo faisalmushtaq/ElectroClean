@@ -3,7 +3,8 @@
 // no file is needed and nothing is saved. Each step names the keys and controls to use, as the guided
 // coach does (training/rules.js), and is done for real: it is ticked when the tour sees it happen in
 // the annotation view (a mark of the right type on the outlined artifact, the channels chosen, an
-// undo, a rating, Save and Finish). "Skip this step" goes on without it. When the last step is done
+// undo and redo, a rating, Save and Finish). "Skip this step" goes on without it. On a touch screen every step
+// has its own words: the buttons under the EEG, taps, and pressing and holding a mark. When the last step is done
 // the tour tells the study (POST /training/stage {tour, done}, never sent twice by itself) and the
 // training path comes back. The steps' rules are pure functions (tourSteps, stepDone), tested in Node
 // (web_tests/unit/ui_tour.test.mjs).
@@ -16,17 +17,20 @@ import { touchFirst } from '../util.js';
 import { makeSyntheticRecording } from '../eeg/synthetic.js';
 import { loadParts } from '../lazy.js';
 
-/** The tour's practice recording: thirty seconds of simulated EEG with a blink and a burst of muscle activity. */
+/**
+ * The tour's practice recording: thirty seconds of simulated EEG with a blink and a burst of muscle activity.
+ * They come after the first five seconds, where the filters settle (the hatched edge zone), on the first screen.
+ */
 export const TOUR_SPEC = Object.freeze({
   id: 'tour', stem: 'sub-tour_task-practice', sfreq: 250, durationS: 30, seed: 5,
   artifacts: [
-    ['Eye-blink-artifact', 3.0, 0.4, ['Fp1', 'Fp2', 'VEOG']],
-    ['EMG-artifact', 6.5, 1.5, ['T7', 'T8']],
+    ['Eye-blink-artifact', 6.5, 0.4, ['Fp1', 'Fp2', 'VEOG']],
+    ['EMG-artifact', 8.0, 1.5, ['T7', 'T8']],
     ['Eye-blink-artifact', 14.0, 0.4, ['Fp1', 'Fp2', 'VEOG']],
   ],
 });
 
-/** The artifacts the tour points at, in samples (the blink at 3 s and the muscle burst at 6.5 s). */
+/** The artifacts the tour points at, in samples (the blink at 6.5 s and the muscle burst at 8 s). */
 export function tourTargets(sfreq = TOUR_SPEC.sfreq) {
   const t = (i) => {
     const [label, onset, dur, channels] = TOUR_SPEC.artifacts[i];
@@ -48,16 +52,20 @@ export function overlapShare(a, target) {
 const covers = (a, target) => a.label === target.label && overlapShare(a, target) >= 0.3;
 
 /**
- * The steps: {key, title, body, ghost?: target, done(obs)}. `obs` is what the tour has seen:
- * {annotations, startS, maxStartS, undone, saved}. `quickKeys` maps a type to its number key.
+ * The steps: {key, title, body, touch, ghost?: target, done(obs)}. `obs` is what the tour has seen:
+ * {annotations, startS, maxStartS, undone, redone, saved}. `quickKeys` maps a type to its number key.
+ * `touch` is the step's words on a touch screen (stepBody).
  */
 export function tourSteps({ quickKeys = {}, sfreq = TOUR_SPEC.sfreq } = {}) {
   const { blink, muscle } = tourTargets(sfreq);
-  return [
+  const steps = [
     { key: 'move', title: 'Move through the recording',
       body: 'Each row is one channel, named at the left of the EEG, and time runs from left to right.\n' +
         '1. Press the **right arrow** key to see the next stretch of the recording (or drag the bar under the EEG).\n' +
         '2. Press the **left arrow** key to come back to the start.',
+      touch: 'Each row is one channel, named at the left of the EEG, and time runs from left to right.\n' +
+        '1. Under the EEG, beside **Time**, tap the last arrow (**Forward a screen**) to see the next stretch of the recording.\n' +
+        '2. Tap the first arrow (**Back a screen**) to come back to the start. Moving the EEG sideways with two fingers works too.',
       done: (o) => o.maxStartS > 0.5 && o.startS < 0.5 },
     { key: 'mark', title: `Mark this ${blink.label}`, ghost: blink,
       body: 'The blink is outlined with a dashed line. To mark it:\n' +
@@ -71,19 +79,34 @@ export function tourSteps({ quickKeys = {}, sfreq = TOUR_SPEC.sfreq } = {}) {
         `2. ${scopeText(muscle.channels)}\n` +
         '3. Drag across the EEG from the start of the outline to its end.',
       done: (o) => o.annotations.some((a) => covers(a, muscle) && muscle.channels.every((c) => (a.channels || []).includes(c))) },
-    { key: 'undo', title: 'Take back a change',
-      body: 'Press **Ctrl+Z** (**⌘Z** on a Mac), or click **Undo** at the top, to take back your last change. ' +
-        '**Ctrl+Y** (or **Redo**) brings it back.',
-      done: (o) => o.undone },
+    { key: 'undo', title: 'Take back a change, and bring it back',
+      body: `1. Press **Ctrl+Z** (**⌘Z** on a Mac), or click **Undo** at the top, to take back your last change: your ${muscle.label} goes.\n` +
+        '2. Press **Ctrl+Y**, or click **Redo**, to bring it back.',
+      touch: `1. Tap **Undo** at the top to take back your last change: your ${muscle.label} goes.\n` +
+        '2. Tap **Redo** to bring it back.',
+      done: (o) => o.undone && o.redone },
     { key: 'confidence', title: 'Say how sure you are',
       body: `1. Click your ${blink.label} on the EEG to select it.\n` +
         '2. Press **D**, then a number from **1** (not at all sure) to **5** (completely sure).',
+      touch: `1. Tap your ${blink.label} on the EEG to select it.\n` +
+        '2. Under the list of annotations, tap a number for **Confidence**, from **1** (not at all sure) to **5** (completely sure). ' +
+        'Pressing and holding the mark offers the same in its menu.',
       done: (o) => o.annotations.some((a) => a.confidence !== null && a.confidence !== undefined) },
     { key: 'save', title: 'Save and finish',
       body: 'When a recording is done, press **Save and Finish** at the top right. In a study it checks your work, ' +
         'saves it and marks the recording complete. Here it ends the tour, and nothing you marked is kept.',
+      touch: 'When a recording is done, tap **Save and Finish** at the top right. In a study it checks your work, ' +
+        'saves it and marks the recording complete. Here it ends the tour, and nothing you marked is kept.',
       done: (o) => o.saved },
   ];
+  // marking and choosing channels: the guided coach's words, made into taps (training/rules.js)
+  for (const st of steps) if (!st.touch) st.touch = touchWords(st.body);
+  return steps;
+}
+
+/** A step's words for this screen: its touch words on a touch screen. */
+export function stepBody(step, touch = touchFirst()) {
+  return touch ? step.touch || touchWords(step.body) : step.body;
 }
 
 /** Whether a step is done by what was seen. */
@@ -103,11 +126,15 @@ export class TourCoach {
     this.quickKeys = Object.fromEntries(ws.quick.map((n, i) => [n, i + 1]));
     this.steps = tourSteps({ quickKeys: this.quickKeys, sfreq: ws.sf });
     this.index = 0;
-    this.obs = { annotations: [], startS: 0, maxStartS: 0, undone: false, saved: false };
+    this.obs = { annotations: [], startS: 0, maxStartS: 0, undone: false, redone: false, saved: false };
     this.sending = false;
     this.finished = false;
     this.t0 = performance.now();
-    this._listener = (change) => { if (change && change.action === 'undo') this.obs.undone = true; this.scheduleCheck(); };
+    this._listener = (change) => {
+      if (change && change.action === 'undo') this.obs.undone = true;
+      if (change && change.action === 'redo' && this.obs.undone) this.obs.redone = true; // brought back what was taken back
+      this.scheduleCheck();
+    };
     ws.store.addListener(this._listener);
     this._build();
   }
@@ -142,7 +169,7 @@ export class TourCoach {
     this.progress.setAttribute('aria-valuenow', String(this.index));
     this.progress.setAttribute('aria-valuemax', String(n));
     this.title.textContent = step.title;
-    clear(this.body).appendChild(richText(touchFirst() ? touchWords(step.body) : step.body));
+    clear(this.body).appendChild(richText(stepBody(step)));
     this._feedback('', '');
     this.nextBtn.disabled = true;
     this.nextBtn.textContent = this.index === n - 1 ? 'Finish the tour' : 'Next step';
@@ -152,7 +179,7 @@ export class TourCoach {
     const v = this.ws.viewer;
     v.setGhost(step.ghost ? { ...step.ghost } : null);
     if (step.ghost) v.showInterval(step.ghost.onset_sample, step.ghost.duration_samples, step.ghost.channels);
-    if (step.key === 'undo') this.obs.undone = false; // only an undo made at this step counts
+    if (step.key === 'undo') { this.obs.undone = false; this.obs.redone = false; } // only an undo and redo made at this step count
     this.check();
   }
 
@@ -173,7 +200,10 @@ export class TourCoach {
     const done = stepDone(this.step, this.obs);
     if (done && this.nextBtn.disabled) {
       this.nextBtn.disabled = false;
-      this._feedback(this.step.key === 'save' ? 'That is the whole tour.' : 'Done. Press **Next step** (Enter) to go on.', 'success');
+      this._feedback(this.step.key === 'save' ? 'That is the whole tour.' : touchFirst() ? 'Done. Tap **Next step** to go on.'
+        : 'Done. Press **Next step** (Enter) to go on.', 'success');
+    } else if (!done && this.step.key === 'undo' && this.obs.undone && !this.feedback.textContent) {
+      this._feedback(`That took your last change back. Now bring it back with **Redo**${touchFirst() ? '' : ' (**Ctrl+Y**)'}.`, '');
     }
   }
 

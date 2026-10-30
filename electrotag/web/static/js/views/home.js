@@ -94,7 +94,7 @@ export function homeView(app) {
         waiting ? gateLine(gate) : null,
         h('div.btn-row', {}, h('button.btn.primary', { type: 'button', onclick: () => app.go('training') }, 'Go to my training path'))]
       : waiting && !cont && !next
-        ? [h('h2', {}, 'Your study recordings are locked'), gateLine(gate),
+        ? [h('h2', {}, gateHeading(gate)), gateLine(gate),
           h('div.btn-row', {}, h('button.btn.primary', { type: 'button', 'data-log': 'training-path', onclick: () => app.go('training') }, 'See my training path'))]
       : cont
         ? continueContent(app, cont)
@@ -142,7 +142,7 @@ export function homeView(app) {
       h('h1', {}, `Hello${app.me && app.me.display_name ? `, ${app.me.display_name}` : ''}`),
       guideLine(),
       h('div.home-grid', {},
-        h('div.col', {}, nextCard, expertCard(app), !training && items.length ? progressCard(p) : null, programme && !training ? trainingDoneCard(app) : null,
+        h('div.col', {}, nextCard, expertCard(app), !training && items.length ? progressCard(p) : null, programme && !training && !waiting ? trainingDoneCard(app) : null,
           list, outcomesHost(app), quizCard(app)),
         sideColumn([...games(app), demo]))));
 }
@@ -175,6 +175,16 @@ export function expertCard(app) {
       + 'The originals are never changed: a correction is a new version, credited to you.'),
     lines.map((l) => h('p.caption', {}, l)),
     h('div.btn-row', {}, h('button.btn', { type: 'button', 'data-log': 'open-expert', onclick: () => app.showExpert('expert') }, 'Open the expert area')));
+}
+
+/**
+ * The heading of the first card while the study recordings wait: after an assessment that did not meet the
+ * criteria (or whose result is to come), it says that the study team has the next step.
+ */
+export function gateHeading(gate) {
+  if (gate && gate.result === 'not_met') return 'Assessment not met: waiting for your study team';
+  if (gate && gate.result) return 'Assessment finished: waiting for your study team';
+  return 'Your study recordings are locked';
 }
 
 /** Why the study recordings are locked (the gate's message, in the study's words), with the lock drawn beside it. */

@@ -311,7 +311,11 @@ def test_training_stages_and_the_gate_on_firestore(service: StudyService, record
         blob["html"] for set_id, aid, blob in service.store.reports() if aid == "T01"][0]
     g = admin_ok(service, "training_reopen", {"annotator_id": "T01", "from": "guided"})
     assert g["events"][-1]["event"] == "training_reopened"
-    ok(service, "training_stage", T01, {"stage": "guided", "action": "skip"})
+    # the round that ended is kept with its report; the reopened stage is done again, never skipped
+    assert [(r["round"], r["status"]) for r in g["rounds"]] == [(1, "not_met")] and g["rounds"][0]["html"]
+    assert err(service, "training_stage", T01, {"stage": "guided", "action": "skip"}).code == "reopened"
+    for rid in (GUIDED1, GUIDED2):
+        finish_guided(service, recordings, rid)
     perfect = [as_wire(a, f"{i + 1:032x}") for i, a in enumerate(ref)]
     r = ok(service, "submit", T01, submission(recordings, PRACTICE1, perfect, "assessment", "example"))
     assert r["attempt"] == 2 and r["assessment"]["status"] == "met"
@@ -528,7 +532,8 @@ def test_the_admin_area_on_firestore(service: StudyService, recordings: Path, tm
     admin_ok(service, "unassign", {"annotator_id": "A01", "recording_id": SUB3})
     assert SUB3 not in [i["recording_id"] for i in ok(service, "assignments", A01)["items"]]
     admin_ok(service, "set_create", {"set_id": "pilot", "name": "Pilot"})
-    r = admin_ok(service, "set_add_reference", {"set_id": "pilot", "recording_id": SUB1, "use": "practice",
+    # guided: a quiz item of a practice or assessment recording would give its answers away, and is refused
+    r = admin_ok(service, "set_add_reference", {"set_id": "pilot", "recording_id": SUB1, "use": "guided",
                                                 "source": {"kind": "consensus", "annotator_ids": ["A01", "A02"]}})
     assert r["set"]["recordings"][0]["provenance"]["method"] == "consensus" and r["disagreements"]
     assert service.store.manifest("set:pilot", SUB1) is not None

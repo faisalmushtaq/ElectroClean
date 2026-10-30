@@ -4,7 +4,12 @@
 // recordings are the trainee's own copies, opened from their computer and checked against the study's
 // fingerprints as the quiz checks them; nothing is uploaded. The recognition check is the set's quiz.
 // "I have looked at them" finishes the stage (POST /training/stage {snippets, done}, never sent twice
-// by itself); the study may ask for the recognition check to be finished first.
+// by itself); the study may ask for the recognition check to be finished first. The check opens with the
+// recordings already open here, and comes back to the gallery as it was, with its result.
+//
+// Each example is shown at its place in the recording (the time axis gives the recording's own times),
+// without the hatching of the filters' edge zones, which says nothing about the artifact. The left and
+// right arrow keys go to the previous and next example.
 
 import { h, clear } from '../ui/dom.js';
 import { appHeader, icon } from '../views/common.js';
@@ -12,10 +17,11 @@ import { filesForRecording } from '../views/open.js';
 import { EegViewer } from '../viewer/viewer.js';
 import { displayChannels } from '../annotate/session.js';
 import { logger } from '../log/logger.js';
+import { dialogOpen } from '../ui/dialog.js';
 import { DEFAULT_SCALINGS } from '../api/demo_catalogue.js';
 import { CAN_CHOOSE_FOLDER, acceptFiles, listWords, plural } from '../util.js';
 import { loadPart } from '../lazy.js';
-import { segmentBounds, segmentRecording } from './quiz.js';
+import { segmentBounds } from './quiz.js';
 
 /**
  * The snippets by family and type, in the catalogue's order (the order of the annotation view's types):
@@ -49,12 +55,24 @@ export function galleryOrder(groups) {
 
 /**
  * What is outlined, in words: "0.40 s on Fp1, Fp2 and VEOG, at 3.00 s in the recording" (or "on every
- * channel"). The EEG shown starts at the context before it, so its time axis starts at 0.
+ * channel"). The EEG shown is that stretch of the recording, so its time axis gives the same times.
  */
 export function whereText(s) {
   const chans = s.channels && s.channels.length ? `on ${listWords(s.channels)}` : 'on every channel';
   const len = Number(s.end_s) - Number(s.start_s);
   return `${len.toFixed(2)} s ${chans}, at ${Number(s.start_s).toFixed(2)} s in the recording`;
+}
+
+/** The recognition check's state in words: "Recognition check: 3 of 4 right", or null before it is finished. */
+export function quizResultText(quiz) {
+  if (!quiz || !quiz.finished) return null;
+  return Number.isFinite(quiz.n_correct) ? `Recognition check: ${quiz.n_correct} of ${quiz.n_items} right` : 'Recognition check: finished';
+}
+
+/** The example to go to for a key (ArrowLeft, ArrowRight): -1, 1, or 0 for any other key or one with a modifier. */
+export function keyStep(e) {
+  if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return 0;
+  return e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0;
 }
 
 function studyFilters(me) {
@@ -77,6 +95,15 @@ export class SnippetsView {
     this.title = h('h1', {}, 'Meet the artifacts');
     this.progress = h('p.subtitle.quiz-progress', { 'aria-live': 'polite' });
     this.backBtn = h('button.btn.quiet', { type: 'button', 'data-log': 'snippets-back', onclick: () => this.leave() }, icon('arrow-left'), 'Training path');
+    this._onKey = (e) => {
+      const step = keyStep(e);
+      if (!step || this.closed || this.suspended || !this.prevBtn || !this.prevBtn.isConnected) return;
+      const t = e.target;
+      if ((t && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))) || dialogOpen()) return;
+      e.preventDefault();
+      this._go(step);
+    };
+    document.addEventListener('keydown', this._onKey);
     this.body = h('div.quiz-body');
     this.el = h('div.view.quiz.snippets', { 'data-view': 'snippets' }, appHeader(app),
       h('main.quiz-frame', {}, h('div.quiz-bar', {}, this.backBtn, h('div.quiz-heading', {}, this.title, this.progress)), this.body));
@@ -292,12 +319,14 @@ export class SnippetsView {
       h('div.quiz-scroll', {}, this.index),
       missing ? h('p.caption', {}, `${plural(missing, 'more example')} ${missing === 1 ? 'needs' : 'need'} a recording not opened yet. `,
         h('button.link', { type: 'button', 'data-log': 'snippets-open-more', onclick: () => this._showOpen() }, 'Open it')) : null,
+      quizResultText(quiz) ? h('p.success.snippet-quiz-result', { role: 'status' }, quizResultText(quiz)) : null,
       this.doneMsg,
       h('div.snippet-actions', {},
         quiz ? h('button.btn', { type: 'button', 'data-log': 'snippets-quiz', onclick: () => this.takeQuiz() },
           quiz.finished ? 'See the recognition check' : 'Take the recognition check') : null,
         this._doneButton()));
     this._set(h('div.quiz-main', {}, this.host, side));
+    this.side = side;
     this._drawIndex();
     this._show(index ?? shown.find((i) => !this.seen.has(i)) ?? shown[0]);
   }
@@ -338,18 +367,19 @@ export class SnippetsView {
     this.current = i;
     const rec = o.recording;
     const { s0, s1, h0, h1 } = segmentBounds(s, rec.sfreq, rec.nSamples);
-    const seg = segmentRecording(rec, s0, s1);
     if (this.viewer) this.viewer.destroy();
     clear(this.host);
     const study = (this.app.me && this.app.me.study) || {};
     const scalings = { ...DEFAULT_SCALINGS, ...((study.display && study.display.scalings) || {}), ...((o.manifest.display && o.manifest.display.scalings) || {}) };
-    const gaps = (o.manifest.gaps || []).map(([a, b]) => [Math.max(0, a - s0), Math.min(s1 - s0, b - s0)]).filter(([a, b]) => b > a);
+    // the stretch at its place in the recording: the time axis reads as the text ("at 4.00 s")
+    const durationS = (s1 - s0) / rec.sfreq;
     this.viewer = new EegViewer(this.host, {
-      recording: seg, channels: o.channels, scalings, events: [], gaps, catalogue: this.catalogue, filters: studyFilters(this.app.me),
-      view: { duration_s: seg.durationS, n_channels: o.channels.length },
+      recording: rec, channels: o.channels, scalings, events: [], gaps: o.manifest.gaps || [], catalogue: this.catalogue, filters: studyFilters(this.app.me),
+      view: { duration_s: durationS, n_channels: o.channels.length },
     });
-    this.viewer.setView({ startS: 0, durationS: seg.durationS, nChannels: o.channels.length, firstChannel: 0 }, 'snippet');
-    this.viewer.setGhost({ label: s.label, onset_sample: h0, duration_samples: h1 - h0, channels: [...(s.channels || [])] });
+    this.viewer.setEdgeZonesVisible(false); // where the filters settle: nothing to do with the artifact shown
+    this.viewer.setView({ startS: s0 / rec.sfreq, durationS, nChannels: o.channels.length, firstChannel: 0 }, 'snippet');
+    this.viewer.setGhost({ label: s.label, onset_sample: s0 + h0, duration_samples: h1 - h0, channels: [...(s.channels || [])] });
     const shown = this._available();
     const lab = this.catalogue && this.catalogue.has(s.label) ? this.catalogue.get(s.label) : null;
     this.position.textContent = `Example ${shown.indexOf(i) + 1} of ${shown.length}`;
@@ -370,10 +400,30 @@ export class SnippetsView {
   }
 
   // ------------------------------------------------------------------- leaving
+  /** The recognition check, with the recordings open here; it comes back to the gallery as it was. */
   takeQuiz() {
     logger.event('snippets_quiz_opened', { set_id: this.data.set_id, n_seen: this.seen.size });
-    this.destroy();
-    this.app.showQuiz(this.data.set_id, { fromTraining: true });
+    this.suspended = true;
+    if (this.viewer) { this.viewer.destroy(); this.viewer = null; }
+    this.app.snippetsView = null;
+    this.app.suspendedSnippets = this;
+    this.app.showQuiz(this.data.set_id, { fromTraining: true, shared: this.opened, onLeave: () => this.resume() });
+  }
+
+  /** Back from the recognition check: the gallery where it was, with the check's result. */
+  async resume() {
+    if (this.closed) { this.app.showTraining(); return; }
+    this.suspended = false;
+    if (this.app.suspendedSnippets === this) this.app.suspendedSnippets = null;
+    this.app.snippetsView = this;
+    this.app._render(this.el, 'training');
+    logger.event('snippets_quiz_left', { set_id: this.data.set_id });
+    try {
+      const fresh = await this.backend.trainingSnippets(); // a read: the check's result
+      if (!this.closed) this.data = { ...this.data, quiz: fresh.quiz };
+    } catch { /* the gallery shows without the result */ }
+    if (this.closed) return;
+    this._showGallery(this.current ?? null);
   }
 
   /** Finish the stage: sent once while it is on its way; after a failure, the button tries again. */
@@ -407,6 +457,7 @@ export class SnippetsView {
   destroy() {
     if (this.closed) return;
     this.closed = true;
+    document.removeEventListener('keydown', this._onKey);
     if (this.viewer) this.viewer.destroy();
     this.viewer = null;
     for (const o of this.opened.values()) if (o.owned) o.recording.close();

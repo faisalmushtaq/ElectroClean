@@ -20,6 +20,20 @@ const STATUS = { todo: ['To do', ''], in_progress: ['In progress', 'active'], do
   locked: ['Locked', ''] }; // locked: real study work waits for the competency assessment (GET /me training_gate)
 const MODES = { standard: 'Annotation', guided: 'Guided training', practice: 'Practice', assessment: 'Assessment' };
 export const TABS = [['todo', 'To do'], ['in_progress', 'In progress'], ['done', 'Done'], ['all', 'All'], ['history', 'History']];
+/** While study recordings wait for the competency assessment, they have a tab of their own, after To do. */
+export const LOCKED_TAB = ['locked', 'Locked'];
+
+/** The tabs for these items: Locked only when some recording is locked. */
+export function tabsFor(items) {
+  return items.some((i) => i.status === 'locked') ? [TABS[0], LOCKED_TAB, ...TABS.slice(1)] : TABS;
+}
+
+/** Why a study recording is locked, in the words of the gate (GET /me training_gate). */
+export function lockedWhy(gate) {
+  if (gate && gate.result === 'not_met') return 'Assessment not met: waiting for your study team.';
+  if (gate && gate.result) return 'Opens once your study team confirms your assessment result.';
+  return 'Opens once you pass the competency assessment.';
+}
 export const SORTS = [['recent', 'Recently worked on'], ['name', 'File name'], ['length', 'Length']];
 
 /**
@@ -136,7 +150,8 @@ export function visibleItems(items, { tab = 'todo', query = '', sort = 'recent' 
   const q = String(query || '').trim().toLowerCase();
   let list = items.map((it, i) => ({ it, i }));
   if (tab === 'history') list = list.filter(({ it }) => it.status === 'done' || (it.saved && typeof it.saved === 'object'));
-  else if (tab === 'todo') list = list.filter(({ it }) => it.status !== 'done' && it.status !== 'unusable'); // everything still to do, started or not
+  // everything still to do, started or not; a locked recording waits under Locked, as it cannot be opened yet
+  else if (tab === 'todo') list = list.filter(({ it }) => it.status !== 'done' && it.status !== 'unusable' && it.status !== 'locked');
   // a recording that cannot be annotated is finished for the annotator: it is listed with the done ones
   else if (tab === 'done') list = list.filter(({ it }) => it.status === 'done' || it.status === 'unusable');
   else if (tab !== 'all') list = list.filter(({ it }) => it.status === tab);
@@ -177,7 +192,10 @@ export function recordingsCard(app) {
   const items = (app.assignments && app.assignments.items) || [];
   const st = listState(app);
   const count = (k) => visibleItems(items, { tab: k }).length;
-  if (!st.tab) st.tab = count('todo') ? 'todo' : items.length ? 'history' : 'todo';
+  const tabs0 = tabsFor(items);
+  // nothing to do but locked recordings: they are shown first, under Locked
+  const lockedOnly = st.tab === 'todo' && !count('todo') && count('locked');
+  if (!st.tab || lockedOnly || !tabs0.some(([k]) => k === st.tab)) st.tab = count('todo') ? 'todo' : count('locked') ? 'locked' : items.length ? 'history' : 'todo';
   const showMode = items.some((i) => i.mode !== 'standard');
 
   const body = h('div.rec-body');
@@ -188,7 +206,7 @@ export function recordingsCard(app) {
 
   const drawTabs = () => {
     clear(tabs);
-    for (const [k, t] of TABS) {
+    for (const [k, t] of tabsFor(items)) {
       // Read aloud as "To do, 3 recordings" rather than "To do3".
       const n = count(k);
       tabs.append(h('button.tab', { type: 'button', role: 'tab', 'aria-selected': String(st.tab === k), 'data-tab': k, 'data-log': `recordings-tab-${k}`,
@@ -213,7 +231,7 @@ export function recordingsCard(app) {
     const [text, cls] = it.revising ? ['Being revised', 'active'] : STATUS[it.status] || [it.status, ''];
     return h('tr', { 'data-id': it.recording_id, 'data-log-text': it.file_name },
       h('td', {}, h('span.file', { title: it.recording_id }, it.file_name), feedbackCaption(app, it), correctedCaption(app, it),
-        it.status === 'locked' ? h('span.caption.locked-why', {}, 'Opens once you pass the competency assessment.') : null),
+        it.status === 'locked' ? h('span.caption.locked-why', {}, lockedWhy(app.me && app.me.training_gate)) : null),
       showMode ? h('td.opt', {}, MODES[it.mode] || it.mode) : null,
       h('td.num', {}, formatHms(it.duration_s)),
       h('td.num.opt', {}, String(it.n_channels)),

@@ -323,6 +323,17 @@ export const tests = [
       await clickDialogButton(page, 'Save and Finish');
       await page.waitForSelector('.dialog .dialog-title', { timeout: 15000 });
       await page.locator('.dialog-buttons button', { hasText: /Back to my recordings|^OK$/ }).first().click();
+      // T01 sees nothing to watch until E01 agrees: Watch an expert at work appears on Learn with the experts, on the
+      // training path, once that stage is open and there is a session to watch
+      await switchTo(page, 'T01');
+      await page.evaluate(async () => { for (const stage of ['tour', 'snippets']) await globalThis.ElectroTag.backend.trainingStage({ stage, action: 'skip' }); });
+      await page.evaluate(() => globalThis.ElectroTag.showTraining());
+      await waitForRoute(page, 'training');
+      await page.waitForSelector('[data-stage="guided"][data-status="available"]');
+      await page.waitForTimeout(300); // the study is asked what there is to watch
+      assert.equal(await page.locator('[data-stage="guided"] .watch-entry').count(), 0, 'nothing to watch yet: no way in');
+      assert.equal(await page.evaluate(async () => { try { await globalThis.ElectroTag.backend.expert('replay_index_get', { annotator_id: 'E01', recording_id: 'x' }); return 'answered'; } catch (e) { return e.code; } }), 'forbidden');
+      await switchTo(page, 'E01');
       await page.evaluate(() => globalThis.ElectroTag.backend.expert('replay_consent_set', { teaching: true }));
       const rid = await page.evaluate(() => globalThis.ElectroTag.backend.state.submissions.find((x) => x.annotator_id === 'E01').recording_id);
       // T01, and A01 who holds the same recording as study work: nothing to watch, and the study refuses the replay
@@ -338,14 +349,14 @@ export const tests = [
         }, rid);
         assert.deepEqual(refused, ['forbidden', 'forbidden', 0], who);
       }
+      // The sandbox's training recordings are also its study recordings, so even with E01's consent there is
+      // nothing a trainee may watch, and the training path offers no way in (the real study server's test watches)
       await switchTo(page, 'T01');
       await page.evaluate(() => globalThis.ElectroTag.showTraining());
       await waitForRoute(page, 'training');
-      await t.screenshot(page, 'watch_entry');
-      await page.click('[data-stage="guided"] .watch-entry');
-      await page.waitForSelector('.dialog .dialog-title:text("Watch an expert")');
-      assert.match(await page.textContent('.dialog'), /No expert has a session to show yet/);
-      await clickDialogButton(page, 'OK');
+      await page.waitForSelector('[data-stage="guided"][data-status="available"]');
+      await page.waitForTimeout(300);
+      assert.equal(await page.locator('[data-stage="guided"] .watch-entry').count(), 0, 'nothing a trainee may watch in the sandbox');
     },
   },
   {

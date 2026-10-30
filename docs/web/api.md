@@ -140,7 +140,8 @@ password.
                              "colour": "#0067A5", "section": "Eye", "is_group": false,
                              "parent": "Eye-artifact" | null, "description": "…"}]},
   "programme": null | {"set_id": "example", "name": "…", "complete": false},  // in a training programme; complete when every stage is done
-  "training_gate": {"open": true, "reason": "" | "training_required", "message": "…"},  // see "Training stages"
+  "training_gate": {"open": true, "reason": "" | "training_required", "message": "…",
+                    "result": "" | "not_met" | "not_determined"},  // see "Training stages"
   "quizzes": [{"set_id": "example", "name": "…", "n_items": 4, "n_answered": 0, "finished": false, "feedback": "immediate"}]
 }
 ```
@@ -581,8 +582,15 @@ the study's setting `training.tour` is off, the snippets when the set has none,
 and a stage whose recordings the set does not have. A `completed` stage stays
 completed whatever is done to the stages before it. `can_skip` is true for a
 stage the study lets trainees skip (`training.skippable`) that is open now
-(`available` or `in_progress`); `can_resume` for a skipped stage. A skipped
-stage's recordings are not listed.
+(`available` or `in_progress`) and that the study team has not reopened (below);
+`can_resume` for a stage skipped in this set. A skipped stage's recordings are
+not listed. `carried_from` names the earlier set a stage was done or skipped in,
+after a new assessment set (null otherwise). The guided stage's `detail` gives
+the result of each "correct the marks" recording done ("Correct the marks: you
+fixed 2 of 4 planted mistakes."). `GET /training` also answers `rounds`: the
+earlier rounds of the assessment, oldest first, before each reopening or new
+assessment set (`[{"round": 1, "set_id", "set_name", "status": "met" |
+"not_met" | "not_determined" | "", "status_text", "at"}]`).
 
 `POST /training/stage` (`et_training_stage`) `{"stage": "tour" | "snippets" | "guided" | "practice" | "assessment",
 "action": "skip" | "done" | "resume"}` → the answer of `GET /training`. It saves, so the browser never sends it
@@ -596,24 +604,32 @@ of the trainee's progress (`stage_skipped`, with the policy of the moment,
 stages skipped (`stages_skipped`). Errors: 400 `bad_request` for an unknown stage
 or action; 404 `no_programme` outside a programme; 409 `cannot_skip` for the
 assessment, which is never skipped, and for a stage the study does not let
-trainees skip; 409 `locked` for a stage not open yet; 409 `finished` for a stage
+trainees skip; 409 `reopened` for skipping a stage the study team reopened, which
+is done again before the assessment is retaken; 409 `locked` for a stage not open yet; 409 `finished` for a stage
 completed or not used; 409 `not_done_here` for `done` of a stage that finishes by
 what is saved; 409 `quiz_required` for `done` of the snippets while their
 recognition check is unfinished and the study counts the stage as done only once
 it is finished (`training.snippets_quiz_required`).
 
 `GET /training/snippets` (`et_training_snippets`) → `{"set_id", "snippets": [Snippet], "recordings":
-{recording_id: Manifest}, "quiz": {"n_items", "finished", "required"} | null}` where
+{recording_id: Manifest}, "quiz": {"n_items", "finished", "required", "n_correct": int | null} | null}` where
 `Snippet = {"snippet_id", "recording_id", "start_s", "end_s", "label", "explanation", "context_s": 2.0,
 "channels": [..], "source": {"kind": "guided", "annotation_id"} | {"kind": "added", "by"} | {...}}`. The snippets
 are the study team's own (`snippet_add`, below) and one for each reference
 annotation of the set's guided recordings (`snippet_id` `g-<annotation ID>`,
 with the experts' note on it as the explanation); practice and assessment
-recordings never give snippets, which would give their answers away. Only
+recordings never give snippets, which would give their answers away, and
+neither does a recording that another set holds as a practice or assessment
+recording (the same file, by its fingerprint). Only
 snippets whose recording is registered are listed, and `recordings` holds the
 public manifests the browser checks the trainee's own copies against.
 `channels` are those the artifact is on (empty: the whole montage). `quiz` is
-the set's quiz, when it has one that the trainee may take.
+the set's quiz, when it has one that the trainee may take; `n_correct` is the
+number answered correctly once it is finished. A quiz with an item from a
+practice or assessment recording (of the set or, as above, of another set) is
+never the recognition check: `quiz` is then null, and `GET /me` offers that quiz
+to experts and administrators only (`POST /quiz/{set_id}` answers others 409
+`reveals_answers`) until the study team removes the item.
 
 **The competency gate.** Real study work waits until the trainee's competency
 assessment is passed: the study's `training.gate` is `met` (the competency
@@ -621,7 +637,9 @@ report's status, the default), `completed` (every assessment recording saved,
 whatever the result) or `off`. Nobody waits who is an expert or an
 administrator, who takes no training programme, or whose programme's set has
 no assessment recordings. While the gate is closed, `training_gate` is
-`{"open": false, "reason": "training_required", "message": "…"}`, the study
+`{"open": false, "reason": "training_required", "message": "…", "result": ""}`
+(`result` is `not_met` or `not_determined` once the assessment is finished and
+the study team has the next step), the study
 recordings not yet saved are `locked` in `GET /assignments`, and `POST /match`
 for one of them, a draft (`PUT /drafts/…`), saving (`POST /submissions`), a
 revision and setting one aside (`POST /problems` with `outcome` `unusable`) are
@@ -634,9 +652,16 @@ admin area and both audited (`training_reopen` and `training_assessment_set`,
 below). Reopening sends the trainee back to the guided or the practice stage:
 from there each stage counts only what is saved from then on (its recordings
 are offered again, with `repeat` true, as new attempts; nothing saved before is
-changed), and the assessment is taken once more. A new assessment set enrols
-the trainee in that set with its learning stages counted as done (their
-`detail` says where), so the next step is its assessment.
+changed), and the assessment is taken once more. The reopened stages cannot be
+skipped until they are done again: the study team reopened them for that. The
+round that ended is kept with its competency report (`rounds`). A new
+assessment set enrols the trainee in that set with each learning stage carried
+over as it was: done there (`completed`, "Done in Pilot training set."), skipped
+there (`skipped`, "Skipped in Pilot training set.", which cannot be taken up
+in the new set) or not part of it; the earlier set's skips and rounds come too,
+so that no skip is lost or counted as done, and the new competency report lists
+the earlier skips (`stages_skipped`, with `stages_skipped_in` naming the set).
+The next step is its assessment.
 
 These are the administrative operations of the training path (`POST /admin/{op}`,
 `et_admin`); the three for snippets are also operations of the expert channel
@@ -644,12 +669,12 @@ These are the administrative operations of the training path (`POST /admin/{op}`
 
 | op | body | answer |
 | --- | --- | --- |
-| `snippets_list` | `{"set_id"}` | `{"set_id", "snippets": [Snippet] (the study team's), "guided": [Snippet] (made from the guided references), "recordings": [{"recording_id", "file_name", "use", "duration_s", "ch_names"}]}`, the recordings a snippet may come from (the set's own, less its practice and assessment recordings) |
-| `snippet_add` | `{"set_id", "recording_id", "start_s", "end_s", "label", "explanation"?, "context_s"?: 2.0, "channels"?: [..], "snippet_id"?, "source"?}` | `{"snippet"}`. The same `snippet_id` again replaces it, so a request that reaches the study twice keeps one; without one the next free `s01`, `s02`, … is used. At most 60 s long, with up to 10 s of context. 422 `reveals_answers` for a practice or assessment recording of the set; 404 `unknown_recording`; 400 `bad_request` for times outside the recording, a type that is not the study's or a channel it does not have. Audited (`snippet_add`, the explanation counted by its length). |
+| `snippets_list` | `{"set_id"}` | `{"set_id", "snippets": [Snippet] (the study team's), "guided": [Snippet] (made from the guided references), "recordings": [{"recording_id", "file_name", "use", "duration_s", "ch_names"}]}`, the recordings a snippet may come from (the set's own, less the practice and assessment recordings of any set) |
+| `snippet_add` | `{"set_id", "recording_id", "start_s", "end_s", "label", "explanation"?, "context_s"?: 2.0, "channels"?: [..], "snippet_id"?, "source"?}` | `{"snippet"}`. The same `snippet_id` again replaces it, so a request that reaches the study twice keeps one; without one the next free `s01`, `s02`, … is used. At most 60 s long, with up to 10 s of context. 422 `reveals_answers` for a practice or assessment recording of the set or of another set that holds the same file; 404 `unknown_recording`; 400 `bad_request` for times outside the recording, a type that is not the study's or a channel it does not have. Audited (`snippet_add`, the explanation counted by its length). |
 | `snippet_remove` | `{"set_id", "snippet_id"}` | `{}`; one that is gone already changes nothing. 409 `guided_snippet` for one made from a guided reference. Audited. |
-| `training_gate_get` | `{"annotator_id"}` | `{"annotator_id", "training_gate", "programme": GET /training's answer \| null, "events": [{"event", "stage", "at", "by", "from", "from_set"}], "skipped": ["tour", …], "can_reopen", "can_assign_set", "assessment_sets": [{"set_id", "name", "n_assessment"}]}`: the trainee's path as they see it, the gate, what happened to the stages, and whether the two actions after an assessment are open (once it is finished and not met) |
-| `training_reopen` | `{"annotator_id", "from"?: "practice" \| "guided"}` | the answer of `training_gate_get`. 409 `not_finished` before the assessment is finished, 409 `already_met` after a pass; 404 `no_programme`. Audited. |
-| `training_assessment_set` | `{"annotator_id", "set_id"}` | the answer of `training_gate_get`, in the new set. 409 `same_set`, 409 `not_finished`, 409 `already_met`, 422 `no_assessment` for a set without assessment recordings, 409 `not_allowed` for a set the trainee may not use. Audited. |
+| `training_gate_get` | `{"annotator_id"}` | `{"annotator_id", "training_gate", "programme": GET /training's answer \| null, "events": [{"event", "stage", "at", "by", "from", "from_set", "set_name"}], "skipped": ["tour", …], "rounds": [{"round", "set_id", "set_name", "status", "status_text", "at", "html"}], "can_reopen", "can_assign_set", "assessment_sets": [{"set_id", "name", "n_assessment"}]}`: the trainee's path as they see it, the gate, what happened to the stages (after a new assessment set, the earlier set's skips first, with its `set_name`), the earlier rounds of the assessment with each competency report as HTML, and whether the two actions after an assessment are open (once it is finished and not met) |
+| `training_reopen` | `{"annotator_id", "from"?: "practice" \| "guided"}` | the answer of `training_gate_get`; the round that ended is kept with its report, and the reopened stages cannot be skipped until done. 409 `not_finished` before the assessment is finished, 409 `already_met` after a pass; 404 `no_programme`. Audited. |
+| `training_assessment_set` | `{"annotator_id", "set_id"}` | the answer of `training_gate_get`, in the new set, each learning stage carried over as it was (done, skipped or not used), with the earlier set's skips and rounds. 409 `same_set`, 409 `not_finished`, 409 `already_met`, 422 `no_assessment` for a set without assessment recordings, 409 `not_allowed` for a set the trainee may not use. Audited. |
 
 ## Interaction logs
 
@@ -765,8 +790,8 @@ study's own recordings have `"self_contained": false` and `"scope": "study"`.
 | `set_guided_notes` | `{"set_id", "recording_id"}` | `{"notes": [{"annotation_id", "label", "onset_s", "offset_s", "note"}]}` (every reference annotation of the recording, with its note or "") |
 | `set_guided_note` | `{"set_id", "annotation_id", "text"}` | `{}` ("" removes the note); 404 `unknown_annotation` |
 | `set_example_create` | `{}` | `{"set": SetRecord, "recordings_zip": {"file_name", "base64", "size_bytes"}}` (the simulated recordings to give trainees, about 4.6 MB); 409 `set_exists`; 422 `example_unavailable` (see below) |
-| `quiz_items` | `{"set_id"}` | `{"items": [QuizItem]}` (`electrotag.training.reference.QuizItem.to_dict()`) |
-| `quiz_item_add` | `{"set_id", "recording_id", "start_s", "end_s", "correct_label", "accepted_labels"?, "explanation"?, "context_s"?: 2.0, "item_id"?}` | `{"item": QuizItem}`. The recording must be registered in the set's scope (404 `unknown_recording`); the segment lies within it; the labels are the catalogue's, or "No artifact / none of these" when the set offers it (`quiz.include_none_option`). Without `item_id` the next free `q01`, `q02` … is used; an existing `item_id` is replaced |
+| `quiz_items` | `{"set_id"}` | `{"items": [QuizItem], "withheld": [{"item_id", "recording_id", "message"}]}` (`electrotag.training.reference.QuizItem.to_dict()`); `withheld` lists the items whose recording is now a practice or assessment recording: while there are any, trainees are not offered the quiz and it is no recognition check |
+| `quiz_item_add` | `{"set_id", "recording_id", "start_s", "end_s", "correct_label", "accepted_labels"?, "explanation"?, "context_s"?: 2.0, "item_id"?}` | `{"item": QuizItem}`. The recording must be registered in the set's scope (404 `unknown_recording`); the segment lies within it; the labels are the catalogue's, or "No artifact / none of these" when the set offers it (`quiz.include_none_option`). Without `item_id` the next free `q01`, `q02` … is used; an existing `item_id` is replaced. 422 `reveals_answers` for a practice or assessment recording (of this set, or another set's copy of the same file), whose references are the answers trainees are scored against |
 | `quiz_item_remove` | `{"set_id", "item_id"}` | `{}`; 404 `unknown_item` |
 | `progress` | `{}` | as `GET /admin/progress` |
 | `stats` | `{"work"?: "study" \| "all"}` | `Stats` (below): how far the study has got and how long the work takes, from the completion register (`elapsed_s`, `n_annotations`, `completed_at`), the drafts, the assignments, the accounts' `last_seen` and the visits. `work` `study` counts the study's own annotation (mode `standard`), `all` training too; 400 otherwise. A recording saved more than once (a revision, or a practice recording repeated) counts as one recording done, on the day of its first save, with the annotations of its latest attempt and the time of all its attempts together; `saved` per recording is the number of people who saved it |
@@ -932,7 +957,11 @@ the end), so the export and the results zip include it; a quiz finished before
 every segment is answered (End the quiz now) is saved with `completed` false and
 the score of the segments answered. Finishing again gives the same score and
 saves nothing more. A set's quiz is for annotators it allows (403
-`not_allowed`); a set without items has none (404 `no_quiz`). The browser shows
+`not_allowed`); a set without items has none (404 `no_quiz`). A quiz with a
+segment of a practice or assessment recording would show trainees the answers
+they are scored against: until the study team removes that segment, only
+experts and administrators are offered it, and others are answered 409
+`reveals_answers`. The browser shows
 each segment from the annotator's own copy of the recording, opened from their
 computer as for training.
 
@@ -1280,7 +1309,7 @@ caller's work is part of it.
 | `adjudication_reference` | `{"unit_id", "set_id", "use", "provenance"?}` | the answer of `set_add_reference` with the Source `{"kind": "adjudication", "task_id": "<unit ID>"}`, which the admin operation takes too: method `adjudicated`, the versions' people as the experts, the adjudicator, and the adjudicated file and the versions' files as its sources. 409 `not_finished`; 422 `window_task` for a unit with a window (a reference covers the whole recording) | **save** |
 | `tasks_list` | `{"status"?, "recording_id"?}` | `{"tasks": [TaskOut], "counts": {status: n}}` (docs above, "Tasks, windows and known answers"), known-answer tasks left out; the conflicts of a task whose annotators have all saved are counted, and the count is kept for as long as the same versions are compared. The adjudication part registers the counter that tells `ready` from `agreed` (`tasks.register_conflict_counter`) | read |
 | `library_list` | `{"label"?, "pair"?: [a, b] \| "a\|b", "annotator_id"?, "status"?: "awaiting" \| "open" \| "decided", "choice"?: "one" \| "all" \| "none" \| "edited" \| letter, "kind"?, "recording_id"?, "q"?, "offset"?: 0, "limit"?: 200 (at most 500)}` | `{"entries": [LibraryEntry], "total", "facets": {"labels", "pairs", "kinds", "choices", "status", "annotators", "recordings"}, "filters", "sets": [{"set_id", "name", "none_option"}]}`: the conflicts of every unit that has some, derived afresh; the facets count every entry. `q` searches the file name, the types and the reasons | read |
-| `library_promote` | `{"promote_id": "<32 hex>", "entry_id", "to": "quiz_item" \| "snippet", "set_id", "label"?, "explanation"?, "start_s"?, "end_s"?, "context_s"?: 2.0}` | `{"item": QuizItem}` or `{"snippet": Snippet}`, with `"already"`. The label and times start from the decision (the conflict's when nothing is kept), the explanation from the reason; the item keeps `source: {"library_entry", "task_id", "conflict_id", "promote_id", "promoted_by", "promoted_at", "kinds", "decision"}`. The same `promote_id`, or the same entry promoted to the same set again, gives what was made before. A self-contained set gets a copy of the recording's manifest, as for a reference. 409 `undecided` without a label for a conflict not yet decided; 404 `unknown_entry`. Audited | **save** |
+| `library_promote` | `{"promote_id": "<32 hex>", "entry_id", "to": "quiz_item" \| "snippet", "set_id", "label"?, "explanation"?, "start_s"?, "end_s"?, "context_s"?: 2.0}` | `{"item": QuizItem}` or `{"snippet": Snippet}`, with `"already"`. The label and times start from the decision (the conflict's when nothing is kept), the explanation from the reason; the item keeps `source: {"library_entry", "task_id", "conflict_id", "promote_id", "promoted_by", "promoted_at", "kinds", "decision"}`. The same `promote_id`, or the same entry promoted to the same set again, gives what was made before. A self-contained set gets a copy of the recording's manifest, as for a reference. 409 `undecided` without a label for a conflict not yet decided; 404 `unknown_entry`; 422 `reveals_answers` when the recording is a practice or assessment recording of any set. Audited | **save** |
 
 `Adjudication` (records of kind `adjudications`, one per unit, kept under the adjudicator) =
 `{"unit_id", "task_id", "unit_kind", "recording_id", "file_name", "window", "corrected",

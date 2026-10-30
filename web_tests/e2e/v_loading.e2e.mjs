@@ -12,8 +12,10 @@ import { signIn, waitForRoute, openExample } from './helpers.mjs';
  * load only when used); loading the sandbox's admin half only for its administrator is the way down.
  * The five-stage training path's rules (js/training/stages.js, which the sandbox needs at every call)
  * brought the demonstration to 457 KB; its stage actions, snippets and admin operations load when used.
+ * Carrying stages over to a new assessment set and the earlier rounds (the same rules, also needed at
+ * every call) brought it to 464 KB.
  */
-const SIGNIN_BUDGET_KB = { server: 140, demo: 462 };
+const SIGNIN_BUDGET_KB = { server: 140, demo: 468 };
 
 /**
  * Modules that belong to later views and must not load with the sign-in page (the demonstration's

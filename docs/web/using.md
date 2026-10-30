@@ -61,7 +61,8 @@ Below that is the list of the recordings assigned to you. It is made for a study
 annotator has a couple of hundred recordings. Its tabs
 show what is still to do (To do holds every recording you have not finished, started or not, and
 In progress only those you have started), what is done, all of them, and your History, each with
-the number of recordings it holds. A search field finds recordings by their file name, and Sort
+the number of recordings it holds. While your study recordings wait for your competency assessment,
+they are listed under a Locked tab of their own rather than as recordings to do. A search field finds recordings by their file name, and Sort
 orders the list by the recordings you worked on most recently (unfinished work first), by file
 name, or by length. The list shows 25 recordings at a time, with Previous and Next below it. The
 tab and the order you chose are remembered in this browser.
@@ -689,7 +690,8 @@ each type), Learn with the experts, On your own and the Competency assessment. E
 the one before it is finished or skipped. A stage your study lets you skip has Skip this stage: it
 asks first, then marks the stage Skipped, and Do it after all brings it back whenever you like. The
 study notes every skip, with its time, and the competency report lists the stages skipped. The
-assessment can never be skipped. When the path takes you to a recording, the page for opening it
+assessment can never be skipped. Once the tour or Meet the artifacts is done, Look again on its card
+opens it once more, for example to look at the examples again before the assessment. When the path takes you to a recording, the page for opening it
 names the stage the recording is for; your study team sends you the training recordings.
 
 The tour, Find your way around, opens a practice recording that ElectroTag makes in the browser, so no
@@ -697,8 +699,12 @@ file is needed and nothing you mark is kept. A panel on the right takes you thro
 naming the keys and buttons to use: moving through the recording with the arrow keys, marking an
 outlined blink (its number key, then a drag across it), marking muscle activity on its channels
 only (Selected channels and the channel names at the left of the EEG), taking a change back with
-Ctrl+Z (⌘Z on a Mac) or Undo, saying how sure you are (select a mark, press D and a number from 1 to
-5) and Save and Finish. Each step is ticked when you have done it, and Next step (or Enter) goes on;
+Ctrl+Z (⌘Z on a Mac) or Undo and bringing it back with Ctrl+Y or Redo, saying how sure you are
+(select a mark, press D and a number from 1 to 5) and Save and Finish. On an iPad every step is
+written for touch instead: the arrow buttons beside Time under the EEG, taps on Undo and Redo, and
+the Confidence numbers under the list of annotations (or pressing and holding the mark). The
+artifacts to mark come after the first five seconds of the recording, where the hatching shows the
+filters settling. Each step is ticked when you have done it, and Next step (or Enter) goes on;
 Skip this step goes on without it. Save and Finish at the last step ends the tour and takes you back
 to your training path. Close leaves the tour after asking; you can take it again from the path.
 
@@ -706,10 +712,16 @@ Meet the artifacts shows short examples of each type of artifact from your train
 experts' marks on the recordings you learn with, and any examples your study team added. Open your
 copies of the recordings it names, as for the quiz (the demonstration offers its own copies). Each
 example shows a few seconds of EEG with the artifact outlined on the channels it is on, its type, the
-type's description and the experts' note. Previous and Next step through them, and the list under
-them, by family and type, jumps to any; the ones you have looked at are marked. Take the recognition
-check opens the set's quiz. I have looked at them: finish this stage completes the stage (some
-studies ask for the recognition check to be finished first, and say so).
+type's description and the experts' note; the time axis gives the recording's own times, as the text
+does. Previous and Next (or the left and right arrow keys) step through them, and the list under
+them, by family and type, jumps to any; the ones you have looked at are marked. On a short screen
+the panel scrolls as a whole, and on an iPad held upright the example and the list sit under the
+EEG. Take the recognition check opens the set's quiz with the recordings you have open, so nothing
+needs opening again, and Back to the examples returns to the gallery as you left it, with your
+result ("Recognition check: 3 of 4 right"). I have looked at them: finish this stage completes the
+stage (some studies ask for the recognition check to be finished first, and say so). The examples
+and the check never come from practice or assessment recordings, whose experts' marks are the
+answers you are scored against.
 
 In the third stage, Learn with the experts, a coach on the right
 takes you through the experts' annotations of a recording one at a time. In the first recording the
@@ -735,9 +747,12 @@ opens with a copy of the experts' marks in which some are deliberately wrong: a 
 of a type it is easily mistaken for, a start or an end moved, or a mark where there is no artifact.
 The panel on the right says how many mistakes there are, never which. Correct them as you would your
 own marks (change a type, drag an edge, delete a mark, mark what is missing), then press Save and
-Finish. ElectroTag then lists each planted mistake, fixed or not, and any new mistake you made (a right
-mark you changed, or a mark where the experts marked nothing), and the recording counts as done
-whatever the result: this stage is for learning.
+Finish. ElectroTag then shows your saved marks on the EEG, read only, beside a list of each planted
+mistake ("Left out: fixed", "Wrong type: not fixed") and any new mistake you made (a right mark you
+changed, or a mark where the experts marked nothing); press an item, or N and P, to go to it on the
+EEG, and Back to my training path when you are done. The recording counts as done whatever the
+result, as this stage is for learning, and the stage's card keeps the result ("Correct the marks:
+you fixed 2 of 4 planted mistakes.").
 
 In the fourth stage, On your own, you annotate a practice recording without help. After you save it,
 ElectroTag shows your result in plain words: whether you reached the pass mark, your score, and what
@@ -760,16 +775,21 @@ the stages before it). You annotate
 its recordings as in the second stage but without feedback, and nothing tells you how you did until
 every recording of the assessment is saved. Then the training path shows the result: Criteria met,
 Criteria not met yet (and your study administrator goes through the results with you before you try
-again), or Result to come, when the study team has to judge it. A stage that your programme does not
-use is marked Not included.
+again), or Result to come, when the study team has to judge it. When you pass, the line above the
+stages says "You passed: your study recordings are now open." with Open next recording beside it.
+A stage that your programme does not use is marked Not included.
 
 Most studies keep their own recordings locked until you pass the assessment. Until then your
-recordings are listed on your home page as Locked, with "Opens once you pass the competency
+recordings are listed on your home page under Locked, with "Opens once you pass the competency
 assessment" under the file name, and a line with a lock on your training path and your home page
 says why; they open by themselves once you pass. If your assessment did not meet the criteria, your
-study team goes through the results with you, then either reopens your training (your path then
-shows the stages to do again; what you save from then on counts, and what you saved before is kept)
-or gives you a new assessment. Experts and administrators never wait.
+training path, your home page and those recordings say "Assessment not met: waiting for your study
+team". Your study team goes through the results with you, then either reopens your training or gives
+you a new assessment. After a reopening your path shows the stages to do again, which cannot be
+skipped this time; what you save from then on counts, what you saved before is kept, and the
+assessment's card lists the earlier round with its result. With a new assessment, the stages you
+did or skipped before are shown as they were ("Skipped in Pilot training set"), and the new
+competency report lists those skips too. Experts and administrators never wait.
 
 Once every stage is done, ElectroTag opens on your home page when you sign in, with Open next
 recording for the study's own work and a line that takes you back to your training path. The
@@ -777,11 +797,12 @@ recordings of your training are counted on the training path, apart from the stu
 
 ### Watching an expert at work
 
-When the study shows experts' sessions to trainees, Watch an expert at work, on the Learn with the
-experts stage of your training path, lists the recordings you may watch: training recordings for
-learning with the experts, on which experts who agreed to their sessions being used for teaching have
-worked. You never see an expert at work on a recording of the study itself, which you may be given to
-annotate on your own. Watch, then open the recording's file from your computer as
+When the study shows experts' sessions to trainees and an expert has a session to show, Watch an
+expert at work appears on the Learn with the experts stage of your training path once that stage is
+open. It lists the recordings you may watch: training recordings for learning with the experts, on
+which experts who agreed to their sessions being used for teaching have worked. You never see an
+expert at work on a recording of the study itself, which you may be given to annotate on your own.
+Watch, then open the recording's file from your computer as
 you would to annotate it (your study team gives you the files for this), and the expert's session
 plays back on the EEG: the view moves as theirs did, a small blue ring shows their pointer, their
 annotations appear as they made them, and a line under the EEG says what they did ("Pressed M: Mark

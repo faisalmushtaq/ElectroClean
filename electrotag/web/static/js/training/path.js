@@ -2,7 +2,11 @@
 // progress and result, and one Continue button for the next step. A stage the study lets trainees skip
 // has "Skip this stage", which asks first; a skipped stage says so and offers "Do it after all". Both
 // are sent to the study (POST /training/stage), once, and the path is drawn again from its answer.
-// While real study work waits for the competency assessment, a line says so and why.
+// While real study work waits for the competency assessment, a line says so and why; once the assessment
+// is finished, the line above the stages says how it went (pathOutcome): passed, with the study recordings
+// open and the next one a press away, or not met, waiting for the study team. The tour and the snippets
+// can be looked at again once done, and the earlier rounds of the assessment (before the study team
+// reopened the training or gave a new assessment set) are listed on its card.
 //
 // Other parts of the training add to the path without this file knowing them: STAGE_LINES[stage]
 // and WATCH_EXPERT take functions (app, stage, data) => a node, a line of text or null, drawn on
@@ -24,7 +28,10 @@ export const LOCKED_TEXT = 'Unlocks when you finish or skip the stage before.';
 
 /** Lines other parts of the training add to a stage's card: (app, stage, data) => Node | string | null. */
 export const STAGE_LINES = { tour: [], snippets: [], guided: [], practice: [], assessment: [] };
-/** The slot for watching an expert's session, on "Learn with the experts": the replay part's way in (js/replay/watch.js). */
+/**
+ * The slot for watching an expert's session, on "Learn with the experts": the replay part's way in (js/replay/watch.js).
+ * It is shown on an open stage only, and only once the study has a session to watch (teaching_list).
+ */
 export const WATCH_EXPERT = [(app) => (app ? watchExpertEntry(app) : null)];
 
 const CHIPS = {
@@ -74,6 +81,46 @@ export function detailText(s) {
 function nextText(data) {
   if (data.next) return data.next.text || `Next: ${STAGE_TITLES[data.next.stage] || data.next.stage}.`;
   return data.message || COMPLETE_TEXT;
+}
+
+export const PASSED_TEXT = 'You passed: your study recordings are now open.';
+export const NOT_MET_TEXT = 'Assessment not met: waiting for your study team.';
+export const TO_COME_TEXT = 'Assessment finished: waiting for your study team to confirm the result.';
+
+/**
+ * What the line above the stages says once there is no next step: {state, text}. "waiting" while the
+ * study recordings stay locked after the assessment (the gate's result), "passed" when the assessment met
+ * the criteria and the recordings are open, "complete" otherwise; "next" while there is a next step.
+ */
+export function pathOutcome(data) {
+  if (data.next) return { state: 'next', text: nextText(data) };
+  const gate = data.gate || { open: true };
+  if (gate.open === false && gate.result === 'not_met') return { state: 'waiting', text: NOT_MET_TEXT };
+  if (gate.open === false && gate.result) return { state: 'waiting', text: TO_COME_TEXT };
+  const a = (data.stages || []).find((s) => s.key === 'assessment');
+  if (gate.open !== false && a && a.status === 'completed' && a.result === 'met') return { state: 'passed', text: PASSED_TEXT };
+  return { state: 'complete', text: nextText(data) };
+}
+
+/** An earlier round of the assessment in words: "Round 1, Pilot training set: Does not yet meet the competency criteria." */
+export function roundText(r) {
+  const result = r.status_text || { met: 'Criteria met.', not_met: 'Criteria not met.' }[r.status] || 'No result.';
+  return `Round ${r.round}${r.set_name ? `, ${r.set_name}` : ''}: ${result}`;
+}
+
+/** The stages done in the browser can be looked at again once done (not those carried over from an earlier set). */
+export const canLookAgain = (s) => s.status === 'completed' && !s.carried && (s.key === 'tour' || s.key === 'snippets');
+
+/** The way in to watching an expert: on an open stage, once the study has a session to show. */
+function watchSlot(app, s, data) {
+  if (!app || s.status === 'locked' || s.status === 'not_used') return null;
+  const nodes = lines(WATCH_EXPERT, app, s, data);
+  if (!nodes.length || !app.backend || typeof app.backend.expert !== 'function') return null;
+  const host = h('div.watch-slot', { hidden: true });
+  Promise.resolve().then(() => app.backend.expert('teaching_list', {})).then((got) => {
+    if (got && got.shown && (got.sessions || []).length) { host.append(...nodes); host.hidden = false; }
+  }, () => { /* nothing to watch: the stage reads as it is */ });
+  return host;
 }
 
 /** What a skip question says: what the stage gives, and that it can be done later. */
@@ -144,8 +191,16 @@ export function trainingPath(data, { app = null, annotatorId, message = '', onCo
     if (s.can_resume && app) {
       actions.push(h('button.btn.small', { type: 'button', 'data-log': `resume-${s.key}`, onclick: () => resume(s) }, 'Do it after all'));
     }
+    if (canLookAgain(s) && app) {
+      actions.push(h('button.btn.small.quiet', { type: 'button', 'data-log': `look-again-${s.key}`, onclick: () => open(s.key, true) }, 'Look again'));
+    }
     buttons.push(...actions);
-    const extra = [...lines(STAGE_LINES[s.key] || [], app, s, data), ...(s.key === 'guided' ? lines(WATCH_EXPERT, app, s, data) : [])];
+    const quiz = s.key === 'snippets' && s.status === 'completed' && app && app.me
+      ? ((app.me.quizzes || []).find((q) => q.set_id === data.set_id && q.finished) || null) : null;
+    const rounds = s.key === 'assessment' && (data.rounds || []).length
+      ? h('ul.stage-rounds', { 'aria-label': 'Earlier rounds of the assessment' }, data.rounds.map((r) => h('li.caption', {}, roundText(r)))) : null;
+    const extra = [...lines(STAGE_LINES[s.key] || [], app, s, data), quiz ? h('p.caption', {}, 'You have taken the recognition check.') : null,
+      rounds, s.key === 'guided' ? watchSlot(app, s, data) : null].filter(Boolean);
     return h(`article.card.stage${state}`, { 'data-stage': s.key, 'data-status': s.status },
       h('div.stage-head', {}, h(`span.badge${good ? '.done' : off || s.status === 'skipped' ? '.locked' : ''}`, {}, good ? icon('check') : String(i + 1)),
         h('h2', {}, s.title || STAGE_TITLES[s.key])),
@@ -158,20 +213,32 @@ export function trainingPath(data, { app = null, annotatorId, message = '', onCo
         extra.length ? h('div.stage-extra', { 'data-slot': s.key }, extra) : null),
       h('div.stage-side', {}, h(`span.chip${chipState ? `.${chipState}` : ''}`, {}, chip), actions));
   });
-  // The tour and the snippets need no recording: they open from here.
+  // The tour and the snippets need no recording: they open from here (also to look at them again).
+  function open(stage, again = false) {
+    logger.event('stage_started', { stage, recording: null, repeat: again });
+    if (stage === 'tour') app._withParts(['tour'], 'annotate', ({ startTour }) => startTour(app));
+    else app._withParts(['snippets'], 'training', ({ showSnippets }) => showSnippets(app));
+  }
   const go = (next) => {
     if (!app || (next.stage !== 'tour' && next.stage !== 'snippets')) { onContinue(next); return; }
-    logger.event('stage_started', { stage: next.stage, recording: null, repeat: false });
-    if (next.stage === 'tour') app._withParts(['tour'], 'annotate', ({ startTour }) => startTour(app));
-    else app._withParts(['snippets'], 'training', ({ showSnippets }) => showSnippets(app));
+    open(next.stage);
   };
+  const outcome = pathOutcome(data);
+  // after a pass, the next study recording is one press away
+  const items = (app && app.assignments && app.assignments.items) || [];
+  const nextStudy = outcome.state === 'passed' && app && app.assignments
+    ? items.find((i) => i.recording_id === app.assignments.next && i.mode === 'standard' && i.status !== 'locked') || null : null;
   const cont = data.next
     ? h('button.btn.primary.wide', { type: 'button', 'data-log': 'training-continue', onclick: () => go(data.next) }, data.next.label || 'Continue')
-    : null;
+    : nextStudy ? h('button.btn.primary', { type: 'button', 'data-log': 'open-next', onclick: () => app.openAssignment(nextStudy) }, 'Open next recording')
+      : null;
   if (cont) buttons.push(cont);
-  const back = h(`button.btn${data.next ? '' : '.primary'}`, { type: 'button', 'data-log': 'training-back', onclick: onBack },
-    data.next ? 'Back to my recordings' : 'Go to my recordings');
-  const gate = data.gate && data.gate.open === false
+  // the recordings are not the way on while they are locked: no primary button points at them then
+  const backPrimary = !data.next && !nextStudy && outcome.state !== 'waiting';
+  const back = h(`button.btn${backPrimary ? '.primary' : ''}`, { type: 'button', 'data-log': 'training-back', onclick: onBack },
+    data.next || outcome.state === 'waiting' ? 'Back to my recordings' : 'Go to my recordings');
+  const waiting = outcome.state === 'waiting';
+  const gate = data.gate && data.gate.open === false && !waiting
     ? h('section.card.gate-card', { 'data-log': 'training-gate', role: 'note' }, icon('lock'),
       h('p', {}, data.gate.message || 'Your study recordings open once you pass the competency assessment.'))
     : null;
@@ -181,8 +248,10 @@ export function trainingPath(data, { app = null, annotatorId, message = '', onCo
     h('p.subtitle', {}, `${data.name || data.set_id}  ·  annotator ${annotatorId}`),
     message ? h(`p.${/^That did not reach/.test(message) ? 'banner' : 'success'}`, { role: 'status' }, message) : null,
     gate,
-    h('section.next-step', { 'aria-label': 'What comes next' },
-      h('p.subtitle.next-text', {}, nextText(data)),
+    h(`section.next-step${outcome.state === 'next' ? '' : `.${outcome.state}`}`, { 'aria-label': 'What comes next', 'data-outcome': outcome.state },
+      h('div.next-words', {},
+        h(`p.${outcome.state === 'passed' || waiting ? 'next-outcome' : 'subtitle.next-text'}`, {}, outcome.text),
+        waiting && data.gate.message ? h('p.caption.gate-line', { 'data-log': 'training-gate' }, icon('lock'), h('span', {}, data.gate.message)) : null),
       h('div.btn-row', {}, back, cont)),
     h('ol.stages.path', { 'aria-label': 'The stages of your training' }, cards.map((c) => h('li', {}, c))),
     quizzes && quizzes.length && onQuiz ? quizCard({ me: { quizzes } }, { onOpen: onQuiz }) : null);

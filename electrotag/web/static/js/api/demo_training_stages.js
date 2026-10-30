@@ -60,6 +60,9 @@ export class DemoTrainingStages {
     if (action === 'skip') {
       if (st.status === 'skipped') return view();
       if (!maySkip(policy, stage)) throw new ApiError(409, 'cannot_skip', `This study asks every trainee to do ${title}, so it cannot be skipped.`);
+      if (stageMarks(this.b._progress(aid).events).reopenedStage(stage) && ['available', 'in_progress'].includes(st.status)) {
+        throw new ApiError(409, 'reopened', `Your study team reopened your training so that you do ${title} again before the assessment, so it cannot be skipped this time.`);
+      }
       if (st.status === 'locked') throw new ApiError(409, 'locked', `${title} is not open yet: finish or skip the stage before it first.`);
       if (st.status === 'completed' || st.status === 'not_used') {
         throw new ApiError(409, 'finished', `${title} is ${st.status === 'completed' ? 'done already' : 'not part of your training'}, so there is nothing to skip.`);
@@ -87,8 +90,12 @@ export class DemoTrainingStages {
   // ----------------------------------------------------------------- snippets
   _quiz(aid) {
     const items = this.b._quizItemsOf(this.set.set_id);
-    if (!items.length || !this.b._quizAllowed(aid)) return null;
-    return { n_items: items.length, finished: Boolean(this.b._quizState(aid, false).finished), required: this.b._policy().snippets_quiz_required };
+    // a quiz on a practice or assessment recording would give its answers away (training_path.py _quiz)
+    if (!items.length || !this.b._quizAllowed(aid) || items.some((it) => NO_SNIPPETS_FROM.includes(this._use(it.recording_id)))) return null;
+    const st = this.b._quizState(aid, false);
+    const finished = Boolean(st.finished);
+    const n = finished && st.score ? st.score.n_correct : null;
+    return { n_items: items.length, finished, required: this.b._policy().snippets_quiz_required, n_correct: Number.isFinite(n) ? n : null };
   }
 
   _use(rid) { return ((this.set.recordings || []).find((r) => r.recording_id === rid) || {}).use || ''; }
@@ -142,7 +149,7 @@ export class DemoTrainingStages {
     if (typeof rid !== 'string' || !rid) throw bad('recording_id is missing');
     const use = this._use(rid);
     if (NO_SNIPPETS_FROM.includes(use)) {
-      throw bad(`${rid} is a ${use} recording of ${set.set_id}: a snippet of it would show trainees the answers. Choose a guided recording, or another recording of the set.`, 'reveals_answers', 422);
+      throw bad(`${rid} is ${/^[aeiou]/i.test(use) ? 'an' : 'a'} ${use} recording of this set: a snippet of it would show trainees the answers they are scored against. Choose a guided recording, or another recording that no set uses for practice or assessment.`, 'reveals_answers', 422);
     }
     const info = (set.recordings || []).some((r) => r.recording_id === rid) ? this.b._recordingInfo(rid) : null;
     if (!info) throw new ApiError(404, 'unknown_recording', `${rid} is not a recording of the reference set ${set.set_id}`);
@@ -211,12 +218,12 @@ export class DemoTrainingStages {
   /** training_gate_get (training_path.py admin_gate_get). */
   gateGet(body) {
     const aid = this._who(body);
-    const out = { annotator_id: aid, training_gate: this.b._gate(), programme: null, events: [], skipped: [], can_reopen: false,
+    const out = { annotator_id: aid, training_gate: this.b._gate(), programme: null, events: [], skipped: [], rounds: [], can_reopen: false,
       can_assign_set: false, assessment_sets: [] };
     if (!this.b._inProgramme(aid)) return out;
     const events = this.b._progress(aid).events;
     out.programme = this.b._trainingView(aid);
-    out.events = events.map((e) => Object.fromEntries(['event', 'stage', 'at', 'by', 'from', 'from_set'].filter((k) => k in e).map((k) => [k, e[k]])));
+    out.events = events.map((e) => Object.fromEntries(['event', 'stage', 'at', 'by', 'from', 'from_set', 'set_name'].filter((k) => k in e).map((k) => [k, e[k]])));
     out.skipped = stageMarks(events).skipped;
     return out;
   }

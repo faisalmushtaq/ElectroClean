@@ -437,6 +437,16 @@ def test_entries_are_promoted_with_their_provenance_once(service: StudyService, 
         == "unknown_entry"
     promoted = [x for x in service.store.audit_page(None, 50)[0] if x["op"] == "library_promote"]
     assert len(promoted) == 3 and "explanation" not in promoted[0]["details"]
+    # once the recording is another set's assessment recording, its conflicts give the answers away: refused
+    service.call("admin", ADMIN, {"op": "set_create", "set_id": "pilot", "name": "Pilot set"})
+    service.call("admin", ADMIN, {"op": "set_add_reference", "set_id": "pilot", "recording_id": SUB1,
+                                  "use": "assessment", "recording_scope": "study",
+                                  "source": {"kind": "annotator", "annotator_id": "A01"}})
+    other = service.call("admin", ADMIN, {"op": "set_create", "set_id": "library2"})["set"]["set_id"]
+    for to in ("quiz_item", "snippet"):
+        e = ex_err(service, E01, "library_promote", {"promote_id": "6" * 32, "entry_id": f"{U1}:{c1}", "to": to,
+                                                     "set_id": other, "label": BLINK})
+        assert e.code == "reveals_answers" and "an assessment recording of the training set Pilot set" in e.message
 
 
 def test_the_results_hold_the_decisions_and_the_library(service: StudyService, recordings: Path) -> None:

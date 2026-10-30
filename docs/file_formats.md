@@ -550,9 +550,28 @@ criteria, `status` (`met`, `not_met`, `not_determined`, `incomplete`), the
 individual `checks`, all `metrics` (overall, per category, missed, extra and
 relabelled artifacts), `stages_skipped` (the stages of the training path the
 trainee skipped and did not take up again: `tour`, `snippets`, `guided`,
-`practice`), the SHA-256 of every input file, the software version and
-`results_sha256`, a digest of the results that is identical whenever the
-report is regenerated from the same inputs.
+`practice`, including those skipped in an earlier set before the study team
+gave a new assessment set), `stages_skipped_in` (those skipped in an earlier
+set, each with that set's name), the SHA-256 of every input file, the software
+version and `results_sha256`, a digest of the results that is identical
+whenever the report is regenerated from the same inputs.
+
+## Training progress (`training_progress/<set>/annotator-<ID>.json`)
+
+Stars, scores and times of the trainee's guided and practice recordings
+(`guided`, `practice`; a "correct the marks" recording has `kind` `correct`,
+with `fixed` and `n_errors`), and `events`, every stage event in order, each
+with its time `at`: `stage_skipped` (with the `policy` of the moment),
+`stage_resumed` and `stage_completed` with their `stage`;
+`training_reopened` (`from`, `by`, the `baseline` of saves that no longer
+count, `practice_seen`, and `round`, the round of the assessment that ended:
+`set_id`, `set_name`, `status`, `status_text`, `at` and the competency
+`report` as it was then); and `assessment_set_assigned` (`from_set`,
+`from_set_name`, `by`, `stages`, each learning stage as it was in the earlier
+set with the set it was done or skipped in, `skips`, every skip of the earlier
+set, `earlier_rounds` and `round`). The training path is worked out from these
+events, so a skip is never lost: a stage skipped in an earlier set stays
+skipped in the new one.
 
 ## Agreement analysis outputs
 

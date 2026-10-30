@@ -78,8 +78,9 @@ NOT_FOR_TEACHING = ("Trainees watch experts only on the training recordings for 
 def teaching_recording(service: StudyService, recording_id: str, mode: str, context_id: str) -> bool:
     """True when an expert's session on this recording, in this mode and training set, may be shown to trainees: a
     recording of a self-contained training set (never the study's own register), used there for learning with the
-    experts (``guided``: practice and assessment recordings would give their answers away), and neither its ID nor
-    its fingerprint in the study's register, so that nobody can be given it as study work."""
+    experts (``guided``: practice and assessment recordings would give their answers away), neither its ID nor
+    its fingerprint in the study's register, so that nobody can be given it as study work, and not the same file as
+    a practice or assessment recording of any other set."""
     from electrotag.training.reference import ReferenceSetError
 
     if mode == "standard" or not context_id:
@@ -94,7 +95,10 @@ def teaching_recording(service: StudyService, recording_id: str, mode: str, cont
     if m is None or service.store.manifest(SCOPE_STUDY, recording_id) is not None:
         return False
     sha, size = fingerprint_of(m)
-    return not (sha and any(o.get("scope") == SCOPE_STUDY for o in service.store.manifests_by_fingerprint(sha, size)))
+    if sha and any(o.get("scope") == SCOPE_STUDY for o in service.store.manifests_by_fingerprint(sha, size)):
+        return False
+    # the same file as a practice or assessment recording of another set would give that set's answers away
+    return not service.training_path.answer_sets(recording_id, scope=set_scope(rs.set_id))
 
 
 def may_watch(service: StudyService, user: User, annotator_id: str, recording_id: str, mode: str,

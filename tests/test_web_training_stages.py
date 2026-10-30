@@ -113,7 +113,7 @@ def test_skip_done_and_resume_are_idempotent_and_kept_with_the_progress(client: 
     assert [s["key"] for s in tr["stages"]] == ["tour", "snippets", "guided", "practice", "assessment"]
     assert tr["next"]["stage"] == "tour" and tr["next"]["recording_id"] is None
     assert stage(tr, "tour")["can_skip"] and not stage(tr, "snippets")["can_skip"]
-    assert tr["gate"] == {"open": True, "reason": "", "message": ""}  # the example set has no assessment
+    assert tr["gate"] == {"open": True, "reason": "", "message": "", "result": ""}  # the example set has no assessment
     once = t01.ok("post", "/training/stage", {"stage": "tour", "action": "done"})
     twice = t01.ok("post", "/training/stage", {"stage": "tour", "action": "done"})
     assert once == twice and stage(once, "tour")["status"] == "completed" and once["next"]["stage"] == "snippets"
@@ -158,11 +158,12 @@ def test_the_snippets_stage_waits_for_its_recognition_check_when_the_study_asks(
     t01 = Api(client, "T01")
     t01.ok("post", "/training/stage", {"stage": "tour", "action": "skip"})
     sn = t01.ok("get", "/training/snippets")
-    assert sn["quiz"] == {"n_items": 1, "finished": False, "required": True}
+    assert sn["quiz"] == {"n_items": 1, "finished": False, "required": True, "n_correct": None}
     err(t01.post("/training/stage", {"stage": "snippets", "action": "done"}), 409, "quiz_required")
     t01.ok("post", "/quiz/example", {"action": "answer", "item_id": "q1", "label": "Eye-blink-artifact"})
     t01.ok("post", "/quiz/example", {"action": "finish"})
-    assert t01.ok("get", "/training/snippets")["quiz"]["finished"] is True
+    quiz = t01.ok("get", "/training/snippets")["quiz"]
+    assert quiz["finished"] is True and quiz["n_correct"] == 1  # "Recognition check: 1 of 1 right"
     tr = t01.ok("post", "/training/stage", {"stage": "snippets", "action": "done"})
     assert stage(tr, "snippets")["status"] == "completed"
 
@@ -244,7 +245,7 @@ def test_study_work_waits_for_the_assessment(gated, recordings: Path, study: Pat
     r = t01.ok("post", "/submissions", submission(recordings, PRACTICE1, perfect, "assessment", "example"))
     assert r["assessment"]["status"] == "met"
     me = t01.ok("get", "/me")
-    assert me["training_gate"] == {"open": True, "reason": "", "message": ""}
+    assert me["training_gate"] == {"open": True, "reason": "", "message": "", "result": ""}
     items = {i["recording_id"]: i for i in t01.ok("get", "/assignments")["items"]}
     assert items[SUB1]["status"] == "todo" and items[SUB1]["locked"] is None
     assert t01.ok("post", "/match", match_body(recordings, SUB1))["status"] == "matched"
@@ -276,7 +277,8 @@ def test_experts_admins_and_a_study_without_a_gate_never_wait(gated, recordings:
     assert gate["open"] is False and "finished the competency assessment" in gate["message"]
 
 
-def test_after_an_assessment_not_met_the_study_team_reopens_the_training(gated, recordings: Path) -> None:
+def test_after_an_assessment_not_met_the_study_team_reopens_the_training(gated, recordings: Path, study: Path
+                                                                       ) -> None:
     client, ref = gated
     admin = Api(client, "ADMIN")
     t01 = Api(client, "T01")
@@ -300,8 +302,19 @@ def test_after_an_assessment_not_met_the_study_team_reopens_the_training(gated, 
     assessment = stage(tr, "assessment")
     assert assessment["status"] == "locked" and "reopened your training" in assessment["detail"]
     assert t01.ok("get", "/me")["programme"]["complete"] is False
-    # skip the guided stage again and retake the assessment, this time well: only the new save counts
-    t01.ok("post", "/training/stage", {"stage": "guided", "action": "skip"})
+    # the reopened stage is done again, never skipped, before the assessment is taken once more
+    body = err(t01.post("/training/stage", {"stage": "guided", "action": "skip"}), 409, "reopened")
+    assert "reopened your training" in body["message"]
+    assert stage(tr, "guided")["can_skip"] is False and stage(tr, "tour")["status"] == "skipped"
+    for rid in (GUIDED1, GUIDED2):
+        finish_guided(t01, study, recordings, rid)
+    # the round that did not meet the criteria is kept, with its report, for the trainee and the study team
+    rounds = t01.ok("get", "/training")["rounds"]
+    assert [(r["round"], r["set_id"], r["status"]) for r in rounds] == [(1, "example", "not_met")]
+    assert set(rounds[0]) == {"round", "set_id", "set_name", "status", "status_text", "at"}
+    g = admin.admin_ok("training_gate_get", {"annotator_id": "T01"})
+    assert g["rounds"][0]["status"] == "not_met" and "<html" in g["rounds"][0]["html"].lower()
+    # retake the assessment, this time well: only the new save counts
     items = {(i["recording_id"], i["mode"]): i for i in t01.ok("get", "/assignments")["items"]}
     assert items[(PRACTICE1, "assessment")]["repeat"] is True and items[(PRACTICE1, "assessment")]["status"] == "todo"
     perfect = [as_wire(x, f"{i + 1:032x}") for i, x in enumerate(ref)]
@@ -334,9 +347,18 @@ def test_after_an_assessment_not_met_the_study_team_gives_a_new_assessment_set(g
     assert g["programme"]["set_id"] == "retake" and g["events"][-1]["event"] == "assessment_set_assigned"
     assert admin_audit(admin)[0]["op"] == "training_assessment_set"
     tr = t01.ok("get", "/training")
-    assert [s["status"] for s in tr["stages"]] == ["completed"] * 4 + ["available"]
-    assert stage(tr, "guided")["detail"] == "Done in Example training set (simulated)."
+    # each stage as it was in the earlier set: the skips stay skips (never "completed"), and cannot be taken up here
+    assert [s["status"] for s in tr["stages"]] == ["skipped"] * 3 + ["not_used", "available"]
+    assert stage(tr, "guided")["detail"] == "Skipped in Example training set (simulated)."
+    assert {s["carried_from"] for s in tr["stages"][:4]} == {"Example training set (simulated)"}
+    assert not any(s["can_resume"] or s["can_skip"] for s in tr["stages"])
     assert tr["next"]["stage"] == "assessment" and t01.ok("get", "/me")["training_gate"]["open"] is False
+    assert [(r["round"], r["set_id"]) for r in tr["rounds"]] == [(1, "example")]
+    g = admin.admin_ok("training_gate_get", {"annotator_id": "T01"})
+    assert g["skipped"] == ["tour", "snippets", "guided"]
+    skips = [e for e in g["events"] if e["event"] == "stage_skipped"]
+    assert [e["stage"] for e in skips] == ["tour", "snippets", "guided"]
+    assert {e["set_name"] for e in skips} == {"Example training set (simulated)"}
 
 
 def test_a_trainees_guided_recordings_open_only_once_the_first_stages_are_done(client: TestClient,
@@ -345,3 +367,88 @@ def test_a_trainees_guided_recordings_open_only_once_the_first_stages_are_done(c
     assert t01.ok("post", "/match", match_body(recordings, GUIDED1))["status"] == "not_assigned"
     skip_to_guided(t01)
     assert t01.ok("post", "/match", match_body(recordings, GUIDED1))["mode"] == "guided"
+
+
+def test_no_skip_is_lost_or_counted_as_done_across_new_assessment_sets(gated, recordings: Path, study: Path) -> None:
+    """Example set (skips, then an assessment not met) -> retake -> retake2: every skip of the first set is still
+    a skip, named with its set, in the last set's path, the study team's card and the competency report."""
+    client, ref = gated
+    admin = Api(client, "ADMIN")
+    t01 = Api(client, "T01")
+    for s in ("tour", "snippets", "guided"):
+        t01.ok("post", "/training/stage", {"stage": s, "action": "skip"})
+    t01.ok("post", "/submissions", submission(recordings, PRACTICE1, [as_wire(ref[0], "1" * 32)], "assessment",
+                                              "example"))
+    a01 = Api(client, "A01")
+    for rid in (SUB1, SUB2):
+        a01.ok("post", "/submissions", submission(recordings, rid, [as_wire(ref[0], "a" * 32)]))
+    for set_id, rid in (("retake", SUB2), ("retake2", SUB1)):
+        admin.admin_ok("set_create", {"set_id": set_id, "name": set_id.title()})
+        admin.admin_ok("set_add_reference", {"set_id": set_id, "recording_id": rid, "use": "assessment",
+                                             "recording_scope": "study",
+                                             "source": {"kind": "annotator", "annotator_id": "A01"}})
+    admin.admin_ok("training_assessment_set", {"annotator_id": "T01", "set_id": "retake"})
+    t01.ok("post", "/submissions", submission(recordings, SUB2, [], "assessment", "retake"))
+    admin.admin_ok("training_assessment_set", {"annotator_id": "T01", "set_id": "retake2"})
+    tr = t01.ok("get", "/training")
+    assert tr["set_id"] == "retake2"
+    assert [s["status"] for s in tr["stages"]] == ["skipped"] * 3 + ["not_used", "available"]
+    name = "Example training set (simulated)"
+    assert [s["carried_from"] for s in tr["stages"][:3]] == [name] * 3  # the set they were skipped in, not Retake
+    assert stage(tr, "tour")["detail"] == f"Skipped in {name}."
+    assert [(r["round"], r["set_id"]) for r in tr["rounds"]] == [(1, "example"), (2, "retake")]
+    g = admin.admin_ok("training_gate_get", {"annotator_id": "T01"})
+    skips = [(e["stage"], e["set_name"]) for e in g["events"] if e["event"] == "stage_skipped"]
+    assert skips == [("tour", name), ("snippets", name), ("guided", name)]
+    assert g["skipped"] == ["tour", "snippets", "guided"] and len(g["rounds"]) == 2
+    # the new competency report lists them, with the set they were skipped in
+    t01.ok("post", "/submissions", submission(recordings, SUB1, [], "assessment", "retake2"))
+    folder = study / "Annotated_Events" / "training" / "retake2" / "reports"
+    report = json.loads((folder / "annotator-T01_competency_report.json").read_text())
+    assert report["stages_skipped"] == ["tour", "snippets", "guided"]
+    assert report["stages_skipped_in"] == {"tour": name, "snippets": name, "guided": name}
+    html = (folder / "annotator-T01_competency_report.html").read_text()
+    assert f"Stages skipped: Find your way around (in {name})" in html.replace("&#x27;", "'")
+    prog = json.loads((study / "Annotated_Events" / "training_progress" / "retake2" / "annotator-T01.json")
+                      .read_text())
+    assert "completed" not in json.dumps(prog["events"][-1]["stages"])
+
+
+def test_a_quiz_that_would_give_answers_away_is_withheld(client: TestClient) -> None:
+    admin = Api(client, "ADMIN")
+    body = {"set_id": "example", "item_id": "q1", "recording_id": GUIDED2, "start_s": 3.9, "end_s": 4.5,
+            "correct_label": "Eye-blink-artifact"}
+    admin.admin_ok("quiz_item_add", body)
+    t01 = Api(client, "T01")
+    assert t01.ok("get", "/training/snippets")["quiz"]["n_items"] == 1
+    assert "quick recognition check" in stage(t01.ok("get", "/training"), "snippets")["detail"]
+    # quiz items, like snippets, never come from a recording whose answers trainees are scored against
+    e = admin.admin_error("quiz_item_add", {**body, "item_id": "q2", "recording_id": PRACTICE1}, 422,
+                          "reveals_answers")
+    assert "is a practice recording of this set" in e["message"]
+    # a recording given such a use later: the quiz is left out of the recognition check and offered to nobody
+    # but the experts until the study team removes the item; the admin area says which item and why
+    admin.admin_ok("set_recording_update", {"set_id": "example", "recording_id": GUIDED2, "use": "assessment"})
+    withheld = admin.admin_ok("quiz_items", {"set_id": "example"})["withheld"]
+    assert [w["item_id"] for w in withheld] == ["q1"] and "is an assessment recording" in withheld[0]["message"]
+    assert t01.ok("get", "/training/snippets")["quiz"] is None
+    assert "recognition check" not in stage(t01.ok("get", "/training"), "snippets")["detail"]
+    assert all(s["recording_id"] != GUIDED2 for s in t01.ok("get", "/training/snippets")["snippets"])
+    a01 = Api(client, "A01")
+    assert a01.ok("get", "/me")["quizzes"] == []
+    err(a01.quiz("example", {"action": "get"}), 409, "reveals_answers")
+    assert [q["set_id"] for q in Api(client, "E01").ok("get", "/me")["quizzes"]] == ["example"]
+    snip = admin.admin_error("snippet_add", {"set_id": "example", "recording_id": GUIDED2, "start_s": 1.0,
+                                             "end_s": 2.0, "label": "EMG-artifact"}, 422, "reveals_answers")
+    assert snip["message"].startswith(f"{GUIDED2} is an assessment recording of this set")
+    admin.admin_ok("quiz_item_remove", {"set_id": "example", "item_id": "q1"})
+    assert admin.admin_ok("quiz_items", {"set_id": "example"})["withheld"] == []
+
+
+def test_any_set_that_scores_trainees_on_a_recording_is_found(gated, recordings: Path) -> None:
+    """``answer_sets``: for the replays shown to trainees and other material without a set of its own."""
+    client, _ref = gated
+    service = client.app.state.service
+    assert service.training_path.answer_sets(PRACTICE1, "set:example") == [("example", "assessment")]
+    assert service.training_path.answer_sets(GUIDED1, "set:example") == []
+    assert service.training_path.answer_sets(SUB1) == []

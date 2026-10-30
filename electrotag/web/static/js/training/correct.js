@@ -3,18 +3,21 @@
 //
 // For a trainee, this is a guided recording whose guidance is "correct": the guided coach hands over to
 // CorrectPanel (GUIDANCE_PANELS in coach.js), the trainee corrects the marks freely and saves with Save
-// and Finish, and the study scores the corrections (electrotag/web/correct_marks.py); afterSaved shows
-// how many planted mistakes were fixed and what is still wrong. For an expert trying an exercise
+// and Finish, and the study scores the corrections (electrotag/web/correct_marks.py); afterSaved opens a
+// review of the saved marks on the EEG (CorrectionsReview), as practice has one: how many planted mistakes
+// were fixed, and each mistake, fixed or not, which N and P (or a press on it) go to. The training path's
+// card says the result afterwards. For an expert trying an exercise
 // (js/expert/planted.js, purpose "planted"), nothing is saved: Check my corrections scores them in the
 // browser (planted_scoring.js, the same rules as the study's), and the experts' marks can be shown as
 // dashed outlines.
 //
 // Log events: planted_opened {mode, n_planted, restored}, planted_checked {fixed, n_errors, new_mistakes},
 // planted_reference_layer {shown}, planted_item_jumped {kind, fixed}, planted_restarted, planted_result_shown
-// {fixed, n_errors, new_mistakes}.
+// {fixed, n_errors, new_mistakes}, planted_review_item {kind, fixed, item}.
 
 import { h, append, clear } from '../ui/dom.js';
 import { showDialog } from '../ui/dialog.js';
+import { loadParts } from '../lazy.js';
 import { logger } from '../log/logger.js';
 import { icon } from '../views/common.js';
 import { DEMO_NOTICE } from '../api/notice.js';
@@ -25,21 +28,97 @@ const KIND_WORDS = { missing: 'Left out', type: 'Wrong type', boundary: 'Start o
   broken: 'A right mark changed', added: 'Marked where there is none' };
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
+/** A planted mistake's heading: "Left out: fixed", "Left out: not fixed"; a new mistake's: "Marked where there is none". */
+export function itemHeading(it, fixed, planted = true) {
+  const what = KIND_WORDS[it.kind] || it.kind;
+  return planted ? `${what}: ${fixed ? 'fixed' : 'not fixed'}` : what;
+}
+
+/** The planted mistakes, then any new ones, in the order of the list: [{it, fixed, planted}]. */
+export function resultRows(score) {
+  return [...(score.items || []).map((it) => ({ it, fixed: Boolean(it.fixed), planted: true })),
+    ...(score.new || []).map((it) => ({ it, fixed: false, planted: false }))];
+}
+
 /** The list of what was fixed and what was not, each going to its moment of the EEG when pressed. */
 export function resultList(score, onJump = null) {
-  const row = (it, fixed) => {
-    const li = h(`li.planted-item${fixed ? '.fixed' : '.not-fixed'}`, { 'data-kind': it.kind },
+  const row = ({ it, fixed, planted }, i) => {
+    const li = h(`li.planted-item${fixed ? '.fixed' : '.not-fixed'}`, { 'data-kind': it.kind, 'data-row': String(i) },
       icon(fixed ? 'check' : 'close'),
-      h('span.planted-text', {}, h('b', {}, `${KIND_WORDS[it.kind] || it.kind}${fixed ? ': fixed' : ''}`), ' ', it.detail || ''));
+      h('span.planted-text', {}, h('b', {}, itemHeading(it, fixed, planted)), ' ', it.detail || ''));
     if (onJump) {
-      append(li, [h('button.btn.quiet.small', { type: 'button', 'data-log': 'planted-jump', onclick: () => onJump(it, fixed) }, 'Show')]);
+      append(li, [h('button.btn.quiet.small', { type: 'button', 'data-log': 'planted-jump', onclick: () => onJump(it, fixed, i) }, 'Show')]);
     }
     return li;
   };
+  const rows = resultRows(score);
+  const nPlanted = (score.items || []).length;
   return h('div.planted-result', {},
-    h('ul.planted-items', { 'aria-label': 'The planted mistakes' }, (score.items || []).map((it) => row(it, it.fixed))),
-    (score.new || []).length ? h('p.caption', {}, 'New mistakes') : null,
-    (score.new || []).length ? h('ul.planted-items', { 'aria-label': 'New mistakes' }, score.new.map((it) => row(it, false))) : null);
+    h('ul.planted-items', { 'aria-label': 'The planted mistakes' }, rows.slice(0, nPlanted).map((r, i) => row(r, i))),
+    rows.length > nPlanted ? h('p.caption', {}, 'New mistakes') : null,
+    rows.length > nPlanted ? h('ul.planted-items', { 'aria-label': 'New mistakes' }, rows.slice(nPlanted).map((r, i) => row(r, nPlanted + i))) : null);
+}
+
+/**
+ * The review after Save and Finish of an exercise: the saved marks on the EEG, read only, and beside them how
+ * many planted mistakes were fixed and each mistake, fixed or not; N and P (or Show) go to each in turn.
+ */
+export class CorrectionsReview {
+  constructor(ws, planted) {
+    this.ws = ws;
+    this.planted = planted;
+    this.rows = resultRows(planted);
+    this.row = -1;
+    ws.review = this;
+    const fixedAll = planted.fixed === planted.n_errors && !planted.new_mistakes;
+    this.list = resultList(planted, (it, fixed, i) => this.go(i));
+    this.el = h('section.review.card.corrections-review', { 'aria-label': 'Your corrections' },
+      h('h2', {}, 'Your corrections'),
+      h(`p.verdict.${fixedAll ? 'passed' : 'not-yet'}`, {}, planted.message || ''),
+      this.rows.length ? h('p.caption', {}, 'Press an item, or N and P, to go to it on the EEG. Your saved marks are shown.') : null,
+      this.list);
+    ws.reviewHost.appendChild(this.el);
+    logger.event('planted_result_shown', { fixed: planted.fixed, n_errors: planted.n_errors, new_mistakes: planted.new_mistakes });
+  }
+
+  go(i) {
+    if (i < 0 || i >= this.rows.length) return;
+    const { it, fixed } = this.rows[i];
+    this.row = i;
+    for (const li of this.list.querySelectorAll('li[data-row]')) li.classList.toggle('current', li.dataset.row === String(i));
+    const li = this.list.querySelector(`li[data-row="${i}"]`);
+    if (li && li.scrollIntoView) li.scrollIntoView({ block: 'nearest' });
+    const sf = this.ws.sf;
+    const a = Math.round(Number(it.onset_s) * sf);
+    const b = Math.round(Number(it.offset_s) * sf);
+    this.ws.viewer.showInterval(a, Math.max(1, b - a), []);
+    logger.event('planted_review_item', { kind: it.kind, fixed, item: i + 1 });
+  }
+
+  step(delta) {
+    const next = this.row >= 0 ? this.row + delta : delta > 0 ? 0 : this.rows.length - 1;
+    this.go(Math.min(Math.max(0, next), this.rows.length - 1));
+  }
+}
+
+/** Open the review of a saved exercise (the trainee's session, still holding its recording). */
+export async function openCorrectionsReview(app, session, planted) {
+  const [{ AnnotationSession }, { Workspace }] = await loadParts('session', 'workspace');
+  const rs = new AnnotationSession({
+    backend: app.backend, recording: session.recording, manifest: session.manifest, recordingId: session.recordingId,
+    mode: 'review', contextId: session.contextId, me: app.me, catalogue: app.catalogue, readOnly: true,
+  });
+  rs.store.reset(session.store.toJSON().filter((a) => app.catalogue.has(a.label)));
+  rs.view = session.view;
+  const ws = new Workspace(app, rs, { kind: 'review' });
+  const chip = ws.el.querySelector('.ws-header .chip');
+  if (chip) chip.textContent = 'Corrections review'; // the review of practice says "Practice review"
+  app.ws = ws;
+  app._render(ws.el, 'review');
+  ws.mount(app.content);
+  const review = new CorrectionsReview(ws, planted);
+  ws.logOpened({ recording_id: session.recordingId, segment: 'corrections_review' });
+  return review;
 }
 
 export class CorrectPanel {
@@ -163,17 +242,22 @@ export class CorrectPanel {
     btn.title = 'Save your corrections and see how many of the planted mistakes you fixed';
   }
 
-  /** After Save and Finish (app.afterSave): how the trainee did, then the training path. */
+  /** After Save and Finish (app.afterSave): the review of the corrections on the EEG, then the training path. */
   async afterSaved(app, result) {
     const g = (result && result.guided) || {};
     const p = (g.feedback && g.feedback.planted) || null;
-    if (p) {
-      logger.event('planted_result_shown', { fixed: p.fixed, n_errors: p.n_errors, new_mistakes: p.new_mistakes });
-      await showDialog({ title: 'Your corrections', logText: p.message, className: 'planted-dialog',
-        body: h('div', {}, h('p.dialog-text', {}, p.message), resultList(p)),
-        buttons: [{ label: 'Back to my training path', value: true, kind: 'primary' }], cancelValue: true });
-    }
     app.pathMessage = g.message || 'Recording saved.';
+    if (p) {
+      try {
+        await openCorrectionsReview(app, this.ws.s, p);
+        return;
+      } catch {
+        // the review's parts could not be loaded: the result in a dialog instead
+        await showDialog({ title: 'Your corrections', logText: p.message, className: 'planted-dialog',
+          body: h('div', {}, h('p.dialog-text', {}, p.message), resultList(p)),
+          buttons: [{ label: 'Back to my training path', value: true, kind: 'primary' }], cancelValue: true });
+      }
+    }
     await app.showTraining();
   }
 

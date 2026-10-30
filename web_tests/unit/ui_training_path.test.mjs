@@ -7,12 +7,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  STAGES, REOPENED_TEXT, SKIPPED_TEXT, browserStep, isFinished, isUnlocked, maySkip, snippetsDetail, stageMarks, stagePolicy, stageStates,
+  STAGES, REOPENED_TEXT, SKIPPED_TEXT, browserStep, correctionsDetail, isFinished, isUnlocked, maySkip, snippetsDetail, stageMarks, stagePolicy, stageStates,
 } from '../../electrotag/web/static/js/training/stages.js';
-import { COMPLETE_TEXT, LOCKED_TEXT, STAGE_LINES, WATCH_EXPERT, countText, detailText, skipQuestion, stageChip } from '../../electrotag/web/static/js/training/path.js';
-import { galleryOrder, groupSnippets, whereText } from '../../electrotag/web/static/js/training/snippets.js';
+import { COMPLETE_TEXT, LOCKED_TEXT, NOT_MET_TEXT, PASSED_TEXT, STAGE_LINES, TO_COME_TEXT, WATCH_EXPERT, canLookAgain, countText, detailText, pathOutcome, roundText, skipQuestion, stageChip } from '../../electrotag/web/static/js/training/path.js';
+import { galleryOrder, groupSnippets, keyStep, quizResultText, whereText } from '../../electrotag/web/static/js/training/snippets.js';
 import { nextSnippetId, parseChannels } from '../../electrotag/web/static/js/admin/snippets.js';
-import { eventText } from '../../electrotag/web/static/js/admin/training_gate.js';
+import { eventText, roundLine } from '../../electrotag/web/static/js/admin/training_gate.js';
 import { programmeText, progressCounts } from '../../electrotag/web/static/js/admin/model.js';
 import { DemoBackend, TRAINING_SET } from '../../electrotag/web/static/js/api/demo.js';
 import { Catalogue } from '../../electrotag/web/static/js/catalogue.js';
@@ -79,6 +79,57 @@ test('reopening and a new assessment set, as the progress events say', () => {
   assert.ok(carried.slice(0, 4).every((x) => x.carried && x.detail === 'Done in Pilot set.'));
 });
 
+test('a new assessment set keeps each stage as it was in the earlier set: a skip stays a skip', () => {
+  const stages = { tour: { status: 'skipped', set_id: 'pilot', set_name: 'Pilot set' }, snippets: { status: 'completed', set_id: 'pilot', set_name: 'Pilot set' },
+    guided: { status: 'skipped', set_id: 'first', set_name: 'First set' }, practice: { status: 'not_used', set_id: 'pilot', set_name: 'Pilot set' } };
+  const events = [ev('assessment_set_assigned', undefined, { from_set: 'pilot', from_set_name: 'Pilot set', stages,
+    skips: [{ stage: 'guided', at: '0', set_id: 'first', set_name: 'First set' }, { stage: 'tour', at: '1', set_id: 'pilot', set_name: 'Pilot set' }],
+    earlier_rounds: [{ set_id: 'first', set_name: 'First set', status: 'not_met', status_text: 'x', at: '0' }],
+    round: { set_id: 'pilot', set_name: 'Pilot set', status: 'not_met', status_text: 'y', at: '1' } })];
+  const s = stageStates(base({ events }));
+  assert.deepEqual(statuses(s), ['skipped', 'completed', 'skipped', 'not_used', 'available']);
+  assert.deepEqual(s.slice(0, 4).map((x) => x.detail), ['Skipped in Pilot set.', 'Done in Pilot set.', 'Skipped in First set.', 'Not part of your training in Pilot set.']);
+  assert.ok(s.slice(0, 4).every((x) => x.carried && !x.can_resume && !x.can_skip));
+  const marks = stageMarks(events);
+  assert.deepEqual(marks.skipped, ['tour', 'guided']);
+  assert.deepEqual(marks.rounds.map((r) => [r.round, r.set_id]), [[1, 'first'], [2, 'pilot']]);
+  assert.equal(roundText({ ...marks.rounds[1], status_text: 'Does not yet meet the competency criteria.' }), 'Round 2, Pilot set: Does not yet meet the competency criteria.');
+  // a stage the study team reopened is done again, never skipped
+  const re = stageStates(base({ events: [ev('stage_skipped', 'tour'), ev('stage_skipped', 'snippets'), ev('stage_skipped', 'guided'),
+    ev('training_reopened', undefined, { from: 'guided' })] }));
+  assert.equal(re[2].status, 'available');
+  assert.equal(re[2].can_skip, false);
+  assert.ok(re[0].can_resume);
+});
+
+test('correct the marks on the stage card, and the snippets\' keys and check', () => {
+  assert.equal(correctionsDetail({ g1: { kind: 'correct', n_errors: 4, fixed: 2 }, g2: { stars: 3 } }, ['g1', 'g2']),
+    'Correct the marks: you fixed 2 of 4 planted mistakes.');
+  assert.equal(correctionsDetail({ g1: { kind: 'correct', n_errors: 1, fixed: 1 } }, ['g1']), 'Correct the marks: you fixed 1 of 1 planted mistake.');
+  assert.equal(correctionsDetail({}, []), '');
+  assert.equal(stageStates(base({ guided: { total: G, done: ['g1'], detail: 'Correct the marks: you fixed 2 of 4 planted mistakes.' } }))[2].detail,
+    'Correct the marks: you fixed 2 of 4 planted mistakes.');
+  assert.equal(quizResultText({ finished: true, n_correct: 1, n_items: 1 }), 'Recognition check: 1 of 1 right');
+  assert.equal(quizResultText({ finished: false, n_items: 3 }), null);
+  assert.equal(keyStep({ key: 'ArrowRight' }), 1);
+  assert.equal(keyStep({ key: 'ArrowLeft' }), -1);
+  assert.equal(keyStep({ key: 'ArrowLeft', shiftKey: true }), 0);
+  assert.equal(keyStep({ key: 'n' }), 0);
+});
+
+test('once every stage is done, the path says how the assessment went, and finished stages can be looked at again', () => {
+  const stages = (result) => [{ key: 'tour', status: 'completed' }, { key: 'assessment', status: 'completed', result }];
+  assert.deepEqual(pathOutcome({ next: { text: 'Next: x.' }, stages: [] }), { state: 'next', text: 'Next: x.' });
+  assert.deepEqual(pathOutcome({ stages: stages('met'), gate: { open: true } }), { state: 'passed', text: PASSED_TEXT });
+  assert.equal(PASSED_TEXT, 'You passed: your study recordings are now open.');
+  assert.deepEqual(pathOutcome({ stages: stages('not_met'), gate: { open: false, result: 'not_met' } }), { state: 'waiting', text: NOT_MET_TEXT });
+  assert.equal(NOT_MET_TEXT, 'Assessment not met: waiting for your study team.');
+  assert.deepEqual(pathOutcome({ stages: stages('not_determined'), gate: { open: false, result: 'not_determined' } }), { state: 'waiting', text: TO_COME_TEXT });
+  assert.equal(pathOutcome({ stages: stages('not_met'), gate: { open: true }, message: 'Done.' }).state, 'complete');
+  assert.ok(canLookAgain({ key: 'tour', status: 'completed' }) && canLookAgain({ key: 'snippets', status: 'completed' }));
+  assert.ok(!canLookAgain({ key: 'snippets', status: 'completed', carried: true }) && !canLookAgain({ key: 'guided', status: 'completed' }));
+});
+
 test('the snippets stage says what it holds', () => {
   assert.equal(snippetsDetail(3, true, true), "3 examples of the experts' artifacts, with their notes, then a quick recognition check. To finish this stage, also finish the recognition check.");
   assert.equal(snippetsDetail(1, false, true), "1 example of the experts' artifacts, with their notes.");
@@ -136,7 +187,7 @@ test('the sandbox: skipping, finishing and resuming are kept as events, sent twi
   assert.deepEqual(done.stages.map((s) => s.status), ['skipped', 'completed', 'available', 'locked', 'not_used']);
   assert.equal(done.next.recording_id, TRAINING_SET.guided[0].rid);
   assert.deepEqual(b.state.progress.T01.events.map((e) => [e.event, e.stage]), [['stage_skipped', 'tour'], ['stage_completed', 'snippets']]);
-  assert.deepEqual((await b.me()).training_gate, { open: true, reason: '', message: '' }); // the sandbox's set has no assessment
+  assert.deepEqual((await b.me()).training_gate, { open: true, reason: '', message: '', result: '' }); // the sandbox's set has no assessment
   // the study asks for the recognition check before the snippets count as done
   const admin = new DemoBackend({ storage: memory(), tokens: memory() });
   await admin.login('ADMIN', 'demo');
@@ -147,7 +198,7 @@ test('the sandbox: skipping, finishing and resuming are kept as events, sent twi
   await assert.rejects(() => admin.trainingStage({ stage: 'snippets', action: 'done' }), (e) => e.code === 'quiz_required');
   const sn = await admin.trainingSnippets();
   assert.equal(sn.snippets.length, 12);
-  assert.deepEqual(sn.quiz, { n_items: 7, finished: false, required: true });
+  assert.deepEqual(sn.quiz, { n_items: 7, finished: false, required: true, n_correct: null });
   assert.ok(sn.snippets.every((s) => s.recording_id !== TRAINING_SET.practice[0]));
 });
 
@@ -161,6 +212,10 @@ test('the admin area\'s snippets: the next ID, and the channels typed checked ag
   assert.match(eventText({ event: 'stage_skipped', stage: 'tour', at: '2026-10-30T10:15:00+00:00' }), /^Find your way around skipped, /);
   assert.match(eventText({ event: 'training_reopened', from: 'practice', by: 'ADMIN', at: '2026-10-30T10:15:00+00:00' }),
     /^Training reopened \(from On your own\) by ADMIN, /);
+  // a skip carried over from an earlier set names it; an earlier round says how it ended
+  assert.match(eventText({ event: 'stage_skipped', stage: 'guided', set_name: 'Pilot set', at: '2026-10-30T10:15:00+00:00' }),
+    /^Learn with the experts skipped in Pilot set, /);
+  assert.match(roundLine({ round: 1, set_name: 'Pilot set', status: 'not_met', at: '2026-10-30T10:15:00+00:00' }), /^Round 1, Pilot set: not met, /);
   // a trainee's path in a line (Results, Progress): skips named; a locked study recording counts as one to do
   const stages = stageStates(base({ events: [ev('stage_skipped', 'tour'), ev('stage_skipped', 'snippets'), ev('stage_skipped', 'guided')] }));
   assert.equal(programmeText({ stages }), 'Tour skipped · Snippets skipped · Guided 0 of 2 (skipped) · Practice 0 of 1 · Assessment 0 of 1 (locked)');

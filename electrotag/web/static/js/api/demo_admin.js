@@ -1033,7 +1033,8 @@ export class DemoAdmin {
 
   // ------------------------------------------------------------------- quiz
   op_quiz_items(body) {
-    return { items: deepCopy(this._quizItems(this._setOr404(body.set_id))) };
+    // the sandbox's quiz is on its guided recordings, whose use cannot change here: nothing is withheld (admin.py op_quiz_items)
+    return { items: deepCopy(this._quizItems(this._setOr404(body.set_id))), withheld: [] };
   }
 
   // --------------------------------------------------------------- progress

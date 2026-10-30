@@ -526,6 +526,15 @@ ol.stages.path .stage {
 .gate-card { display: flex; align-items: flex-start; gap: 12px; margin: 16px 0 0; background: var(--band); }
 .gate-card .ico { width: 20px; height: 20px; flex: none; margin-top: 2px; }
 .gate-card p { margin: 0; }
+/* once the assessment is finished: how it went, in a heading's voice, with the lock and why under it */
+.next-words { display: flex; flex-direction: column; gap: 8px; min-width: 0; max-width: 760px; }
+.next-outcome { margin: 0; font: var(--t-28); letter-spacing: -0.03em; color: var(--ink); font-variation-settings: var(--display); }
+.next-step.waiting .gate-line, .next-step.passed .gate-line { margin: 0; }
+.next-step.waiting, .next-step.passed { align-items: flex-end; }
+/* the earlier rounds of the assessment, under its card's text; watching an expert, flush with the text */
+.stage-rounds { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.stage-extra { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.stage-extra .watch-slot .btn.quiet { padding-left: 0; padding-right: 0; height: auto; min-height: 32px; }
 @media (max-width: 899px) {
   ol.stages.path .stage { grid-template-columns: minmax(0, 1fr); padding: 16px; }
   .stage-side { flex-direction: row; align-items: center; justify-content: space-between; }
@@ -549,6 +558,18 @@ ol.stages.path .stage {
 @media (hover: hover) { .snippet-dot:hover { background: var(--hover); } }
 .snippet-actions { display: flex; flex-direction: column; gap: 8px; }
 .snippet-actions .btn.wide { width: 100%; }
+.snippet-quiz-result { margin: 0; }
+/* the side scrolls as a whole, so that the index of examples keeps its full height on a short screen */
+.view.quiz.snippets .snippet-side { overflow-y: auto; }
+.view.quiz.snippets .snippet-side > * { flex: none; }
+.view.quiz.snippets .snippet-side .quiz-scroll { min-height: auto; overflow: visible; }
+/* held upright or narrow: the EEG on top, the example and the whole index under it, the page scrolling */
+@media (max-width: 1024px) and (orientation: portrait), (max-width: 799px) {
+  .view.quiz.snippets .quiz-body { overflow-y: auto; }
+  .view.quiz.snippets .quiz-main { flex: none; }
+  .view.quiz.snippets .quiz-eeg { flex: none; height: 58vh; height: 58dvh; min-height: 320px; }
+  .view.quiz.snippets .quiz-side.snippet-side { height: auto; overflow: visible; }
+}
 
 /* a study recording that waits for the competency assessment (js/views/home_list.js) */
 .locked-why { display: block; }
@@ -1384,6 +1405,8 @@ button.review-line { text-align: left; font: var(--t-14); }
 .planted-item.not-fixed .ico { background-color: var(--warning-text); }
 .planted-item .planted-text { flex: 1 1 auto; min-width: 0; }
 .planted-item .btn { flex: none; }
+.planted-item.current { background: var(--hover); outline: 1px solid var(--hairline); }
+.corrections-review .planted-items { margin-top: 4px; }
 .planted-panel .coach-buttons { flex-wrap: wrap; gap: 8px; }
 .planted-recordings { list-style: none; margin: 0; padding: 0; }
 .planted-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--hairline); }

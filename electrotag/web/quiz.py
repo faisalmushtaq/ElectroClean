@@ -8,6 +8,11 @@ judged with :meth:`~electrotag.training.reference.QuizItem.is_correct`, and the 
 saved as the desktop saves it (``training/<set>/quiz/annotator-<ID>_quiz_<mode>_<session>.json`` in
 the results folder), so the export and the results zip include it.
 
+A quiz with segments of a set's practice or assessment recordings (added before the study refused such
+segments, or whose recording was given that use later) would show trainees the answers they are scored
+against: it is offered to experts and administrators only, and is never the training path's recognition
+check, until the study team removes those segments.
+
 A set's ``quiz.feedback`` says when the annotator learns whether an answer was right:
 ``immediate`` (the desktop's practice quiz) or ``end`` (its assessment quiz). The correct answers
 never reach the browser before then. Where the annotator is (their answers so far) is kept by the
@@ -70,7 +75,7 @@ class Quizzes:
         """The quizzes the annotator may take (``quizzes`` in ``GET /me``)."""
         out = []
         for rs in self.store.reference_sets():
-            if not rs.quiz_items or not allowed(rs, user.annotator_id):
+            if not rs.quiz_items or not allowed(rs, user.annotator_id) or self._withheld(user, rs):
                 continue
             state = self.store.quiz_state(user.annotator_id, rs.set_id) or {}
             out.append({"set_id": rs.set_id, "name": rs.name or rs.set_id, "n_items": len(rs.quiz_items),
@@ -98,7 +103,16 @@ class Quizzes:
             raise ApiError(403, "not_allowed", "This quiz is not one of yours. Ask your study administrator.")
         if not rs.quiz_items:
             raise ApiError(404, "no_quiz", f"{rs.name or rs.set_id} has no quiz")
+        if self._withheld(user, rs):
+            raise ApiError(409, "reveals_answers", f"The quiz of {rs.name or rs.set_id} is not offered at the moment: "
+                           "some of its segments come from recordings you may be assessed on. Your study team can "
+                           "put it right.")
         return rs
+
+    def _withheld(self, user: User, rs: ReferenceSet) -> bool:
+        """A quiz with segments of a practice or assessment recording would give the answers away: only experts
+        and administrators may take it until the study team puts it right (electrotag/web/training_path.py)."""
+        return not user.is_expert and bool(self.service.training_path.withheld_quiz_items(rs))
 
     def _options(self, rs: ReferenceSet) -> list[str]:
         labels = list(self.store.catalogue.label_names)

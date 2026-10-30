@@ -142,6 +142,30 @@ trainee meets the same one, or from an expert's own flawed annotation file), try
 would with a check in the browser, and give it to trainees in Training; the sandbox has one
 ready-made exercise to try.
 
+The training path keeps the assessment blind and the record of each trainee whole. A quiz item, like a
+snippet, is refused (422 `reveals_answers`) when its recording is a practice or assessment recording
+of the set, or of another set that holds the same file, and so is the library's Promote; a quiz that
+already holds such an item is left out of the recognition check, offered to experts and
+administrators only, and named in Training's Quiz tab until the item is removed; the demonstration's
+quiz is now on a guided recording. Giving a trainee a new assessment set carries each learning stage
+over as it was, so a stage skipped in the earlier set reads "Skipped in Pilot training set" and is
+never counted as done, and the earlier set's skips appear under What happened to the stages and in
+the new competency report (`stages_skipped_in`). Each round of the assessment that ends with a
+reopening or a new set stays listed, on the trainee's path and on their Training path card in the
+admin area with its competency report, and the stages the study team reopens cannot be skipped until
+they are done again. A trainee whose assessment did not meet the criteria reads "Assessment not met:
+waiting for your study team" on the path, the home page and their locked recordings, which now have
+a Locked tab of their own instead of counting as to do; one who passes reads "You passed: your study
+recordings are now open" with Open next recording. The tour gives every step in touch words on an
+iPad, asks for Redo after Undo so that no mark is lost, and points at artifacts past the filters'
+edge zone. Meet the artifacts shows each example at its own time in the recording, without the
+hatching, goes from example to example with the arrow keys, keeps its index at full height on short
+screens and an iPad held upright, and takes the recognition check with the recordings already open,
+coming back to the gallery with its result. Correct the marks ends in a review of the saved marks on
+the EEG, with each planted mistake to go to with N and P, and the stage's card keeps the result.
+Finished stages can be looked at again, and Watch an expert at work appears only on an open stage
+once there is a session to watch.
+
 A changed copy of a recording that is also in a training set (a set made from the study's own
 recordings) is now matched by its name and shape, as any other changed copy is; the study's copy and
 the set's copy were counted as two recordings, so the file was refused as looking like several.
