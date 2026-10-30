@@ -7,9 +7,11 @@ import pytest
 from electrotag.app.annotations.labels import default_catalogue
 from electrotag.app.annotations.model import AnnotationDocument, ArtifactAnnotation, RecordingInfo
 from electrotag.app.annotations.timing import RecordingTiming
+from itertools import chain, combinations
+
 from electrotag.reliability.conflicts import (
-    ConflictError, ConflictRules, adjudicated_annotations, agreed_mark, apply_decision, conflict_id, find_clusters,
-    label_pair,
+    OUTCOMES, ConflictError, ConflictRules, adjudicated_annotations, agreed_mark, apply_decision, conflict_id,
+    find_clusters, kept_marks, label_pair, outcome_for,
 )
 
 SF = 100.0
@@ -153,3 +155,78 @@ def test_the_adjudicated_version_is_the_agreed_marks_and_the_decisions() -> None
     out = adjudicated_annotations(cs, decided, CH)
     assert [(x.label, x.onset_sample, x.channels) for x in out] == [(BLINK, 100, ()), (EMG, 1000, ("O1",))]
     assert len({x.annotation_id for x in out}) == len(out)
+
+
+def test_marks_from_different_people_can_be_kept_together() -> None:
+    # as in the review: A has an eye movement; B an EMG and a blink; C a blink: B's two marks chain into one cluster
+    A = doc("A01", a("a1", MOVE, 1.0, 1.4, ("Fp1",)))
+    B = doc("A02", a("b1", EMG, 1.0, 1.4), a("b2", BLINK, 1.4, 1.6, ("Fp1", "Fp2")))
+    C = doc("A03", a("c1", BLINK, 1.3, 1.6))
+    c = next(x for x in clusters({"A": A, "B": B, "C": C}, rules=ConflictRules(iou_threshold=0.0)) if x.is_conflict)
+    assert {m.annotation_id for m in c.marks} == {"a1", "b1", "b2", "c1"} and "split" in c.kinds
+    kept = apply_decision(c, {"choice": "pick", "picks": [{"letter": "B", "annotation_id": "b2"},
+                                                          {"letter": "A", "annotation_id": "a1"}]}, CH)
+    assert [(k.label, k.onset_sample, k.channels) for k in kept] == [(MOVE, 100, ("Fp1",)),
+                                                                     (BLINK, 140, ("Fp1", "Fp2"))]
+    assert len({k.annotation_id for k in kept}) == 2
+    for bad in ([], [{"letter": "A", "annotation_id": "zz"}], [{"letter": "A", "annotation_id": "a1"}] * 2, "a1"):
+        with pytest.raises(ConflictError):
+            apply_decision(c, {"choice": "pick", "picks": bad}, CH)
+    assert kept_marks(c, {"choice": "pick", "picks": [{"letter": "B", "annotation_id": "b2"}]}) == {("B", "b2")}
+    # for each person, from what was kept: B had two marks and one is kept
+    pick = {"choice": "pick", "picks": [{"letter": "B", "annotation_id": "b2"}]}
+    assert (outcome_for(c, pick, "A"), outcome_for(c, pick, "B")) == ("other_kept", "part_kept")
+    both = {"choice": "pick", "picks": [{"letter": "B", "annotation_id": "b2"}, {"letter": "A", "annotation_id": "a1"}]}
+    assert (outcome_for(c, both, "A"), outcome_for(c, both, "B")) == ("all_kept", "part_kept")
+    assert outcome_for(c, {"choice": "pick", "picks": [{"letter": "A", "annotation_id": "a1"}]}, "A") == "yours_kept"
+
+
+def _expected(choice: str, me: str, marked: set[str], picked: set[str]) -> str:
+    """What the annotator behind ``me`` should be told, worked out by hand from who marked the place (one mark each)."""
+    if choice == "edited":
+        return "edited"
+    kept = ({choice} & marked if len(choice) == 1 else marked if choice == "all"
+            else picked if choice == "pick" else set())
+    if me not in marked:
+        return "other_kept" if kept else "yours_kept"
+    if me in kept:
+        return "all_kept" if kept - {me} else "yours_kept"
+    return "other_kept" if kept else "none_kept"
+
+
+@pytest.mark.parametrize("k", [2, 3])
+def test_every_outcome_for_every_person_follows_from_what_was_kept(k: int) -> None:
+    letters = "ABC"[:k]
+    labels = (BLINK, MOVE, EMG)
+    seen = set()
+    for n in range(1, k + 1):
+        for marked in map(set, combinations(letters, n)):
+            docs = {x: doc(f"A0{i + 1}", *([a(f"{x.lower()}1", labels[i], 1.0, 1.4)] if x in marked else []))
+                    for i, x in enumerate(letters)}
+            c = next(x for x in clusters(docs) if x.is_conflict)
+            assert {m.letter for m in c.marks} == marked
+            picks = [set(p) for p in chain.from_iterable(combinations(sorted(marked), r) for r in range(1, n + 1))]
+            decisions = [(x, {"choice": x}, set()) for x in [*letters, "all", "none"]]
+            decisions.append(("edited", {"choice": "edited", "marks": [a("e", BLINK, 1.0, 1.4)]}, set()))
+            decisions += [("pick", {"choice": "pick",
+                                    "picks": [{"letter": x, "annotation_id": f"{x.lower()}1"} for x in p]}, p)
+                          for p in picks]
+            for name, d, picked in decisions:
+                for me in letters:
+                    got = outcome_for(c, d, me)
+                    assert got in OUTCOMES
+                    assert got == _expected(name, me, marked, picked), (k, marked, d, me)
+                    seen.add(got)
+    assert seen == set(OUTCOMES) - {"part_kept"}  # part_kept needs two marks of one person (the test above)
+
+
+def test_the_cases_of_the_usability_review() -> None:
+    # k=3, only B marked the place; keeping A (who had no mark) agrees with C, who had none either
+    docs = {"A": doc("A08"), "B": doc("A03", a("b1", BLINK, 1.0, 1.4)), "C": doc("A09")}
+    c = next(x for x in clusters(docs) if x.is_conflict)
+    assert [outcome_for(c, {"choice": "A"}, x) for x in "ABC"] == ["yours_kept", "none_kept", "yours_kept"]
+    # A and C marked it; keeping B (no mark) drops both, and with all kept, B is told a colleague's mark was kept
+    docs = {"A": doc("A08", a("a1", BLINK, 1.0, 1.4)), "B": doc("A03"), "C": doc("A09", a("c1", MOVE, 1.0, 1.4))}
+    c = next(x for x in clusters(docs) if x.is_conflict)
+    assert [outcome_for(c, {"choice": "B"}, x) for x in "ABC"] == ["none_kept", "yours_kept", "none_kept"]
+    assert [outcome_for(c, {"choice": "all"}, x) for x in "ABC"] == ["all_kept", "other_kept", "all_kept"]

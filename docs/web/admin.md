@@ -426,9 +426,18 @@ page can weight each person, by their accuracy on the known-answer tasks or by w
 is then in the consensus when the people who marked it carry more than half of the total weight.
 The page itself makes the unweighted consensus.
 
-**An adjudicated consensus.** After reviewing the disagreements, an adjudicator annotates the
-recording in the study; their saved annotations become the reference, recorded with the experts
-whose disagreements they resolved.
+**A finished adjudication.** The adjudicated version of a whole recording from the expert area's
+adjudication queue (see Adjudication below): the marks the annotators agreed on and the
+adjudicator's decision on each conflict. Choose it from the list of finished adjudications; the
+recording is the adjudication's own, so the Recording field above is not used. The reference is
+recorded with the people compared as its experts and the adjudicator, and keeps the versions
+compared as its sources. An adjudication of a part of a recording cannot become a reference, since
+a reference covers the whole recording. The same can be done from the queue's **Make it a training
+reference…**.
+
+**An adjudicator's own annotations.** The older way, outside the adjudication queue: after
+reviewing the disagreements, an adjudicator annotates the recording in the study; their saved
+annotations become the reference, recorded with the experts whose disagreements they resolved.
 
 A study recording added to a set is copied into the set, and the copy is offered only for training.
 Write a note about the reference (who the experts are, how they worked); it is kept with the record
@@ -879,8 +888,15 @@ menu) lists what can be adjudicated: each study recording given to two or more p
 once its annotators have saved, and each saved recording that two or more experts have corrected,
 so that their corrections are settled before the corrected version is used. Its tabs show what is
 Ready (everyone has saved and there are conflicts), In progress, Finished, and Waiting (someone has
-not saved yet, or everyone agrees); each row has its annotators, the number of conflicts and how
-many are decided, and the adjudicator. **Start** asks for the recording's file on this computer,
+not saved yet, or everyone agrees); the queue opens on In progress when you have adjudications of
+your own under way, and lists your own first. Each row says what is compared (the whole recording,
+a part of it, or the corrections of someone's version), its annotators, the number of conflicts and
+how many are decided, and the adjudicator; a row you cannot start says why (your own work, or
+another expert adjudicating it). The search above the tabs finds a recording, a person (by ID or
+name) or a task's note. The line above the search counts what is ready to adjudicate, with the
+number of recordings beside it when parts of a recording or sets of corrections make the two
+differ, says how many of those are your own work, and totals the conflicts you have left to
+decide. The home page's Expert work card says the same in short. **Start** asks for the recording's file on this computer,
 checks it against the study's copy, and starts the adjudication: from then on the versions
 compared stay as they were when it started, even if someone revises their work, so that the
 decisions keep their meaning. **Continue** takes you back to your own adjudication where you left
@@ -888,36 +904,61 @@ it, because every decision is kept by the study as you make it.
 
 In the **adjudication view** every version is drawn on the EEG with its letter before the type (A:
 Eye-blink-artifact, B: Eye-movement-artifact), each letter in its own colour, and the lanes above
-the EEG put each person's marks side by side on the same time axis, named. The side panel shows
-the current conflict (its kinds and what each person marked, with their confidence and note), the
-decision bar, and every conflict in the order of the recording, with a tick once it is decided.
-Decide with the keys or the buttons:
+the EEG put each person's marks side by side on the same time axis, named in the same colours. The
+side panel keeps the current conflict (its kinds and what each person marked, with their confidence
+and note) and the decision bar at its top, where they stay while the list of every conflict below
+them scrolls, in the order of the recording, with a tick once a conflict is decided. The panel's
+Annotations, Recording and Help tabs fold away while you adjudicate (on a short screen they are
+hidden); press one to open it. For the corrections of someone's version, each expert's change at
+the conflict is listed with its reason and note, and the version they corrected is drawn dashed
+on the EEG and in a lane of its own (L hides and shows it). Decide with the keys or the buttons;
+**?** shows the keys of the view, in the same sheet as the other expert views:
 
 | Key | What it does |
 | --- | --- |
 | 1 to 6, or A to D | keep that person's version of the conflict |
 | K | keep both (with more than two people, keep all): one mark of each type, spanning its marks |
-| X | keep neither |
-| E | edit: replace the marks with one of your own (its type, start and end, and channels; or drag across the EEG to set the times) |
+| X | keep neither (with more than two people, none) |
+| M | choose the marks to keep one by one, from one person or several (tick them, or click them in the lanes): for a place where two people saw two different artifacts |
+| E | your own marks instead, up to five (each with its type, start and end, and channels; drag across the EEG to set the times of the mark you are on) |
+| Shift and 1 to 7 | the reason, in the order of the reason buttons, which show their number |
 | R | write the reason |
 | Enter | save the decision and go to the next conflict not decided yet |
 | S | skip to the next conflict not decided yet |
 | N and P | the next and the previous conflict |
 | T | the lanes: every version, then each one alone (the EEG follows) |
+| ? | the keys of this view |
 | F | finish the adjudication |
 
 Give a reason with a decision by choosing one (Clear artifact, Not an artifact, Type shows in the
 EEG, Start and end show, Channels show, Both are valid, Other) or writing a few words, as the
 study's setting **A reason for each decision** asks: for every decision, only when keeping
-neither version or editing a mark, or never. Each decision is sent to the study on its own and kept at once; the bar waits while it is
-sent, and you can change a decision until you finish. **Finish adjudication** appears once every
+neither version or editing a mark, or never. The reasons are one group of buttons, as in the
+correction view: the arrow keys or a reason's number choose within it, Shift and the number
+chooses from anywhere, and Enter on a reason saves the decision. A typical decision with a reason is
+three keys (2, Shift+3, Enter). ElectroTag has no study-wide default reason: a reason records why
+the adjudicator decided as they did at that place, and the setting already lets a study ask for
+reasons only where they matter most. A choice you have not saved yet stays with its conflict when
+you move to another one (the list marks it "Chosen, not saved"), and leaving with such choices
+asks first. Each decision is sent to the study on its own and kept at once; the bar waits while it
+is sent, and you can change a decision until you finish. **Finish adjudication** appears once every
 conflict is decided, and saves the adjudicated version: the marks everyone agreed on (each at the
 middle of their starts and ends, on the channels most of them cover) and your decisions. It is
 saved like any result, with its five files, under `derived/adjudications/` in the results, and
 the annotators then see the outcome of their own conflicts when the study shows it to them
 (Study settings, Corrections and adjudication). A finished adjudication of a whole
-recording can become a training reference (`adjudication_reference`, or Source adjudication when
-adding a reference), with the people compared as its experts and you as its adjudicator.
+recording can become a training reference: **Make it a training reference…** on its row of the
+queue's Finished tab asks for the reference set and its use (practice, assessment or guided), and
+Training's "A finished adjudication" does the same; the people compared are its experts and you
+its adjudicator.
+
+A finished adjudication can be **reopened**, as a screening tool lets a resolved conflict be
+changed: open it from the queue (or the library) and press **Change decisions…**. Its adjudicator
+or an administrator may do so, and the study records it in the audit log. The adjudicated version
+saved when it was finished is kept, never deleted, and stays the one that counts (for the
+annotators' outcomes, training references and the analyses) until you finish again; the newer
+adjudicated version then supersedes it, and the record keeps the history of what was finished
+before.
 
 In the sandbox the queue says that adjudication needs a study server: comparing versions needs
 ElectroTag's own Python code. Run `electrotag-web demo` to try it on this computer.
@@ -928,17 +969,20 @@ The library holds every conflict between annotators, decided or not: from the ad
 from the recordings that wait for one. It is worked out afresh each time from the adjudications,
 so it always shows the decisions as they stand. Filter it by artifact type, by the **confused
 pair** (an eye blink against an eye movement, say), by the kind of conflict, by status (Not
-started, Open, Decided) and decision, by annotator and by recording, or search the reasons. Each
-row says where the conflict is, its kinds, the types involved, who marked what, and the decision
-with its reason.
+started, Open, Decided) and decision, by annotator and by recording, or search the reasons, types
+and recordings. Each row says where the conflict is, its kinds, the types involved, who marked
+what, the decision with its reason, and where it was promoted to.
 
 **Open at this moment** opens the recording from this computer at the conflict, read only, with
 every version, the lanes and the decision. **Download TSV** and **Download JSON** save the list as
 filtered (the results zip holds the whole library as `library/library.tsv`, and every decision in
-`adjudications/decisions.tsv`). **Promote…** makes an entry a quiz item or an artifact snippet of a
-reference set: the type, times and explanation start from the decision and its reason, and you can
-change them. The item keeps a note of the conflict it came from, and promoting the same entry to
-the same set again gives the item made before.
+`adjudications/decisions.tsv`). Each row of the file names the letters (`A=A08,B=A03`) and the
+people whose marks the decision kept, since the letters differ from one adjudication to the next.
+**Promote…** makes a decided entry a quiz item or an artifact snippet of a reference set (a
+conflict not yet decided cannot be promoted): the type, times and explanation start from the
+decision and its reason, and you can change them. The item keeps a note of the conflict it came
+from, the row then says where it went, and promoting the same entry to the same set again gives
+the item made before.
 
 ## Correct the marks
 

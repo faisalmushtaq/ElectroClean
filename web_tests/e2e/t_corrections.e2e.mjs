@@ -498,6 +498,9 @@ export const tests = [
       assert.match(await page.textContent('.dialog.settled-dialog'), /Why: the type shows in the EEG: the eyes move/);
       await t.screenshot(page, 'history_corrections_outcome');
       await clickDialogButton(page, 'Close');
+      // the home page's Decisions on your disagreements card has it too
+      await page.waitForSelector('.outcomes-card .settled-card', { timeout: 15000 });
+      assert.match(await page.textContent('.outcomes-card .settled-card summary'), /corrected by Expert one and .+, who disagreed: \d+ places?, decided by Expert three/);
       await page.click('button.corrected-line');
       await waitForRoute(page, 'open');
       await page.setInputFiles('input[data-log="file-input"]', filesFor(t.study.dir, file));

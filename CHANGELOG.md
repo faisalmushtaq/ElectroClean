@@ -102,6 +102,27 @@ a training snippet that keeps where it came from. The results hold every decisio
 (`adjudications/decisions.tsv`) and the library (`library/library.tsv`). The sandbox says that this
 needs a study server.
 
+Adjudication after a week of use: the outcome each annotator is shown now follows from what was
+kept rather than from the letter chosen, so keeping a version without a mark tells everyone who left
+the place unmarked that it was decided as they had it, and three or more people are never told
+"both"; the card sits near the top of the home page with a line saying in how many places the
+expert decided as you had it, and the history says it under each recording. In the adjudication
+view the conflict and the decision bar stay at the top of the panel while only the list of conflicts
+scrolls (at 1280 by 720 and on an iPad held sideways too), the panel's tabs fold away, the reason
+buttons carry their number, as in the correction view, for Shift and a digit and move with the
+arrow keys, ? shows the same key sheet as the other expert views, Enter saves from a reason, the focus stays on the view, and a choice not saved stays with its conflict. Marks of
+different people can be kept for one conflict (M), the adjudicator may draw up to five marks of
+their own, the hint and the key sheet (?) follow the number of versions, and the letters' colours
+are told apart more easily. For two experts' corrections, each expert's reason and note are shown
+and the version they corrected is drawn dashed. A finished adjudication can be reopened, audited:
+its adjudicated version is kept and counts until the newer one is finished. The queue gains a
+search, honest counts (parts and corrections beside the recordings, one's own work said apart,
+conflicts left), one's own work first, and Make it a training reference…, which Training offers too
+as "A finished adjudication" (the older source is now "An adjudicator's own annotations"); the home
+page's Expert work card says what waits, and the outcome card also lists a version of yours that
+two experts corrected differently, once settled. The library refuses to promote an undecided conflict,
+marks what was promoted, and its TSV names the letters and whose marks were kept.
+
 The training path now has five stages: Find your way around, a hands-on tour of the annotation view on
 a practice recording made in the browser (each step, from moving through the recording to Save and
 Finish, names its keys and is ticked when it is done, and nothing is kept); Meet the artifacts, a

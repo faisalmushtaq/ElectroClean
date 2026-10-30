@@ -339,9 +339,13 @@ correction changed nothing that matching can see.
 With `adjudicated`, every annotator is compared with the adjudicated version of
 each finished adjudication, which becomes the reference annotator `ADJUDICATED`;
 the versions compared are those the adjudication itself compared, and a
-recording without a finished adjudication is left out. `adjudication.tsv` gives,
+recording without a finished adjudication is left out. An adjudication that was
+reopened and finished again counts with its latest adjudicated version (the
+earlier ones stay in the results); while it is reopened, the version finished
+before is used, with the decisions it was made from. `adjudication.tsv` gives,
 for each adjudication, its conflicts by kind, the decisions by choice (keeping
-one person's marks, everyone's, nobody's, or the adjudicator's own), the mean
+one person's marks, everyone's, nobody's, marks chosen one by one from several
+people, or the adjudicator's own), the mean
 seconds per decision, and two event F1 figures: between the versions compared
 before adjudication (`f1_before`), and of each of them with the adjudicated
 version after it (`f1_after`). The difference shows how far the adjudication

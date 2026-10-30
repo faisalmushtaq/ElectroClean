@@ -491,6 +491,7 @@ COLUMN_TITLES.update({
     "kept_one": ("Kept one", "Decisions that kept one person's marks"),
     "kept_all": ("Kept all", "Decisions that kept everyone's marks"),
     "kept_none": ("Kept none", "Decisions that kept no mark"),
+    "kept_picked": ("Kept chosen marks", "Decisions that kept marks chosen one by one, from one person or several"),
     "edited": ("Edited", "Decisions that replaced the marks with the adjudicator's own"),
     "n_decided": ("Decided", ""),
     "mean_decision_s": ("Seconds per decision", "Mean time between decisions, from the start of the adjudication"),
@@ -596,7 +597,7 @@ def _versions_section(result: Any, add: Callable[[str], None]) -> None:
                 f"before adjudication, and with the adjudicated version at {_cell(after)} after it (event F1 over "
                 "every type, time only, at the main threshold, as in the key results).</div>")
             add(_table(adj[["unit_id", "recording", "adjudicator", "annotators", "n_conflicts", "presence", "type",
-                            "timing", "channels", "split", "kept_one", "kept_all", "kept_none", "edited",
+                            "timing", "channels", "split", "kept_one", "kept_all", "kept_none", "kept_picked", "edited",
                             "mean_decision_s", "f1_before", "f1_after"]],
                        caption="Each adjudication: its conflicts by kind, the decisions by choice (from the study's "
                        "records; n/a when they were not available) and the agreement before and after."))

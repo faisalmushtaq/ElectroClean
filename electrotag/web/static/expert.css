@@ -11,52 +11,107 @@
 
 /* ---------------------------------------------------------------- adjudication (js/expert/queue.js, adjudicate.js, lanes.js) */
 .adj-summary { margin: 0 0 12px; }
-.adjudication-pass h3 { font: var(--t-14); font-weight: 600; margin: 16px 0 4px; }
-.adj-whose { display: flex; flex-wrap: wrap; gap: 4px 8px; margin: 4px 0 8px; }
+.queue-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 8px; }
+.queue-tools .field { width: auto; min-width: 240px; max-width: 360px; }
+.admin-list tr.adj-blocked td { color: var(--text-secondary); }
+/* The pass: the conflict, the decision bar and Save stay at the top of the panel; only the list below scrolls.
+   The panel's tabs fold to their bar while adjudicating (opened by pressing one). */
+.view.annotate.adjudicating .ws-side > .review-host { flex: 1 1 auto; max-height: none; min-height: 0; }
+.view.annotate.adjudicating .ws-side > .side-tabs { flex: 0 1 30%; min-height: 160px; }
+.view.annotate.adjudicating .ws-side > .side-tabs.folded { flex: none; min-height: 0; }
+.side-tabs.folded .tab-panel { display: none; }
+.side-tabs.folded .tab[aria-selected="true"] { color: var(--text-secondary); border-bottom-color: transparent; }
+.review.adjudication-pass { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 12px 16px 0; }
+.adj-top { flex: none; max-height: calc(100% - 88px); overflow-y: auto; }
+.adj-list-wrap { flex: 1 1 0; min-height: 0; overflow-y: auto; border-top: 1px solid var(--hairline); }
+.adj-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 12px; }
+.adj-head h2 { margin: 0; }
+.adj-whose { display: flex; flex-wrap: wrap; gap: 4px 8px; margin: 0; }
 .adj-who b { font-weight: 600; }
-.adj-progress-row .progress { margin: 4px 0 12px; }
-.adj-progress-row .caption { margin: 0; }
+.adj-window, .adj-reopened { margin: 4px 0 0; }
+.adj-reopened { color: var(--accent); }
+.adj-progress-row .progress { margin: 4px 0 8px; }
+.adj-progress-row .caption { margin: 4px 0 0; }
 .adj-detail { padding: 8px 0; border-top: 1px solid var(--hairline); }
 .adj-detail-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .adj-detail-head b { font-weight: 600; }
-.adj-versions { list-style: none; margin: 8px 0; padding: 0; }
-.adj-versions li { padding: 4px 0; }
+.adj-versions { list-style: none; margin: 4px 0; padding: 0; }
+.adj-versions li { padding: 2px 0; }
 .adj-mark { display: inline; }
 .adj-mark + .adj-mark::before { content: ""; display: block; }
-.adj-decided { margin: 8px 0 0; color: var(--accent); }
+.adj-change { display: block; padding-left: 16px; }
+.adj-decided { margin: 4px 0 0; color: var(--accent); }
 .adj-decided b { font-weight: 600; }
 .adj-bar { display: flex; flex-direction: column; gap: 8px; padding: 8px 0; border-top: 1px solid var(--hairline); }
 .adj-bar .btn-row { margin-top: 0; }
+.adj-save-row { align-items: center; }
 .adj-choices { display: flex; flex-wrap: wrap; gap: 4px; }
 .adj-choice { padding: 0 12px; }
 .adj-choice[aria-pressed="true"] { background: var(--accent); color: var(--surface); }
+.adj-choice[aria-pressed="true"] b { color: inherit !important; }
 .adj-choice[aria-pressed="true"] .chip-key { color: inherit; }
-.adj-reasons { display: flex; flex-wrap: wrap; gap: 4px; }
+.adj-reasons { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; flex: none; }
+.adj-reasons-label { margin-right: 4px; }
 .adj-reasons .seg { height: 28px; padding: 0 8px; font: var(--t-12); border-radius: var(--pill); background: var(--fill); }
+.adj-reasons .seg[aria-checked="true"] { background: var(--accent-soft); color: var(--accent); }
 .adj-reason { height: 32px; font: var(--t-14); }
 .adj-reason-note { margin: 0; }
+.adj-pick { display: flex; flex-direction: column; gap: 4px; padding: 8px; background: var(--surface); border: 1px solid var(--hairline); }
+.adj-pick[hidden] { display: none; }
+.adj-pick .caption { margin: 0; }
+.adj-pick-row { display: flex; align-items: baseline; gap: 4px; cursor: pointer; }
 .adj-edit { display: flex; flex-direction: column; gap: 4px; padding: 8px; background: var(--surface); border: 1px solid var(--hairline); }
 .adj-edit[hidden] { display: none; }
+.adj-edit-mark + .adj-edit-mark { border-top: 1px solid var(--hairline); padding-top: 4px; }
 .adj-edit-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .adj-edit .field { height: 32px; font: var(--t-14); }
 .adj-edit .num { width: 80px; }
-.adj-msg { margin: 4px 0 0; min-height: 16px; }
-.adj-keys { margin-top: 12px; }
-.adj-list { list-style: none; margin: 4px 0; padding: 0; }
+.adj-edit .caption { margin: 0; }
+.adj-msg { margin: 0; min-height: 0; }
+.adj-msg:empty { display: none; }
+.adj-list { list-style: none; margin: 0; padding: 0; }
 .adj-item { display: flex; align-items: flex-start; gap: 8px; padding: 8px 4px; border-bottom: 1px solid var(--hairline); cursor: pointer; }
 .adj-item.current { background: var(--accent-soft); }
 @media (hover: hover) { .adj-item:hover:not(.current) { background: var(--hover); } }
 .adj-n { min-width: 20px; color: var(--text-secondary); text-align: right; font-variant-numeric: tabular-nums lining-nums; }
 .adj-tick { width: 16px; flex: none; color: var(--accent); visibility: hidden; }
 .adj-item[data-decided="yes"] .adj-tick { visibility: visible; }
+.adj-item[data-unsaved="yes"] .adj-said { color: var(--warning-text); }
 .adj-item-body { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
 .adj-time { font-variant-numeric: tabular-nums lining-nums; }
 .adj-kinds { display: inline-flex; flex-wrap: wrap; gap: 4px; }
 .adj-kind { font: var(--t-12); }
 .adj-said { flex: 1 1 100%; margin: 0; }
 .adj-said:empty { display: none; }
-.view.annotate.adjudicating .ws-side > .review-host { flex: 1 1 auto; max-height: none; }
-.view.annotate.adjudicating .ws-side > .side-tabs { flex: 0 1 30%; min-height: 160px; }
+.adj-keysheet th { white-space: nowrap; vertical-align: top; padding-right: 12px; }
+/* Save stays at the foot of the top part even when that part has to scroll (a short window, a tablet). */
+.adj-save-row { position: sticky; bottom: 0; z-index: 1; background: var(--page); padding: 4px 0; }
+/* A short window (a laptop at 1280 by 720): tighter, and the title left to the header's chip. */
+@media (max-height: 820px) {
+  .review.adjudication-pass { padding-top: 8px; }
+  .adj-head h2 { display: none; }
+  .adj-progress-row .progress { margin: 2px 0 4px; }
+  .adj-detail { padding: 4px 0; }
+  .adj-bar { gap: 4px; padding: 4px 0; }
+  /* the folded tabs give their room too: ? and the header's Help open them */
+  .view.annotate.adjudicating .ws-side > .side-tabs.folded { display: none; }
+}
+@media (max-height: 820px) and (pointer: fine) {
+  .adj-choice { height: 28px; }
+  .adj-reasons .seg { height: 24px; }
+  .adj-reason { height: 28px; }
+}
+/* Fingers: larger targets, and no keyboard hints where there is no keyboard. */
+@media (pointer: coarse) {
+  .adj-reasons .seg { height: 40px; padding: 0 12px; font: var(--t-14); }
+  .lane { height: 24px; }
+  .lane-track { height: 20px; }
+  .lane-mark { height: 14px; top: 3px; }
+  .lane-mark.current { height: 20px; top: 0; }
+}
+@media (hover: none) and (pointer: coarse) {
+  .adj-choice .chip-key, .adj-reasons-label { display: none; }
+}
 
 /* the lanes above the EEG: one per version, on the EEG's time axis */
 .lanes { display: flex; flex-direction: column; gap: 2px; padding: 4px 1px; background: var(--surface); border: 1px solid var(--hairline); border-bottom: none; }
@@ -64,9 +119,12 @@
 .lane.dimmed { opacity: 0.35; }
 .lane-name { position: absolute; left: 4px; width: 84px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: var(--t-12); color: var(--text-secondary); }
 .lane-name b { font-weight: 600; color: var(--ink); }
+.lane.original .lane-name b { font-weight: 400; color: var(--text-secondary); }
 .lane-track { position: relative; height: 12px; background: var(--page); }
 .lane-mark { position: absolute; top: 2px; height: 8px; padding: 0; border: 1px solid; border-radius: 0; opacity: 0.45; cursor: pointer; }
 .lane-mark.current { top: 0; height: 12px; opacity: 1; }
+.lane-mark.picked { outline: 2px solid var(--ink); outline-offset: 1px; opacity: 1; }
+.lane.original .lane-mark { border-style: dashed; opacity: 0.8; cursor: default; }
 
 /* the library (js/expert/library.js) */
 .library-filters { flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }

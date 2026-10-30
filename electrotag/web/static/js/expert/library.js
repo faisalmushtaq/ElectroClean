@@ -12,11 +12,11 @@ import { showDialog } from '../ui/dialog.js';
 import { logger } from '../log/logger.js';
 import { newId } from '../util.js';
 import { card, chip, dataTable, downloadText, field, loading, messageArea, recordingName, sectionHead, select, textArea, textInput, numberInput } from '../admin/ui.js';
-import { KIND_TEXT, REASON_TEXT, STATUS_TEXT, decisionText, filterKeys, libraryJson, libraryQuery, libraryTsv, promoteDefaults, spanText } from './model.js';
+import { KIND_TEXT, REASON_TEXT, STATUS_TEXT, decisionText, filterKeys, libraryJson, libraryQuery, libraryTsv, promoteDefaults, promotedText, spanText } from './model.js';
 import { startAdjudication } from './adjudicate.js';
 
 const STATUS_KIND = { awaiting: '', open: 'warning', decided: 'done' };
-const CHOICE_TEXT = { one: 'Kept one version', all: 'Kept all', none: 'Kept neither', edited: 'Edited' };
+const CHOICE_TEXT = { one: 'Kept one version', all: 'Kept all', none: 'Kept none', pick: 'Kept chosen marks', edited: 'The adjudicator\'s own marks' };
 
 export class LibrarySection {
   constructor(area) {
@@ -28,10 +28,10 @@ export class LibrarySection {
     this.fields = {
       label: select(any('Every type')), pair: select(any('Every pair')), kind: select(any('Every kind')), status: select(any('Any status')),
       choice: select(any('Any decision')), annotator_id: select(any('Every annotator')), recording_id: select(any('Every recording')),
-      q: textInput({ placeholder: 'Search the reasons' }),
+      q: textInput({ placeholder: 'Search reasons, types and recordings' }),
     };
     const names = { label: 'Artifact type', pair: 'Confused pair', kind: 'Kind of conflict', status: 'Status', choice: 'Decision', annotator_id: 'Annotator',
-      recording_id: 'Recording', q: 'Search the reasons' };
+      recording_id: 'Recording', q: 'Search reasons, types and recordings' };
     for (const [k, el] of Object.entries(this.fields)) {
       el.setAttribute('aria-label', names[k]);
       el.dataset.filter = k;
@@ -64,11 +64,13 @@ export class LibrarySection {
         const people = Object.fromEntries(Object.entries(e.letters || {}).map(([p, x]) => [x, p]));
         return h('span', {}, chip(STATUS_TEXT[e.status] || e.status, STATUS_KIND[e.status] || ''),
           d ? h('span.caption.block', {}, `${decisionText(d, people)}${d.reason_code ? `: ${REASON_TEXT[d.reason_code] || d.reason_code}` : ''}`) : null,
-          d && d.reason ? h('span.caption.block.adj-reason-text', {}, `“${d.reason}”`) : null);
+          d && d.reason ? h('span.caption.block.adj-reason-text', {}, `“${d.reason}”`) : null,
+          (e.promoted || []).length ? h('span.block.lib-promoted', {}, chip(`Promoted: ${promotedText(e)}`, 'done')) : null);
       } },
       { title: '', render: (e) => h('span.btn-row.tight', {},
         h('button.btn.small', { type: 'button', 'data-log': 'library-open', 'data-entry': e.entry_id, onclick: () => this._open(e) }, 'Open at this moment'),
-        h('button.btn.small', { type: 'button', 'data-log': 'library-promote', 'data-entry': e.entry_id, onclick: () => this.promote(e) }, 'Promote…')) },
+        h('button.btn.small', { type: 'button', 'data-log': 'library-promote', 'data-entry': e.entry_id, disabled: !e.decision,
+          title: e.decision ? null : 'Decide it first: only a decided conflict can teach', onclick: () => this.promote(e) }, 'Promote…')) },
     ];
   }
 
@@ -91,7 +93,7 @@ export class LibrarySection {
     await this._load({ quietly: false });
   }
 
-  async _load({ quietly }) {
+  async _load({ quietly, log = quietly }) {
     const q = this._query();
     let got;
     try {
@@ -104,7 +106,7 @@ export class LibrarySection {
     if (JSON.stringify(q) !== JSON.stringify(this._query())) return; // the filters changed meanwhile: a newer answer follows
     this.answer = got;
     this.f = q;
-    if (quietly) logger.event('library_filtered', { keys: filterKeys(q), shown: got.total });
+    if (log) logger.event('library_filtered', { keys: filterKeys(q), shown: got.total });
     this._fillFilters(got.facets || {});
     if (!this.body.contains(this.table)) {
       clear(this.body);
@@ -151,6 +153,7 @@ export class LibrarySection {
 
   /** Make an entry a quiz item or a snippet: a dialog with the set, the label, the explanation and the times. */
   async promote(e) {
+    if (!e.decision) { this.msg.show('note', 'This conflict is not decided yet: only a decided conflict can become a quiz item or a snippet.'); return null; }
     const sets = (this.answer && this.answer.sets) || [];
     if (!sets.length) { this.msg.show('note', 'There is no reference set to add it to yet. An administrator makes reference sets in Training.'); return null; }
     const dflt = promoteDefaults(e);
@@ -162,8 +165,8 @@ export class LibrarySection {
     const end = numberInput({ value: dflt.end_s, min: 0, step: '0.01' });
     const msg = messageArea();
     const body = h('div.admin-stack.promote-form', {},
-      h('p.dialog-text', {}, `${(e.kinds || []).map((k) => KIND_TEXT[k] || k).join(', ')} in ${e.file_name}, ${spanText(e.onset_s, e.offset_s)}. `
-        + (dflt.decided ? 'The type and times start from the decision.' : 'It is not decided yet, so choose the type yourself.')),
+      h('p.dialog-text', {}, `${(e.kinds || []).map((k) => KIND_TEXT[k] || k).join(', ')} in ${e.file_name}, ${spanText(e.onset_s, e.offset_s)}. The type and times start from the decision.`
+        + ((e.promoted || []).length ? ` Already made: ${promotedText(e)}.` : '')),
       field('Make it', to), field('In the reference set', set), field('Type', label),
       h('div.row', {}, field('From (s)', start), field('To (s)', end)),
       field('Explanation', explanation, { hint: 'Shown with the item or snippet; it starts from the adjudicator\'s reason.' }), msg);
@@ -190,6 +193,7 @@ export class LibrarySection {
     const item = made.item || made.snippet;
     const what = made.item ? `quiz item ${item.item_id}` : `snippet ${item.snippet_id}`;
     this.msg.show('success', made.already ? `This entry is already ${what} of ${set.value}.` : `Added as ${what} of ${set.value}, with a note of the conflict it came from.`);
+    if (!made.already) this._load({ quietly: true, log: false }); // the row shows where it was promoted
     return made;
   }
 }

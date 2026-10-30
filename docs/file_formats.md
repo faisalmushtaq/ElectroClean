@@ -377,26 +377,38 @@ results zip is made or `electrotag web export` runs, as they stand then.
 (`"schema": "electrotag.adjudication"`): the unit, the recording, the
 adjudicator, `state` (`in_progress` or `finished`), `started_at`,
 `finished_at`, the frozen `inputs` and `rules`, the `letters` of the people
-compared, `decisions` (by conflict ID: `choice`, the edited `marks`,
-`reason_code`, `reason`, `decided_at`, `decided_by`), `version` (the
-adjudicated version saved) and `counts`.
+compared, `decisions` (by conflict ID: `choice`, the edited `marks`, the
+`picks` of a `pick` decision as `{"letter", "annotation_id"}`, `reason_code`,
+`reason`, `decided_at`, `decided_by`), `version` (the adjudicated version
+saved) and `counts`. An adjudication that was reopened has `history`: for
+each reopening, what had been finished (`finished_at`, `version`, `decisions`,
+`decisions_sha256`, the adjudicator), `reopened_at`, `reopened_by` and the
+`reason`. Every adjudicated version saved stays in
+`derived/adjudications/annotator-ADJUDICATED/` as an attempt of its own; the
+latest is the one that counts, and its `context.derived.decisions_sha256`
+names the decisions it was made from.
 
 `adjudications/decisions.tsv` has a row for each conflict of each
 adjudication, with the columns `unit_id`, `unit_kind`, `recording_id`,
 `adjudicator_id`, `state`, `conflict_id`, `kinds` (`presence`, `type`,
 `timing`, `channels`, `split`, comma-separated), `onset_s`, `offset_s`,
-`labels`, `letters`, `people`, `choice` (a letter, `all`, `none`, `edited`, or
-`n/a` while undecided), `kept_people` (whose marks the choice kept),
+`labels`, `letters`, `people`, `choice` (a letter, `all`, `none`, `pick`,
+`edited`, or `n/a` while undecided), `kept_people` (whose marks the choice
+kept),
 `reason_code`, `reason`, `decided_at` and `seconds_since_previous` (from the
 start, or the decision before, to this decision).
 
 `library/library.tsv` has a row for each conflict between annotators, decided
 or not, with the columns `entry_id`, `unit_id`, `unit_kind`, `recording_id`,
 `status` (`awaiting`, `open` or `decided`), `kinds`, `labels`, `pair` (the two
-types of a type conflict, `a | b`), `onset_s`, `offset_s`, `people` (who marked
-it), `missing` (who did not), `choice`, `kept_labels`, `reason_code`, `reason`,
-`adjudicator_id` and `decided_at`. The expert area's library downloads the
-same columns for the entries it shows, with `decision` in place of `choice`.
+types of a type conflict, `a | b`), `onset_s`, `offset_s`, `letters` (who each
+letter of the unit is, such as `A=A08,B=A03`: the letters differ from one unit
+to the next), `people` (who marked it), `missing` (who did not), `choice`,
+`kept_annotator_ids` (whose marks the decision kept; empty for `none` and for
+the adjudicator's own marks, `n/a` while undecided), `kept_labels`,
+`reason_code`, `reason`, `adjudicator_id`, `decided_at` and `promoted` (the
+quiz items and snippets made from it, as `set/item`). The expert area's
+library downloads the same columns for the entries it shows.
 
 ## `completion_register.tsv`
 

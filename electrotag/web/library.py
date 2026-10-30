@@ -7,10 +7,12 @@ conflict: where it is, its kinds, the types involved (with the confused pair, su
 against an eye movement), each person's mark, and its status: ``awaiting`` (nobody adjudicates the
 unit yet), ``open`` (adjudication started, this conflict not decided) or ``decided``.
 
-An entry can be promoted to a quiz item or an artifact snippet of a reference set
-(:func:`library_promote`): the item keeps ``source: {"library_entry", "task_id", "conflict_id",
-"promote_id", "promoted_by", "promoted_at"}``, and the same entry promoted to the same set again,
-or the same ``promote_id`` sent twice, gives the item already made. Nothing else is stored.
+A decided entry can be promoted to a quiz item or an artifact snippet of a reference set
+(:func:`library_promote`; an undecided one is refused with 409 ``undecided``): the item keeps
+``source: {"library_entry", "task_id", "conflict_id", "promote_id", "promoted_by", "promoted_at"}``,
+and the same entry promoted to the same set again, or the same ``promote_id`` sent twice, gives the
+item already made. Each entry lists where it was promoted (``promoted``), found from those sources.
+Nothing else is stored.
 """
 
 from __future__ import annotations
@@ -35,8 +37,8 @@ MAX_LIMIT = 500
 MAX_EXPLANATION = 2000
 #: The columns of library/library.tsv (docs/file_formats.md).
 LIBRARY_COLUMNS = ("entry_id", "unit_id", "unit_kind", "recording_id", "status", "kinds", "labels", "pair",
-                   "onset_s", "offset_s", "people", "missing", "choice", "kept_labels", "reason_code", "reason",
-                   "adjudicator_id", "decided_at")
+                   "onset_s", "offset_s", "letters", "people", "missing", "choice", "kept_annotator_ids", "kept_labels",
+                   "reason_code", "reason", "adjudicator_id", "decided_at", "promoted")
 
 
 def _bad(message: str, code: str = "bad_request") -> ApiError:
@@ -48,6 +50,7 @@ def entries(service: StudyService, user: User) -> list[dict[str, Any]]:
     from electrotag.web.adjudication import _records, compare, conflict_out, units
 
     records = _records(service)
+    promoted = _promoted(service)
     out: list[dict[str, Any]] = []
     for u in units(service):
         rec = records.get(u.unit_id)
@@ -77,8 +80,40 @@ def entries(service: StudyService, user: User) -> list[dict[str, Any]]:
                 "status": "awaiting" if rec is None else ("decided" if d is not None else "open"),
                 "decision": d, "adjudicator_id": (rec or {}).get("adjudicator_id"),
                 "finished": bool(rec) and rec.get("state") == "finished",
+                "promoted": promoted.get(f"{u.unit_id}:{c.cluster_id}", []),
             })
     return out
+
+
+def _promoted(service: StudyService) -> dict[str, list[dict[str, str]]]:
+    """Where each entry was promoted: entry ID -> [{"set_id", "to", "id"}], from the sources of the reference sets'
+    quiz items and snippets."""
+    out: dict[str, list[dict[str, str]]] = {}
+    for rs in service.store.reference_sets():
+        for it in rs.quiz_items:
+            eid = (it.source or {}).get("library_entry")
+            if eid:
+                out.setdefault(str(eid), []).append({"set_id": rs.set_id, "to": "quiz_item", "id": it.item_id})
+        for sn in rs.snippets:
+            eid = (sn.get("source") or {}).get("library_entry")
+            if eid:
+                out.setdefault(str(eid), []).append({"set_id": rs.set_id, "to": "snippet",
+                                                     "id": str(sn.get("snippet_id"))})
+    return out
+
+
+def kept_people(e: dict[str, Any]) -> list[str]:
+    """Whose marks a decided entry kept (one person's, everyone's, the marks picked; none for ``none`` and for the
+    adjudicator's own marks)."""
+    d = e.get("decision") or {}
+    choice = d.get("choice")
+    marks = e.get("marks") or []
+    if choice == "all":
+        return sorted({m["annotator_id"] for m in marks})
+    if choice == "pick":
+        picked = {(p.get("letter"), p.get("annotation_id")) for p in d.get("picks") or []}
+        return sorted({m["annotator_id"] for m in marks if (m["letter"], m["annotation_id"]) in picked})
+    return sorted({m["annotator_id"] for m in marks if m["letter"] == choice})
 
 
 def _kept_labels(e: dict[str, Any]) -> list[str]:
@@ -92,7 +127,7 @@ def _choice_of(e: dict[str, Any]) -> str | None:
     if not d:
         return None
     c = d.get("choice")
-    return c if c in ("all", "none", "edited") else "one"
+    return c if c in ("all", "none", "pick", "edited") else "one"
 
 
 def _pair_key(pair: Any) -> str:
@@ -175,8 +210,8 @@ def _filters(body: dict[str, Any]) -> dict[str, Any]:
         f["status"] = status
     choice = body.get("choice")
     if choice is not None:
-        if not isinstance(choice, str) or not re.match(r"^(one|all|none|edited|[A-F])$", choice):
-            raise _bad("choice must be one, all, none, edited or a letter")
+        if not isinstance(choice, str) or not re.match(r"^(one|all|none|pick|edited|[A-F])$", choice):
+            raise _bad("choice must be one, all, none, pick, edited or a letter")
         f["choice"] = choice
     kind = body.get("kind")
     if kind is not None:
@@ -215,10 +250,14 @@ def library_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         out.append({"entry_id": e["entry_id"], "unit_id": e["unit_id"], "unit_kind": e["unit_kind"],
                     "recording_id": e["recording_id"], "status": e["status"], "kinds": e["kinds"],
                     "labels": e["labels"], "pair": _pair_key(e.get("pair")), "onset_s": e["onset_s"],
-                    "offset_s": e["offset_s"], "people": sorted({m["annotator_id"] for m in e["marks"]}),
-                    "missing": e["missing_ids"], "choice": d.get("choice"), "kept_labels": _kept_labels(e),
+                    "offset_s": e["offset_s"],
+                    "letters": [f"{x}={p}" for p, x in sorted((e.get("letters") or {}).items(), key=lambda kv: kv[1])],
+                    "people": sorted({m["annotator_id"] for m in e["marks"]}),
+                    "missing": e["missing_ids"], "choice": d.get("choice"),
+                    "kept_annotator_ids": kept_people(e) if d else None, "kept_labels": _kept_labels(e),
                     "reason_code": d.get("reason_code"), "reason": d.get("reason"),
-                    "adjudicator_id": e.get("adjudicator_id"), "decided_at": d.get("decided_at")})
+                    "adjudicator_id": e.get("adjudicator_id"), "decided_at": d.get("decided_at"),
+                    "promoted": [f"{p['set_id']}/{p['id']}" for p in e.get("promoted") or []]})
     return out
 
 
@@ -280,12 +319,12 @@ def library_promote(service: StudyService, user: User, body: dict[str, Any]) -> 
     if entry is None:
         raise ApiError(404, "unknown_entry", "This entry is no longer in the library.")
     d = entry.get("decision")
-    kept = (d or {}).get("result") or []
+    if d is None:
+        raise ApiError(409, "undecided", "This conflict has not been decided yet, so it cannot teach anything: "
+                       "promote it once it is decided.")
+    kept = d.get("result") or []
     label = body.get("label")
     if label is None:
-        if d is None:
-            raise ApiError(409, "undecided", "This conflict has not been decided yet. Choose the artifact type "
-                           "yourself, or promote it once it is decided.")
         labels = sorted({a["label"] for a in kept})
         label = labels[0] if len(labels) == 1 else (NONE_OPTION if not kept else None)
         if label is None:
@@ -314,7 +353,7 @@ def library_promote(service: StudyService, user: User, body: dict[str, Any]) -> 
     explanation = explanation.strip()
     source = {"library_entry": eid, "task_id": entry["unit_id"], "conflict_id": entry["conflict_id"],
               "promote_id": pid, "promoted_by": user.annotator_id, "promoted_at": now_local_iso(),
-              "kinds": entry["kinds"], "decision": (d or {}).get("choice")}
+              "kinds": entry["kinds"], "decision": d.get("choice")}
     rid = entry["recording_id"]
     # never from a recording whose answers trainees are scored against (electrotag/web/training_path.py)
     service.training_path.refuse_if_revealing(rs0, rid, "a quiz item" if to == "quiz_item" else "a snippet",
@@ -366,5 +405,5 @@ def library_promote(service: StudyService, user: User, body: dict[str, Any]) -> 
     return {("item" if to == "quiz_item" else "snippet"): made, "already": False}
 
 
-__all__ = ["ENTRY_STATUSES", "LIBRARY_COLUMNS", "PROMOTE_TO", "entries", "library_list", "library_promote",
-           "library_rows"]
+__all__ = ["ENTRY_STATUSES", "LIBRARY_COLUMNS", "PROMOTE_TO", "entries", "kept_people", "library_list",
+           "library_promote", "library_rows"]

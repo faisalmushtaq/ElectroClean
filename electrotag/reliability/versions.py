@@ -64,7 +64,7 @@ CORRECTION_COLUMNS = ["recording", "annotator", "attempt", "corrected_by", "via"
                       "added", "removed", "changed", "relabelled", "reasons", "f1_with_original", "n_matched"]
 ADJUDICATION_COLUMNS = ["unit_id", "unit_kind", "recording", "group", "window_start_s", "window_end_s",
                         "adjudicator", "annotators", "n_conflicts", "presence", "type", "timing", "channels", "split",
-                        "kept_one", "kept_all", "kept_none", "edited", "n_decided", "mean_decision_s",
+                        "kept_one", "kept_all", "kept_none", "kept_picked", "edited", "n_decided", "mean_decision_s",
                         "f1_before", "f1_after", "n_adjudicated"]
 PAIR_COLUMNS = ["label_1", "label_2", "n_conflicts", "n_units", "kept_label_1", "kept_label_2", "kept_both",
                 "kept_neither_or_edited"]
@@ -539,14 +539,32 @@ def correction_effect(pairs: Iterable[CorrectedPair], config: AnalysisConfig) ->
 
 
 # ------------------------------------------------------------------ what the adjudication changed
-def _decided_for(choice: Any, letters: dict[str, str]) -> list[str]:
-    """The people whose marks a decision kept (a letter, or all of them)."""
+def _decided_for(choice: Any, letters: dict[str, str], picks: Any = None) -> list[str]:
+    """The people whose marks a decision kept (a letter, all of them, or the people of the marks picked)."""
     person = {x: p for p, x in letters.items()}
     if choice in person:
         return [person[choice]]
     if choice == "all":
         return sorted(person.values())
+    if choice == "pick" and isinstance(picks, list):
+        return sorted({person[str(p.get("letter"))] for p in picks if isinstance(p, dict)
+                       and str(p.get("letter")) in person})
     return []
+
+
+def _decisions_of(rec: dict[str, Any], sha: Any) -> dict[str, Any]:
+    """The decisions behind an adjudicated version: the record's own, or, when the adjudication was reopened after
+    that version was saved, those kept in its history with the same ``decisions_sha256`` (the version's
+    ``context.derived``). A reopened adjudication's earlier version stays the one that counts until it is finished
+    again, with the decisions it was made from."""
+    history = [h for h in rec.get("history") or [] if isinstance(h, dict)]
+    for cand in [rec, *reversed(history)]:
+        if sha and cand.get("decisions_sha256") == sha and isinstance(cand.get("decisions"), dict):
+            return cand["decisions"]
+    if rec.get("state") == "finished" or not history:
+        return rec.get("decisions") if isinstance(rec.get("decisions"), dict) else {}
+    last = history[-1].get("decisions")
+    return last if isinstance(last, dict) else {}
 
 
 def adjudication_effect(units: Iterable[AdjudicatedUnit], config: AnalysisConfig,
@@ -576,8 +594,8 @@ def adjudication_effect(units: Iterable[AdjudicatedUnit], config: AnalysisConfig
                                  who={x: p for p, x in letters.items()}) if len(docs) >= 2 else []
         conflicts = [c for c in clusters if c.is_conflict]
         rec = records.adjudications.get(u.unit_id) or {}
-        decisions = rec.get("decisions") if isinstance(rec.get("decisions"), dict) else {}
-        by_choice = {"one": 0, "all": 0, "none": 0, "edited": 0}
+        decisions = _decisions_of(rec, d.get("decisions_sha256"))
+        by_choice = {"one": 0, "all": 0, "none": 0, "pick": 0, "edited": 0}
         times: list[float] = []
         previous = rec.get("started_at")
         for dec in sorted((x for x in decisions.values() if isinstance(x, dict)),
@@ -607,6 +625,7 @@ def adjudication_effect(units: Iterable[AdjudicatedUnit], config: AnalysisConfig
                      "kept_one": by_choice["one"] if decisions else None,
                      "kept_all": by_choice["all"] if decisions else None,
                      "kept_none": by_choice["none"] if decisions else None,
+                     "kept_picked": by_choice["pick"] if decisions else None,
                      "edited": by_choice["edited"] if decisions else None,
                      "n_decided": len(decisions) if records.found else None,
                      "mean_decision_s": sum(times) / len(times) if times else None,
@@ -622,7 +641,12 @@ def adjudication_effect(units: Iterable[AdjudicatedUnit], config: AnalysisConfig
             acc["units"].add(u.unit_id)
             dec = decisions.get(c.cluster_id) if decisions else None
             if isinstance(dec, dict):
-                kept = {m.label for m in c.marks if m.annotator_id in _decided_for(dec.get("choice"), letters)}
+                kept = {m.label for m in c.marks if m.annotator_id in _decided_for(dec.get("choice"), letters,
+                                                                                   dec.get("picks"))}
+                if dec.get("choice") == "pick":
+                    picked = {(str(p.get("letter")), str(p.get("annotation_id"))) for p in dec.get("picks") or []
+                              if isinstance(p, dict)}
+                    kept = {m.label for m in c.marks if (m.letter, m.annotation_id) in picked}
                 if kept == {lp[0]}:
                     acc["kept_label_1"] += 1
                 elif kept == {lp[1]}:
@@ -635,7 +659,8 @@ def adjudication_effect(units: Iterable[AdjudicatedUnit], config: AnalysisConfig
             _f, n_kept = _f1(evs[p], adj_evs, sfreq, **kw)
             in_conflict = [m for c in conflicts for m in c.marks if m.annotator_id == p]
             decided_for = sum(1 for c in conflicts if isinstance(decisions.get(c.cluster_id), dict)
-                              and p in _decided_for(decisions[c.cluster_id].get("choice"), letters)) \
+                              and p in _decided_for(decisions[c.cluster_id].get("choice"), letters,
+                                                    decisions[c.cluster_id].get("picks"))) \
                 if decisions else None
             survival.append({"annotator": p, "unit_id": u.unit_id, "recording": u.group_id, "n_marks": len(evs[p]),
                              "n_kept": n_kept, "share_kept": n_kept / len(evs[p]) if evs[p] else float("nan"),

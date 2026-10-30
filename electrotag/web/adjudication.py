@@ -27,7 +27,14 @@ frozen inputs, so the queue, the library and the decisions never get out of step
 Nobody adjudicates a unit they annotated (409 ``own_task``). Records keep ``"blinded": false``, leaving
 room for blinded adjudication in a future crowd study.
 
-Every operation that saves (start, decide, finish, reference) is idempotent and appends to the audit log;
+**Reopening.** A finished adjudication can be reopened (``adjudication_reopen``, audited) by its adjudicator or an
+administrator, as a screening tool lets a resolved conflict be changed. The record keeps what was finished in its
+``history`` (decisions, version and reason), and the adjudicated version saved then stays in the derived tree,
+never deleted; finishing again saves a newer adjudicated version, which supersedes it. Until then the earlier
+finished version is the one that counts (:func:`last_finished`): for the annotators' outcomes, for training
+references and, through the files, for the analyses.
+
+Every operation that saves (start, decide, finish, reopen, reference) is idempotent and appends to the audit log;
 reasons are counted there by their length only.
 """
 
@@ -81,6 +88,19 @@ def _bad(message: str, code: str = "bad_request") -> ApiError:
 
 def _sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def last_finished(record: dict[str, Any] | None) -> dict[str, Any] | None:
+    """What counts of an adjudication: the record itself when it is finished, or what was finished before it was
+    reopened (the last entry of its ``history``), or None when it was never finished. The answer has
+    ``decisions``, ``version``, ``finished_at``, ``decisions_sha256`` and ``adjudicator_id``."""
+    if not record:
+        return None
+    if record.get("state") == "finished":
+        return {k: record.get(k) for k in ("decisions", "version", "finished_at", "decisions_sha256", "adjudicator_id",
+                                            "adjudicator_name")}
+    history = [h for h in record.get("history") or [] if isinstance(h, dict)]
+    return history[-1] if history else None
 
 
 def unit_id_for(kind: str, *parts: str) -> str:
@@ -458,7 +478,8 @@ def decision_out(c: Cluster, d: dict[str, Any] | None, ch_names: tuple[str, ...]
     if d is None:
         return None
     kept = apply_decision(c, _with_marks(d, ch_names, sfreq), ch_names)
-    return {"choice": d.get("choice"), "marks": list(d.get("marks") or []), "reason_code": d.get("reason_code"),
+    return {"choice": d.get("choice"), "marks": list(d.get("marks") or []), "picks": list(d.get("picks") or []),
+            "reason_code": d.get("reason_code"),
             "reason": d.get("reason") or "", "decided_at": d.get("decided_at"), "decided_by": d.get("decided_by"),
             "result": [_ann_out(a, sfreq) for a in kept]}
 
@@ -493,7 +514,7 @@ def record_out(record: dict[str, Any] | None) -> dict[str, Any] | None:
         return None
     keys = ("unit_id", "task_id", "unit_kind", "recording_id", "file_name", "window", "corrected", "adjudicator_id",
             "adjudicator_name", "state", "started_at", "finished_at", "blinded", "inputs", "letters", "rules",
-            "decisions", "version", "counts")
+            "decisions", "version", "counts", "history", "reopened_at")
     return {k: record.get(k) for k in keys}
 
 
@@ -510,11 +531,16 @@ def full_answer(service: StudyService, user: User, unit: Unit, record: dict[str,
     versions = []
     for p, x in sorted(cmp.letters.items(), key=lambda kv: kv[1]):
         inp = Input.from_frozen(p, (record or {}).get("inputs", {}).get(p, {})) if record else unit.inputs[p]
-        versions.append({"letter": x, "annotator_id": p, "display_name": _name(service, p), "source": inp.source,
-                         "attempt": inp.attempt, "number": inp.number or None,
-                         "annotations": [annotation_dict(a) for a in cmp.docs[x].sorted_annotations()]})
+        version = {"letter": x, "annotator_id": p, "display_name": _name(service, p), "source": inp.source,
+                   "attempt": inp.attempt, "number": inp.number or None,
+                   "annotations": [annotation_dict(a) for a in cmp.docs[x].sorted_annotations()]}
+        if inp.source == "correction":
+            version.update(_correction_details(service, inp))
+        versions.append(version)
     conflicts = [conflict_out(service, c, decisions.get(c.cluster_id), cmp) for c in cmp.conflicts]
+    corrected = unit.corrected or (record or {}).get("corrected")
     return {
+        "original": _original_of(service, unit.recording_id, corrected) if corrected else None,
         "unit": unit_out(service, user, unit, record, len(cmp.conflicts), len(cmp.clusters) - len(cmp.conflicts)),
         "adjudication": record_out(record), "versions": versions, "conflicts": conflicts,
         "agreed": [{"cluster_id": c.cluster_id, "mark": _ann_out(agreed_mark(c, ch), sfreq),
@@ -524,6 +550,32 @@ def full_answer(service: StudyService, user: User, unit: Unit, record: dict[str,
         "progress": {"conflicts": len(conflicts), "decided": sum(1 for c in conflicts if c["decision"] is not None)},
         "reason_required": service.settings.review.reason_required, "reason_codes": list(REASON_CODES),
     }
+
+
+def _correction_details(service: StudyService, inp: Input) -> dict[str, Any]:
+    """What a corrector changed and why (their reasons and notes), for the adjudicator of two or more corrections."""
+    from electrotag.web.corrections import REASONS, _saved
+
+    rec = next((r for r in _saved(service, inp.annotator_id) if r.get("correction_id") == inp.correction_id), None)
+    if rec is None:
+        return {"changes": [], "overall_note": ""}
+    keep = ("annotation_id", "change", "fields", "before", "after", "reason", "note")
+    return {"changes": [{**{k: c.get(k) for k in keep}, "reason_text": REASONS.get(str(c.get("reason") or ""), "")}
+                        for c in rec.get("changes") or [] if isinstance(c, dict)],
+            "overall_note": str(rec.get("overall_note") or "")}
+
+
+def _original_of(service: StudyService, rid: str, corrected: dict[str, Any]) -> dict[str, Any] | None:
+    """The saved version the corrections compared were made of (drawn dashed under them), or None."""
+    from electrotag.web.service import annotation_dict
+
+    aid, attempt = str(corrected.get("annotator_id") or ""), int(corrected.get("attempt") or 1)
+    try:
+        doc, _sha256, _file = _document(service, rid, Input(aid, "original", aid, attempt))
+    except ApiError:
+        return None
+    return {"annotator_id": aid, "display_name": _name(service, aid), "attempt": attempt,
+            "annotations": [annotation_dict(a) for a in doc.sorted_annotations()]}
 
 
 # ------------------------------------------------------------------ finding a unit
@@ -579,8 +631,10 @@ def adjudication_list(service: StudyService, user: User, body: dict[str, Any]) -
         if want is None or row["status"] == want:
             out.append(row)
     order = {"adjudicating": 0, "ready": 1, "collecting": 2, "agreed": 3, "adjudicated": 4}
-    out.sort(key=lambda r: (order[r["status"]], r["recording_id"], r["unit_id"]))
-    return {"units": out, "counts": counts, "total": len(out)}
+    out.sort(key=lambda r: (order[r["status"]], not r["yours"], r["recording_id"], r["unit_id"]))
+    sets = [{"set_id": rs.set_id, "name": rs.name or rs.set_id}
+            for rs in sorted(service.store.reference_sets(), key=lambda r: r.set_id)]
+    return {"units": out, "counts": counts, "total": len(out), "sets": sets}
 
 
 @expert_op("tasks_list")
@@ -717,6 +771,46 @@ def _edited_marks(service: StudyService, raw: Any, cmp: Compared) -> list[dict[s
                                                                "duration_samples", "channels")} for a in marks]
 
 
+def _picks(raw: Any, cluster: Cluster) -> list[dict[str, str]]:
+    """The marks a ``pick`` decision keeps, checked against the conflict: [{"letter", "annotation_id"}]."""
+    from electrotag.reliability.conflicts import ConflictError, picked_marks
+
+    try:
+        found = picked_marks(cluster, raw)
+    except ConflictError as exc:
+        raise ApiError(422, "invalid_choice", f"{exc}.") from exc
+    return [{"letter": m.letter, "annotation_id": m.annotation_id} for m in found]
+
+
+def _version_words(v: dict[str, Any]) -> str:
+    """"A01's version (A)" or "E02's correction of A01's work (B)"."""
+    if v["source"] == "correction":
+        return f"{v['person']}'s correction of {v['annotator_id']}'s work ({v['letter']})"
+    return f"{v['person']}'s version ({v['letter']})"
+
+
+def _kept_versions(rec: dict[str, Any], cluster: Cluster, decision: dict[str, Any]) -> tuple[list[dict[str, Any]], str]:
+    """Whose versions a decision kept marks of, for the audit log: [{"person", "annotator_id", "source", "letter"}]
+    (the frozen inputs, by letter), and the decision in words ("kept A01's version (A)")."""
+    from electrotag.reliability.conflicts import kept_marks
+
+    by_letter = {str(d.get("letter")): {"person": p, "annotator_id": str(d.get("annotator_id") or p),
+                                        "source": str(d.get("source") or "original"), "letter": str(d.get("letter"))}
+                 for p, d in (rec.get("inputs") or {}).items()}
+    choice = decision.get("choice")
+    letters = sorted({x for x, _id in kept_marks(cluster, decision)}) if choice in ("all", "pick") else (
+        [str(choice)] if choice in by_letter else [])
+    kept = [by_letter[x] for x in letters if x in by_letter]
+    if choice == "none":
+        return kept, "kept no mark"
+    if choice == "edited":
+        return kept, f"replaced by {audit.count(len(decision.get('marks') or []), 'mark')} of the adjudicator's own"
+    said = " and ".join(_version_words(v) for v in kept)
+    if choice == "pick":
+        return kept, f"kept {audit.count(len(decision.get('picks') or []), 'mark')} chosen from {said}"
+    return kept, f"kept {'every version: ' if choice == 'all' else ''}{said}"
+
+
 @expert_op("adjudication_decide")
 def adjudication_decide(service: StudyService, user: User, body: dict[str, Any]) -> dict[str, Any]:
     """Decide one conflict: a letter (that person's marks), ``all``, ``none`` or ``edited`` (with ``marks``), with a
@@ -734,12 +828,13 @@ def adjudication_decide(service: StudyService, user: User, body: dict[str, Any])
         raise ApiError(422, "unknown_conflict", "This conflict is not part of the adjudication.")
     choice = body.get("choice")
     letters = set(cmp.letters.values())
-    if not isinstance(choice, str) or not (choice in letters or choice in ("all", "none", "edited")):
-        raise ApiError(422, "invalid_choice", f"choice must be one of {', '.join(sorted(letters))}, all, none or "
-                       "edited")
+    if not isinstance(choice, str) or not (choice in letters or choice in ("all", "none", "pick", "edited")):
+        raise ApiError(422, "invalid_choice", f"choice must be one of {', '.join(sorted(letters))}, all, none, pick "
+                       "or edited")
     code, text = _reason(body, choice, service.settings.review.reason_required)
     marks = _edited_marks(service, body.get("marks"), cmp) if choice == "edited" else []
-    decision = {"choice": choice, "marks": marks, "reason_code": code, "reason": text,
+    picks = _picks(body.get("picks"), cluster) if choice == "pick" else []
+    decision = {"choice": choice, "marks": marks, "picks": picks, "reason_code": code, "reason": text,
                 "decided_at": now_local_iso(), "decided_by": user.annotator_id}
     same = {"yes": False}
 
@@ -748,8 +843,8 @@ def adjudication_decide(service: StudyService, user: User, body: dict[str, Any])
         if old is None or old.get("state") == "finished" or old.get("adjudicator_id") != user.annotator_id:
             return None
         before = dict(old.get("decisions") or {}).get(cid)
-        if before is not None and all(before.get(k) == decision[k] for k in ("choice", "marks", "reason_code",
-                                                                              "reason")):
+        if before is not None and all((before.get(k) or None) == (decision[k] or None)
+                                      for k in ("choice", "marks", "picks", "reason_code", "reason")):
             same["yes"] = True
             return None
         decisions = {**dict(old.get("decisions") or {}), cid: decision}
@@ -759,10 +854,12 @@ def adjudication_decide(service: StudyService, user: User, body: dict[str, Any])
     if kept.get("state") == "finished":
         raise ApiError(409, "finished", "This adjudication is finished; its decisions are kept as they are.")
     if not same["yes"]:
+        kept_list, words = _kept_versions(rec, cluster, decision)
         audit.record(service.store, user.annotator_id, "adjudication_decide",
-                     f"Decided a {'/'.join(cluster.kinds)} conflict of {unit.recording_id}: {choice}",
+                     f"Decided a {'/'.join(cluster.kinds)} conflict of {unit.recording_id}: {words}",
                      {"unit_id": uid, "conflict_id": cid, "kinds": list(cluster.kinds), "choice": choice,
-                      "reason_code": code, "reason_length": len(text), "n_marks": len(marks)})
+                      "kept": kept_list[0] if choice in letters else None, "kept_versions": kept_list,
+                      "reason_code": code, "reason_length": len(text), "n_marks": len(marks) or len(picks)})
     decisions = dict(kept.get("decisions") or {})
     return {"conflict": conflict_out(service, cluster, decisions.get(cid), cmp),
             "progress": {"conflicts": len(cmp.conflicts), "decided": sum(1 for c in cmp.conflicts
@@ -863,13 +960,74 @@ def adjudication_finish(service: StudyService, user: User, body: dict[str, Any])
     return {"adjudication": record_out(kept), "version": kept.get("version") or version, "already": False}
 
 
+@expert_op("adjudication_reopen")
+def adjudication_reopen(service: StudyService, user: User, body: dict[str, Any]) -> dict[str, Any]:
+    """Reopen a finished adjudication so that its decisions can be changed (its adjudicator, or an administrator,
+    who then continues it). What was finished is kept in the record's ``history``, and its adjudicated version
+    stays saved; finishing again saves a newer version, which supersedes it. Audited; reopening one already open
+    changes nothing."""
+    uid = _unit_id(body)
+    rec = _record(service, uid)
+    if rec is None:
+        raise ApiError(409, "not_started", "This adjudication has not been started, so there is nothing to reopen.")
+    unit = find_unit(service, uid, rec)
+    _check_not_own(user, unit)
+    if rec.get("adjudicator_id") != user.annotator_id and not user.is_admin:
+        raise ApiError(409, "not_yours", f"{rec.get('adjudicator_id')} adjudicated this recording; only they, or an "
+                       "administrator, can reopen it.")
+    text = body.get("reason", "")
+    if text is None:
+        text = ""
+    if not isinstance(text, str) or any(ord(ch) < 32 or ord(ch) == 127 for ch in text):
+        raise _bad("The reason must be a single line of text")
+    text = text.strip()
+    if len(text) > MAX_REASON:
+        raise _bad(f"The reason has at most {MAX_REASON} characters (this one has {len(text)})")
+    if rec.get("state") != "finished":
+        if rec.get("adjudicator_id") != user.annotator_id:
+            raise _taken(rec)
+        return {**full_answer(service, user, unit, rec), "already": True}
+    now = now_local_iso()
+    done = {"yes": False}
+
+    def reopen(old: dict[str, Any] | None) -> dict[str, Any] | None:
+        done["yes"] = False  # set on every try: a transaction may run this more than once
+        if old is None or old.get("state") != "finished":
+            return None
+        done["yes"] = True
+        entry = {"finished_at": old.get("finished_at"), "version": old.get("version"),
+                 "decisions": old.get("decisions") or {}, "decisions_sha256": old.get("decisions_sha256"),
+                 "adjudicator_id": old.get("adjudicator_id"), "adjudicator_name": old.get("adjudicator_name"),
+                 "reopened_at": now, "reopened_by": user.annotator_id, "reason": text}
+        new = {k: v for k, v in old.items() if k not in ("finishing", "decisions_sha256")}
+        return {**new, "state": "in_progress", "finished_at": None, "version": None, "reopened_at": now,
+                "adjudicator_id": user.annotator_id, "adjudicator_name": user.display_name,
+                "history": [*list(old.get("history") or []), entry]}
+
+    kept = service.store.update_record("adjudications", uid, user.annotator_id, reopen) or rec
+    if not done["yes"]:
+        if kept.get("adjudicator_id") != user.annotator_id:
+            raise _taken(kept)
+        return {**full_answer(service, user, unit, kept), "already": True}
+    before = (kept.get("history") or [{}])[-1]
+    version = before.get("version") or {}
+    audit.record(service.store, user.annotator_id, "adjudication_reopen",
+                 f"Reopened the adjudication of {unit.recording_id} (adjudicated version {version.get('attempt')} by "
+                 f"{before.get('adjudicator_id')} is kept until it is finished again)",
+                 {"unit_id": uid, "recording_id": unit.recording_id,
+                  "previous_adjudicator": before.get("adjudicator_id"),
+                  "version": version, "decisions_sha256": before.get("decisions_sha256"), "reason_length": len(text)})
+    return {**full_answer(service, user, unit, kept), "already": False}
+
+
 @expert_op("adjudication_reference")
 def adjudication_reference(service: StudyService, user: User, body: dict[str, Any]) -> dict[str, Any]:
     """A finished adjudication as a training reference (the admin operation set_add_reference, Source adjudication)."""
     uid = _unit_id(body)
     rec = _record(service, uid)
-    if rec is None or rec.get("state") != "finished":
+    if last_finished(rec) is None:
         raise ApiError(409, "not_finished", "Only a finished adjudication can become a training reference.")
+    assert rec is not None
     return service.administration.op_set_add_reference(user, {
         "set_id": body.get("set_id"), "recording_id": rec.get("recording_id"), "use": body.get("use"),
         "recording_scope": SCOPE_STUDY, "source": {"kind": "adjudication", "task_id": uid},
@@ -887,14 +1045,15 @@ def reference_source(service: StudyService, source: dict[str, Any], rid: str,
     if not isinstance(uid, str) or not UNIT_RE.match(uid):
         raise _bad("source.task_id (the adjudication) is missing")
     rec = _record(service, uid)
-    if rec is None or rec.get("state") != "finished" or not rec.get("version"):
+    done = last_finished(rec)
+    if rec is None or done is None or not done.get("version"):
         raise ApiError(409, "not_finished", "Only a finished adjudication can become a training reference.")
     if rec.get("recording_id") != rid:
         raise ApiError(422, "invalid_document", f"The adjudication is of {rec.get('recording_id')}, not of {rid}")
     if rec.get("window"):
         raise ApiError(422, "window_task", "This adjudication covers a window of the recording; a training "
                        "reference must cover the whole recording.")
-    files = service.store.derived_files("adjudications", ADJUDICATED, rid, int(rec["version"]["attempt"]))
+    files = service.store.derived_files("adjudications", ADJUDICATED, rid, int(done["version"]["attempt"]))
     name = next((n for n in sorted(files) if n.endswith("_annotations.json")), None)
     if name is None:
         raise ApiError(500, "reference_unavailable", "The adjudicated version cannot be found")
@@ -907,24 +1066,30 @@ def reference_source(service: StudyService, source: dict[str, Any], rid: str,
         _, _, (iname, data) = _document(service, rid, Input.from_frozen(p, d), str(d.get("annotations_sha256") or ""))
         kept.append(keep(f"{p}_{iname}" if d.get("source") == "correction" else iname, data))
     return {"doc": doc, "method": "adjudicated", "experts": sorted(rec.get("inputs") or {}),
-            "adjudicator": str(rec.get("adjudicator_id") or ""), "files": kept,
+            "adjudicator": str(done.get("adjudicator_id") or rec.get("adjudicator_id") or ""), "files": kept,
             "details": {"adjudication": {"task_id": uid, "unit_kind": rec.get("unit_kind"),
-                                         "decisions_sha256": rec.get("decisions_sha256"),
+                                         "decisions_sha256": done.get("decisions_sha256"),
+                                         "version": int(done["version"]["attempt"]),
                                          "n_conflicts": (rec.get("counts") or {}).get("conflicts")}}}
 
 
 # ------------------------------------------------------------------ what annotators see
-OUTCOMES = ("yours_kept", "other_kept", "all_kept", "none_kept", "edited")
+#: What the annotator's feedback says of each decision (conflicts.OUTCOMES, kept here so that this module loads
+#: without the matching code).
+OUTCOMES = ("yours_kept", "all_kept", "part_kept", "other_kept", "none_kept", "edited")
 
 
 @feedback_part("adjudications")
 def mine(service: StudyService, user: User) -> list[dict[str, Any]]:
     """The outcome of each conflict in the annotator's own work, once its adjudication is finished: their marks,
     the others' marks (nobody named), the decision and its reason."""
+    from electrotag.reliability.conflicts import outcome_for
+
     aid = user.annotator_id
     out = []
     for rec in service.store.records("adjudications"):
-        if rec.get("state") != "finished" or aid not in (rec.get("inputs") or {}):
+        done = last_finished(rec)
+        if done is None or aid not in (rec.get("inputs") or {}):
             continue
         uid = str(rec.get("unit_id") or rec.get("task_id"))
         try:
@@ -935,14 +1100,17 @@ def mine(service: StudyService, user: User) -> list[dict[str, Any]]:
         mine_letter = cmp.letters[aid]
         sfreq = float(cmp.manifest["timing"]["sfreq"])
         ch = tuple(cmp.manifest["ch_names"])
-        decisions = dict(rec.get("decisions") or {})
+        decisions = dict(done.get("decisions") or {})
         rows = []
         for c in cmp.conflicts:
             d = decisions.get(c.cluster_id) or {}
-            choice = d.get("choice")
-            outcome = ("yours_kept" if choice == mine_letter else "all_kept" if choice == "all" else
-                       "none_kept" if choice == "none" else "edited" if choice == "edited" else "other_kept")
-            kept = decision_out(c, d, ch, sfreq) if d else None
+            try:
+                outcome = outcome_for(c, d, mine_letter) if d else None
+                kept = decision_out(c, d, ch, sfreq) if d else None
+            except (ValueError, KeyError):
+                outcome, kept = None, None
+            if outcome is None:
+                continue
             rows.append({
                 "conflict_id": c.cluster_id, "kinds": list(c.kinds), "onset_s": round(c.start / sfreq, 6),
                 "offset_s": round(c.stop / sfreq, 6),
@@ -955,8 +1123,9 @@ def mine(service: StudyService, user: User) -> list[dict[str, Any]]:
                              "reason": d.get("reason") or "", "reason_code": d.get("reason_code"),
                              "reason_text": REASON_WORDS.get(str(d.get("reason_code")), "")}})
         out.append({"task_id": uid, "unit_kind": rec.get("unit_kind"), "recording_id": rec.get("recording_id"),
-                    "file_name": rec.get("file_name"), "finished_at": rec.get("finished_at"),
-                    "window": rec.get("window"), "conflicts": rows})
+                    "file_name": rec.get("file_name"), "finished_at": done.get("finished_at"),
+                    "reopened": rec.get("state") != "finished", "window": rec.get("window"),
+                    "k": len(cmp.letters), "conflicts": rows})
     out.sort(key=lambda r: str(r.get("finished_at") or ""), reverse=True)
     return out
 
@@ -994,8 +1163,10 @@ def adjudication_files(store: Any) -> dict[str, bytes]:
         for c in sorted(cmp.conflicts, key=lambda c: str((decisions.get(c.cluster_id) or {}).get("decided_at") or "~")):
             d = decisions.get(c.cluster_id) or {}
             choice = d.get("choice")
-            kept = [person.get(str(choice), "")] if choice in person else (sorted(person.values()) if choice == "all"
-                                                                           else [])
+            kept = [person.get(str(choice), "")] if choice in person else (
+                sorted(person.values()) if choice == "all"
+                else sorted({person.get(str(p.get("letter")), "") for p in d.get("picks") or []}) if choice == "pick"
+                else [])
             gap = None
             if d.get("decided_at") and previous:
                 try:
@@ -1018,5 +1189,5 @@ def adjudication_files(store: Any) -> dict[str, bytes]:
 
 
 __all__ = ["ADJUDICATED", "OUTCOMES", "REASON_CODES", "STATUSES", "UNIT_KINDS", "Compared", "Input", "Unit",
-           "adjudication_files", "compare", "correction_units", "find_unit", "mine", "recording_units",
-           "reference_source", "task_units", "unit_id_for", "units"]
+           "adjudication_files", "compare", "correction_units", "find_unit", "last_finished", "mine",
+           "recording_units", "reference_source", "task_units", "unit_id_for", "units"]
