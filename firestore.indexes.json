@@ -14,6 +14,13 @@
     {"collectionGroup": "guided", "fieldPath": "state_json", "indexes": []},
     {"collectionGroup": "progress", "fieldPath": "data_json", "indexes": []},
     {"collectionGroup": "quiz", "fieldPath": "state_json", "indexes": []},
-    {"collectionGroup": "audit", "fieldPath": "details_json", "indexes": []}
+    {"collectionGroup": "audit", "fieldPath": "details_json", "indexes": []},
+    {"collectionGroup": "derived", "fieldPath": "blob", "indexes": []},
+    {"collectionGroup": "derived", "fieldPath": "entry", "indexes": []},
+    {"collectionGroup": "visits", "fieldPath": "recordings", "indexes": []},
+    {"collectionGroup": "tasks", "fieldPath": "record_json", "indexes": []},
+    {"collectionGroup": "corrections", "fieldPath": "record_json", "indexes": []},
+    {"collectionGroup": "adjudications", "fieldPath": "record_json", "indexes": []},
+    {"collectionGroup": "gold", "fieldPath": "record_json", "indexes": []}
   ]
 }

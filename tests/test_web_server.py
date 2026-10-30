@@ -716,7 +716,7 @@ def test_administration(client: TestClient, recordings: Path) -> None:
     admin = Api(client, "ADMIN")
     p = admin.ok("get", "/admin/progress")
     rows = {a["annotator_id"]: a for a in p["annotators"]}
-    assert set(rows) == {"ADMIN", "A01", "A02", "T01"}
+    assert set(rows) == {"ADMIN", "A01", "A02", "T01", "E01"}
     first = next(i for i in rows["A01"]["items"] if i["recording_id"] == SUB1)
     assert first["status"] == "done" and first["attempts"] == 1 and first["last_activity"]
     assert rows["T01"]["programme"]["set_id"] == "example"

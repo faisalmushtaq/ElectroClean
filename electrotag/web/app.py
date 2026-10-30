@@ -279,7 +279,7 @@ def create_app(study_dir: Path | str, *, demo: bool = False, allowed_origins: li
 
     def session_answer(user: User, token: str) -> JSONResponse:
         return JSONResponse({"token": token, "expires_in_s": TOKEN_IDLE_S, "annotator_id": user.annotator_id,
-                             "display_name": user.display_name, "role": user.role})
+                             "display_name": user.display_name, "role": user.role, "roles": list(user.roles)})
 
     async def invite_guard(request: Request) -> tuple[dict[str, Any], str]:
         """The body of an invitation request, refused while its address has failed too often."""
@@ -336,6 +336,10 @@ def create_app(study_dir: Path | str, *, demo: bool = False, allowed_origins: li
     async def my_reviews(request: Request) -> JSONResponse:
         return await authed(request, "my_reviews")
 
+    @app.get(f"{p}/me/feedback")
+    async def my_feedback(request: Request) -> JSONResponse:
+        return await authed(request, "my_feedback")
+
     @app.post(f"{p}/problems")
     async def problem_report(request: Request) -> JSONResponse:
         return await authed(request, "problem_report", await body_of(request))
@@ -367,6 +371,14 @@ def create_app(study_dir: Path | str, *, demo: bool = False, allowed_origins: li
     @app.get(f"{p}/training")
     async def training(request: Request) -> JSONResponse:
         return await authed(request, "training")
+
+    @app.post(f"{p}/training/stage")
+    async def training_stage(request: Request) -> JSONResponse:
+        return await authed(request, "training_stage", await body_of(request))
+
+    @app.get(f"{p}/training/snippets")
+    async def training_snippets(request: Request) -> JSONResponse:
+        return await authed(request, "training_snippets")
 
     @app.post(p + "/training/guided/{recording_id:path}/check")
     async def guided_check(request: Request, recording_id: str) -> JSONResponse:
@@ -419,6 +431,11 @@ def create_app(study_dir: Path | str, *, demo: bool = False, allowed_origins: li
     async def admin_op(request: Request, op: str) -> JSONResponse:
         """Every operation of the admin area (docs/web/api.md, "Administration")."""
         return await authed(request, "admin", {**await body_of(request), "op": op})
+
+    @app.post(p + "/expert/{op}")
+    async def expert_op(request: Request, op: str) -> JSONResponse:
+        """Every operation of the expert area (docs/web/api.md, "Experts")."""
+        return await authed(request, "expert", {**await body_of(request), "op": op})
 
     @app.post(p + "/quiz/{set_id:path}")
     async def quiz(request: Request, set_id: str) -> JSONResponse:

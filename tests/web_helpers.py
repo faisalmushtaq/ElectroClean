@@ -197,3 +197,26 @@ def race_revisions(service: Any, user: Any, bodies: list[dict[str, Any]], monkey
     for t in threads:
         t.join(120)
     return answers
+
+
+def derived_maker(store: Any, annotator_id: str, recording_id: str, annotations: list[dict[str, Any]], *,
+                  kind: str = "corrections", by: str = "E01", session_id: str | None = None) -> Any:
+    """``make_session`` for :meth:`Store.save_derived`: a correction (or an adjudicated version) of someone's work
+    on a study recording, saved with the journalled save as the expert operations do it."""
+    from electrotag.web.manifest import ManifestRecording
+    from electrotag.web.saving import WebSession
+    from electrotag.web.service import parse_annotations
+
+    m = store.manifest("study", recording_id)
+    loaded = ManifestRecording(m)
+    parsed = parse_annotations(annotations, loaded.info, store.catalogue, 1)
+    context = {"derived": {"kind": "correction" if kind == "corrections" else "adjudication", "by": by}}
+
+    def make(layout: Any) -> Any:
+        return WebSession(layout=layout, settings=store.settings, filters=store.settings.filters,
+                          catalogue=store.catalogue, loaded=loaded, annotator_id=annotator_id,
+                          display_name=f"{annotator_id} corrected by {by}", mode="standard", context=context,
+                          initial_annotations=parsed, allow_repeat=False, autosave_enabled=False, client={},
+                          server=store.kind, session_id=session_id)
+
+    return make

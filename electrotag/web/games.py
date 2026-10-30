@@ -214,7 +214,7 @@ class Games:
         now = time.monotonic()
         if self._team is not None and now - self._team[0] < self.cache_s:
             return self._team[1]
-        people = [u for u in self.store.users() if u.get("role", "annotator") == "annotator"]
+        people = [u for u in self.store.users() if "annotator" in (u.get("roles") or [u.get("role", "annotator")])]
         people.sort(key=lambda u: (str(u.get("created_at") or ""), u["annotator_id"]))
         ids = [u["annotator_id"] for u in people]
         given: dict[str, set[str]] = {aid: set() for aid in ids}

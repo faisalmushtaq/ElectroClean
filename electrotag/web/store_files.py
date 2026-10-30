@@ -3,7 +3,10 @@
 Results go straight into ElectroTag's usual folders below the study (``Annotated_Events/...``,
 ``interaction_logs/...``, ``training_progress/...``), written by the desktop application's code, so
 ``electrotag-agreement`` and ``electrotag-activity`` read them as they are. See
-:mod:`electrotag.web.study` for the folder layout.
+:mod:`electrotag.web.study` for the folder layout. Derived versions (an expert's correction, an
+adjudicated version) are saved by the same code into trees of their own below the results folder,
+``Annotated_Events/derived/<kind>/``, each with its own completion register, so they are never anyone's
+attempt; the saves of every tree are recovered in the same way when the study is opened.
 """
 
 from __future__ import annotations
@@ -24,6 +27,8 @@ from electrotag.app.session.register import CompletionRegister, RegisterError
 from electrotag.config.settings import Settings
 from electrotag.web.accounts import AccountError, AccountExists, Accounts, InvitationProblem
 from electrotag.web.store import (
+    DERIVED_DIR,
+    DERIVED_KINDS,
     RECORD_ID_RE,
     RECORD_KINDS,
     AccountProblem,
@@ -35,8 +40,11 @@ from electrotag.web.store import (
     Store,
     StoreError,
     User,
+    attempt_of,
     generated_password,
+    index_rows,
     latest_entry,
+    page_of,
 )
 from electrotag.web.study import StudyError, WebStudy
 
@@ -79,22 +87,24 @@ class FilesStore(Store):
         from electrotag.app.session.transaction import recover_interrupted_exports
         from electrotag.web import audit
 
-        layout = self.layout
-        if not layout.staging.exists():
-            return []
-        register = CompletionRegister(layout, self.settings.register_lock_timeout_s)
-        try:
-            actions = recover_interrupted_exports(layout, register, SessionLog(layout))
-        except Exception:  # noqa: BLE001 - the study must still open; the next opening tries again
-            log.exception("Interrupted saves in %s could not be checked", layout.root)
-            return []
         out = []
-        for a in actions:
-            out.append({"session_id": a.session_id, "action": a.action, "message": a.message})
-            if a.action in ("rolled_forward", "rolled_back", "rollback_incomplete"):
-                log.warning("Interrupted save %s: %s", a.session_id, a.message)
-                audit.record(self, "server", "save_recovered", a.message,
-                             {"session_id": a.session_id, "action": a.action})
+        for kind, layout in [("", self.layout)] + [(k, self.derived_layout(k)) for k in DERIVED_KINDS]:
+            if not layout.staging.exists():
+                continue
+            register = CompletionRegister(layout, self.settings.register_lock_timeout_s)
+            try:
+                actions = recover_interrupted_exports(layout, register, SessionLog(layout))
+            except Exception:  # noqa: BLE001 - the study must still open; the next opening tries again
+                log.exception("Interrupted saves in %s could not be checked", layout.root)
+                continue
+            for a in actions:
+                out.append({"session_id": a.session_id, "action": a.action, "message": a.message,
+                            **({"derived": kind} if kind else {})})
+                if a.action in ("rolled_forward", "rolled_back", "rollback_incomplete"):
+                    log.warning("Interrupted save %s: %s", a.session_id, a.message)
+                    where = {"derived": kind} if kind else {}
+                    audit.record(self, "server", "save_recovered", a.message,
+                                 {"session_id": a.session_id, "action": a.action, **where})
         return out
 
     def close(self) -> None:
@@ -135,6 +145,14 @@ class FilesStore(Store):
     @property
     def layout(self) -> Any:
         return self.study.layout
+
+    def derived_layout(self, kind: str) -> Any:
+        """The results tree of one kind of derived version (``Annotated_Events/derived/<kind>``)."""
+        from electrotag.app.io.naming import OutputLayout
+
+        if kind not in DERIVED_KINDS:
+            raise StoreError(f"Unknown kind of derived version {kind!r}")
+        return OutputLayout(self.layout.root / DERIVED_DIR / kind)
 
     # -------------------------------------------------------------- manifests
     def manifest(self, scope: str, recording_id: str) -> dict[str, Any] | None:
@@ -240,10 +258,11 @@ class FilesStore(Store):
         return self.db.user_records()
 
     def create_account(self, annotator_id: str, *, display_name: str, role: str, email: str,
-                       password: str | None) -> Credentials:
+                       password: str | None, roles: tuple[str, ...] | None = None) -> Credentials:
         temporary = None if password else generated_password()
         try:
-            self.db.add_user(annotator_id, password or str(temporary), display_name=display_name, role=role)
+            self.db.add_user(annotator_id, password or str(temporary), display_name=display_name, role=role,
+                             roles=roles)
         except AccountExists as exc:
             raise AccountProblem("user_exists", f"{annotator_id.upper()} already has an account in this "
                                  "study.") from exc
@@ -254,9 +273,10 @@ class FilesStore(Store):
         return {"invite_link": None, "temporary_password": temporary}
 
     def update_account(self, annotator_id: str, *, display_name: str | None = None, role: str | None = None,
-                       status: str | None = None, notes: str | None = None) -> None:
+                       status: str | None = None, notes: str | None = None,
+                       roles: tuple[str, ...] | None = None) -> None:
         try:
-            self.db.update_user(annotator_id, display_name=display_name, role=role, notes=notes,
+            self.db.update_user(annotator_id, display_name=display_name, role=role, notes=notes, roles=roles,
                                 disabled=None if status is None else status == "disabled")
         except AccountError as exc:
             raise AccountProblem("invalid_user", str(exc), 400) from exc
@@ -304,8 +324,8 @@ class FilesStore(Store):
         return self.db.assignments(annotator_id)
 
     def assign(self, annotator_id: str, recording_ids: list[str], *, mode: str = "standard",
-               context_id: str = "") -> int:
-        return self.db.assign(annotator_id, recording_ids, mode=mode, context_id=context_id)
+               context_id: str = "", task_id: str = "") -> int:
+        return self.db.assign(annotator_id, recording_ids, mode=mode, context_id=context_id, task_id=task_id)
 
     def unassign_item(self, annotator_id: str, recording_id: str, mode: str, context_id: str) -> bool:
         return self.db.unassign_item(annotator_id, recording_id, mode, context_id)
@@ -357,16 +377,18 @@ class FilesStore(Store):
 
     # ----------------------------------------------------------------- results
     def completion_entries(self, annotator_id: str | None = None) -> list[dict[str, str]]:
-        try:
-            entries = CompletionRegister(self.layout, self.settings.register_lock_timeout_s).entries()
-        except RegisterError:
-            return []
-        return [e for e in entries if annotator_id is None or e.get("annotator_id") == annotator_id]
+        return _register_entries(self.layout, self.settings, annotator_id)
 
     def save_results(self, make_session: Callable[[Any], Any], *, elapsed_s: float, started_at: str) -> SavedResult:
+        return self._save_into(self.layout, make_session, elapsed_s=elapsed_s, started_at=started_at)
+
+    def _save_into(self, layout: Any, make_session: Callable[[Any], Any], *, elapsed_s: float, started_at: str,
+                   derived: bool = False) -> SavedResult:
         from electrotag.web.saving import run_session
 
-        session = make_session(self.layout)
+        session = make_session(layout)
+        if derived:
+            session.allow_repeat = True  # each derived version of the same work is a new attempt of its tree
         result = run_session(session, elapsed_s=elapsed_s, started_at=started_at)
         files: dict[str, bytes] = {}
         attempt = 1
@@ -376,17 +398,27 @@ class FilesStore(Store):
             attempt = int(m.group(1)) if m else 1
         else:  # the files were written and verified but the register could not be updated: roll it forward now
             self.recover_interrupted()
-            entry = next((e for e in self.completion_entries(session.annotator_id)
+            entry = next((e for e in _register_entries(layout, self.settings, session.annotator_id)
                           if e.get("session_id") == session.session_id), None)
             if entry is not None:
-                from electrotag.app.io.naming import OUTPUT_SUFFIXES
-
-                folder = _inside(self.layout.root, entry["output_dir"])
-                paths = [folder / f"{entry['output_basename']}{s}" for s in OUTPUT_SUFFIXES.values()]
-                files = {p.name: p.read_bytes() for p in paths if p.is_file()}
-                m = ATTEMPT_RE.search(entry["output_basename"])
-                attempt = int(m.group(1)) if m else 1
+                files = _files_of(layout.root, entry)
+                attempt = attempt_of(entry)
         return SavedResult(session=session, result=result, files=files, attempt=attempt)
+
+    # ------------------------------------------------------- derived versions
+    def save_derived(self, kind: str, make_session: Callable[[Any], Any], *, elapsed_s: float,
+                     started_at: str) -> SavedResult:
+        return self._save_into(self.derived_layout(kind), make_session, elapsed_s=elapsed_s, started_at=started_at,
+                               derived=True)
+
+    def derived_entries(self, kind: str, annotator_id: str | None = None) -> list[dict[str, str]]:
+        return _register_entries(self.derived_layout(kind), self.settings, annotator_id)
+
+    def derived_files(self, kind: str, annotator_id: str, recording_id: str,
+                      attempt: int | None = None) -> dict[str, bytes]:
+        mine = [e for e in self.derived_entries(kind, annotator_id) if e.get("recording_id") == recording_id
+                and e.get("status") == "completed" and e.get("output_dir") and e.get("output_basename")]
+        return _chosen_files(self.derived_layout(kind).root, mine, attempt)
 
     def progress(self, rs: ReferenceSet, annotator_id: str) -> Progress:
         from electrotag.training.programme import load_progress
@@ -406,23 +438,13 @@ class FilesStore(Store):
             return {}
         return {"status": str(rep.get("status", "")), "status_text": str(rep.get("status_text", ""))}
 
-    def saved_files(self, annotator_id: str, recording_id: str, mode: str, context_id: str) -> dict[str, bytes]:
-        from electrotag.app.io.naming import OUTPUT_SUFFIXES
-
+    def saved_files(self, annotator_id: str, recording_id: str, mode: str, context_id: str,
+                    attempt: int | None = None) -> dict[str, bytes]:
         mine = [e for e in self.completion_entries(annotator_id) if e.get("recording_id") == recording_id
                 and e.get("mode", "standard") == mode and e.get("context", "") == (context_id if mode != "standard"
                                                                                      else "")
                 and e.get("status") == "completed" and e.get("output_dir") and e.get("output_basename")]
-        if not mine:
-            return {}
-        last = latest_entry(mine)  # by attempt number: a revision is always the latest attempt
-        folder = _inside(self.layout.root, last["output_dir"])
-        out = {}
-        for suffix in OUTPUT_SUFFIXES.values():
-            p = folder / f"{last['output_basename']}{suffix}"
-            if p.is_file():
-                out[p.name] = p.read_bytes()
-        return out
+        return _chosen_files(self.layout.root, mine, attempt)
 
     def results_tree(self, dest: Path, *, logs: bool = False, annotator_ids: set[str] | None = None,
                      modes: set[str] | None = None) -> Path:
@@ -509,9 +531,11 @@ class FilesStore(Store):
             raise StoreError(f"Unknown visit {visit_id}")
         with self._log_lock(visit_id):
             first = self.db.advance_visit(visit_id, len(events), max(float(e.get("t", 0.0)) for e in events))
-            text = "".join(_jsonl({"seq": first + k, **e}) for k, e in enumerate(events))
+            numbered = [{"seq": first + k, **e} for k, e in enumerate(events)]
+            text = "".join(_jsonl(e) for e in numbered)
             with open(v["path"], "a", encoding="utf-8") as fh:
                 fh.write(text)
+            self.db.index_visit(visit_id, numbered, v["context_id"])
         return len(events)
 
     def visit_close(self, visit_id: str, event: dict[str, Any]) -> None:
@@ -522,6 +546,74 @@ class FilesStore(Store):
         return [{"visit_id": v["visit_id"], "annotator_id": v["annotator_id"], "mode": v["mode"],
                  "context_id": v["context_id"], "started_at": v["opened_at"], "closed_at": v["closed_at"] or None,
                  "n_events": int(v["seq"])} for v in self.db.visit_rows(annotator_id, limit)]
+
+    def _read_log(self, visit_id: str) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]]]:
+        """(the visit's row, its header, its numbered events) read from its JSON Lines file."""
+        v = self.db.visit(visit_id)
+        if v is None:
+            raise StoreError(f"Unknown visit {visit_id}")
+        header: dict[str, Any] = {}
+        events: list[dict[str, Any]] = []
+        with self._log_lock(visit_id):
+            try:
+                text = Path(v["path"]).read_text(encoding="utf-8")
+            except OSError as exc:
+                raise StoreError(f"The log of visit {visit_id} cannot be read") from exc
+        for line in text.splitlines():
+            try:
+                obj = json.loads(line)
+            except ValueError:
+                continue  # a line cut short by a crash: the rest of the log is still read
+            if not isinstance(obj, dict):
+                continue
+            if obj.get("type") == "header" and "seq" not in obj:
+                header = obj
+            elif isinstance(obj.get("seq"), int):
+                events.append(obj)
+        return v, header, events
+
+    def visit_log(self, visit_id: str, *, from_seq: int = 0, limit: int = 4000) -> dict[str, Any]:
+        _v, header, events = self._read_log(visit_id)
+        page, nxt = page_of(events, int(from_seq), int(limit))
+        return {"header": header, "events": page, "next_seq": nxt}
+
+    def visit_index(self, visit_id: str) -> list[dict[str, Any]]:
+        rows = self.db.visit_index_rows(visit_id)
+        if rows is not None:
+            return rows
+        v, _header, events = self._read_log(visit_id)  # a visit opened before the index existed
+        return index_rows([], events, v["context_id"])
+
+
+def _register_entries(layout: Any, settings: Settings, annotator_id: str | None) -> list[dict[str, str]]:
+    try:
+        entries = CompletionRegister(layout, settings.register_lock_timeout_s).entries()
+    except RegisterError:
+        return []
+    return [e for e in entries if annotator_id is None or e.get("annotator_id") == annotator_id]
+
+
+def _files_of(root: Path, entry: dict[str, str]) -> dict[str, bytes]:
+    """The result files of one register row (those that exist)."""
+    from electrotag.app.io.naming import OUTPUT_SUFFIXES
+
+    folder = _inside(root, entry["output_dir"])
+    out = {}
+    for suffix in OUTPUT_SUFFIXES.values():
+        p = folder / f"{entry['output_basename']}{suffix}"
+        if p.is_file():
+            out[p.name] = p.read_bytes()
+    return out
+
+
+def _chosen_files(root: Path, entries: list[dict[str, str]], attempt: int | None) -> dict[str, bytes]:
+    """The files of the latest of ``entries`` by attempt number (a revision is always the latest), or of
+    attempt ``attempt``; {} when there is none."""
+    if attempt is not None:
+        entries = [e for e in entries if attempt_of(e) == int(attempt)]
+    if not entries:
+        return {}
+    return _files_of(root, latest_entry(entries))
 
 
 def _check_kind(kind: str, record_id: str | None = None) -> None:

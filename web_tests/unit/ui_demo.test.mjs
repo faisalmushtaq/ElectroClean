@@ -213,3 +213,47 @@ test('the training path shows results, not only progress: a failed assessment ha
   assert.deepEqual(stageChip({ key: 'assessment', status: 'completed', result: 'not_determined' }), ['Result to come', '']);
   assert.deepEqual(stageChip({ key: 'assessment', status: 'not_used' }), ['Not included', '']);
 });
+
+test('E01 is an expert who also annotates, and the expert channel is for experts and administrators', async () => {
+  const e = await signedIn('E01');
+  const me = await e.me();
+  assert.deepEqual([me.role, me.roles], ['expert', ['expert', 'annotator']]);
+  assert.deepEqual(me.study.review, { show_corrections_to_annotators: true, show_outcomes_to_annotators: true });
+  assert.deepEqual(me.study.training, { skippable: ['tour', 'snippets', 'guided', 'practice'], gate: 'met' });
+  const got = await e.expert('replay_consent_get', {});
+  assert.deepEqual(got.consent, { teaching: false, changed_at: null });
+  const set = await e.expert('replay_consent_set', { teaching: true });
+  assert.equal(set.changed, true);
+  assert.equal((await e.expert('replay_consent_set', { teaching: true })).changed, false);
+  await assert.rejects(() => e.expert('no_such_op', {}), (x) => x.status === 404 && x.code === 'not_found');
+  await assert.rejects(() => e.admin('overview', {}), (x) => x.status === 403);
+  const a = await signedIn('A01');
+  assert.deepEqual((await a.me()).roles, ['annotator']);
+  await assert.rejects(() => a.expert('replay_consent_get', {}), (x) => x.status === 403 && x.code === 'forbidden');
+  assert.deepEqual(await a.myFeedback(), { corrections: { shown: true, items: [] }, adjudications: { shown: true, items: [] } });
+  const admin = await signedIn('ADMIN');
+  assert.equal((await admin.expert('replay_consent_get', {})).consent.teaching, false); // an administrator may do what an expert does
+  const t = await signedIn('T01');
+  await assert.rejects(() => t.trainingStage({ stage: 'assessment', action: 'skip' }), (x) => x.status === 409 && x.code === 'cannot_skip');
+  await assert.rejects(() => t.trainingStage({ stage: 'tour', action: 'done' }), (x) => x.status === 501 && x.code === 'not_offered');
+  assert.deepEqual((await t.trainingSnippets()).snippets, []);
+});
+
+test('a sandbox kept by an earlier version gets roles, the expert and the newer settings', async () => {
+  const { initialAdminState, upgradeAdminState } = await import('../../electrotag/web/static/js/api/demo_admin.js');
+  const fresh = new DemoBackend({ storage: memory(), tokens: memory() });
+  const old = initialAdminState(fresh._builtIn());
+  old.version = 1;
+  old.users = old.users.filter((u) => u.annotator_id !== 'E01').map(({ roles, ...u }) => u); // eslint-disable-line no-unused-vars
+  delete old.settings.review;
+  delete old.settings.training;
+  const up = upgradeAdminState(old);
+  assert.equal(up.version, 2);
+  assert.deepEqual(up.users.find((u) => u.annotator_id === 'ADMIN').roles, ['admin']);
+  assert.deepEqual(up.users.find((u) => u.annotator_id === 'E01').roles, ['expert', 'annotator']);
+  assert.equal(up.settings.training.gate, 'met');
+  assert.equal(up.settings.review.k_default, 2);
+  // brought up to date once: an expert removed afterwards stays removed
+  up.users = up.users.filter((u) => u.annotator_id !== 'E01');
+  assert.equal(upgradeAdminState(up).users.some((u) => u.annotator_id === 'E01'), false);
+});

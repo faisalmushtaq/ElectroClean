@@ -58,6 +58,11 @@ Annotated_Events/
     activity_reports/<date and time>/   tables and report made from the logs
     problem_reports/problem_reports.{tsv,json}   problems annotators reported (results zip and export)
     reviews/annotator-A01/<stem>_attempt-01_review-<time>-<id>.{tsv,json}   each review of saved work
+    derived/corrections/                experts' corrections of saved work (below)
+        completion_register.tsv
+        session_log.jsonl
+        annotator-A01/sub-001/eeg/sub-001_task-rest_eeg_annotator-A01[_attempt-02]_….{tsv,json,txt}
+    derived/adjudications/              adjudicated versions of tasks, laid out the same way
     .electrotag/
         locks/          lock files of sessions and of the register
         staging/        saves in progress (normally empty)
@@ -71,6 +76,19 @@ The base name is the recording's file name without its extension (`.vhdr`,
 `_annotator-<ID>`. Files are never overwritten: if an administrator allows an
 annotator to annotate a recording again, the new files get `_attempt-02`
 (and so on) before the suffix.
+
+`derived/` holds the versions made from someone's saved work: an expert's
+correction (`derived/corrections/`) and the adjudicated version of a task
+(`derived/adjudications/`). Each is a full save of the five files above, made
+with the same journalled save, into a tree of its own with its own
+`completion_register.tsv`, `session_log.jsonl` and `.electrotag/` folder, so
+that it is never anyone's attempt or completion. A correction's files carry
+the name of the person whose work it is (`annotator-A01`), and their attempt
+number counts the corrections of that person's work on the recording. The
+`_annotations.json` and `_session.json` of a derived version say where it
+comes from in `session.context.derived` (its kind, who made it, and the saved
+attempt it was made from). The originals are never changed, and the analyses
+(`electrotag-agreement` and the admin area's) leave derived versions out.
 
 ## `…_events.tsv`
 
@@ -342,7 +360,10 @@ with `electrotag web init-study --settings` or changed in the admin area.
 ```
 
 `settings` may override any key of `electrotag/config/default_settings.json`;
-the [administrator guide](administrator_guide.md) explains each one.
+the [administrator guide](administrator_guide.md) explains each one, including
+the blocks `review` (corrections and adjudication), `training` (which stages of
+the training path may be skipped, and what real study work waits for) and
+`replay` (who may watch replays of sessions).
 `electrotag admin` validates the file before saving it. `annotators`,
 `allow_unlisted_annotators`, `allocation.assignments` and `admin_passphrase`
 were read by the desktop application only: in the browser, accounts and their

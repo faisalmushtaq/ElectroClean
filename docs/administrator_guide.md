@@ -35,7 +35,8 @@ file (the format is in [file_formats.md](file_formats.md)):
 ```
 
 The admin area's settings change the blocks `filters`, `display`, `channels`,
-`selection`, `logging`, `annotation` and `loading`, and the study keeps them
+`selection`, `logging`, `annotation`, `loading`, `gamification`, `review`,
+`training` and `replay`, and the study keeps them
 with its records: in Firestore for a study on Firebase, and in the study
 folder's `electrotag_study.json` on an ElectroTag server. The settings that
 decide what a recording consists of (the channels to hide, the channel types,
@@ -553,6 +554,70 @@ the quiz offers the answer "No artifact / none of these"
 (`"include_none_option": true` in the `quiz` entry of `reference_set.json`),
 clean segments can be included by giving that text as the item's label.
 Results are saved in `training/<set>/quiz/` in the results.
+
+## Roles, expert work and replays
+
+Each account holds one or more roles: an **annotator** annotates the
+recordings given to them, an **expert** opens anyone's saved work to correct
+and add to it, replays sessions, adjudicates conflicts and supplies training
+material, and an **administrator** runs the study in the admin area and may do
+everything an expert does. One person may hold several roles, as an expert who
+also annotates does; roles open privileges only, and recordings can be given
+to anyone. A participant role for a later crowd study is kept but cannot be
+given yet. On Firebase a person's roles are also written into their sign-in
+claims, and an expert's or administrator's role counts only when both the
+claims and the account in the study grant it.
+
+An expert's correction is a new version of the saved work, linked to it and
+credited to the expert; the original files never change, and the analyses
+use the originals. The `review` block decides how corrections and the
+adjudication of disagreements work:
+
+```json
+{"settings": {"review": {"corrections": true, "show_corrections_to_annotators": true, "k_default": 2,
+                         "show_outcomes_to_annotators": true, "reason_required": "always",
+                         "matching": {"match_criterion": "iou", "iou_threshold": 0.2, "onset_tolerance_s": 0.5,
+                                      "offset_tolerance_s": 0.5, "channel_jaccard": 0.5},
+                         "gold_min_items": 3}}}
+```
+
+`corrections` lets experts correct saved work, and
+`show_corrections_to_annotators` shows annotators the corrections of their own
+work with the reasons given. `k_default` is the number of annotators, from 2 to
+6, given each task when the study shares recordings out as tasks.
+`show_outcomes_to_annotators` shows annotators the decisions on the conflicts
+in their work (who else marked what is never said). `reason_required` says
+when an adjudicator gives a reason for a decision: `always`, `edited_or_none`
+(only when they keep neither version or edit a mark) or `never`. `matching`
+holds the rules by which two marks count as the same, as in the agreement
+analysis: the criterion (`iou`, `tolerance` or `iou_and_tolerance`), the overlap
+needed (from 0, any overlap, to just below 1), the onset and offset tolerances
+in seconds, and the share of channels in common (0 to 1) below which two marks
+differ in their channels. `gold_min_items` is the number of known-answer items,
+from 1 to 100, scored before a person's measured accuracy weighs their marks.
+
+The `training` block is the training path's policy:
+`{"skippable": ["tour", "snippets", "guided", "practice"], "gate": "met", "tour": true,
+"snippets_quiz_required": false}`. `skippable` lists the stages a trainee may
+skip (the platform tour, the artifact snippets, learning with the experts and
+practice on their own); the blind competency assessment can never be skipped,
+and a setting that names it is refused. `gate` says what real study work waits
+for: a passed assessment (`met`), a finished one (`completed`), or nothing
+(`off`); experts and administrators never wait. `tour` begins the path with the
+platform tour, and `snippets_quiz_required` counts the snippets stage as done
+only once its recognition check is finished. The five-stage path that follows
+this policy comes with the training path's next part; until then the
+settings are kept and checked.
+
+The `replay` block, `{"enabled": true, "trainees_watch_experts": true}`, says
+whether experts and administrators may replay annotators' sessions step by
+step from the interaction log (`enabled`), and whether trainees may watch the
+sessions of experts who have agreed to it (`trainees_watch_experts`). Each
+expert gives or withdraws that agreement for their own sessions in the expert
+area, and every change is written to the audit log. Replays use the
+interaction logs for teaching and for checking work, a purpose of their own:
+say so in the study's information for participants, and check whether the
+study's ethics approval covers it.
 
 ## Interaction logs (research data)
 

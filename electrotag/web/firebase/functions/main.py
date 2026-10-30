@@ -10,8 +10,10 @@ The work is done by :class:`electrotag.web.service.StudyService` with the Firest
 code as the ElectroTag server. Only ``firebase_functions`` is imported when an instance starts;
 ElectroTag is imported on the first call, and the heavy libraries (pandas, SciPy, matplotlib) only
 by practice scoring, competency reports and the admin area's analyses, so guided checks answer
-quickly. ``et_admin`` (every operation of the admin area, by ``op``) is for administrators only: the
-service refuses anyone whose claims and account in the study do not both make them one.
+quickly. ``et_admin`` (every operation of the admin area, by ``op``) is for administrators only and
+``et_expert`` (every operation of the expert area, by ``op``) for experts and administrators: a
+privileged role (expert, admin) counts only when both the caller's claims and their account in the
+study grant it.
 
 Deploy with ``npx firebase-tools deploy --only functions,firestore`` (docs/web/firebase.md); the
 predeploy step copies the ElectroTag code these functions need into this folder.
@@ -72,7 +74,7 @@ def handle(operation: str, req: https_fn.CallableRequest) -> Any:
     """Answer one call: check who is calling, then run the operation."""
     from electrotag.web.errors import ApiError
     from electrotag.web.firebase import role_in
-    from electrotag.web.store import StoreError, User
+    from electrotag.web.store import PRIVILEGED_ROLES, StoreError, User, primary_role
 
     data = req.data if isinstance(req.data, dict) else {}
     study = data.get("study")
@@ -82,8 +84,8 @@ def handle(operation: str, req: https_fn.CallableRequest) -> Any:
         raise _fail("unauthenticated", "not_signed_in", "Please sign in (again): your session has ended.")
     claims = dict(req.auth.token or {})
     aid = str(claims.get("annotator_id") or "")
-    role = role_in(claims, study)
-    if not aid or role is None:
+    granted = role_in(claims, study)
+    if not aid or granted is None:
         raise _fail("permission-denied", "not_in_study", "Your account does not take part in this study. Ask your "
                     "study administrator.")
     try:
@@ -92,8 +94,9 @@ def handle(operation: str, req: https_fn.CallableRequest) -> Any:
         if member is None:
             raise _fail("permission-denied", "not_in_study", "Your account does not take part in this study. Ask "
                         "your study administrator.")
-        # An administrator only when both the claims and the study say so.
-        user = User(aid, member.display_name, "admin" if role == "admin" and member.role == "admin" else "annotator")
+        # A privileged role (expert, admin) only when both the claims and the account in the study grant it.
+        roles = tuple(r for r in member.roles if r not in PRIVILEGED_ROLES or r in granted)
+        user = User(aid, member.display_name, primary_role(roles), roles)
         body = {k: v for k, v in data.items() if k != "study"}
         return svc.call(operation, user, body)
     except ApiError as exc:
@@ -193,6 +196,31 @@ def et_admin(req: https_fn.CallableRequest) -> Any:
 @https_fn.on_call()
 def et_quiz(req: https_fn.CallableRequest) -> Any:
     return handle("quiz", req)
+
+
+# The expert area: every operation by "op" (experts and administrators). Corrections and adjudicated
+# versions are saved with the journalled save, and the library recomputes conflicts, so it has more room.
+@https_fn.on_call(memory=options.MemoryOption.GB_1, timeout_sec=300)
+def et_expert(req: https_fn.CallableRequest) -> Any:
+    return handle("expert", req)
+
+
+# An annotator's feedback on their own work: corrections of it and the outcomes of its conflicts.
+@https_fn.on_call()
+def et_my_feedback(req: https_fn.CallableRequest) -> Any:
+    return handle("my_feedback", req)
+
+
+# The training path's stages: skip, done or resume one (saved; never repeated by the browser), and the
+# artifact snippets of the second stage.
+@https_fn.on_call()
+def et_training_stage(req: https_fn.CallableRequest) -> Any:
+    return handle("training_stage", req)
+
+
+@https_fn.on_call()
+def et_training_snippets(req: https_fn.CallableRequest) -> Any:
+    return handle("training_snippets", req)
 
 
 # The annotator's counters, milestones' facts, personal goal, team progress and anonymised

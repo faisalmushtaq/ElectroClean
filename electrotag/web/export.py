@@ -6,6 +6,8 @@
         electrotag_study.json      the study's settings (so DIR can be used as a study folder)
         Annotated_Events/            ElectroTag's results layout
             completion_register.tsv, session_log.jsonl, annotator-<ID>/..., training/...
+            derived/<kind>/                  corrections and adjudicated versions, each tree with its own
+                                             completion_register.tsv (docs/file_formats.md)
             training/<set>/quiz/annotator-<ID>_quiz_<mode>_<session>.json
             training_progress/<set>/annotator-<ID>.json
             problem_reports/problem_reports.tsv, .json      the problems annotators reported (docs/file_formats.md)
@@ -103,6 +105,7 @@ def export_study(store: Any, to: Path | str) -> dict[str, int]:
     if session_log:
         with open(layout.session_log, "a", encoding="utf-8") as fh:
             fh.write("".join(line.rstrip("\n") + "\n" for line in session_log))
+    _export_derived(store, layout, settings, counts)
     for d in store.progress_records():
         if d.get("reference_set_id") and d.get("annotator_id"):
             path = layout.root / "training_progress" / d["reference_set_id"] / f"annotator-{d['annotator_id']}.json"
@@ -138,6 +141,32 @@ def export_study(store: Any, to: Path | str) -> dict[str, int]:
     return counts
 
 
+def _export_derived(store: Any, layout: OutputLayout, settings: Any, counts: dict[str, int]) -> None:
+    """The derived versions (corrections, adjudicated versions) into ``derived/<kind>/``, each tree with its own
+    completion register and session log, as the files store keeps them."""
+    from electrotag.web.store import DERIVED_DIR
+
+    rows = getattr(store, "derived_submission_files", lambda: [])()
+    by_kind: dict[str, list[str]] = {}
+    for kind, entry, files, log_lines in sorted(rows, key=lambda x: (x[0], x[1].get("completed_at", ""))):
+        tree = OutputLayout(layout.root / DERIVED_DIR / kind)
+        tree.root.mkdir(parents=True, exist_ok=True)
+        register = CompletionRegister(tree, settings.register_lock_timeout_s)
+        folder = _safe(tree.root, entry["output_dir"])
+        for name, data in sorted(files.items()):
+            if "/" in name or "\\" in name:
+                raise ExportError(f"Unsuitable file name {name!r}")
+            _put(folder / name, data, counts)
+        if entry.get("session_id") not in {e.get("session_id") for e in register.entries()}:
+            register.add(entry)
+            by_kind.setdefault(kind, []).extend(log_lines)
+        counts["derived"] = counts.get("derived", 0) + 1
+    for kind, lines in by_kind.items():
+        if lines:
+            with open(OutputLayout(layout.root / DERIVED_DIR / kind).session_log, "a", encoding="utf-8") as fh:
+                fh.write("".join(line.rstrip("\n") + "\n" for line in lines))
+
+
 #: The largest results zip the administrator's area downloads (larger studies: ``electrotag-web export``).
 MAX_RESULTS_ZIP = 25_000_000
 
@@ -168,7 +197,8 @@ def results_zip_file(store: Any) -> Path:
             if root.is_dir():
                 for path in sorted(root.rglob("*")):
                     rel = path.relative_to(root)
-                    if (rel.parts and rel.parts[0] == INTERNAL_DIR) or not path.is_file():
+                    # the journalled saves' own workings (locks, staging), in the results tree and each derived one
+                    if INTERNAL_DIR in rel.parts or not path.is_file():
                         continue
                     zf.write(path, f"{base}/{rel.as_posix()}")
             for rel, data in sorted(extra.items()):  # the problem reports and reviews (the files store keeps them)
@@ -205,7 +235,9 @@ def results_readme(study_name: str, base: str, when: str) -> str:
         f"Results of the ElectroTag study {study_name}, downloaded {when}.\n\n"
         f"{base}/ holds the saved annotations of each annotator (an _annotations.json, _events.tsv, _events.json\n"
         "and _session.json for each recording), the completion register, the interaction logs, the training\n"
-        "progress and competency reports, the quiz results, the problem reports and the reviews.\n\n"
+        "progress and competency reports, the quiz results, the problem reports and the reviews.\n"
+        f"{base}/derived/ holds the versions made from them (experts' corrections, adjudicated versions), each\n"
+        "kind with its own completion register; the originals are never changed.\n\n"
         f"study/{STUDY_CONFIG_FILENAME} holds the study's settings, study/audit_log.jsonl every change an\n"
         "administrator made (oldest first, one JSON object a line), and study/manifests.json the description\n"
         "of each registered recording (its fingerprint, timing, channels and events). The EEG files\n"

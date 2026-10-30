@@ -94,7 +94,7 @@ def build_study(folder: Path) -> Path:
         register_dataset(training_source, store, say=quiet)
         for u in spec["users"]:
             store.db.add_user(u["annotator_id"], u["password"], display_name=u["display_name"], role=u["role"],
-                              replace=True)
+                              roles=u.get("roles"), replace=True)
         for aid, rids in spec["assignments"].items():
             store.assign(aid, rids)
         for aid, set_id in spec["programmes"].items():

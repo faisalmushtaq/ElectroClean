@@ -209,8 +209,13 @@ def cmd_import_manifests(a: argparse.Namespace) -> int:
 def cmd_add_user(a: argparse.Namespace) -> int:
     from electrotag.web.accounts import AccountError, normalise_id
 
+    from electrotag.web.store import primary_role, roles_text
+
     store = open_store(a)
-    role = "admin" if a.admin else "annotator"
+    roles = tuple(r for r, on in (("annotator", True), ("expert", a.expert), ("admin", a.admin)) if on)
+    if a.admin and not a.expert:
+        roles = ("admin",)  # as before: an administrator's account (who can annotate too)
+    role = primary_role(roles)
     try:
         aid = normalise_id(a.annotator_id)
     except AccountError as exc:
@@ -223,14 +228,14 @@ def cmd_add_user(a: argparse.Namespace) -> int:
         password = a.password
         try:
             uid, link = ensure_auth_user(firebase_app(a.firebase_project), email=a.email, annotator_id=aid,
-                                         study=store.study_id, role=role, display_name=a.name or "",
+                                         study=store.study_id, role=role, roles=roles, display_name=a.name or "",
                                          password=password or None)
         except AuthProblem as exc:
             raise CommandError(exc.message) from exc
-        store.put_user(aid, display_name=a.name or "", role=role, uid=uid, email=a.email)
-        _audit(store, "user_add", f"Added {aid} as {'an administrator' if role == 'admin' else 'an annotator'}",
-               annotator_id=aid, display_name=a.name or "", role=role, email=a.email)
-        print(f"{aid} ({a.email}) can sign in to study {store.study_id} as {role}.")
+        store.put_user(aid, display_name=a.name or "", roles=roles, uid=uid, email=a.email)
+        _audit(store, "user_add", f"Added {aid} as {roles_text(roles)}",
+               annotator_id=aid, display_name=a.name or "", role=role, roles=list(roles), email=a.email)
+        print(f"{aid} ({a.email}) can sign in to study {store.study_id} as {', '.join(roles)}.")
         if link:
             print("Send them this link to choose their password (it works once):")
             print(link)
@@ -241,15 +246,15 @@ def cmd_add_user(a: argparse.Namespace) -> int:
         if password != getpass.getpass("Repeat: "):
             raise CommandError("The passwords differ")
     try:
-        store.db.add_user(aid, password, display_name=a.name or "", role=role, replace=a.replace)
+        store.db.add_user(aid, password, display_name=a.name or "", role=role, roles=roles, replace=a.replace)
         if a.email:
             store.db.update_user(aid, email=a.email)
     except AccountError as exc:
         raise CommandError(str(exc)) from exc
     _audit(store, "user_add", (f"Set a new password for {aid}" if a.replace else
-                               f"Added {aid} as {'an administrator' if role == 'admin' else 'an annotator'}"),
-           annotator_id=aid, display_name=a.name or "", role=role)
-    print(f"{aid} can sign in to the server as {role}.")
+                               f"Added {aid} as {roles_text(roles)}"),
+           annotator_id=aid, display_name=a.name or "", role=role, roles=list(roles))
+    print(f"{aid} can sign in to the server as {', '.join(roles)}.")
     return 0
 
 
@@ -524,6 +529,8 @@ def build_parser(prog: str = "electrotag-web") -> argparse.ArgumentParser:
     s.add_argument("--email", help="Firebase: the address they sign in with")
     s.add_argument("--password", help="the password (Firebase: leave out to print a link that lets them choose one)")
     s.add_argument("--admin", action="store_true", help="a study administrator, who uses the admin area")
+    s.add_argument("--expert", action="store_true",
+                   help="an expert, who corrects saved work, adjudicates and supplies training material")
     s.add_argument("--replace", action="store_true", help="study folder: set a new password for an existing account")
     s.set_defaults(func=cmd_add_user)
 

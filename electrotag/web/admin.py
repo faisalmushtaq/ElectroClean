@@ -30,7 +30,8 @@ from electrotag.web import audit
 from electrotag.web.errors import ApiError
 from electrotag.web.manifest import SCOPE_STUDY, fingerprint_of, manifest_info, set_scope
 from electrotag.web.store import (
-    MODES, ROLES, STATUSES, AccountProblem, StoreError, User, attempt_of, item_key, latest_entry,
+    KNOWN_ROLES, MODES, RESERVED_IDS, RESERVED_ROLES, ROLES, STATUSES, AccountProblem, StoreError, User, attempt_of,
+    item_key, latest_entry, parse_roles, primary_role, roles_text,
 )
 
 if TYPE_CHECKING:
@@ -39,7 +40,7 @@ if TYPE_CHECKING:
 
 #: The blocks of electrotag_study.json's settings that the admin area may read and change.
 SETTINGS_BLOCKS = ("filters", "display", "channels", "selection", "logging", "annotation", "loading", "discovery",
-                   "gamification")
+                   "gamification", "review", "training", "replay")
 SET_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 EMAIL_RE = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,190}\.[^@\s]{2,63}$")
@@ -78,6 +79,11 @@ OPERATIONS = READ_ONLY + (
 # ------------------------------------------------------------------ checking input
 def _bad(message: str, code: str = "bad_request") -> ApiError:
     return ApiError(400, code, message)
+
+
+def _rec_roles(rec: dict[str, Any]) -> tuple[str, ...]:
+    """The roles of an account record (``roles``, or the older single ``role``)."""
+    return parse_roles(rec.get("roles") or rec.get("role"))
 
 
 def _text(body: dict[str, Any], key: str, *, required: bool = False, limit: int = 200, default: str = "") -> str:
@@ -120,6 +126,34 @@ def _aid(value: Any, what: str = "annotator_id") -> str:
         return normalise_id(value)
     except AccountError as exc:
         raise _bad(f"{what}: {exc}") from exc
+
+
+def roles_from(body: dict[str, Any], *, required: bool) -> tuple[str, ...] | None:
+    """The roles a request asks for: ``roles`` (a list), ``role`` (one, the older form) or both, when they agree
+    (``role`` is then the primary role of ``roles``). None when neither is given and none is required."""
+    role, roles = body.get("role"), body.get("roles")
+    if roles is None and role is None:
+        return ("annotator",) if required else None
+    asked: list[str] = []
+    if roles is not None:
+        if not isinstance(roles, list) or not roles or not all(isinstance(r, str) for r in roles):
+            raise _bad("roles must be a list of at least one role (annotator, expert, admin)")
+        asked = list(roles)
+    if role is not None:
+        if not isinstance(role, str):
+            raise _bad(f"role must be one of {', '.join(ROLES)}")
+        asked = asked or [role]
+    for r in asked + ([role] if isinstance(role, str) else []):
+        if r in RESERVED_ROLES:
+            raise ApiError(400, "role_not_offered", f"The role {r!r} is kept for a later kind of study and cannot be "
+                           "given yet.")
+        if r not in KNOWN_ROLES:
+            raise _bad(f"role must be one of {', '.join(ROLES)}")
+    kept = parse_roles(asked)
+    if roles is not None and role is not None and role != primary_role(kept):
+        raise _bad(f"role ({role}) and roles ({', '.join(kept)}) say different things: role is the first of the "
+                   "roles, in the order admin, expert, annotator; give roles alone")
+    return kept
 
 
 def _ids(value: Any, what: str, *, minimum: int = 1) -> list[str]:
@@ -473,12 +507,13 @@ class Admin:
                 "show_full_report_to_annotator": rs.show_full_report_to_annotator}
 
     def user_out(self, rec: dict[str, Any], invitations: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
-        person = User(rec["annotator_id"], rec.get("display_name", ""), rec.get("role", "annotator"))
+        roles = _rec_roles(rec)
+        person = User(rec["annotator_id"], rec.get("display_name", ""), roles=roles)
         items = self.service.work_items(person)
         if invitations is None:
             invitations = self.store.invitations()
         return {"annotator_id": rec["annotator_id"], "display_name": rec.get("display_name", ""),
-                "email": rec.get("email") or None, "role": rec.get("role", "annotator"),
+                "email": rec.get("email") or None, "role": primary_role(roles), "roles": list(roles),
                 "status": rec.get("status", "active"), "created_at": rec.get("created_at", ""),
                 "last_seen": rec.get("last_seen") or None, "notes": rec.get("notes", ""),
                 "assigned": len(items), "done": sum(1 for i in items if i.status == "done"),
@@ -490,8 +525,9 @@ class Admin:
         records = self.store.user_records()
         active = [u for u in records if u.get("status") == "active"]
         counts = {"recordings": sum(1 for m in self.store.manifests() if m["scope"] == SCOPE_STUDY),
-                  "annotators": sum(1 for u in active if u.get("role") == "annotator"),
-                  "admins": sum(1 for u in active if u.get("role") == "admin"),
+                  "annotators": sum(1 for u in active if "annotator" in _rec_roles(u)),
+                  "experts": sum(1 for u in active if "expert" in _rec_roles(u)),
+                  "admins": sum(1 for u in active if "admin" in _rec_roles(u)),
                   "assignments": 0, "done": 0, "in_progress": 0, "todo": 0, "unusable": 0}
         for u in active:
             for i in self.service.work_items(User(u["annotator_id"], u.get("display_name", ""), u["role"])):
@@ -598,31 +634,34 @@ class Admin:
         email = _text(body, "email", limit=254)
         if email and not EMAIL_RE.match(email):
             raise _bad(f"{email} is not an email address")
-        role = body.get("role") or "annotator"
-        if role not in ROLES:
-            raise _bad(f"role must be one of {', '.join(ROLES)}")
+        roles = roles_from(body, required=True) or ("annotator",)
+        if aid in RESERVED_IDS:
+            raise ApiError(400, "reserved_id", f"{aid} is kept for ElectroTag's own versions (the adjudicated version "
+                           "and training references) and cannot be an account; choose another ID.")
         password = body.get("password")
         if password is not None and (not isinstance(password, str) or not 8 <= len(password) <= 200):
             raise _bad("A password must have 8 to 200 characters")
         invite = _bool(body, "invite") or False
         if invite and password is not None:
             raise _bad("Give a password or ask for an invitation link, not both")
-        if invite and role == "admin":
+        if invite and "admin" in roles:
             raise ApiError(409, "admin_account", ADMIN_NOT_INVITED)
         days = self._invite_days(body)
         if invite:
             # Nobody knows this password: the person chooses their own with the invitation.
             password = secrets.token_urlsafe(24)
-        creds = self.store.create_account(aid, display_name=name, role=role, email=email, password=password)
+        creds = self.store.create_account(aid, display_name=name, role=primary_role(roles), email=email,
+                                          password=password, roles=roles)
         inv: dict[str, Any] = {}
         if invite:
             inv = self.store.create_invitation(aid, days=days, by=user.annotator_id)
-        kind = "an administrator" if role == "admin" else "an annotator"
+        kind = roles_text(roles)
         how = ""
         if invite:
             how = " with an invitation link" + (f" (until {inv['expires_at'][:10]})" if inv.get("expires_at") else "")
         self._audit(user, "user_add", f"Added {aid}" + (f" ({name})" if name else "") + f" as {kind}{how}",
-                    annotator_id=aid, display_name=name, role=role, email=email or None, invited=invite,
+                    annotator_id=aid, display_name=name, role=primary_role(roles), roles=list(roles),
+                    email=email or None, invited=invite,
                     expires_at=inv.get("expires_at"))
         out = {"user": self.user_out(self._user_record(aid)),
                "invite_link": inv.get("invite_link") or creds.get("invite_link"),
@@ -639,7 +678,7 @@ class Admin:
 
     def op_user_invite(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
         aid = _aid(body.get("annotator_id"))
-        if self._user_record(aid).get("role") == "admin":
+        if "admin" in _rec_roles(self._user_record(aid)):
             raise ApiError(409, "admin_account", ADMIN_NOT_INVITED)
         days = self._invite_days(body)
         inv = self.store.create_invitation(aid, days=days, by=user.annotator_id)
@@ -667,17 +706,17 @@ class Admin:
         notes = body.get("notes")
         if notes is not None:
             notes = _text(body, "notes", limit=5000)
-        role, status = body.get("role"), body.get("status")
-        if role is not None and role not in ROLES:
-            raise _bad(f"role must be one of {', '.join(ROLES)}")
+        roles = roles_from(body, required=False)
+        status = body.get("status")
         if status is not None and status not in STATUSES:
             raise _bad(f"status must be one of {', '.join(STATUSES)}")
-        if aid == user.annotator_id and (role == "annotator" or status == "disabled"):
+        if aid == user.annotator_id and ((roles is not None and "admin" not in roles) or status == "disabled"):
             raise ApiError(409, "self", "You cannot take away your own administrator role or disable your own "
                            "account; ask another administrator.")
         said = []
-        if role is not None and role != rec.get("role"):
-            said.append("made them an administrator" if role == "admin" else "made them an annotator")
+        before = _rec_roles(rec)
+        if roles is not None and roles != before:
+            said.append(f"made them {roles_text(roles)}")
         if status is not None and status != rec.get("status"):
             said.append("disabled the account" if status == "disabled" else "enabled the account")
         if name is not None and name != rec.get("display_name", ""):
@@ -687,9 +726,12 @@ class Admin:
         if not said:
             # Nothing to change (an account switched off already, say): nothing is written or audited.
             return {"user": self.user_out(rec), "changed": False}
-        self.store.update_account(aid, display_name=name, role=role, status=status, notes=notes)
+        changed_roles = roles if roles is not None and roles != before else None
+        self.store.update_account(aid, display_name=name, status=status, notes=notes, roles=changed_roles,
+                                  role=primary_role(changed_roles) if changed_roles else None)
         self._audit(user, "user_update", f"{aid}: " + ", ".join(said), annotator_id=aid,
-                    display_name=name, role=role, status=status, notes=notes)
+                    display_name=name, role=primary_role(changed_roles) if changed_roles else None,
+                    roles=list(changed_roles) if changed_roles else None, status=status, notes=notes)
         return {"user": self.user_out(self._user_record(aid)), "changed": True}
 
     def op_user_reset_password(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
@@ -707,7 +749,8 @@ class Admin:
         rec = self._user_record(aid)
         self.store.remove_account(aid)
         self._audit(user, "user_remove", f"Removed {aid} from the study (their results and logs stay)",
-                    annotator_id=aid, display_name=rec.get("display_name", ""), role=rec.get("role"))
+                    annotator_id=aid, display_name=rec.get("display_name", ""), role=rec.get("role"),
+                    roles=list(_rec_roles(rec)))
         return {}
 
     # --------------------------------------------------------- assignments

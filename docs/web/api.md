@@ -83,7 +83,8 @@ stretches of the recording that have been on the screen, as `[start_s, end_s]` p
 `GET /health` → `{"ok": true, "version": "1.1.0", "study": "<name>", "demo": false}` (no authentication; CORS open to any origin, so the application can check an address before signing in).
 
 `POST /login` `{"annotator_id": "A01", "password": "…"}` →
-`{"token": "…", "expires_in_s": 43200, "annotator_id": "A01", "display_name": "…", "role": "annotator" | "admin"}`
+`{"token": "…", "expires_in_s": 43200, "annotator_id": "A01", "display_name": "…", "role": "annotator", "roles": ["annotator"]}`
+(`roles` and `role` as in "Roles" below)
 (401 `bad_credentials` otherwise; after 10 unsuccessful attempts for one ID, or
 50 from one address, in 15 minutes, 429 `too_many_attempts`). IDs are not
 case-sensitive. `POST /logout` → `{}`. A request with a missing or expired
@@ -116,7 +117,7 @@ password.
 
 ```jsonc
 {
-  "annotator_id": "A01", "display_name": "", "role": "annotator",
+  "annotator_id": "A01", "display_name": "", "role": "annotator", "roles": ["annotator"],
   "study": {
     "study_id": "…", "name": "…",
     "filters": {"highpass_enabled": true, "highpass_hz": 1.0, "notch_enabled": true, "notch_hz": 50.0,
@@ -128,6 +129,8 @@ password.
                    "allow_revisions": true, "allow_reviews": true, "show_reviews_to_annotators": true,
                    "confidence": "optional" | "every_mark"},
     "gamification": {"enabled": true, "leaderboard": true},
+    "review": {"show_corrections_to_annotators": true, "show_outcomes_to_annotators": true},
+    "training": {"skippable": ["tour", "snippets", "guided", "practice"], "gate": "met" | "completed" | "off"},
     "logging": {"interactions": true, "pointer_hz": 5, "idle_after_s": 30},
     "logging_notice": "This study records how you use ElectroTag …"   // "" when logging is off
   },
@@ -154,7 +157,36 @@ and `annotation.show_reviews_to_annotators` whether administrators may review
 saved work and whether the annotator sees those reviews (see "Reviews" below),
 and `gamification` whether
 the home page shows the game elements and the leaderboard (see
-"Achievements"; `leaderboard` is false whenever `enabled` is).
+"Achievements"; `leaderboard` is false whenever `enabled` is). `review` says
+whether the annotator is shown the corrections of their work and the outcomes
+of the conflicts in it (`GET /me/feedback`), and `training` which stages of the
+training path may be skipped and what real study work waits for (the study
+settings `review` and `training` of the [administrator guide](../administrator_guide.md)).
+
+### Roles
+
+Each account holds one or more **roles**: `annotator` (annotates the
+recordings given to them), `expert` (opens anyone's saved work to correct it,
+replays sessions, adjudicates conflicts and supplies training material, in the
+expert area: "Experts" below) and `admin` (runs the study in the admin area,
+and may do everything an expert does). One person may hold several, for
+example an expert who also annotates. `participant` is kept for a later crowd
+study: it is read and kept, and the admin area refuses to give it (400
+`role_not_offered`). Roles open privileges only; recordings can be assigned to
+anyone whatever their roles.
+
+`roles` lists a person's roles in the order `admin`, `expert`, `annotator`;
+`role`, the field of the time when a person had one role, is the first of them
+(the **primary role**), so a client that reads only `role` sees an
+administrator as `admin` and an expert who annotates as `expert`. The study
+keeps both (the SQLite column `users.roles` and the Firestore field `roles`
+beside `role`); an account kept before roles became a set has `role` alone,
+which is read as its whole set and written as a list at its next change. On
+Firebase a privileged role (`expert`, `admin`) counts only when both the
+caller's claims and their account in the study grant it ("The same operations
+on Firebase"). The IDs `ADJUDICATED` and `REFERENCE` are never accounts (400
+`reserved_id`): they name the adjudicated version of a task and a training
+reference.
 
 ## Assignments and opening a recording
 
@@ -368,6 +400,20 @@ first; when the study keeps reviews from its annotators
 (`annotation.show_reviews_to_annotators` false) `{"shown": false, "reviews": []}`.
 The agreement analyses do not use reviews.
 
+## Feedback on one's own work
+
+`GET /me/feedback` (`et_my_feedback`) →
+`{"corrections": {"shown": true, "items": [..]}, "adjudications": {"shown": true, "items": [..]}}`: what the
+study shows the caller about their own saved work, in two parts. `corrections`
+lists the experts' corrections of it, with the changes and their reasons, and
+is `{"shown": false, "items": []}` when the study keeps them from its
+annotators (`review.show_corrections_to_annotators` false); `adjudications`
+lists the decisions on the conflicts in it, and follows
+`review.show_outcomes_to_annotators` in the same way. Other people are never
+named. The items of each part are described with the operations that make
+them ("Corrections and replay" and "Adjudication and the library" below); a
+study whose experts have made none answers empty lists.
+
 ## Achievements
 
 `GET /me/achievements` gives the facts that the home page's game elements are
@@ -499,6 +545,21 @@ once more, so the time it was closed is not counted) and returns the next `Step`
 the trainee's attempts at this step to remove first, when `annotations` were
 sent; the step then gives at most one star).
 
+### Training stages
+
+`POST /training/stage` (`et_training_stage`) `{"stage": "tour" | "snippets" | "guided" | "practice" | "assessment",
+"action": "skip" | "done" | "resume"}` skips, finishes or resumes a stage of the
+five-stage training path (a platform tour, artifact snippets, learning with
+the experts, practice on one's own and the blind assessment). It saves, so the
+browser never sends it again by itself. The competency assessment is never
+skipped (409 `cannot_skip`); an unknown stage or action is 400 `bad_request`
+and an annotator outside a programme 404 `no_programme`. `GET /training/snippets`
+(`et_training_snippets`) → `{"set_id", "snippets": [Snippet], "recordings": {recording_id: Manifest},
+"quiz": {"n_items", "finished"} | null}`, the artifact snippets of the
+trainee's set for the second stage. The stages themselves come with the
+training path's next part: until then `POST /training/stage` answers 501
+`not_offered` for a request it accepts, and the snippets are an empty list.
+
 ## Interaction logs
 
 `POST /visits` `{"client": {...}, "programme": false, "mode": "standard", "context_id": ""}` → `{"visit_id": "…",
@@ -551,7 +612,8 @@ registering from the command line.
 AuditEntry = {"at": "2026-10-28T10:15:02.120+00:00", "by": "ADMIN", "op": "user_add",
               "summary": "Added A03 (Annotator three) as an annotator", "details": {...}}
 UserRecord = {"annotator_id": "A03", "display_name": "Annotator three", "email": "a03@example.org" | null,
-              "role": "annotator" | "admin", "status": "active" | "disabled", "created_at": "…",
+              "role": "annotator" | "expert" | "admin" /* the primary role */,
+              "roles": ["annotator"] /* "Roles" above */, "status": "active" | "disabled", "created_at": "…",
               "last_seen": "…" | null, "notes": "", "assigned": 12, "done": 4, "programme": "<set_id>" | null,
               "invitation": {"state": "none" | "invited" | "accepted" | "expired" | "revoked",
                              "invited_at": "…" | null, "expires_at": "…" | null, "ended_at": "…" | null}}
@@ -584,12 +646,12 @@ study's own recordings have `"self_contained": false` and `"scope": "study"`.
 
 | op | body | answer |
 | --- | --- | --- |
-| `overview` | `{}` | `{"study": {"study_id", "name"}, "counts": {"recordings", "annotators", "admins", "assignments", "done", "in_progress", "todo", "unusable", "problems_open", "reviewed"}, "recent": [AuditEntry], "last_saved": [{"annotator_id", "recording_id", "mode", "context_id", "at"}]}` (ten of each; `recordings` counts the study's own, the others the active accounts and their work; `problems_open` the open problem reports and `reviewed` the annotator's recordings with at least one review) |
-| `settings_get` | `{}` | `{"name", "settings": {"filters", "display", "channels", "selection", "logging", "annotation", "loading", "discovery", "gamification"}, "logging_notice", "logging_notice_is_default"}`: the effective values of the blocks of `electrotag_study.json` that a study may change |
+| `overview` | `{}` | `{"study": {"study_id", "name"}, "counts": {"recordings", "annotators", "experts", "admins", "assignments", "done", "in_progress", "todo", "unusable", "problems_open", "reviewed"}, "recent": [AuditEntry], "last_saved": [{"annotator_id", "recording_id", "mode", "context_id", "at"}]}` (ten of each; `recordings` counts the study's own, the others the active accounts and their work, each account under every role it holds; `problems_open` the open problem reports and `reviewed` the annotator's recordings with at least one review) |
+| `settings_get` | `{}` | `{"name", "settings": {"filters", "display", "channels", "selection", "logging", "annotation", "loading", "discovery", "gamification", "review", "training", "replay"}, "logging_notice", "logging_notice_is_default"}`: the effective values of the blocks of `electrotag_study.json` that a study may change (`review`, `training` and `replay` are described in the administrator guide) |
 | `settings_update` | `{"name"?, "settings"?: {block: {key: value}}, "logging_notice"?}` | as `settings_get`. Each key given replaces that setting; the result is checked with ElectroTag's own settings code and refused with 400 `invalid_settings` and the reason (also for a block or key that cannot be changed). `"logging_notice": ""` goes back to ElectroTag's own notice |
 | `users_list` | `{}` | `{"users": [UserRecord]}` (disabled accounts too) |
-| `user_add` | `{"annotator_id", "display_name"?, "email"?, "role"?: "annotator", "password"?, "invite"?: false, "expires_days"?: 14}` | `{"user": UserRecord, "invite_link": str \| null, "temporary_password": str \| null}`, with `"invite_token", "expires_at"` when `invite` is true. On Firebase `email` is required (400 `email_required`), the Firebase Authentication user is created (or, for a person already in another study of the project, given this study) with the custom claims below, and `invite_link` lets the person choose a password when none is given. On the server a temporary password (three groups of four characters) is made when none is given; with `"invite": true` the account is made with an invitation instead (as `user_invite`), and nobody knows its first password. A password has 8 to 200 characters; a password and `invite` together are 400; `invite` for an administrator is 409 `admin_account`. 409 `user_exists`, 409 `email_in_use` |
-| `user_update` | `{"annotator_id", "display_name"?, "role"?, "status"?, "notes"?}` | `{"user": UserRecord, "changed": bool}`; 404 `unknown_user`. A request that changes nothing (an account switched off already, say) gives `changed: false` and writes no audit entry. Disabling ends the person's sessions at once and stops them signing in; on Firebase the role is also written into their claims. An administrator cannot demote or disable themselves (409 `self`) |
+| `user_add` | `{"annotator_id", "display_name"?, "email"?, "roles"?: ["annotator"], "role"?, "password"?, "invite"?: false, "expires_days"?: 14}` | `{"user": UserRecord, "invite_link": str \| null, "temporary_password": str \| null}`, with `"invite_token", "expires_at"` when `invite` is true. On Firebase `email` is required (400 `email_required`), the Firebase Authentication user is created (or, for a person already in another study of the project, given this study) with the custom claims below, and `invite_link` lets the person choose a password when none is given. On the server a temporary password (three groups of four characters) is made when none is given; with `"invite": true` the account is made with an invitation instead (as `user_invite`), and nobody knows its first password. A password has 8 to 200 characters; a password and `invite` together are 400; `invite` for an administrator is 409 `admin_account`. `roles` lists the account's roles; the older `role` alone gives one; with both, `role` must be the primary role of `roles` (400 otherwise). An unknown role is 400 `bad_request`, `participant` 400 `role_not_offered`, the IDs `ADJUDICATED` and `REFERENCE` 400 `reserved_id`. 409 `user_exists`, 409 `email_in_use` |
+| `user_update` | `{"annotator_id", "display_name"?, "roles"?, "role"?, "status"?, "notes"?}` | `{"user": UserRecord, "changed": bool}`; 404 `unknown_user`. `roles` replaces every role (the older `role` alone makes it the only one), checked as for `user_add`. A request that changes nothing (an account switched off already, say) gives `changed: false` and writes no audit entry. Disabling ends the person's sessions at once and stops them signing in; on Firebase the roles are also written into their claims. An administrator cannot take their own administrator role away or disable themselves (409 `self`) |
 | `user_reset_password` | `{"annotator_id"}` | `{"invite_link" \| null, "temporary_password" \| null}`: a new password link (Firebase) or a new temporary password (the server, which also ends every session of the account) |
 | `user_invite` | `{"annotator_id", "expires_days"?: 14}` | `{"invite_token": str \| null, "invite_link": str \| null, "expires_at": str \| null, "invitation": UserRecord.invitation}`. On the server a new single-use invitation: a random token (32 bytes) kept only as its SHA-256 hash with its expiry (1 to 90 days, 400 otherwise); any earlier invitation of the account stops working. The browser makes the private link from `invite_token`. On Firebase `invite_link` is Firebase Authentication's link to choose a password (the account needs an email address, 409 `no_email`) and its expiry is Firebase's own. 404 `unknown_user`; 409 `disabled` for an account that is switched off; 409 `admin_account` for an administrator (on every backend: an administrator is given a password). A new password (`user_reset_password`), making the account an administrator, switching it off or removing it ends its invitation |
 | `user_invite_revoke` | `{"annotator_id"}` | `{"invitation": UserRecord.invitation}`: the open invitation stops working at once; 409 `no_invitation` when there is none; 422 `cannot_revoke` on Firebase, where a link once made cannot be withdrawn (switch the account off instead) |
@@ -782,6 +844,63 @@ saves nothing more. A set's quiz is for annotators it allows (403
 each segment from the annotator's own copy of the recording, opened from their
 computer as for training.
 
+## Experts
+
+Experts (accounts with the role `expert`) and administrators work in the
+**expert area** of the browser application. Every operation of it is
+`POST /expert/{op}` with a JSON body and, on Firebase, the one callable
+function `et_expert` with `{"study", "op", ...the body}` (1 GB of memory and up
+to 300 s, for saving corrections and adjudicated versions); in the service
+layer it is `StudyService.expert.run(op, user, body)` (`electrotag/web/expert.py`).
+Anyone else gets 403 `forbidden`, and an `op` the study does not offer 404
+`not_found`. An operation whose name ends in `_get` or `_list` only reads, and
+the browser may ask it once more after a failure; every other operation saves,
+is never repeated by the browser, gives the same state when the same request
+reaches the study twice, and writes an entry to the audit log. Expert work in
+the browser is logged like annotation work (the admin area's is not).
+
+The expert area's versions of someone's work are **derived versions**: an
+expert's correction of a saved attempt and the adjudicated version of a task
+are each saved with the journalled save, as five files, into a results tree of
+their own (`Annotated_Events/derived/corrections/` and
+`Annotated_Events/derived/adjudications/`, each with its own completion
+register: docs/file_formats.md), with their provenance in `context.derived`.
+The original files never change, and a derived version is never anyone's
+attempt, completion or time; the analyses use the originals.
+
+| op | body | answer | saves? |
+| --- | --- | --- | --- |
+| `replay_consent_get` | `{}` | `{"consent": {"teaching": false, "changed_at": "…" \| null}, "replays": {"enabled": true, "trainees_watch_experts": true}}`: whether the caller agrees to trainees watching replays of the caller's own sessions for teaching, and the study's `replay` settings | read |
+| `replay_consent_set` | `{"teaching": bool}` | as `replay_consent_get`, with `"changed": bool`; only the caller's own consent, which they may give and withdraw at any time. A change is audited (`replay_consent_set`); the same value again changes nothing and writes nothing. 400 `bad_request` unless `teaching` is true or false | **save** |
+
+### Corrections and replay
+
+The operations with which an expert corrects someone's saved work and replays
+how a session went (`work_list`, `saved_attempt_get`, `correction_save`,
+`corrections_list`, `correction_get`, `replay_index_get` and `replay_events_get`)
+are described here when they are offered.
+
+### Tasks, windows and known answers
+
+Tasks share recordings, or stretches of them, out among k annotators, with
+known-answer items mixed in; their administrative operations (`tasks_create`,
+`tasks_list`, `task_update`, `task_remove`, `quality_list`) and what
+`GET /assignments` says of a task are described here when they are offered.
+An assignment made for a task carries its `task_id`.
+
+### Adjudication and the library
+
+The adjudication queue and the library of conflicts and their resolutions
+(`tasks_list`, `adjudication_get`, `adjudication_start`, `adjudication_decide`,
+`adjudication_finish`, `adjudication_reference`, `library_list` and
+`library_promote`) are described here when they are offered.
+
+### Derived versions in the analyses
+
+The agreement analysis's choice of versions (`versions`: original, corrected
+or adjudicated) is described here when it is offered; until then every
+analysis uses the original annotations and leaves derived versions out.
+
 ## The same operations on Firebase
 
 On Firebase every operation above is a callable Cloud Function (Python, 2nd
@@ -789,13 +908,16 @@ generation, region europe-west2) taking and returning the same JSON:
 `et_me`, `et_assignments`, `et_match`, `et_put_draft`, `et_delete_draft`,
 `et_submit`, `et_training`, `et_guided_get`, `et_guided_check`,
 `et_guided_continue`, `et_guided_show_me`, `et_visit_open`, `et_visit_events`,
-`et_visit_close`, `et_quiz`, `et_achievements`, `et_problem_report`, `et_my_reviews` and, for administrators, `et_admin_progress` and
-`et_admin` (every operation of the admin area, by `op`; it has 2 GB of memory
-and up to 540 s for the analyses and the results zip). Each takes
+`et_visit_close`, `et_quiz`, `et_achievements`, `et_problem_report`, `et_my_reviews`,
+`et_my_feedback`, `et_training_stage`, `et_training_snippets`, for experts and
+administrators `et_expert` (every operation of the expert area, by `op`) and,
+for administrators, `et_admin_progress` and `et_admin` (every operation of the
+admin area, by `op`; it has 2 GB of memory and up to 540 s for the analyses and
+the results zip). Each takes
 `{"study": "<study id>", ...the request body...}` (path parameters such as the
 recording ID become fields). Signing in uses Firebase Authentication (email and
 password) in the browser; the annotator ID and role are custom claims set when
-the account is made (`user_add`, or the administrator's command `add-user`), and
+the account is made (`user_add`, or the administrator's command `add-user`) and whenever its roles change, and
 the functions read them from the caller's ID token. A changed role reaches the
 claims of a token only when the browser refreshes it (Firebase does every hour,
 or at once with `getIdToken(true)`); taking a role away, disabling and
@@ -824,6 +946,10 @@ The fields of each call:
 | `et_achievements` | none for `GET /me/achievements`; `{"goal_per_week"}` or `{"leaderboard_hidden"}` for `POST` |
 | `et_problem_report` | the body of `POST /problems` (never repeated by the browser; the same `problem_id` is kept once) |
 | `et_my_reviews` | none (`GET /me/reviews`) |
+| `et_my_feedback` | none (`GET /me/feedback`) |
+| `et_training_stage` | the body of `POST /training/stage` (never repeated by the browser) |
+| `et_training_snippets` | none (`GET /training/snippets`) |
+| `et_expert` | `{"op", ...the body of `POST /expert/{op}`}`; only an `op` ending in `_get` or `_list` is asked again after a failure |
 
 There is no `token` and no beacon on Firebase: the Firebase SDK adds the ID
 token; to send the last events when the page is hidden, call `et_visit_events`
@@ -834,15 +960,20 @@ studies export them with `electrotag web export` (docs/web/firebase.md).
 The HTTP status of an error becomes the `HttpsError` code: 400 and 413
 `invalid-argument`, 401 `unauthenticated`, 403 `permission-denied`, 404
 `not-found`, 409 `already-exists`, 422 `failed-precondition`, 429
-`resource-exhausted`, 500 `internal`. `details` is the error body
+`resource-exhausted`, 500 `internal`, 501 `unimplemented`. `details` is the error body
 (`{"error": "<code>", "message": "…", …}`). A caller whose claims do not name
 the study, or who has no account in it, gets `permission-denied` with error
 `not_in_study`.
 
-The custom claims are `{"annotator_id": "A01", "role": "annotator", "roles": {"<study>": "annotator" | "admin"},
-"studies": ["<study>"]}`; a person keeps one annotator ID in every study of a
-project. A caller counts as an administrator only when both the claims and
-their account in the study say so.
+The custom claims are `{"annotator_id": "A01", "role": "annotator", "roles": {"<study>": ["annotator", …]},
+"studies": ["<study>"]}`: for each study the person's roles, as a list (claims
+written before roles became a set hold one role as a string, which is read as
+a list of one), and `role` the primary role. A person keeps one annotator ID in
+every study of a project. A privileged role (`expert`, `admin`) counts only
+when both the claims and the person's account in the study grant it: the
+functions use the account's roles less any privileged role the claims do not
+name, so a role taken away in the study counts at once and one just given
+counts once the browser's token has been refreshed.
 
 The application learns about the Firebase project from `config.json` beside
 it, which `electrotag web config` writes:

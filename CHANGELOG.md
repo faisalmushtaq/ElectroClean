@@ -5,6 +5,24 @@ Each section below describes the changes in one version of ElectroTag;
 
 ## Unreleased
 
+Accounts can now hold several roles: annotator, expert and administrator, as an expert who also
+annotates does. The study keeps both the set and the older single role (the first of them), and
+studies made before read as they were; on Firebase each person's roles are written into their
+sign-in claims, and an expert's or administrator's role counts only when both the claims and the
+account in the study grant it. The participant role of a later crowd study is kept but cannot be
+given yet, and the IDs ADJUDICATED and REFERENCE cannot be accounts. Experts and administrators reach
+a new expert channel (`POST /expert/{op}`, `et_expert` on Firebase), whose first operations let an
+expert agree, or no longer agree, to trainees watching replays of their sessions, each change
+audited; the corrections, replays, tasks, adjudication and library of later releases are built on it.
+Study settings gain three blocks, `review` (corrections and adjudication), `training` (which stages of
+the training path may be skipped, never the assessment, and what real study work waits for) and
+`replay`, each checked like the others. The study now keeps derived versions of saved work (an
+expert's correction, an adjudicated version) with the same journalled save in trees of their own
+(`Annotated_Events/derived/`), never anyone's attempt; the results zip and the export include them
+and the analyses leave them out. Each visit now keeps an index of
+the recordings it opened, and its log can be read in pages. The demonstration has an expert account,
+E01, with the password `demo` (`electrotag` on `electrotag-web demo`).
+
 A changed copy of a recording that is also in a training set (a set made from the study's own
 recordings) is now matched by its name and shape, as any other changed copy is; the study's copy and
 the set's copy were counted as two recordings, so the file was refused as looking like several.

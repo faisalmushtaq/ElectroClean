@@ -105,6 +105,8 @@ def build_dataset(
     for source, doc in documents:
         if doc.mode not in config.modes:
             continue
+        if (doc.context or {}).get("derived"):
+            continue  # a correction or an adjudicated version: the analyses use the original annotations
         if config.annotators is not None and doc.annotator_id not in config.annotators:
             continue
         if catalogue is None:

@@ -35,12 +35,30 @@ if TYPE_CHECKING:
     from electrotag.training.reference import ReferenceSet
 
 MODES = ("standard", "guided", "practice", "assessment")
-#: The kinds of record kept with :meth:`Store.update_record`: problem reports, reviews of saved work, and the
-#: marks of assignments that cannot be annotated (each annotator's, by item key).
-RECORD_KINDS = ("problems", "reviews", "unusable")
+#: The kinds of record kept with :meth:`Store.update_record`: problem reports, reviews of saved work, the
+#: marks of assignments that cannot be annotated (each annotator's, by item key), and the records of the
+#: expert work: tasks (``annotator_id`` ""), corrections (the corrected person's), adjudications (the
+#: adjudicator's) and gold scores (docs/web/api.md, "Experts").
+RECORD_KINDS = ("problems", "reviews", "unusable", "tasks", "corrections", "adjudications", "gold")
 #: A record's ID: letters, digits, "_" and "-" (the browser makes 32 hexadecimal characters).
 RECORD_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
-ROLES = ("annotator", "admin")
+#: The roles a person can be given now. One person may hold several (an expert who also annotates).
+ROLES = ("annotator", "expert", "admin")
+#: Roles that are read and kept but cannot be given yet (the crowd participant of a later study).
+RESERVED_ROLES = ("participant",)
+KNOWN_ROLES = ROLES + RESERVED_ROLES
+#: The roles that open more than annotating; on Firebase they count only when both the person's claims
+#: and their account in the study grant them.
+PRIVILEGED_ROLES = ("expert", "admin")
+#: The order of precedence: a person's primary role (the old ``role`` field) is the first they hold.
+ROLE_ORDER = ("admin", "expert", "annotator", "participant")
+#: IDs that are never accounts: the adjudicated version's and a training reference's annotator.
+RESERVED_IDS = ("ADJUDICATED", "REFERENCE")
+#: The kinds of derived version (:meth:`Store.save_derived`): an expert's correction of someone's saved
+#: work, and the adjudicated version of a task. Each has its own results tree and completion register.
+DERIVED_KINDS = ("corrections", "adjudications")
+#: Where the derived versions are kept below the results folder (``Annotated_Events/derived/<kind>/``).
+DERIVED_DIR = "derived"
 STATUSES = ("active", "disabled")
 #: Who changed something, in the audit log, when it was an ``electrotag-web`` command.
 BY_COMMAND = "command"
@@ -50,15 +68,65 @@ Credentials = dict[str, Any]  # {"invite_link": str | None, "temporary_password"
 Invitation = dict[str, Any]  # {"invite_token": str | None, "invite_link": str | None, "expires_at": str | None}
 
 
+def parse_roles(value: str | list[Any] | tuple[Any, ...] | None, fallback: str = "annotator") -> tuple[str, ...]:
+    """A person's roles from what a store or the claims keep: ``"annotator,expert"``, a list, or the old single
+    ``role``. Unknown names are dropped; the result is in :data:`ROLE_ORDER` and never empty (``fallback``)."""
+    if value is None:
+        items: list[Any] = []
+    elif isinstance(value, str):
+        items = [x.strip() for x in value.split(",")]
+    elif isinstance(value, (list, tuple)):
+        items = [str(x).strip() for x in value if isinstance(x, str)]
+    else:
+        items = []
+    found = {x for x in items if x in KNOWN_ROLES}
+    out = tuple(r for r in ROLE_ORDER if r in found)
+    return out or ((fallback,) if fallback else ())
+
+
+def primary_role(roles: tuple[str, ...] | list[str]) -> str:
+    """The first of ``roles`` in :data:`ROLE_ORDER` (kept as the old ``role``); "annotator" when there is none."""
+    return next((r for r in ROLE_ORDER if r in roles), "annotator")
+
+
+def roles_text(roles: tuple[str, ...] | list[str]) -> str:
+    """``an annotator and expert``, ``an administrator``: the roles as the audit log's summaries say them."""
+    words = {"annotator": "annotator", "expert": "expert", "admin": "administrator", "participant": "participant"}
+    names = [words[r] for r in ("annotator", "expert", "admin", "participant") if r in roles] or ["annotator"]
+    joined = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+    return ("an " if joined[0] in "aeiou" else "a ") + joined
+
+
 @dataclass(frozen=True)
 class User:
+    """A person signed in to the study. ``role`` is the primary role (every positional ``User(aid, name,
+    role)`` keeps working) and ``roles`` all of them; one fills the other (:func:`primary_role`)."""
+
     annotator_id: str
     display_name: str = ""
     role: str = "annotator"
+    roles: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.roles:
+            roles = parse_roles(list(self.roles), fallback="")
+            object.__setattr__(self, "roles", roles or ("annotator",))
+            object.__setattr__(self, "role", primary_role(self.roles))
+        else:
+            object.__setattr__(self, "roles", parse_roles(self.role))
+            object.__setattr__(self, "role", primary_role(self.roles))
+
+    def has_role(self, role: str) -> bool:
+        return role in self.roles
 
     @property
     def is_admin(self) -> bool:
-        return self.role == "admin"
+        return "admin" in self.roles
+
+    @property
+    def is_expert(self) -> bool:
+        """An expert, or an administrator (who may do everything an expert does)."""
+        return "expert" in self.roles or self.is_admin
 
 
 @dataclass(frozen=True)
@@ -68,6 +136,8 @@ class Assignment:
     mode: str = "standard"
     context_id: str = ""
     position: int = 0
+    #: The task this assignment belongs to ("" for an assignment made without one: docs/web/api.md, "Tasks").
+    task_id: str = ""
 
 
 @dataclass
@@ -95,6 +165,47 @@ def latest_entry(entries: list[dict[str, Any]]) -> dict[str, Any]:
     Attempt numbers only grow (each save takes the next free one), so they order the attempts even when
     the times were written on computers in different time zones."""
     return max(entries, key=lambda e: (attempt_of(e), str(e.get("completed_at", ""))))
+
+
+def index_rows(rows: list[dict[str, Any]], events: list[dict[str, Any]], context_id: str = "") -> list[dict[str, Any]]:
+    """The visit index (:meth:`Store.visit_index`) brought up to date with numbered events.
+
+    Each ``recording_opened`` starts a row; ``recording_finished`` or ``closed_without_saving`` of the same
+    window ends it (``last_seq``, ``ended_t``, ``outcome``), and ``log_closed`` ends every row still open
+    (``outcome`` stays ""). ``context_id`` is the visit's (the reference set of a training visit)."""
+    out = [dict(r) for r in rows]
+    for e in events:
+        kind = e.get("type")
+        seq = int(e.get("seq") or 0)
+        t = float(e.get("t") or 0.0)
+        if kind == "recording_opened":
+            mode = str(e.get("mode") or "standard")
+            win = e.get("window_no")
+            out.append({"window_no": int(win) if isinstance(win, (int, float)) and not isinstance(win, bool) else None,
+                        "recording_id": str(e.get("recording") or e.get("recording_id") or ""),
+                        "session_id": str(e.get("session_id") or ""), "mode": mode,
+                        "context_id": context_id if mode != "standard" else "", "first_seq": seq, "last_seq": None,
+                        "opened_t": t, "ended_t": None, "outcome": ""})
+        elif kind in ("recording_finished", "closed_without_saving"):
+            win = e.get("window_no")
+            open_rows = [r for r in out if r["last_seq"] is None and (win is None or r["window_no"] in (win, None))]
+            if open_rows:
+                r = open_rows[-1]
+                r.update(last_seq=seq, ended_t=t, outcome="finished" if kind == "recording_finished"
+                         else "closed_without_saving")
+        elif kind == "log_closed":
+            for r in out:
+                if r["last_seq"] is None:
+                    r.update(last_seq=seq, ended_t=t)
+    return out
+
+
+def page_of(events: list[dict[str, Any]], from_seq: int, limit: int) -> tuple[list[dict[str, Any]], int | None]:
+    """The events with ``seq`` from ``from_seq`` on, at most ``limit`` of them (in order), and the ``seq`` of
+    the next event after the page (None when the page reaches the end)."""
+    wanted = sorted((e for e in events if int(e.get("seq") or 0) >= from_seq), key=lambda e: int(e.get("seq") or 0))
+    page = wanted[: max(1, int(limit))]
+    return page, (int(wanted[len(page)]["seq"]) if len(wanted) > len(page) else None)
 
 
 def item_key(recording_id: str, mode: str, context_id: str) -> str:
@@ -231,12 +342,13 @@ class Store(ABC):
 
     @abstractmethod
     def users(self) -> list[dict[str, Any]]:
-        """The active accounts (``annotator_id``, ``display_name``, ``role``, ``created_at``, ``last_seen``)."""
+        """The active accounts (``annotator_id``, ``display_name``, ``role`` (the primary role), ``roles``,
+        ``created_at``, ``last_seen``)."""
 
     @abstractmethod
     def user_records(self) -> list[dict[str, Any]]:
-        """Every account, disabled ones too: ``annotator_id``, ``display_name``, ``email``, ``role``,
-        ``status``, ``created_at``, ``last_seen``, ``notes``."""
+        """Every account, disabled ones too: ``annotator_id``, ``display_name``, ``email``, ``role`` (the
+        primary role), ``roles``, ``status``, ``created_at``, ``last_seen``, ``notes``."""
 
     def user_record(self, annotator_id: str) -> dict[str, Any] | None:
         aid = str(annotator_id or "").strip().upper()
@@ -244,13 +356,16 @@ class Store(ABC):
 
     @abstractmethod
     def create_account(self, annotator_id: str, *, display_name: str, role: str, email: str,
-                       password: str | None) -> Credentials:
-        """A new account (:class:`AccountProblem` ``user_exists`` if the ID has one)."""
+                       password: str | None, roles: tuple[str, ...] | None = None) -> Credentials:
+        """A new account (:class:`AccountProblem` ``user_exists`` if the ID has one) with ``roles`` (or
+        ``role`` alone); ``role`` is kept as the primary role."""
 
     @abstractmethod
     def update_account(self, annotator_id: str, *, display_name: str | None = None, role: str | None = None,
-                       status: str | None = None, notes: str | None = None) -> None:
-        """Change an account; disabling it stops it signing in, at once."""
+                       status: str | None = None, notes: str | None = None,
+                       roles: tuple[str, ...] | None = None) -> None:
+        """Change an account; disabling it stops it signing in, at once. ``roles`` replaces every role (the
+        primary role follows); ``role`` alone makes it the only one."""
 
     @abstractmethod
     def reset_password(self, annotator_id: str) -> Credentials: ...
@@ -289,7 +404,9 @@ class Store(ABC):
 
     @abstractmethod
     def assign(self, annotator_id: str, recording_ids: list[str], *, mode: str = "standard",
-               context_id: str = "") -> int: ...
+               context_id: str = "", task_id: str = "") -> int:
+        """Add assignments (those already there are kept as they are, except that one without a task is
+        linked to ``task_id`` when one is given); returns how many were added."""
 
     @abstractmethod
     def unassign_item(self, annotator_id: str, recording_id: str, mode: str, context_id: str) -> bool:
@@ -356,14 +473,41 @@ class Store(ABC):
     def report_result(self, set_id: str, annotator_id: str) -> dict[str, str]:
         """The result of the trainee's competency report, ``{"status", "status_text"}``, or {} without one."""
 
-    @abstractmethod
-    def saved_files(self, annotator_id: str, recording_id: str, mode: str, context_id: str) -> dict[str, bytes]:
-        """The files of the latest saved attempt (file name -> contents), or {} if it was never saved."""
+    def report_status(self, set_id: str, annotator_id: str) -> str:
+        """The status of the trainee's competency report (``met``, ``not_met``, ``not_determined``), or ""
+        when there is none yet (the competency gate of real study work reads it)."""
+        return str(self.report_result(set_id, annotator_id).get("status") or "")
 
-    def saved_document(self, annotator_id: str, recording_id: str, mode: str, context_id: str) -> bytes | None:
-        """The ``_annotations.json`` of the latest saved attempt, or None."""
-        files = self.saved_files(annotator_id, recording_id, mode, context_id)
+    @abstractmethod
+    def saved_files(self, annotator_id: str, recording_id: str, mode: str, context_id: str,
+                    attempt: int | None = None) -> dict[str, bytes]:
+        """The files of the latest saved attempt, or of attempt ``attempt`` (file name -> contents), or {} if
+        there is no such attempt."""
+
+    def saved_document(self, annotator_id: str, recording_id: str, mode: str, context_id: str,
+                       attempt: int | None = None) -> bytes | None:
+        """The ``_annotations.json`` of the latest saved attempt (or of ``attempt``), or None."""
+        files = self.saved_files(annotator_id, recording_id, mode, context_id, attempt)
         return next((b for n, b in sorted(files.items()) if n.endswith("_annotations.json")), None)
+
+    # ------------------------------------------------------- derived versions
+    @abstractmethod
+    def save_derived(self, kind: str, make_session: Callable[[Any], AnnotationSession], *, elapsed_s: float,
+                     started_at: str) -> SavedResult:
+        """Save a derived version (one of :data:`DERIVED_KINDS`): Save and Finish of ``make_session(layout)``
+        with the five files written, read back and verified, into the derived tree of ``kind``
+        (``Annotated_Events/derived/<kind>/``, a layout of its own with its own completion register), so that
+        it is never anyone's attempt, completion or time. ``attempt`` counts the versions of that kind of the
+        session's annotator and recording. Repeats are always allowed."""
+
+    @abstractmethod
+    def derived_entries(self, kind: str, annotator_id: str | None = None) -> list[dict[str, str]]:
+        """The completion register rows of the derived tree of ``kind`` (``output_dir`` is relative to it)."""
+
+    @abstractmethod
+    def derived_files(self, kind: str, annotator_id: str, recording_id: str,
+                      attempt: int | None = None) -> dict[str, bytes]:
+        """The files of a derived version (the latest, or ``attempt``), or {} if there is none."""
 
     @abstractmethod
     def results_tree(self, dest: Path, *, logs: bool = False, annotator_ids: set[str] | None = None,
@@ -452,6 +596,19 @@ class Store(ABC):
         """Visits, newest first: ``visit_id``, ``annotator_id``, ``mode``, ``context_id``, ``started_at``,
         ``closed_at`` (or None) and ``n_events``."""
 
+    @abstractmethod
+    def visit_log(self, visit_id: str, *, from_seq: int = 0, limit: int = 4000) -> dict[str, Any]:
+        """One page of a visit's interaction log: ``{"header": dict, "events": [...], "next_seq": int | None}``,
+        the events with ``seq`` from ``from_seq`` on, at most ``limit`` (in order), and the ``seq`` to ask for
+        next (None at the end). Raises :class:`StoreError` for an unknown visit."""
+
+    @abstractmethod
+    def visit_index(self, visit_id: str) -> list[dict[str, Any]]:
+        """The recordings a visit opened, in order (:func:`index_rows`): ``window_no``, ``recording_id``,
+        ``session_id``, ``mode``, ``context_id``, ``first_seq``, ``last_seq`` (None while open), ``opened_t``,
+        ``ended_t``, ``outcome`` (``finished``, ``closed_without_saving`` or ""). Kept as the events arrive;
+        a log written before the index existed is read through instead. [] for an unknown visit."""
+
 
 def generated_password() -> str:
     """A temporary password that is easy to read out and type: three groups of four characters."""
@@ -461,8 +618,8 @@ def generated_password() -> str:
     return "-".join("".join(secrets.choice(alphabet) for _ in range(4)) for _ in range(3))
 
 
-__all__ = ["BY_COMMAND", "MODES", "RECORD_ID_RE", "RECORD_KINDS", "ROLES", "STATUSES", "AccountProblem", "Assignment",
-           "Credentials", "Invitation",
-           "ResultExists",
-           "SavedResult", "Store", "StoreError", "User", "attempt_of", "generated_password", "item_key", "latest_entry",
-           "settings_from_overrides"]
+__all__ = ["BY_COMMAND", "DERIVED_DIR", "DERIVED_KINDS", "KNOWN_ROLES", "MODES", "PRIVILEGED_ROLES", "RECORD_ID_RE",
+           "RECORD_KINDS", "RESERVED_IDS", "RESERVED_ROLES", "ROLES", "ROLE_ORDER", "STATUSES", "AccountProblem",
+           "Assignment", "Credentials", "Invitation", "ResultExists", "SavedResult", "Store", "StoreError", "User",
+           "attempt_of", "generated_password", "index_rows", "item_key", "latest_entry", "page_of", "parse_roles",
+           "primary_role", "roles_text", "settings_from_overrides"]

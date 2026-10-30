@@ -30,8 +30,10 @@ from electrotag.web.study import WebStudy
 
 DEMO_STUDY = "demo"
 DEMO_PASSWORD = "electrotag"
+#: The accounts: (ID, name, roles). E01 is an expert who also annotates, with nothing assigned at first.
 DEMO_USERS = (("ADMIN", "Study administrator", "admin"), ("A01", "Annotator one", "annotator"),
-              ("A02", "Annotator two", "annotator"), ("T01", "Trainee one", "annotator"))
+              ("A02", "Annotator two", "annotator"), ("T01", "Trainee one", "annotator"),
+              ("E01", "Expert one", "annotator,expert"))
 
 
 def build_demo(directory: Path | str, *, fresh: bool = False, say: Any = print, quiz: bool = True) -> Path:
@@ -75,8 +77,8 @@ def build_demo(directory: Path | str, *, fresh: bool = False, say: Any = print, 
         reg = register_dataset(dataset, store, say=say)
         register_dataset(training_source, store, say=say)
         study_recordings = sorted(m["recording_id"] for m in reg.manifests)
-        for aid, name, role in DEMO_USERS:
-            store.db.add_user(aid, DEMO_PASSWORD, display_name=name, role=role, replace=True)
+        for aid, name, roles in DEMO_USERS:
+            store.db.add_user(aid, DEMO_PASSWORD, display_name=name, roles=roles.split(","), replace=True)
         for aid in ("A01", "A02"):
             store.assign(aid, study_recordings)
         store.enrol("T01", EXAMPLE_SET_ID)
@@ -127,7 +129,8 @@ def serve_demo(directory: Path | str, *, host: str = "127.0.0.1", port: int = 80
     zip_path = Path(directory).resolve() / "recordings.zip"
     app = create_app(study_dir, demo=True, allowed_origins=origins, demo_zip=zip_path)
     shown = "localhost" if host in ("127.0.0.1", "0.0.0.0") else host
-    print(f"\nOpen http://{shown}:{port}/ and sign in as A01, A02, T01 or ADMIN with the password {DEMO_PASSWORD}.")
+    print(f"\nOpen http://{shown}:{port}/ and sign in as A01, A02, T01, E01 or ADMIN with the password "
+          f"{DEMO_PASSWORD}.")
     print(f"The recordings to open are in {Path(directory).resolve() / 'recordings'} "
           f"(also at http://{shown}:{port}/demo/recordings.zip). Press Ctrl+C to stop.\n")
     uvicorn.run(app, host=host, port=port, log_level="warning")

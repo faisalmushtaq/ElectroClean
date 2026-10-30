@@ -59,24 +59,39 @@ def firestore_client(project: str) -> Any:
     return firestore.client(firebase_app(project))
 
 
-def claims_for(existing: dict[str, Any] | None, annotator_id: str, study: str, role: str) -> dict[str, Any]:
-    """Custom claims giving a Firebase user an annotator ID and a role in a study (other studies kept)."""
+def _study_roles(value: Any) -> tuple[str, ...]:
+    """The roles a claim gives in one study: the list written now, or the single role of older claims."""
+    from electrotag.web.store import parse_roles
+
+    return parse_roles(value if isinstance(value, (str, list, tuple)) else None, fallback="")
+
+
+def claims_for(existing: dict[str, Any] | None, annotator_id: str, study: str,
+               roles: str | list[str] | tuple[str, ...]) -> dict[str, Any]:
+    """Custom claims giving a Firebase user an annotator ID and roles in a study (other studies kept):
+    ``roles[study]`` is the list of roles and ``role`` the primary role (of the study just set)."""
+    from electrotag.web.store import primary_role
+
     claims = dict(existing or {})
     if claims.get("annotator_id") and claims["annotator_id"] != annotator_id:
         raise ValueError(f"This Firebase user is already annotator {claims['annotator_id']}; an annotator keeps one "
                          "ID in every study of a project")
-    roles = dict(claims.get("roles") or {})
-    roles[study] = role
-    return {"annotator_id": annotator_id, "role": role, "roles": roles, "studies": sorted(roles)}
+    mine = _study_roles(roles) or ("annotator",)
+    by_study = dict(claims.get("roles") or {})
+    by_study[study] = list(mine)
+    return {"annotator_id": annotator_id, "role": primary_role(mine), "roles": by_study, "studies": sorted(by_study)}
 
 
 def claims_without(existing: dict[str, Any] | None, study: str) -> dict[str, Any]:
     """The claims with one study taken out (the annotator ID stays while other studies remain)."""
+    from electrotag.web.store import primary_role
+
     claims = dict(existing or {})
     roles = {k: v for k, v in dict(claims.get("roles") or {}).items() if k != study}
     if not roles:
         return {}
-    return {**claims, "roles": roles, "studies": sorted(roles), "role": roles[sorted(roles)[0]]}
+    first = sorted(roles)[0]
+    return {**claims, "roles": roles, "studies": sorted(roles), "role": primary_role(_study_roles(roles[first]))}
 
 
 class AuthProblem(ValueError):
@@ -88,7 +103,8 @@ class AuthProblem(ValueError):
 
 
 def ensure_auth_user(app: Any, *, email: str, annotator_id: str, study: str, role: str, display_name: str = "",
-                     password: str | None = None, update_existing: bool = True) -> tuple[str, str | None]:
+                     password: str | None = None, update_existing: bool = True,
+                     roles: tuple[str, ...] | list[str] | None = None) -> tuple[str, str | None]:
     """The Firebase user with this email address (created if needed) with the claims of the study.
 
     Returns its uid and, when no password was given, a link with which the person chooses one.
@@ -104,7 +120,7 @@ def ensure_auth_user(app: Any, *, email: str, annotator_id: str, study: str, rol
             user = auth.create_user(email=email, password=password or None, display_name=display_name or None,
                                     app=app)
         try:
-            claims = claims_for(user.custom_claims, annotator_id, study, role)
+            claims = claims_for(user.custom_claims, annotator_id, study, roles or role)
         except ValueError as exc:
             raise AuthProblem("email_in_use", f"{email} already signs in as another annotator ID: {exc}") from exc
         auth.set_custom_user_claims(user.uid, claims, app=app)
@@ -125,11 +141,15 @@ def password_link(app: Any, email: str) -> str:
     return auth.generate_password_reset_link(email, app=app)
 
 
-def set_role(app: Any, uid: str, annotator_id: str, study: str, role: str) -> None:
+def set_roles(app: Any, uid: str, annotator_id: str, study: str, roles: str | list[str] | tuple[str, ...]) -> None:
+    """Write a person's roles in a study into their claims (other studies kept)."""
     from firebase_admin import auth
 
     user = auth.get_user(uid, app=app)
-    auth.set_custom_user_claims(uid, claims_for(user.custom_claims, annotator_id, study, role), app=app)
+    auth.set_custom_user_claims(uid, claims_for(user.custom_claims, annotator_id, study, roles), app=app)
+
+
+set_role = set_roles  # the name of the time when a person had one role
 
 
 def set_disabled(app: Any, uid: str, disabled: bool) -> None:
@@ -157,13 +177,14 @@ def leave_study(app: Any, uid: str, study: str) -> None:
     auth.revoke_refresh_tokens(uid, app=app)
 
 
-def role_in(claims: dict[str, Any], study: str) -> str | None:
-    """The role the claims give in a study, or None if they give none."""
+def role_in(claims: dict[str, Any], study: str) -> tuple[str, ...] | None:
+    """The roles the claims give in a study (the list written now, or the single role of older claims), or
+    None if they give the person no place in it."""
     roles = claims.get("roles")
     if isinstance(roles, dict):
         r = roles.get(study)
-        return str(r) if r else None
+        return (_study_roles(r) or ("annotator",)) if r else None
     studies = claims.get("studies")
     if isinstance(studies, list) and study not in studies:
         return None
-    return str(claims.get("role") or "annotator") if claims.get("annotator_id") else None
+    return _study_roles(claims.get("role") or "annotator") or ("annotator",) if claims.get("annotator_id") else None

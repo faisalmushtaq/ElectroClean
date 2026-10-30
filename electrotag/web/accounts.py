@@ -14,6 +14,12 @@ random (32 bytes) and kept only as a SHA-256 hash, with its expiry; each account
 invitation, which ends when it is used, when a newer one is made for the account, when it is
 withdrawn, when the account is given a new password, made an administrator, switched off or removed.
 Administrators are never invited: a link that travels by email must not open the admin area.
+
+An account holds one or more roles (:data:`~electrotag.web.store.ROLES`), kept as a comma-separated list
+in ``users.roles``; ``users.role`` keeps the primary role, so an older copy of the server still reads the
+file. A database made before roles became a set is brought up to date when it is opened (``roles`` is
+filled from ``role``). The same goes for the task of an assignment (``assignments.task_id``) and the
+index of the recordings each visit opened (``visit_recordings``, kept for visits opened since).
 """
 
 from __future__ import annotations
@@ -32,7 +38,7 @@ from pathlib import Path
 from typing import Any
 
 from electrotag.app.common import now_local_iso
-from electrotag.web.store import MODES, ROLES, Assignment, User
+from electrotag.web.store import MODES, ROLES, Assignment, User, index_rows, parse_roles, primary_role
 
 TOKEN_IDLE_S = 12 * 3600
 #: How long an invitation lasts unless the administrator chooses otherwise, and the longest allowed.
@@ -137,9 +143,30 @@ CREATE TABLE IF NOT EXISTS study_secrets (
     value TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS visit_recordings (
+    visit_id TEXT NOT NULL,
+    first_seq INTEGER NOT NULL,
+    window_no INTEGER,
+    recording_id TEXT NOT NULL DEFAULT '',
+    session_id TEXT NOT NULL DEFAULT '',
+    mode TEXT NOT NULL DEFAULT 'standard',
+    context_id TEXT NOT NULL DEFAULT '',
+    last_seq INTEGER,
+    opened_t REAL NOT NULL DEFAULT 0,
+    ended_t REAL,
+    outcome TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (visit_id, first_seq)
+);
+CREATE INDEX IF NOT EXISTS visit_recordings_by_recording ON visit_recordings (recording_id);
 """
-#: Columns added to the users table after the first version of the server (added to older databases).
-USER_COLUMNS = {"email": "TEXT NOT NULL DEFAULT ''", "notes": "TEXT NOT NULL DEFAULT ''"}
+#: Columns added to the tables after the first version of the server (added to older databases).
+USER_COLUMNS = {"email": "TEXT NOT NULL DEFAULT ''", "notes": "TEXT NOT NULL DEFAULT ''",
+                "roles": "TEXT NOT NULL DEFAULT ''"}
+ASSIGNMENT_COLUMNS = {"task_id": "TEXT NOT NULL DEFAULT ''"}
+#: ``indexed``: 1 for a visit whose recordings are kept in visit_recordings as its events arrive.
+VISIT_COLUMNS = {"indexed": "INTEGER NOT NULL DEFAULT 0"}
+_INDEX_COLUMNS = ("window_no", "recording_id", "session_id", "mode", "context_id", "first_seq", "last_seq",
+                  "opened_t", "ended_t", "outcome")
 
 
 class AccountError(ValueError):
@@ -185,6 +212,32 @@ def token_hash(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
+def checked_roles(roles: Any, role: str | None = None) -> tuple[str, ...]:
+    """The roles to keep: ``roles`` (a list or a comma-separated text) or, without them, ``role``; each one of
+    ROLES (:class:`AccountError` otherwise)."""
+    given = roles if roles else ([role] if role else ["annotator"])
+    items = [x.strip() for x in given.split(",")] if isinstance(given, str) else list(given)
+    for r in items:
+        if r not in ROLES:
+            raise AccountError(f"The role must be one of {', '.join(ROLES)}")
+    return parse_roles(items)
+
+
+def _user(row: sqlite3.Row) -> User:
+    roles = parse_roles(row["roles"] or row["role"])
+    return User(row["annotator_id"], row["display_name"], primary_role(roles), roles)
+
+
+def _roles_of(row: sqlite3.Row) -> list[str]:
+    return list(parse_roles(row["roles"] or row["role"]))
+
+
+def _admin_row(row: sqlite3.Row) -> bool:
+    """An administrator's account, by its roles or by its primary role (for the invitations, which must never
+    open the admin area, either is enough)."""
+    return "admin" in _roles_of(row) or row["role"] == "admin"
+
+
 def normalise_id(value: str) -> str:
     aid = str(value or "").strip().upper()
     if not ID_RE.match(aid):
@@ -206,10 +259,14 @@ class Accounts:
             self._db.execute("PRAGMA journal_mode=WAL")
             self._db.execute("PRAGMA busy_timeout=5000")
             self._db.executescript(SCHEMA)
-            have = {r[1] for r in self._db.execute("PRAGMA table_info(users)").fetchall()}
-            for name, decl in USER_COLUMNS.items():
-                if name not in have:
-                    self._db.execute(f"ALTER TABLE users ADD COLUMN {name} {decl}")
+            for table, columns in (("users", USER_COLUMNS), ("assignments", ASSIGNMENT_COLUMNS),
+                                   ("visits", VISIT_COLUMNS)):
+                have = {r[1] for r in self._db.execute(f"PRAGMA table_info({table})").fetchall()}
+                for name, decl in columns.items():
+                    if name not in have:
+                        self._db.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
+            # Accounts made before roles became a set: their one role is the whole set (once; idempotent).
+            self._db.execute("UPDATE users SET roles=role WHERE roles=''")
 
     def close(self) -> None:
         with self._lock:
@@ -236,10 +293,10 @@ class Accounts:
 
     # ---------------------------------------------------------------- users
     def add_user(self, annotator_id: str, password: str, *, display_name: str = "", role: str = "annotator",
-                 replace: bool = False) -> User:
+                 replace: bool = False, roles: Any = None) -> User:
         aid = normalise_id(annotator_id)
-        if role not in ROLES:
-            raise AccountError(f"The role must be one of {', '.join(ROLES)}")
+        kept = checked_roles(roles, role)
+        role, roles_csv = primary_role(kept), ",".join(kept)
         if len(password) < MIN_PASSWORD:
             raise AccountError(f"The password must have at least {MIN_PASSWORD} characters")
         h = hash_password(password)
@@ -248,13 +305,13 @@ class Accounts:
             if exists and not replace:
                 raise AccountExists(f"{aid} already has an account (use --replace to set a new password)")
             if exists:
-                db.execute("UPDATE users SET display_name=?, role=?, password_hash=?, disabled=0 WHERE annotator_id=?",
-                           (display_name, role, h, aid))
+                db.execute("UPDATE users SET display_name=?, role=?, roles=?, password_hash=?, disabled=0 "
+                           "WHERE annotator_id=?", (display_name, role, roles_csv, h, aid))
                 db.execute("DELETE FROM tokens WHERE annotator_id=?", (aid,))
             else:
-                db.execute("INSERT INTO users (annotator_id, display_name, role, password_hash, created_at) "
-                           "VALUES (?, ?, ?, ?, ?)", (aid, display_name, role, h, now_local_iso()))
-        return User(aid, display_name, role)
+                db.execute("INSERT INTO users (annotator_id, display_name, role, roles, password_hash, created_at) "
+                           "VALUES (?, ?, ?, ?, ?, ?)", (aid, display_name, role, roles_csv, h, now_local_iso()))
+        return User(aid, display_name, role, kept)
 
     def remove_user(self, annotator_id: str) -> None:
         aid = normalise_id(annotator_id)
@@ -265,27 +322,29 @@ class Accounts:
 
     def user(self, annotator_id: str) -> User | None:
         row = self._one("SELECT * FROM users WHERE annotator_id=? AND disabled=0", (str(annotator_id).upper(),))
-        return User(row["annotator_id"], row["display_name"], row["role"]) if row else None
+        return _user(row) if row else None
 
     def users(self) -> list[dict[str, Any]]:
-        return [dict(annotator_id=r["annotator_id"], display_name=r["display_name"], role=r["role"],
-                     created_at=r["created_at"], last_seen=r["last_seen"])
+        return [dict(annotator_id=r["annotator_id"], display_name=r["display_name"], role=_user(r).role,
+                     roles=_roles_of(r), created_at=r["created_at"], last_seen=r["last_seen"])
                 for r in self._all("SELECT * FROM users WHERE disabled=0 ORDER BY annotator_id")]
 
     def user_records(self) -> list[dict[str, Any]]:
         """Every account, disabled ones too (without the password hash)."""
         return [{"annotator_id": r["annotator_id"], "display_name": r["display_name"], "email": r["email"] or None,
-                 "role": r["role"], "status": "disabled" if r["disabled"] else "active", "created_at": r["created_at"],
-                 "last_seen": r["last_seen"] or None, "notes": r["notes"]}
+                 "role": _user(r).role, "roles": _roles_of(r), "status": "disabled" if r["disabled"] else "active",
+                 "created_at": r["created_at"], "last_seen": r["last_seen"] or None, "notes": r["notes"]}
                 for r in self._all("SELECT * FROM users ORDER BY annotator_id")]
 
     def update_user(self, annotator_id: str, *, display_name: str | None = None, role: str | None = None,
-                    disabled: bool | None = None, notes: str | None = None, email: str | None = None) -> None:
+                    disabled: bool | None = None, notes: str | None = None, email: str | None = None,
+                    roles: Any = None) -> None:
         aid = normalise_id(annotator_id)
-        if role is not None and role not in ROLES:
-            raise AccountError(f"The role must be one of {', '.join(ROLES)}")
-        changes: dict[str, Any] = {k: v for k, v in (("display_name", display_name), ("role", role),
-                                                      ("notes", notes), ("email", email)) if v is not None}
+        kept = checked_roles(roles, role) if (roles or role is not None) else None
+        changes: dict[str, Any] = {k: v for k, v in (("display_name", display_name), ("notes", notes),
+                                                      ("email", email)) if v is not None}
+        if kept is not None:
+            changes.update(role=primary_role(kept), roles=",".join(kept))
         if disabled is not None:
             changes["disabled"] = 1 if disabled else 0
         with self._tx() as db:
@@ -296,7 +355,7 @@ class Accounts:
             if disabled:
                 db.execute("DELETE FROM tokens WHERE annotator_id=?", (aid,))
                 self._end_invitation(db, aid, "revoked")
-            if role == "admin":  # an invitation is for annotators: a link sent by email must not open an admin
+            if kept is not None and "admin" in kept:  # a link sent by email must not open the admin area
                 self._end_invitation(db, aid, "revoked")
 
     def set_password(self, annotator_id: str, password: str) -> None:
@@ -328,7 +387,7 @@ class Accounts:
             return None
         if not verify_password(password, row["password_hash"]):
             return None
-        return User(row["annotator_id"], row["display_name"], row["role"])
+        return _user(row)
 
     # --------------------------------------------------------------- tokens
     def issue_token(self, user: User) -> str:
@@ -358,7 +417,7 @@ class Accounts:
             with self._tx() as db:
                 db.execute("UPDATE tokens SET last_used=? WHERE token_hash=?", (now, h))
                 db.execute("UPDATE users SET last_seen=? WHERE annotator_id=?", (now_local_iso(), row["annotator_id"]))
-        return User(row["annotator_id"], row["display_name"], row["role"])
+        return _user(row)
 
     def revoke_token(self, token: str) -> None:
         with self._tx() as db:
@@ -382,12 +441,12 @@ class Accounts:
         expires = time.time() + days * 86400
         expires_iso = datetime.now().astimezone().replace(microsecond=0) + timedelta(days=days)
         with self._tx() as db:
-            row = db.execute("SELECT disabled, role FROM users WHERE annotator_id=?", (aid,)).fetchone()
+            row = db.execute("SELECT disabled, role, roles FROM users WHERE annotator_id=?", (aid,)).fetchone()
             if row is None:
                 raise AccountError(f"{aid} has no account")
             if row["disabled"]:
                 raise AccountError(f"{aid} is switched off; switch the account on before inviting them")
-            if row["role"] == "admin":
+            if _admin_row(row):
                 raise AccountError(f"{aid} is an administrator; invitation links are for annotators")
             db.execute("INSERT OR REPLACE INTO invitations (annotator_id, token_hash, state, created_at, created_by, "
                        "expires_at, expires_epoch, ended_at) VALUES (?, ?, 'invited', ?, ?, ?, ?, '')",
@@ -417,9 +476,9 @@ class Accounts:
         ``expires_at``), or None when the token is not known (never made, replaced or withdrawn)."""
         if not isinstance(token, str) or not 20 <= len(token) <= 200:
             return None
-        row = self._one("SELECT i.*, u.display_name, u.disabled, u.role FROM invitations i JOIN users u ON "
+        row = self._one("SELECT i.*, u.display_name, u.disabled, u.role, u.roles FROM invitations i JOIN users u ON "
                         "u.annotator_id = i.annotator_id WHERE i.token_hash=?", (token_hash(token),))
-        if row is None or row["disabled"] or row["role"] == "admin":
+        if row is None or row["disabled"] or _admin_row(row):
             return None
         state = row["state"]
         if state == "invited" and float(row["expires_epoch"]) < time.time():
@@ -438,9 +497,9 @@ class Accounts:
             raise InvitationProblem("unknown")
         h = hash_password(password)
         with self._tx() as db:
-            row = db.execute("SELECT i.*, u.display_name, u.role, u.disabled FROM invitations i JOIN users u ON "
-                             "u.annotator_id = i.annotator_id WHERE i.token_hash=?", (token_hash(token),)).fetchone()
-            if row is None or row["disabled"] or row["role"] == "admin":
+            row = db.execute("SELECT i.*, u.display_name, u.role, u.roles, u.disabled FROM invitations i JOIN users u "
+                             "ON u.annotator_id = i.annotator_id WHERE i.token_hash=?", (token_hash(token),)).fetchone()
+            if row is None or row["disabled"] or _admin_row(row):
                 raise InvitationProblem("unknown")
             if row["state"] == "accepted":
                 raise InvitationProblem("used")
@@ -453,11 +512,12 @@ class Accounts:
             db.execute("DELETE FROM tokens WHERE annotator_id=?", (aid,))
             db.execute("UPDATE invitations SET state='accepted', ended_at=? WHERE annotator_id=?",
                        (now_local_iso(), aid))
-        return User(aid, row["display_name"], row["role"])
+        roles = parse_roles(row["roles"] or row["role"])
+        return User(aid, row["display_name"], primary_role(roles), roles)
 
     # ---------------------------------------------------------- assignments
     def assign(self, annotator_id: str, recording_ids: list[str], *, mode: str = "standard",
-               context_id: str = "") -> int:
+               context_id: str = "", task_id: str = "") -> int:
         aid = normalise_id(annotator_id)
         if mode not in MODES:
             raise AccountError(f"The mode must be one of {', '.join(MODES)}")
@@ -467,11 +527,15 @@ class Accounts:
             start = db.execute("SELECT COALESCE(MAX(position), 0) FROM assignments WHERE annotator_id=?",
                                (aid,)).fetchone()[0]
             n = 0
+            ctx = context_id if mode != "standard" else ""
             for i, rid in enumerate(recording_ids, start=1):
                 cur = db.execute("INSERT OR IGNORE INTO assignments (annotator_id, recording_id, mode, context_id, "
-                                 "position, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                                 (aid, rid, mode, context_id if mode != "standard" else "", start + i, now_local_iso()))
+                                 "position, created_at, task_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                                 (aid, rid, mode, ctx, start + i, now_local_iso(), task_id))
                 n += cur.rowcount
+                if task_id and not cur.rowcount:  # an assignment made before its task: linked to it
+                    db.execute("UPDATE assignments SET task_id=? WHERE annotator_id=? AND recording_id=? AND mode=? "
+                               "AND context_id=? AND task_id=''", (task_id, aid, rid, mode, ctx))
         return n
 
     def unassign(self, annotator_id: str, recording_ids: list[str] | None = None) -> int:
@@ -513,8 +577,8 @@ class Accounts:
         else:
             rows = self._all("SELECT * FROM assignments WHERE annotator_id=? ORDER BY position",
                              (str(annotator_id).upper(),))
-        return [Assignment(r["annotator_id"], r["recording_id"], r["mode"], r["context_id"], r["position"])
-                for r in rows]
+        return [Assignment(r["annotator_id"], r["recording_id"], r["mode"], r["context_id"], r["position"],
+                           r["task_id"] or "") for r in rows]
 
     # ----------------------------------------------------------- programmes
     def enrol(self, annotator_id: str, set_id: str) -> None:
@@ -534,8 +598,8 @@ class Accounts:
     # --------------------------------------------------------------- visits
     def open_visit(self, visit_id: str, annotator_id: str, path: Path, mode: str, context_id: str) -> None:
         with self._tx() as db:
-            db.execute("INSERT INTO visits (visit_id, annotator_id, path, mode, context_id, opened_at, opened_mono) "
-                       "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            db.execute("INSERT INTO visits (visit_id, annotator_id, path, mode, context_id, opened_at, opened_mono, "
+                       "indexed) VALUES (?, ?, ?, ?, ?, ?, ?, 1)",
                        (visit_id, annotator_id, str(path), mode, context_id, now_local_iso(), time.monotonic()))
 
     def visit(self, visit_id: str) -> dict[str, Any] | None:
@@ -550,6 +614,33 @@ class Accounts:
             db.execute("UPDATE visits SET seq=?, last_t=? WHERE visit_id=?",
                        (int(row["seq"]) + n_events, max(float(row["last_t"]), last_t), visit_id))
         return first
+
+    def index_visit(self, visit_id: str, events: list[dict[str, Any]], context_id: str) -> None:
+        """Bring the visit's index of recordings up to date with numbered events (only for indexed visits)."""
+        if not any(e.get("type") in ("recording_opened", "recording_finished", "closed_without_saving", "log_closed")
+                   for e in events):
+            return
+        with self._tx() as db:
+            row = db.execute("SELECT indexed FROM visits WHERE visit_id=?", (visit_id,)).fetchone()
+            if row is None or not row["indexed"]:
+                return
+            old = [dict(r) for r in db.execute("SELECT * FROM visit_recordings WHERE visit_id=? ORDER BY first_seq",
+                                               (visit_id,)).fetchall()]
+            new = index_rows([{k: r[k] for k in _INDEX_COLUMNS} for r in old], events, context_id)
+            for r in new:
+                db.execute("INSERT OR REPLACE INTO visit_recordings (visit_id, " + ", ".join(_INDEX_COLUMNS) + ") "
+                           "VALUES (?, " + ", ".join("?" * len(_INDEX_COLUMNS)) + ")",
+                           (visit_id, *(r[k] for k in _INDEX_COLUMNS)))
+
+    def visit_index_rows(self, visit_id: str) -> list[dict[str, Any]] | None:
+        """The visit's index of recordings, or None when the visit was opened before visits were indexed."""
+        row = self._one("SELECT indexed FROM visits WHERE visit_id=?", (visit_id,))
+        if row is None:
+            return []
+        if not row["indexed"]:
+            return None
+        return [{k: r[k] for k in _INDEX_COLUMNS}
+                for r in self._all("SELECT * FROM visit_recordings WHERE visit_id=? ORDER BY first_seq", (visit_id,))]
 
     def close_visit(self, visit_id: str) -> None:
         with self._tx() as db:

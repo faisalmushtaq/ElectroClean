@@ -98,7 +98,7 @@ def test_overview_counts_and_recent_changes(client: TestClient, admin: Api, reco
     o = admin.admin_ok("overview")
     assert o["study"] == {"study_id": "demo", "name": "ElectroTag demonstration"}
     c = o["counts"]
-    assert (c["recordings"], c["annotators"], c["admins"]) == (3, 3, 1)
+    assert (c["recordings"], c["annotators"], c["experts"], c["admins"]) == (3, 4, 1, 1)  # E01 annotates too
     assert c["done"] == 1 and c["assignments"] == c["done"] + c["in_progress"] + c["todo"]
     assert o["last_saved"][0]["annotator_id"] == "A01" and o["last_saved"][0]["recording_id"] == SUB1
     assert o["recent"] == []
@@ -110,7 +110,7 @@ def test_overview_counts_and_recent_changes(client: TestClient, admin: Api, reco
 def test_settings_are_read_changed_and_checked(client: TestClient, admin: Api) -> None:
     s = admin.admin_ok("settings_get")
     assert set(s["settings"]) == {"filters", "display", "channels", "selection", "logging", "annotation", "loading",
-                                  "discovery", "gamification"}
+                                  "discovery", "gamification", "review", "training", "replay"}
     assert s["settings"]["annotation"]["allow_revisions"] is True
     assert s["settings"]["gamification"] == {"enabled": True, "leaderboard": True, "leaderboard_viewed_only": False}
     assert s["settings"]["filters"]["notch_hz"] == 50.0 and s["logging_notice"]
@@ -183,7 +183,7 @@ def test_accounts_on_the_server(client: TestClient, admin: Api, recordings: Path
     assert chosen["temporary_password"] is None
     Api(client, "B01", "a-chosen-password")
     users = {u["annotator_id"]: u for u in admin.admin_ok("users_list")["users"]}
-    assert set(users) == {"ADMIN", "A01", "A02", "T01", "A03", "B01"}
+    assert set(users) == {"ADMIN", "A01", "A02", "T01", "E01", "A03", "B01"}
     assert users["A01"]["assigned"] == 3 and users["T01"]["programme"] == "example"
     # changes
     u = admin.admin_ok("user_update", {"annotator_id": "A03", "display_name": "Ann Three", "notes": "Part-time",
@@ -646,7 +646,7 @@ def test_analyses_on_demand(client: TestClient, admin: Api, recordings: Path, st
     assert "Annotated_Events/completion_register.tsv" in names
     assert any(n.endswith("_competency_report.html") for n in names)
     p = admin.admin_ok("progress", {})
-    assert {a["annotator_id"] for a in p["annotators"]} == {"ADMIN", "A01", "A02", "T01"}
+    assert {a["annotator_id"] for a in p["annotators"]} == {"ADMIN", "A01", "A02", "T01", "E01"}
     assert p.keys() == admin.ok("get", "/admin/progress").keys()
 
 

@@ -74,7 +74,29 @@ and sends the study only their manifests.
   analysis and the activity analysis read as they are;
 * the training reference annotations, which never leave the server: it checks
   each guided attempt and scores each practice recording and only returns the
-  feedback.
+  feedback;
+* the derived versions of saved work (an expert's correction, the adjudicated
+  version of a task), each saved with the same journalled save into a results
+  tree of its own (`Annotated_Events/derived/<kind>/`, with its own completion
+  register), so that the originals never change and a derived version is never
+  anyone's attempt (`Store.save_derived`, `derived_entries`, `derived_files`).
+
+**Roles.** Each account holds a set of roles, `annotator`, `expert` and
+`admin` (`electrotag/web/store.py`: `ROLES`, with `participant` reserved for a
+later crowd study), and keeps the first of them as its primary `role`.
+`User.is_admin` and `User.is_expert` (true for administrators too) gate the
+admin area and the expert area; nothing else depends on roles. On Firebase
+`functions/main.py` makes each caller's user from their account in the study,
+less any privileged role (expert, admin) that their claims do not name.
+
+**The expert channel** is built like the admin channel: one route
+(`POST /expert/{op}`), one callable (`et_expert`) and one method
+(`StudyService.expert.run`, `electrotag/web/expert.py`). Each part of the
+expert work registers its operations in `EXPERT_OPS` with `@expert_op(name)`
+from a module listed, one line each, in `EXPERT_MODULES`, which are imported at
+the first expert call; what `GET /me/feedback` lists is registered the same way
+in `FEEDBACK_PARTS`. An operation whose name ends in `_get` or `_list` only
+reads; every other one saves, and the browser never repeats it by itself.
 
 ## Folder layout
 
@@ -513,10 +535,14 @@ without a server: built-in example recordings, demo accounts, results kept in
 the browser and downloadable, and the same training rules. Every method
 returns a Promise of the JSON described in docs/web/api.md.
 
-Two methods carry the administrator's and the quiz's operations, so that every
-backend implements them the same way: `admin(op, body)` (`POST /admin/{op}`,
-or `et_admin` with `{op, ...body}` on Firebase) and `quiz(setId, body)`
-(`POST /quiz/{set_id}`, or `et_quiz`). The demonstration implements the admin
+Three methods carry the administrator's, the experts' and the quiz's
+operations, so that every backend implements them the same way:
+`admin(op, body)` (`POST /admin/{op}`, or `et_admin` with `{op, ...body}` on
+Firebase), `expert(op, body)` (`POST /expert/{op}`, or `et_expert`; on Firebase
+only an operation that reads, `isExpertRead(op)`, is asked again after a
+failure) and `quiz(setId, body)` (`POST /quiz/{set_id}`, or `et_quiz`). The
+sandbox's expert operations are in `js/api/demo_expert.js`, a registry to which
+each part of the expert work adds its own module with one line. The demonstration implements the admin
 operations a visitor can try in the browser (accounts with their passwords and
 invitation links, assignments, recordings added from the computer, settings,
 the training set's pass mark, matching, guidance and notes, problem reports,
@@ -761,3 +787,12 @@ visit, and sends them in batches. The server writes them as JSON Lines files in
 activity analysis summarise. Logs written by the desktop application (version
 1.1.0 and earlier) have the same format, so the analysis reads them together
 with the browser's. Typed text and passwords are never recorded.
+
+The study also keeps, for each visit, an index of the recordings it opened
+(`Store.visit_index`: from each `recording_opened` to the `recording_finished`
+or `closed_without_saving` of the same window, with the sequence numbers of
+both), updated as the events arrive: the SQLite table `visit_recordings` on the
+server, the field `recordings` of the visit's document on Firestore. A visit
+logged before the index existed is read through instead. `Store.visit_log`
+reads a visit's events in pages by sequence number, for the replay of a
+session.

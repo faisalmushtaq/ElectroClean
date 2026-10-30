@@ -257,6 +257,9 @@ class StudyService:
         from electrotag.web.feedback import Feedback
 
         self.feedback = Feedback(self)
+        from electrotag.web.expert import Expert
+
+        self.expert = Expert(self)
 
     # ----------------------------------------------------------------- basics
     @property
@@ -302,6 +305,9 @@ class StudyService:
                            "show_reviews_to_annotators": s.show_reviews_to_annotators, "confidence": s.confidence},
             "gamification": {"enabled": s.gamification_enabled,
                              "leaderboard": s.gamification_enabled and s.gamification_leaderboard},
+            "review": {"show_corrections_to_annotators": s.review.show_corrections_to_annotators,
+                       "show_outcomes_to_annotators": s.review.show_outcomes_to_annotators},
+            "training": {"skippable": list(s.training.skippable), "gate": s.training.gate},
             "logging": self.logging_info(),
             "logging_notice": (self.store.logging_notice or LOGGING_NOTICE) if s.logging_interactions else "",
         }
@@ -330,7 +336,8 @@ class StudyService:
             except ReferenceSetError:
                 prog = None
         return {"annotator_id": user.annotator_id, "display_name": user.display_name, "role": user.role,
-                "study": self.study_info(), "catalogue": self.catalogue_info(), "programme": prog,
+                "roles": list(user.roles), "study": self.study_info(), "catalogue": self.catalogue_info(),
+                "programme": prog,
                 "quizzes": self.quizzes.available(user)}
 
     # ---------------------------------------------------------- what to do
@@ -825,6 +832,21 @@ class StudyService:
     def guided_show_me(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
         return self.coach.guided_show_me(user, _rid(body), body)
 
+    def training_stage(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        """``POST /training/stage {stage, action}``: skip, finish or resume a stage of the training path
+        (electrotag/web/coach.py). Saves; the browser never repeats it by itself."""
+        return self.coach.stage_action(user, body)
+
+    def training_snippets(self, user: User, body: dict[str, Any] | None = None) -> dict[str, Any]:
+        """``GET /training/snippets``: the artifact snippets of the trainee's set (electrotag/web/coach.py)."""
+        return self.coach.snippets_view(user)
+
+    # ----------------------------------------------- feedback on one's own work
+    def my_feedback(self, user: User, body: dict[str, Any] | None = None) -> dict[str, Any]:
+        """``GET /me/feedback``: the corrections of the annotator's saved work and the outcomes of the conflicts
+        in it, each when the study shows them (electrotag/web/expert.py, ``FEEDBACK_PARTS``)."""
+        return self.expert.my_feedback(user)
+
     # ---------------------------------------------------------- achievements
     def achievements(self, user: User, body: dict[str, Any] | None = None) -> dict[str, Any]:
         """``GET /me/achievements`` (and ``POST`` with ``goal_per_week`` or ``leaderboard_hidden``)."""
@@ -927,16 +949,21 @@ class StudyService:
         """One operation of the admin area (docs/web/api.md, "Administration"; electrotag/web/admin.py)."""
         return self.administration.run(op, user, body or {})
 
+    def expert_op(self, op: Any, user: User, body: dict[str, Any] | None = None) -> dict[str, Any]:
+        """One operation of the expert area (docs/web/api.md, "Experts"; electrotag/web/expert.py)."""
+        return self.expert.run(op, user, body or {})
+
     # ------------------------------------------------------------------ quiz
     def quiz(self, user: User, set_id: Any, body: dict[str, Any] | None = None) -> dict[str, Any]:
         """The short-segment quiz of a reference set: get, answer, finish (electrotag/web/quiz.py)."""
         return self.quizzes.run(user, set_id, body or {})
 
-    #: Operation name -> method, for the HTTP routes and the Firebase functions. ``admin`` takes the
-    #: operation in the body's ``op`` and ``quiz`` the set in its ``set_id``.
+    #: Operation name -> method, for the HTTP routes and the Firebase functions. ``admin`` and ``expert`` take
+    #: the operation in the body's ``op`` and ``quiz`` the set in its ``set_id``.
     OPERATIONS = ("me", "assignments", "match", "put_draft", "delete_draft", "submit", "training", "guided_get",
                   "guided_check", "guided_continue", "guided_show_me", "visit_open", "visit_events", "visit_close",
-                  "admin_progress", "admin", "quiz", "achievements", "problem_report", "my_reviews")
+                  "admin_progress", "admin", "quiz", "achievements", "problem_report", "my_reviews", "expert",
+                  "my_feedback", "training_stage", "training_snippets")
 
     def call(self, operation: str, user: User, body: dict[str, Any] | None) -> dict[str, Any]:
         if operation not in self.OPERATIONS:
@@ -946,6 +973,8 @@ class StudyService:
         body = body or {}
         if operation == "admin":
             return self.admin(body.get("op"), user, {k: v for k, v in body.items() if k != "op"})
+        if operation == "expert":
+            return self.expert_op(body.get("op"), user, {k: v for k, v in body.items() if k != "op"})
         if operation == "quiz":
             return self.quiz(user, body.get("set_id"), {k: v for k, v in body.items() if k != "set_id"})
         return getattr(self, operation)(user, body)

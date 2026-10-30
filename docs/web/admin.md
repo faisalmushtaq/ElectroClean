@@ -16,7 +16,9 @@ another way, for example on an encrypted drive, and open them in their own brows
 
 Accounts with the role of administrator see the admin area. Sign in as usual: an administrator goes
 straight to the admin area, and the header offers My recordings to annotate (an administrator can
-annotate too) and Admin to come back. The study's administrator accounts are made when the study is
+annotate too) and Admin to come back. A person can hold several roles: annotator, expert and
+administrator. Experts open the expert area from the Expert work card on their home page (described
+in the expert section of this guide as its parts arrive); an administrator may use it too. The study's administrator accounts are made when the study is
 set up (docs/web/firebase.md and docs/web/server.md), and from then on you can make more in the
 admin area itself.
 
@@ -108,14 +110,15 @@ annotation, which is the default, or all work with the training programme includ
 
 ## Annotators
 
-The Annotators section has three tabs. Accounts lists every account of the study with its role,
+The Annotators section has three tabs. Accounts lists every account of the study with its roles,
 whether it is active, where its invitation stands, how much of its work is done and when the person
 last signed in. Search by ID, name or email, or show only one role or status, and sort by any
 column.
 
 To add someone, use Add an account below the list: give their annotator ID (up to 32 letters, digits,
 hyphens or underscores, as the study's records name them; it cannot be changed later), their name if
-you like, their email address and their role. On a study
+you like, their email address and their roles: Annotator, Expert and Administrator, as many as
+apply (an expert who also annotates has both). On a study
 on Firebase people sign in with their email address, so it is needed, and the study answers with an
 invitation link that lets the person choose their own password. On a study server the person signs
 in with their annotator ID, and First sign-in chooses how they get in: a temporary password that
@@ -188,13 +191,14 @@ action carries on while you look at other sections, and its table is there when 
 closing or reloading the page while it runs asks you first, since the people not reached yet would
 be left as they were.
 
-Manage opens a person's page. There you change their name, their role and the notes the study team
+Manage opens a person's page. There you change their name, their roles and the notes the study team
 keeps about them, reset their password (which shows a new invitation link or temporary password and
 stops the old one working), switch the account off and on again, and remove it from the study. A
 switched-off account cannot sign in, and its work stays. Removing an account takes away its
 assignments and its training programme; its saved results and interaction logs stay with the study.
-You cannot change your own role, switch off your own account or remove it: another administrator
-does that.
+You cannot take away your own administrator role, switch off your own account or remove it: another
+administrator does that. A person keeps at least one role, and the participant role of a later crowd
+study cannot be given yet.
 
 The person's page also chooses their training programme (a trainee works through the chosen
 reference set's guided recordings, then its practice recordings, then its assessment) and lists

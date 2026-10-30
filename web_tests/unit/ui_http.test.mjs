@@ -91,6 +91,27 @@ test('achievements: GET and POST /me/achievements', async () => {
   assert.deepEqual([calls[1].method, calls[1].url, JSON.parse(calls[1].body)], ['POST', 'https://s.org/api/v1/me/achievements', { leaderboard_hidden: true }]);
 });
 
+test('the expert channel, feedback and the training stages have their routes', async () => {
+  reply = () => ({ status: 200, body: { ok: 1 } });
+  const b = new HttpBackend('https://s.org');
+  await b.expert('replay_consent_set', { teaching: true });
+  await b.myFeedback();
+  await b.trainingStage({ stage: 'tour', action: 'skip' });
+  await b.trainingSnippets();
+  const seen = calls.map((c) => [c.method, c.url.replace('https://s.org/api/v1', ''), c.body ? JSON.parse(c.body) : null]);
+  assert.deepEqual(seen, [
+    ['POST', '/expert/replay_consent_set', { teaching: true }],
+    ['GET', '/me/feedback', null],
+    ['POST', '/training/stage', { stage: 'tour', action: 'skip' }],
+    ['GET', '/training/snippets', null],
+  ]);
+  assert.ok(calls.every((c) => c.headers['X-ElectroTag'] === '1'));
+  await assert.rejects(() => b.expert('../admin/overview', {}), (e) => e.status === 400 && e.code === 'bad_request');
+  assert.equal(calls.length, 4); // a name that is not an operation is never sent
+  reply = () => ({ status: 403, body: { error: 'forbidden', message: 'Only the study\'s experts and administrators can use the expert area' } });
+  await assert.rejects(() => b.expert('work_list', {}), (e) => e.status === 403 && e.code === 'forbidden');
+});
+
 test('an invitation link is checked and accepted without a sign-in, then signs the person in', async () => {
   reply = (url) => (url.endsWith('/invite/check') ? { status: 200, body: { annotator_id: 'A11', study_name: 'S' } }
     : url.endsWith('/invite/accept') ? { status: 200, body: { token: 'NEW', annotator_id: 'A11' } }

@@ -20,6 +20,7 @@ FIREBASE_CODES = {
     422: "failed-precondition",
     429: "resource-exhausted",
     500: "internal",
+    501: "unimplemented",
     503: "unavailable",
 }
 

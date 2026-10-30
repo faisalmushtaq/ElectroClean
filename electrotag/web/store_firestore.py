@@ -7,8 +7,8 @@ Everything lives under ``studies/{study_id}``::
         manifests/{key}                     one per registered recording (packed), with its fingerprint
                                             and how it was registered
         reference_sets/{set_id}             a training reference set and its reference files (packed)
-        users/{annotator_id}                display name, email, role, status, notes, the Firebase
-                                            Authentication user
+        users/{annotator_id}                display name, email, roles (and the primary role), status,
+                                            notes, the Firebase Authentication user
         assignments/{annotator_id}          the annotator's recordings and training programme
         drafts/{annotator_id}_{key}         unfinished work (packed)
         guided/{annotator_id}_{set}_{key}   where a trainee is in a guided recording
@@ -20,10 +20,15 @@ Everything lives under ``studies/{study_id}``::
         reviews/{review_id}                 an administrator's review of a saved recording
         unusable/{annotator_id}_{key}       an assignment its annotator found could not be annotated
         submissions/{annotator_id}_{key}_{attempt}   a saved recording: its register row and its files
+        derived/{kind}_{annotator_id}_{key}_{attempt}   a derived version (a correction, an adjudicated
+                                            version): its register row and files, kept apart from the
+                                            submissions so it is never anyone's attempt
+        tasks/, corrections/, adjudications/, gold/   the records of the expert work (record_json)
         result_files/{key}                  other result files, as written (the quiz results)
         progress/{set}_{annotator_id}       stars, scores and times (training_progress)
         reports/{set}_{annotator_id}        the competency report
-        visits/{visit_id}                   a visit's log header; its events in visits/{id}/batches/{seq}
+        visits/{visit_id}                   a visit's log header and the index of the recordings it
+                                            opened (recordings); its events in visits/{id}/batches/{seq}
         audit/{newest first}                the audit log of the administrators' changes
 
 Saving runs the desktop application's own code (:class:`~electrotag.web.saving.WebSession`) into a
@@ -64,6 +69,8 @@ from electrotag.web.manifest import SCHEMA as MANIFEST_SCHEMA
 from electrotag.web.manifest import SCHEMA_VERSION as MANIFEST_VERSION
 from electrotag.web.manifest import fingerprint_of, manifest_key
 from electrotag.web.store import (
+    DERIVED_DIR,
+    DERIVED_KINDS,
     MODES,
     RECORD_ID_RE,
     RECORD_KINDS,
@@ -77,7 +84,11 @@ from electrotag.web.store import (
     Store,
     StoreError,
     User,
+    index_rows,
     item_key,
+    page_of,
+    parse_roles,
+    primary_role,
     settings_from_overrides,
 )
 
@@ -113,6 +124,18 @@ def _batches(events: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
 
 def _short(text: str) -> str:
     return hashlib.sha1(text.encode()).hexdigest()[:16]
+
+
+def _roles(d: dict[str, Any]) -> tuple[str, ...]:
+    """An account's roles: its ``roles`` list, or (an account kept before roles became a set) its ``role``."""
+    return parse_roles(d.get("roles") or d.get("role"))
+
+
+def _check_roles(roles: Any, role: str | None) -> tuple[str, ...]:
+    given = list(roles) if roles else [role or "annotator"]
+    if any(r not in ROLES for r in given):
+        raise AccountProblem("invalid_user", f"The role must be one of {', '.join(ROLES)}", 400)
+    return parse_roles(given)
 
 
 class FirestoreStore(Store):
@@ -460,7 +483,8 @@ class FirestoreStore(Store):
         d = snap.to_dict() or {}
         if d.get("disabled"):
             return None
-        return User(aid, str(d.get("display_name", "")), str(d.get("role", "annotator")))
+        roles = _roles(d)
+        return User(aid, str(d.get("display_name", "")), primary_role(roles), roles)
 
     def users(self) -> list[dict[str, Any]]:
         out = []
@@ -468,31 +492,33 @@ class FirestoreStore(Store):
             d = s.to_dict() or {}
             if not d.get("disabled"):
                 out.append({"annotator_id": s.id, "display_name": d.get("display_name", ""),
-                            "role": d.get("role", "annotator"), "email": d.get("email", ""),
+                            "role": primary_role(_roles(d)), "roles": list(_roles(d)), "email": d.get("email", ""),
                             "created_at": d.get("created_at", ""), "last_seen": d.get("last_seen", "")})
         return sorted(out, key=lambda u: u["annotator_id"])
 
     def put_user(self, annotator_id: str, *, display_name: str = "", role: str = "annotator", uid: str = "",
-                 email: str = "") -> User:
+                 email: str = "", roles: Any = None) -> User:
         aid = str(annotator_id or "").strip().upper()
         if not ID_RE.match(aid):
             raise StoreError("An ID must be 1 to 32 letters, digits, hyphens or underscores (for example A01)")
-        if role not in ROLES:
+        given = list(roles) if roles else [role]
+        if any(r not in ROLES for r in given):
             raise StoreError(f"The role must be one of {', '.join(ROLES)}")
+        kept = parse_roles(given)
         ref = self.doc.collection("users").document(aid)
-        data = {"annotator_id": aid, "display_name": display_name, "role": role, "uid": uid, "email": email,
-                "disabled": False}
+        data = {"annotator_id": aid, "display_name": display_name, "role": primary_role(kept), "roles": list(kept),
+                "uid": uid, "email": email, "disabled": False}
         if not ref.get().exists:
             data.update(created_at=now_local_iso(), notes="")
         ref.set(data, merge=True)
-        return User(aid, display_name, role)
+        return User(aid, display_name, primary_role(kept), kept)
 
     def user_records(self) -> list[dict[str, Any]]:
         out = []
         for s in self.doc.collection("users").stream():
             d = s.to_dict() or {}
             out.append({"annotator_id": s.id, "display_name": d.get("display_name", ""),
-                        "email": d.get("email") or None, "role": d.get("role", "annotator"),
+                        "email": d.get("email") or None, "role": primary_role(_roles(d)), "roles": list(_roles(d)),
                         "status": "disabled" if d.get("disabled") else "active",
                         "created_at": d.get("created_at", ""), "last_seen": d.get("last_seen") or None,
                         "notes": d.get("notes", "")})
@@ -507,15 +533,14 @@ class FirestoreStore(Store):
         return ref, snap.to_dict() or {}
 
     def create_account(self, annotator_id: str, *, display_name: str, role: str, email: str,
-                       password: str | None) -> Credentials:
+                       password: str | None, roles: tuple[str, ...] | None = None) -> Credentials:
         from electrotag.web.firebase import AuthProblem, ensure_auth_user
 
         aid = str(annotator_id or "").strip().upper()
         if not ID_RE.match(aid):
             raise AccountProblem("invalid_user", "An ID must be 1 to 32 letters, digits, hyphens or underscores, "
                                  "starting with a letter or digit (for example A01)", 400)
-        if role not in ROLES:
-            raise AccountProblem("invalid_user", f"The role must be one of {', '.join(ROLES)}", 400)
+        kept = _check_roles(roles, role)
         if not email:
             raise AccountProblem("email_required", "On Firebase each person signs in with their email address: "
                                  "give it", 400)
@@ -525,19 +550,20 @@ class FirestoreStore(Store):
             raise AccountProblem("email_in_use", f"{email} already signs in to this study under another ID")
         try:
             uid, link = ensure_auth_user(self.auth_app, email=email, annotator_id=aid, study=self.study_id,
-                                         role=role, display_name=display_name, password=password,
-                                         update_existing=False)
+                                         role=primary_role(kept), roles=kept, display_name=display_name,
+                                         password=password, update_existing=False)
         except AuthProblem as exc:
             raise AccountProblem(exc.code, exc.message, 409 if exc.code == "email_in_use" else 400) from exc
-        self.put_user(aid, display_name=display_name, role=role, uid=uid, email=email)
+        self.put_user(aid, display_name=display_name, roles=kept, uid=uid, email=email)
         if link:
             self.doc.collection("users").document(aid).set({"invite": {"invited_at": now_local_iso(), "by": ""}},
                                                            merge=True)
         return {"invite_link": link, "temporary_password": None}
 
     def update_account(self, annotator_id: str, *, display_name: str | None = None, role: str | None = None,
-                       status: str | None = None, notes: str | None = None) -> None:
-        from electrotag.web.firebase import set_disabled, set_role
+                       status: str | None = None, notes: str | None = None,
+                       roles: tuple[str, ...] | None = None) -> None:
+        from electrotag.web.firebase import set_disabled, set_roles
 
         ref, d = self._user_doc(annotator_id)
         changes: dict[str, Any] = {}
@@ -545,12 +571,12 @@ class FirestoreStore(Store):
             changes["display_name"] = display_name
         if notes is not None:
             changes["notes"] = notes
-        if role is not None and role != d.get("role"):
-            if role not in ROLES:
-                raise AccountProblem("invalid_user", f"The role must be one of {', '.join(ROLES)}", 400)
-            if d.get("uid"):
-                set_role(self.auth_app, d["uid"], ref.id, self.study_id, role)
-            changes["role"] = role
+        if roles or role is not None:
+            kept = _check_roles(roles, role)
+            if kept != _roles(d) or not d.get("roles"):
+                if d.get("uid"):
+                    set_roles(self.auth_app, d["uid"], ref.id, self.study_id, kept)
+                changes.update(role=primary_role(kept), roles=list(kept))
         if status is not None and (status == "disabled") != bool(d.get("disabled")):
             if d.get("uid"):
                 set_disabled(self.auth_app, d["uid"], status == "disabled")
@@ -628,11 +654,11 @@ class FirestoreStore(Store):
         for aid, d in docs:
             for i, a in enumerate(d.get("items", []), start=1):
                 out.append(Assignment(aid, a["recording_id"], a.get("mode", "standard"), a.get("context_id", ""),
-                                      int(a.get("position", i))))
+                                      int(a.get("position", i)), str(a.get("task_id") or "")))
         return out
 
     def assign(self, annotator_id: str, recording_ids: list[str], *, mode: str = "standard",
-               context_id: str = "") -> int:
+               context_id: str = "", task_id: str = "") -> int:
         from google.cloud import firestore
 
         aid = str(annotator_id).upper()
@@ -652,9 +678,17 @@ class FirestoreStore(Store):
             n = 0
             for rid in recording_ids:
                 if (rid, mode, ctx) not in have:
-                    items.append({"recording_id": rid, "mode": mode, "context_id": ctx, "position": len(items) + 1})
+                    item = {"recording_id": rid, "mode": mode, "context_id": ctx, "position": len(items) + 1}
+                    if task_id:
+                        item["task_id"] = task_id
+                    items.append(item)
                     have.add((rid, mode, ctx))
                     n += 1
+                elif task_id:  # an assignment made before its task: linked to it
+                    for a in items:
+                        if ((a["recording_id"], a.get("mode", "standard"), a.get("context_id", "")) == (rid, mode, ctx)
+                                and not a.get("task_id")):
+                            a["task_id"] = task_id
             tx.set(ref, {**d, "items": items, "updated_at": now_local_iso()})
             return n
 
@@ -764,15 +798,31 @@ class FirestoreStore(Store):
         return [dict((s.to_dict() or {}).get("entry", {})) for s in self._submissions(annotator_id, ["entry"])]
 
     def save_results(self, make_session: Callable[[Any], Any], *, elapsed_s: float, started_at: str) -> SavedResult:
+        return self._save_into("submissions", None, make_session, elapsed_s=elapsed_s, started_at=started_at)
+
+    def save_derived(self, kind: str, make_session: Callable[[Any], Any], *, elapsed_s: float,
+                     started_at: str) -> SavedResult:
+        if kind not in DERIVED_KINDS:
+            raise StoreError(f"Unknown kind of derived version {kind!r}")
+        return self._save_into("derived", kind, make_session, elapsed_s=elapsed_s, started_at=started_at)
+
+    def _save_into(self, collection: str, kind: str | None, make_session: Callable[[Any], Any], *, elapsed_s: float,
+                   started_at: str) -> SavedResult:
+        """Save and Finish into a scratch folder, then keep the files in one document of ``collection``:
+        ``submissions`` (a person's attempt) or ``derived`` (a derived version of ``kind``)."""
         from electrotag.app.io.naming import OutputLayout, output_basename, output_filenames
         from electrotag.app.session.register import CompletionRegister
         from electrotag.web.saving import run_session
 
         with tempfile.TemporaryDirectory(prefix="electrotag-save-") as tmp:
-            layout = OutputLayout(Path(tmp) / "Annotated_Events")
+            root = Path(tmp) / "Annotated_Events"
+            layout = OutputLayout(root / DERIVED_DIR / kind if kind else root)
             session = make_session(layout)
+            if kind:
+                session.allow_repeat = True  # each derived version of the same work is a new attempt of its tree
             aid, rid, mode, ctx = session.annotator_id, session.recording_id, session.mode, session.context_id
-            earlier = [e for e in self.completion_entries(aid) if e.get("recording_id") == rid
+            kept = self.completion_entries(aid) if not kind else self.derived_entries(kind, aid)
+            earlier = [e for e in kept if e.get("recording_id") == rid
                        and e.get("mode", "standard") == mode and e.get("context", "") == ctx]
             if earlier and not session.allow_repeat:
                 raise ApiError(409, "already_done", f"You have already completed {rid}; it is not saved twice.")
@@ -790,13 +840,16 @@ class FirestoreStore(Store):
             if layout.session_log.is_file():
                 log_lines = [ln for ln in layout.session_log.read_text(encoding="utf-8").splitlines() if ln.strip()]
             attempt = len(earlier) + 1
-            ref = self.doc.collection("submissions").document(f"{aid}_{item_key(rid, mode, ctx)}_{attempt:02d}")
+            name = f"{aid}_{item_key(rid, mode, ctx)}_{attempt:02d}"
+            ref = self.doc.collection(collection).document(f"{kind}_{name}" if kind else name)
             payload = {"files": {n: base64.b64encode(b).decode("ascii") for n, b in files.items()},
                        "session_log": log_lines}
+            fields: dict[str, Any] = {"annotator_id": aid, "recording_id": rid, "mode": mode, "context_id": ctx,
+                                      "attempt": attempt, "entry": entry, "saved_at": now_local_iso()}
+            if kind:
+                fields["kind"] = kind
             try:
-                self._put_blob(ref, {"annotator_id": aid, "recording_id": rid, "mode": mode, "context_id": ctx,
-                                     "attempt": attempt, "entry": entry, "saved_at": now_local_iso()},
-                               payload, create=True)
+                self._put_blob(ref, fields, payload, create=True)
             except Exception as exc:  # AlreadyExists: saved by another request at the same moment
                 if type(exc).__name__ in ("AlreadyExists", "Conflict"):
                     raise ApiError(409, "already_done", f"{rid} was saved by another request just now.") from exc
@@ -812,6 +865,48 @@ class FirestoreStore(Store):
             payload = self._get_blob(snap) or {}
             files = {n: base64.b64decode(b) for n, b in payload.get("files", {}).items()}
             out.append((dict(d.get("entry", {})), files, list(payload.get("session_log", []))))
+        return out
+
+    # ------------------------------------------------------- derived versions
+    def _derived(self, kind: str, annotator_id: str | None, fields: list[str] | None = None) -> list[Any]:
+        from google.cloud.firestore_v1.base_query import FieldFilter
+
+        if kind not in DERIVED_KINDS:
+            raise StoreError(f"Unknown kind of derived version {kind!r}")
+        q: Any = self.doc.collection("derived").where(filter=FieldFilter("kind", "==", kind))
+        if annotator_id is not None:  # filtered here: two equality filters would need a composite index
+            q = self.doc.collection("derived").where(filter=FieldFilter("annotator_id", "==", annotator_id))
+        if fields is not None:
+            q = q.select(list(dict.fromkeys(["kind", *fields])))
+        return [s for s in q.stream() if (s.to_dict() or {}).get("kind") == kind]
+
+    def derived_entries(self, kind: str, annotator_id: str | None = None) -> list[dict[str, str]]:
+        return [dict((s.to_dict() or {}).get("entry", {})) for s in self._derived(kind, annotator_id, ["entry"])]
+
+    def derived_files(self, kind: str, annotator_id: str, recording_id: str,
+                      attempt: int | None = None) -> dict[str, bytes]:
+        mine = [s for s in self._derived(kind, annotator_id, ["recording_id", "attempt"])
+                if (s.to_dict() or {}).get("recording_id") == recording_id
+                and (attempt is None or int((s.to_dict() or {}).get("attempt", 0)) == int(attempt))]
+        return self._files_of_latest(mine)
+
+    def _files_of_latest(self, snaps: list[Any]) -> dict[str, bytes]:
+        if not snaps:
+            return {}
+        last = max(snaps, key=lambda s: int((s.to_dict() or {}).get("attempt", 0)))
+        payload = self._get_blob(last.reference.get()) or {}
+        return {n: base64.b64decode(b) for n, b in payload.get("files", {}).items()}
+
+    def derived_submission_files(self) -> list[tuple[str, dict[str, Any], dict[str, bytes], list[str]]]:
+        """(kind, register row, files, session log lines) of every derived version (for the export)."""
+        out = []
+        for snap in self.doc.collection("derived").stream():
+            d = snap.to_dict() or {}
+            if d.get("kind") not in DERIVED_KINDS:
+                continue
+            payload = self._get_blob(snap) or {}
+            files = {n: base64.b64decode(b) for n, b in payload.get("files", {}).items()}
+            out.append((str(d["kind"]), dict(d.get("entry", {})), files, list(payload.get("session_log", []))))
         return out
 
     def progress(self, rs: ReferenceSet, annotator_id: str) -> Progress:
@@ -872,17 +967,15 @@ class FirestoreStore(Store):
             out.append((d.get("set_id", ""), d.get("annotator_id", ""), self._get_blob(snap) or {}))
         return out
 
-    def saved_files(self, annotator_id: str, recording_id: str, mode: str, context_id: str) -> dict[str, bytes]:
+    def saved_files(self, annotator_id: str, recording_id: str, mode: str, context_id: str,
+                    attempt: int | None = None) -> dict[str, bytes]:
         ctx = context_id if mode != "standard" else ""
         mine = [s for s in self._submissions(annotator_id, ["recording_id", "mode", "context_id", "attempt"])
                 if (s.to_dict() or {}).get("recording_id") == recording_id
                 and (s.to_dict() or {}).get("mode", "standard") == mode
-                and (s.to_dict() or {}).get("context_id", "") == ctx]
-        if not mine:
-            return {}
-        last = max(mine, key=lambda s: int((s.to_dict() or {}).get("attempt", 0)))
-        payload = self._get_blob(last.reference.get()) or {}
-        return {n: base64.b64decode(b) for n, b in payload.get("files", {}).items()}
+                and (s.to_dict() or {}).get("context_id", "") == ctx
+                and (attempt is None or int((s.to_dict() or {}).get("attempt", 0)) == int(attempt))]
+        return self._files_of_latest(mine)
 
     def results_tree(self, dest: Path, *, logs: bool = False, annotator_ids: set[str] | None = None,
                      modes: set[str] | None = None) -> Path:
@@ -909,6 +1002,18 @@ class FirestoreStore(Store):
                 if "/" not in name and "\\" not in name:
                     (folder / name).write_bytes(base64.b64decode(b64))
             register.add(entry)
+        for kind, entry, files, _log in self.derived_submission_files():  # derived/<kind>/, a register of its own
+            if annotator_ids is not None and entry.get("annotator_id") not in annotator_ids:
+                continue
+            if modes is not None and entry.get("mode", "standard") not in modes:
+                continue
+            tree = OutputLayout(layout.root / DERIVED_DIR / kind)
+            folder = safe_path(tree.root, entry["output_dir"])
+            folder.mkdir(parents=True, exist_ok=True)
+            for name, data in files.items():
+                if "/" not in name and "\\" not in name:
+                    (folder / name).write_bytes(data)
+            CompletionRegister(tree).add(entry)
         if logs:
             for visit, header, events in self.visit_logs():
                 if annotator_ids is not None and visit.get("annotator_id") not in annotator_ids:
@@ -1080,7 +1185,8 @@ class FirestoreStore(Store):
         self.doc.collection("visits").document(visit_id).create({
             "annotator_id": annotator_id, "mode": mode, "context_id": context_id,
             "header_json": json.dumps(header), "opened_at": now_local_iso(),
-            "stem": f"{started.strftime('%Y%m%dT%H%M%S')}_{mode}", "seq": 0, "last_t": 0.0, "closed": False})
+            "stem": f"{started.strftime('%Y%m%dT%H%M%S')}_{mode}", "seq": 0, "last_t": 0.0, "closed": False,
+            "recordings": []})  # the index of the recordings it opens (visit_index)
         self.doc.collection("users").document(annotator_id).set({"last_seen": now_local_iso()}, merge=True)
 
     def visit(self, visit_id: str) -> dict[str, Any] | None:
@@ -1111,6 +1217,10 @@ class FirestoreStore(Store):
                 tx.set(batch, {"first_seq": part[0]["seq"], "n": len(part), "blob": pack(part)})
             update = {"seq": first + len(numbered) - 1,
                       "last_t": max([float(d.get("last_t", 0.0))] + [float(e.get("t", 0.0)) for e in events])}
+            if isinstance(d.get("recordings"), list):  # indexed as it goes (visits opened since the index exists)
+                rows = index_rows(list(d["recordings"]), numbered, str(d.get("context_id") or ""))
+                if rows != d["recordings"]:
+                    update["recordings"] = rows
             if close:
                 update.update(closed=True, closed_at=now_local_iso())
             tx.update(ref, update)
@@ -1141,6 +1251,50 @@ class FirestoreStore(Store):
                         "context_id": d.get("context_id", ""), "started_at": d.get("opened_at", ""),
                         "closed_at": d.get("closed_at") or None, "n_events": int(d.get("seq", 0))})
         return out
+
+    def _visit_snap(self, visit_id: str) -> Any:
+        snap = self.doc.collection("visits").document(visit_id).get() if re.fullmatch(r"[0-9a-f]{32}", str(visit_id)) \
+            else None
+        if snap is None or not snap.exists:
+            raise StoreError(f"Unknown visit {visit_id}")
+        return snap
+
+    def visit_log(self, visit_id: str, *, from_seq: int = 0, limit: int = 4000) -> dict[str, Any]:
+        snap = self._visit_snap(visit_id)
+        d = snap.to_dict() or {}
+        batches = snap.reference.collection("batches")
+        # Only the batches that hold the page are read (their sizes first, without the events).
+        heads = sorted(((int((b.to_dict() or {}).get("first_seq", 0)), int((b.to_dict() or {}).get("n", 0)), b.id)
+                        for b in batches.select(["first_seq", "n"]).stream()))
+        wanted, n = [], 0
+        for first, count, bid in heads:
+            last = first + count - 1
+            if last < from_seq:
+                continue
+            wanted.append(bid)
+            n += last - max(first, int(from_seq)) + 1
+            if n > int(limit):  # at least one event past the page: page_of finds where the next page starts
+                break
+        events: list[dict[str, Any]] = []
+        if wanted:
+            for b in self.client.get_all([batches.document(bid) for bid in wanted]):
+                events.extend(unpack((b.to_dict() or {})["blob"]))
+        page, nxt = page_of(events, int(from_seq), int(limit))
+        return {"header": json.loads(d.get("header_json") or "{}"), "events": page, "next_seq": nxt}
+
+    def visit_index(self, visit_id: str) -> list[dict[str, Any]]:
+        try:
+            snap = self._visit_snap(visit_id)
+        except StoreError:
+            return []
+        d = snap.to_dict() or {}
+        if isinstance(d.get("recordings"), list):
+            return [dict(r) for r in d["recordings"]]
+        events: list[dict[str, Any]] = []  # a visit opened before the index existed: read through its log
+        for b in snap.reference.collection("batches").order_by("first_seq").stream():
+            events.extend(unpack((b.to_dict() or {})["blob"]))
+        events.sort(key=lambda e: int(e.get("seq", 0)))
+        return index_rows([], events, str(d.get("context_id") or ""))
 
     def visit_logs(self) -> list[tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]]]]:
         """(visit record, header, events in order) of every visit (for the export)."""

@@ -113,9 +113,10 @@ On Windows the environment's Python is `electrotag\web\firebase\functions\venv\S
 Before uploading, the deployment copies the ElectroTag code the functions need into their folder
 (`scripts/vendor_functions.py`, which needs only Python itself). The first deployment takes several
 minutes, because Google switches on the services the functions use; later ones are quicker. When it
-ends, the console's **Functions** page lists ElectroTag's twenty functions, whose names start with `et_`, all in
+ends, the console's **Functions** page lists ElectroTag's twenty-four functions, whose names start with `et_`, all in
 europe-west2; `et_admin`, which answers the admin area, has more memory and time than the others
-for the analyses. Deploy again after updating ElectroTag (or use the GitHub workflow at the end of
+for the analyses, and `et_expert`, which answers the expert area, a little more than the rest for
+saving experts' corrections. Deploy again after updating ElectroTag (or use the GitHub workflow at the end of
 this guide).
 
 ## 9. Create the study
@@ -157,8 +158,13 @@ account and choose the admin area (docs/web/admin.md explains each part). There 
   is uploaded, and the study checks again everything it receives;
 * **make the accounts**: give each person an ID, a name and the email address they sign in with.
   The admin area shows a link with which they choose their own password; send it to them. You can
-  disable an account (it can no longer sign in, at once), give a new link, change a role, or remove
-  someone from the study (their results and logs stay);
+  disable an account (it can no longer sign in, at once), give a new link, change its roles
+  (annotator, expert, administrator; one person may hold several), or remove someone from the
+  study (their results and logs stay). Each person's roles in the study are written into their
+  Firebase Authentication claims, and the functions also read the account in the study: an expert's
+  or administrator's role counts only when both say so, so a role taken away counts at once and one
+  just given counts once the person's browser renews its sign-in (within the hour, or at their next
+  sign-in);
 * **assign the work**: recordings to annotate, or a training programme;
 * **build reference sets** for training and assessment: from an expert's saved annotations, an
   uploaded annotation file (an `_annotations.json`, including those the desktop application saved

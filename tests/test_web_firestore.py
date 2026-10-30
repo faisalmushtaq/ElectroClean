@@ -560,7 +560,7 @@ def test_accounts_with_firebase_authentication(study: str) -> None:
     assert out["temporary_password"] is None and "oobCode" in out["invite_link"]
     assert out["user"]["email"] == email and out["user"]["status"] == "active"
     user = auth.get_user_by_email(email, app=app)
-    assert user.custom_claims["annotator_id"] == "A05" and user.custom_claims["roles"] == {study: "annotator"}
+    assert user.custom_claims["annotator_id"] == "A05" and user.custom_claims["roles"] == {study: ["annotator"]}
     choose_password(out["invite_link"], "a-chosen-password")
     sign_in(email, "a-chosen-password")
     assert admin_err(svc, "user_add", {"annotator_id": "A05", "email": "other@example.org"}).code == "user_exists"
@@ -572,7 +572,7 @@ def test_accounts_with_firebase_authentication(study: str) -> None:
     sign_in(f"a06-{study}@example.org", "another-password")
     # role, status, password link
     admin_ok(svc, "user_update", {"annotator_id": "A05", "role": "admin"})
-    assert auth.get_user(user.uid, app=app).custom_claims["roles"] == {study: "admin"}
+    assert auth.get_user(user.uid, app=app).custom_claims["roles"] == {study: ["admin"]}
     admin_ok(svc, "user_update", {"annotator_id": "A05", "status": "disabled"})
     assert auth.get_user(user.uid, app=app).disabled is True
     assert svc.store.user("A05") is None  # the functions refuse the account at once
@@ -759,7 +759,9 @@ def test_security_rules_keep_clients_out(study: str) -> None:
     base = f"http://{os.environ['FIRESTORE_EMULATOR_HOST']}/v1/projects/{PROJECT}/databases/(default)/documents"
     paths = [f"studies/{study}", f"studies/{study}/users/A01", f"studies/{study}/manifests",
              f"studies/{study}/submissions", f"studies/{study}/reference_sets/example", f"studies/{study}/problems",
-             f"studies/{study}/reviews", f"studies/{study}/unusable"]
+             f"studies/{study}/reviews", f"studies/{study}/unusable", f"studies/{study}/derived",
+             f"studies/{study}/tasks", f"studies/{study}/corrections", f"studies/{study}/adjudications",
+             f"studies/{study}/gold", f"studies/{study}/users"]
     for auth in ({"Authorization": f"Bearer {token}"}, {}):
         for p in paths:
             r = httpx.get(f"{base}/{p}", headers=auth)
@@ -767,5 +769,147 @@ def test_security_rules_keep_clients_out(study: str) -> None:
         w = httpx.post(f"{base}/studies/{study}/users?documentId=EVIL", headers=auth,
                        json={"fields": {"role": {"stringValue": "admin"}}})
         assert w.status_code == 403
+        w = httpx.patch(f"{base}/studies/{study}/users/A01?updateMask.fieldPaths=roles", headers=auth,
+                        json={"fields": {"roles": {"arrayValue": {"values": [{"stringValue": "admin"}]}}}})
+        assert w.status_code == 403  # nobody gives themselves a role from the browser
         d = httpx.delete(f"{base}/studies/{study}/users/A01", headers=auth)
         assert d.status_code == 403
+
+
+# ------------------------------------------------------ roles, derived versions, visits (H1)
+E01 = User("E01", "Expert one", roles=("annotator", "expert"))
+
+
+def test_roles_are_kept_as_a_set_and_older_accounts_still_read(study: str) -> None:
+    service = firebase_service(study)  # with Firebase Authentication when the emulator runs (the claims follow)
+    store = service.store
+    store.put_user("E01", display_name="Expert one", roles=["expert", "annotator"])
+    assert store.user("E01").roles == ("expert", "annotator") and store.user("E01").role == "expert"
+    rec = store.user_record("E01")
+    assert rec["roles"] == ["expert", "annotator"] and rec["role"] == "expert"
+    # an account written before roles became a set: its one role is its set, and the first change adds the list
+    store.doc.collection("users").document("A02").update({"roles": firestore_delete()})
+    assert store.user("A02").roles == ("annotator",) and store.user_record("A02")["roles"] == ["annotator"]
+    store.update_account("A02", roles=("annotator", "expert"))
+    d = store.doc.collection("users").document("A02").get().to_dict()
+    assert d["roles"] == ["expert", "annotator"] and d["role"] == "expert"
+    assert ok(service, "me", User("A02", roles=("annotator", "expert")))["roles"] == ["expert", "annotator"]
+    out = admin_ok(service, "user_update", {"annotator_id": "A02", "roles": ["annotator"]})
+    assert out["user"]["roles"] == ["annotator"]
+    assert admin_err(service, "user_update", {"annotator_id": "ADMIN", "roles": ["expert"]}).code == "self"
+    assert admin_err(service, "user_add", {"annotator_id": "P1", "roles": ["participant"],
+                                           "email": "p1@example.org"}).code == "role_not_offered"
+    assert ok(service, "expert", E01, {"op": "replay_consent_get"})["consent"]["teaching"] is False
+    assert err(service, "expert", A01, {"op": "replay_consent_get"}).code == "forbidden"
+    assert ok(service, "expert", E01, {"op": "replay_consent_set", "teaching": True})["changed"] is True
+    assert admin_ok(service, "audit", {"limit": 1})["entries"][0]["op"] == "replay_consent_set"
+
+
+def firestore_delete() -> Any:
+    from google.cloud import firestore
+
+    return firestore.DELETE_FIELD
+
+
+def test_derived_versions_on_firestore(service: StudyService, recordings: Path, tmp_path: Path) -> None:
+    from electrotag.app.io.naming import OutputLayout
+    from electrotag.app.session.register import CompletionRegister
+    from electrotag.reliability.config import AnalysisConfig
+    from electrotag.reliability.data import load_dataset
+    from tests.web_helpers import derived_maker
+
+    store = service.store
+    ok(service, "submit", A01, submission(recordings, SUB1, [BLINK]))
+    ok(service, "submit", A01, {**submission(recordings, SUB1, [BLINK, EMG]), "revises": 1})
+    one = store.save_derived("corrections", derived_maker(store, "A01", SUB1, [EMG]), elapsed_s=2, started_at="")
+    two = store.save_derived("corrections", derived_maker(store, "A01", SUB1, [BLINK], by="E02"), elapsed_s=2,
+                             started_at="")
+    assert (one.attempt, two.attempt) == (1, 2) and len(one.files) == 5
+    assert [e["recording_id"] for e in store.derived_entries("corrections", "A01")] == [SUB1, SUB1]
+    assert store.derived_entries("adjudications") == []
+    assert len([e for e in store.completion_entries("A01") if e["recording_id"] == SUB1]) == 2  # unchanged
+    labels = lambda files: [a["label"] for a in json.loads(next(b for n, b in files.items()  # noqa: E731
+                                                                if n.endswith("_annotations.json")))["annotations"]]
+    assert labels(store.derived_files("corrections", "A01", SUB1)) == ["Eye-blink-artifact"]
+    assert labels(store.derived_files("corrections", "A01", SUB1, attempt=1)) == ["EMG-artifact"]
+    assert store.derived_files("corrections", "A01", SUB1, attempt=5) == {}
+    assert len(labels(store.saved_files("A01", SUB1, "standard", "", attempt=2))) == 2
+    assert labels(store.saved_files("A01", SUB1, "standard", "", attempt=1)) == ["Eye-blink-artifact"]
+    # the analyses' tree and the export put them in derived/corrections, with a register of their own
+    root = store.results_tree(tmp_path / "tree")
+    tree = OutputLayout(root / "derived" / "corrections")
+    assert len(CompletionRegister(tree).entries()) == 2
+    assert {a for a in load_dataset([root], AnalysisConfig()).groups[SUB1].docs} == {"A01"}
+    out = tmp_path / "export"
+    assert cli(["export", "--firebase-project", PROJECT, "--study", store.study_id, "--to", str(out)]) == 0
+    exported = OutputLayout(out / "Annotated_Events" / "derived" / "corrections")
+    assert len(CompletionRegister(exported).entries()) == 2
+    assert len(list((exported.root / "annotator-A01" / "sub-001" / "eeg").glob("*_annotations.json"))) == 2
+    assert cli(["export", "--firebase-project", PROJECT, "--study", store.study_id, "--to", str(out)]) == 0
+    assert len(CompletionRegister(exported).entries()) == 2  # exported twice, registered once
+
+
+def test_visit_index_paging_and_the_gate_status_on_firestore(service: StudyService) -> None:
+    store = service.store
+    v = ok(service, "visit_open", A01, {"client": {}})["visit_id"]
+    ok(service, "visit_events", A01, {"visit_id": v, "events": [
+        {"t": 1.0, "type": "recording_opened", "recording": SUB1, "window_no": 1, "session_id": "a" * 32,
+         "mode": "standard"}] + [{"t": 1.0 + i, "type": "key", "window_no": 1} for i in range(10)]})
+    ok(service, "visit_events", A01, {"visit_id": v, "events": [
+        {"t": 20.0, "type": "recording_finished", "recording": SUB1, "window_no": 1}]
+        + [{"t": 21.0 + i, "type": "key"} for i in range(10)]})
+    ok(service, "visit_close", A01, {"visit_id": v, "reason": "signed_out"})
+    rows = store.visit_index(v)
+    assert [(r["recording_id"], r["first_seq"], r["last_seq"], r["outcome"]) for r in rows] == [
+        (SUB1, 2, 13, "finished")]
+    seen, nxt = [], 0
+    while nxt is not None:
+        page = store.visit_log(v, from_seq=nxt, limit=7)  # pages that cross the batches
+        assert page["header"]["visit_id"] == v and len(page["events"]) <= 7
+        seen += [e["seq"] for e in page["events"]]
+        nxt = page["next_seq"]
+    assert seen == list(range(1, 25))
+    store.doc.collection("visits").document(v).update({"recordings": firestore_delete()})  # an older visit
+    assert [r["recording_id"] for r in store.visit_index(v)] == [SUB1]
+    assert store.visit_index("f" * 32) == []
+    # the competency status the gate reads, and assignments with a task
+    assert store.report_status("example", "T01") == ""
+    store.doc.collection("reports").document("example_T01").set({"status": "not_met", "status_text": "Not met"})
+    assert store.report_status("example", "T01") == "not_met"
+    assert store.assign("A02", [SUB1], task_id="t-000000000001") == 0  # assigned already: linked to the task
+    assert [a.task_id for a in store.assignments("A02") if a.recording_id == SUB1] == ["t-000000000001"]
+
+
+@pytest.mark.skipif(not AUTH, reason="needs the Auth emulator")
+def test_role_claims_on_firebase(study: str) -> None:
+    from firebase_admin import auth
+
+    from electrotag.web.firebase import firebase_app
+
+    svc = firebase_service(study)
+    app = firebase_app(PROJECT)
+    email = f"e01-{study}@example.org"
+    out = admin_ok(svc, "user_add", {"annotator_id": "E01", "email": email, "roles": ["annotator", "expert"],
+                                     "password": "an-expert-password"})
+    assert out["user"]["roles"] == ["expert", "annotator"]
+    user = auth.get_user_by_email(email, app=app)
+    assert user.custom_claims["roles"] == {study: ["expert", "annotator"]} and user.custom_claims["role"] == "expert"
+    admin_ok(svc, "user_update", {"annotator_id": "E01", "roles": ["annotator"]})
+    assert auth.get_user(user.uid, app=app).custom_claims["roles"] == {study: ["annotator"]}
+    if not FUNCTIONS:
+        return
+    admin_ok(svc, "user_update", {"annotator_id": "E01", "roles": ["annotator", "expert"]})
+    token = sign_in(email, "an-expert-password")
+    status, body = callable_("et_expert", {"study": study, "op": "replay_consent_get"}, token)
+    assert status == 200 and body["result"]["consent"]["teaching"] is False, body
+    _, body = callable_("et_me", {"study": study}, token)
+    assert body["result"]["roles"] == ["expert", "annotator"]
+    # taken away in the study: refused at once, although the token in hand still names the role
+    admin_ok(svc, "user_update", {"annotator_id": "E01", "roles": ["annotator"]})
+    _, body = callable_("et_expert", {"study": study, "op": "replay_consent_get"}, token)
+    assert body["error"]["status"] == "PERMISSION_DENIED" and body["error"]["details"]["error"] == "forbidden"
+    _, body = callable_("et_my_feedback", {"study": study}, token)
+    assert body["result"]["corrections"] == {"shown": True, "items": []}
+    annotator = sign_in(f"a01-{study}@example.org")
+    _, body = callable_("et_expert", {"study": study, "op": "replay_consent_get"}, annotator)
+    assert body["error"]["details"]["error"] == "forbidden"

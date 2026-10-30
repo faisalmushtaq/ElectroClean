@@ -32,7 +32,8 @@ test('the same quick types, scalings and filters as default_settings.json', () =
   assert.deepEqual(DEFAULT_QUICK_LABELS, s.annotation.quick_labels);
   assert.deepEqual(DEFAULT_SCALINGS, s.display.scalings);
   // every block the admin area shows, as the study server's settings_get gives them
-  assert.deepEqual(Object.keys(DEFAULT_SETTINGS), ['filters', 'display', 'channels', 'selection', 'logging', 'annotation', 'loading', 'discovery', 'gamification']);
+  assert.deepEqual(Object.keys(DEFAULT_SETTINGS), ['filters', 'display', 'channels', 'selection', 'logging', 'annotation', 'loading', 'discovery', 'gamification',
+    'review', 'training', 'replay']);
   for (const [block, values] of Object.entries(DEFAULT_SETTINGS)) assert.deepEqual(values, s[block], block);
 });
 

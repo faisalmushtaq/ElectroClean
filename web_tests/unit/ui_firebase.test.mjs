@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { FirebaseBackend, toApiError, authError } from '../../electrotag/web/static/js/api/firebase.js';
+import { FirebaseBackend, toApiError, authError, isExpertRead, claimedRoles } from '../../electrotag/web/static/js/api/firebase.js';
 
 class FakeHttpsError extends Error {
   constructor(code, message, details) { super(message); this.code = `functions/${code}`; this.details = details; }
@@ -143,4 +143,43 @@ test('achievements: read with a retry, changed without one', async () => {
   await assert.rejects(() => b.setAchievements({ goal_per_week: 5 }), (e) => e.code === 'network');
   assert.equal(writes, 1);
   assert.deepEqual(calls.at(-1).data, { study: 's', goal_per_week: 5 });
+});
+
+test('expert operations: only those that read are asked again, and the claims give the roles', async () => {
+  assert.ok(isExpertRead('work_list') && isExpertRead('saved_attempt_get') && isExpertRead('replay_consent_get'));
+  for (const op of ['correction_save', 'adjudication_decide', 'adjudication_start', 'library_promote', 'replay_consent_set', 'list_and_save']) {
+    assert.equal(isExpertRead(op), false, op);
+  }
+  let reads = 0;
+  let saves = 0;
+  const { sdk, calls } = fakeSdk({ handlers: {
+    et_expert: (d) => {
+      if (d.op === 'work_list') { reads += 1; if (reads === 1) throw new FakeHttpsError('unavailable', 'unavailable', {}); return { items: [] }; }
+      saves += 1;
+      throw new FakeHttpsError('internal', 'internal', {});
+    },
+    et_my_feedback: () => ({ corrections: { shown: true, items: [] } }),
+    et_training_stage: () => { throw new FakeHttpsError('unavailable', 'unavailable', {}); },
+    et_training_snippets: () => ({ snippets: [] }),
+  } });
+  const b = await FirebaseBackend.create({ config: {}, study: 's', sdk });
+  b.retryDelayMs = 1;
+  assert.deepEqual(await b.expert('work_list', { limit: 5 }), { items: [] });
+  assert.equal(reads, 2);
+  assert.deepEqual(calls[0].data, { study: 's', limit: 5, op: 'work_list' });
+  await assert.rejects(() => b.expert('correction_save', { correction_id: 'c'.repeat(32) }), (e) => e.status === 500);
+  assert.equal(saves, 1); // a save is never repeated by itself
+  await assert.rejects(() => b.trainingStage({ stage: 'tour', action: 'skip' }), (e) => e.code === 'network');
+  assert.equal(calls.filter((c) => c.name === 'et_training_stage').length, 1);
+  assert.equal((await b.myFeedback()).corrections.shown, true);
+  assert.deepEqual((await b.trainingSnippets()).snippets, []);
+  await assert.rejects(() => b.expert('Not An Op'), (e) => e.status === 400);
+  // roles in the claims: the list written now, or the older single role
+  assert.deepEqual(claimedRoles({ roles: { s: ['annotator', 'expert'] }, role: 'expert' }, 's'), ['expert', 'annotator']);
+  assert.deepEqual(claimedRoles({ roles: { s: 'admin' }, role: 'admin' }, 's'), ['admin']);
+  assert.deepEqual(claimedRoles({ role: 'annotator' }, 's'), ['annotator']);
+  const { sdk: sdk2 } = fakeSdk({ users: { 'e@example.org': { password: 'p', claims: { annotator_id: 'E01', role: 'expert', roles: { s: ['expert', 'annotator'] } } } } });
+  const e = await FirebaseBackend.create({ config: {}, study: 's', sdk: sdk2 });
+  const who = await e.login('e@example.org', 'p');
+  assert.deepEqual([who.role, who.roles], ['expert', ['expert', 'annotator']]);
 });

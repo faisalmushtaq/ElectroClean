@@ -21,7 +21,7 @@ from electrotag.app.annotations.labels import default_catalogue  # noqa: E402
 COMFORT_KEYS = ("break_reminder_minutes", "idle_pause_minutes", "coverage_check", "confidence")
 #: The settings blocks a study's administrator sees and may change (electrotag/web/admin.py SETTINGS_BLOCKS).
 SETTINGS_BLOCKS = ("filters", "display", "channels", "selection", "logging", "annotation", "loading", "discovery",
-                   "gamification")
+                   "gamification", "review", "training", "replay")
 
 
 def main() -> int:

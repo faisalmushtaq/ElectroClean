@@ -174,6 +174,33 @@ class Coach:
         return {"set_id": rs.set_id, "name": rs.name or rs.set_id, "description": rs.description,
                 "stages": stages, "next": next_view, "complete": nxt.stage is None, "message": nxt.text}
 
+    # ------------------------------------------------- the five-stage path (later part)
+    #: The stages of ``POST /training/stage`` and what may be done to them (docs/web/api.md, "Training stages").
+    STAGE_KEYS = ("tour", "snippets", "guided", "practice", "assessment")
+    STAGE_ACTIONS = ("skip", "done", "resume")
+
+    def stage_action(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        """``POST /training/stage``: the request is checked here; skipping, finishing and resuming the stages of
+        the five-stage path come with that path (until then the study answers 501 ``not_offered``)."""
+        stage, action = body.get("stage"), body.get("action")
+        if stage not in self.STAGE_KEYS or action not in self.STAGE_ACTIONS:
+            raise self._api(400, "bad_request", "stage must be one of tour, snippets, guided, practice or assessment, "
+                            "and action one of skip, done or resume")
+        if stage == "assessment" and action == "skip":
+            raise self._api(409, "cannot_skip", "The competency assessment cannot be skipped: it is passed before "
+                            "real study work begins.")
+        if not self.store.programme(user.annotator_id):
+            raise self._api(404, "no_programme", "You are not taking part in a training programme")
+        raise self._api(501, "not_offered", "This study does not offer the training path's stages yet.")
+
+    def snippets_view(self, user: User) -> dict[str, Any]:
+        """``GET /training/snippets``: the artifact snippets of the trainee's set and the manifests of their
+        recordings. Sets keep no snippets yet, so the gallery is empty (and its quiz is the set's own)."""
+        set_id = self.store.programme(user.annotator_id)
+        if not set_id:
+            raise self._api(404, "no_programme", "You are not taking part in a training programme")
+        return {"set_id": set_id, "snippets": [], "recordings": {}, "quiz": None}
+
     # -------------------------------------------------------------- guided
     def _guided(self, user: User, recording_id: str) -> tuple[ReferenceSet, WorkItem]:
         items = [i for i in self.service.work_items(user) if i.mode == "guided" and i.recording_id == recording_id]

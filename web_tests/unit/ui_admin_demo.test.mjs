@@ -52,7 +52,8 @@ test('only administrators can use the admin area; ADMIN is a built-in account', 
   assert.equal((await b.me()).role, 'admin');
   const o = await b.admin('overview');
   // T01's practice recording is not counted while its stage is locked, as on the server
-  assert.deepEqual(o.counts, { recordings: 3, annotators: 2, admins: 1, assignments: 5, done: 0, in_progress: 0, todo: 5, unusable: 0, problems_open: 0, reviewed: 0 });
+  // E01, the built-in expert, annotates too: each account counts under every role it holds
+  assert.deepEqual(o.counts, { recordings: 3, annotators: 3, experts: 1, admins: 1, assignments: 5, done: 0, in_progress: 0, todo: 5, unusable: 0, problems_open: 0, reviewed: 0 });
   assert.deepEqual(o.recent, []);
   await assert.rejects(() => b.admin('no_such_operation'), (e) => e.status === 404);
 });
@@ -196,7 +197,8 @@ test('study settings: checked, changed block by block, and used by the demonstra
   const before = await b.admin('settings_get');
   // The demonstration's own notice says plainly that typed text is never recorded.
   assert.match(before.logging_notice, /never records what you type/);
-  assert.deepEqual(Object.keys(before.settings).sort(), ['annotation', 'channels', 'discovery', 'display', 'filters', 'gamification', 'loading', 'logging', 'selection']);
+  assert.deepEqual(Object.keys(before.settings).sort(), ['annotation', 'channels', 'discovery', 'display', 'filters', 'gamification', 'loading', 'logging', 'replay', 'review',
+    'selection', 'training']);
   await assert.rejects(() => b.admin('settings_update', { settings: { filters: { notch_hz: 55 } } }), (e) => e.status === 400 && e.code === 'invalid_settings');
   await assert.rejects(() => b.admin('settings_update', { settings: { output: { directory: '/' } } }), (e) => e.code === 'invalid_settings');
   const quick = ['EMG-artifact', 'Eye-blink-artifact', 'Chewing-artifact'];

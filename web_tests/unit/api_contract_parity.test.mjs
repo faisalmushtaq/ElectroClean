@@ -42,7 +42,7 @@ const PYTHON = findPython();
 //   any       anything, or missing on one side
 const TIMES = ['saved_at', 'created_at', 'modified_at', 'reported_at', 'reviewed_at', 'registered_at', 'first_saved_at', 'completed_at',
   'generated_at', 'started_at', 'answered_at', 'finished_at', 'closed_at', 'last_seen', 'last_activity', 'last_active', 'at', 'resolved_at',
-  'returned_at', 'expires_at', 'invited_at', 'ended_at', 'added_at', 'save_times\\[\\]', 'today', 'days\\[\\]'].join('|');
+  'returned_at', 'expires_at', 'invited_at', 'ended_at', 'added_at', 'changed_at', 'save_times\\[\\]', 'today', 'days\\[\\]'].join('|');
 export const ALLOWED = [
   ['.*', `(.*\\.)?(${TIMES})`, 'type', 'times: each side stamps its own'],
   ['.*', '(.*\\.)?(token|visit_id|session_id|problem_id|review_id|annotation\\.annotation_id)', 'type', 'IDs and tokens: each side makes its own'],
@@ -141,7 +141,7 @@ function writeSandbox(dir) {
   const truthOf = (rid) => truthAnnotations(SPECS[RIDS.indexOf(rid)]);
   const sandbox = {
     study_id: 'demo', study_name: admin.name,
-    users: admin.users.map((u) => ({ annotator_id: u.annotator_id, display_name: u.display_name, role: u.role, password: PY_PASSWORD })),
+    users: admin.users.map((u) => ({ annotator_id: u.annotator_id, display_name: u.display_name, role: u.role, roles: u.roles, password: PY_PASSWORD })),
     assignments: Object.fromEntries([...new Set(admin.assignments.map((a) => a.annotator_id))]
       .map((aid) => [aid, RIDS.filter((rid) => admin.assignments.some((a) => a.annotator_id === aid && a.recording_id === rid))])),
     programmes: Object.fromEntries(admin.users.filter((u) => u.programme).map((u) => [u.annotator_id, u.programme])),
@@ -263,6 +263,23 @@ async function script(call) {
   await call('visit events', (s) => s.b.sendEvents(s.mem.visit, [{ t: 1.5, wall: STAMP, type: 'key_press', key: 'b' }, { t: 2, wall: STAMP, type: 'view_change' }]));
   await call('visit close', (s) => s.b.closeVisit(s.mem.visit, 'signed_out'));
   await call('admin as an annotator', (s) => s.b.admin('overview', {}));
+  await call('expert as an annotator', (s) => s.b.expert('replay_consent_get', {}));
+  await call('my feedback', (s) => s.b.myFeedback());
+  await call('training stage (not a trainee)', (s) => s.b.trainingStage({ stage: 'tour', action: 'skip' }));
+  await call('training snippets (not a trainee)', (s) => s.b.trainingSnippets());
+  await call('logout', (s) => s.b.logout());
+
+  // ------------------------------------------------------------ an expert who also annotates (E01)
+  await call('login', (s) => s.b.login('E01', s.password));
+  await call('me (expert)', (s) => s.b.me());
+  await call('assignments (expert)', (s) => s.b.assignments());
+  await call('expert replay_consent_get', (s) => s.b.expert('replay_consent_get', {}));
+  await call('expert replay_consent_set', (s) => s.b.expert('replay_consent_set', { teaching: true }));
+  await call('expert replay_consent_set (again)', (s) => s.b.expert('replay_consent_set', { teaching: true }));
+  await call('expert replay_consent_set (not a choice)', (s) => s.b.expert('replay_consent_set', { teaching: 'yes' }));
+  await call('expert replay_consent_get (after)', (s) => s.b.expert('replay_consent_get', {}));
+  await call('expert unknown operation', (s) => s.b.expert('frobnicate_list', {}));
+  await call('admin as an expert', (s) => s.b.admin('overview', {}));
   await call('logout', (s) => s.b.logout());
 
   // ------------------------------------------------------------ the administrator (ADMIN)
@@ -287,6 +304,16 @@ async function script(call) {
   await call('admin unassign (finished)', (s) => s.b.admin('unassign', { annotator_id: 'A01', recording_id: r1, mode: 'standard', context_id: '' }));
   await call('admin user_update', (s) => s.b.admin('user_update', { annotator_id: 'A02', notes: 'Starts on Monday' }));
   await call('admin user_update (own role)', (s) => s.b.admin('user_update', { annotator_id: 'ADMIN', role: 'annotator' }));
+  await call('admin user_update (own roles)', (s) => s.b.admin('user_update', { annotator_id: 'ADMIN', roles: ['annotator', 'expert'] }));
+  await call('admin user_add (an expert)', (s) => s.b.admin('user_add', { annotator_id: 'e02', display_name: 'Second expert', roles: ['annotator', 'expert'], password: 'long enough' }));
+  await call('admin user_add (participant)', (s) => s.b.admin('user_add', { annotator_id: 'P01', roles: ['participant'] }));
+  await call('admin user_add (reserved ID)', (s) => s.b.admin('user_add', { annotator_id: 'adjudicated' }));
+  await call('admin user_add (roles disagree)', (s) => s.b.admin('user_add', { annotator_id: 'P02', role: 'annotator', roles: ['admin'] }));
+  await call('admin user_add (no roles)', (s) => s.b.admin('user_add', { annotator_id: 'P03', roles: [] }));
+  await call('admin user_update (roles)', (s) => s.b.admin('user_update', { annotator_id: 'A02', roles: ['expert', 'annotator'] }));
+  await call('admin user_update (same roles)', (s) => s.b.admin('user_update', { annotator_id: 'A02', roles: ['annotator', 'expert'] }));
+  await call('admin user_update (one role)', (s) => s.b.admin('user_update', { annotator_id: 'A02', role: 'annotator' }));
+  await call('admin expert operations', (s) => s.b.expert('replay_consent_get', {}));
   await call('admin recording_update', (s) => s.b.admin('recording_update', { scope: 'study', recording_id: r2, notes: 'T7 is noisy' }));
   await call('admin problem_resolve', (s) => s.b.admin('problem_resolve', { problem_id: hex(0xa1), note: 'Known; carry on' }));
   await call('admin problem_resolve (again)', (s) => s.b.admin('problem_resolve', { problem_id: hex(0xa1) }));
@@ -311,6 +338,10 @@ async function script(call) {
   await call('login', (s) => s.b.login('T01', s.password));
   await call('me (trainee)', (s) => s.b.me());
   await call('training (new)', (s) => s.b.training());
+  await call('training stage (skip the assessment)', (s) => s.b.trainingStage({ stage: 'assessment', action: 'skip' }));
+  await call('training stage (no such stage)', (s) => s.b.trainingStage({ stage: 'lunch', action: 'skip' }));
+  await call('training stage (skip the tour)', (s) => s.b.trainingStage({ stage: 'tour', action: 'skip' }));
+  await call('training snippets', (s) => s.b.trainingSnippets());
   await call('assignments (trainee)', (s) => s.b.assignments());
   await call('match practice before the guided recordings', async (s) => s.b.match(await matchBody(r3)));
   for (const [gi, g] of TRAINING_SET.guided.entries()) {

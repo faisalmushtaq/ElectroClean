@@ -32,7 +32,8 @@ OPERATIONS = {"et_me": "me", "et_assignments": "assignments", "et_match": "match
               "et_visit_open": "visit_open", "et_visit_events": "visit_events", "et_visit_close": "visit_close",
               "et_admin_progress": "admin_progress", "et_admin": "admin", "et_quiz": "quiz",
               "et_achievements": "achievements", "et_problem_report": "problem_report",
-              "et_my_reviews": "my_reviews"}
+              "et_my_reviews": "my_reviews", "et_expert": "expert", "et_my_feedback": "my_feedback",
+              "et_training_stage": "training_stage", "et_training_snippets": "training_snippets"}
 
 
 def load_main():
@@ -124,7 +125,7 @@ def test_administrators_need_the_claim_and_the_account(main) -> None:
     assert e.value.code.value == "permission-denied" and e.value.details["error"] == "forbidden"
     admin_claims = {"annotator_id": "ADMIN", "roles": {"demo": "admin"}, "studies": ["demo"], "role": "admin"}
     p = call(main, "et_admin_progress", {"study": "demo"}, admin_claims)
-    assert {a["annotator_id"] for a in p["annotators"]} == {"ADMIN", "A01", "A02", "T01"}
+    assert {a["annotator_id"] for a in p["annotators"]} == {"ADMIN", "A01", "A02", "T01", "E01"}
     # a claim alone is not enough: A01's account in the study is an annotator's
     with pytest.raises(https_fn.HttpsError):
         call(main, "et_admin_progress", {"study": "demo"}, {**A01, "roles": {"demo": "admin"}, "role": "admin"})
@@ -164,6 +165,42 @@ def test_the_admin_area_and_the_quiz_as_callables(main) -> None:
     assert call(main, "et_me", {"study": "demo"}, A01)["quizzes"][0]["finished"] is True
     entries = call(main, "et_admin", {"study": "demo", "op": "audit", "limit": 5}, ADMIN)["entries"]
     assert entries[0]["op"] == "quiz_item_add" and entries[0]["by"] == "ADMIN"
+
+
+def test_a_privileged_role_needs_both_the_claim_and_the_account(main) -> None:
+    endpoint = main.et_expert.__firebase_endpoint__
+    assert endpoint.availableMemoryMb == 1024 and endpoint.timeoutSeconds == 300
+    e01 = {"annotator_id": "E01", "roles": {"demo": ["annotator", "expert"]}, "studies": ["demo"], "role": "expert"}
+    got = call(main, "et_expert", {"study": "demo", "op": "replay_consent_get"}, e01)
+    assert got["consent"]["teaching"] is False
+    me = call(main, "et_me", {"study": "demo"}, e01)
+    assert me["roles"] == ["expert", "annotator"] and me["role"] == "expert"
+    # claims written before E01 was made an expert (the older single role): an annotator for now
+    stale = {"annotator_id": "E01", "roles": {"demo": "annotator"}, "studies": ["demo"], "role": "annotator"}
+    with pytest.raises(https_fn.HttpsError) as e:
+        call(main, "et_expert", {"study": "demo", "op": "replay_consent_get"}, stale)
+    assert e.value.code.value == "permission-denied" and e.value.details["error"] == "forbidden"
+    assert call(main, "et_me", {"study": "demo"}, stale)["roles"] == ["annotator"]
+    # a claim alone is not enough: A01's account in the study is an annotator's
+    with pytest.raises(https_fn.HttpsError) as e:
+        call(main, "et_expert", {"study": "demo", "op": "replay_consent_get"},
+             {**A01, "roles": {"demo": ["annotator", "expert", "admin"]}})
+    assert e.value.details["error"] == "forbidden"
+    # an administrator may use every expert operation
+    assert call(main, "et_expert", {"study": "demo", "op": "replay_consent_get"}, ADMIN)["consent"]["teaching"] is False
+    with pytest.raises(https_fn.HttpsError) as e:
+        call(main, "et_expert", {"study": "demo", "op": "nothing"}, ADMIN)
+    assert e.value.code.value == "not-found"
+    fb = call(main, "et_my_feedback", {"study": "demo"}, A01)
+    assert fb["corrections"] == {"shown": True, "items": []}
+    t01 = {"annotator_id": "T01", "roles": {"demo": ["annotator"]}, "studies": ["demo"], "role": "annotator"}
+    with pytest.raises(https_fn.HttpsError) as e:
+        call(main, "et_training_stage", {"study": "demo", "stage": "assessment", "action": "skip"}, t01)
+    assert e.value.details["error"] == "cannot_skip"
+    with pytest.raises(https_fn.HttpsError) as e:
+        call(main, "et_training_stage", {"study": "demo", "stage": "tour", "action": "done"}, t01)
+    assert e.value.code.value == "unimplemented" and e.value.details["error"] == "not_offered"
+    assert call(main, "et_training_snippets", {"study": "demo"}, t01)["snippets"] == []
 
 
 def test_unexpected_errors_are_hidden(main, monkeypatch: pytest.MonkeyPatch) -> None:

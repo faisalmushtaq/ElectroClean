@@ -32,6 +32,18 @@ COVERAGE_CHECKS = ("warn", "off")
 #: are asked to rate each new mark; no mark starts with a rating). "off" and "on" are read as these.
 CONFIDENCE_SETTINGS = ("optional", "every_mark")
 _CONFIDENCE_ALIASES = {"off": "optional", "on": "every_mark"}
+#: review.reason_required: when an adjudicator gives a reason for a decision (always; only when they keep
+#: neither version or edit a mark; never).
+REASON_RULES = ("always", "edited_or_none", "never")
+#: The ways two marks are matched (electrotag.reliability.config.MATCH_CRITERIA; kept here so that reading
+#: the settings never loads the agreement analysis, and checked to be the same by the tests).
+MATCH_CRITERIA = ("iou", "tolerance", "iou_and_tolerance")
+MATCHING_KEYS = ("match_criterion", "iou_threshold", "onset_tolerance_s", "offset_tolerance_s", "channel_jaccard")
+#: The five stages of the training path, and those a trainee may be allowed to skip (never the assessment).
+TRAINING_STAGES = ("tour", "snippets", "guided", "practice", "assessment")
+SKIPPABLE_STAGES = ("tour", "snippets", "guided", "practice")
+#: training.gate: real study work waits for a passed assessment ("met"), a finished one ("completed"), or nothing.
+TRAINING_GATES = ("met", "completed", "off")
 
 
 class SettingsError(ValueError):
@@ -167,6 +179,118 @@ def _flag(block: dict[str, Any], name: str, key: str, default: bool) -> bool:
     return value
 
 
+def _whole(block: dict[str, Any], name: str, key: str, default: int, low: int, high: int, what: str) -> int:
+    value = block.get(key, default)
+    if (isinstance(value, bool) or not isinstance(value, (int, float)) or int(value) != value
+            or not low <= value <= high):
+        raise SettingsError(f"{name}.{key} must be a whole number from {low} to {high} ({what})")
+    return int(value)
+
+
+def _block(data: dict[str, Any], name: str) -> dict[str, Any]:
+    block = data.get(name, {}) or {}
+    if not isinstance(block, dict):
+        raise SettingsError(f"{name} must be a block of settings")
+    return block
+
+
+@dataclass(frozen=True)
+class ReviewSettings:
+    """review: corrections of saved work and the adjudication of disagreements (docs/administrator_guide.md)."""
+
+    corrections: bool = True  # experts may correct saved work, as new versions linked to the original
+    show_corrections_to_annotators: bool = True  # annotators see the corrections of their work, with the reasons
+    k_default: int = 2  # annotators per task when tasks are made
+    show_outcomes_to_annotators: bool = True  # annotators see the decisions on the conflicts in their work
+    reason_required: str = "always"  # REASON_RULES
+    matching: dict[str, Any] = field(default_factory=lambda: {
+        "match_criterion": "iou", "iou_threshold": 0.2, "onset_tolerance_s": 0.5, "offset_tolerance_s": 0.5,
+        "channel_jaccard": 0.5})
+    gold_min_items: int = 3  # known-answer items scored before a person's accuracy weighs their marks
+
+    @classmethod
+    def from_dict(cls, block: dict[str, Any]) -> ReviewSettings:
+        d = cls()
+        matching = block.get("matching", d.matching)
+        if not isinstance(matching, dict):
+            raise SettingsError("review.matching must be a block of settings (match_criterion, iou_threshold, ...)")
+        unknown = sorted(set(matching) - set(MATCHING_KEYS))
+        if unknown:
+            raise SettingsError(f"review.matching has no setting {unknown[0]!r}; it has {', '.join(MATCHING_KEYS)}")
+        m = {**d.matching, **matching}
+        if m["match_criterion"] not in MATCH_CRITERIA:
+            raise SettingsError(f"review.matching.match_criterion must be one of {', '.join(MATCH_CRITERIA)}")
+        for key, low, high in (("iou_threshold", 0.0, 1.0), ("onset_tolerance_s", 0.0, 60.0),
+                               ("offset_tolerance_s", 0.0, 60.0), ("channel_jaccard", 0.0, 1.0)):
+            v = m[key]
+            if isinstance(v, bool) or not isinstance(v, (int, float)) or not low <= v <= high or v != v:
+                raise SettingsError(f"review.matching.{key} must be a number from {low:g} to {high:g}")
+            m[key] = float(v)
+        if m["iou_threshold"] >= 1:
+            raise SettingsError("review.matching.iou_threshold must be below 1 (0 counts any overlap)")
+        reason = block.get("reason_required", d.reason_required)
+        if reason not in REASON_RULES:
+            raise SettingsError('review.reason_required must be "always", "edited_or_none" (only when the '
+                                'adjudicator keeps neither version or edits a mark) or "never"')
+        return cls(
+            corrections=_flag(block, "review", "corrections", d.corrections),
+            show_corrections_to_annotators=_flag(block, "review", "show_corrections_to_annotators",
+                                                 d.show_corrections_to_annotators),
+            k_default=_whole(block, "review", "k_default", d.k_default, 2, 6, "annotators per task"),
+            show_outcomes_to_annotators=_flag(block, "review", "show_outcomes_to_annotators",
+                                              d.show_outcomes_to_annotators),
+            reason_required=str(reason), matching=m,
+            gold_min_items=_whole(block, "review", "gold_min_items", d.gold_min_items, 1, 100,
+                                  "known-answer items before a person's accuracy counts"),
+        )
+
+
+@dataclass(frozen=True)
+class TrainingPolicy:
+    """training: which stages of the training path a trainee may skip, and what real study work waits for."""
+
+    skippable: tuple[str, ...] = SKIPPABLE_STAGES
+    gate: str = "met"  # TRAINING_GATES
+    tour: bool = True  # the training path begins with the platform tour
+    snippets_quiz_required: bool = False  # the snippets stage is done only once its recognition check is finished
+
+    @classmethod
+    def from_dict(cls, block: dict[str, Any]) -> TrainingPolicy:
+        d = cls()
+        skippable = block.get("skippable", list(d.skippable))
+        if not isinstance(skippable, list) or not all(isinstance(x, str) for x in skippable):
+            raise SettingsError("training.skippable must be a list of stages (tour, snippets, guided, practice)")
+        if "assessment" in skippable:
+            raise SettingsError("training.skippable cannot include the assessment: trainees must pass the blind "
+                                "assessment before real study work")
+        unknown = [x for x in skippable if x not in SKIPPABLE_STAGES]
+        if unknown:
+            raise SettingsError(f"training.skippable names {unknown[0]!r}, which is not a stage; the stages that "
+                                f"can be skipped are {', '.join(SKIPPABLE_STAGES)}")
+        gate = block.get("gate", d.gate)
+        if gate not in TRAINING_GATES:
+            raise SettingsError('training.gate must be "met" (study work waits until the assessment is passed), '
+                                '"completed" (until it is done) or "off"')
+        return cls(skippable=tuple(x for x in SKIPPABLE_STAGES if x in skippable), gate=str(gate),
+                   tour=_flag(block, "training", "tour", d.tour),
+                   snippets_quiz_required=_flag(block, "training", "snippets_quiz_required",
+                                                d.snippets_quiz_required))
+
+
+@dataclass(frozen=True)
+class ReplaySettings:
+    """replay: who may watch a step-by-step replay of a session, from its interaction log."""
+
+    enabled: bool = True  # experts and administrators may replay annotators' sessions
+    trainees_watch_experts: bool = True  # trainees may watch the sessions of experts who have agreed to it
+
+    @classmethod
+    def from_dict(cls, block: dict[str, Any]) -> ReplaySettings:
+        d = cls()
+        return cls(enabled=_flag(block, "replay", "enabled", d.enabled),
+                   trainees_watch_experts=_flag(block, "replay", "trainees_watch_experts", d.trainees_watch_experts))
+
+
 @dataclass(frozen=True)
 class Settings:
     """All application settings after merging defaults and study overrides."""
@@ -213,6 +337,10 @@ class Settings:
     idle_pause_minutes: float = 3.0  # minutes without input after which the clock pauses itself (0: never)
     coverage_check: str = "warn"  # "warn": Save and Finish lists the parts never on screen; "off"
     confidence: str = "optional"  # CONFIDENCE_SETTINGS: how sure the annotator is of each mark (docs/web/using.md)
+    # review, training and replay: corrections and adjudication, the training path's policy, and replays.
+    review: ReviewSettings = field(default_factory=ReviewSettings)
+    training: TrainingPolicy = field(default_factory=TrainingPolicy)
+    replay: ReplaySettings = field(default_factory=ReplaySettings)
     raw: dict[str, Any] = field(repr=False, default_factory=dict)
 
     @classmethod
@@ -278,6 +406,9 @@ class Settings:
                 gamification_enabled=_flag(games, "gamification", "enabled", True),
                 gamification_leaderboard=_flag(games, "gamification", "leaderboard", True),
                 gamification_leaderboard_viewed_only=_flag(games, "gamification", "leaderboard_viewed_only", False),
+                review=ReviewSettings.from_dict(_block(data, "review")),
+                training=TrainingPolicy.from_dict(_block(data, "training")),
+                replay=ReplaySettings.from_dict(_block(data, "replay")),
                 raw=copy.deepcopy(data),
             )
         except KeyError as exc:  # pragma: no cover - defaults always complete

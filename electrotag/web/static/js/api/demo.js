@@ -20,6 +20,8 @@ import { ApiError } from './http.js';
 import { DEMO_NOTICE } from './notice.js';
 import { DemoAdmin } from './demo_admin.js';
 import { DemoFeedback } from './demo_feedback.js';
+import { DemoExpert } from './demo_expert.js';
+import { primaryRole, rolesOf } from '../admin/model.js';
 
 export { DEMO_NOTICE };
 import * as rules from '../training/rules.js';
@@ -213,6 +215,7 @@ export class DemoBackend {
     this.state = { ...emptyState(), ...(storage.get(STATE_KEY, null) || {}) };
     this._admin = new DemoAdmin(this);
     this.feedback = new DemoFeedback(this); // problem reports and reviews (demo_feedback.js)
+    this.experts = new DemoExpert(this); // the expert area's operations (demo_expert.js)
     const saved = tokens.get(TOKEN_KEY, null);
     const user = saved ? this._admin.user(saved.annotator_id) : null;
     this.annotatorId = user && user.status === 'active' ? user.annotator_id : null;
@@ -251,7 +254,7 @@ export class DemoBackend {
     const user = this._admin.user(aid);
     if (!user || !this._admin.passwordOk(aid, password)) {
       throw new ApiError(401, 'bad_credentials',
-        `The ID or password is not right. In the demonstration, sign in as A01, T01 or ADMIN with the password ${DEMO_PASSWORD}.`);
+        `The ID or password is not right. In the demonstration, sign in as A01, T01, E01 or ADMIN with the password ${DEMO_PASSWORD}.`);
     }
     if (user.status !== 'active') throw new ApiError(403, 'account_disabled', 'This account has been switched off. Ask the study team.');
     return this._signInAs(user);
@@ -263,7 +266,8 @@ export class DemoBackend {
     this._admin.touch(aid);
     const token = `demo-${newId()}`;
     this.tokens.set(TOKEN_KEY, { annotator_id: aid, token });
-    return { token, expires_in_s: 43200, annotator_id: aid, display_name: user.display_name, role: user.role };
+    const roles = rolesOf(user);
+    return { token, expires_in_s: 43200, annotator_id: aid, display_name: user.display_name, role: primaryRole(roles), roles };
   }
 
   /** The sandbox takes private invitation links (?invite=<token>) made in its admin area, in this browser. */
@@ -287,7 +291,7 @@ export class DemoBackend {
     if (!acc) throw new ApiError(401, 'not_signed_in', 'Please sign in again.');
     const quiz = this._quizState(aid, false);
     return {
-      annotator_id: aid, display_name: acc.display_name, role: acc.role,
+      annotator_id: aid, display_name: acc.display_name, role: primaryRole(rolesOf(acc)), roles: rolesOf(acc),
       study: this._admin.studyBlock(),
       catalogue: CATALOGUE,
       programme: this._inProgramme(aid) ? { set_id: TRAINING_SET.set_id, name: this._exampleSet().name, complete: !this._nextStep(aid).stage } : null,
@@ -866,7 +870,7 @@ export class DemoBackend {
 
   _team() {
     if (!this.state.secret) { this.state.secret = sha256Hex(new TextEncoder().encode(`${newId()}${newId()}`)); this._save(); }
-    const people = this._admin.s.users.filter((u) => u.role !== 'admin')
+    const people = this._admin.s.users.filter((u) => rolesOf(u).includes('annotator'))
       .sort((x, y) => String(x.created_at || '').localeCompare(String(y.created_at || '')) || (x.annotator_id < y.annotator_id ? -1 : 1));
     const ids = people.map((u) => u.annotator_id);
     const names = {};
@@ -1367,6 +1371,39 @@ export class DemoBackend {
   // ------------------------------------------------------------ administration
   /** The admin area's operations (docs/web/api.md, "Administration"), in this browser: demo_admin.js. */
   async admin(op, body = {}) { return this._admin.run(op, body || {}); }
+
+  // ---------------------------------------------------------------- experts
+  /** The expert area's operations (docs/web/api.md, "Experts"), in this browser: demo_expert.js. */
+  async expert(op, body = {}) { return this.experts.run(op, body || {}); }
+
+  /** GET /me/feedback: the corrections of the annotator's work and the outcomes of its conflicts, when shown. */
+  async myFeedback() {
+    this._aid();
+    const r = (this._admin.s.settings || {}).review || {};
+    return { corrections: { shown: r.show_corrections_to_annotators !== false, items: [] },
+      adjudications: { shown: r.show_outcomes_to_annotators !== false, items: [] } };
+  }
+
+  /** POST /training/stage: checked as coach.py checks it; the five-stage path comes later (501 not_offered). */
+  async trainingStage(body = {}) {
+    const aid = this._aid();
+    const b = body || {};
+    if (!['tour', 'snippets', 'guided', 'practice', 'assessment'].includes(b.stage) || !['skip', 'done', 'resume'].includes(b.action)) {
+      throw new ApiError(400, 'bad_request', 'stage must be one of tour, snippets, guided, practice or assessment, and action one of skip, done or resume');
+    }
+    if (b.stage === 'assessment' && b.action === 'skip') {
+      throw new ApiError(409, 'cannot_skip', 'The competency assessment cannot be skipped: it is passed before real study work begins.');
+    }
+    if (!this._inProgramme(aid)) throw new ApiError(404, 'no_programme', 'You are not taking part in a training programme');
+    throw new ApiError(501, 'not_offered', 'This study does not offer the training path\'s stages yet.');
+  }
+
+  /** GET /training/snippets: the artifact snippets of the trainee's set (none yet). */
+  async trainingSnippets() {
+    const aid = this._aid();
+    if (!this._inProgramme(aid)) throw new ApiError(404, 'no_programme', 'You are not taking part in a training programme');
+    return { set_id: TRAINING_SET.set_id, snippets: [], recordings: {}, quiz: null };
+  }
 
   /** Forget everything saved by the sandbox in this browser. */
   reset() {

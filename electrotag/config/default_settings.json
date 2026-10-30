@@ -72,5 +72,25 @@
     "enabled": true,
     "leaderboard": true,
     "leaderboard_viewed_only": false
+  },
+  "review": {
+    "corrections": true,
+    "show_corrections_to_annotators": true,
+    "k_default": 2,
+    "show_outcomes_to_annotators": true,
+    "reason_required": "always",
+    "matching": {"match_criterion": "iou", "iou_threshold": 0.2, "onset_tolerance_s": 0.5,
+                 "offset_tolerance_s": 0.5, "channel_jaccard": 0.5},
+    "gold_min_items": 3
+  },
+  "training": {
+    "skippable": ["tour", "snippets", "guided", "practice"],
+    "gate": "met",
+    "tour": true,
+    "snippets_quiz_required": false
+  },
+  "replay": {
+    "enabled": true,
+    "trainees_watch_experts": true
   }
 }
