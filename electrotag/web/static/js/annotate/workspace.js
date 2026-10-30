@@ -43,6 +43,8 @@ import { mapLayout, projectPositions } from '../viewer/head_map.js';
 import { readElectrodes, sidecarsOf } from '../eeg/electrodes.js';
 import { centredStart, clampTime, parseTimeText } from './goto.js';
 import { forgetOpen, noteOpen } from './reopen.js';
+import { loadPart } from '../lazy.js';
+import { noteForGuideTab } from '../guide/artifacts.js';
 import { CONTEXT_S, boundsOf, itemWindow, outsideStretches } from '../viewer/bounds.js';
 
 export { friendlyDuration, plural };
@@ -369,7 +371,7 @@ export class Workspace {
     clear(this.side);
     this.coachHost = h('div.coach-host');
     this.reviewHost = h('div.review-host');
-    const tabs = [['annotations', 'Annotations'], ['recording', 'Recording'], ['help', 'Help']];
+    const tabs = [['annotations', 'Annotations'], ['recording', 'Recording'], ['guide', 'Guide'], ['help', 'Help']];
     this.tabButtons = {};
     this.tabPanels = {};
     const bar = h('div.tabs', { role: 'tablist' });
@@ -381,6 +383,13 @@ export class Workspace {
     }
     this._annotationsPanel();
     this._recordingPanel();
+    // The artifact reference guide (js/guide/guide.js): beside the EEG in the Guide tab, or in a tab of its own.
+    this.tabPanels.help.appendChild(h('div.help-guide', {},
+      h('p', {}, h('b', {}, 'Artifact reference guide. '), 'Every artifact type with its definition, what it looks like, how to tell it from look-alikes and an example.'),
+      h('div.btn-row', {},
+        h('button.btn.small', { type: 'button', 'data-log': 'help-guide', onclick: () => this.showGuide() }, 'Open beside the EEG'),
+        h('a.btn.small.quiet', { href: './#guide', target: '_blank', rel: 'noopener', 'data-log': 'help-guide-tab',
+          onclick: () => { noteForGuideTab(this.quick); logger.event('guide_opened', { where: 'tab', label: null }); } }, 'Open in a new tab'))));
     this.tabPanels.help.appendChild(h('div.help-text', { html: helpHtml(touchFirst(), { training: ['guided', 'practice'].includes(this.s.mode) && this.kind === 'annotate' }) }));
     this.side.append(this.coachHost, this.reviewHost, h('div.side-tabs', {}, bar, ...Object.values(this.tabPanels)));
     this.showTab('annotations');
@@ -391,9 +400,28 @@ export class Workspace {
       b.setAttribute('aria-selected', String(k === key));
       this.tabPanels[k].hidden = k !== key;
     }
+    if (key === 'guide' && !this.guideView && !this._guideLoad) void this.showGuide();
   }
 
   showHelp() { this.showTab('help'); this.tabPanels.help.scrollTop = 0; }
+
+  /** The Guide tab, at a type if given; the guide loads with its first showing (a failed load is tried again next time). */
+  async showGuide(label = null) {
+    if (!this.guideView && !this._guideLoad) {
+      this._guideLoad = loadPart('guide').then(({ mountGuidePanel }) => {
+        if (this._destroyed || this.guideView) return;
+        this.guideView = mountGuidePanel(this, this.tabPanels.guide);
+        logger.event('guide_opened', { where: 'panel', label });
+        this.onDestroy(() => this.guideView && this.guideView.destroy());
+      }, () => { this.say('The guide could not be loaded. Check the connection, then choose Guide again.'); })
+        .finally(() => { this._guideLoad = null; });
+    }
+    const loading = this._guideLoad;
+    this.showTab('guide');
+    if (loading) await loading;
+    if (label && this.guideView) this.guideView.show(label);
+  }
+
 
   _annotationsPanel() {
     const p = this.tabPanels.annotations;
@@ -1386,7 +1414,7 @@ export class Workspace {
     const current = ids.length ? this.store.get(ids[0]).label : this.currentLabel;
     const title = ids.length ? (ids.length === 1 ? 'Change the selected annotation to' : `Change ${ids.length} annotations to`) : 'Type of the next annotation';
     const r = this.typeMenuBtn ? this.typeMenuBtn.getBoundingClientRect() : null;
-    const chosen = await pickType({ title, catalogue: this.cat, current, quick: this.quick, at: r ? { x: r.left, y: r.bottom + 4 } : null });
+    const chosen = await pickType({ title, catalogue: this.cat, current, quick: this.quick, at: r ? { x: r.left, y: r.bottom + 4 } : null, about: (l) => this.showGuide(l) });
     if (chosen) { logger.noteInput('dialog:' + title); this.applyType(chosen); }
   }
 
@@ -1395,7 +1423,7 @@ export class Workspace {
     this.select([id]);
     if (!this._checkEditable()) return;
     const current = this.store.get(id).label;
-    const chosen = await pickType({ title: `Change ${current} to`, catalogue: this.cat, current, quick: this.quick, at });
+    const chosen = await pickType({ title: `Change ${current} to`, catalogue: this.cat, current, quick: this.quick, at, about: (l) => this.showGuide(l) });
     if (chosen && chosen !== current) { logger.noteInput(`dialog:Change ${current} to`); this.applyType(chosen); }
   }
 
@@ -1520,7 +1548,7 @@ export class Workspace {
     const ids = this.targetIds();
     if (!ids.length || !this._checkEditable()) return;
     const current = this.store.get(ids[0]).label;
-    const label = await pickType({ title: ids.length === 1 ? 'Change type' : `Change the type of ${ids.length} annotations`, catalogue: this.cat, current, quick: this.quick });
+    const label = await pickType({ title: ids.length === 1 ? 'Change type' : `Change the type of ${ids.length} annotations`, catalogue: this.cat, current, quick: this.quick, about: (l) => this.showGuide(l) });
     if (!label || (label === current && ids.length === 1)) return;
     logger.noteInput('dialog:Change type');
     this.store.setLabelMany(ids, label);

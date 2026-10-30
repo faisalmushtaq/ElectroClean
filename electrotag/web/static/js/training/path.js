@@ -12,6 +12,7 @@
 // and WATCH_EXPERT take functions (app, stage, data) => a node, a line of text or null, drawn on
 // the stage's card (WATCH_EXPERT on "Learn with the experts", for watching an expert's session).
 
+import { noteForGuideTab } from '../guide/artifacts.js';
 import { h } from '../ui/dom.js';
 import { ask } from '../ui/dialog.js';
 import { logger } from '../log/logger.js';
@@ -261,5 +262,9 @@ export function trainingPath(data, { app = null, annotatorId, message = '', onCo
         waiting && data.gate.message ? h('p.caption.gate-line', { 'data-log': 'training-gate' }, icon('lock'), h('span', {}, data.gate.message)) : null),
       h('div.btn-row', {}, back, cont)),
     h('ol.stages.path', { 'aria-label': 'The stages of your training' }, cards.map((c) => h('li', {}, c))),
+    h('p.caption.guide-line', {}, 'Every artifact type, with its definition, what it looks like and an example, is in the ',
+      h('a', { href: './#guide', target: '_blank', rel: 'noopener', 'data-log': 'training-guide',
+        onclick: () => noteForGuideTab(app && app.catalogue && app.me && app.me.study ? app.catalogue.quickLabels((app.me.study.annotation || {}).quick_labels) : null) },
+      'artifact reference guide'), ' (it opens in a new tab).'),
     quizzes && quizzes.length && onQuiz ? quizCard({ me: { quizzes } }, { onOpen: onQuiz }) : null);
 }

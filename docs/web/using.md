@@ -369,10 +369,32 @@ its number and a short name (1 Blink, 2 HEM, 3 EMG and so on); when the window i
 line, the toolbar continues on a second. On the right, the Annotations tab
 lists everything you have marked, the Recording tab shows the time you have worked, how much of the
 recording you have viewed, the viewing options, your comfort choices and details of the recording,
-and the Help tab lists every key. The line at the bottom reminds you of the main keys and shows what
+the Guide tab holds the artifact reference guide (below), and the Help tab lists every key. The line at the bottom reminds you of the main keys and shows what
 each action did and what to do next, on two lines when it needs them, so that an instruction is
 always read to its end. On its right it says how much of the recording you have viewed and how many
 annotations you have made, with the display filters below.
+
+### The artifact reference guide
+
+The artifact reference guide describes every artifact type of the catalogue on one page, family by
+family, in the order of the type list. For each type it gives the HED-SCORE name and its short name
+and code, the key that chooses it in your study (Key 1 to Key 9, or Find a type with /), the
+HED-SCORE definition, what it looks like (where it shows on the scalp, its frequency, its shape and
+its typical duration) and how to tell it from the types it is most often confused with. Sixteen of
+the specific types have a small live example beside them: ten seconds of simulated EEG, drawn
+without filters by the same viewer as the training snippets, with the artifact outlined where it was
+placed. The simulation is the sandbox's own, so the examples work offline and without a study; your
+study's real examples are in Meet the artifacts on your training path. The group terms, and the
+types the sandbox does not simulate (rocking or patting and sucking in infants, salt bridges,
+induction, artificial ventilation and dialysis), are described without an example.
+
+Type in the search box to keep only the types whose names, codes or descriptions contain every word,
+for example "blink", "frontal" or "50 Hz". Print prints the whole guide, with every example drawn and
+without the search and buttons. The guide opens in several ways: the Guide tab beside the EEG while
+you annotate, Open beside the EEG or Open in a new tab in the Help tab, About this type in the type
+list (/, Find a type), which shows the highlighted type in the Guide tab, the link on the training
+path, and its own address, the application's address followed by `#guide`, which opens in any tab
+without signing in.
 
 ## Marking an artifact
 

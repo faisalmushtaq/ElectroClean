@@ -19,7 +19,7 @@ import { appHeader, downloadFiles, smallScreenNotice } from './views/common.js';
 import { friendlyDuration, nowLocalIso, plural, session } from './util.js';
 import { loadPart, loadParts, partNow, preloadParts } from './lazy.js';
 
-const VIEWS = ['signin', 'home', 'open', 'annotate', 'review', 'training', 'quiz'];
+const VIEWS = ['signin', 'home', 'open', 'annotate', 'review', 'training', 'quiz', 'guide'];
 /** The admin area's plain hashes (js/admin/model.js lists its sections). */
 const ADMIN_ROUTE = /^admin(-[a-z]+)?$/;
 /** The expert area's plain hashes (js/expert/sections.js lists its sections; the same rule as its EXPERT_ROUTE). */
@@ -127,6 +127,7 @@ export class App {
     this._reloadedIn = asked; // the page's view before a reload (a recording opens again: annotate/reopen.js)
     const invite = takeInvite();
     this._render(h('main.page.loading', {}, h('p.subtitle', {}, 'Starting ElectroTag…')), 'signin');
+    if (asked === 'guide') { await this.showGuide(); return; } // the artifact reference guide, in a tab of its own: no sign-in
     let where;
     try { where = await findBackend(); } catch { where = { kind: 'demo', source: 'none' }; }
     this.where = where;
@@ -405,6 +406,10 @@ export class App {
       this.quizView.destroy(); // the quiz's answers are with the study; its recordings are closed
       this.quizView = null;
     }
+    if (this.guideView && this.guideView.el !== el) {
+      this.guideView.destroy(); // the artifact reference guide's example viewers
+      this.guideView = null;
+    }
     if (this.snippetsView && this.snippetsView.el !== el) {
       this.snippetsView.destroy(); // the training path's snippets (js/training/snippets.js): their recordings are closed
       this.snippetsView = null;
@@ -517,6 +522,7 @@ export class App {
       if (!dialogOpen()) this.ws.close();
       return;
     }
+    if (want === 'guide') { this.showGuide(); return; }
     if (!this.me) { if (want !== 'signin') this.showSignin(); return; }
     if (ADMIN_ROUTE.test(want)) { if (this.isAdmin) this.showAdmin(want); else this.showHome(); return; }
     if (EXPERT_ROUTE.test(want)) { if (this.isExpert) this.showExpert(want); else this.showHome(); return; }
@@ -539,6 +545,11 @@ export class App {
   goBack() {
     if (this.me && this.me.programme && this._fromTraining) this.showTraining();
     else this.showHome();
+  }
+
+  /** The artifact reference guide as a page of its own (js/guide/guide.js). */
+  showGuide() {
+    return this._withParts(['guide'], 'guide', ({ showGuidePage }) => showGuidePage(this));
   }
 
   showHome() {

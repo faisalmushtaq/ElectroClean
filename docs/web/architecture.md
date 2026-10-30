@@ -186,7 +186,8 @@ loads at its first use with a dynamic `import()`: the home page, the open view,
 the annotation view with the EEG viewer, training (with the platform tour and
 the snippets of the training path as parts of their own), the quiz, the practice
 review, the admin area, the expert area, the purposes someone's saved work is
-opened for (`views/purposes.js`), the game elements and the EEG readers with
+opened for (`views/purposes.js`), the artifact reference guide (`guide/guide.js`, which
+`#guide` also opens before anyone signs in), the game elements and the EEG readers with
 their workers. `lazy.js` keeps each part's promise, so a part is fetched once however
 many callers ask for it, and `app.js` shows a "Loading…" page while a view's
 part is on its way. A part that cannot be loaded (most often because the

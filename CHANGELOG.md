@@ -5,6 +5,15 @@ Each section below describes the changes in one version of ElectroTag;
 
 ## Unreleased
 
+An artifact reference guide describes every type of the catalogue on one searchable, printable
+page: its HED-SCORE name, short name, code and key, the HED-SCORE definition, where it shows on the
+scalp, its frequency, shape and typical duration, how to tell it from its look-alikes, and, for
+sixteen types, a live simulated example drawn with the snippets' viewer, so that it works offline and
+in the sandbox. It opens as the annotation view's new Guide tab, from the Help tab, from About this
+type in the type list, from the training path, and at its own address (`#guide`) without signing in.
+The sandbox's simulation gained the vertical eye movement, nystagmus, tongue movement, pulse,
+respiration, sweat and electrode movement for these examples.
+
 Annotators can download their own annotations of a saved recording, as the files the study keeps:
 the BIDS `_events.tsv` and its `_events.json`, the `_annotations.json` with their ratings and notes,
 and the session details, as one small zip file or as separate files. The Saved dialog after Save and
