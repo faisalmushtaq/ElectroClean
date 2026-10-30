@@ -397,6 +397,10 @@ export class App {
       this.quizView.destroy(); // the quiz's answers are with the study; its recordings are closed
       this.quizView = null;
     }
+    if (this.snippetsView && this.snippetsView.el !== el) {
+      this.snippetsView.destroy(); // the training path's snippets (js/training/snippets.js): their recordings are closed
+      this.snippetsView = null;
+    }
     clear(this.content);
     this.content.appendChild(el);
     if (route !== null) this._setRoute(route);
@@ -600,7 +604,7 @@ export class App {
         next_stage: data.next ? data.next.stage : null, next_recording: data.next ? data.next.recording_id : null, message });
       this._fromTraining = true;
       const page = trainingPath(data, {
-        annotatorId: this.me.annotator_id, message,
+        app: this, annotatorId: this.me.annotator_id, message, // the path opens the tour and the snippets itself
         onContinue: (next) => {
           logger.event('stage_started', { stage: next.stage, recording: next.recording_id, repeat: Boolean(next.repeat) });
           const item = (this.assignments.items || []).find((i) => i.recording_id === next.recording_id && i.mode === next.stage) ||
@@ -800,6 +804,13 @@ export class App {
         ...(view.purpose && view.purpose.kind === 'feedback' ? { view_saved: true } : {}),
       });
     } catch (exc) {
+      if (exc.code === 'training_required' && this._stillOpen(view)) {
+        // a study recording, while study work waits for the competency assessment (js/training/path.js)
+        view.step('match', 'A study recording: locked until you pass your assessment', 'failed');
+        view.showProblem(exc.message, [h('button.btn.primary', { type: 'button', 'data-log': 'training-path', onclick: () => this.showTraining() },
+          'Go to my training path'), view.chooseAgainButton(false)]);
+        return;
+      }
       view.step('match', 'Asking the study', 'failed');
       if (exc.status !== 401 && this._stillOpen(view)) {
         // Asking is a read: the person may ask again with the file already read and checked.

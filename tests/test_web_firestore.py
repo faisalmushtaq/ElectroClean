@@ -44,6 +44,7 @@ from tests.web_helpers import (  # noqa: E402
     make_template,
     match_body,
     reference_annotations,
+    skip_to_guided_in,
     submission,
 )
 
@@ -252,7 +253,10 @@ def finish_guided(service: StudyService, recordings: Path, rid: str) -> dict[str
 
 def test_training_programme_on_firestore(service: StudyService, recordings: Path) -> None:
     tr = ok(service, "training", T01)
-    assert [s["status"] for s in tr["stages"]] == ["available", "locked", "not_used"]
+    assert [s["status"] for s in tr["stages"]] == ["available", "locked", "locked", "locked", "not_used"]
+    skip_to_guided_in(service, T01)
+    tr = ok(service, "training", T01)
+    assert [s["status"] for s in tr["stages"]] == ["skipped", "skipped", "available", "locked", "not_used"]
     steps = reference_annotations(service.store, "example", GUIDED1)
     early = as_wire(steps[0], "f" * 32)
     early["onset_sample"] -= 200
@@ -265,14 +269,54 @@ def test_training_programme_on_firestore(service: StudyService, recordings: Path
     assert r["guided"]["summary"]["stars"] < r["guided"]["summary"]["max_stars"]  # Show me was used
     finish_guided(service, recordings, GUIDED2)
     tr = ok(service, "training", T01)
-    assert tr["stages"][1]["status"] == "available" and tr["next"]["recording_id"] == PRACTICE1
+    assert tr["stages"][3]["status"] == "available" and tr["next"]["recording_id"] == PRACTICE1
     ref = reference_annotations(service.store, "example", PRACTICE1)
     r = ok(service, "submit", T01, submission(recordings, PRACTICE1, [as_wire(a, f"{i + 1:032x}")
                                                                      for i, a in enumerate(ref)],
                                               "practice", "example"))
     assert r["feedback"]["passed"] is True and len(r["feedback"]["reference"]) == len(ref)
     tr = ok(service, "training", T01)
-    assert tr["stages"][1]["status"] == "completed" and tr["complete"]
+    assert tr["stages"][3]["status"] == "completed" and tr["complete"]
+
+
+def test_training_stages_and_the_gate_on_firestore(service: StudyService, recordings: Path) -> None:
+    """The five-stage path on Firestore: skips kept with the progress, the gate on study work, the competency report
+    naming the skipped stages, reopening after a result not met, and the snippets."""
+    admin_ok(service, "set_recording_update", {"set_id": "example", "recording_id": PRACTICE1, "use": "assessment"})
+    admin_ok(service, "set_update", {"set_id": "example", "criteria": {
+        "criteria": [{"metric": "event_f1", "threshold": 0.8, "scope": "overall"}], "min_reference_events": 1}})
+    admin_ok(service, "assign", {"annotator_ids": ["T01"], "recording_ids": [SUB1]})
+    me = ok(service, "me", T01)
+    assert me["training_gate"]["open"] is False and me["training_gate"]["reason"] == "training_required"
+    items = {i["recording_id"]: i for i in ok(service, "assignments", T01)["items"]}
+    assert items[SUB1]["status"] == "locked"
+    assert err(service, "match", T01, match_body(recordings, SUB1)).code == "training_required"
+    assert err(service, "submit", T01, submission(recordings, SUB1, [BLINK])).code == "training_required"
+    # skips, sent twice, are kept once in the progress document
+    for stage in ("tour", "tour", "snippets", "guided"):
+        tr = ok(service, "training_stage", T01, {"stage": stage, "action": "skip"})
+    assert [s["status"] for s in tr["stages"]] == ["skipped", "skipped", "skipped", "not_used", "available"]
+    rs = service.store.reference_set("example")
+    assert [e["stage"] for e in service.store.progress(rs, "T01").events] == ["tour", "snippets", "guided"]
+    assert len(ok(service, "training_snippets", T01)["snippets"]) > 0
+    # not met: the study team reopens the training, and a good retake opens study work
+    ref = reference_annotations(service.store, "example", PRACTICE1)
+    r = ok(service, "submit", T01, submission(recordings, PRACTICE1, [as_wire(ref[0], "1" * 32)], "assessment",
+                                              "example"))
+    assert r["assessment"]["status"] == "not_met"
+    stored = [json.loads(blob["json"]) for set_id, aid, blob in service.store.reports()
+              if (set_id, aid) == ("example", "T01")]
+    assert stored and stored[0]["stages_skipped"] == ["tour", "snippets", "guided"]
+    assert "Stages skipped: Find your way around, Meet the artifacts, Learn with the experts." in [
+        blob["html"] for set_id, aid, blob in service.store.reports() if aid == "T01"][0]
+    g = admin_ok(service, "training_reopen", {"annotator_id": "T01", "from": "guided"})
+    assert g["events"][-1]["event"] == "training_reopened"
+    ok(service, "training_stage", T01, {"stage": "guided", "action": "skip"})
+    perfect = [as_wire(a, f"{i + 1:032x}") for i, a in enumerate(ref)]
+    r = ok(service, "submit", T01, submission(recordings, PRACTICE1, perfect, "assessment", "example"))
+    assert r["attempt"] == 2 and r["assessment"]["status"] == "met"
+    assert ok(service, "me", T01)["training_gate"]["open"] is True
+    assert ok(service, "match", T01, match_body(recordings, SUB1))["status"] == "matched"
 
 
 def test_export_writes_the_files_store_layout(service: StudyService, recordings: Path, template: Path,
@@ -290,6 +334,7 @@ def test_export_writes_the_files_store_layout(service: StudyService, recordings:
     ok(service, "submit", A01, submission(recordings, SUB3, [BLINK]))
     ok(service, "submit", A02, submission(recordings, SUB1, [ann("e" * 32, "Eye-blink-artifact", 510, 95,
                                                                  ["Fp1", "Fp2"])]))
+    skip_to_guided_in(service, T01)
     finish_guided(service, recordings, GUIDED1)
     v = ok(service, "visit_open", A01, {})
     ok(service, "visit_events", A01, {"visit_id": v["visit_id"], "events": [{"t": 1.0, "type": "key", "key": "1"}]})
@@ -400,6 +445,8 @@ def call(name, data):
     req = https_fn.CallableRequest(data={{"study": {study!r}, **data}}, raw_request=None,
                                    auth=https_fn.AuthData(uid="u", token=claims))
     return inspect.unwrap(getattr(m, name))(req)
+call("et_training_stage", {{"stage": "tour", "action": "skip"}})
+call("et_training_stage", {{"stage": "snippets", "action": "skip"}})
 call("et_guided_get", {{"recording_id": {GUIDED1!r}}})
 r = call("et_guided_check", {{"recording_id": {GUIDED1!r}, "step": 1, "annotations": []}})
 print(json.dumps({{"problems": r["problems"], "loaded": [x for x in ("pandas", "scipy", "mne") if x in sys.modules]}}))
@@ -543,6 +590,7 @@ def test_the_example_set_without_mne_on_firestore(template: Path, monkeypatch: p
     assert admin_err(svc, "set_example_create", {}).code == "set_exists"
     store.put_user("T01")
     admin_ok(svc, "programme_set", {"annotator_id": "T01", "set_id": "example"})
+    skip_to_guided_in(svc, T01)
     assert ok(svc, "guided_get", T01, {"recording_id": GUIDED1})["n_steps"] == 6
 
 
@@ -761,7 +809,18 @@ def test_callables_end_to_end(study: str, recordings: Path) -> None:
     assert {a["annotator_id"] for a in body["result"]["annotators"]} == {"A01", "A02", "T01", "ADMIN"}
     trainee = sign_in(f"t01-{study}@example.org")
     _, body = callable_("et_training", {"study": study}, trainee)
+    assert body["result"]["next"]["stage"] == "tour"
+    # the training path's stages through their function: the tour skipped, the snippets finished
+    _, body = callable_("et_training_stage", {"study": study, "stage": "tour", "action": "skip"}, trainee)
+    assert body["result"]["stages"][0]["status"] == "skipped"
+    _, body = callable_("et_training_stage", {"study": study, "stage": "assessment", "action": "skip"}, trainee)
+    assert body["error"]["status"] == "ALREADY_EXISTS" and body["error"]["details"]["error"] == "cannot_skip"
+    _, body = callable_("et_training_snippets", {"study": study}, trainee)
+    assert body["result"]["snippets"] and body["result"]["recordings"]
+    _, body = callable_("et_training_stage", {"study": study, "stage": "snippets", "action": "done"}, trainee)
     assert body["result"]["next"]["recording_id"] == GUIDED1
+    _, body = callable_("et_me", {"study": study}, trainee)
+    assert body["result"]["training_gate"]["open"] is True  # the example set has no assessment
     _, body = callable_("et_guided_get", {"study": study, "recording_id": GUIDED1}, trainee)
     assert body["result"]["current"]["step"] == 1
     _, body = callable_("et_guided_check", {"study": study, "recording_id": GUIDED1, "step": 1, "annotations": []},

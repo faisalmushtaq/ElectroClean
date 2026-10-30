@@ -4,7 +4,7 @@
 // the server, and the interaction logs it writes.
 import fs from 'node:fs';
 import path from 'node:path';
-import { pressSave, signIn, waitForRoute, waitForTraces, annotations, eegPoint, drag, clickDialogButton } from './helpers.mjs';
+import { pressSave, signIn, waitForRoute, waitForTraces, annotations, eegPoint, drag, clickDialogButton, skipFirstStages } from './helpers.mjs';
 
 const PASSWORD = 'electrotag';
 
@@ -236,6 +236,7 @@ export const tests = [
       const page = await signInAt(t, 'T01');
       await waitForRoute(page, 'training');
       assert.match(await page.textContent('main.training'), /Learn with the experts/);
+      await skipFirstStages(page);
       const startNext = async () => {
         await page.locator('main.training .btn.primary').first().click();
         await waitForRoute(page, 'open');

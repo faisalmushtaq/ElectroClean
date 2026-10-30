@@ -230,11 +230,10 @@ def test_feedback_training_stages_and_snippets(client: TestClient, admin: Api) -
     assert (r.status_code, r.json()["error"]) == (409, "cannot_skip")
     r = t01.post("/training/stage", {"stage": "lunch", "action": "skip"})
     assert (r.status_code, r.json()["error"]) == (400, "bad_request")
-    r = t01.post("/training/stage", {"stage": "tour", "action": "done"})
-    assert (r.status_code, r.json()["error"]) == (501, "not_offered")  # the five-stage path comes later
+    assert t01.ok("post", "/training/stage", {"stage": "tour", "action": "done"})["stages"][0]["status"] == "completed"
     r = a01.post("/training/stage", {"stage": "tour", "action": "skip"})
     assert (r.status_code, r.json()["error"]) == (404, "no_programme")
-    assert t01.ok("get", "/training/snippets") == {"set_id": "example", "snippets": [], "recordings": {}, "quiz": None}
+    assert t01.ok("get", "/training/snippets")["set_id"] == "example"  # tests/test_web_training_stages.py has more
 
 
 # ------------------------------------------------------------------ the settings

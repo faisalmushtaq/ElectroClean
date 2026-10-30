@@ -16,7 +16,8 @@ import { inform } from '../ui/dialog.js';
 
 export const PAGE_SIZE = 25;
 const PREFS_KEY = 'electrotag.home.list';
-const STATUS = { todo: ['To do', ''], in_progress: ['In progress', 'active'], done: ['Done', 'done'], unusable: ['Cannot be annotated', ''] };
+const STATUS = { todo: ['To do', ''], in_progress: ['In progress', 'active'], done: ['Done', 'done'], unusable: ['Cannot be annotated', ''],
+  locked: ['Locked', ''] }; // locked: real study work waits for the competency assessment (GET /me training_gate)
 const MODES = { standard: 'Annotation', guided: 'Guided training', practice: 'Practice', assessment: 'Assessment' };
 export const TABS = [['todo', 'To do'], ['in_progress', 'In progress'], ['done', 'Done'], ['all', 'All'], ['history', 'History']];
 export const SORTS = [['recent', 'Recently worked on'], ['name', 'File name'], ['length', 'Length']];
@@ -176,7 +177,7 @@ export function recordingsCard(app) {
   };
 
   const action = (it) => {
-    if (it.status === 'unusable') return null;
+    if (it.status === 'unusable' || it.status === 'locked') return null;
     if (it.status === 'done') {
       if (!canRevise(app, it)) return null;
       const text = it.revising ? 'Continue the revision' : 'Open to revise';
@@ -190,7 +191,8 @@ export function recordingsCard(app) {
   const listRow = (it) => {
     const [text, cls] = it.revising ? ['Being revised', 'active'] : STATUS[it.status] || [it.status, ''];
     return h('tr', { 'data-id': it.recording_id, 'data-log-text': it.file_name },
-      h('td', {}, h('span.file', { title: it.recording_id }, it.file_name), feedbackCaption(app, it), correctedCaption(app, it)),
+      h('td', {}, h('span.file', { title: it.recording_id }, it.file_name), feedbackCaption(app, it), correctedCaption(app, it),
+        it.status === 'locked' ? h('span.caption.locked-why', {}, 'Opens once you pass the competency assessment.') : null),
       showMode ? h('td.opt', {}, MODES[it.mode] || it.mode) : null,
       h('td.num', {}, formatHms(it.duration_s)),
       h('td.num.opt', {}, String(it.n_channels)),

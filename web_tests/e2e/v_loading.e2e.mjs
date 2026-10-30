@@ -10,8 +10,10 @@ import { signIn, waitForRoute, openExample } from './helpers.mjs';
  * own back end (js/api/demo*.js and what they use). On 30 October the roles and the expert account
  * brought them to 132 KB and 447 KB (the sandbox's expert operations and the newer settings' checks
  * load only when used); loading the sandbox's admin half only for its administrator is the way down.
+ * The five-stage training path's rules (js/training/stages.js, which the sandbox needs at every call)
+ * brought the demonstration to 457 KB; its stage actions, snippets and admin operations load when used.
  */
-const SIGNIN_BUDGET_KB = { server: 140, demo: 455 };
+const SIGNIN_BUDGET_KB = { server: 140, demo: 462 };
 
 /**
  * Modules that belong to later views and must not load with the sign-in page (the demonstration's

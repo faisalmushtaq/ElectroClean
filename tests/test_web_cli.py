@@ -57,9 +57,10 @@ def test_a_study_folder_from_scratch(template: Path, tmp_path: Path, capsys: pyt
     # Who has done what, as a table and as JSON.
     assert cli(["progress", "--study-dir", str(study)]) == 0
     out = capsys.readouterr().out
-    assert "A01 (Ann): 0 of 5 done; last seen never" in out  # 3 recordings, 2 guided
+    assert "A01 (Ann): 0 of 3 done; last seen never" in out  # 3 recordings; the guided ones come after the tour
     assert f"to do        {SUB1}" in out
-    assert "training: Learn with the experts: available, 0 of 2" in out
+    assert "training: Find your way around: available\n" in out
+    assert "training: Learn with the experts: locked, 0 of 2" in out
     assert cli(["progress", "--study-dir", str(study), "--json"]) == 0
     report = json.loads(capsys.readouterr().out)
     assert report["annotators"][0]["annotator_id"] == "A01"

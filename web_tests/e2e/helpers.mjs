@@ -95,3 +95,15 @@ export async function openExample(page, index = 0) {
   await waitForRoute(page, 'annotate');
   await waitForTraces(page);
 }
+
+/**
+ * On the training path, skip its first two stages (the platform tour and the snippets) as a trainee
+ * does, answering each question, so that the next step is learning with the experts.
+ */
+export async function skipFirstStages(page, timeout = 30000) {
+  for (const stage of ['tour', 'snippets']) {
+    await page.locator(`main.training [data-log="skip-${stage}"]`).click({ timeout });
+    await clickDialogButton(page, 'Skip this stage');
+    await page.waitForSelector(`main.training [data-stage="${stage}"][data-status="skipped"]`, { timeout });
+  }
+}
