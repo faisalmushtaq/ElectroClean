@@ -23,6 +23,22 @@ out as tasks now writes each person's assignments in one step, which on Firebase
 share-out far quicker. This part covers the study's records and operations
 (docs/web/api.md, "Datasets, collections, groups and hand-outs").
 
+The admin area has three new sections for this. Datasets (under Data) lists the source datasets with
+their details, licence, target of ratings and how many of their recordings have met it, with a page
+for each that shows the summary worked out from its recordings and lets the team move recordings to
+another dataset or add them to a collection; collections are picked by hand or built from filters
+(datasets, file name, format, length and "rated by at most"), with a random sample that its seed
+repeats. Its Tracking tab shows datasets, collections or hand-outs by people, then one target's
+recordings by people with each cell's dates, and downloads them as a table. Groups (under People)
+keep their members with the history of who joined and left, and Hand-outs (under People) give a
+dataset or collection to people and groups, all of it or k per recording through the Tasks preview,
+with a due date and the title annotators see; overdue people are marked there, in the grids and on
+Overview. ElectroTag sends no email yet: What would be notified, on the Hand-outs page, lists what a
+notice would say for the team to copy. Adding recordings asks for their dataset and points out an ID
+that belongs to another dataset before anything is sent, and the Recordings list has a Dataset column
+and filter. The study team sees each person's name beside their ID in these lists once it has been
+given.
+
 Annotators and experts now answer a short sign-up questionnaire at their first sign-in, before any
 recording, training or expert work opens, and the study refuses that work until they have: their
 experience of EEG (datasets analysed in the bands 0, 1–2, 3–10, 11–30, 31–100 and over 100, years with
