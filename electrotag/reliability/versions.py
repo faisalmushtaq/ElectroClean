@@ -146,6 +146,15 @@ class StudyRecords:
         tk = {str(t["task_id"]): dict(t) for t in tasks if isinstance(t, dict) and t.get("task_id")}
         return cls(adj, tk, True)
 
+    def known_answer_recordings(self) -> set[str]:
+        """The recordings whose every task (not removed) is a known-answer task: these are never adjudicated."""
+        kinds: dict[str, set[bool]] = {}
+        for t in self.tasks.values():
+            if t.get("state") == "removed" or not t.get("recording_id"):
+                continue
+            kinds.setdefault(str(t["recording_id"]), set()).add(bool(t.get("gold")))
+        return {rid for rid, k in kinds.items() if k == {True}}
+
     @classmethod
     def read(cls, folders: Iterable[Path | str]) -> StudyRecords:
         """The records a results folder holds (``adjudications/<unit>.json``, ``tasks/tasks.json``), as
@@ -416,10 +425,16 @@ def _adjudicated(originals: Mapping[Key, list[Item]], derived: list[Item], confi
             sel.rows.append(_row((group, aid), it, "original", unit_id=uid, note="a version the adjudication compared"))
     left = sorted({rid for rid, _aid in originals} - covered)
     if left:
-        names = ", ".join(left[:10]) + (f" and {len(left) - 10} more" if len(left) > 10 else "")
-        sel.warnings.append(f"{len(left)} recording{'s have' if len(left) != 1 else ' has'} no finished adjudication "
-                            f"and {'are' if len(left) != 1 else 'is'} left out of this analysis of the adjudicated "
-                            f"versions: {names}")
+        # Known-answer recordings are scored against their references and never adjudicated: they are left out
+        # as well, without a warning that would ask for an adjudication.
+        known = records.known_answer_recordings() if records is not None else set()
+        unfinished = [rid for rid in left if rid not in known]
+        if unfinished:
+            names = ", ".join(unfinished[:10]) + (f" and {len(unfinished) - 10} more" if len(unfinished) > 10 else "")
+            many = len(unfinished) != 1
+            sel.warnings.append(f"{len(unfinished)} recording{'s have' if many else ' has'} no finished adjudication "
+                                f"and {'are' if many else 'is'} left out of this analysis of the adjudicated "
+                                f"versions: {names}")
         sel.left_out.extend(left)
     if not sel.units:
         sel.warnings.append("No adjudication is finished yet, so there is no adjudicated version to compare with")

@@ -193,7 +193,8 @@ class Analyses:
 
         if cfg.versions == "original" and cfg.unit != "task":
             return None
-        tasks = self.store.records("tasks") if cfg.unit == "task" else []
+        # the tasks also tell the adjudicated analysis which recordings are known answers (never adjudicated)
+        tasks = self.store.records("tasks") if cfg.unit == "task" or cfg.versions == "adjudicated" else []
         adjudications = self.store.records("adjudications") if cfg.versions == "adjudicated" else []
         return StudyRecords.of(adjudications, tasks)
 

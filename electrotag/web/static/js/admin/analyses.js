@@ -77,7 +77,7 @@ export class AnalysesSection {
       this.msg, this.agreementHost, this.activityHost, this.competencyHost);
   }
 
-  async show() {
+  async show(params = {}) {
     this.msg.clear();
     if (this.running.size) return; // keep the forms and the running analysis as they are
     try {
@@ -98,6 +98,8 @@ export class AnalysesSection {
       this._activityForm();
       this._competencyForm();
     }
+    // From a trainee's page in People ("Write T03's competency report"): their set and their name chosen.
+    if (params && params.competency && this.competencyChoice) this.competencyChoice(params.competency, params.annotator);
   }
 
   /** Run one analysis: the button cannot be pressed again until the answer arrives. */
@@ -299,6 +301,11 @@ export class AnalysesSection {
     };
     set.addEventListener('change', fillWho);
     fillWho();
+    this.competencyChoice = (setId, aid) => {
+      if ([...set.options].some((o) => o.value === setId)) { set.value = setId; fillWho(); }
+      if (aid && [...who.options].some((o) => o.value === aid)) who.value = aid;
+      requestAnimationFrame(() => this.competencyHost.scrollIntoView({ block: 'start' }));
+    };
     const msg = messageArea();
     const progress = progressLine();
     const result = this.results.competency;

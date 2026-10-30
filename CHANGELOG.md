@@ -919,6 +919,26 @@ quizzes need a study server or Firebase, which the sandbox now says, since
 only its own training set can run as a programme there. The sandbox keeps its
 work under a new name in the browser, so it starts afresh once.
 
+The study team's screens are clearer after a hands-on check of the trainee
+path. In Tasks, All leaves out trainees whose study work is locked until they
+pass the competency assessment and accounts without the annotator role, the
+list marks them, and the preview warns when any of them is chosen; the
+share-out now also evens out how many recordings each pair of annotators
+shares, which pairwise agreement needs, and the preview says how evenly (with
+10 annotators and 200 recordings, each pair shares 4 or 5). After an account
+is added, the form goes back to Annotator alone, so an Expert role never
+carries over to the next person. A trainee's training path in People is
+written for the study team and links to their competency report. The audit
+log gives every new kind of change a title and a filter entry, and a decision
+on a conflict names whose version it kept. The analysis against the
+adjudicated versions no longer warns about known-answer recordings, which are
+never adjudicated. In Study settings the stages a trainee may skip sit under
+Trainees may skip, and the known-answer setting sits with the other choices
+about tasks. Snippet authoring says how long the recording and the snippet
+are, and shows the stretch on the EEG from your own copy of the recording. On
+a phone, a long status such as "Locked until the assessment is passed" wraps
+inside its badge.
+
 ## 1.1.0
 
 The first public release, with stand-alone applications for Windows (64-bit),

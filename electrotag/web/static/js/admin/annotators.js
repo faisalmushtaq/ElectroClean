@@ -46,6 +46,12 @@ export function roleBoxes(selected = ['annotator'], { locked = [] } = {}) {
   const el = h('fieldset.admin-checks.role-boxes', { 'data-roles': '' }, h('legend', {}, 'Roles'), h('div.check-list', { role: 'group', 'aria-label': 'Roles' }, boxes));
   el.value = () => ['admin', 'expert', 'annotator'].filter((r) => el.querySelector(`input[data-role="${r}"]`).checked);
   el.box = (role) => el.querySelector(`input[data-role="${role}"]`);
+  /** Back to the given roles (Annotator alone by default), the locked ones kept: after an account is added, so
+   * that an Expert or Administrator ticked for one person never carries over to the next. */
+  el.reset = (roles = ['annotator']) => {
+    for (const input of el.querySelectorAll('input[data-role]')) input.checked = input.disabled ? input.checked : roles.includes(input.value);
+    el.dispatchEvent(new Event('change'));
+  };
   return el;
 }
 
@@ -308,6 +314,7 @@ export class AnnotatorsSection {
         result.prepend(put(h('div.made-one', { 'data-made': who }), this._secret(who, r, body.email) || h('p.success', { role: 'status' }, `${who} can now sign in with the password you chose.`),
           h('div.btn-row', {}, h('button.btn.small', { type: 'button', onclick: () => this.area.go('assignments', { annotator: who }) }, `Assign recordings to ${who}…`))));
         for (const f of [id, name, email, password]) f.value = '';
+        role.reset(); // the next person starts as an annotator: privileged roles are ticked afresh each time
         await this.reload();
       },
     });

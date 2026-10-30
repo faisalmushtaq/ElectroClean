@@ -219,6 +219,17 @@ def test_the_adjudicated_versions_are_the_reference() -> None:
     assert set(f1) == {(ADJUDICATED, "A01"), (ADJUDICATED, "A02")}  # everyone against the adjudicated version only
     assert f1[(ADJUDICATED, "A01")] == pytest.approx(2 * 2 / 6)
     assert any("no finished adjudication" in w and "lonely.vhdr" in w for w in r.settings_record["warnings"])
+    # a known-answer recording is never adjudicated: it is left out without a warning that asks for one
+    gold = StudyRecords.of([], [{"task_id": "t-000000000009", "recording_id": "lonely.vhdr",
+                                 "gold": {"set_id": "known"}, "annotators": ["A01", "A02"], "state": "open"},
+                                {"task_id": "t-00000000000a", "recording_id": "mixed.vhdr", "gold": {"set_id": "known"},
+                                 "state": "open"},
+                                {"task_id": "t-00000000000b", "recording_id": "mixed.vhdr", "gold": None,
+                                 "state": "open"}])
+    assert gold.known_answer_recordings() == {"lonely.vhdr"}
+    r2 = analyse(docs, gold, versions="adjudicated")
+    assert not any("no finished adjudication" in w for w in r2.settings_record["warnings"])
+    assert "lonely.vhdr" in r2.settings_record["versions"]["left_out"]
     eff = r.table("adjudication").iloc[0]
     assert (eff.n_conflicts, eff.type, eff.presence) == (2, 1, 1)
     assert eff.f1_before == pytest.approx(0.4) and eff.f1_after == pytest.approx((2 * 2 / 6 + 2 * 2 / 5) / 2)

@@ -3,9 +3,16 @@
 // stages"). The set offers one for each of the experts' annotations on its guided recordings, with the
 // guided note as its explanation; the study team adds its own here (snippet_add), from any recording
 // of the set that is not used for practice or the assessment, whose snippets would give the answers
-// away. A snippet sent twice is kept once: the browser chooses its ID before sending it.
+// away. A snippet sent twice is kept once: the browser chooses its ID before sending it. While
+// authoring, the form says how long the recording and the snippet are and what trainees will see, and
+// the stretch can be looked at on the EEG from the team's own copy of the recording (read in the
+// browser, never uploaded), with the artifact outlined as trainees see it.
 
 import { h, clear } from '../ui/dom.js';
+import { clockText } from '../viewer/bounds.js';
+import { loadPart } from '../lazy.js';
+import { acceptFiles } from '../util.js';
+import { DEFAULT_SCALINGS } from '../api/demo_catalogue.js';
 import {
   actionButton, card, confirmInline, dataTable, field, loading, messageArea, numberInput, recordingName, select, textArea, textInput,
 } from './ui.js';
@@ -32,6 +39,25 @@ export function parseChannels(text, chNames) {
     if (!out.includes(c)) out.push(c);
   }
   return { channels: out };
+}
+
+/**
+ * What the times typed so far mean, in one sentence: how long the recording is, how long the snippet
+ * lasts and the stretch trainees see with the EEG on each side ("" when the times are not given yet).
+ */
+export function spanText({ start, end, context, duration }) {
+  const dur = Number(duration);
+  const long = Number.isFinite(dur) && dur > 0 ? `The recording is ${clockText(dur)} long (${dur.toFixed(1)} s).` : '';
+  const a = start === '' || start === null || start === undefined ? NaN : Number(start);
+  const b = end === '' || end === null || end === undefined ? NaN : Number(end);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return long;
+  if (b <= a) return `${long} The end must come after the start.`.trim();
+  if (Number.isFinite(dur) && dur > 0 && b > dur) return `${long} The snippet ends after the recording does.`.trim();
+  const c = Number.isFinite(Number(context)) ? Math.max(0, Number(context)) : 2;
+  const from = Math.max(0, a - c);
+  const to = Number.isFinite(dur) && dur > 0 ? Math.min(dur, b + c) : b + c;
+  return `${long} The snippet lasts ${(b - a).toFixed(2)} s, from ${a.toFixed(2)} to ${b.toFixed(2)} s; trainees see ${from.toFixed(2)} to `
+    .concat(`${to.toFixed(2)} s of the recording (${(to - from).toFixed(2)} s).`).trim();
 }
 
 /** The tab's content for set `s`: what it shows is read from the study (snippets_list) as it opens. */
@@ -114,6 +140,18 @@ function addCard(area, s, data, reload) {
   const context = numberInput({ min: 0, max: 10, step: 0.5, value: 2 });
   const channels = textInput({ placeholder: 'for example T7, T8 (empty: every channel)' });
   const explanation = textArea({ rows: 3, placeholder: 'What to look for, and why it is marked on these channels' });
+  const span = h('p.caption.snippet-span', { 'aria-live': 'polite' });
+  const preview = snippetPreview(area, recs, () => ({ recordingId: recording.value, start: start.value, end: end.value, context: context.value,
+    label: label.value, channels: channels.value }));
+  const sync = () => {
+    const rec = recs.find((r) => r.recording_id === recording.value);
+    span.textContent = spanText({ start: start.value, end: end.value, context: context.value, duration: rec ? rec.duration_s : NaN });
+    preview.redraw();
+  };
+  for (const el of [recording, start, end, context, label, channels]) {
+    el.addEventListener('input', sync);
+    el.addEventListener('change', sync);
+  }
   // The ID is chosen here, so that a snippet sent twice (a slow answer, a second press) is kept once.
   let pending = nextSnippetId(data.snippets);
   const add = actionButton('Add the snippet', { kind: 'primary', working: 'Adding…', msg, log: 'snippet-add', onClick: async () => {
@@ -132,13 +170,105 @@ function addCard(area, s, data, reload) {
     pending = null;
     await reload(['success', `Added the snippet ${added}. Trainees see it in Meet the artifacts.`]);
   } });
-  return card('Add a snippet',
+  const box = card('Add a snippet',
     h('p.caption', {}, 'Choose a stretch of a recording that shows one artifact clearly, as the experts would mark it.'),
     h('form.admin-form', { onsubmit: (e) => { e.preventDefault(); add.click(); } },
       field('Recording', recording),
       h('div.row.wrap', {}, field('Type', label), field('Starts at (s)', start), field('Ends at (s)', end),
         field('EEG on each side (s)', context, { hint: 'From 0 to 10.' })),
+      span,
       field('Channels', channels, { hint: 'The channels the artifact is on, outlined for the trainee.' }),
+      preview.el,
       field('Explanation', explanation, { hint: 'Up to 1000 characters.' }),
       h('div.btn-row', {}, add), msg));
+  sync();
+  return box;
+}
+
+/**
+ * Look at the stretch on the EEG while authoring: the team chooses its own copy of the recording (read in
+ * the browser, never uploaded; the sandbox offers its built-in copy), and the snippet is drawn as trainees
+ * will see it, the artifact outlined on its channels, and drawn again as the times change.
+ */
+function snippetPreview(area, recs, current) {
+  const opened = new Map(); // recording ID -> { recording, channels }
+  const status = h('p.caption.snippet-preview-status', { 'aria-live': 'polite' });
+  const host = h('div.quiz-eeg.snippet-eeg.admin-snippet-eeg', { hidden: true });
+  let viewer = null;
+  let drawn = '';
+  const input = h('input', { type: 'file', multiple: true, accept: acceptFiles('.edf,.bdf,.rec,.vhdr,.vmrk,.eeg'), hidden: true, 'data-log': 'snippet-preview-file' });
+  const look = h('button.btn.small', { type: 'button', 'data-log': 'snippet-preview', onclick: () => input.click() }, 'Look at it on the EEG…');
+  const backend = area.backend;
+  const example = backend && backend.isDemo && typeof backend.exampleRecording === 'function'
+    ? h('button.btn.small', { type: 'button', 'data-log': 'snippet-preview-example', onclick: () => open(null) }, 'Use the built-in copy') : null;
+  const meta = () => recs.find((r) => r.recording_id === current().recordingId);
+  async function open(files) {
+    const m = meta();
+    if (!m) return;
+    status.textContent = `Reading ${m.file_name}…`;
+    try {
+      let rec;
+      if (files) {
+        const { filesForRecording } = await loadPart('open');
+        const chosen = filesForRecording(files, m.file_name);
+        if (!chosen || !chosen.some((f) => f.name === m.file_name)) throw new Error(`choose the file ${m.file_name} (and its companion files, for BrainVision).`);
+        const f = (area.app.me && area.app.me.study && area.app.me.study.filters) || {};
+        rec = await (await loadPart('readers')).openRecording(chosen, { fileName: m.file_name, filters: {
+          highpassHz: f.highpass_enabled === false ? null : (f.highpass_hz || 1.0), notchHz: f.notch_enabled === false ? null : (f.notch_hz || 50.0),
+          notchHarmonics: Boolean(f.notch_harmonics) } });
+      } else {
+        rec = backend.exampleRecording(m.recording_id);
+      }
+      const { displayChannels } = await loadPart('session');
+      opened.set(m.recording_id, { recording: rec, channels: displayChannels(rec, { ch_names: m.ch_names || rec.channels.map((c) => c.name) }) });
+      drawn = '';
+      await draw();
+    } catch (exc) {
+      status.textContent = `${m.file_name} could not be opened: ${exc.message}`;
+    }
+  }
+  input.addEventListener('change', () => { if (input.files.length) open([...input.files]); input.value = ''; });
+  async function draw() {
+    const c = current();
+    const o = opened.get(c.recordingId);
+    const m = meta();
+    if (!o || !m) {
+      host.hidden = true;
+      if (viewer) { viewer.destroy(); viewer = null; }
+      status.textContent = m ? `To look at the stretch, open your copy of ${m.file_name}: it is read here and never uploaded.` : '';
+      return;
+    }
+    const a = Number(c.start);
+    const b = Number(c.end);
+    if (c.start === '' || c.end === '' || !(b > a) || b > o.recording.durationS) {
+      host.hidden = true;
+      status.textContent = 'Give the start and the end of the artifact to see it here.';
+      return;
+    }
+    const key = JSON.stringify(c);
+    if (key === drawn && viewer) return;
+    drawn = key;
+    const [{ segmentBounds, segmentRecording }, { EegViewer }] = await Promise.all([loadPart('quiz'), loadPart('viewer')]);
+    const rec = o.recording;
+    const item = { start_s: a, end_s: b, context_s: Number(c.context) };
+    const { s0, s1, h0, h1 } = segmentBounds(item, rec.sfreq, rec.nSamples);
+    const seg = segmentRecording(rec, s0, s1);
+    const names = String(c.channels || '').split(/[\s,;]+/).map((x) => x.trim().toLowerCase()).filter(Boolean);
+    const outlined = o.channels.map((ch) => ch.name).filter((n) => names.includes(n.toLowerCase()));
+    if (viewer) viewer.destroy();
+    clear(host);
+    host.hidden = false;
+    viewer = new EegViewer(host, {
+      recording: seg, channels: o.channels, scalings: { ...DEFAULT_SCALINGS }, events: [], gaps: [], catalogue: area.catalogue,
+      view: { duration_s: seg.durationS, n_channels: o.channels.length },
+    });
+    viewer.setView({ startS: 0, durationS: seg.durationS, nChannels: o.channels.length, firstChannel: 0 }, 'snippet');
+    viewer.setGhost({ label: c.label, onset_sample: h0, duration_samples: h1 - h0, channels: outlined });
+    status.textContent = `As trainees see it: ${(seg.durationS).toFixed(2)} s from ${(s0 / rec.sfreq).toFixed(2)} s of ${m.file_name}, `
+      + `the artifact outlined ${outlined.length ? `on ${outlined.join(', ')}` : 'on every channel'}.`;
+  }
+  let timer = 0;
+  const redraw = () => { clearTimeout(timer); timer = setTimeout(() => { draw(); }, 250); };
+  const el = h('div.snippet-preview', {}, h('div.btn-row', {}, look, example, input), status, host);
+  return { el, redraw };
 }

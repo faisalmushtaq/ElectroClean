@@ -361,6 +361,8 @@ th.num .th-sort { flex-direction: row-reverse; }
   table.admin-list td[data-title=""]::before { content: none; }
   table.admin-list td.actions { justify-content: flex-end; }
   table.admin-list td > * { min-width: 0; }
+  /* A long status ("Locked until the assessment is passed") wraps inside its pill rather than running out of the card. */
+  table.admin-list td .chip { height: auto; min-height: 24px; padding-block: 2px; white-space: normal; }
   .field.num { max-width: none; }
   .report-frame { height: 60vh; }
 }
@@ -417,3 +419,8 @@ th.num .th-sort { flex-direction: row-reverse; }
 .task-actions { display: inline-flex; flex-wrap: wrap; gap: 4px; }
 .task-change { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .task-change select.field { width: auto; }
+
+/* Snippet authoring (js/admin/snippets.js): the stretch on the EEG, as trainees will see it. */
+.snippet-preview { margin: 0 0 16px; }
+.admin-snippet-eeg { height: 440px; padding: 8px; border: 1px solid var(--hairline); background: var(--page); }
+@media (max-width: 640px) { .admin-snippet-eeg { height: 360px; padding: 4px; } }
