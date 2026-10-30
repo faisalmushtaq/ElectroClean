@@ -148,7 +148,7 @@ export const tests = [
         await page.waitForSelector('.admin-nav a[data-expert="expert-queue"]');
         await page.click('.admin-nav a[data-expert="expert-queue"]');
         await page.waitForSelector('[data-section="queue"] table.admin-list');
-        assert.ok(await page.locator('.expert-nav a.to-admin[href="#admin"]').count(), 'an administrator has a way back to the admin area');
+        assert.ok(await page.locator('.admin-switch').count(), 'an administrator has a way back to the admin area');
         await page.evaluate(async () => { await globalThis.ElectroTag.signOut(); });
         await signIn(page, 'E01', PASSWORD);
         await waitForRoute(page, 'home');
@@ -277,9 +277,9 @@ export const tests = [
         // ?: the keys of this view, in the panel's Help
         await focusEeg(page);
         await page.keyboard.press('?');
-        await page.waitForSelector('.adj-keysheet');
-        assert.match(await page.textContent('.adj-keysheet'), /Shift\+1 to Shift\+7/);
-        assert.equal(await page.locator('.side-tabs.folded').count(), 0);
+        await page.waitForSelector('.dialog.key-sheet');
+        assert.match(await page.textContent('.dialog.key-sheet'), /Keys of the adjudication.*Shift\+1–7/s);
+        await clickDialogButton(page, 'Close');
         await page.setViewportSize({ width: 1600, height: 950 });
         assert.ok(await page.locator('.ws-actions [data-log="adjudication-finish"]:not([hidden])').count(), 'Finish shows once all are decided');
         await t.screenshot(page, 'adjudication_decided');

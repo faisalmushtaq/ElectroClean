@@ -171,7 +171,9 @@ is no mark, as you had it; both marks (or yours among others') were kept; a coll
 kept instead of yours, or where you had none; your mark was not kept; or the expert drew their own
 mark. A blue line means what you did stood. In the History of your recordings, a line under the
 recording ("Adjudicated: 9 of 17 disagreements decided as you had them") opens the card at that
-recording. If the expert takes a second look, the decisions shown stay until they finish again.
+recording. When two experts corrected a version of yours differently and another expert settled
+it, the card lists that recording too, with each place where the experts disagreed and what was
+kept. If the expert takes a second look, the decisions shown stay until they finish again.
 Your own files stay exactly as you saved them; the decisions make a new version beside them. Some
 studies keep these decisions from the annotators, and then the card does not appear.
 

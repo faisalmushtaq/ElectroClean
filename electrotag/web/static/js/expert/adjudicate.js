@@ -37,6 +37,7 @@ import { icon } from '../views/common.js';
 import { touchFirst } from '../util.js';
 import { Lanes } from './lanes.js';
 import { REASONS as CORRECTION_REASONS } from './diff.js';
+import { isHelpKey, showKeySheet } from './key_sheet.js';
 import {
   KIND_TEXT, MAX_EDITED, MAX_REASON, REASON_KEYS, REASON_TEXT, choicesFor, conflictOfMark, decidedShare, decisionBody, decisionProblem,
   decisionText, hintText, keyAction, keySheet, nextLaneMode, nextUndecided, overlayAnnotations, progressText, reasonNeeded, spanText, whoText,
@@ -209,20 +210,11 @@ export class AdjudicationPass {
     });
   }
 
-  /** ?: the keys of this view, in the Help tab (opened). */
+  /** ?: the keys of this view, in the expert views' key sheet (key_sheet.js). */
   showKeys() {
-    const ws = this.ws;
-    const panel = ws.tabPanels && ws.tabPanels.help;
-    if (!panel) return;
-    clear(panel);
-    panel.append(h('div.help-text.adj-keysheet', {}, h('h3', {}, this.mode === 'decide' ? 'Keys while adjudicating' : 'Keys of this view'),
-      h('table.info', {}, h('tbody', {}, keySheet(this.letters, this.mode).map(([k, what]) => h('tr', {}, h('th', {}, k), h('td', {}, what))))),
-      h('p.caption', {}, 'The keys work while the EEG or the panel has the focus; in the reason field, Enter saves and Esc goes back to the EEG.')));
-    ws.showTab('help');
-    this._lastTab = 'help';
-    if (this.sideTabs) this.sideTabs.classList.remove('folded');
-    panel.scrollTop = 0;
     logger.event('adjudication_keys_shown', {});
+    return showKeySheet(this.mode === 'decide' ? 'Keys of the adjudication' : 'Keys of this view', keySheet(this.letters, this.mode),
+      { view: 'adjudication', foot: 'The keys work while the EEG or the panel has the focus; in the reason field, Enter saves and Esc goes back to the EEG.' });
   }
 
   _item(c, i) {
@@ -248,7 +240,7 @@ export class AdjudicationPass {
     this.reasonBtns = codes.map((code, i) => h('button.seg.adj-reason-chip', { type: 'button', role: 'radio', 'aria-checked': 'false', 'data-reason': code,
       tabindex: i ? '-1' : '0', title: `${REASON_TEXT[code]} (Shift+${REASON_KEYS[code]})`,
       onclick: () => this.setReasonCode(code, 'button'), onkeydown: (e) => this._reasonKey(e, i) },
-    REASON_TEXT[code], h('span.chip-key', {}, REASON_KEYS[code])));
+    h('span.key-hint', { 'aria-hidden': 'true' }, REASON_KEYS[code]), REASON_TEXT[code]));
     this.reasonInput = h('input.field.adj-reason', { type: 'text', maxlength: String(MAX_REASON), placeholder: 'Or write the reason in a few words (R)', 'aria-label': 'Reason for this decision',
       'data-log': 'adjudication-reason' });
     this.reasonInput.addEventListener('input', () => { if (this.pending) this.pending.reason = this.reasonInput.value; this._remember(); this._refreshBar(); });
@@ -264,7 +256,7 @@ export class AdjudicationPass {
     return h('div.adj-bar', {},
       h('div.adj-choices', { role: 'group', 'aria-label': 'What to keep' }, this.choiceBtns),
       this.pickHost, this.editHost,
-      h('div.adj-reasons', { role: 'radiogroup', 'aria-label': 'Reason (Shift and its number)' }, h('span.caption.adj-reasons-label', { 'aria-hidden': 'true' }, 'Reason (Shift + number)'), this.reasonBtns),
+      h('div.adj-reasons.reason-chips', { role: 'radiogroup', 'aria-label': 'Reason (Shift and its number)' }, h('span.caption.adj-reasons-label', { 'aria-hidden': 'true' }, 'Reason (Shift + number)'), this.reasonBtns),
       this.reasonInput,
       h('div.btn-row.adj-save-row', {}, this.saveBtn, this.skipBtn, this.reasonNote));
   }
@@ -278,9 +270,17 @@ export class AdjudicationPass {
     return true;
   }
 
-  /** The reason chips are one radio group: the arrows move along it and choose, Enter saves. */
+  /** The reason chips are one radio group: the arrows or a chip's number choose, Enter saves (as in the correction view). */
   _reasonKey(e, i) {
     if (this._enterSaves(e)) return;
+    const digit = !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && /^[1-7]$/.test(e.key) ? Number(e.key) : 0;
+    if (digit) {
+      e.preventDefault();
+      e.stopPropagation();
+      this.setReasonCode(this.reasonBtns[digit - 1].dataset.reason, 'digit', { only: true });
+      this.reasonBtns[digit - 1].focus();
+      return;
+    }
     const n = this.reasonBtns.length;
     const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
     if (!step && e.key !== 'Home' && e.key !== 'End') return;
@@ -632,7 +632,7 @@ export class AdjudicationPass {
   /** The keys that come before the workspace's own: ? for this view's keys, Shift and a digit for a reason. */
   _hookKey(e) {
     if (e.ctrlKey || e.metaKey || e.altKey) return false;
-    if (e.key === '?') { e.preventDefault(); logger.shortcut(keyName(e), 'Keys'); this.showKeys(); return true; }
+    if (isHelpKey(e)) { e.preventDefault(); logger.shortcut(keyName(e), 'Keys'); void this.showKeys(); return true; }
     if ((e.key === 'l' || e.key === 'L') && this.t.original && this.ws.viewer.toggleLayer) {
       e.preventDefault();
       const on = this.ws.viewer.toggleLayer('original');

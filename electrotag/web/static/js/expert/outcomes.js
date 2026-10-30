@@ -7,6 +7,7 @@
 import { h, clear } from '../ui/dom.js';
 import { logger } from '../log/logger.js';
 import { KIND_TEXT, REASON_TEXT, spanText } from './model.js';
+import { namesText, settledList, settledSummary } from './settled.js';
 
 export const OUTCOME_TEXT = Object.freeze({
   yours_kept: 'As you had it', all_kept: 'Kept with the others', part_kept: 'Partly kept', other_kept: 'A colleague\'s mark was kept',
@@ -80,8 +81,23 @@ export function conflictLines(c) {
 }
 
 /** The card of the home page, or null when there is nothing to show. */
-export function outcomesCard(items) {
-  if (!items || !items.length) return null;
+/** The adjudicated corrections among GET /me/feedback's corrections: versions two experts corrected, settled since. */
+export function settledOf(corrections) {
+  return (corrections || []).filter((c) => c.standing === 'adjudicated' && c.adjudication && (c.adjudication.conflicts || []).length);
+}
+
+/**
+ * The card of the home page, or null when there is nothing to show: the places where the annotator and a colleague
+ * disagreed (`items`, the adjudications part), and the versions of theirs that two experts corrected differently and
+ * an expert settled (`settled`, from the corrections part, in the words of settled.js).
+ */
+export function outcomesCard(items, settled = []) {
+  items = items || [];
+  if (!items.length && !(settled || []).length) return null;
+  const corrected = (settled || []).map((c) => h('details.outcome.settled-card', { 'data-unit': c.adjudication.unit_id || '', 'data-recording': c.recording_id },
+    h('summary', {}, h('b', {}, c.file_name || c.recording_id),
+      h('span.caption', {}, ` Your version ${c.attempt}, corrected by ${namesText(c.correctors)}, who disagreed: ${settledSummary(c)}.`)),
+    settledList(c)));
   const blocks = items.map((it) => h('details.outcome', { 'data-unit': it.task_id, 'data-recording': it.recording_id },
     h('summary', {}, h('b', {}, it.file_name || it.recording_id), h('span.caption', {}, ` ${outcomeSummary(it)}`),
       it.reopened ? h('span.caption', {}, 'The expert is looking at it again; these decisions stand until they finish.') : null),
@@ -96,9 +112,11 @@ export function outcomesCard(items) {
     }))));
   const el = h('section.card.outcomes-card', { 'aria-label': 'Decisions on your disagreements' },
     h('h2', {}, 'Decisions on your disagreements'),
-    h('p.outcomes-lead', {}, outcomesLead(items)),
-    h('p.caption', {}, 'Where your annotations and a colleague\'s disagreed, an expert decided each place. Open a recording to see each one, with the reason. Your own files stay as you saved them.'),
-    blocks);
+    items.length ? h('p.outcomes-lead', {}, outcomesLead(items)) : null,
+    h('p.caption', {}, items.length
+      ? 'Where your annotations and a colleague\'s disagreed, an expert decided each place. Open a recording to see each one, with the reason. Your own files stay as you saved them.'
+      : 'Where experts who corrected your work disagreed, another expert decided each place. Your own files stay as you saved them.'),
+    blocks, corrected);
   el.addEventListener('toggle', (e) => { if (e.target.open) logger.event('adjudication_outcome_opened', { conflicts: (e.target.querySelectorAll('li') || []).length }); }, true);
   return el;
 }
@@ -114,12 +132,15 @@ export async function fillOutcomes(app, host) {
   try {
     const fb = await app.backend.myFeedback();
     const part = fb && fb.adjudications;
+    const items = part && part.shown ? part.items || [] : [];
+    const settled = fb && fb.corrections && fb.corrections.shown ? settledOf(fb.corrections.items) : [];
     clear(host);
-    const card = part && part.shown ? outcomesCard(part.items) : null;
+    const card = outcomesCard(items, settled);
     if (card) {
       loadStyles();
       host.append(card);
-      logger.event('adjudication_outcomes_shown', { recordings: part.items.length, conflicts: part.items.reduce((n, it) => n + (it.conflicts || []).length, 0) });
+      logger.event('adjudication_outcomes_shown', { recordings: items.length, conflicts: items.reduce((n, it) => n + (it.conflicts || []).length, 0),
+        settled_corrections: settled.length });
     } else host.remove();
   } catch {
     host.remove(); // the home page works without it

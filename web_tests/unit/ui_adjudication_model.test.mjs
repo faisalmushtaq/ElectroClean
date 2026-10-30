@@ -245,6 +245,11 @@ test('an annotator reads the outcome of their conflicts in plain words, nobody n
   assert.equal(adjudicatedText([{ recording_id: 'r', conflicts: item.conflicts }], 'r'), 'Adjudicated: 1 of 3 disagreements decided as you had them');
   assert.equal(adjudicatedText([{ recording_id: 'r', conflicts: item.conflicts }], 'other'), '');
   assert.equal(o.outcomesCard([]), null);
+  assert.equal(o.outcomesCard([], []), null);
+  // versions two experts corrected differently, once settled, are on the same card (in settled.js's words)
+  const settled = { standing: 'adjudicated', recording_id: 'r', attempt: 1, correctors: [{ corrector_id: 'E01' }, { corrector_id: 'E02' }],
+    adjudication: { unit_id: 'k-1', conflicts: [{ kinds: ['type'], onset_s: 2, offset_s: 2.4, decision: { choice: 'A' } }] } };
+  assert.deepEqual(o.settledOf([settled, { ...settled, standing: 'pending' }, { ...settled, adjudication: { conflicts: [] } }, { standing: 'single' }]), [settled]);
 });
 
 test('the outcome is said from the annotator\'s side: whether what they marked, or left unmarked, stood', async () => {
@@ -275,10 +280,12 @@ test('the adjudication view says its own keys: the hint and the key sheet follow
   assert.doesNotMatch(m.hintText(['A', 'B', 'C']), /both|neither|A or B/);
   assert.match(m.hintText(['A', 'B'], 'view'), /N \/ P/);
   const sheet = m.keySheet(['A', 'B', 'C']);
-  assert.deepEqual(sheet[0], ['1 to 3 (or A, B, C)', 'Keep that version: its marks as they are']);
-  for (const k of ['K', 'X', 'M', 'E', 'Shift+1 to Shift+7', 'R', 'Enter', 'S', 'N, P', 'T', '?', 'F']) assert.ok(sheet.some(([x]) => x === k), k);
-  assert.match(sheet.find(([x]) => x === 'Shift+1 to Shift+7')[1], /1 clear artifact, 2 not an artifact/);
-  assert.ok(!m.keySheet(['A', 'B'], 'view').some(([x]) => x === 'K'));
+  const rows = sheet.flatMap((g) => g.rows);
+  assert.deepEqual(rows[0], ['1–3 / A / B / C', 'keep that version: its marks as they are']);
+  for (const k of ['K', 'X', 'M', 'E', 'Shift+1–7', 'R', 'Enter', 'S', 'N / P', 'T / Shift+T', '?', 'F', '1–7']) assert.ok(rows.some(([x]) => x === k), k);
+  assert.match(rows.find(([x]) => x === 'Shift+1–7')[1], /1 clear artifact, 2 not an artifact/);
+  assert.equal(m.keySheet(['A', 'B'])[0].rows[0][0], '1 / 2 / A / B');
+  assert.ok(!m.keySheet(['A', 'B'], 'view').flatMap((g) => g.rows).some(([x]) => x === 'K'));
   // the keys of the sheet are the keys keyAction answers
   for (const k of ['k', 'x', 'm', 'e', 'r', 's', 'n', 'p', 't', 'f', 'Enter', '3', 'c']) assert.ok(m.keyAction(k, ['A', 'B', 'C']), k);
 });

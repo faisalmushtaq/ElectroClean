@@ -863,7 +863,7 @@ Annotations, Recording and Help tabs fold away while you adjudicate (on a short 
 hidden); press one to open it. For the corrections of someone's version, each expert's change at
 the conflict is listed with its reason and note, and the version they corrected is drawn dashed
 on the EEG and in a lane of its own (L hides and shows it). Decide with the keys or the buttons;
-**?** lists the keys in the panel:
+**?** shows the keys of the view, in the same sheet as the other expert views:
 
 | Key | What it does |
 | --- | --- |
@@ -884,8 +884,9 @@ on the EEG and in a lane of its own (L hides and shows it). Decide with the keys
 Give a reason with a decision by choosing one (Clear artifact, Not an artifact, Type shows in the
 EEG, Start and end show, Channels show, Both are valid, Other) or writing a few words, as the
 study's setting **A reason for each decision** asks: for every decision, only when keeping
-neither version or editing a mark, or never. The reasons are one group of buttons: the arrow keys
-move along it, and Enter on a reason saves the decision. A typical decision with a reason is
+neither version or editing a mark, or never. The reasons are one group of buttons, as in the
+correction view: the arrow keys or a reason's number choose within it, Shift and the number
+chooses from anywhere, and Enter on a reason saves the decision. A typical decision with a reason is
 three keys (2, Shift+3, Enter). ElectroTag has no study-wide default reason: a reason records why
 the adjudicator decided as they did at that place, and the setting already lets a study ask for
 reasons only where they matter most. A choice you have not saved yet stays with its conflict when

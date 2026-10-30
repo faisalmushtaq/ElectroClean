@@ -50,11 +50,10 @@
 .adj-choice[aria-pressed="true"] { background: var(--accent); color: var(--surface); }
 .adj-choice[aria-pressed="true"] b { color: inherit !important; }
 .adj-choice[aria-pressed="true"] .chip-key { color: inherit; }
-.adj-reasons { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.adj-reasons { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; flex: none; }
 .adj-reasons-label { margin-right: 4px; }
 .adj-reasons .seg { height: 28px; padding: 0 8px; font: var(--t-12); border-radius: var(--pill); background: var(--fill); }
 .adj-reasons .seg[aria-checked="true"] { background: var(--accent-soft); color: var(--accent); }
-.adj-reasons .seg .chip-key { margin-left: 4px; color: var(--text-secondary); font-variant-numeric: tabular-nums lining-nums; }
 .adj-reason { height: 32px; font: var(--t-14); }
 .adj-reason-note { margin: 0; }
 .adj-pick { display: flex; flex-direction: column; gap: 4px; padding: 8px; background: var(--surface); border: 1px solid var(--hairline); }
@@ -111,7 +110,7 @@
   .lane-mark.current { height: 20px; top: 0; }
 }
 @media (hover: none) and (pointer: coarse) {
-  .adj-choice .chip-key, .adj-reasons .chip-key, .adj-reasons-label { display: none; }
+  .adj-choice .chip-key, .adj-reasons-label { display: none; }
 }
 
 /* the lanes above the EEG: one per version, on the EEG's time axis */

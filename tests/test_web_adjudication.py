@@ -370,6 +370,11 @@ def test_two_corrections_of_the_same_work_are_adjudicated(service: StudyService,
                                                  "reason_code": "clear_artifact"})
     fin = ex(service, E03, "adjudication_finish", {"unit_id": uid})
     assert fin["version"]["n_annotations"] == 2  # the eye movement and the EMG
+    # reopened, the corrected version settled before still stands for A01 until it is finished again
+    ex(service, E03, "adjudication_reopen", {"unit_id": uid})
+    item = service.call("my_feedback", A01, {})["corrections"]["items"][0]
+    assert item["standing"] == "adjudicated" and item["adjudication"]["version"] == 1
+    ex(service, E03, "adjudication_finish", {"unit_id": uid})
     # a third correction by E01 of the same version replaces E01's earlier one (each corrector's latest)
     correct(E01, 3, [MINE[1]], {MINE[0]["annotation_id"]: "not_artifact", MINE[2]["annotation_id"]: "not_artifact"})
     assert [a["annotator_id"] for a in unit_row(service, uid, E03)["annotators"]] == ["E01", "E02"]

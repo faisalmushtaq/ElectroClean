@@ -644,8 +644,13 @@ def standing_of(service: StudyService, rec: dict[str, Any]) -> dict[str, Any]:
     people = [{"corrector_id": r.get("corrector_id"), "corrector_name": r.get("corrector_name") or ""} for r in group]
     if len(group) < 2:
         return {"standing": "single", "correctors": people, "group": group, "adjudication": None}
+    from electrotag.web.adjudication import last_finished
+
     adj = _adjudication_of(service, aid, rid, attempt)
-    if adj is not None and adj.get("state") == "finished":
+    done = last_finished(adj)
+    if adj is not None and done is not None:
+        # a reopened adjudication goes on counting with what was finished before, until it is finished again
+        adj = {**adj, **{k: v for k, v in done.items() if v is not None}, "state": "finished"}
         frozen = dict(adj.get("inputs") or {})
         ids = {str(d.get("correction_id")) for d in frozen.values()}
         kept = [r for r in corrections_of(service, aid, rid, attempt, latest_per_corrector=False)

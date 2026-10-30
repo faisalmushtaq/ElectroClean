@@ -193,24 +193,27 @@ export function hintText(letters, mode = 'decide') {
     + 'Shift+1–7 reason  ·  Enter save and next  ·  N / P move  ·  ? keys';
 }
 
-/** Every key of the adjudication view, for its key sheet (?): [[keys, what they do]]. */
+/**
+ * Every key of the adjudication view, for its key sheet (? and key_sheet.js, as the other expert views have):
+ * [{title, rows: [[keys, what they do]]}], keys written as the sheet shows them ("N / P", "Shift+1–7").
+ */
 export function keySheet(letters, mode = 'decide') {
-  const view = [['N, P', 'Next and previous conflict'], ['T', 'The lanes: every version, then each one alone (Shift+T back)'],
-    ['?', 'These keys'], ['Arrows, Home, End, + and -', 'Move and scale the EEG, as when annotating']];
-  if (mode !== 'decide') return view;
-  const letterKeys = letters.slice(0, 4).map((x) => x).join(', ');
+  const n = letters.length;
+  const moving = { title: 'Moving', rows: [['N / P', 'the next and previous conflict'], ['T / Shift+T', 'the lanes: every version, then each one alone'],
+    ['?', 'this list of keys']] };
+  if (mode !== 'decide') return [moving];
+  const versions = `${n === 2 ? '1 / 2' : `1–${n}`}${n ? ` / ${letters.slice(0, 4).join(' / ')}` : ''}`;
   return [
-    [`${digitsText(letters)}${letterKeys ? ` (or ${letterKeys})` : ''}`, 'Keep that version: its marks as they are'],
-    ['K', letters.length === 2 ? 'Keep both versions\' marks' : 'Keep every version\'s marks'],
-    ['X', letters.length === 2 ? 'Keep neither: no mark here' : 'Keep none: no mark here'],
-    ['M', 'Choose the marks to keep, one by one, from different people if need be'],
-    ['E', 'Your own marks instead (up to 5): type, start and end, channels; or drag across the EEG'],
-    ['Shift+1 to Shift+7', `The reason: ${Object.values(REASON_TEXT).map((t, i) => `${i + 1} ${t.toLowerCase()}`).join(', ')}`],
-    ['R', 'Write the reason in a few words'],
-    ['Enter', 'Save the decision and go to the next undecided conflict'],
-    ['S', 'Skip to the next undecided conflict'],
-    ...view,
-    ['F', 'Finish the adjudication, once every conflict is decided'],
+    { title: 'What to keep', rows: [[versions, 'keep that version: its marks as they are'],
+      ['K', n === 2 ? 'keep both versions\' marks' : 'keep every version\'s marks'], ['X', n === 2 ? 'keep neither: no mark here' : 'keep none: no mark here'],
+      ['M', 'choose the marks to keep one by one, from different people if need be'],
+      ['E', 'your own marks instead (up to 5): type, start and end, channels; or drag across the EEG']] },
+    { title: 'Reasons', rows: [['Shift+1–7', `anywhere: the reason with that number (${Object.values(REASON_TEXT).map((t, i) => `${i + 1} ${t.toLowerCase()}`).join(', ')})`],
+      ['Left arrow / Right arrow', 'in the reasons: choose the previous or next one'], ['1–7', 'in the reasons: choose the reason with that number'],
+      ['R', 'write the reason in a few words']] },
+    { title: 'Saving', rows: [['Enter', 'save the decision and go to the next conflict not decided'], ['S', 'skip to the next conflict not decided'],
+      ['F', 'finish the adjudication, once every conflict is decided']] },
+    moving,
   ];
 }
 
