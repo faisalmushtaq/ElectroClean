@@ -374,8 +374,11 @@ to find that channel only ("b1"), or use * for any characters (*z). With more th
 channels are laid out in columns, and buttons above them tick a whole group with one click, or
 clear it when it is all ticked: the regions (frontal, central, temporal, parietal and occipital)
 and sides of a montage named by the 10-20 or 10-10 system, the banks of numbered channels of other
-montages (BioSemi's A1 to A32, B1 to B32 and so on, or EGI's E1 to E128 in blocks of 32), and the
-types of channel when there are several. Show chosen only lists just the channels ticked.
+montages (BioSemi's A1 to A32, B1 to B32 and so on, or EGI's E1 to E256 in blocks of 32), and the
+types of channel when there are several. A montage named by numbers that comes with its own
+electrodes.tsv (see below) has regions and sides as well, beside its banks: each electrode joins the
+region and side of the nearest site of the 10-10 system. Show chosen only lists just the channels
+ticked.
 
 Map, at the top of the list, shows the channels as electrodes on a drawing of the head, seen from
 above with the nose at the top, each a small circle with its name. Click an electrode to choose it
@@ -388,15 +391,16 @@ them, when that file comes with the recording: when you open the recording toget
 (choose its folder, or the file with the recording's files), when it was kept with the recording's
 copy on this device, or when it came with a recording opened from a link (see Opening a recording
 from a link). Otherwise they go at the standard places of their 10-20, 10-10 or 10-05 names. A montage
-whose names say nothing about where the electrodes are, such as BioSemi's A1 to D32 or EGI's E1 to
-E128, is arranged on rings in the order of its channels, and the map says "Positions not known:
+whose names say nothing about where the electrodes are, such as BioSemi's A1 to H32 or EGI's E1 to
+E256, is arranged on rings in the order of its channels, and the map says "Positions not known:
 arranged in order". Channels that are not on the head (EOG, ECG and the like) are under it, as
 Other channels. A bad channel is grey with a dashed edge and can still be chosen. When channels are
 coloured by group, the map uses the same colours. The map opens with the whole head in view. On a
-dense cap, such as 128 channels with 10-05 names, the electrodes are then too close together for
-their names: each is a small dot, and its name shows when you point at it or move to it with the
-arrow keys. The + button makes the map larger, step by step, until every electrode has its name, and
-− makes it smaller again; a large map scrolls in its frame. ElectroTag remembers whether you last
+dense cap, such as 128 channels with 10-05 names or a 256-channel net, the electrodes are then too
+close together for their names: each is a small dot, and its name shows when you point at it or move
+to it with the arrow keys. The + button makes the map larger, step by step, until every electrode has
+its name, and − makes it smaller again; a large map scrolls in its frame. In a short window the map
+is made lower, so that the count of channels chosen under it stays in view without scrolling. ElectroTag remembers whether you last
 used the list or the map. When Edit channels… opens on an annotation of the whole montage,
 choosing a channel, in the list or on the map, switches it to "Only these channels" by itself.
 
@@ -500,9 +504,12 @@ what you typed, it says so under the field, and Esc closes the field. Show all, 
 with Shift+End, puts the whole recording on the screen to find your way around it; press it again to
 go back to the view you had. A view of the whole recording is an overview, so it does not count
 towards the parts you have viewed, and a line at the top of the EEG says so for as long as it lasts.
-On a long recording with many channels, reading the whole of it can take a while: the EEG is drawn
-from the start as it is read, and a note over it says how much has been read so far, for example
-"Reading the EEG… 35%". Going back to your view does not wait for the rest.
+On a long recording with many channels, reading the whole of it can take a while (about half a
+minute for an hour of 256 channels): the EEG is drawn from the start as it is read, and a note over
+it says how much has been read so far, for example "Reading the EEG… 35%". Going back to your view
+does not wait for the rest. The overview keeps only what the screen can show, the lowest and highest
+value of each short stretch, so even an hour of 256 channels takes little of the computer's or iPad's
+memory; the value under the pointer is shown again once you go back to a view of the signal itself.
 
 While the pointer is over a trace, the line at the bottom shows the channel, the time to the
 thousandth of a second and the value of the signal there in µV, as drawn: filtered as you see it,
@@ -534,7 +541,9 @@ stays black; by type, EOG is blue, ECG green, EMG violet and other channels mauv
 black. A small legend under the choice says what each colour means and how many channels have it.
 The colours only tell groups apart: a bad channel stays grey and is labelled "(bad)", the channels
 you select stay pink, and no colour stands for a problem. Regions and sides follow the 10-20 and
-10-10 names; a montage named otherwise, such as BioSemi's A1 to D32, stays black by region and side.
+10-10 names, or, for a montage named otherwise, such as BioSemi's A1 to H32 or EGI's E1 to E256, the
+positions in the recording's own electrodes.tsv (each channel takes the region and side of the
+nearest 10-10 site); without that file such a montage stays black by region and side.
 ElectroTag remembers your choice in this browser; until you choose, the study's default applies
 (none, unless the study team set one).
 
@@ -597,8 +606,12 @@ applied to every recording you open there. Traces can be thin, normal or thick; 
 easier to follow on a bright screen or from a little further away. Channel names can be normal or
 large, and the text of the side panel normal or larger. Names are never drawn smaller than they can
 be read: when the rows are too short for a name each (many channels on the screen, or a small
-window), every second or third channel is named, the channels you have selected are always named,
-and pointing at a row names its channel. Page Up shows fewer channels, each with its name. These choices change only how the EEG and
+window), every second, third or, with 256 channels, every fourth or fifth channel is named, the
+channels you have selected are named too, and pointing at a row names its channel. When you have
+selected so many channels that their names would cover each other, as many are named as fit, spread
+over them. Page Up shows fewer channels, each with its name. With only a few channels, such as one
+or two, the rows keep the height they have with a handful (at most 120 pixels each) and sit in the
+middle of the EEG, rather than stretching one trace over the whole height. These choices change only how the EEG and
 the panel look, never what is saved. ElectroTag also follows your computer's or iPad's setting
 to reduce motion, and announces its messages to screen readers.
 

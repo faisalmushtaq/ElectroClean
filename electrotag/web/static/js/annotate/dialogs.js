@@ -7,6 +7,7 @@ import { Catalogue, displayCode } from '../catalogue.js';
 import { legibleOnWhite, local } from '../util.js';
 import { logger } from '../log/logger.js';
 import { channelMap } from './channel_map.js';
+import { standardPosition } from '../viewer/head_map.js';
 import { MAX_NOTE_CHARS, cleanNote, noteProblem } from './confidence.js';
 import { parseTimeText } from './goto.js';
 
@@ -153,6 +154,52 @@ export function tenTwentyPosition(name) {
   return { region: REGION_OF[m[1]], side: m[2] === 'Z' ? 'Midline' : (Number(m[2]) % 2 ? 'Left' : 'Right') };
 }
 
+/** The sites of the 10-10 system, row by row (with 9 and 10 on the ring below, and the inion row). */
+const TEN_TEN = Object.freeze({
+  Fp: 'z 1 2', AF: 'z 3 4 7 8 9 10', F: 'z 1 2 3 4 5 6 7 8 9 10', FC: 'z 1 2 3 4 5 6', FT: '7 8 9 10', C: 'z 1 2 3 4 5 6',
+  T: '7 8 9 10', CP: 'z 1 2 3 4 5 6', TP: '7 8 9 10', P: 'z 1 2 3 4 5 6 7 8 9 10', PO: 'z 3 4 7 8 9 10', O: 'z 1 2', I: 'z 1 2',
+});
+
+/** The 10-10 sites with their map positions, regions and sides. */
+let tenTenSites = null;
+function sites() {
+  if (!tenTenSites) {
+    tenTenSites = [];
+    for (const [row, numbers] of Object.entries(TEN_TEN)) {
+      for (const n of numbers.split(' ')) {
+        const name = `${row}${n}`;
+        const at = standardPosition(name);
+        const pos = tenTwentyPosition(name);
+        if (at && pos) tenTenSites.push({ ...at, ...pos });
+      }
+    }
+  }
+  return tenTenSites;
+}
+
+/**
+ * The region and side of channels whose names say nothing about where they are (BioSemi's A1 to
+ * H32, EGI's E1 to E256) but whose positions came with the recording (an electrodes.tsv, as map
+ * positions {x, y} of js/viewer/head_map.js): those of the nearest 10-10 site. Returns a Map name ->
+ * {region, side}.
+ */
+export function regionsFromPositions(positions) {
+  const out = new Map();
+  if (!positions) return out;
+  const all = sites();
+  for (const [name, p] of positions) {
+    if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+    let best = null;
+    let d = Infinity;
+    for (const q of all) {
+      const e = (q.x - p.x) ** 2 + (q.y - p.y) ** 2;
+      if (e < d) { d = e; best = q; }
+    }
+    if (best) out.set(name, { region: best.region, side: best.side });
+  }
+  return out;
+}
+
 function push(map, key, value) {
   if (!map.has(key)) map.set(key, []);
   map.get(key).push(value);
@@ -186,26 +233,36 @@ function banks(names) {
  * channels}]}]. A montage whose EEG channels are mostly (60% or more) named by the 10-20 or 10-10
  * system has Regions (frontal, central, temporal, parietal, occipital) and Sides; other montages
  * have Banks, the numbered channels sharing a prefix (BioSemi's A1 to A32 ... D1 to D32), with a
- * bank of more than BANK_BLOCK channels offered in blocks (E1–E32, E33–E64 ...). A montage with
- * more than one type of channel also has Types. channels: [{name, type}] in display order.
+ * bank of more than BANK_BLOCK channels offered in blocks (E1–E32, E33–E64 ...), and Regions and
+ * Sides as well when the recording's own positions (`positions`, a Map name -> {x, y} from its
+ * electrodes.tsv) place 60% or more of them (regionsFromPositions). A montage with more than one
+ * type of channel also has Types. channels: [{name, type}] in display order.
  */
-export function channelGroups(channels) {
+export function channelGroups(channels, positions = null) {
   const rows = [];
   const kindOf = (c) => String(c.type || '');
   const eeg = channels.filter((c) => ['eeg', ''].includes(kindOf(c)));
-  const regions = new Map();
-  const sides = new Map();
-  for (const c of eeg) {
-    const pos = tenTwentyPosition(c.name);
-    if (!pos) continue;
-    push(regions, pos.region, c.name);
-    push(sides, pos.side, c.name);
-  }
-  const placed = [...regions.values()].reduce((n, v) => n + v.length, 0);
-  if (eeg.length && placed >= 0.6 * eeg.length) {
+  const byPlace = (placeOf) => {
+    const regions = new Map();
+    const sides = new Map();
+    for (const c of eeg) {
+      const pos = placeOf(c.name);
+      if (!pos) continue;
+      push(regions, pos.region, c.name);
+      push(sides, pos.side, c.name);
+    }
+    const placed = [...regions.values()].reduce((n, v) => n + v.length, 0);
+    if (!eeg.length || placed < 0.6 * eeg.length) return false;
     rows.push({ caption: 'Regions', groups: REGIONS.filter((r) => regions.has(r)).map((r) => ({ name: r, channels: regions.get(r) })) });
     rows.push({ caption: 'Sides', groups: SIDES.filter((s) => sides.has(s)).map((s) => ({ name: s, channels: sides.get(s) })) });
-  } else {
+    return true;
+  };
+  if (!byPlace(tenTwentyPosition)) {
+    // Positions from the recording's electrodes.tsv place a cap named by numbers (beside its banks).
+    if (positions && positions.size) {
+      const placed = regionsFromPositions(positions);
+      byPlace((name) => placed.get(name));
+    }
     const found = banks(channels.map((c) => c.name));
     if (found.length >= 2) rows.push({ caption: 'Banks', groups: found });
   }
@@ -308,7 +365,8 @@ export function chooseChannels({ title, channels, chosen = [], allowWholeMontage
   someRadio.addEventListener('change', update);
   let groupsBlock = null;
   if (many) {
-    const rows = channelGroups(channels);
+    const placed = map && map.layout && map.layout.source === 'file' ? new Map(map.layout.points.filter((p) => !p.extra).map((p) => [p.name, p])) : null;
+    const rows = channelGroups(channels, placed);
     if (rows.length) {
       groupsBlock = h('div.channel-groups', { role: 'group', 'aria-label': 'Tick whole groups of channels' }, rows.map((row) => [
         h('span.caption.channel-groups-caption', {}, row.caption),

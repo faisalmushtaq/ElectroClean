@@ -29,6 +29,20 @@ adjudication, where two marks agree on channels when their Jaccard index reaches
 `review.matching.channel_jaccard` (0.5 by default). `ELECTROTAG_REAL_EEG` runs the readers, registration and Python checks on a folder of
 real recordings; the testing guide says how, and lists the recordings used.
 
+Recordings of every channel count up to 256 were checked from opening to Save and Finish, and the
+views now suit both ends of the range. One or two channels no longer stretch a single trace over
+the whole height of the EEG: rows stop at 120 pixels and sit in the middle. With 256 channels the
+names stay at 11 pixels or more, the last one is no longer cut off by the time axis, and with most
+of the channels selected their names no longer pile up over each other. Caps named by numbers, such
+as BioSemi's A1 to H32 and EGI's E1 to E256, get regions and sides in the channel chooser and
+colours by region and side when the recording's electrodes.tsv says where the electrodes are. The
+channel map is lowered in a short window so that the count of channels chosen stays in view, and
+an adjudication's conflicts, snippets and messages write many channels as runs ("180 channels:
+A1–F20") rather than every name. Show all of a long recording keeps only what the screen can show,
+so an hour of 256 channels takes a few megabytes rather than a gigabyte, the overlay of 256
+channels redraws two to four times faster, and a recording with a very large marker file (185,000
+events in one 256-channel EGI recording) no longer slows every redraw by a tenth of a second.
+
 Accounts can now hold several roles: annotator, expert and administrator, as an expert who also
 annotates does. The study keeps both the set and the older single role (the first of them), and
 studies made before read as they were; on Firebase each person's roles are written into their

@@ -181,3 +181,24 @@ test('the type is shown only where it differs from the montage\'s and is not in 
   assert.deepEqual([...s], [...range('EXG', 1, 8).map((n) => [n, 'MISC']), ['Status', 'STIM']]);
   assert.equal(typeSuffixes(demo()).size, 0, 'HEOG, VEOG and ECG say their type already');
 });
+
+test('a cap named by numbers with its own positions has Regions and Sides beside its banks', async () => {
+  const { standardPosition } = await import('../../electrotag/web/static/js/viewer/head_map.js');
+  const { regionsFromPositions } = await import('../../electrotag/web/static/js/annotate/dialogs.js');
+  const sites = ['Fp1', 'Fp2', 'F7', 'F3', 'Fz', 'F4', 'F8', 'T7', 'C3', 'Cz', 'C4', 'T8', 'P7', 'P3', 'Pz', 'P4', 'P8', 'O1', 'O2',
+    'FT9', 'TP10', 'PO8', 'Iz', 'AF7', 'FC6', 'CP1', 'F10', 'P9', 'C6', 'Oz', 'Fpz', 'POz'];
+  const chs = typed(range('A', 1, 32));
+  const positions = new Map(chs.map((c, i) => [c.name, standardPosition(sites[i])]));
+  const placed = regionsFromPositions(positions);
+  assert.deepEqual(placed.get('A8'), { region: 'Temporal', side: 'Left' });
+  assert.deepEqual(placed.get('A10'), { region: 'Central', side: 'Midline' });
+  assert.deepEqual(placed.get('A21'), { region: 'Temporal', side: 'Right' }, 'TP10, on the ring below');
+  assert.deepEqual(placed.get('A23'), { region: 'Occipital', side: 'Midline' }, 'Iz');
+  const withBanks = [...chs, ...typed(range('B', 1, 32))];
+  const all = new Map([...positions, ...typed(range('B', 1, 32)).map((c, i) => [c.name, standardPosition(sites[i])])]);
+  const r = channelGroups(withBanks, all).map((x) => x.caption);
+  assert.deepEqual(r, ['Regions', 'Sides', 'Banks']);
+  assert.deepEqual(rows(withBanks).map((x) => x[0]), ['Banks'], 'without positions, the banks alone');
+  // positions for too few channels: the banks alone
+  assert.deepEqual(channelGroups(withBanks, new Map([...all].slice(0, 10))).map((x) => x.caption), ['Banks']);
+});

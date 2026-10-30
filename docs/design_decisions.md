@@ -673,6 +673,42 @@ that place, and a default would fill the record with reasons nobody gave; Shift 
 chosen reason one key, and the study's rule can ask for reasons only when keeping nothing or
 drawing a mark.
 
+## Recordings of every channel count up to 256 (30 October 2026)
+
+The project lead asked for a check that ElectroTag handles recordings of any number of channels up
+to 256. Recordings of 1, 2, 4, 8, 19, 32, 64, 128, 160 and 256 channels, in EDF, BDF and BrainVision,
+with 10-20, 10-05, BioSemi, EGI and numbered names, extra EOG, ECG, EMG and Status channels, rates
+from 128 to 2048 Hz and lengths up to an hour, were registered, assigned, opened, annotated and saved
+in Chromium and WebKit, and so were 17 public recordings of 2 to 257 channels. Everything worked,
+and the things below were changed where they worked badly.
+
+A row's height stands for twice the channel type's scaling, so one channel on a tall screen was a
+row of 680 pixels in which 20 µV took half the height: rows now stop at 120 pixels and sit in the
+middle of the plot. The rule that the selected channels are always named, written for a few chosen
+channels, drew 180 boxed names on rows of 2.6 pixels over each other with 256 channels; selected
+names are now placed as long as they do not cover another, which keeps the rule for a few channels
+and names about every fourth of very many. The last row's name was cut off by the time axis, which
+was painted after it. In the channel chooser the map took half the window whatever was above it,
+and two rows of banks pushed the count of channels chosen out of view; the map is now lowered until
+it fits. Caps named by numbers have no 10-20 names, so their regions, sides and colours by region
+came to nothing even when the recording's electrodes.tsv said where each electrode was; each now
+takes the region and side of the nearest 10-10 site, which keeps the five regions and their colours
+as they are for named caps. Where a whole list of channels was written out (an adjudication's
+conflict, a snippet's description, the message after Edit channels…), 180 names pushed the
+decision's buttons off the panel; channels are now written as runs in the montage's order ("180
+channels: A1–F20").
+
+Two changes are about memory and time. Show all of an hour of 256 channels kept every sample, about
+a gigabyte in the page, to draw some 1,100 columns; a read that long now keeps each block of
+samples as its minimum and maximum, two blocks or more to a column, so that the drawing is the same
+and the page holds a few megabytes (86 MB of page memory in all for that hour, against 1,024 MB).
+The overlay of 256 channels blended every trace into every pixel it crossed, one at a time (95 to 230
+ms a redraw); it now counts the traces of each colour per pixel and blends each pixel once per
+colour (35 to 55 ms). A public 256-channel EGI recording came with 185,454 markers, and the overview
+bar drew every one of them at each change of view (about 100 ms); the overview now draws one tick
+for each pixel column with events, worked out once, and the EEG finds the events on screen by
+bisection, which took a redraw of that recording from about 150 ms to 30.
+
 ## Decisions still open
 
 1. **Agreement settings to pre-register:** bin widths, the bin coverage rule,

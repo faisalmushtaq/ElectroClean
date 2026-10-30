@@ -145,3 +145,25 @@ test('a BioSemi montage has no 10-20 names: by region and side it stays in ink',
   assert.equal(channelColours(chs, 'side').size, 0);
   assert.deepEqual(legendOf(chs, 'region'), [{ group: 'Other', colour: COLOURS.trace, count: 128, ink: true }]);
 });
+
+test('a cap named by numbers, with its own electrode positions: each channel takes the region and side of the nearest 10-10 site', async () => {
+  const { standardPosition } = await import('../../electrotag/web/static/js/viewer/head_map.js');
+  // EGI-style names at the places of known sites, nudged a little, as an electrodes.tsv gives them
+  const at = { E1: 'Fp1', E2: 'Fz', E3: 'F8', E4: 'C3', E5: 'Cz', E6: 'T7', E7: 'TP10', E8: 'P4', E9: 'Pz', E10: 'O2', E11: 'PO7' };
+  const positions = new Map(Object.entries(at).map(([n, site]) => { const p = standardPosition(site); return [n, { x: p.x + 0.01, y: p.y - 0.01 }]; }));
+  const chs = [...Object.keys(at).map((name) => ({ name, type: 'eeg' })), { name: 'ECG', type: 'ecg' }];
+  assert.equal(channelColours(chs, 'region').size, 0, 'without positions, nothing is placed');
+  const legend = legendOf(chs, 'region', COLOURS.trace, positions);
+  assert.deepEqual(legend.map((l) => [l.group, l.count]), [['Frontal', 3], ['Central', 2], ['Temporal', 2], ['Parietal', 2], ['Occipital', 2], ['Other', 1]]);
+  const colours = channelColours(chs, 'region', positions);
+  assert.equal(colours.get('E6'), colourOf('region', 'Temporal'));
+  assert.equal(colours.get('E10'), colourOf('region', 'Occipital'));
+  assert.equal(colours.has('ECG'), false, 'other types stay in ink');
+  const sides = channelColours(chs, 'side', positions);
+  assert.equal(sides.get('E1'), colourOf('side', 'Left'));
+  assert.equal(sides.get('E8'), colourOf('side', 'Right'));
+  assert.equal(sides.has('E5'), false, 'the midline in ink');
+  // positions for fewer than 60% of the EEG channels place nothing
+  const few = new Map([...positions].slice(0, 3));
+  assert.equal(channelColours(chs, 'region', few).size, 0);
+});

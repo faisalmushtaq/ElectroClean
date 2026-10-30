@@ -32,11 +32,22 @@ const TAG_BAND = TAG_ROWS * TAG_ROW_H + 6;
 const AXIS_H = 24;
 const RIGHT = 10;
 const OVERVIEW_H = 34;
+// Rows are never taller than this (CSS pixels): with one, two or four channels on a tall screen, the
+// rows stay the height a few channels have elsewhere and sit in the middle of the plot, rather than
+// stretching one trace over the whole height (a row's height stands for twice the channel type's
+// scaling, so a taller row would magnify the signal as well).
+export const MAX_ROW_H = 120;
 const EDGE_PX = 6;
 const CLIP = 0.75; // traces are clipped at 1.5 half-rows (MNE's clipping=1.5)
 // A read of more samples than this (samples × channels, as for Show all on a long, dense recording)
 // is made in pieces in time order: each piece is drawn as it arrives and the share read is shown.
 const PIECE_VALUES = 4e6;
+// Such a read is kept whole only while the screen can show its detail. When each pixel column of the
+// plot covers 8 samples or more (Show all of a long recording), each block of samples is kept as its
+// minimum and maximum instead (the cache's `step`, samples per block, with two values per block), a
+// block at most half a column: what is drawn is the same, and a 256-channel hour at 1000 Hz takes a few
+// megabytes rather than a gigabyte. A view that needs the samples themselves reads them again.
+const ENVELOPE_MIN_STEP = 4;
 
 const end = (a) => a.onset_sample + a.duration_samples;
 const NOTE_W = 12; // the note glyph at the end of a tag
@@ -93,7 +104,8 @@ export class EegViewer {
     this.durationTotal = this.nSamples / this.sfreq;
     this.channels = o.channels;
     this.scalings = o.scalings || {};
-    this.events = o.events || [];
+    // in time order, so that those on screen are found by bisection (a marker file can hold 100,000 or more)
+    this.events = [...(o.events || [])].sort((a, b) => a.onset_sample - b.onset_sample);
     this.gaps = o.gaps || [];
     this.catalogue = o.catalogue;
     this.filters = o.filters || { highpassHz: null, notchHz: null, notchHarmonics: false };
@@ -247,12 +259,19 @@ export class EegViewer {
   get y1() { return this.H - AXIS_H; }
   get plotW() { return this.x1 - this.x0; }
   get plotH() { return this.y1 - this.y0; }
-  get rowH() { return this.plotH / Math.max(1, this.view.nChannels); }
+  get rowH() { return Math.min(MAX_ROW_H, this.plotH / Math.max(1, this.view.nChannels)); }
+  /** The top of the first row on screen: the rows fill the plot, or sit in its middle when they are at MAX_ROW_H. */
+  get rowsTop() { return this.y0 + Math.max(0, (this.plotH - this.rowH * Math.max(1, this.view.nChannels)) / 2); }
 
   tToX(t) { return this.x0 + ((t - this.view.startS) / this.view.durationS) * this.plotW; }
   xToT(x) { return this.view.startS + ((x - this.x0) / this.plotW) * this.view.durationS; }
   sampleToX(s) { return this.tToX(s / this.sfreq); }
-  rowCentre(i) { return this.y0 + (i - this.view.firstChannel + 0.5) * this.rowH; }
+  rowCentre(i) { return this.rowsTop + (i - this.view.firstChannel + 0.5) * this.rowH; }
+  /** The row (index into channels) at y (CSS pixels in the plot), or null between or outside the rows. */
+  rowAt(y) {
+    const row = Math.floor((y - this.rowsTop) / this.rowH) + this.view.firstChannel;
+    return row >= this.view.firstChannel && row < Math.min(this.channels.length, this.view.firstChannel + this.view.nChannels) ? row : null;
+  }
 
   /** Channels on screen: [{row, ch}] */
   visibleRows() {
@@ -415,7 +434,21 @@ export class EegViewer {
     if (!c || c.filtersKey !== this._filtersKey()) return false;
     const [s0, s1] = this._neededRange();
     if (s0 < c.startSample || s1 > c.startSample + c.nSamples) return false;
+    if (c.step > 1 && (this.view.durationS * this.sfreq) / Math.max(1, Math.round(this.plotW)) < c.step) return false;
     return this.visibleRows().every(({ ch }) => c.rows.has(ch.index));
+  }
+
+  /** Where absolute sample `s` is in a row of cache `c`: its index, or that of its block's first value (step > 1). */
+  _cacheIndex(c, s) {
+    return c.step > 1 ? 2 * Math.floor((s - c.startSample) / c.step) : s - c.startSample;
+  }
+
+  /** The columns of the dense drawing for one row of cache `c`: decimateColumns over its samples or its blocks. */
+  _decimate(c, data, grid, cols, prev) {
+    const sStart = this.view.startS * this.sfreq;
+    if (!(c.step > 1)) return decimateColumns(data, c.startSample, grid, Math.round(sStart / grid), cols, prev);
+    // blocks: two values for each `step` samples, counted from the cache's start
+    return decimateColumns(data, 0, (grid * 2) / c.step, Math.round((sStart - c.startSample) / grid), cols, prev);
   }
 
   async _load() {
@@ -452,7 +485,7 @@ export class EegViewer {
       this.readProgress = null;
       this.stats.readMs = performance.now() - t;
       const rows = new Map(want.map((ci, k) => [ci, res.data[k]]));
-      this._cache = { id: (this._cacheId = (this._cacheId || 0) + 1), startSample: res.startSample, nSamples: res.nSamples, rows, filtersKey: this._filtersKey() };
+      this._cache = { id: (this._cacheId = (this._cacheId || 0) + 1), startSample: res.startSample, nSamples: res.nSamples, step: res.step || 1, rows, filtersKey: this._filtersKey() };
       this.edgeZones = res.edgeZones || [];
       this._loading = false;
       this.invalidate(['under', 'traces']);
@@ -475,6 +508,10 @@ export class EegViewer {
   async _readInPieces(token, s0, s1, want, pieces) {
     const n = s1 - s0;
     const filtersKey = this._filtersKey();
+    const perColumn = n / Math.max(1, Math.round(this.plotW));
+    const step = 2 * Math.floor(perColumn / 4); // even, and at most half a column
+    // (in pieces of at most PIECE_VALUES values, however long the read: only the blocks are kept)
+    if (step >= ENVELOPE_MIN_STEP) return this._readEnvelope(token, s0, s1, want, Math.max(pieces, Math.ceil((n * want.length) / this.pieceValues)), step);
     const data = want.map(() => new Float32Array(n));
     const zones = new Map();
     let done = 0;
@@ -495,6 +532,52 @@ export class EegViewer {
       this.invalidate(['under', 'traces']);
     }
     return { startSample: s0, nSamples: n, data, edgeZones: [...zones.values()] };
+  }
+
+  /**
+   * As _readInPieces, keeping each block of `step` samples as its minimum and maximum (ENVELOPE_MIN_STEP):
+   * the pieces are whole blocks, and each is reduced as it arrives. Returns {startSample, nSamples,
+   * step, data} with two values per block, or null when a newer read took over.
+   */
+  async _readEnvelope(token, s0, s1, want, pieces, step) {
+    const n = s1 - s0;
+    const blocks = Math.ceil(n / step);
+    const filtersKey = this._filtersKey();
+    const data = want.map(() => new Float32Array(2 * blocks));
+    const zones = new Map();
+    let doneBlocks = 0;
+    for (let k = 0; k < pieces; k++) {
+      const ba = Math.round((k * blocks) / pieces);
+      const bb = Math.round(((k + 1) * blocks) / pieces);
+      if (bb <= ba) continue;
+      const a = s0 + ba * step;
+      const b = Math.min(s1, s0 + bb * step);
+      const r = await this.recording.readWindow({ startSample: a, nSamples: b - a, channels: want, filters: { ...this.filters } });
+      if (token !== this._token) return null;
+      const off = r.startSample - a; // (the read starts where it was asked to)
+      r.data.forEach((d, i) => {
+        const out = data[i];
+        for (let blk = ba; blk < bb; blk++) {
+          const from = Math.max(0, (blk - ba) * step - off);
+          const to = Math.min(d.length, (blk - ba + 1) * step - off);
+          let lo = NaN; let hi = NaN;
+          if (to > from) {
+            lo = d[from]; hi = lo;
+            for (let j = from + 1; j < to; j++) { const v = d[j]; if (v < lo) lo = v; else if (v > hi) hi = v; }
+          }
+          out[2 * blk] = lo;
+          out[2 * blk + 1] = hi;
+        }
+      });
+      for (const z of r.edgeZones || []) zones.set(`${z[0]}:${z[1]}`, z);
+      doneBlocks = bb;
+      this.readProgress = Math.min(1, (doneBlocks * step) / n);
+      this._cache = { id: (this._cacheId = (this._cacheId || 0) + 1), startSample: s0, nSamples: Math.min(n, doneBlocks * step), step,
+        rows: new Map(want.map((ci, i) => [ci, data[i].subarray(0, 2 * doneBlocks)])), filtersKey };
+      this.edgeZones = [...zones.values()];
+      this.invalidate(['under', 'traces']);
+    }
+    return { startSample: s0, nSamples: n, step, data, edgeZones: [...zones.values()] };
   }
 
   // -------------------------------------------------------------- rendering
@@ -542,6 +625,15 @@ export class EegViewer {
     const s0 = this.view.startS * this.sfreq;
     const s1 = (this.view.startS + this.view.durationS) * this.sfreq;
     return this.annotations.filter((a) => a.onset_sample < s1 && end(a) > s0);
+  }
+
+  /** The events on screen (and one sample either side), from the events in time order. */
+  _eventsOnScreen() {
+    const ev = this.events;
+    const lo = this.view.startS * this.sfreq - 1;
+    const hi = (this.view.startS + this.view.durationS) * this.sfreq + 1;
+    const first = (t) => { let a = 0; let b = ev.length; while (a < b) { const m = (a + b) >> 1; if (ev[m].onset_sample < t) a = m + 1; else b = m; } return a; };
+    return ev.slice(first(lo), first(hi));
   }
 
   /** Vertical extent (y0, y1) of the rows of `channels` on screen; [] means the whole plot. */
@@ -649,37 +741,53 @@ export class EegViewer {
     ctx.strokeStyle = rgba(COLOURS.event, 0.75);
     ctx.setLineDash([4, 3]);
     ctx.beginPath();
-    for (const e of this.events) {
-      const x = this.sampleToX(e.onset_sample);
-      if (x < x0 || x > x1) continue;
-      ctx.moveTo(Math.round(x) + 0.5, y0); ctx.lineTo(Math.round(x) + 0.5, y1);
+    let lastX = null; // one line for each pixel column with events
+    for (const e of this._eventsOnScreen()) {
+      const x = Math.round(this.sampleToX(e.onset_sample));
+      if (x < x0 || x > x1 || x === lastX) continue;
+      lastX = x;
+      ctx.moveTo(x + 0.5, y0); ctx.lineTo(x + 0.5, y1);
     }
     ctx.stroke();
     ctx.setLineDash([]);
+    // the time axis's band, before the names, so that the last row's name may reach into it
+    ctx.fillStyle = COLOURS.surface;
+    ctx.fillRect(0, y1, this.W, AXIS_H);
+    ctx.strokeStyle = COLOURS.separator;
+    ctx.beginPath(); ctx.moveTo(x0, y1 + 0.5); ctx.lineTo(x1, y1 + 0.5); ctx.stroke();
     // Channel names, never smaller than 11 pixels (13 for large names): where the rows are shorter,
-    // every second or third channel is named, and the selected channels are always named, on a
-    // white ground over their neighbours (the row under the pointer is named in _renderOver).
+    // every second or third channel is named (nameEvery). The selected channels are named too, in
+    // their colour: in place when their row is among those named, otherwise on a white ground over
+    // their neighbours, as many as fit without covering each other's names (with most of a 256-channel
+    // montage selected, about every fourth). The row under the pointer is named in _renderOver.
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
     const fontPx = namePx(this.comfort.names, this.rowH);
     const every = nameEvery(fontPx, this.rowH);
     this._names = { px: fontPx, every };
-    const later = [];
+    const isSelected = (row, ch) => (this.overlay ? this.isolated === row : this.channelsActive && this.selectedChannels.has(ch.name));
+    const onGrid = (row) => !((row - this.view.firstChannel) % every);
+    const taken = []; // centres of the selected channels' names drawn so far, top to bottom
+    const boxed = [];
     for (const { row, ch } of this.visibleRows()) {
-      const selected = this.overlay ? this.isolated === row : this.channelsActive && this.selectedChannels.has(ch.name);
-      if ((row - this.view.firstChannel) % every) { if (selected) later.push({ row, ch }); continue; }
+      const selected = isSelected(row, ch);
+      if (!onGrid(row)) { if (selected) boxed.push({ row, ch }); continue; }
       const hover = this.hover && this.hover.area === 'channel_names' && this.hover.row === row;
       ctx.font = `${selected ? '600 ' : ''}${fontPx}px ${FONT}`;
       ctx.fillStyle = selected ? (this.overlay ? COLOURS.accent : COLOURS.selection_channel) : ch.bad ? COLOURS.text_disabled : hover ? COLOURS.accent : this.groupColour(ch) || COLOURS.text;
       ctx.fillText(this._nameText(ch), x0 - 8, this.rowCentre(row));
+      if (selected) taken.push(this.rowCentre(row));
     }
-    for (const { row, ch } of later) this._boxedName(ctx, row, ch, this.overlay ? COLOURS.accent : COLOURS.selection_channel);
+    const room = fontPx + 4; // a boxed name's white ground
+    this._names.boxed = [];
+    for (const { row, ch } of boxed) {
+      const y = this.rowCentre(row);
+      if (taken.some((t) => Math.abs(t - y) < room)) continue;
+      this._boxedName(ctx, row, ch, this.overlay ? COLOURS.accent : COLOURS.selection_channel);
+      this._names.boxed.push(ch.name);
+      taken.push(y);
+    }
     ctx.textBaseline = 'alphabetic';
-    // the time axis
-    ctx.fillStyle = COLOURS.surface;
-    ctx.fillRect(0, y1, this.W, AXIS_H);
-    ctx.strokeStyle = COLOURS.separator;
-    ctx.beginPath(); ctx.moveTo(x0, y1 + 0.5); ctx.lineTo(x1, y1 + 0.5); ctx.stroke();
     // The ticks' labels in one format, which the title names (seconds, or m:ss from ten minutes on).
     // A label stays inside the canvas and clear of the title and of the label before it.
     ctx.fillStyle = COLOURS.text_secondary;
@@ -732,9 +840,9 @@ export class EegViewer {
     ctx.textAlign = 'left';
     const hits = (a, b) => avoid.some((r) => a < r[1] && b > r[0] && y1 - 15 < r[3] && y1 - 2 > r[2]);
     let lastRight = -Infinity;
-    for (const e of this.events) {
+    for (const e of this._eventsOnScreen()) {
       const x = this.sampleToX(e.onset_sample);
-      if (x < x0 || x > x1) continue;
+      if (x < x0 || x > x1 || x + 2 < lastRight + 4) continue; // (no room after the label before it)
       const w = ctx.measureText(e.label).width;
       let left = x + 2;
       if (hits(left, left + w + 4) || left + w + 4 > x1) left = x - 6 - w;
@@ -793,7 +901,6 @@ export class EegViewer {
     const groups = new Map();
     let decimate = 0;
     const grid = span / cols; // samples per column
-    const g0 = Math.round(sStart / grid);
     const decimated = new Map();
     for (const { row, ch } of this.visibleRows()) {
       const data = c.rows.get(ch.index);
@@ -823,7 +930,7 @@ export class EegViewer {
       }
       const td = performance.now();
       const prev = this._decimated && this._decimated.dataId === c.id ? this._decimated.rows.get(ch.index) : null;
-      const d = decimateColumns(data, c.startSample, grid, g0, cols, prev);
+      const d = this._decimate(c, data, grid, cols, prev);
       decimated.set(ch.index, d);
       let total = 0;
       let count = 0;
@@ -1041,7 +1148,8 @@ export class EegViewer {
       const text = `${this.hover.t.toFixed(3)} s`;
       ctx.font = `600 11px ${FONT}`;
       ctx.fillStyle = COLOURS.surface;
-      ctx.fillRect(0, y1 + 2, Math.min(x0 - 6, 12 + Math.max(ctx.measureText(text).width, this._axisTitleW || 0)), AXIS_H - 2);
+      // (from just under the last row's name, which may reach a few pixels into the axis's band)
+      ctx.fillRect(0, y1 + 6, Math.min(x0 - 6, 12 + Math.max(ctx.measureText(text).width, this._axisTitleW || 0)), AXIS_H - 6);
       ctx.fillStyle = COLOURS.accent;
       ctx.textAlign = 'left';
       ctx.fillText(text, 8, y1 + 16);
@@ -1132,7 +1240,12 @@ export class EegViewer {
       hatch(ctx, xa, 0, w, H, rgba('#6E6E73', 0.55), 5);
     }
     ctx.fillStyle = COLOURS.event;
-    for (const e of this.events) ctx.fillRect(Math.round(tx(e.onset_sample)), H - 6, 1, 6);
+    // a tick for each pixel column with events, worked out once for each width
+    if (!this._eventTicks || this._eventTicks.W !== W) {
+      const cols = new Set(this.events.map((e) => Math.round(tx(e.onset_sample))));
+      this._eventTicks = { W, cols: [...cols] };
+    }
+    for (const x of this._eventTicks.cols) ctx.fillRect(x, H - 6, 1, 6);
     for (const a of this.annotations) {
       ctx.fillStyle = this.catalogue.colourFor(a.label);
       const xa = tx(a.onset_sample);
@@ -1189,8 +1302,8 @@ export class EegViewer {
       if (x >= tg.x && x <= tg.x + tg.w && y >= tg.y && y <= tg.y + tg.h) { info.area = 'tags'; info.tag = tg.id; info.annotation = tg.id; return info; }
     }
     if (y >= this.y0 && y <= this.y1) {
-      const row = Math.floor((y - this.y0) / this.rowH) + this.view.firstChannel;
-      if (row >= this.view.firstChannel && row < Math.min(this.channels.length, this.view.firstChannel + this.view.nChannels)) {
+      const row = this.rowAt(y);
+      if (row !== null) {
         info.row = row;
         info.channel = this.channels[row].name;
       }
@@ -1458,12 +1571,19 @@ export class EegViewer {
       ctx.restore();
       return;
     }
-    // Dense: min/max columns into the pixels, each blended over what is there already.
+    // Dense: min/max columns into the pixels. The traces of one colour (the ink, or one group's) are
+    // counted per pixel first (each column's stroke adds one from its top to its bottom, kept as a
+    // difference at its two ends and summed down the columns), and each pixel then takes the opacity
+    // of that many traces over each other at once (1 - (1 - a)^n), over the colours drawn before: with
+    // 256 channels the pixels are blended once per colour rather than once per trace.
     const W = this.traces.width;
     const H = this.traces.height;
     if (!this._img || this._img.width !== W || this._img.height !== H) this._img = new ImageData(W, H);
     const buf = new Uint32Array(this._img.data.buffer);
     buf.fill(0);
+    if (!this._counts || this._counts.length !== W * (H + 1)) this._counts = new Int16Array(W * (H + 1));
+    const counts = this._counts;
+    const acc = new Int32Array(W);
     const top = Math.ceil(y0 * dpr);
     const bottom = Math.floor(y1 * dpr) - 1;
     const thick = widths.device;
@@ -1471,62 +1591,75 @@ export class EegViewer {
     const colX = new Int32Array(cols + 1);
     for (let col = 0; col <= cols; col++) colX[col] = Math.round((x0 + col) * dpr);
     const grid = span / cols;
-    const g0 = Math.round(sStart / grid);
     const decimated = new Map();
-    const a8 = Math.round(alpha * 255);
-    const inv = 255 - a8;
-    // The opacity after one more trace of the same colour, for every opacity there may be already.
-    const nextAlpha = new Uint8Array(256);
-    for (let da = 0; da < 256; da++) nextAlpha[da] = Math.min(255, a8 + Math.round((da * inv) / 255));
-    for (const { row, ch } of rows) {
-      const data = c.rows.get(ch.index);
-      if (!data) continue;
-      const prev = this._decimated && this._decimated.dataId === c.id ? this._decimated.rows.get(ch.index) : null;
-      const d = decimateColumns(data, c.startSample, grid, g0, cols, prev);
-      decimated.set(ch.index, d);
-      let total = 0; let count = 0;
-      for (let col = 0; col < cols; col++) { total += d.sum[col]; count += d.cnt[col]; }
-      const offset = count ? total / count : 0;
-      this._offsets.set(row, offset);
-      const { yc, k, lim } = this._overlayGeometry(ch);
-      this._cols.set(row, { min: d.min, max: d.max, offset, k, yc, lim });
-      const yOf = (v) => { const y = (v - offset) * k; return yc - (y > lim ? lim : y < -lim ? -lim : y); };
-      const [r, g, b] = hexToRgb(this._overlayColour(ch));
-      const rgb = ((b << 16) | (g << 8) | r) >>> 0;
-      const src = ((a8 << 24) | rgb) >>> 0;
-      let prevLo = -1; let prevHi = -1;
-      for (let col = 0; col < cols; col++) {
-        const lo0 = d.min[col];
-        if (lo0 !== lo0) { prevLo = -1; continue; }
-        let lo = Math.round(yOf(d.max[col]) * dpr);
-        let hi = Math.round(yOf(lo0) * dpr) + thick - 1;
-        const ownLo = lo; const ownHi = hi;
-        if (prevLo >= 0) { if (lo > prevHi) lo = prevHi; if (hi < prevLo) hi = prevLo; }
-        prevLo = ownLo; prevHi = ownHi;
-        if (lo < top) lo = top;
-        if (hi > bottom) hi = bottom;
-        const xa = colX[col];
-        const xb = Math.max(colX[col + 1], xa + wide);
-        for (let y = lo; y <= hi; y++) {
-          const base = y * W;
-          for (let x = xa; x < xb; x++) {
-            const i = base + x;
-            const dst = buf[i];
-            if (!dst) { buf[i] = src; continue; }
-            const da = dst >>> 24;
-            // the same colour (ink, or one group's): only the opacity grows
-            if ((dst & 0xFFFFFF) === rgb) { buf[i] = ((nextAlpha[da] << 24) | rgb) >>> 0; continue; }
-            // source over destination (straight alpha, as ImageData holds it)
-            const dw = (da * inv) / 255;
-            const oa = a8 + dw;
-            const f = 1 / oa;
-            const rr = ((r * a8 + (dst & 255) * dw) * f) | 0;
-            const gg = ((g * a8 + ((dst >>> 8) & 255) * dw) * f) | 0;
-            const bb = ((b * a8 + ((dst >>> 16) & 255) * dw) * f) | 0;
-            buf[i] = (((oa + 0.5) << 24) | (bb << 16) | (gg << 8) | rr) >>> 0;
-          }
+    const a = alpha;
+    // the opacity (0-255) of n traces of opacity a over each other
+    const opacity = new Uint8Array(rows.length + 2);
+    for (let n = 1; n < opacity.length; n++) opacity[n] = Math.round(255 * (1 - (1 - a) ** n));
+    const groups = new Map(); // colour -> rows, in the order the colours first come
+    for (const r of rows) {
+      const colour = this._overlayColour(r.ch);
+      if (!groups.has(colour)) groups.set(colour, []);
+      groups.get(colour).push(r);
+    }
+    const lo0 = top * W;
+    const hi0 = (bottom + 2) * W;
+    let first = true;
+    for (const [colour, members] of groups) {
+      counts.fill(0, lo0, hi0);
+      for (const { row, ch } of members) {
+        const data = c.rows.get(ch.index);
+        if (!data) continue;
+        const prev = this._decimated && this._decimated.dataId === c.id ? this._decimated.rows.get(ch.index) : null;
+        const d = this._decimate(c, data, grid, cols, prev);
+        decimated.set(ch.index, d);
+        let total = 0; let count = 0;
+        for (let col = 0; col < cols; col++) { total += d.sum[col]; count += d.cnt[col]; }
+        const offset = count ? total / count : 0;
+        this._offsets.set(row, offset);
+        const { yc, k, lim } = this._overlayGeometry(ch);
+        this._cols.set(row, { min: d.min, max: d.max, offset, k, yc, lim });
+        const yOf = (v) => { const y = (v - offset) * k; return yc - (y > lim ? lim : y < -lim ? -lim : y); };
+        let prevLo = -1; let prevHi = -1;
+        for (let col = 0; col < cols; col++) {
+          const min = d.min[col];
+          if (min !== min) { prevLo = -1; continue; }
+          let lo = Math.round(yOf(d.max[col]) * dpr);
+          let hi = Math.round(yOf(min) * dpr) + thick - 1;
+          const ownLo = lo; const ownHi = hi;
+          if (prevLo >= 0) { if (lo > prevHi) lo = prevHi; if (hi < prevLo) hi = prevLo; }
+          prevLo = ownLo; prevHi = ownHi;
+          if (lo < top) lo = top;
+          if (hi > bottom) hi = bottom;
+          const xa = colX[col];
+          const xb = Math.max(colX[col + 1], xa + wide);
+          if (hi < lo) continue;
+          const a0 = lo * W;
+          const a1 = (hi + 1) * W;
+          for (let x = xa; x < xb; x++) { counts[a0 + x] += 1; counts[a1 + x] -= 1; }
         }
       }
+      // this colour's pixels over what the colours before left (source over, straight alpha as ImageData holds it)
+      const [r, g, b] = hexToRgb(colour);
+      const rgb = ((b << 16) | (g << 8) | r) >>> 0;
+      acc.fill(0);
+      for (let y = top; y <= bottom; y++) for (let x = 0, i = y * W; x < W; x++, i++) {
+        const n = (acc[x] += counts[i]);
+        if (n <= 0) continue;
+        const sa = opacity[Math.min(n, opacity.length - 1)];
+        const dst = buf[i];
+        if (first || !dst) { buf[i] = ((sa << 24) | rgb) >>> 0; continue; }
+        const da = dst >>> 24;
+        const inv = 255 - sa;
+        const dw = (da * inv) / 255;
+        const oa = sa + dw;
+        const f = 1 / oa;
+        const rr = ((r * sa + (dst & 255) * dw) * f) | 0;
+        const gg = ((g * sa + ((dst >>> 8) & 255) * dw) * f) | 0;
+        const bb = ((b * sa + ((dst >>> 16) & 255) * dw) * f) | 0;
+        buf[i] = (((oa + 0.5) << 24) | (bb << 16) | (gg << 8) | rr) >>> 0;
+      }
+      first = false;
     }
     this._decimated = { dataId: c.id, rows: decimated };
     ctx.putImageData(this._img, 0, 0);
@@ -1595,8 +1728,8 @@ export class EegViewer {
     ctx.beginPath();
     const per = span / cols;
     for (let col = 0; col < cols; col++) {
-      const a = Math.max(0, Math.floor(sStart + col * per) - c.startSample);
-      const b = Math.min(data.length, Math.max(a + 1, Math.floor(sStart + (col + 1) * per) - c.startSample));
+      const a = Math.max(0, this._cacheIndex(c, Math.floor(sStart + col * per)));
+      const b = Math.min(data.length, Math.max(a + 1, this._cacheIndex(c, Math.floor(sStart + (col + 1) * per)) + (c.step > 1 ? 2 : 0)));
       if (a >= data.length) break;
       let lo = data[a]; let hi = lo;
       for (let s = a + 1; s < b; s++) { const v = data[s]; if (v < lo) lo = v; else if (v > hi) hi = v; }
@@ -1616,7 +1749,8 @@ export class EegViewer {
    */
   valueAt(clientX, clientY) {
     const c = this._cache;
-    if (!c || c.filtersKey !== this._filtersKey()) return null;
+    // (blocks' minima and maxima, as after Show all of a long recording, have no value at a time)
+    if (!c || c.filtersKey !== this._filtersKey() || c.step > 1) return null;
     const r = this.over.getBoundingClientRect();
     const x = clientX - r.left;
     const y = clientY - r.top;
@@ -1632,8 +1766,8 @@ export class EegViewer {
     };
     let row = null;
     if (!this.overlay) {
-      row = Math.floor((y - this.y0) / this.rowH) + this.view.firstChannel;
-      if (row >= Math.min(this.channels.length, this.view.firstChannel + this.view.nChannels)) return null;
+      row = this.rowAt(y);
+      if (row === null) return null;
     } else if (this.isolated !== null) {
       row = this.isolated;
     } else {
