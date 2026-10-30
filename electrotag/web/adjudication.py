@@ -162,26 +162,22 @@ def _original(aid: str, entry: dict[str, Any]) -> Input:
                  str(entry.get("output_basename") or ""))
 
 
-def task_units(service: StudyService, entries: list[dict[str, Any]]) -> list[Unit]:
-    """The study's tasks as units (the adapter to the task records of docs/web/api.md, "Tasks"): each task's
-    annotators, window and letters; known-answer (gold) tasks never come to adjudication."""
-    out = []
-    for t in service.store.records("tasks"):
-        tid, rid = t.get("task_id"), t.get("recording_id")
-        if not isinstance(tid, str) or not UNIT_RE.match(tid) or not isinstance(rid, str) or t.get("gold"):
-            continue
-        people = [str(a) for a in t.get("annotators") or []]
-        w = t.get("window") if isinstance(t.get("window"), dict) else None
-        window = (int(w["start_sample"]), int(w["end_sample"])) if w and "start_sample" in w and "end_sample" in w \
-            else None
-        inputs = {}
-        for aid in people:
-            e = _latest_saved(entries, aid, rid)
-            if e is not None:
-                inputs[aid] = _original(aid, e)
-        out.append(Unit(tid, "task", rid, people, inputs, window, _letters(people, t.get("letters")),
-                        notes=str(t.get("notes") or "")))
-    return out
+def task_unit(service: StudyService, t: dict[str, Any], attempts: dict[str, dict[str, Any] | None] | None = None
+              ) -> Unit:
+    """A task of the study (``service.tasks``, electrotag/web/tasks.py) as a unit: its annotators, window and letters,
+    and each one's latest saved attempt (``Tasks.attempts``)."""
+    people = [str(a) for a in t.get("annotators") or []]
+    w = t.get("window") if isinstance(t.get("window"), dict) else None
+    window = (int(w["start_sample"]), int(w["end_sample"])) if w and "start_sample" in w and "end_sample" in w else None
+    rows = attempts if attempts is not None else service.tasks.attempts(t)
+    inputs = {aid: _original(aid, row) for aid, row in rows.items() if row is not None and aid in people}
+    return Unit(str(t["task_id"]), "task", str(t["recording_id"]), people, inputs, window,
+                _letters(people, t.get("letters")), notes=str(t.get("notes") or ""))
+
+
+def task_units(service: StudyService, tasks: list[dict[str, Any]]) -> list[Unit]:
+    """The study's tasks as units; known-answer (gold) tasks never come to adjudication."""
+    return [task_unit(service, t) for t in tasks if not t.get("gold")]
 
 
 def recording_units(service: StudyService, entries: list[dict[str, Any]], skip: set[str]) -> list[Unit]:
@@ -246,9 +242,10 @@ def correction_units(service: StudyService) -> list[Unit]:
 def units(service: StudyService) -> list[Unit]:
     """Everything the study could adjudicate now (tasks, recordings without a task, corrections)."""
     entries = [e for e in service.store.completion_entries() if e.get("status") == "completed"]
-    tasks = task_units(service, entries)
-    tasked = {u.recording_id for u in tasks}
-    return (tasks + recording_units(service, entries, tasked) + correction_units(service))[:MAX_UNITS]
+    every_task = service.tasks.all()
+    tasked = {str(t.get("recording_id")) for t in every_task}  # gold tasks' recordings too: never a recording unit
+    return (task_units(service, every_task) + recording_units(service, entries, tasked)
+            + correction_units(service))[:MAX_UNITS]
 
 
 # ------------------------------------------------------------------ the versions and their conflicts
@@ -334,6 +331,46 @@ def compare(service: StudyService, unit: Unit, record: dict[str, Any] | None = N
     clusters = find_clusters(docs, ch_names=tuple(m["ch_names"]), sfreq=float(timing["sfreq"]), unit_id=unit.unit_id,
                              window=window, rules=rules, who={x: p for p, x in letters.items()})
     return Compared(unit, letters, docs, shas, rules, clusters, m)
+
+
+#: Conflict counts of units not started yet, by what was compared (the versions and the rules): reading the files
+#: and matching them again for every list would cost a few file reads per unit each time.
+_COUNTS: dict[str, tuple[int, int]] = {}
+_COUNTS_MAX = 5000
+
+
+def _count_key(service: StudyService, unit: Unit) -> str:
+    versions = sorted((p, i.source, i.attempt, i.number, i.session_id) for p, i in unit.inputs.items())
+    return json.dumps([service.store.study_id, unit.unit_id, unit.window, versions, service.settings.review.matching],
+                      sort_keys=True, default=str)
+
+
+def counts_of(service: StudyService, unit: Unit) -> tuple[int, int]:
+    """(conflicts, agreed marks) of a unit whose versions are all saved, from the cache when the same versions were
+    counted before."""
+    key = _count_key(service, unit)
+    if key not in _COUNTS:
+        cmp = compare(service, unit)
+        if len(_COUNTS) >= _COUNTS_MAX:
+            _COUNTS.clear()
+        _COUNTS[key] = (len(cmp.conflicts), len(cmp.clusters) - len(cmp.conflicts))
+    return _COUNTS[key]
+
+
+def _register_counter() -> None:
+    from electrotag.web.tasks import register_conflict_counter
+
+    def count(service: StudyService, task: dict[str, Any]) -> int | None:
+        """The conflicts of a task whose annotators have all saved (tasks.py's derived statuses)."""
+        if task.get("gold"):
+            return None
+        unit = task_unit(service, task)
+        return counts_of(service, unit)[0] if unit.complete else None
+
+    register_conflict_counter(count)
+
+
+_register_counter()
 
 
 def _record(service: StudyService, unit_id: str) -> dict[str, Any] | None:
@@ -533,8 +570,7 @@ def adjudication_list(service: StudyService, user: User, body: dict[str, Any]) -
         n = a = None
         if rec is None and u.complete:
             try:
-                cmp = compare(service, u)
-                n, a = len(cmp.conflicts), len(cmp.clusters) - len(cmp.conflicts)
+                n, a = counts_of(service, u)
             except ApiError:
                 continue  # a version that cannot be read is left out of the queue (the admin area shows it)
         row = unit_out(service, user, u, rec, n, a)
@@ -544,6 +580,24 @@ def adjudication_list(service: StudyService, user: User, body: dict[str, Any]) -
     order = {"adjudicating": 0, "ready": 1, "collecting": 2, "agreed": 3, "adjudicated": 4}
     out.sort(key=lambda r: (order[r["status"]], r["recording_id"], r["unit_id"]))
     return {"units": out, "counts": counts, "total": len(out)}
+
+
+@expert_op("tasks_list")
+def tasks_list(service: StudyService, user: User, body: dict[str, Any]) -> dict[str, Any]:
+    """The study's tasks for the expert area (TaskOut of tasks.py, known-answer tasks left out), with their conflicts
+    counted (cached by the versions compared)."""
+    want = body.get("status")
+    from electrotag.web.tasks import STATUSES as TASK_STATUSES
+
+    if want is not None and want not in TASK_STATUSES:
+        raise _bad(f"status must be one of {', '.join(TASK_STATUSES)}")
+    rid = body.get("recording_id")
+    tasks = [t for t in service.tasks.all() if not t.get("gold") and (rid is None or t.get("recording_id") == rid)]
+    every = service.tasks.outs(tasks)
+    counts: dict[str, int] = {}
+    for o in every:
+        counts[o["status"]] = counts.get(o["status"], 0) + 1
+    return {"tasks": [o for o in every if want is None or o["status"] == want], "counts": counts}
 
 
 @expert_op("adjudication_get")

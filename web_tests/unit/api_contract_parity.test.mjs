@@ -60,6 +60,8 @@ export const ALLOWED = [
     'any', 'agreement figures the sandbox does not compute; the review shows only the score, the share found and the share of the right type'],
   ['.*practice submit.*', 'feedback\\.per_category', 'any', 'the scores by type, which the review does not show'],
   ['.*', 'manifest\\.gaps|recordings\\..*\\.gaps', 'any', "the sandbox's third example has a stretch without data at its end, which its EDF file cannot hold"],
+  // Until the sandbox's own answers (js/api/demo.js) carry `task: null`, the browser reads a missing task as none.
+  ['.*', '(items\\[\\]\\.)?task', 'any', 'the sandbox makes no tasks (they need the study server: demo_admin.js SERVER_ONLY), so its items and matches have none'],
 ];
 
 // ------------------------------------------------------------------ comparison

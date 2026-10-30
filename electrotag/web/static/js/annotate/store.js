@@ -17,6 +17,7 @@
 
 import { newId, nowLocalIso } from '../util.js';
 import { cleanNote, isConfidence, joinNotes, lowerConfidence, noteProblem } from './confidence.js';
+import { insideBounds, outsideText } from '../viewer/bounds.js';
 
 export class AnnotationError extends Error {}
 
@@ -55,6 +56,7 @@ export class AnnotationStore {
     this.maxHistory = opts.maxHistory ?? 2000;
     this.lastAutoMerged = 0;
     this.lastSurvivors = new Map();
+    this.window = null; // a task's part of the recording (setWindow): marks outside it are refused
     this._items = new Map();
     this._undo = [];
     this._redo = [];
@@ -100,6 +102,13 @@ export class AnnotationStore {
   }
 
   // -------------------------------------------------------------- validation
+  /**
+   * The part of the recording a task gives the annotator (viewer/bounds.js boundsOf: startSample,
+   * endSample, text), or null: from then on a mark made or changed outside it is refused, and one
+   * dragged past its edge stops at the edge. The marks already there are kept as they are.
+   */
+  setWindow(bounds) { this.window = bounds || null; }
+
   normaliseChannels(channels) {
     const chosen = new Set((channels || []).map(String));
     const unknown = [...chosen].filter((c) => !this._chIndex.has(c)).sort();
@@ -117,6 +126,7 @@ export class AnnotationStore {
       throw new AnnotationError(`${a.label} at sample ${on}: shorter than ${this.minDurationSamples} sample(s)`);
     }
     if (on + dur > this.nSamples) throw new AnnotationError(`${a.label} at sample ${on}: ends after the recording`);
+    if (this.window && !insideBounds(on, dur, this.window)) throw new AnnotationError(outsideText(this.window));
     if (new Set(a.channels).size !== a.channels.length) throw new AnnotationError('A channel is listed more than once');
     const unknown = a.channels.filter((c) => !this._chIndex.has(c));
     if (unknown.length) throw new AnnotationError(`Channels not in the recording: ${unknown.join(', ')}`);
@@ -136,11 +146,15 @@ export class AnnotationStore {
   }
 
   snapSamples(start, stop) {
-    let s = Math.min(Math.max(Math.min(start, stop), 0), this.nSamples);
-    let e = Math.min(Math.max(Math.max(start, stop), 0), this.nSamples);
+    // A task's window: a stretch wholly outside it is refused, one across its edge stops at the edge.
+    const lo = this.window ? this.window.startSample : 0;
+    const hi = this.window ? this.window.endSample : this.nSamples;
+    if (this.window && (Math.max(start, stop) <= lo || Math.min(start, stop) >= hi)) throw new AnnotationError(outsideText(this.window));
+    let s = Math.min(Math.max(Math.min(start, stop), lo), hi);
+    let e = Math.min(Math.max(Math.max(start, stop), lo), hi);
     if (e - s < this.minDurationSamples) {
-      e = Math.min(s + this.minDurationSamples, this.nSamples);
-      s = Math.max(e - this.minDurationSamples, 0);
+      e = Math.min(s + this.minDurationSamples, hi);
+      s = Math.max(e - this.minDurationSamples, lo);
     }
     if (e - s < this.minDurationSamples) throw new AnnotationError('Recording is shorter than the minimum annotation duration');
     return [s, e - s];

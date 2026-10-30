@@ -12,6 +12,7 @@
             training_progress/<set>/annotator-<ID>.json
             problem_reports/problem_reports.tsv, .json      the problems annotators reported (docs/file_formats.md)
             reviews/annotator-<ID>/<recording>_attempt-<n>_review-<time>-<id>.tsv, .json   each review of saved work
+            tasks/tasks.tsv, .json, gold_scores.tsv           the tasks and the known-answer scores
             interaction_logs/annotator-<ID>/<time>_<mode>.jsonl
 
 The result files are exactly those the desktop application's code wrote when each recording was
@@ -136,6 +137,11 @@ def export_study(store: Any, to: Path | str) -> dict[str, int]:
     for rel, data in sorted(record_files(store).items()):
         atomic_write_bytes(safe_path(layout.root, rel), data)
         counts["feedback"] = counts.get("feedback", 0) + 1
+    from electrotag.web.tasks import task_files
+
+    for rel, data in sorted(task_files(store).items()):  # the tasks and the known-answer scores as they stand now
+        atomic_write_bytes(safe_path(layout.root, rel), data)
+        counts["tasks"] = counts.get("tasks", 0) + 1
     return counts
 
 
@@ -196,7 +202,9 @@ def results_zip_file(store: Any) -> Path:
             root = Path(work) / store.settings.output_directory_name
         else:
             root = store.layout.root
-        extra = {} if getattr(store, "kind", "") == "firestore" else record_files(store)
+        from electrotag.web.tasks import task_files
+
+        extra = {} if getattr(store, "kind", "") == "firestore" else {**record_files(store), **task_files(store)}
         base = root.name or "Annotated_Events"
         with zipfile.ZipFile(tmp.name, "w", compression=zipfile.ZIP_DEFLATED) as zf:
             if root.is_dir():
@@ -240,7 +248,8 @@ def results_readme(study_name: str, base: str, when: str) -> str:
         f"Results of the ElectroTag study {study_name}, downloaded {when}.\n\n"
         f"{base}/ holds the saved annotations of each annotator (an _annotations.json, _events.tsv, _events.json\n"
         "and _session.json for each recording), the completion register, the interaction logs, the training\n"
-        "progress and competency reports, the quiz results, the problem reports and the reviews.\n"
+        "progress and competency reports, the quiz results, the problem reports, the reviews, and the tasks\n"
+        "that shared recordings out with their known-answer scores (tasks/).\n"
         f"{base}/derived/ holds the versions made from them (experts' corrections, adjudicated versions), each\n"
         "kind with its own completion register; the originals are never changed.\n\n"
         f"study/{STUDY_CONFIG_FILENAME} holds the study's settings, study/audit_log.jsonl every change an\n"

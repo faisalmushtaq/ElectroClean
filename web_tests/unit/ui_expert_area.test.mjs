@@ -74,7 +74,7 @@ test('the sandbox reads the roles of a request as admin.py does', () => {
   assert.throws(() => rolesFrom({ roles: ['wizard'] }, { required: true }), (e) => e.code === 'bad_request');
   assert.throws(() => rolesFrom({ role: 'annotator', roles: ['admin'] }, { required: true }), /say different things/);
   assert.deepEqual(Object.keys(expertOps()).sort(), ['adjudication_decide', 'adjudication_finish', 'adjudication_get', 'adjudication_list',
-    'adjudication_reference', 'adjudication_start', 'library_list', 'library_promote', 'replay_consent_get', 'replay_consent_set']);
+    'adjudication_reference', 'adjudication_start', 'library_list', 'library_promote', 'replay_consent_get', 'replay_consent_set', 'tasks_list']);
   assert.throws(() => expertOps([{ a_get: () => {} }, { a_get: () => {} }]), /given twice/);
 });
 

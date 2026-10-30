@@ -400,3 +400,19 @@ th.num .th-sort { flex-direction: row-reverse; }
 .form-grid.add-account { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
 /* An account's roles: three boxes side by side, in a row of their own (never cut short). */
 .role-boxes .check-list { max-height: none; overflow: visible; }
+
+/* Tasks: the share-out's options in one row, its times side by side, the preview, and each task's people. */
+.row.wrap.tasks-times > .admin-field { flex: 0 1 200px; }
+.tasks-preview { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.tasks-preview:empty { display: none; }
+.tasks-summary { margin: 0; font: var(--t-16); }
+.tasks-sub { margin: 8px 0 0; }
+.task-people { list-style: none; margin: 0; padding: 0; }
+.task-people li { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.task-letter {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 4px;
+  border: 1px solid var(--border); border-radius: var(--pill); font: var(--t-12); color: var(--text-secondary);
+}
+.task-actions { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.task-change { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.task-change select.field { width: auto; }

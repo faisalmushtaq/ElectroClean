@@ -25,11 +25,12 @@ import { ResultsSection } from './results.js';
 import { RecordsSection } from './records.js';
 import { SettingsSection } from './settings.js';
 import { ProblemsSection } from './problems.js';
+import { TasksSection } from './tasks.js';
 
 const KINDS = {
   overview: OverviewSection, progress: ProgressSection, annotators: AnnotatorsSection, recordings: RecordingsSection,
   assignments: AssignmentsSection, training: TrainingSection, analyses: AnalysesSection, results: ResultsSection,
-  records: RecordsSection, settings: SettingsSection, problems: ProblemsSection,
+  records: RecordsSection, settings: SettingsSection, problems: ProblemsSection, tasks: TasksSection,
 };
 
 const CSS_HREF = new URL('../../admin.css', import.meta.url).href;
@@ -75,7 +76,7 @@ export class AdminArea {
     this.main = h('main.admin-main', { id: 'admin-main' });
     this.find = this._buildFind();
     const demo = this.backend.isDemo
-      ? h('aside.note.admin-demo-note', { 'aria-label': 'Demonstration' }, 'Demonstration: everything here is kept in this browser. The analyses, consensus references and the results zip need a study server or Firebase.')
+      ? h('aside.note.admin-demo-note', { 'aria-label': 'Demonstration' }, 'Demonstration: everything here is kept in this browser. The analyses, consensus references, tasks and the results zip need a study server or Firebase.')
       : null;
     // The first Tab stop: straight to the section shown, past the header and the menu.
     const skip = h('button.skip-link', { type: 'button', 'data-log': 'admin-skip', onclick: () => {

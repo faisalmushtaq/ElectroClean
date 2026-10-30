@@ -483,3 +483,43 @@ def test_the_routes_of_the_server(template: Path, study: Path, recordings: Path)
         assert a01.ok("get", "/me/feedback")["adjudications"]["items"][0]["recording_id"] == SUB1
     finally:
         app.state.store.close()
+
+
+def test_tasks_made_by_the_tasks_part_are_units_with_their_conflicts_counted(service: StudyService,
+                                                                              recordings: Path) -> None:
+    from electrotag.web import adjudication
+
+    service.call("admin", ADMIN, {"op": "tasks_create", "request_id": "7" * 32, "recording_ids": [SUB2], "k": 2,
+                                  "annotator_ids": ["A01", "A02"], "adopt": True})
+    task = next(t for t in service.tasks.all() if t["recording_id"] == SUB2)
+    tid = task["task_id"]
+    two_saved(service, recordings, SUB2)
+    rows = {u["unit_id"]: u for u in ex(service, E01, "adjudication_list")["units"]}
+    assert unit_id_for("recording", SUB2) not in rows and rows[tid]["kind"] == "task" and rows[tid]["conflicts"] == 3
+    # the tasks part tells ready from agreed with the counter registered here, and lists what this part keeps
+    listed = ex(service, E01, "tasks_list")
+    out = next(t for t in listed["tasks"] if t["task_id"] == tid)
+    assert out["status"] == "ready" and out["conflicts"] == 3 and listed["counts"]["ready"] >= 1
+    assert ex(service, E01, "tasks_list", {"status": "agreed"})["tasks"] == []
+    adjudication._COUNTS.clear()
+    calls = {"n": 0}
+    real = adjudication.compare
+
+    def counted(*a: Any, **k: Any) -> Any:
+        calls["n"] += 1
+        return real(*a, **k)
+
+    adjudication.compare = counted
+    try:
+        ex(service, E01, "tasks_list")
+        ex(service, E01, "tasks_list")
+        assert calls["n"] == 1  # counted once for the same versions
+    finally:
+        adjudication.compare = real
+    got = ex(service, E01, "adjudication_start", {"unit_id": tid})
+    decide_all(service, got)
+    out = next(t for t in ex(service, E01, "tasks_list")["tasks"] if t["task_id"] == tid)
+    assert out["status"] == "adjudicating" and out["adjudication"]["decided"] == 3
+    ex(service, E01, "adjudication_finish", {"unit_id": tid})
+    out = service.call("admin", ADMIN, {"op": "tasks_list"})["tasks"]
+    assert next(t for t in out if t["task_id"] == tid)["status"] == "adjudicated"
