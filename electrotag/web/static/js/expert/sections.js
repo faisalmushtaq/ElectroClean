@@ -10,6 +10,8 @@ export const EXPERT_ROUTE = /^expert(-[a-z]+)?$/;
 
 export const EXPERT_SECTIONS = Object.freeze([
   { key: 'overview', route: 'expert', title: 'Overview', load: null },
+  { key: 'queue', route: 'expert-queue', title: 'Adjudication', load: () => import('./queue.js').then((m) => m.QueueSection) },
+  { key: 'library', route: 'expert-library', title: 'Library', load: () => import('./library.js').then((m) => m.LibrarySection) },
 ]);
 
 export function expertSectionForRoute(route, sections = EXPERT_SECTIONS) {

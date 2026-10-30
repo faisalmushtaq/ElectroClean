@@ -74,6 +74,8 @@ async function openReview(app, { recording, fp, view, target }) {
 /** What each purpose does once its file is read: one line per purpose. */
 export const PURPOSES = {
   review: openReview,
+  adjudicate: async (app, o) => (await import('../expert/adjudicate.js')).openAdjudication(app, o), // the adjudication pass
+  library: async (app, o) => (await import('../expert/adjudicate.js')).openAdjudication(app, o), // a library entry, read only
 };
 
 /** Add a purpose (a later part may also add its line to PURPOSES above). */

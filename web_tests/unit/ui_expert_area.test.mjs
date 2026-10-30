@@ -14,7 +14,7 @@ const { expertOps } = await import('../../electrotag/web/static/js/api/demo_expe
 
 test('the expert area has its routes, and only experts and administrators use it', () => {
   assert.ok(EXPERT_ROUTE.test('expert') && EXPERT_ROUTE.test('expert-work') && !EXPERT_ROUTE.test('experts') && !EXPERT_ROUTE.test('admin'));
-  assert.deepEqual(EXPERT_SECTIONS.map((s) => s.key), ['overview']);
+  assert.deepEqual(EXPERT_SECTIONS.map((s) => s.key), ['overview', 'queue', 'library']);
   assert.equal(expertSectionForRoute('expert'), 'overview');
   assert.equal(expertSectionForRoute('expert-nothing'), null);
   assert.equal(routeForExpertSection('overview'), 'expert');
@@ -33,7 +33,7 @@ test('the expert area has its routes, and only experts and administrators use it
 });
 
 test('a recording is opened for its purpose; an unknown purpose says so', async () => {
-  assert.deepEqual(Object.keys(PURPOSES), ['review']);
+  assert.deepEqual(Object.keys(PURPOSES), ['review', 'adjudicate', 'library']);
   const seen = [];
   registerPurpose('try', async (app, args) => { seen.push(args.target.recording_id); });
   assert.throws(() => registerPurpose('try', async () => {}), /registered twice/);
@@ -73,7 +73,8 @@ test('the sandbox reads the roles of a request as admin.py does', () => {
   assert.throws(() => rolesFrom({ roles: [] }, { required: true }), (e) => e.code === 'bad_request');
   assert.throws(() => rolesFrom({ roles: ['wizard'] }, { required: true }), (e) => e.code === 'bad_request');
   assert.throws(() => rolesFrom({ role: 'annotator', roles: ['admin'] }, { required: true }), /say different things/);
-  assert.deepEqual(Object.keys(expertOps()).sort(), ['replay_consent_get', 'replay_consent_set']);
+  assert.deepEqual(Object.keys(expertOps()).sort(), ['adjudication_decide', 'adjudication_finish', 'adjudication_get', 'adjudication_list',
+    'adjudication_reference', 'adjudication_start', 'library_list', 'library_promote', 'replay_consent_get', 'replay_consent_set']);
   assert.throws(() => expertOps([{ a_get: () => {} }, { a_get: () => {} }]), /given twice/);
 });
 

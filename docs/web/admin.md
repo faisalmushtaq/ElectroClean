@@ -625,6 +625,84 @@ withdraw. Each expert decides for their own sessions only; the study's audit log
 and a save that changes nothing writes nothing. When the study's settings do not show experts'
 sessions to trainees (Study settings, Replays), the choice is kept for when they do.
 
+## Adjudication
+
+Adjudication settles the disagreements between annotators the way a systematic review settles
+those between its two screeners. When two or more people have annotated the same recording, each
+on their own, ElectroTag compares their versions with the agreement analysis's matching rules (the
+study's settings, under Corrections and adjudication) and lists every **conflict**: a mark
+only some of them made, different types, a start or end further apart than the tolerance,
+different channels, or a stretch one person marked as two. An expert who annotated neither version
+decides each conflict, and finishing saves an **adjudicated version**. Adjudication is not
+blinded: you see who made each mark, which is why nobody adjudicates their own work. The versions
+compared are never changed.
+
+The **queue** (Adjudication in the expert area's menu, and in the Study group of the admin area's
+menu) lists what can be adjudicated: each study recording given to two or more people, each task
+once its annotators have saved, and each saved recording that two or more experts have corrected,
+so that their corrections are settled before the corrected version is used. Its tabs show what is
+Ready (everyone has saved and there are conflicts), In progress, Finished, and Waiting (someone has
+not saved yet, or everyone agrees); each row has its annotators, the number of conflicts and how
+many are decided, and the adjudicator. **Start** asks for the recording's file on this computer,
+checks it against the study's copy, and starts the adjudication: from then on the versions
+compared stay as they were when it started, even if someone revises their work, so that the
+decisions keep their meaning. **Continue** takes you back to your own adjudication where you left
+it, because every decision is kept by the study as you make it.
+
+In the **adjudication view** every version is drawn on the EEG with its letter before the type (A:
+Eye-blink-artifact, B: Eye-movement-artifact), each letter in its own colour, and the lanes above
+the EEG put each person's marks side by side on the same time axis, named. The side panel shows
+the current conflict (its kinds and what each person marked, with their confidence and note), the
+decision bar, and every conflict in the order of the recording, with a tick once it is decided.
+Decide with the keys or the buttons:
+
+| Key | What it does |
+| --- | --- |
+| 1 to 6, or A to D | keep that person's version of the conflict |
+| K | keep both (with more than two people, keep all): one mark of each type, spanning its marks |
+| X | keep neither |
+| E | edit: replace the marks with one of your own (its type, start and end, and channels; or drag across the EEG to set the times) |
+| R | write the reason |
+| Enter | save the decision and go to the next conflict not decided yet |
+| S | skip to the next conflict not decided yet |
+| N and P | the next and the previous conflict |
+| T | the lanes: every version, then each one alone (the EEG follows) |
+| F | finish the adjudication |
+
+Give a reason with a decision by choosing one (Clear artifact, Not an artifact, Type shows in the
+EEG, Start and end show, Channels show, Both are valid, Other) or writing a few words, as the
+study's setting **A reason for each decision** asks: for every decision, only when keeping
+neither version or editing a mark, or never. Each decision is sent to the study on its own and kept at once; the bar waits while it is
+sent, and you can change a decision until you finish. **Finish adjudication** appears once every
+conflict is decided, and saves the adjudicated version: the marks everyone agreed on (each at the
+middle of their starts and ends, on the channels most of them cover) and your decisions. It is
+saved like any result, with its five files, under `derived/adjudications/` in the results, and
+the annotators then see the outcome of their own conflicts when the study shows it to them
+(Study settings, Corrections and adjudication). A finished adjudication of a whole
+recording can become a training reference (`adjudication_reference`, or Source adjudication when
+adding a reference), with the people compared as its experts and you as its adjudicator.
+
+In the sandbox the queue says that adjudication needs a study server: comparing versions needs
+ElectroTag's own Python code. Run `electrotag-web demo` to try it on this computer.
+
+## Library
+
+The library holds every conflict between annotators, decided or not: from the adjudications, and
+from the recordings that wait for one. It is worked out afresh each time from the adjudications,
+so it always shows the decisions as they stand. Filter it by artifact type, by the **confused
+pair** (an eye blink against an eye movement, say), by the kind of conflict, by status (Not
+started, Open, Decided) and decision, by annotator and by recording, or search the reasons. Each
+row says where the conflict is, its kinds, the types involved, who marked what, and the decision
+with its reason.
+
+**Open at this moment** opens the recording from this computer at the conflict, read only, with
+every version, the lanes and the decision. **Download TSV** and **Download JSON** save the list as
+filtered (the results zip holds the whole library as `library/library.tsv`, and every decision in
+`adjudications/decisions.tsv`). **Promote…** makes an entry a quiz item or an artifact snippet of a
+reference set: the type, times and explanation start from the decision and its reason, and you can
+change them. The item keeps a note of the conflict it came from, and promoting the same entry to
+the same set again gives the item made before.
+
 ## When something goes wrong
 
 Every problem is reported on the page where it happened, in plain words: the study's own message

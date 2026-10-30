@@ -25,6 +25,11 @@ export const SECTIONS = Object.freeze([
   { key: 'settings', route: 'admin-settings', title: 'Study settings', group: 'config' },
 ]);
 
+/** Links of the admin menu to the expert area, which administrators may use too: {group, route, title}. */
+export const EXPERT_LINKS = Object.freeze([
+  { group: 'study', route: 'expert-queue', title: 'Adjudication' },
+]);
+
 export function sectionsOf(group) {
   return SECTIONS.filter((s) => s.group === group);
 }

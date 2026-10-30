@@ -32,6 +32,24 @@ button. Its first page explains the area and lets each expert agree, or no longe
 watching replays of their sessions; the corrections, replays, adjudication, library and training
 material of the next parts appear in its menu as they are added.
 
+Disagreements between annotators are now adjudicated the way a systematic review's two screeners
+settle theirs. When two or more people have saved the same recording (a recording given to each of
+them, a task, or two experts' corrections of the same work), the study lists every conflict, found
+with the agreement analysis's matching rules: a mark only some made, different types, starts or ends
+far apart, different channels, or a stretch marked as two. In the expert area's Adjudication queue
+(also in the admin menu), an expert who annotated none of it opens the recording from their
+computer and decides each conflict on the EEG, with each person's marks named and side by side in
+lanes above the EEG: keep one version, both, neither, or a mark of their own, with a reason, all by
+key (1 and 2, K, X, E, R, Enter, N and P). Decisions are kept as they are made, so the work can be
+continued later; finishing saves an adjudicated version beside the originals, which can become a
+training reference, and annotators see the outcome of their own conflicts on their home page,
+nobody else named, when the study shows it. A new Library lists every conflict, decided or not,
+filtered by type, confused pair, kind, status, decision, annotator and recording; each entry opens
+at its moment in the EEG, the list downloads as TSV or JSON, and an entry can become a quiz item or
+a training snippet that keeps where it came from. The results hold every decision
+(`adjudications/decisions.tsv`) and the library (`library/library.tsv`). The sandbox says that this
+needs a study server.
+
 A changed copy of a recording that is also in a training set (a set made from the study's own
 recordings) is now matched by its name and shape, as any other changed copy is; the study's copy and
 the set's copy were counted as two recordings, so the file was refused as looking like several.
