@@ -32,6 +32,21 @@ button. Its first page explains the area and lets each expert agree, or no longe
 watching replays of their sessions; the corrections, replays, adjudication, library and training
 material of the next parts appear in its menu as they are added.
 
+Administrators can now share recordings out as tasks, in a new Tasks section of the admin area
+(under People): each recording, or each part of one, goes to 2 to 6 annotators who annotate it
+independently, so that their disagreements can be adjudicated. Choose the people, the recordings,
+how many people each goes to and the part of each recording (the whole of it, one stretch, or
+consecutive parts), then preview the share-out (each person's share, and what is left out and why)
+before making it once. The work is shared evenly and the same choices give the same share-out; people
+who already have a recording come first for it, and recordings already given to several people can be
+turned into tasks as they are. An annotator given part of a recording sees the rest hatched, the view
+stays within the part, and a mark outside it is refused, by the study too (422 `outside_window`).
+Known-answer recordings from a reference set can be mixed in: everyone chosen gets them, nothing tells
+them apart, each save is scored against the reference, and the section lists each person's accuracy on
+them. Tasks can be changed (a person replaced), closed, reopened or removed, without any saved result
+being lost; the results zip and the export hold them under `tasks/` (docs/file_formats.md). The
+demonstration says that tasks need a study server or Firebase.
+
 A changed copy of a recording that is also in a training set (a set made from the study's own
 recordings) is now matched by its name and shape, as any other changed copy is; the study's copy and
 the set's copy were counted as two recordings, so the file was refused as looking like several.

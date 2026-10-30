@@ -14,6 +14,10 @@
 // Each annotation may carry a confidence rating on a 5-point scale (D then a digit, the menu or the
 // Annotations table; in an every-mark study the prompt opens after each new mark) and a short note
 // (confidence.js); the functions for them are together under "confidence and notes".
+//
+// A task may give the annotator only part of a recording (its window): the rest is hatched, the view
+// stays inside the part, marks outside it are refused, and coverage counts the part only ("a task's
+// part of the recording" below).
 
 import { h, clear } from '../ui/dom.js';
 import { showDialog, ask, inform, choose, dialogOpen } from '../ui/dialog.js';
@@ -37,6 +41,7 @@ import { microvoltText } from '../viewer/geometry.js';
 import { mapLayout, projectPositions } from '../viewer/head_map.js';
 import { readElectrodes, sidecarsOf } from '../eeg/electrodes.js';
 import { centredStart, clampTime, parseTimeText } from './goto.js';
+import { CONTEXT_S, boundsOf, itemWindow, outsideStretches } from '../viewer/bounds.js';
 
 export { friendlyDuration, plural };
 
@@ -132,6 +137,7 @@ export class Workspace {
     this._breakShown = false;
     this._saved = { browser: null, study: null };
     this.lastMadeId = null; // the annotation made last, which D changes when nothing is selected
+    this.bounds = this._taskBounds(); // a task's part of the recording, or null for all of it
     this._build();
   }
 
@@ -164,6 +170,7 @@ export class Workspace {
       recording: s.recording, channels: s.channels, scalings: s.scalings, events: s.events, gaps: s.gaps,
       catalogue: this.cat, filters: s.filters, view,
     });
+    if (this.bounds) this._applyBounds();
     if (s.view) {
       this.viewer.setView({ startS: s.view.start_s || 0, durationS: s.view.duration_s || 10, firstChannel: s.view.first_channel || 0,
         nChannels: s.view.n_channels || 32, scaleFactor: s.view.scale_factor || 1 }, 'restore');
@@ -201,7 +208,9 @@ export class Workspace {
       this.closeBtn = h('button.btn.quiet.back', { type: 'button', 'data-log': 'close', onclick: () => this.close() },
         icon('arrow-left'), this.kind === 'review' ? 'Training path' : this.kind === 'reviewing' ? 'Back' : 'Close'),
       h('div.ws-name', {}, h('h1', { title: s.recordingId }, s.recording.fileName),
-        h('span.chip', { class: this.kind === 'tryout' ? 'warning' : 'active' }, MODE_TEXT[this.kind === 'annotate' ? s.mode : this.kind] || s.mode)),
+        h('span.chip', { class: this.kind === 'tryout' ? 'warning' : 'active' }, MODE_TEXT[this.kind === 'annotate' ? s.mode : this.kind] || s.mode),
+        this.bounds ? h('span.chip.ws-part', { 'data-log': 'task-part', title: 'This task gives you this part of the recording: the rest is hatched and is not annotated.' },
+          `Your part: ${this.bounds.text}`) : null),
       this.kind === 'tryout' ? h('span.ws-banner', {}, 'This file is not part of the study, so nothing you mark is saved.') : null);
     const actions = h('div.ws-actions');
     this.actionsEl = actions; // a review pass and the feedback view add their own forward action (review_pass.js)
@@ -661,7 +670,8 @@ export class Workspace {
       filters: this.filtersText(), filter_settings: this._filtersLog(), original_events: s.events.length, resumed: s.resumed,
       annotations_restored: s.restored, window_px: [window.innerWidth, window.innerHeight],
       ...(this.timed ? { elapsed_restored_s: Math.round(s.elapsedBase * 1000) / 1000, viewed_fraction: this._viewedFraction() } : {}),
-      comfort: { ...this.comfort }, overlay: Boolean(this.viewer.overlay), value_readout: Boolean(this.readoutOn), ...extra,
+      comfort: { ...this.comfort }, overlay: Boolean(this.viewer.overlay), value_readout: Boolean(this.readoutOn),
+      ...(this.bounds ? { task_window: { start_s: this.bounds.startS, end_s: this.bounds.endS } } : {}), ...extra,
     });
     logger.event('viewer_ready', {});
   }
@@ -869,7 +879,9 @@ export class Workspace {
 
   // =================================================================== coverage
   /** The stretches of the recording without recorded data, in seconds: nothing to look at. */
-  _noData() { return (this.s.gaps || []).map(([a, b]) => [a / this.sf, b / this.sf]); }
+  _noData() {
+    return [...(this.s.gaps || []).map(([a, b]) => [a / this.sf, b / this.sf]), ...outsideStretches(this.bounds, this.s.recording.durationS)];
+  }
 
   _viewedFraction() {
     return Math.round(cov.viewedFraction(this.s.viewed, this.s.recording.durationS, this._noData()) * 10000) / 10000;
@@ -917,6 +929,26 @@ export class Workspace {
     const left = gaps.length;
     this.say(`Not yet viewed: ${clockText(from)} to ${clockText(g[1])}. ${left === 1 ? 'This is the last such part.' : `${left} parts are left to look at.`}`);
     logger.event('next_unviewed', { from_s: Math.round(from * 1000) / 1000, to_s: Math.round(g[1] * 1000) / 1000, n_unviewed: left, via });
+  }
+
+  // ===================================================== a task's part of the recording
+  /**
+   * The window of the task this recording is part of (GET /assignments: the item's `task.window`), as
+   * bounds (viewer/bounds.js), or null for the whole recording. Only annotation and the feedback on it
+   * have one: the expert area's views open other people's work.
+   */
+  _taskBounds() {
+    if (!['annotate', 'feedback'].includes(this.kind) || this.s.tryOut) return null;
+    const s = this.s;
+    const w = s.taskWindow || itemWindow((this.app.assignments || {}).items, { recordingId: s.recordingId, mode: s.mode, contextId: s.contextId });
+    return boundsOf(w, s.recording.sfreq, s.recording.nSamples);
+  }
+
+  /** The viewer keeps to the part and hatches the rest; the store refuses marks outside it. */
+  _applyBounds() {
+    this.viewer.setBounds(this.bounds);
+    this.store.setWindow(this.bounds);
+    if (!this.s.view) this.viewer.setView({ startS: this.bounds.startS - CONTEXT_S }, 'restore');
   }
 
   // ================================================================ drafts kept
@@ -2423,7 +2455,7 @@ export class Workspace {
   /** Show all (Shift+End): the whole recording on the screen, and the view before it again. */
   showAll(via = 'key') {
     const v = this.viewer;
-    const total = v.durationTotal;
+    const total = v.spanS; // the whole recording, or a task's part of it
     if (v.view.durationS >= total - 1e-6 && this._beforeAll) {
       const b = this._beforeAll;
       this._beforeAll = null;
