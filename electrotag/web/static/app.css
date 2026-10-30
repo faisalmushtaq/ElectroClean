@@ -635,6 +635,9 @@ ol.stages.path .stage {
 @media (hover: hover) { .chip-btn:hover:not(:disabled) { background: var(--fill-hover); } }
 .chip-btn .chip-key { font-variant-numeric: tabular-nums lining-nums; color: var(--text-secondary); margin-left: 2px; }
 .chip-btn .chip-code { letter-spacing: 0; }
+/* Uncertain / needs review (key 0): set apart from the numbered types by a dashed edge. */
+.chip-btn.uncertain-chip { border: 1px dashed var(--border); margin-left: 4px; }
+.chip-btn.uncertain-chip[aria-pressed="true"] { border-color: transparent; }
 .chip-btn[aria-pressed="true"] { background: var(--chip-colour); color: var(--chip-text); }
 .chip-btn[aria-pressed="true"] .chip-key { color: inherit; }
 .chip-btn[aria-pressed="true"] .swatch { outline: 1px solid rgba(255, 255, 255, 0.85); }
@@ -649,6 +652,16 @@ ol.stages.path .stage {
 @media (hover: hover) { .seg:hover:not(:disabled):not([aria-pressed="true"]) { background: var(--fill-hover); } }
 .seg[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
 .seg:disabled, .chip-btn:disabled { color: var(--text-disabled); cursor: default; }
+/* The scope of the next mark with its channels: one unit when the toolbar wraps. */
+.ws-scope { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+/* The scales (workspace.js _scaleTools): the time shown and the amplitude, each with a smaller and a larger step. */
+.ws-scales { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+.ws-scales .scale-caption { min-width: 0; margin: 0 2px 0 6px; }
+.ws-scales .scale-caption:first-child { margin-left: 0; }
+.ws-scales select.field.scale-select { width: auto; height: 32px; padding: 0 28px 0 8px; background-position: right 6px center; font: var(--t-14); }
+.ws-scales .scale-value { min-width: 56px; text-align: center; color: var(--ink); font: var(--t-14); font-variant-numeric: tabular-nums lining-nums; }
+.ws-actions .ws-scales .btn.icon.small { width: 32px; padding: 0; }
+@media (pointer: coarse) { .ws-scales select.field.scale-select { height: 40px; font: var(--t-16); } }
 .ws-chansummary { color: var(--text-secondary); font: var(--t-14); overflow: hidden; text-overflow: ellipsis; min-width: 96px; max-width: 180px; }
 .ws-chansummary.warning { color: var(--destructive); font-weight: 600; }
 .ws-chansummary.selected { color: var(--selection-channel); font-weight: 600; }
@@ -790,6 +803,8 @@ ul.unviewed-list { font-variant-numeric: tabular-nums lining-nums; margin-bottom
 }
 .ann-table .ann-details .chans { min-width: 0; overflow-wrap: anywhere; }
 .ann-table .ann-time { margin-left: auto; white-space: nowrap; }
+/* A mark of the uncertain type: "needs review", in the accent so that it reads as something to come back to. */
+.ann-table .review-mark { color: var(--accent); font-weight: 600; }
 /* Confidence and notes: quiet, in the secondary text colour (never the warning or bad-channel greys). */
 .ann-table .note-mark .ico { width: 12px; height: 12px; display: block; }
 .ann-table .note-mark { display: inline-flex; align-self: center; }
@@ -914,6 +929,11 @@ ul.warnings { font: var(--t-14); }
   font: var(--t-14); background: var(--surface);
 }
 .channel-chip:has(input:checked) { background: #FBEAF1; border-color: #E9A7C3; color: var(--selection-channel); font-weight: 600; }
+/* A channel marked bad for the whole recording: struck through (the study's own bad channels are greyed). */
+.channel-chip.marked-bad .channel-name { text-decoration: line-through; color: var(--text-secondary); }
+.channel-chip.study-bad .channel-name { color: var(--text-secondary); }
+.channel-bad-row { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--hairline); }
+.channel-bad-row .caption { margin: 0 0 8px; }
 .form { min-width: 300px; }
 .form .caption.error { color: var(--destructive); }
 

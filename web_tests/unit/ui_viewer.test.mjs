@@ -35,7 +35,7 @@ test('axis ticks, tags, steps and scale bars', () => {
   assert.equal(tickLabel(12.5, 0.5), '12.5');
   assert.equal(tickLabel(3725, 600), '1:02:05');
   assert.deepEqual(layoutTags([{ x: 100, w: 80 }, { x: 150, w: 80 }, { x: 400, w: 50 }]), [0, 1, 0]);
-  assert.equal(stepOption(DURATIONS, 10, 1), 15);
+  assert.equal(stepOption(DURATIONS, 10, 1), 20);
   assert.equal(stepOption(DURATIONS, 10, -1), 5);
   assert.equal(stepOption(CHANNEL_COUNTS, 22, 1, 22), 22);
   assert.equal(stepOption(CHANNEL_COUNTS, 20, 1, 22), 22);

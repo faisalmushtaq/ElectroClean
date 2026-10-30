@@ -136,7 +136,7 @@ export function layoutTags(tags, rows = 2, gap = 4) {
 }
 
 /** Display options for seconds and channels shown (Home/End and Page Up/Page Down step through them). */
-export const DURATIONS = [1, 2, 3, 5, 10, 15, 20, 30, 60, 120];
+export const DURATIONS = [1, 2, 5, 10, 20, 30, 60, 120]; // the toolbar's time scales (scales.js TIME_SCALES), then two minutes
 export const CHANNEL_COUNTS = [1, 2, 4, 8, 12, 16, 20, 24, 32, 48, 64, 96, 128, 192, 256];
 
 export function stepOption(options, current, dir, max = Infinity) {
