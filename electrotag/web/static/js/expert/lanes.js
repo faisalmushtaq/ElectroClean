@@ -2,7 +2,9 @@
 // EEG with one lane per version compared, named by its letter and the person who made it, on the
 // viewer's own time axis (viewer.tToX), so that each annotator's marks sit side by side over the same
 // stretch of EEG. The marks of the current conflict are drawn full, the others lighter; a click on a
-// mark goes to its conflict. T shows every lane, then each version alone (the EEG follows).
+// mark goes to its conflict (or, while choosing marks one by one, ticks it). T shows every lane, then
+// each version alone (the EEG follows). Each letter has the colour it has in the panel and on the EEG.
+// For two or more corrections, a last lane shows the original they corrected, outlined.
 
 import { h, clear } from '../ui/dom.js';
 import { laneMarks } from './model.js';
@@ -10,21 +12,25 @@ import { laneMarks } from './model.js';
 export class Lanes {
   /**
    * @param {object} viewer the workspace's EegViewer
-   * @param {{versions: object[], catalogue: object, onPick?: Function}} o versions: [{letter, annotator_id, display_name, annotations}]
+   * @param {{versions: object[], catalogue: object, colours?: object, original?: object|null, onPick?: Function}} o
+   *   versions: [{letter, annotator_id, display_name, annotations}]; colours: letter -> colour; original: {annotator_id, annotations}
    */
-  constructor(viewer, { versions, catalogue, onPick = null }) {
+  constructor(viewer, { versions, catalogue, colours = {}, original = null, onPick = null }) {
     this.viewer = viewer;
-    this.versions = versions;
+    this.versions = original ? [...versions, { letter: 'O', annotator_id: original.annotator_id, annotations: original.annotations, original: true }] : versions;
     this.catalogue = catalogue;
     this.onPick = onPick;
     this.conflicts = [];
     this.current = -1;
+    this.picks = null;
     this.mode = null;
-    this.rows = versions.map((v) => {
+    this.rows = this.versions.map((v) => {
       const track = h('div.lane-track');
-      const name = h('span.lane-name', { title: `${v.letter}: ${v.annotator_id}${v.display_name ? ` (${v.display_name})` : ''}` },
-        h('b', {}, v.letter), ` ${v.annotator_id}`);
-      const row = h('div.lane', { 'data-letter': v.letter }, name, track);
+      const name = v.original
+        ? h('span.lane-name', { title: `The original: ${v.annotator_id}'s version, which was corrected` }, h('b', {}, 'Original'))
+        : h('span.lane-name', { title: `${v.letter}: ${v.annotator_id}${v.display_name ? ` (${v.display_name})` : ''}` },
+          h('b', { style: { color: colours[v.letter] || null } }, v.letter), ` ${v.annotator_id}`);
+      const row = h(`div.lane${v.original ? '.original' : ''}`, { 'data-letter': v.letter }, name, track);
       return { v, row, track };
     });
     this.el = h('div.lanes', { role: 'group', 'aria-label': 'Each version in its own lane' }, this.rows.map((r) => r.row));
@@ -38,16 +44,17 @@ export class Lanes {
   destroy() { if (this._ro) this._ro.disconnect(); }
 
   /** The conflicts (to know which marks are the current one's) and the current index. */
-  setConflicts(conflicts, current) {
+  setConflicts(conflicts, current, picks = null) {
     this.conflicts = conflicts;
     this.current = current;
+    this.picks = picks ? new Set(picks.map((p) => `${p.letter}-${p.annotation_id}`)) : null;
     this.draw();
   }
 
   /** null for every lane, or one letter alone. */
   setMode(mode) {
     this.mode = mode;
-    for (const r of this.rows) r.row.classList.toggle('dimmed', Boolean(mode) && r.v.letter !== mode);
+    for (const r of this.rows) r.row.classList.toggle('dimmed', Boolean(mode) && r.v.letter !== mode && !r.v.original);
     this.draw();
   }
 
@@ -69,10 +76,12 @@ export class Lanes {
       const xb = Math.min(v.plotW, v.tToX(m.t1) - left);
       if (xb <= xa) continue;
       const colour = this.catalogue.get(m.label)?.colour || null;
-      const b = h('button.lane-mark', { type: 'button', class: m.current ? 'current' : null, tabindex: '-1',
-        title: `${m.letter}: ${m.label}, ${m.t0.toFixed(2)}–${m.t1.toFixed(2)} s`, 'data-id': m.id,
-        style: { left: `${Math.round(xa)}px`, width: `${Math.max(2, Math.round(xb - xa))}px`, background: colour, borderColor: colour },
-        onclick: () => this.onPick && this.onPick(m.id) });
+      const original = Boolean(r.v.original);
+      const cls = [m.current ? 'current' : '', this.picks && this.picks.has(m.id) ? 'picked' : ''].filter(Boolean).join(' ') || null;
+      const b = h('button.lane-mark', { type: 'button', class: cls, tabindex: '-1', disabled: original || null,
+        title: `${original ? 'Original' : m.letter}: ${m.label}, ${m.t0.toFixed(2)}–${m.t1.toFixed(2)} s`, 'data-id': m.id,
+        style: { left: `${Math.round(xa)}px`, width: `${Math.max(2, Math.round(xb - xa))}px`, background: original ? 'transparent' : colour, borderColor: colour },
+        onclick: () => this.onPick && !original && this.onPick(m.id) });
       r.track.append(b);
     }
   }

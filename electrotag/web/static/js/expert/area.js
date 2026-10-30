@@ -10,7 +10,7 @@
 // expert area is logged like annotation work.
 
 import { h, clear } from '../ui/dom.js';
-import { appHeader } from '../views/common.js';
+import { appHeader, icon } from '../views/common.js';
 import { actionButton, card, checkbox, loading, messageArea, sectionHead } from '../admin/ui.js';
 import { EXPERT_SECTIONS, routeForExpertSection } from './sections.js';
 
@@ -90,7 +90,9 @@ export class ExpertArea {
     this.current = null;
     this._reads = new Map();
     this.nav = h('nav.admin-nav.expert-nav', { 'aria-label': 'Sections of the expert area' },
-      h('ul', {}, sections.map((s) => h('li', {}, h('a.admin-nav-link', { href: `#${s.route}`, 'data-section': s.key }, s.title)))));
+      h('ul', {}, sections.map((s) => h('li', {}, h('a.admin-nav-link', { href: `#${s.route}`, 'data-section': s.key }, s.title))),
+        // an administrator's way back to the admin area
+        app.isAdmin ? h('li', {}, h('a.admin-nav-link.to-admin', { href: '#admin', 'data-log': 'to-admin-area', title: 'Back to the admin area' }, 'Admin area', icon('arrow-up-right'))) : null));
     this.main = h('main.admin-main', { id: 'expert-main' });
     this.el = h('div.view.admin.expert-area', { 'data-view': 'expert' }, appHeader(app, { title: 'Expert work', expert: true }),
       h('div.admin-layout', {}, this.nav, h('div.admin-body', {}, this.main)));

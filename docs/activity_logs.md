@@ -363,12 +363,17 @@ work. Opening an adjudication logs `recording_opened` (with `segment`
 of versions compared). Choosing what to keep logs `adjudication_choice`
 (`conflict_id`, `choice`, `via`); each decision the study keeps logs
 `adjudication_decision` (`conflict_id`, `kinds`, `choice`, `reason_code`,
-`reason_length`, `seconds` on the conflict before deciding, and `already` when
-the study had it); the reason's text is never logged. `adjudication_skipped`
+`reason_length`, `n_marks` for marks chosen one by one or drawn by the
+adjudicator, `seconds` on the conflict before deciding, and `already` when
+the study had it); the reason's text is never logged. A reason chosen with
+Shift and a digit is a `shortcut` (`Reason <code>`). `adjudication_skipped`
 (`conflict_id`), `adjudication_lanes` (`mode`: `all` or the one letter shown),
-`adjudication_finished` (`unit_id`, `n_conflicts`, `by_choice`) and
-`adjudication_closed` (`unit_id`, `decided`, `n_conflicts`, `reason`) follow
-the rest. Correct the marks (docs/web/admin.md) logs `planted_opened` (`mode`: `trainee` on
+`adjudication_keys_shown` (the ? key sheet), `adjudication_reopened`
+(`unit_id`, `already`, `reason_length`), `adjudication_finished` (`unit_id`,
+`n_conflicts`, `by_choice`) and `adjudication_closed` (`unit_id`, `decided`,
+`n_conflicts`, `reason`, and `unsaved`, the choices left unsaved) follow the
+rest. In the queue, `adjudication_queue_searched` (`shown`, `of`: never what
+was typed) and `adjudication_reference_made` (`use`). Correct the marks (docs/web/admin.md) logs `planted_opened` (`mode`: `trainee` on
 the training path, or `try` for an expert trying an exercise; `n_planted`; `restored` when a draft
 was continued), with an `annotations_snapshot` of the copy it opens with, then
 `planted_checked` (`fixed`, `n_errors`, `new_mistakes`: an expert's Check my corrections),

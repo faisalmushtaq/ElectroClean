@@ -247,7 +247,8 @@ export class TrainingSection {
       ['annotator', 'Someone\'s saved annotations', 'An expert annotates the recording in this study (in Annotation mode), and their saved work becomes the reference.'],
       ['document', 'An annotation file', 'An ElectroTag _annotations.json, for example one saved in another ElectroTag study.'],
       ['consensus', 'A consensus of several annotators', 'Where enough of them agree, sample by sample, for each artifact type.'],
-      ['adjudicated', 'An adjudicated consensus', 'An adjudicator\'s saved annotations, made after reviewing the experts\' disagreements.'],
+      ['adjudication', 'A finished adjudication', 'The adjudicated version of a whole recording, from the expert area\'s adjudication queue: the marks the annotators agreed on and the adjudicator\'s decision on each conflict.'],
+      ['adjudicated', 'An adjudicator\'s own annotations', 'Someone\'s saved annotations (in Annotation mode), made as the reference after they reviewed the experts\' disagreements themselves, outside the adjudication queue.'],
     ];
     const kind = radios(`source-${s.set_id}`, kinds, 'annotator');
     const people = this.users.map((u) => [u.annotator_id, `${u.annotator_id}${u.display_name ? ` · ${u.display_name}` : ''}`]);
@@ -284,20 +285,50 @@ export class TrainingSection {
     const adjudicator = select(people);
     const adjExperts = checkList(this.users.map((u) => ({ value: u.annotator_id, text: u.annotator_id, extra: u.display_name || '' })), { legend: 'Experts whose disagreements were adjudicated', name: 'adj-experts' });
     const adjudicatedPart = h('div.source-part', {}, field('Adjudicator', adjudicator, { hint: 'Their saved annotations (in Annotation mode) are the reference.' }), adjExperts);
-    const parts = { annotator: annotatorPart, document: documentPart, consensus: consensusPart, adjudicated: adjudicatedPart };
-    const sync = () => { for (const [k, el] of Object.entries(parts)) el.hidden = kind.value() !== k; };
+    // a finished adjudication of the queue (the expert operation adjudication_list, read when this is chosen)
+    const unit = select([['', 'Loading…']]);
+    const unitInfo = h('p.caption', { role: 'status' });
+    let units = null;
+    const loadUnits = async () => {
+      if (units) return;
+      units = [];
+      try {
+        const got = await this.area.app.backend.expert('adjudication_list', { status: 'adjudicated' });
+        units = (got.units || []).filter((u) => !u.window);
+        unit.replaceChildren(...(units.length ? units.map((u) => h('option', { value: u.unit_id },
+          `${u.file_name}: ${(u.annotators || []).map((a) => a.annotator_id).join(', ')}${u.kind === 'corrections' ? ' (corrections)' : ''}, by ${u.adjudicator_id}`))
+          : [h('option', { value: '' }, 'No adjudication of a whole recording is finished yet')]));
+        syncUnit();
+      } catch (exc) {
+        unit.replaceChildren(h('option', { value: '' }, 'Not available'));
+        unitInfo.textContent = exc.message;
+      }
+    };
+    const syncUnit = () => {
+      const u = (units || []).find((x) => x.unit_id === unit.value);
+      unitInfo.textContent = u ? `The recording is ${u.recording_id} (from the study); finished ${String(u.finished_at || '').slice(0, 10)}.` : '';
+    };
+    unit.addEventListener('change', syncUnit);
+    const adjudicationPart = h('div.source-part', {}, field('Adjudication', unit, { hint: 'Only adjudications of a whole recording can be references; the recording chosen above is replaced by the adjudication\'s own.' }), unitInfo);
+    const parts = { annotator: annotatorPart, document: documentPart, consensus: consensusPart, adjudication: adjudicationPart, adjudicated: adjudicatedPart };
+    const sync = () => { for (const [k, el] of Object.entries(parts)) el.hidden = kind.value() !== k; if (kind.value() === 'adjudication') loadUnits(); };
     kind.addEventListener('change', sync);
     sync();
     const notes = textArea({ rows: 2, placeholder: 'optional: who the experts are, how they worked' });
     const add = actionButton('Add the reference', { kind: 'primary', working: 'Adding…', msg, log: 'set-add-reference', onClick: async () => {
       msg.clear();
       clear(out);
-      if (!recording.value) throw new Error('Choose the recording first (add it on the Recordings page if it is not listed).');
-      if (!use.value()) throw new Error('Choose how the recording is used: guided, practice or assessment.');
-      const [scope, rid] = [recording.value.slice(0, recording.value.indexOf('|')), recording.value.slice(recording.value.indexOf('|') + 1)];
-      let source;
       const k = kind.value();
-      if (k === 'annotator') {
+      const chosenUnit = k === 'adjudication' ? (units || []).find((x) => x.unit_id === unit.value) : null;
+      if (k === 'adjudication' && !chosenUnit) throw new Error('Choose a finished adjudication.');
+      if (!chosenUnit && !recording.value) throw new Error('Choose the recording first (add it on the Recordings page if it is not listed).');
+      if (!use.value()) throw new Error('Choose how the recording is used: guided, practice or assessment.');
+      const [scope, rid] = chosenUnit ? ['study', chosenUnit.recording_id]
+        : [recording.value.slice(0, recording.value.indexOf('|')), recording.value.slice(recording.value.indexOf('|') + 1)];
+      let source;
+      if (k === 'adjudication') {
+        source = { kind: 'adjudication', task_id: chosenUnit.unit_id };
+      } else if (k === 'annotator') {
         if (!who.value) throw new Error('Choose whose annotations to use.');
         source = { kind: 'annotator', annotator_id: who.value, mode: mode.value, context_id: mode.value === 'standard' ? '' : ctx.value.trim() };
       } else if (k === 'document') {
@@ -323,7 +354,7 @@ export class TrainingSection {
       field('Recording', recording),
       h('fieldset.admin-fieldset', {}, h('legend', {}, 'Used for'), use),
       h('fieldset.admin-fieldset', {}, h('legend', {}, 'The reference comes from'), kind),
-      annotatorPart, documentPart, consensusPart, adjudicatedPart,
+      annotatorPart, documentPart, consensusPart, adjudicationPart, adjudicatedPart,
       field('Notes about the reference', notes),
       h('div.btn-row', {}, add), msg, out);
   }

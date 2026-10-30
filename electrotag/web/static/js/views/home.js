@@ -142,8 +142,8 @@ export function homeView(app) {
       h('h1', {}, `Hello${app.me && app.me.display_name ? `, ${app.me.display_name}` : ''}`),
       guideLine(),
       h('div.home-grid', {},
-        h('div.col', {}, nextCard, expertCard(app), !training && items.length ? progressCard(p) : null, programme && !training ? trainingDoneCard(app) : null,
-          list, outcomesHost(app), quizCard(app)),
+        h('div.col', {}, nextCard, outcomesHost(app), expertCard(app), !training && items.length ? progressCard(p) : null, programme && !training ? trainingDoneCard(app) : null,
+          list, quizCard(app)),
         sideColumn([...games(app), demo]))));
 }
 
@@ -169,12 +169,22 @@ export const EXPERT_CARD_LINES = [];
 export function expertCard(app) {
   if (!app.isExpert) return null;
   const lines = EXPERT_CARD_LINES.map((fn) => { try { return fn(app); } catch { return null; } }).filter(Boolean);
+  const counts = h('div.expert-counts', { role: 'status' });
+  const queue = h('button.btn.quiet', { type: 'button', 'data-log': 'open-expert-queue', hidden: true, onclick: () => app.showExpert('expert-queue') }, 'Open the adjudication queue');
+  if (app.backend && !app.backend.isDemo && app.backend.expert) {
+    // what waits for adjudication (js/expert/model.js expertCardLines); the card works without it
+    Promise.all([import('../expert/model.js'), app.backend.expert('adjudication_list', {})]).then(([m, got]) => {
+      const said = m.expertCardLines(got.units);
+      counts.replaceChildren(...said.map((l) => h('p.expert-count', {}, l)));
+      queue.hidden = !said.length;
+    }, () => { /* nothing to add */ });
+  }
   return h('section.card.expert-card', { 'aria-label': 'Expert work' },
     h('h2', {}, 'Expert work'),
     h('p.caption', {}, 'Correct and add to saved work, replay how sessions went, adjudicate disagreements and supply training material. '
       + 'The originals are never changed: a correction is a new version, credited to you.'),
-    lines.map((l) => h('p.caption', {}, l)),
-    h('div.btn-row', {}, h('button.btn', { type: 'button', 'data-log': 'open-expert', onclick: () => app.showExpert('expert') }, 'Open the expert area')));
+    lines.map((l) => h('p.caption', {}, l)), counts,
+    h('div.btn-row', {}, h('button.btn', { type: 'button', 'data-log': 'open-expert', onclick: () => app.showExpert('expert') }, 'Open the expert area'), queue));
 }
 
 /** Why the study recordings are locked (the gate's message, in the study's words), with the lock drawn beside it. */

@@ -51,18 +51,42 @@ export function canRevise(app, it) {
  */
 export function correctionsOf(app, redraw = null) {
   const r = app.me && app.me.study && app.me.study.review;
-  if ((r && r.show_corrections_to_annotators === false) || !app.backend || !app.backend.myFeedback) return [];
+  const corrections = !(r && r.show_corrections_to_annotators === false);
+  if ((!corrections && r && r.show_outcomes_to_annotators === false) || !app.backend || !app.backend.myFeedback) return [];
   const kept = app.corrections;
   if (!kept || kept.for !== app.assignments) {
-    const mine = { for: app.assignments, items: kept ? kept.items : [] };
+    const mine = { for: app.assignments, items: kept ? kept.items : [], outcomes: kept ? kept.outcomes : [] };
     app.corrections = mine;
     app.backend.myFeedback().then((fb) => {
       if (app.corrections !== mine) return;
-      mine.items = (fb && fb.corrections && fb.corrections.shown && fb.corrections.items) || [];
-      if (redraw && mine.items.length) redraw();
+      mine.items = (corrections && fb && fb.corrections && fb.corrections.shown && fb.corrections.items) || [];
+      mine.outcomes = (fb && fb.adjudications && fb.adjudications.shown && fb.adjudications.items) || []; // decisions on disagreements
+      if (redraw && (mine.items.length || mine.outcomes.length)) redraw();
     }, () => { /* the list works without them */ });
   }
   return app.corrections.items;
+}
+
+/** "Adjudicated: 9 of 17 places as you had them" for a recording whose disagreements were decided, or ''. */
+export function adjudicatedText(outcomes, recordingId) {
+  const conflicts = (outcomes || []).filter((o) => o.recording_id === recordingId).flatMap((o) => o.conflicts || []);
+  if (!conflicts.length) return '';
+  const stood = conflicts.filter((c) => ['yours_kept', 'all_kept'].includes(c.decision && c.decision.outcome)).length;
+  return `Adjudicated: ${stood} of ${conflicts.length} disagreement${conflicts.length === 1 ? '' : 's'} decided as you had ${conflicts.length === 1 ? 'it' : 'them'}`;
+}
+
+/** The history's line about the adjudication of a recording: it opens the decisions, on the home page. */
+function adjudicatedCaption(app, it) {
+  const text = (it.mode || 'standard') === 'standard' ? adjudicatedText(app.corrections && app.corrections.outcomes, it.recording_id) : '';
+  if (!text) return null;
+  return h('button.link.caption.block.adjudicated-line', { type: 'button', 'data-adjudicated': it.recording_id, 'data-log': 'adjudicated-line',
+    title: 'See the decisions', onclick: () => {
+      const d = document.querySelector(`.outcomes-card details[data-recording="${CSS.escape(it.recording_id)}"]`);
+      if (!d) return;
+      d.open = true;
+      d.scrollIntoView({ block: 'start' });
+      d.querySelector('summary')?.focus({ preventScroll: true });
+    } }, text);
 }
 
 /** The corrections of one recording of the list, newest first. */
@@ -191,7 +215,7 @@ export function recordingsCard(app) {
   const listRow = (it) => {
     const [text, cls] = it.revising ? ['Being revised', 'active'] : STATUS[it.status] || [it.status, ''];
     return h('tr', { 'data-id': it.recording_id, 'data-log-text': it.file_name },
-      h('td', {}, h('span.file', { title: it.recording_id }, it.file_name), feedbackCaption(app, it), correctedCaption(app, it),
+      h('td', {}, h('span.file', { title: it.recording_id }, it.file_name), feedbackCaption(app, it), correctedCaption(app, it), adjudicatedCaption(app, it),
         it.status === 'locked' ? h('span.caption.locked-why', {}, 'Opens once you pass the competency assessment.') : null),
       showMode ? h('td.opt', {}, MODES[it.mode] || it.mode) : null,
       h('td.num', {}, formatHms(it.duration_s)),
@@ -204,7 +228,7 @@ export function recordingsCard(app) {
     const s = savedOf(it) || {};
     return h('tr', { 'data-id': it.recording_id, 'data-log-text': it.file_name },
       h('td.name', {}, h('span.file-line', { title: it.recording_id }, it.file_name),
-        h('span.caption.when', {}, `Saved ${savedText(s.saved_at)}${it.revising ? ' · revision under way' : ''}`), feedbackCaption(app, it), correctedCaption(app, it)),
+        h('span.caption.when', {}, `Saved ${savedText(s.saved_at)}${it.revising ? ' · revision under way' : ''}`), feedbackCaption(app, it), correctedCaption(app, it), adjudicatedCaption(app, it)),
       h('td.num', {}, String(s.version || 1)),
       h('td.num.opt', {}, s.n_annotations === null || s.n_annotations === undefined ? 'n/a' : String(s.n_annotations)),
       h('td.num.opt', {}, s.elapsed_s === null || s.elapsed_s === undefined ? 'n/a' : spanText(s.elapsed_s)),

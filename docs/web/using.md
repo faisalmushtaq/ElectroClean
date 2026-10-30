@@ -154,11 +154,17 @@ corrections from the annotators, and then none of this appears.
 Some studies give each recording to two or more people, each annotating it on their own, as a
 systematic review has two people screen each record. Where your annotations and a colleague's
 disagree, an expert looks at each place and decides which marks to keep. Once that is finished,
-your home page has a card, Decisions on your disagreements, with each recording concerned: open
-it to see each place, what you marked, what the others marked (nobody is named), what was kept,
-and the expert's reason. A blue line means your mark (or your choice to leave the place unmarked)
-stood. Your own files stay exactly as you saved them; the decisions make a new version beside
-them. Some studies keep these decisions from the annotators, and then the card does not appear.
+your home page has a card near its top, Decisions on your disagreements, which says first in how
+many places the expert decided as you had it, and then lists each recording concerned: open it to
+see each place, what you marked, what the others marked (nobody is named), what was kept, and the
+expert's reason. Each place is told from your side, from what was kept: your mark was kept; there
+is no mark, as you had it; both marks (or yours among others') were kept; a colleague's mark was
+kept instead of yours, or where you had none; your mark was not kept; or the expert drew their own
+mark. A blue line means what you did stood. In the History of your recordings, a line under the
+recording ("Adjudicated: 9 of 17 disagreements decided as you had them") opens the card at that
+recording. If the expert takes a second look, the decisions shown stay until they finish again.
+Your own files stay exactly as you saved them; the decisions make a new version beside them. Some
+studies keep these decisions from the annotators, and then the card does not appear.
 
 ## Progress and milestones
 
