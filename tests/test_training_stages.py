@@ -191,6 +191,14 @@ def test_snippets_come_from_the_guided_references_and_the_study_teams_own(exampl
             rs.add_snippet(bad, LABELS)
     again = ReferenceSet.load(rs.directory)  # kept in reference_set.json
     assert [s.to_dict() for s in again.own_snippets] == [s.to_dict() for s in rs.own_snippets]
+    # a snippet promoted from the library of conflicts comes as a dict, without channels (library.py)
+    rs.add_snippet({"snippet_id": "s02", "recording_id": rid, "start_s": 4.0, "end_s": 5.0, "label": "EMG-artifact",
+                    "explanation": "", "context_s": 2.0, "source": {"library_entry": "t-1:c-1", "promote_id": "9" * 32}})
+    promoted = next(x for x in set_snippets(rs) if x.snippet_id == "s02")
+    assert promoted.channels == [] and promoted.source["promote_id"] == "9" * 32
+    with pytest.raises(ReferenceSetError):
+        rs.add_snippet({"snippet_id": "", "recording_id": rid, "start_s": 1, "end_s": 2, "label": "EMG-artifact"})
+    rs.remove_snippet("s02")
     rs.remove_snippet("s01")
     assert rs.own_snippets == []
     with pytest.raises(ReferenceSetError):

@@ -62,8 +62,11 @@ Annotated_Events/
         completion_register.tsv
         session_log.jsonl
         annotator-A01/sub-001/eeg/sub-001_task-rest_eeg_annotator-A01[_attempt-02]_….{tsv,json,txt}
-    derived/adjudications/              adjudicated versions of tasks, laid out the same way
+    derived/adjudications/              adjudicated versions, laid out the same way (annotator-ADJUDICATED)
     corrections/corrections.{tsv,json}  every change of every correction, with its reason (results zip and export)
+    adjudications/<unit>.json           each adjudication's record (results zip and export)
+    adjudications/decisions.tsv         every decision on a conflict
+    library/library.tsv                 every conflict between annotators, decided or not
     .electrotag/
         locks/          lock files of sessions and of the register
         staging/        saves in progress (normally empty)
@@ -99,6 +102,18 @@ corrected attempt's `_annotations.json` and each change is as in
 `corrections/corrections.json` below. Its `annotator.display_name` is "A01
 corrected by E01", its session ID is the `correction_id`, and its time is the
 expert's.
+
+An adjudicated version's files carry the reserved name `annotator-ADJUDICATED`
+(its display name is "Adjudicated (E01)", after the adjudicator), and their
+attempt number counts the adjudicated versions of the recording. Its
+`session.context.derived` is `{"kind": "adjudication", "task_id"}` (the unit
+adjudicated: a task, `r-…` for a recording given to several people, or `k-…`
+for corrections of one saved attempt), `unit_kind`, `adjudicator_id`,
+`adjudicator_name`, `inputs` (for each person compared, their letter, whether
+it was their own version or a correction, the attempt, its session ID and
+output base name, and the SHA-256 of its `_annotations.json`), `rules` (the
+matching rules used), `window`, `corrected`, `n_conflicts`, `decisions_sha256`
+and `blinded`.
 
 ## `…_events.tsv`
 
@@ -354,6 +369,35 @@ known-answer task they saved, with the columns `annotator_id`, `task_id`, `recor
 `event_recall` and `scored_at`. The scores compare the saved annotations with the set's reference as
 the practice feedback does, within the task's part of the recording when it has one.
 
+## Adjudications and the library (results zip and export)
+
+The adjudications are kept by the study and written into the results when the
+results zip is made or `electrotag web export` runs, as they stand then.
+`adjudications/<unit>.json` is each adjudication's record
+(`"schema": "electrotag.adjudication"`): the unit, the recording, the
+adjudicator, `state` (`in_progress` or `finished`), `started_at`,
+`finished_at`, the frozen `inputs` and `rules`, the `letters` of the people
+compared, `decisions` (by conflict ID: `choice`, the edited `marks`,
+`reason_code`, `reason`, `decided_at`, `decided_by`), `version` (the
+adjudicated version saved) and `counts`.
+
+`adjudications/decisions.tsv` has a row for each conflict of each
+adjudication, with the columns `unit_id`, `unit_kind`, `recording_id`,
+`adjudicator_id`, `state`, `conflict_id`, `kinds` (`presence`, `type`,
+`timing`, `channels`, `split`, comma-separated), `onset_s`, `offset_s`,
+`labels`, `letters`, `people`, `choice` (a letter, `all`, `none`, `edited`, or
+`n/a` while undecided), `kept_people` (whose marks the choice kept),
+`reason_code`, `reason`, `decided_at` and `seconds_since_previous` (from the
+start, or the decision before, to this decision).
+
+`library/library.tsv` has a row for each conflict between annotators, decided
+or not, with the columns `entry_id`, `unit_id`, `unit_kind`, `recording_id`,
+`status` (`awaiting`, `open` or `decided`), `kinds`, `labels`, `pair` (the two
+types of a type conflict, `a | b`), `onset_s`, `offset_s`, `people` (who marked
+it), `missing` (who did not), `choice`, `kept_labels`, `reason_code`, `reason`,
+`adjudicator_id` and `decided_at`. The expert area's library downloads the
+same columns for the entries it shows, with `decision` in place of `choice`.
+
 ## `completion_register.tsv`
 
 | Column | Meaning |
@@ -476,11 +520,11 @@ not to restore, is moved to `.electrotag/interrupted/autosave/`.
 (method `single_expert`, `consensus` or `adjudicated`, experts, notes), the
 `recordings` (use `guided`, `practice` or `assessment`, reference file, its SHA-256,
 per-recording provenance including the consensus rule), `criteria`
-(competency criteria), optional `analysis` overrides, `quiz` items,
+(competency criteria), optional `analysis` overrides, `quiz` items (an item promoted from the library of conflicts keeps its `source`),
 `practice_review`, the training programme's `guided` settings (tolerance and
 the experts' notes), `practice_pass`, `recordings_dir` for a self-contained set,
-`assigned_annotators`, `snippets` (the examples of artifact types the study team
-added for the training path's *Meet the artifacts*: `snippet_id`, `recording_id`,
+`assigned_annotators`, `snippets` (the examples of artifact types for the training path's *Meet the
+artifacts* that the study team added or promoted from the library of conflicts: `snippet_id`, `recording_id`,
 `start_s`, `end_s`, `label`, `explanation`, `context_s`, `channels` and `source`;
 those made from the guided references are not stored), and
 `show_full_report_to_annotator` (false by default; it

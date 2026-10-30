@@ -149,6 +149,17 @@ work; it is for you to judge what to change. When two experts corrected the same
 says so: the study compares their corrections and decides where they disagree. Some studies keep
 corrections from the annotators, and then none of this appears.
 
+## Decisions on your disagreements
+
+Some studies give each recording to two or more people, each annotating it on their own, as a
+systematic review has two people screen each record. Where your annotations and a colleague's
+disagree, an expert looks at each place and decides which marks to keep. Once that is finished,
+your home page has a card, Decisions on your disagreements, with each recording concerned: open
+it to see each place, what you marked, what the others marked (nobody is named), what was kept,
+and the expert's reason. A blue line means your mark (or your choice to leave the place unmarked)
+stood. Your own files stay exactly as you saved them; the decisions make a new version beside
+them. Some studies keep these decisions from the annotators, and then the card does not appear.
+
 ## Progress and milestones
 
 Many studies also show Goals and milestones beside your progress (your study can switch them off).

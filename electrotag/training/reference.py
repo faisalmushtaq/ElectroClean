@@ -92,9 +92,12 @@ class QuizItem:
     accepted_labels: list[str] = field(default_factory=list)
     explanation: str = ""
     context_s: float = 2.0
+    # Where the item came from, when it was made from something else: an entry of the library of
+    # adjudicated conflicts ({"library_entry", "task_id", "conflict_id", "promote_id", ...}); {} otherwise.
+    source: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        out = {
             "item_id": self.item_id,
             "recording_id": self.recording_id,
             "start_s": self.start_s,
@@ -104,6 +107,9 @@ class QuizItem:
             "explanation": self.explanation,
             "context_s": self.context_s,
         }
+        if self.source:
+            out["source"] = dict(self.source)
+        return out
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> QuizItem:
@@ -116,6 +122,7 @@ class QuizItem:
             accepted_labels=[str(x) for x in d.get("accepted_labels", [])],
             explanation=str(d.get("explanation", "")),
             context_s=float(d.get("context_s", 2.0)),
+            source=dict(d.get("source") or {}),
         )
 
     def is_correct(self, answer: str) -> bool:
@@ -539,10 +546,18 @@ class ReferenceSet:
             n += 1
         return f"s{n:02d}"
 
-    def add_snippet(self, snippet: Snippet, catalogue_labels: tuple[str, ...]) -> None:
-        """Keep a snippet (in place of one with its ID). It must be of a permitted type, between 0 and
-        :data:`SNIPPET_MAX_S` long, and never from a practice or assessment recording of this set."""
-        if snippet.label not in catalogue_labels:
+    def add_snippet(self, snippet: Snippet | dict[str, Any], catalogue_labels: tuple[str, ...] | None = None) -> None:
+        """Keep a snippet (in place of one with its ID): a :class:`Snippet` or its dict (``to_dict``, as the library's
+        "promote to snippet" makes one). It must be between 0 and :data:`SNIPPET_MAX_S` long, never from a practice
+        or assessment recording of this set, and of a permitted type when ``catalogue_labels`` are given."""
+        if isinstance(snippet, dict):
+            if not str(snippet.get("snippet_id") or ""):
+                raise ReferenceSetError("A snippet needs a snippet_id")
+            try:
+                snippet = Snippet.from_dict(snippet)
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ReferenceSetError(f"A snippet needs {exc}") from exc
+        if catalogue_labels is not None and snippet.label not in catalogue_labels:
             raise ReferenceSetError(f"{snippet.label!r} is not a permitted label")
         if not 0 <= snippet.start_s < snippet.end_s:
             raise ReferenceSetError("A snippet's end must be after its start, which is at 0 s or later")

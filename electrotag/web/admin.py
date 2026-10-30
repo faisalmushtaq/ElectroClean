@@ -1115,8 +1115,8 @@ class Admin:
         from electrotag.training.consensus import build_consensus
 
         if not isinstance(source, dict) or source.get("kind") not in ("annotator", "document", "consensus",
-                                                                       "adjudicated"):
-            raise _bad("source.kind must be annotator, document, consensus or adjudicated")
+                                                                       "adjudicated", "adjudication"):
+            raise _bad("source.kind must be annotator, document, consensus, adjudicated or adjudication")
         kind = source["kind"]
         mode, ctx = _mode_ctx(source)
 
@@ -1124,6 +1124,12 @@ class Admin:
             p = folder / name
             p.write_bytes(data)
             return p
+
+        # ---- an adjudication of the expert area: its adjudicated version (electrotag/web/adjudication.py)
+        if kind == "adjudication":
+            from electrotag.web.adjudication import reference_source
+
+            return reference_source(self.service, source, rid, keep)
 
         if kind == "annotator":
             aid = _aid(source.get("annotator_id"), "source.annotator_id")

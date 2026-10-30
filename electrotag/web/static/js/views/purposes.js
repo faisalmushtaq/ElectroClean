@@ -91,6 +91,8 @@ export const PURPOSES = {
   correct: fromPart('corrections', 'openCorrection', 'Correct', 'correction'), // an expert's correction (js/expert/correction_pass.js)
   replay: fromPart('replay', 'openReplay', 'Replay', 'replay'), // a replay of a session (js/replay/player.js)
   corrected: fromPart('correctionFeedback', 'openCorrected', 'Open', 'corrected'), // the annotator's view of a correction
+  adjudicate: async (app, o) => (await import('../expert/adjudicate.js')).openAdjudication(app, o), // the adjudication pass
+  library: async (app, o) => (await import('../expert/adjudicate.js')).openAdjudication(app, o), // a library entry, read only
 };
 
 /** Add a purpose (a later part may also add its line to PURPOSES above). */
