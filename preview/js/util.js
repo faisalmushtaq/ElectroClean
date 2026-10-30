@@ -6,6 +6,18 @@ export function clamp(v, lo, hi) {
   return Math.min(Math.max(v, lo), hi);
 }
 
+/** "1 annotation", "3 annotations". */
+export function plural(n, word, many = `${word}s`) { return `${n} ${n === 1 ? word : many}`; }
+
+/** A length of time as a person reads it: "45 s", "3 min 05 s", "1 h 02 min". */
+export function friendlyDuration(s) {
+  s = Math.round(s);
+  if (s < 60) return `${s} s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} min ${String(s % 60).padStart(2, '0')} s`;
+  return `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`;
+}
+
 /** "00:05:12" from seconds. */
 export function formatHms(seconds) {
   const s = Math.max(0, Math.floor(seconds));

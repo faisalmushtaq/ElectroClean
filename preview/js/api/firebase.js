@@ -203,8 +203,9 @@ export class FirebaseBackend {
     return this._call('et_put_draft', { recording_id: recordingId, mode, context_id: contextId || '', draft });
   }
 
-  deleteDraft(recordingId, mode, contextId) {
-    return this._call('et_delete_draft', { recording_id: recordingId, mode, context_id: contextId || '' });
+  /** `sessionId`: the session discarding its work and closing; the study then refuses its drafts that arrive late. */
+  deleteDraft(recordingId, mode, contextId, { sessionId = '' } = {}) {
+    return this._call('et_delete_draft', { recording_id: recordingId, mode, context_id: contextId || '', ...(sessionId ? { session_id: sessionId } : {}) });
   }
 
   submit(body) { return this._call('et_submit', body); }

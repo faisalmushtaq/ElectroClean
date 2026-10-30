@@ -9,7 +9,7 @@ import { showDialog } from '../ui/dialog.js';
 import { logger } from '../log/logger.js';
 import { local } from '../util.js';
 import { formatBytes } from '../data/links.js';
-import { electrodeFilesToKeep, sidecarsOf } from '../data/electrodes.js';
+import { electrodeFilesToKeep, sidecarsOf } from '../eeg/electrodes.js';
 import { DeviceStore, DeviceStoreError, ownerKey, finishedState, finishedToRemove, summarise } from '../data/device_store.js';
 
 const DEFAULT_PREFS = Object.freeze({ keepLinks: true, keepChosen: false, removeWhenFinished: false });

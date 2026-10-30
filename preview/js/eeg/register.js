@@ -257,11 +257,15 @@ function nowLocalIso() {
   );
 }
 
-let defaultCatalogue = null;
-async function catalogueOf(options) {
-  if (options.catalogue) return options.catalogue.labels ? options.catalogue : { labels: options.catalogue };
-  if (!defaultCatalogue) defaultCatalogue = (await import("../api/demo_catalogue.js")).CATALOGUE;
-  return defaultCatalogue;
+/**
+ * The label catalogue that the event codes are compared with, which the caller gives: the admin area
+ * passes ElectroTag's own (js/api/demo_catalogue.js), as electrotag-web register uses
+ * default_catalogue(). This folder never imports the application, so there is no default here.
+ */
+function catalogueOf(options) {
+  const c = options.catalogue;
+  if (!c) throw new TypeError("buildManifest needs options.catalogue, the label catalogue that event codes are compared with");
+  return c.labels ? c : { labels: c };
 }
 
 /** check_channels: the recording's channels against channels.tsv. */
@@ -357,12 +361,13 @@ function notchFrequencies(f, sfreq) {
  * @param {object} recording an item of findDatasetRecordings().recordings
  * @param {{settings?: object, scope?: string, onProgress?: (p: {stage: string, fraction: number}) => void,
  *          catalogue?: object, worker?: boolean, version?: string}} [options]
- *   catalogue: the study's label catalogue (GET /me; default: ElectroTag's own);
+ *   catalogue: the label catalogue that event codes are compared with (required; {labels} or the list);
  *   worker: false to read on the page; version: the study's ElectroTag version, if known
  * @returns {Promise<{manifest: object, problems: string[]}>} problems: the checks' findings (the
  *   manifest's warnings), for the administrator to look at
  */
 export async function buildManifest(recording, options = {}) {
+  catalogueOf(options);
   const s = registrationSettings(options.settings);
   const scope = options.scope || SCOPE_STUDY;
   const progress = (stage, fraction) => {
@@ -547,7 +552,7 @@ export async function buildManifest(recording, options = {}) {
       warnings.push(`${outOfRange.length} original event(s) lie outside the recording: rows ${pyListRepr(outOfRange.slice(0, 10))}`);
     }
     warnings.push(...original.problems.map((p) => `Events: ${p}`));
-    const eventReport = eventCodeReport(original, await catalogueOf(options));
+    const eventReport = eventCodeReport(original, catalogueOf(options));
     warnings.push(...eventReport.summary.map((line) => `Events: ${line}`));
 
     const eventsSidecar = await loadJsonChain(sidecars.eventsJsonChain);
@@ -757,6 +762,7 @@ function datasetOf(recording) {
  *          ignored: {path: string, reason: string}[], problems: Record<string, string[]>}>}
  */
 export async function buildManifests(files, options = {}) {
+  catalogueOf(options);
   const { recordings, ignored } = findDatasetRecordings(files, options);
   const manifests = [];
   const failures = [];

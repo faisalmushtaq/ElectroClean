@@ -5,7 +5,7 @@
 import { h } from '../ui/dom.js';
 import { icon, starIcons } from '../views/common.js';
 import { minutesText } from './coach.js';
-import { quizCard } from './quiz.js';
+import { quizCard } from './quiz_card.js';
 
 export const STAGE_TEXT = {
   guided: 'Mark each artifact the way the experts did, one at a time, with help and instant feedback.',

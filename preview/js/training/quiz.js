@@ -16,6 +16,10 @@ import { logger } from '../log/logger.js';
 import { DEFAULT_SCALINGS } from '../api/demo_catalogue.js';
 import { CAN_CHOOSE_FOLDER, acceptFiles } from '../util.js';
 import { linkPanel } from '../views/links_panel.js';
+import { loadPart } from '../lazy.js';
+import { feedbackText, quizCard } from './quiz_card.js';
+
+export { feedbackText, quizCard };
 
 /** The answer for a segment without an artifact (electrotag.training.reference.NONE_OPTION). */
 export const NONE_OPTION = 'No artifact / none of these';
@@ -123,38 +127,9 @@ export function scoreText(score) {
   return missing > 0 ? `${text} ${missing} of the ${items} segments ${missing === 1 ? 'was' : 'were'} not answered.` : text;
 }
 
-/** How a quiz gives its feedback, for the list of quizzes. */
-export function feedbackText(feedback) {
-  if (feedback === 'immediate') return 'whether each answer is right, straight away';
-  if (feedback === 'end') return 'your result at the end';
-  return '';
-}
-
 /** The quiz mode as the logs and the saved results name it: feedback after each answer is practice. */
 export function quizMode(feedback) {
   return feedback === 'immediate' ? 'practice' : 'assessment';
-}
-
-// ------------------------------------------------------------- the home view's card
-/** The quizzes of GET /me, as a card for the home view or the training path (null when none). */
-export function quizCard(app, { onOpen = null } = {}) {
-  const quizzes = (app.me && app.me.quizzes) || [];
-  if (!quizzes.length) return null;
-  const open = onOpen || ((q) => app.showQuiz(q.set_id));
-  return h('section.card.quiz-card', { 'data-log': 'quiz-card' },
-    h('h2', {}, quizzes.length === 1 ? 'Short-segment quiz' : 'Short-segment quizzes'),
-    h('p.caption', {}, 'Short pieces of EEG: choose the main artifact type in each. It tests recognising the types only, not marking them.'),
-    h('ul.quiz-list', {}, quizzes.map((q) => {
-      const answered = q.finished ? 0 : Number(q.n_answered) || 0;
-      return h('li', { 'data-set': q.set_id },
-        h('div', {}, h('b', {}, q.name || q.set_id), h('br'),
-          h('span.caption', {}, `${q.n_items} segment${q.n_items === 1 ? '' : 's'}` + (feedbackText(q.feedback) ? `; ${feedbackText(q.feedback)}` : '')),
-          answered ? [h('br'), h('span.caption.quiz-answered', {}, `You have answered ${answered} of ${q.n_items}.`)] : null),
-        // a finished quiz opens on its result; a started one carries on where it stopped
-        h('div.quiz-actions', {}, q.finished ? h('span.chip.done', {}, 'Finished') : null,
-          h('button.btn.small', { type: 'button', 'data-log': `quiz-${q.set_id}`, onclick: () => open(q) },
-            q.finished ? 'See my result' : answered ? 'Continue the quiz' : 'Take the quiz')));
-    })));
 }
 
 /** Keep the card's count of answers (GET /me's quizzes) in step with this page's. */
@@ -167,10 +142,8 @@ function noteAnswered(app, setId, n, finished = false) {
 }
 
 // --------------------------------------------------------------------- the view
-let recordingModule = null;
 async function openRecordingFiles(files, options) {
-  if (!recordingModule) recordingModule = await import('../data/recording.js');
-  return recordingModule.openRecording(files, options);
+  return (await loadPart('readers')).openRecording(files, options);
 }
 
 function studyFilters(me) {

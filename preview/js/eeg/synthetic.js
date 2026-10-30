@@ -223,7 +223,7 @@ function runBiquad(x, c) {
 /**
  * Simple zero-phase display filters (in place) for synthetic and stub recordings: a high-pass that
  * subtracts a centred moving average one cycle of the cut-off long, and notch filters run forwards
- * and backwards. The real data layer (js/data/filters.js) uses FIR designs like MNE's.
+ * and backwards. The real data layer (js/eeg/filters.js) uses FIR designs like MNE's.
  */
 export function applySimpleFilters(x, sfreq, filters) {
   if (!filters) return x;

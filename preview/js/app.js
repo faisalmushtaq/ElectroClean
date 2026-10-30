@@ -3,6 +3,10 @@
 // Views are addressed by a plain hash (#signin, #home, #open, #annotate, #review, #training, and
 // for administrators #admin and #admin-<section>), so the page also works where only such a hash
 // survives (an embedded preview).
+//
+// The sign-in page loads only this module, what it shows and the chosen back end's client; every
+// other view is a part loaded at its first use (js/lazy.js), with a Loading… page while it comes
+// and a plain message with Try again when it cannot be loaded.
 
 import { h, clear } from './ui/dom.js';
 import { ask, inform, showDialog, setDialogLogger, dialogOpen } from './ui/dialog.js';
@@ -10,25 +14,10 @@ import { Catalogue } from './catalogue.js';
 import { findBackend, connectServer, connectFirebase, makeDemo, rememberServer, unreachableText } from './api/choose.js';
 import { DEMO_NOTICE } from './api/notice.js';
 import { logger } from './log/logger.js';
-import { AnnotationSession } from './annotate/session.js';
-import { Workspace, friendlyDuration, plural } from './annotate/workspace.js';
-import { GuidedCoach, minutesText } from './training/coach.js';
-import { PracticeReview, reviewAnnotations } from './training/review.js';
-import { trainingPath } from './training/path.js';
-import { QuizView } from './training/quiz.js';
 import { signinView } from './views/signin.js';
-import { inviteView } from './views/invite.js';
-import { homeView } from './views/home.js';
-import { OpenView } from './views/open.js';
-import { DeviceStore } from './data/device_store.js';
-import { keepOnDevice, dropBrokenCopy, afterFinishOnDevice, offerRemovalAtSignOut } from './views/device.js';
 import { appHeader, downloadFiles, smallScreenNotice } from './views/common.js';
-import { nowLocalIso, session } from './util.js';
-import { newlyReached } from './games/milestones.js';
-import { logMilestones } from './views/home_games.js';
-import { canRevise } from './views/home_list.js';
-import { reportFromHome, reviewsOf } from './views/home_feedback.js';
-import { ReviewPass, FeedbackPanel, attachFeedback, savedReviewMessage } from './annotate/review_pass.js';
+import { friendlyDuration, nowLocalIso, plural, session } from './util.js';
+import { loadPart, loadParts, partNow, preloadParts } from './lazy.js';
 
 const VIEWS = ['signin', 'home', 'open', 'annotate', 'review', 'training', 'quiz'];
 /** The admin area's plain hashes (js/admin/model.js lists its sections). */
@@ -56,29 +45,26 @@ function takeInvite() {
   return typeof token === 'string' && /^[A-Za-z0-9_-]{20,200}$/.test(token) ? token : null;
 }
 
-// The file readers are loaded when the first recording is opened (the demonstration may not need
-// them), or just after signing in to a study, so that a connection lost later does not stop a file
-// from being read.
-let recordingModule = null;
-let readerFailures = 0;
-async function loadReaders() {
-  if (recordingModule) return recordingModule;
-  // Chromium remembers a module that failed to load for the page's life, so a later attempt asks for
-  // it under another address (the module itself is the same file).
-  const url = readerFailures ? `./data/recording.js?attempt=${readerFailures}` : './data/recording.js';
-  try {
-    recordingModule = await import(url);
-  } catch (exc) {
-    readerFailures += 1;
-    throw exc;
-  }
-  return recordingModule;
-}
+// The file readers (js/eeg/recording.js) are loaded when the first recording is opened (the
+// demonstration may not need them), or in idle time just after signing in to a study, so that a
+// connection lost later does not stop a file from being read. A failed load is tried again under
+// another address (js/lazy.js).
 async function openRecordingFiles(files) {
-  return (await loadReaders()).openRecording(files);
+  return (await loadPart('readers')).openRecording(files);
 }
 
-/** Reading errors that mean the files themselves cannot be read as a recording (data/util.js, RecordingError). */
+/** What is fetched in idle time after signing in, so that opening a recording does not wait for it. */
+const PRELOAD = ['open', 'device', 'deviceStore', 'session', 'workspace'];
+
+const PART_TEXT = 'This part of ElectroTag could not be loaded, most probably because the internet connection was lost. ' +
+  'Check your connection, then press Try again; if it still fails, reload the page.';
+
+/** The page shown while a part of the application is loaded. */
+function loadingPage(text = 'Loading…') {
+  return h('main.page.loading', { 'aria-busy': 'true' }, h('p.subtitle', { role: 'status' }, text));
+}
+
+/** Reading errors that mean the files themselves cannot be read as a recording (eeg/util.js, RecordingError). */
 const FORMAT_ERRORS = new Set(['corrupt_recording', 'unsupported_format', 'missing_companion', 'no_files', 'malformed_bids_metadata']);
 
 /** True for an error in the files' format, the only reason a copy kept on this device is removed. */
@@ -200,6 +186,7 @@ export class App {
 
   /** The welcome card of an invitation link: whose it is, then choosing a password. */
   async showInvite(token) {
+    loadPart('invite').catch(() => {}); // fetched while the study is asked
     this._render(h('main.page.loading', {}, h('p.subtitle', {}, 'Checking your invitation…')), 'signin');
     let info = null;
     let problem = '';
@@ -214,7 +201,7 @@ export class App {
       else retry = true; // the study could not answer: the link may be good, so it is kept to ask again
     }
     if (this.route !== 'signin') return; // the person went on while the study answered
-    this._render(inviteView(this, token, { info, problem, code, retry }), 'signin');
+    await this._withParts(['invite'], 'signin', ({ inviteView }) => this._render(inviteView(this, token, { info, problem, code, retry }), 'signin'));
   }
 
   /** Set the password with the invitation and sign in (POST /invite/accept). */
@@ -237,6 +224,9 @@ export class App {
   async _afterSignIn({ quiet }) {
     this.me = await this.backend.me();
     this.catalogue = new Catalogue(this.me.catalogue);
+    // The first view's part is fetched while the visit and the assignments are asked for.
+    const first = this.isAdmin ? ['admin', 'adminModel'] : this.inTraining() ? ['training'] : ['home'];
+    loadParts(...first).catch(() => {}); // tried again, with a message, when the view is shown
     try {
       const visit = await this.backend.openVisit({
         client: { app: 'web', backend: this.backend.kind, user_agent: navigator.userAgent,
@@ -260,7 +250,10 @@ export class App {
         buttons: [{ label: 'Continue', value: true, kind: 'primary' }], cancelValue: true, className: 'logging-notice' });
     }
     await this.loadAssignments();
-    if (!this.backend.isDemo) void loadReaders().catch(() => {}); // tried again when a file is opened
+    // In idle time: the readers (for a study; the demonstration's examples need none) and the
+    // annotation view, so that opening a recording does not wait for them. A part that fails here is
+    // tried again when it is needed.
+    preloadParts([...(this.backend.isDemo ? [] : ['readers']), ...(this.isAdmin ? [] : ['home']), ...PRELOAD, ...(this.me.programme ? ['coach', 'practice'] : [])]);
     const want = (location.hash || '').replace(/^#/, '');
     // Administrators start in the admin area (or where a reload left them); they can still annotate.
     const back = this._adminReturn;
@@ -302,8 +295,11 @@ export class App {
     const g = this.me && this.me.study && this.me.study.gamification;
     if (!g || !g.enabled || this.me.programme || !this.backend.achievements) { this.achievements = null; return null; }
     const changes = this._gamesSeq || 0;
+    // The game elements' own code, fetched with the facts; the home page works without either.
+    const part = loadParts('games', 'milestones').catch(() => null);
     try {
       const facts = await this.backend.achievements();
+      await part;
       // A change of the goal made while this was read is newer than what it read.
       if ((this._gamesSeq || 0) === changes) this.achievements = facts;
     } catch (exc) {
@@ -346,7 +342,10 @@ export class App {
   async signOut() {
     if (this.ws && !(await this.ws.close())) return;
     this._resumeLog();
-    await offerRemovalAtSignOut(this);
+    try {
+      const { offerRemovalAtSignOut } = await loadPart('device');
+      await offerRemovalAtSignOut(this);
+    } catch { /* the part could not be loaded: signing out goes on without the offer */ }
     this.adminArea = null;
     await logger.end('sign_out');
     await this.backend.logout();
@@ -373,7 +372,9 @@ export class App {
   }
 
   // ===================================================================== views
+  /** Show `el` as the page; `route` null keeps the route (a Loading… page between two views). */
   _render(el, route) {
+    this._renders = (this._renders || 0) + 1;
     // Leaving the open view stops its download from a link: a late file must not open by itself.
     if (this.openView && this.openView.el !== el) this.openView.leave();
     if (this.quizView && this.quizView.el !== el) {
@@ -382,7 +383,55 @@ export class App {
     }
     clear(this.content);
     this.content.appendChild(el);
-    this._setRoute(route);
+    if (route !== null) this._setRoute(route);
+  }
+
+  /**
+   * The parts a view needs (js/lazy.js), then `show(...modules)`: at once when they have loaded
+   * already, otherwise after a Loading… page. When one cannot be loaded, a plain message with Try
+   * again takes the view's place. Nothing is shown when the person went elsewhere meanwhile.
+   * Resolves with what `show` returns (undefined when it was not called).
+   */
+  _withParts(names, route, show) {
+    const now = names.map(partNow);
+    if (now.every(Boolean)) return Promise.resolve(show(...now));
+    this._render(loadingPage(), null);
+    const mine = this._renders;
+    return loadParts(...names).then((mods) => (this._renders === mine ? show(...mods) : undefined), () => {
+      if (this._renders === mine) this._render(this._partProblem(() => this._withParts(names, route, show)), route);
+      return undefined;
+    });
+  }
+
+  /** The page for a part that could not be loaded, with Try again. */
+  _partProblem(again) {
+    return h('div.view', { 'data-view': 'load-failed' }, this.me ? appHeader(this) : null,
+      h('main.page', {}, h('h1', {}, 'This page could not be loaded'), h('p.banner', { role: 'alert' }, PART_TEXT),
+        h('div.btn-row', {}, h('button.btn.primary', { type: 'button', 'data-log': 'load-again', onclick: again }, 'Try again'))));
+  }
+
+  /**
+   * The parts needed on the way from the open view to the annotation view, or null when they cannot
+   * be loaded: the open view then says so, with Try again (`again`).
+   */
+  async _openingParts(names, again) {
+    const view = this.openView;
+    const showing = view && this._stillOpen(view);
+    const waiting = showing && !names.every(partNow);
+    if (waiting) view.step('load', 'Loading the annotation view…');
+    try {
+      const mods = await loadParts(...names);
+      if (waiting && this._stillOpen(view)) view.step('load', 'Loaded the annotation view', 'done');
+      return mods;
+    } catch {
+      if (showing && this._stillOpen(view)) {
+        view.step('load', 'Loading the annotation view', 'failed');
+        view.showProblem(PART_TEXT, [h('button.btn.primary', { type: 'button', 'data-log': 'load-again', onclick: again }, 'Try again'), view.chooseAgainButton(false)]);
+      } else if (!showing) {
+        this._render(this._partProblem(again), this.route);
+      }
+      return null;
+    }
   }
 
   _setRoute(route) {
@@ -458,7 +507,7 @@ export class App {
 
   showHome() {
     this._fromTraining = false;
-    this._render(homeView(this), 'home');
+    return this._withParts(['home'], 'home', ({ homeView }) => this._render(homeView(this), 'home'));
   }
 
   /**
@@ -467,17 +516,17 @@ export class App {
    */
   async showAdmin(route = 'admin', params = null) {
     if (!this.isAdmin) { this.showHome(); return; }
-    const { AdminArea } = await import('./admin/area.js');
-    const { sectionForRoute } = await import('./admin/model.js');
-    const section = sectionForRoute(route);
-    if (!section) route = 'admin';
-    if (!this.adminArea || this.adminArea.backend !== this.backend || this.adminArea.annotatorId !== this.me.annotator_id) {
-      this.adminArea = new AdminArea(this);
-      await this.adminArea.ready();
-    }
-    if (ADMIN_ROUTE.test(this.route || '') && this.content.contains(this.adminArea.el)) this._setRoute(route);
-    else this._render(this.adminArea.el, route);
-    await this.adminArea.show(section || 'overview', params);
+    await this._withParts(['admin', 'adminModel'], ADMIN_ROUTE.test(route) ? route : 'admin', async ({ AdminArea }, { sectionForRoute }) => {
+      const section = sectionForRoute(route);
+      if (!section) route = 'admin';
+      if (!this.adminArea || this.adminArea.backend !== this.backend || this.adminArea.annotatorId !== this.me.annotator_id) {
+        this.adminArea = new AdminArea(this);
+        await this.adminArea.ready();
+      }
+      if (ADMIN_ROUTE.test(this.route || '') && this.content.contains(this.adminArea.el)) this._setRoute(route);
+      else this._render(this.adminArea.el, route);
+      await this.adminArea.show(section || 'overview', params);
+    });
   }
 
   async reloadHome() {
@@ -489,15 +538,18 @@ export class App {
   showQuiz(setId, { fromTraining = false } = {}) {
     this._fromTraining = Boolean(fromTraining);
     this.quizSetId = setId;
-    const view = new QuizView(this, setId);
-    if (this.quizView) this.quizView.destroy();
-    this.quizView = view;
-    this._render(view.el, 'quiz');
-    view.start();
+    return this._withParts(['quiz'], 'quiz', ({ QuizView }) => {
+      const view = new QuizView(this, setId);
+      if (this.quizView) this.quizView.destroy();
+      this.quizView = view;
+      this._render(view.el, 'quiz');
+      view.start();
+    });
   }
 
   async showTraining(message = this.pathMessage) {
     this.pathMessage = '';
+    loadPart('training').catch(() => {}); // fetched while the study is asked
     let data;
     try {
       data = await this.backend.training();
@@ -507,22 +559,24 @@ export class App {
       return;
     }
     if (this.me && this.me.programme) this.me.programme.complete = !data.next;
-    logger.event('training_path_opened', { reference_set: data.set_id, stages: data.stages.map((s) => ({ key: s.key, status: s.status, done: s.done, total: s.total })),
-      next_stage: data.next ? data.next.stage : null, next_recording: data.next ? data.next.recording_id : null, message });
-    this._fromTraining = true;
-    const page = trainingPath(data, {
-      annotatorId: this.me.annotator_id, message,
-      onContinue: (next) => {
-        logger.event('stage_started', { stage: next.stage, recording: next.recording_id, repeat: Boolean(next.repeat) });
-        const item = (this.assignments.items || []).find((i) => i.recording_id === next.recording_id && i.mode === next.stage) ||
-          { recording_id: next.recording_id, file_name: next.recording_id.split('/').pop(), mode: next.stage };
-        this.openAssignment(item);
-      },
-      onBack: () => { logger.event('training_path_left', {}); this.showHome(); },
-      quizzes: (this.me && this.me.quizzes) || [],
-      onQuiz: (q) => this.showQuiz(q.set_id, { fromTraining: true }),
+    await this._withParts(['training'], 'training', ({ trainingPath }) => {
+      logger.event('training_path_opened', { reference_set: data.set_id, stages: data.stages.map((s) => ({ key: s.key, status: s.status, done: s.done, total: s.total })),
+        next_stage: data.next ? data.next.stage : null, next_recording: data.next ? data.next.recording_id : null, message });
+      this._fromTraining = true;
+      const page = trainingPath(data, {
+        annotatorId: this.me.annotator_id, message,
+        onContinue: (next) => {
+          logger.event('stage_started', { stage: next.stage, recording: next.recording_id, repeat: Boolean(next.repeat) });
+          const item = (this.assignments.items || []).find((i) => i.recording_id === next.recording_id && i.mode === next.stage) ||
+            { recording_id: next.recording_id, file_name: next.recording_id.split('/').pop(), mode: next.stage };
+          this.openAssignment(item);
+        },
+        onBack: () => { logger.event('training_path_left', {}); this.showHome(); },
+        quizzes: (this.me && this.me.quizzes) || [],
+        onQuiz: (q) => this.showQuiz(q.set_id, { fromTraining: true }),
+      });
+      this._render(h('div.view', { 'data-view': 'training' }, appHeader(this), page), 'training');
     });
-    this._render(h('div.view', { 'data-view': 'training' }, appHeader(this), page), 'training');
   }
 
   download(files) { downloadFiles(files); }
@@ -538,20 +592,26 @@ export class App {
   // ============================================================ opening recordings
   /** Open an assigned recording; with `revise`, a finished one, to revise it (docs/web/using.md, "History and revisions"). */
   openAssignment(item, { revise = false } = {}) {
-    this.openFromComputer(item, { revise });
     // Continue (where you left off, or the revision): the unfinished work is restored without asking.
-    if (this.openView && item && (item.status === 'in_progress' || (revise && item.revising))) this.openView.resume = true;
+    const resume = Boolean(item && (item.status === 'in_progress' || (revise && item.revising)));
+    return this.openFromComputer(item, { revise, resume });
   }
 
-  openFromComputer(expected, { revise = false, purpose = null } = {}) {
+  /** The open view (js/views/open.js); resolves with it once it is shown (undefined when it could not be loaded). */
+  openFromComputer(expected, { revise = false, purpose = null, resume = false } = {}) {
     if (this.openView) this.openView.leave();
-    this.openView = new OpenView(this, { expected, revise: Boolean(expected && revise), purpose });
-    this._render(this.openView.el, this.openView.route);
+    const route = purpose && purpose.route ? purpose.route : 'open';
+    return this._withParts(['open'], route, ({ OpenView }) => {
+      this.openView = new OpenView(this, { expected, revise: Boolean(expected && revise), purpose });
+      if (resume) this.openView.resume = true;
+      this._render(this.openView.el, this.openView.route);
+      return this.openView;
+    });
   }
 
   // ===================================================== problem reports and reviews
   /** Report a problem with a recording from the home page (annotate/problem.js); the list is drawn again after. */
-  reportProblemFor(item) { return reportFromHome(this, item); }
+  async reportProblemFor(item) { return (await loadPart('homeFeedback')).reportFromHome(this, item); }
 
   /** The annotator reads the feedback on a reviewed recording: its file is opened, and the latest saved version shown read only. */
   openFeedback(item) {
@@ -575,7 +635,7 @@ export class App {
     }
     const m = target.manifest || {};
     const goBack = () => this.showAdmin(back.route, back.params);
-    this.openFromComputer({ recording_id: rid, file_name: target.file_name, format: m.format }, { purpose: { kind: 'review', route: 'admin-review', target, back, onBack: goBack,
+    await this.openFromComputer({ recording_id: rid, file_name: target.file_name, format: m.format }, { purpose: { kind: 'review', route: 'admin-review', target, back, onBack: goBack,
       title: `Review ${target.file_name}`,
       note: `${aid}${target.display_name ? ` (${target.display_name})` : ''} saved version ${target.attempt}. Open the recording from this computer: its fingerprint is checked against the study's copy, then the saved annotations are shown read only, ready to review.` } });
   }
@@ -599,6 +659,9 @@ export class App {
       if (!go || !this._stillOpen(view)) { if (this._stillOpen(view)) view.showMessage('Choose the study\'s copy of the recording.', [view.chooseAgainButton()]); return; }
     }
     view.step('match', `This is ${t.file_name}: version ${t.attempt} of ${t.annotator_id}`, 'done');
+    const parts = await this._openingParts(['session', 'workspace', 'reviewPass'], () => this._openForReview(recording, fp, view));
+    if (!parts || !this._stillOpen(view)) return;
+    const [{ AnnotationSession }, { Workspace }, { ReviewPass, savedReviewMessage }] = parts;
     let session;
     try {
       session = new AnnotationSession({ backend: this.backend, recording, manifest: m, recordingId: t.recording_id, mode: 'standard', contextId: '',
@@ -622,6 +685,12 @@ export class App {
 
   /** The annotator's read-only view of a reviewed recording, with Open to revise when the study allows it. */
   async _openFeedbackView({ recording, match: m, sha }) {
+    const names = ['session', 'workspace', 'reviewPass', 'homeList', 'homeFeedback'];
+    const view = this.openView;
+    const waited = !names.every(partNow);
+    const parts = await this._openingParts(names, () => this._openFeedbackView({ recording, match: m, sha }));
+    if (!parts || (waited && view && !this._stillOpen(view))) return; // the person went elsewhere while they loaded
+    const [{ AnnotationSession }, { Workspace }, { FeedbackPanel }, { canRevise }, { reviewsOf }] = parts;
     const item = (this.assignments.items || []).find((i) => i.recording_id === m.recording_id && i.mode === m.mode) || { recording_id: m.recording_id, mode: m.mode, status: 'done' };
     let session;
     try {
@@ -665,8 +734,8 @@ export class App {
   /** Demonstration: the built-in copy of an example recording. */
   async useExample(recordingId) {
     const recording = this.backend.exampleRecording(recordingId);
-    if (!this.openView || this.route !== this.openView.route) this.openFromComputer(null);
-    await this._process(recording, this.openView);
+    const view = this.openView && this.route === this.openView.route ? this.openView : await this.openFromComputer(null);
+    if (view) await this._process(recording, view);
   }
 
   /** Whether `view` is still the open view on screen: work for one that was left is dropped. */
@@ -686,7 +755,7 @@ export class App {
     } catch (exc) {
       logger.event('load_failed', { kind: 'read', reason: exc.message });
       // A copy kept on this device is removed only when its files cannot be read as a recording.
-      if (source && source.kind === 'device' && isFormatError(exc)) await dropBrokenCopy(this, source.sha256);
+      if (source && source.kind === 'device' && isFormatError(exc)) await this._dropBrokenCopy(source.sha256);
       if (!this._stillOpen(view)) return;
       view.step('read', 'Reading the file', 'failed');
       if (isConnectionError(exc)) {
@@ -775,7 +844,9 @@ export class App {
       view.step('match', 'Already finished', 'done');
       // A finished study recording can be revised from here too, when the study allows it.
       const item = (this.assignments.items || []).find((i) => i.recording_id === m.recording_id && i.mode === m.mode && (i.context_id || '') === (m.context_id || ''));
-      const revise = item && canRevise(this, item) && !view.revise
+      const homeList = item ? await loadPart('homeList').catch(() => null) : null;
+      if (!this._stillOpen(view)) return;
+      const revise = homeList && homeList.canRevise(this, item) && !view.revise
         ? h('button.btn', { type: 'button', 'data-log': 'open-to-revise', onclick: () => { view.revise = true; this._process(recording, view); } }, 'Open to revise')
         : null;
       view.showMessage(m.message, [back, revise, view.chooseAgainButton(false)].filter(Boolean), 'note');
@@ -819,9 +890,15 @@ export class App {
     const src = recording.source;
     if (!src || src.kind !== 'device' || fp.hex === src.sha256) return true;
     view.step('fp', 'Checking the copy kept on this device', 'failed');
-    await dropBrokenCopy(this, src.sha256);
+    await this._dropBrokenCopy(src.sha256);
     view.showProblem('The copy of this recording kept on this device has changed, so it has been removed. Choose the file, or open its link again.', [view.chooseAgainButton()]);
     return false;
+  }
+
+  /** Remove a copy kept on this device whose files are broken (js/views/device.js, loaded with the open view). */
+  async _dropBrokenCopy(sha256) {
+    const { dropBrokenCopy } = await loadPart('device');
+    await dropBrokenCopy(this, sha256);
   }
 
   _position(recordingId) {
@@ -831,6 +908,14 @@ export class App {
   }
 
   async openWorkspace({ recording, match, sha, tryOut = false }) {
+    const view = this.openView;
+    const names = ['session', 'workspace', 'device', 'deviceStore'];
+    if (!tryOut && match.mode === 'guided') names.push('coach');
+    if (!tryOut && match.revision) names.push('reviewPass');
+    const waited = !names.every(partNow);
+    const parts = await this._openingParts(names, () => this.openWorkspace({ recording, match, sha, tryOut }));
+    if (!parts || (waited && view && !this._stillOpen(view))) return; // the person went elsewhere while they loaded
+    const [{ AnnotationSession }, { Workspace }, { keepOnDevice }, { DeviceStore }] = parts;
     let session;
     try {
       session = new AnnotationSession({
@@ -868,11 +953,12 @@ export class App {
     this._render(ws.el, 'annotate');
     ws.mount(this.content);
     if (session.mode === 'guided') {
+      const { GuidedCoach } = partNow('coach');
       ws.coach = new GuidedCoach(ws, { backend: this.backend, recordingId: session.recordingId, position: this._position(session.recordingId) });
       await ws.coach.start();
       ws._refreshState();
     }
-    if (session.revision) attachFeedback(this, ws); // the review notes beside a revision of a reviewed recording
+    if (session.revision) partNow('reviewPass').attachFeedback(this, ws); // the review notes beside a revision of a reviewed recording
     ws.logOpened({ recording_id: session.recordingId, match: match.status, ...(session.revision ? { revision: session.revision.version } : {}) });
     if (session.revision) {
       logger.event('revision_started', { session_id: session.sessionId, recording_id: session.recordingId, version: session.revision.version,
@@ -912,20 +998,24 @@ export class App {
     this.ws = null;
     const before = this.achievements;
     await this.loadAssignments();
-    await afterFinishOnDevice(this, s.recordingId); // the save is complete and verified by now
+    const device = partNow('device'); // loaded with the annotation view
+    if (device) await device.afterFinishOnDevice(this, s.recordingId); // the save is complete and verified by now
     // Milestones that this save reached: celebrated once on the home page, never in the way of the next recording.
-    const reached = before && this.achievements ? newlyReached(before, this.achievements) : [];
-    if (reached.length) logMilestones(reached);
+    const games = partNow('games');
+    const ms = partNow('milestones');
+    const reached = before && this.achievements && ms ? ms.newlyReached(before, this.achievements) : [];
+    if (reached.length && games) games.logMilestones(reached);
     if (s.mode === 'practice' && result.feedback) {
       logger.event('practice_scored', { recording: s.recordingId, event_f1: result.feedback.metrics.event_f1, label_accuracy: result.feedback.metrics.label_accuracy,
         passed: result.feedback.passed, missed: result.feedback.flags.filter((f) => f.kind === 'MISSED').length,
         extra: result.feedback.flags.filter((f) => f.kind === 'EXTRA').length, other_type: result.feedback.flags.filter((f) => f.kind === 'TYPE').length });
-      this.openReview(s, result.feedback);
+      await this.openReview(s, result.feedback);
       return;
     }
     if (s.mode === 'guided') {
       const g = ws.coach && ws.coach.summary;
-      this.pathMessage = g && g.steps ? `Recording saved: ${g.stars} of ${g.max_stars} stars (${minutesText(g.time_s || 0)}).` : 'Recording saved.';
+      const coach = partNow('coach');
+      this.pathMessage = g && g.steps && coach ? `Recording saved: ${g.stars} of ${g.max_stars} stars (${coach.minutesText(g.time_s || 0)}).` : 'Recording saved.';
       await this.showTraining();
       return;
     }
@@ -952,7 +1042,12 @@ export class App {
     }
   }
 
+  /** The practice review after a practice recording is saved (js/training/review.js, loaded at its first use). */
   openReview(session, feedback) {
+    return this._withParts(['session', 'workspace', 'practice'], 'review', (sm, wm, pm) => this._openReview(session, feedback, sm, wm, pm));
+  }
+
+  _openReview(session, feedback, { AnnotationSession }, { Workspace }, { PracticeReview, reviewAnnotations }) {
     const mine = session.store.toJSON();
     const rs = new AnnotationSession({
       backend: this.backend, recording: session.recording, manifest: session.manifest, recordingId: session.recordingId,

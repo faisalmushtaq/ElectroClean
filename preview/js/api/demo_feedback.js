@@ -119,18 +119,17 @@ export class DemoFeedback {
     }
     const mode = body.mode || 'standard';
     const ctx = mode === 'standard' ? '' : body.context_id || '';
-    const a = this.b._assignmentsFor(aid).find((x) => x.rid === body.recording_id && x.mode === mode && (x.context_id || '') === ctx);
-    if (!a) throw new ApiError(403, 'not_assigned', `${body.recording_id} is not one of your recordings at the moment`);
-    const status = this.b._status(aid, a);
+    const a = this.b._findItem(aid, body.recording_id, mode, ctx);
+    const { status } = a;
     if (outcome === 'unusable') {
       if (mode !== 'standard') throw bad('A training recording cannot be set aside. Tell the study team about the problem instead, and carry on.', 'not_for_training', 409);
       if (status === 'done') throw bad(`You have saved ${a.rid} already. Tell the study team about the problem instead.`, 'already_done', 409);
     }
-    const info = this.b._recordingInfo(a.rid);
+    const { info } = a;
     const user = this.b._account();
     const rec = {
       schema: 'electrotag.problem_report', schema_version: 1, problem_id: pid, annotator_id: aid, display_name: (user && user.display_name) || '',
-      recording_id: a.rid, file_name: info ? info.file_name : a.rid.split('/').pop(), mode, context_id: ctx, reason: body.reason, note: text,
+      recording_id: a.rid, file_name: info.file_name, mode, context_id: ctx, reason: body.reason, note: text,
       outcome, where, item_status: status, reported_at: nowLocalIso(), state: 'open', resolution: null, resolution_note: '', resolved_at: null,
       resolved_by: null, reassigned_to: null, returned_at: null,
     };
@@ -173,7 +172,7 @@ export class DemoFeedback {
     const rec = this._problem(body);
     const text = note(body.note);
     this._resolve(rec, 'resolved', text);
-    this.b._admin._audit('problem_resolve', `Resolved ${rec.annotator_id}'s report on ${rec.recording_id}`, { problem_id: rec.problem_id, note: text });
+    this.b._admin._audit('problem_resolve', `Resolved ${rec.annotator_id}'s report on ${rec.recording_id}`, { problem_id: rec.problem_id, annotator_id: rec.annotator_id, recording_id: rec.recording_id, note: text });
     return { problem: this.problemOut(rec) };
   }
 
@@ -186,7 +185,7 @@ export class DemoFeedback {
     }
     this._resolve(rec, 'returned', text, { returned_at: nowLocalIso() });
     this.state.unusable[key] = { ...this.state.unusable[key], active: false, changed_at: nowLocalIso() };
-    this.b._admin._audit('problem_return', `Returned ${rec.recording_id} to ${rec.annotator_id}'s to-do list`, { problem_id: rec.problem_id, note: text });
+    this.b._admin._audit('problem_return', `Returned ${rec.recording_id} to ${rec.annotator_id}'s to-do list`, { problem_id: rec.problem_id, annotator_id: rec.annotator_id, recording_id: rec.recording_id, note: text });
     return { problem: this.problemOut(rec) };
   }
 
@@ -206,7 +205,7 @@ export class DemoFeedback {
       throw new ApiError(409, 'already_assigned', `${to} already has ${rec.recording_id}, so giving it to them changes nothing and the report stays open. Choose someone who does not have it yet.`);
     }
     this._resolve(rec, 'reassigned', text, { reassigned_to: to });
-    this.b._admin._audit('problem_reassign', `Gave ${rec.recording_id} to ${to} after ${rec.annotator_id}'s report`, { problem_id: rec.problem_id, to, added, note: text });
+    this.b._admin._audit('problem_reassign', `Gave ${rec.recording_id} to ${to} after ${rec.annotator_id}'s report`, { problem_id: rec.problem_id, annotator_id: rec.annotator_id, recording_id: rec.recording_id, to, added, note: text });
     return { problem: this.problemOut(rec), added };
   }
 
@@ -229,17 +228,12 @@ export class DemoFeedback {
     return { aid, rid, last, info };
   }
 
-  async _manifestOf(info) {
-    if (info.builtin) return { ...this.b._manifest(info.spec), fingerprint: await this.b._fingerprint(info.spec) };
-    return this.b._admin.publicManifestOf(info.record);
-  }
-
   reviewOut(rec, { forAnnotator = false } = {}) {
     const keys = ['review_id', 'annotator_id', 'recording_id', 'file_name', 'mode', 'context_id', 'attempt', 'reviewer_id', 'reviewer_name', 'reviewed_at',
       'overall_note', 'items', 'counts'];
     const out = Object.fromEntries(keys.map((k) => [k, rec[k] ?? null]));
     out.summary = countText(rec.counts || {});
-    if (!forAnnotator) out.session_id = rec.session_id || '';
+    if (!forAnnotator) Object.assign(out, { output_basename: rec.output_basename || '', session_id: rec.session_id || '' });
     return JSON.parse(JSON.stringify(out));
   }
 
@@ -252,7 +246,7 @@ export class DemoFeedback {
     const { aid, rid, last, info } = await this._target(body);
     const u = this.b._admin.user(aid);
     return { annotator_id: aid, display_name: (u && u.display_name) || '', recording_id: rid, file_name: info.file_name, mode: 'standard', context_id: '',
-      attempt: last.attempt, saved_at: last.saved_at, manifest: await this._manifestOf(info),
+      attempt: last.attempt, saved_at: last.saved_at, manifest: await this.b._publicManifest(rid),
       annotations: (last.annotations || []).map((a) => ({ ...a, channels: [...(a.channels || [])] })),
       reviews: this._reviews(aid, rid).map((r) => this.reviewOut(r)), allow_reviews: this._settings.allow_reviews !== false };
   }
@@ -303,7 +297,8 @@ export class DemoFeedback {
     const counts = reviewCounts(items);
     const me = this.b._account();
     const rec = { schema: 'electrotag.review', schema_version: 1, review_id: id, annotator_id: aid, recording_id: rid, file_name: info.file_name, mode: 'standard',
-      context_id: '', attempt: last.attempt, session_id: (last.session && last.session.session_id) || '', reviewer_id: this.b.annotatorId,
+      context_id: '', attempt: last.attempt, output_basename: this.b._outputBasename(info, aid, last.attempt),
+      session_id: (last.session && last.session.session_id) || '', reviewer_id: this.b.annotatorId,
       reviewer_name: (me && me.display_name) || '', reviewed_at: nowLocalIso(), overall_note: overall, items, counts };
     this.state.reviews.push(rec);
     this.b._admin._audit('review_save', `Reviewed ${aid}'s ${rid} (version ${last.attempt}): ${countText(counts)}`,
