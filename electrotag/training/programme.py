@@ -333,13 +333,28 @@ class StagePolicy:
 class StageMarks:
     """What the progress events say of the stages (:func:`stage_marks`)."""
 
-    flags: dict[str, str] = field(default_factory=dict)  # stage -> "skipped", "completed" or "carried"
+    #: stage -> "skipped", "completed", or, after a new assessment set, "carried" (done in an earlier set),
+    #: "carried_skipped" (skipped there) or "carried_not_used" (not part of the training there)
+    flags: dict[str, str] = field(default_factory=dict)
     reopened: dict[str, Any] | None = None  # the latest ``training_reopened`` event
     carried: dict[str, Any] | None = None  # the latest ``assessment_set_assigned`` event
+    #: the name of the set each carried stage was done or skipped in
+    carried_from: dict[str, str] = field(default_factory=dict)
+    #: every skip, in order, including those of earlier sets: {stage, at, set_id, set_name} (set "" for this set)
+    skip_history: list[dict[str, Any]] = field(default_factory=list)
+    #: the earlier rounds of the assessment: {round, set_id, set_name, status, status_text, at, report}
+    rounds: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def skipped(self) -> list[str]:
-        return [s for s in LEARNING_STAGES if self.flags.get(s) == "skipped"]
+        """The learning stages skipped and not taken up again, in this set or (after a new assessment set) the
+        earlier one: a skip is never turned into a finished stage."""
+        return [s for s in LEARNING_STAGES if self.flags.get(s) in ("skipped", "carried_skipped")]
+
+    @property
+    def skipped_in(self) -> dict[str, str]:
+        """The skipped stages that were skipped in an earlier set: stage -> that set's name."""
+        return {s: self.carried_from.get(s, "") for s in self.skipped if self.flags.get(s) == "carried_skipped"}
 
     def baseline(self, mode: str) -> dict[str, int] | None:
         """How many times each recording of ``mode`` had been saved when the training was reopened (None when it
@@ -347,13 +362,33 @@ class StageMarks:
         base = (self.reopened or {}).get("baseline") or {}
         return {str(k): int(v) for k, v in dict(base[mode]).items()} if mode in base else None
 
+    def reopened_stage(self, stage: str) -> bool:
+        """Whether the study team reopened the training at or before ``stage``: such a stage is done again, never
+        skipped, until it is finished."""
+        if self.reopened is None:
+            return False
+        first = self.reopened.get("from") if self.reopened.get("from") in STAGES else "practice"
+        return stage in LEARNING_STAGES and STAGES.index(stage) >= STAGES.index(first)
+
+
+#: A stage's status in the earlier set -> its flag after a new assessment set ("carried": done there).
+CARRIED_FLAGS = {"skipped": "carried_skipped", "not_used": "carried_not_used"}
+
+
+def _round(e: dict[str, Any]) -> dict[str, Any] | None:
+    r = e.get("round")
+    return dict(r) if isinstance(r, dict) else None
+
 
 def stage_marks(events: list[dict[str, Any]]) -> StageMarks:
     """Replay the progress events in order. ``stage_skipped`` marks a learning stage skipped and
     ``stage_resumed`` takes the mark away; ``stage_completed`` finishes the tour or the snippets;
-    ``training_reopened`` (with ``from``, the first stage to do again, and the ``baseline`` of saves) clears the
-    marks of that stage and those after it; ``assessment_set_assigned`` (a new assessment set, ``from_set``)
-    counts every learning stage as done ("carried")."""
+    ``training_reopened`` (with ``from``, the first stage to do again, the ``baseline`` of saves and the ``round``
+    of the assessment that ended) clears the marks of that stage and those after it; ``assessment_set_assigned``
+    (a new assessment set, ``from_set``) carries each learning stage over as it was in the earlier set
+    (``stages``: done, skipped or not used, with the set it happened in), with that set's skips (``skips``) and
+    rounds (``earlier_rounds`` and ``round``). Events written before ``stages`` was kept count every learning
+    stage as done."""
     out = StageMarks()
     for e in events:
         if not isinstance(e, dict):
@@ -361,6 +396,7 @@ def stage_marks(events: list[dict[str, Any]]) -> StageMarks:
         ev, stage = e.get("event"), e.get("stage")
         if ev == "stage_skipped" and stage in LEARNING_STAGES:
             out.flags[stage] = "skipped"
+            out.skip_history.append({"stage": stage, "at": e.get("at", ""), "set_id": "", "set_name": ""})
         elif ev == "stage_completed" and stage in DONE_IN_BROWSER:
             out.flags[stage] = "completed"
         elif ev == "stage_resumed" and stage in LEARNING_STAGES and out.flags.get(stage) == "skipped":
@@ -370,11 +406,27 @@ def stage_marks(events: list[dict[str, Any]]) -> StageMarks:
             for s in STAGES[STAGES.index(first):]:
                 out.flags.pop(s, None)
             out.reopened = e
+            r = _round(e)
+            if r is not None:
+                out.rounds.append(r)
         elif ev == "assessment_set_assigned":
+            stages = e.get("stages") if isinstance(e.get("stages"), dict) else None
+            name = str(e.get("from_set_name") or e.get("from_set") or "")
+            out.carried_from = {}
             for s in LEARNING_STAGES:
-                out.flags[s] = "carried"
+                st = dict((stages or {}).get(s) or {})
+                status = st.get("status") if stages is not None else "completed"
+                out.flags[s] = CARRIED_FLAGS.get(str(status), "carried")
+                out.carried_from[s] = str(st.get("set_name") or name)
+            out.skip_history = [dict(x) for x in e.get("skips") or [] if isinstance(x, dict)] + out.skip_history
+            out.rounds = [dict(x) for x in e.get("earlier_rounds") or [] if isinstance(x, dict)]
+            r = _round(e)
+            if r is not None:
+                out.rounds.append(r)
             out.carried = e
             out.reopened = None
+    for i, r in enumerate(out.rounds, start=1):
+        r["round"] = i
     return out
 
 
@@ -384,8 +436,14 @@ REOPENED_TEXT = ("Your study team has reopened your training: practise again, th
                  "Only what you save from now on counts.")
 
 
-def carried_text(event: dict[str, Any]) -> str:
-    name = str(event.get("from_set_name") or event.get("from_set") or "your earlier training set")
+def carried_text(event: dict[str, Any], name: str = "", status: str = "completed") -> str:
+    """The line of a stage carried over from the trainee's earlier set: "Done in Pilot training set." or "Skipped in
+    Pilot training set." (``name``: the set it was done or skipped in; by default the event's earlier set)."""
+    name = name or str(event.get("from_set_name") or event.get("from_set") or "your earlier training set")
+    if status == "skipped":
+        return f"Skipped in {name}."
+    if status == "not_used":
+        return f"Not part of your training in {name}."
     return f"Done in {name}."
 
 
@@ -396,6 +454,27 @@ def snippets_detail(n_snippets: int, quiz: bool, quiz_required: bool) -> str:
     if quiz and quiz_required:
         text += " To finish this stage, also finish the recognition check."
     return text
+
+
+def corrections_detail(prog: Progress, done: list[str]) -> str:
+    """The guided stage's line for its "correct the marks" recordings: "Correct the marks: you fixed 2 of 4
+    planted mistakes." (one sentence for each such recording done, in order; the same as js/training/stages.js)."""
+    out = []
+    for rid in done:
+        g = prog.guided.get(rid) or {}
+        if g.get("kind") != "correct" or not isinstance(g.get("n_errors"), int):
+            continue
+        n, fixed = int(g["n_errors"]), int(g.get("fixed") or 0)
+        out.append(f"Correct the marks: you fixed {fixed} of {_plural(n, 'planted mistake')}.")
+    return " ".join(out)
+
+
+def quiz_reveals_answers(rs: ReferenceSet) -> list[str]:
+    """The quiz items of a set whose recording is one of its practice or assessment recordings: their answers are
+    those recordings' references, so a quiz holding any is never the recognition check."""
+    from electrotag.training.reference import NO_SNIPPETS_FROM
+
+    return [it.item_id for it in rs.quiz_items if rs.recordings.get(it.recording_id, {}).get("use") in NO_SNIPPETS_FROM]
 
 
 def snippet_count(rs: ReferenceSet) -> int:
@@ -424,7 +503,8 @@ class StageState:
     can_skip: bool = False  # the trainee may skip it now (the study's policy allows it, and it is open)
     done_ids: tuple[str, ...] = ()  # the recordings of the stage that count as done
     redo: tuple[str, ...] = ()  # recordings saved before the training was reopened, to annotate again
-    carried: bool = False  # done in the trainee's earlier set (a new assessment set was assigned)
+    carried: bool = False  # done, skipped or not used in the trainee's earlier set (a new assessment set was assigned)
+    carried_from: str = ""  # the name of that earlier set
 
     @property
     def unlocked(self) -> bool:
@@ -436,7 +516,8 @@ class StageState:
 
     @property
     def can_resume(self) -> bool:
-        return self.status == "skipped"
+        """A skipped stage can be taken up again, unless it was skipped in an earlier set."""
+        return self.status == "skipped" and not self.carried
 
     def to_log(self) -> dict[str, Any]:
         return {"stage": self.key, "status": self.status, "done": self.done, "total": self.total,
@@ -487,6 +568,10 @@ def _learning(key: str, base: str, marks: StageMarks, before_finished: bool) -> 
     flag = marks.flags.get(key)
     if flag == "carried":
         return "completed"
+    if flag == "carried_skipped":  # skipped in the earlier set: still a skip, never counted as done
+        return "skipped"
+    if flag == "carried_not_used":
+        return "not_used"
     if flag == "completed" or base == "completed":
         return "completed"
     if base == "not_used":
@@ -499,10 +584,12 @@ def _learning(key: str, base: str, marks: StageMarks, before_finished: bool) -> 
 def programme_state(layout: OutputLayout | None, rs: ReferenceSet, annotator_id: str,
                     progress: Progress | None = None, *, completed: Completed | None = None,
                     report: Callable[[], dict[str, Any]] | None = None, policy: StagePolicy | None = None,
-                    saves: Saves | None = None) -> list[StageState]:
+                    saves: Saves | None = None, quiz: bool | None = None) -> list[StageState]:
     """The five stages for one trainee. The web server's stores pass ``progress``, ``completed``, ``saves`` (both
     from the completion register) and ``report`` (the competency report's ``status`` and ``status_text``, {}
-    without one) instead of a results folder; ``policy`` is the study's (:class:`StagePolicy`)."""
+    without one) instead of a results folder; ``policy`` is the study's (:class:`StagePolicy`); ``quiz`` says
+    whether the set's quiz is offered as the recognition check (by default, when the set has quiz items that
+    :func:`quiz_reveals_answers` lets through)."""
     prog = progress if progress is not None else load_progress(layout, rs, annotator_id)
     policy = policy or StagePolicy()
     marks = stage_marks(prog.events)
@@ -527,12 +614,15 @@ def programme_state(layout: OutputLayout | None, rs: ReferenceSet, annotator_id:
     out: list[StageState] = []
 
     def add(state: StageState) -> None:
-        state.carried = marks.flags.get(state.key) == "carried"
-        if state.status == "skipped":
+        state.carried = str(marks.flags.get(state.key, "")).startswith("carried")
+        if state.carried and marks.carried is not None:
+            state.carried_from = marks.carried_from.get(state.key, "")
+            state.detail = carried_text(marks.carried, state.carried_from, state.status)
+        elif state.status == "skipped":
             state.detail = SKIPPED_TEXT
-        elif state.carried and marks.carried is not None:
-            state.detail = carried_text(marks.carried)
-        state.can_skip = policy.may_skip(state.key) and state.status in ("available", "in_progress")
+        # a stage the study team reopened is done again before the assessment, never skipped
+        state.can_skip = (policy.may_skip(state.key) and state.status in ("available", "in_progress")
+                          and not marks.reopened_stage(state.key))
         out.append(state)
 
     def before() -> bool:
@@ -545,7 +635,8 @@ def programme_state(layout: OutputLayout | None, rs: ReferenceSet, annotator_id:
     n_snippets = snippet_count(rs)
     status = _learning("snippets", "available" if n_snippets else "not_used", marks, before())
     add(StageState("snippets", STAGE_TITLES["snippets"], STAGE_TEXT["snippets"], status, total=0,
-                   detail=snippets_detail(n_snippets, bool(rs.quiz_items), policy.snippets_quiz_required)
+                   detail=snippets_detail(n_snippets, bool(rs.quiz_items) and not quiz_reveals_answers(rs)
+                                          if quiz is None else quiz, policy.snippets_quiz_required)
                    if n_snippets else ""))
     # 3. learning with the experts
     g_total = rs.guided_recordings
@@ -560,7 +651,8 @@ def programme_state(layout: OutputLayout | None, rs: ReferenceSet, annotator_id:
     else:
         base = "in_progress" if g_done else "available"
     add(StageState("guided", STAGE_TITLES["guided"], STAGE_TEXT["guided"], _learning("guided", base, marks, before()),
-                   len(g_done), len(g_total), stars, max_stars, seconds, done_ids=tuple(g_done), redo=tuple(g_redo)))
+                   len(g_done), len(g_total), stars, max_stars, seconds, detail=corrections_detail(prog, g_done),
+                   done_ids=tuple(g_done), redo=tuple(g_redo)))
     # 4. on your own
     p_total = rs.practice_recordings
     p_done, p_redo = done_in("practice", p_total)

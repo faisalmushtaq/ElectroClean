@@ -40,28 +40,76 @@ export function stagePolicy(training = {}) {
 
 export const maySkip = (policy, stage) => LEARNING_STAGES.includes(stage) && policy.skippable.includes(stage);
 
-/** The progress events replayed in order (programme.py stage_marks): flags by stage, the latest reopening and carry-over. */
+/** A stage's status in the earlier set -> its flag after a new assessment set ("carried": done there). */
+const CARRIED_FLAGS = { skipped: 'carried_skipped', not_used: 'carried_not_used' };
+
+/**
+ * The progress events replayed in order (programme.py stage_marks): flags by stage, the latest reopening and
+ * carry-over, the set each carried stage was done or skipped in, every skip (also those of an earlier set) and
+ * the earlier rounds of the assessment.
+ */
 export function stageMarks(events = []) {
   const flags = {};
   let reopened = null;
   let carried = null;
+  let carriedFrom = {};
+  let skipHistory = [];
+  let rounds = [];
+  const roundOf = (e) => (e.round && typeof e.round === 'object' && !Array.isArray(e.round) ? { ...e.round } : null);
   for (const e of events || []) {
     if (!e || typeof e !== 'object') continue;
     const { event, stage } = e;
-    if (event === 'stage_skipped' && LEARNING_STAGES.includes(stage)) flags[stage] = 'skipped';
-    else if (event === 'stage_completed' && DONE_IN_BROWSER.includes(stage)) flags[stage] = 'completed';
+    if (event === 'stage_skipped' && LEARNING_STAGES.includes(stage)) {
+      flags[stage] = 'skipped';
+      skipHistory.push({ stage, at: e.at || '', set_id: '', set_name: '' });
+    } else if (event === 'stage_completed' && DONE_IN_BROWSER.includes(stage)) flags[stage] = 'completed';
     else if (event === 'stage_resumed' && LEARNING_STAGES.includes(stage) && flags[stage] === 'skipped') delete flags[stage];
     else if (event === 'training_reopened') {
       const first = STAGES.includes(e.from) ? e.from : 'practice';
       for (const s of STAGES.slice(STAGES.indexOf(first))) delete flags[s];
       reopened = e;
+      const r = roundOf(e);
+      if (r) rounds.push(r);
     } else if (event === 'assessment_set_assigned') {
-      for (const s of LEARNING_STAGES) flags[s] = 'carried';
+      const stages = e.stages && typeof e.stages === 'object' ? e.stages : null;
+      const name = String(e.from_set_name || e.from_set || '');
+      carriedFrom = {};
+      for (const s of LEARNING_STAGES) {
+        const st = (stages && stages[s]) || {};
+        flags[s] = CARRIED_FLAGS[stages ? String(st.status) : 'completed'] || 'carried';
+        carriedFrom[s] = String(st.set_name || name);
+      }
+      skipHistory = [...(e.skips || []).filter((x) => x && typeof x === 'object').map((x) => ({ ...x })), ...skipHistory];
+      rounds = (e.earlier_rounds || []).filter((x) => x && typeof x === 'object').map((x) => ({ ...x }));
+      const r = roundOf(e);
+      if (r) rounds.push(r);
       carried = e;
       reopened = null;
     }
   }
-  return { flags, reopened, carried, skipped: LEARNING_STAGES.filter((s) => flags[s] === 'skipped') };
+  rounds.forEach((r, i) => { r.round = i + 1; });
+  const skipped = LEARNING_STAGES.filter((s) => flags[s] === 'skipped' || flags[s] === 'carried_skipped');
+  /** Whether the study team reopened the training at or before a stage: it is done again, never skipped. */
+  const reopenedStage = (stage) => {
+    if (!reopened) return false;
+    const first = STAGES.includes(reopened.from) ? reopened.from : 'practice';
+    return LEARNING_STAGES.includes(stage) && STAGES.indexOf(stage) >= STAGES.indexOf(first);
+  };
+  return { flags, reopened, carried, carriedFrom, skipHistory, rounds, skipped, reopenedStage };
+}
+
+/** The line of a stage carried over from an earlier set (programme.py carried_text). */
+export function carriedText(event, name = '', status = 'completed') {
+  const n = name || (event && (event.from_set_name || event.from_set)) || 'your earlier training set';
+  if (status === 'skipped') return `Skipped in ${n}.`;
+  if (status === 'not_used') return `Not part of your training in ${n}.`;
+  return `Done in ${n}.`;
+}
+
+/** The guided stage's line for its "correct the marks" recordings (programme.py corrections_detail). */
+export function correctionsDetail(guided = {}, done = []) {
+  return done.map((rid) => (guided || {})[rid] || {}).filter((g) => g.kind === 'correct' && Number.isInteger(g.n_errors))
+    .map((g) => `Correct the marks: you fixed ${Number(g.fixed) || 0} of ${plural(g.n_errors, 'planted mistake')}.`).join(' ');
 }
 
 /** The snippets stage's line on the training path (programme.py snippets_detail). */
@@ -74,7 +122,10 @@ export function snippetsDetail(n, quiz, required) {
 
 function learning(key, base, marks, beforeFinished) {
   const flag = marks.flags[key];
-  if (flag === 'carried' || flag === 'completed' || base === 'completed') return 'completed';
+  if (flag === 'carried') return 'completed';
+  if (flag === 'carried_skipped') return 'skipped'; // skipped in the earlier set: still a skip, never counted as done
+  if (flag === 'carried_not_used') return 'not_used';
+  if (flag === 'completed' || base === 'completed') return 'completed';
   if (base === 'not_used') return 'not_used';
   if (flag === 'skipped') return 'skipped';
   return beforeFinished ? base : 'locked';
@@ -85,7 +136,7 @@ export const isFinished = (s) => ['completed', 'skipped', 'not_used'].includes(s
 
 /**
  * The five stages (programme.py programme_state) from what the caller knows:
- * guided {total, done, stars, max_stars, seconds}, practice {total, done, base, detail, result, seconds},
+ * guided {total, done, stars, max_stars, seconds, detail (correctionsDetail)}, practice {total, done, base, detail, result, seconds},
  * assessment {total, done, result, detail} (lists of recording IDs; base is available, in_progress or completed),
  * the progress events, the policy, the number of snippets and whether the set has a quiz.
  */
@@ -96,11 +147,15 @@ export function stageStates({ events = [], policy = stagePolicy(), nSnippets = 0
   const add = (s) => {
     const st = { done: 0, total: 0, stars: 0, max_stars: 0, seconds: 0, detail: '', result: '', ...s,
       title: STAGE_TITLES[s.key], description: STAGE_TEXT[s.key] };
-    st.carried = marks.flags[st.key] === 'carried';
-    if (st.status === 'skipped') st.detail = SKIPPED_TEXT;
-    else if (st.carried && marks.carried) st.detail = `Done in ${marks.carried.from_set_name || marks.carried.from_set || 'your earlier training set'}.`;
-    st.can_skip = maySkip(policy, st.key) && ['available', 'in_progress'].includes(st.status);
-    st.can_resume = st.status === 'skipped';
+    st.carried = String(marks.flags[st.key] || '').startsWith('carried');
+    st.carried_from = '';
+    if (st.carried && marks.carried) {
+      st.carried_from = marks.carriedFrom[st.key] || '';
+      st.detail = carriedText(marks.carried, st.carried_from, st.status);
+    } else if (st.status === 'skipped') st.detail = SKIPPED_TEXT;
+    // a stage the study team reopened is done again before the assessment, never skipped
+    st.can_skip = maySkip(policy, st.key) && ['available', 'in_progress'].includes(st.status) && !marks.reopenedStage(st.key);
+    st.can_resume = st.status === 'skipped' && !st.carried;
     out.push(st);
   };
   add({ key: 'tour', status: learning('tour', policy.tour ? 'available' : 'not_used', marks, before()) });
@@ -109,7 +164,7 @@ export function stageStates({ events = [], policy = stagePolicy(), nSnippets = 0
   const g = guided;
   const gBase = !g.total.length ? 'not_used' : g.done.length === g.total.length ? 'completed' : g.done.length ? 'in_progress' : 'available';
   add({ key: 'guided', status: learning('guided', gBase, marks, before()), done: g.done.length, total: g.total.length,
-    stars: g.stars || 0, max_stars: g.max_stars || 0, seconds: g.seconds || 0, done_ids: g.done });
+    stars: g.stars || 0, max_stars: g.max_stars || 0, seconds: g.seconds || 0, detail: g.detail || '', done_ids: g.done });
   const p = practice;
   add({ key: 'practice', status: learning('practice', p.total.length ? p.base : 'not_used', marks, before()), done: p.done.length,
     total: p.total.length, seconds: p.seconds || 0, detail: p.detail || '', result: p.result || '', done_ids: p.done, best: p.best || null });

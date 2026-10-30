@@ -121,7 +121,7 @@ class Coach:
         prog = prog if prog is not None else self.store.progress(rs, aid)
         states = programme_state(None, rs, aid, prog, completed=self.store.completed,
                                  report=lambda: self.store.report_result(rs.set_id, aid), policy=self.policy(),
-                                 saves=self.saves(aid))
+                                 saves=self.saves(aid), quiz=self.service.training_path.quiz_offered(rs))
         return states, prog
 
     def _next_step(self, rs: ReferenceSet, aid: str, states: list[StageState], prog: Progress) -> Any:
@@ -202,7 +202,7 @@ class Coach:
                 "done": s.done, "total": s.total, "stars": s.stars, "max_stars": s.max_stars,
                 "best_score": (round(float(best.get("event_f1", 0.0)), 4) if (s.key == "practice" and best) else None),
                 "time_s": round(float(s.seconds), 1), "detail": s.detail, "result": s.result or None,
-                "can_skip": s.can_skip, "can_resume": s.can_resume,
+                "can_skip": s.can_skip, "can_resume": s.can_resume, "carried_from": s.carried_from or None,
             })
         next_view = None
         if nxt.stage is not None:
@@ -212,7 +212,9 @@ class Coach:
                          "file_name": item.manifest["file_name"] if item else None, "repeat": nxt.repeat}
         return {"set_id": rs.set_id, "name": rs.name or rs.set_id, "description": rs.description,
                 "stages": stages, "next": next_view, "complete": nxt.stage is None, "message": nxt.text,
-                "gate": self.service.training_path.gate(user)}
+                "gate": self.service.training_path.gate(user),
+                # the earlier rounds of the assessment, before a reopening or a new assessment set
+                "rounds": self.service.training_path.rounds(prog.events)}
 
     # ------------------------------------------------------- the five-stage path
     def stage_action(self, user: User, body: dict[str, Any]) -> dict[str, Any]:

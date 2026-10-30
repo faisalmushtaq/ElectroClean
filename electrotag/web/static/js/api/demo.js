@@ -26,7 +26,7 @@ import { primaryRole, rolesOf } from '../admin/model.js';
 export { DEMO_NOTICE };
 import * as rules from '../training/rules.js';
 import { DEFAULT_PASS, practiceDetail, practiceFeedback, practiceVerdict, retryRecording, scoreSentence } from '../training/scoring.js';
-import { STAGE_TITLES, browserStep, isFinished, isUnlocked, stagePolicy, stageStates } from '../training/stages.js';
+import { STAGE_TITLES, browserStep, correctionsDetail, isFinished, isUnlocked, stageMarks, stagePolicy, stageStates } from '../training/stages.js';
 import { local, newId, nowLocalIso, session } from '../util.js';
 import { sha256Hex } from '../eeg/sha256.js';
 import { coveredS, fromDraft } from '../viewer/coverage.js';
@@ -975,7 +975,7 @@ export class DemoBackend {
     const best = attempts.length ? attempts.reduce((b, a) => (better(a, b) > 0 ? a : b)) : null;
     return stageStates({
       events: prog.events, policy: this._policy(), nSnippets: this._snippetCount(), quiz: this._quizItemsOf(ctx).length > 0,
-      guided: { total: gTotal, done: gDone, stars: sum('stars'), max_stars: sum('max_stars'), seconds: sum('seconds') },
+      guided: { total: gTotal, done: gDone, stars: sum('stars'), max_stars: sum('max_stars'), seconds: sum('seconds'), detail: correctionsDetail(prog.guided, gDone) },
       practice: { total: TRAINING_SET.practice, done: doneIn('practice', TRAINING_SET.practice), base: passed ? 'completed' : attempts.length ? 'in_progress' : 'available',
         seconds: attempts.reduce((a, x) => a + (x.seconds || 0), 0), detail: practiceDetail(best, this._passRule(), passed),
         result: best ? (passed ? 'passed' : 'not_passed') : '', best },
@@ -1020,7 +1020,7 @@ export class DemoBackend {
    * assessment recordings (they need the competency report, which needs ElectroTag's Python code), so study
    * work is always open here; a study server or Firebase locks it until the assessment is passed.
    */
-  _gate() { return { open: true, reason: '', message: '' }; }
+  _gate() { return { open: true, reason: '', message: '', result: '' }; }
 
   async training() {
     return this._trainingView(this._aid());
@@ -1037,12 +1037,14 @@ export class DemoBackend {
       set_id: TRAINING_SET.set_id, name: set.name, description: set.description,
       stages: stages.map((s) => ({ key: s.key, title: s.title, description: s.description, status: s.status, done: s.done, total: s.total,
         stars: s.stars, max_stars: s.max_stars, best_score: s.key === 'practice' && s.best ? Math.round(s.best.event_f1 * 10000) / 10000 : null,
-        time_s: Math.round(s.seconds * 10) / 10, detail: s.detail, result: s.result || null, can_skip: s.can_skip, can_resume: s.can_resume })),
+        time_s: Math.round(s.seconds * 10) / 10, detail: s.detail, result: s.result || null, can_skip: s.can_skip, can_resume: s.can_resume,
+        carried_from: s.carried_from || null })),
       next: nxt.stage ? { stage: nxt.stage, recording_id: item ? item.rid : null, label: nxt.label, text: nxt.text, mode: nxt.stage,
         context_id: TRAINING_SET.set_id, file_name: item ? item.info.file_name : null, repeat: nxt.repeat } : null,
       complete: !nxt.stage,
       message: nxt.text,
       gate: this._gate(),
+      rounds: stageMarks(this._progress(aid).events).rounds.map(({ round, set_id, set_name, status, status_text, at }) => ({ round, set_id, set_name, status, status_text, at })),
     };
   }
 

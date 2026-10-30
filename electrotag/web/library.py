@@ -316,6 +316,9 @@ def library_promote(service: StudyService, user: User, body: dict[str, Any]) -> 
               "promote_id": pid, "promoted_by": user.annotator_id, "promoted_at": now_local_iso(),
               "kinds": entry["kinds"], "decision": (d or {}).get("choice")}
     rid = entry["recording_id"]
+    # never from a recording whose answers trainees are scored against (electrotag/web/training_path.py)
+    service.training_path.refuse_if_revealing(rs0, rid, "a quiz item" if to == "quiz_item" else "a snippet",
+                                              scope=SCOPE_STUDY)
     target = admin._set_scope(rs0)
     if target != SCOPE_STUDY:  # a self-contained set: the recording's manifest is copied in, as set_add_reference does
         existing = service.store.manifest(target, rid)

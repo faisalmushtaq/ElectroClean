@@ -44,7 +44,7 @@ ITEMS = [  # (recording, start, end, label)
     (GUIDED1, 4.0, 4.4, "Eye-blink-artifact"),
     (GUIDED1, 30.0, 30.5, "Electrode-pops-artifact"),
     (GUIDED2, 14.0, 17.0, "Chewing-artifact"),
-    (PRACTICE1, 1.0, 2.0, NONE_OPTION),
+    (GUIDED2, 1.0, 2.0, NONE_OPTION),
 ]
 
 
@@ -76,7 +76,9 @@ def test_quiz_items_in_the_admin_area(admin: Api, client: TestClient) -> None:
             ({"correct_label": "Not-a-label"}, 400, "bad_request"),
             ({"accepted_labels": ["Nope"]}, 400, "bad_request"),
             ({"context_s": 100}, 400, "bad_request"),
-            ({"item_id": "../q"}, 400, "bad_request")):
+            ({"item_id": "../q"}, 400, "bad_request"),
+            # the practice recording's reference is what trainees are scored against: never a quiz item
+            ({"recording_id": PRACTICE1}, 422, "reveals_answers")):
         body = {"set_id": "example", "recording_id": GUIDED1, "start_s": 1.0, "end_s": 2.0,
                 "correct_label": "EMG-artifact", **bad}
         admin.admin_error("quiz_item_add", body, status, code)
@@ -105,7 +107,7 @@ def test_the_quiz_with_feedback_after_each_answer(admin: Api, client: TestClient
     assert first["file_name"].endswith(".vhdr") and NONE_OPTION in first["options"]
     assert "Eye-blink-artifact" in first["options"] and len(first["options"]) == 30
     assert "correct_label" not in json.dumps(g["items"])  # no answers before they are given
-    assert set(g["recordings"]) == {GUIDED1, GUIDED2, PRACTICE1}
+    assert set(g["recordings"]) == {GUIDED1, GUIDED2}
     assert g["recordings"][GUIDED1]["fingerprint"]["hex"] and g["answered"] == {} and g["finished"] is False
     assert g["feedback"] == "immediate" and g["score"] is None
     by_id = {it["item_id"]: it for it in admin.admin_ok("quiz_items", {"set_id": "example"})["items"]}

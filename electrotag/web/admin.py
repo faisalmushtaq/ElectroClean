@@ -1383,14 +1383,20 @@ class Admin:
 
     # ----------------------------------------------------------------- quiz
     def op_quiz_items(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        """The set's quiz items, and those of them that give answers away (``withheld``: from a recording that is
+        now a practice or assessment recording); while there are any, trainees are not offered the quiz."""
         rs = self._set(body.get("set_id"))
-        return {"items": [it.to_dict() for it in rs.quiz_items]}
+        return {"items": [it.to_dict() for it in rs.quiz_items],
+                "withheld": self.service.training_path.withheld_quiz_items(rs)}
 
     def op_quiz_item_add(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
         from electrotag.training.reference import QuizItem
 
         rs0 = self._set(body.get("set_id"))
         rid = _rid(body.get("recording_id"))
+        # the quiz is the recognition check of the training path: never on a recording whose answers trainees are
+        # scored against (as snippets: electrotag/web/training_path.py)
+        self.service.training_path.refuse_if_revealing(rs0, rid, "a quiz item")
         m = self.store.manifest(self._set_scope(rs0), rid)
         if m is None:
             raise ApiError(404, "unknown_recording", f"{rid} is not one of the reference set's registered recordings")

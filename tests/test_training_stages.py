@@ -274,6 +274,40 @@ def test_a_new_assessment_set_counts_the_learning_stages_as_done(example: Refere
     assert next_step(None, rs, "T01", list(st.values()), prog).stage == "assessment"
 
 
+def test_a_new_assessment_set_keeps_each_stage_as_it_was_and_every_skip(example: ReferenceSet) -> None:
+    rs = assessment_set(example)
+    carried = {"tour": {"status": "skipped", "set_id": "pilot", "set_name": "Pilot set"},
+               "snippets": {"status": "completed", "set_id": "pilot", "set_name": "Pilot set"},
+               "guided": {"status": "skipped", "set_id": "first", "set_name": "First set"},
+               "practice": {"status": "not_used", "set_id": "pilot", "set_name": "Pilot set"}}
+    skips = [{"stage": "tour", "at": "1", "set_id": "pilot", "set_name": "Pilot set"},
+             {"stage": "guided", "at": "0", "set_id": "first", "set_name": "First set"}]
+    rounds = [{"set_id": "first", "set_name": "First set", "status": "not_met", "status_text": "x", "at": "0"}]
+    events = [{"event": "assessment_set_assigned", "from_set": "pilot", "from_set_name": "Pilot set", "stages": carried,
+               "skips": skips, "earlier_rounds": rounds,
+               "round": {"set_id": "pilot", "set_name": "Pilot set", "status": "not_met", "status_text": "y", "at": "1"}}]
+    st = states(rs, progress(rs, events))
+    assert [st[k].status for k in ("tour", "snippets", "guided", "practice")] == [
+        "skipped", "completed", "skipped", "not_used"]
+    assert st["tour"].detail == "Skipped in Pilot set." and st["guided"].detail == "Skipped in First set."
+    assert st["snippets"].detail == "Done in Pilot set." and not st["tour"].can_resume and not st["tour"].can_skip
+    assert st["assessment"].status == "available"
+    marks = stage_marks(events)
+    assert marks.skipped == ["tour", "guided"] and marks.skipped_in == {"tour": "Pilot set", "guided": "First set"}
+    assert [x["stage"] for x in marks.skip_history] == ["tour", "guided"]
+    assert [(r["round"], r["set_id"]) for r in marks.rounds] == [(1, "first"), (2, "pilot")]
+
+
+def test_stages_the_study_team_reopened_cannot_be_skipped_until_done(example: ReferenceSet) -> None:
+    rs = assessment_set(example)
+    events = [{"event": "stage_skipped", "stage": s} for s in ("tour", "snippets", "guided")]
+    events.append({"event": "training_reopened", "from": "guided", "baseline": {}, "practice_seen": {}})
+    st = states(rs, progress(rs, events))
+    assert st["tour"].status == "skipped" and st["tour"].can_resume  # before the reopening: as it was
+    assert st["guided"].status == "available" and not st["guided"].can_skip
+    assert stage_marks(events).reopened_stage("practice") and not stage_marks(events).reopened_stage("snippets")
+
+
 # -------------------------------------------------------------- the progress file
 def test_a_rebuilt_progress_file_keeps_the_stage_events(example: ReferenceSet, tmp_path: Path) -> None:
     layout = OutputLayout(tmp_path / "Annotated_Events")

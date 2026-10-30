@@ -97,13 +97,15 @@ def build_demo(directory: Path | str, *, fresh: bool = False, say: Any = print, 
 
 
 def _add_demo_quiz(rs: Any) -> None:
-    """A short quiz on the example set's practice recording: one segment for each of its first
-    artifact types, so that the demonstration offers the quiz (the answers are the simulation's)."""
+    """A short quiz on the example set's first guided recording: one segment for each of its first artifact types,
+    so that the demonstration offers the quiz, and the training path its recognition check (the answers are the
+    simulation's). Never on the practice or assessment recordings, whose references are the answers trainees are
+    scored against."""
     from electrotag.app.annotations.labels import default_catalogue
     from electrotag.training.reference import QuizItem
 
     labels = tuple(lbl.label for lbl in default_catalogue().labels)
-    rid = rs.practice_recordings[0]
+    rid = rs.guided_recordings[0]
     doc = rs.reference_document(rid)
     sfreq = doc.recording.timing.sfreq
     seen: set[str] = set()
