@@ -27,6 +27,7 @@ from tests.web_helpers import (  # noqa: E402
     SUB2,
     SUB3,
     Api,
+    skip_to_guided,
     ann,
     as_wire,
     copy_demo,
@@ -513,8 +514,12 @@ def test_guided_training_with_the_coach(client: TestClient, recordings: Path, st
     me = api.ok("get", "/me")
     assert me["programme"] == {"set_id": "example", "name": me["programme"]["name"], "complete": False}
     tr = api.ok("get", "/training")
-    assert [(s["key"], s["status"]) for s in tr["stages"]] == [("guided", "available"), ("practice", "locked"),
-                                                               ("assessment", "not_used")]
+    assert tr["next"]["stage"] == "tour" and api.ok("get", "/assignments")["items"] == []
+    skip_to_guided(api)
+    tr = api.ok("get", "/training")
+    assert [(s["key"], s["status"]) for s in tr["stages"]] == [
+        ("tour", "skipped"), ("snippets", "skipped"), ("guided", "available"), ("practice", "locked"),
+        ("assessment", "not_used")]
     assert tr["next"]["recording_id"] == GUIDED1 and tr["next"]["mode"] == "guided"
     items = api.ok("get", "/assignments")["items"]
     assert {(i["recording_id"], i["mode"]) for i in items} == {(GUIDED1, "guided"), (GUIDED2, "guided")}
@@ -579,7 +584,7 @@ def test_guided_training_with_the_coach(client: TestClient, recordings: Path, st
     assert r["guided"]["summary"]["steps"] == len(steps) and "stars" in r["guided"]["message"]
     assert r["next"] == GUIDED2
     tr = api.ok("get", "/training")
-    assert tr["stages"][0]["status"] == "in_progress" and tr["stages"][0]["done"] == 1
+    assert tr["stages"][2]["status"] == "in_progress" and tr["stages"][2]["done"] == 1
     sess = next((study / "Annotated_Events" / "training" / "example" / "guided").rglob("*_session.json"))
     assert json.loads(sess.read_text())["context"]["guided"]["steps"] == len(steps)
     prog = study / "Annotated_Events" / "training_progress" / "example" / "annotator-T01.json"
@@ -599,6 +604,7 @@ def test_guided_step_time_leaves_out_the_time_the_recording_was_closed(client: T
     steps = reference_annotations(store, "example", GUIDED1)
     store.close()
     api = Api(client, "T01")
+    skip_to_guided(api)
     api.ok("get", f"/training/guided/{GUIDED1}")  # the recording opens: step 1 starts
     clock[0] += 20  # 20 s looking, then a first try
     wrong = as_wire(steps[0], "f" * 32)
@@ -640,11 +646,12 @@ def test_practice_feedback_reveals_the_reference_after_saving(client: TestClient
     from electrotag.web.store_files import FilesStore
 
     api = Api(client, "T01")
+    skip_to_guided(api)
     assert api.post("/submissions", submission(recordings, PRACTICE1, [], "practice", "example")).status_code == 403
     for rid in (GUIDED1, GUIDED2):
         _finish_guided(api, study, recordings, rid)
     tr = api.ok("get", "/training")
-    assert tr["stages"][1]["status"] == "available" and tr["next"]["recording_id"] == PRACTICE1
+    assert tr["stages"][3]["status"] == "available" and tr["next"]["recording_id"] == PRACTICE1
     store = FilesStore(study)
     ref = reference_annotations(store, "example", PRACTICE1)
     store.close()
@@ -669,7 +676,7 @@ def test_practice_feedback_reveals_the_reference_after_saving(client: TestClient
         r2 = api.ok("post", "/submissions", submission(recordings, PRACTICE1, perfect, "practice", "example"))
         assert r2["attempt"] == 2 and r2["feedback"]["passed"] is True and r2["feedback"]["flags"] == []
     tr = api.ok("get", "/training")
-    assert tr["stages"][1]["status"] == "completed" and tr["complete"] is True
+    assert tr["stages"][3]["status"] == "completed" and tr["complete"] is True
 
 
 def test_assessment_completion_gives_the_competency_result(client: TestClient, recordings: Path,
@@ -713,15 +720,16 @@ def test_a_trainee_sees_the_assessment_result_on_the_path(client: TestClient, re
     ref = reference_annotations(store, "example", PRACTICE1)
     store.close()
     api = Api(client, "T01")
+    skip_to_guided(api)
     for rid in (GUIDED1, GUIDED2):
         _finish_guided(api, study, recordings, rid)
     tr = api.ok("get", "/training")
-    assert tr["stages"][2]["status"] == "available" and tr["stages"][1]["status"] == "not_used"
+    assert tr["stages"][4]["status"] == "available" and tr["stages"][3]["status"] == "not_used"
     assert api.ok("get", "/me")["programme"]["complete"] is False
     api.ok("post", "/submissions", submission(recordings, PRACTICE1, [as_wire(ref[0], "1" * 32)], "assessment",
                                               "example"))
     tr = api.ok("get", "/training")
-    a = tr["stages"][2]
+    a = tr["stages"][4]
     assert a["status"] == "completed" and a["result"] == "not_met"
     assert a["detail"].startswith("Does not yet meet the competency criteria. Please talk to your study administrator")
     assert tr["next"] is None and tr["complete"] is True and "talk to your study administrator" in tr["message"]

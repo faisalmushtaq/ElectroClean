@@ -958,6 +958,10 @@ class FirestoreStore(Store):
                 for name, data in files.items():
                     if name.endswith("_annotations.json"):
                         (folder / name).write_bytes(data)
+            # the trainee's progress, where the report reads the stages they skipped
+            prog = layout.root / "training_progress" / rs.set_id / f"annotator-{annotator_id}.json"
+            prog.parent.mkdir(parents=True, exist_ok=True)
+            prog.write_text(json.dumps(self.progress(rs, annotator_id).to_dict()), encoding="utf-8")
             report = competency_report(layout, rs, annotator_id)
             paths = report.pop("paths", {})
             stored = {"json": Path(paths["json"]).read_text(encoding="utf-8") if paths else json.dumps(report),

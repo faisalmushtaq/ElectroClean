@@ -47,6 +47,7 @@ EXPERT_OPS: dict[str, ExpertOp] = {}
 #: The modules that register expert operations (one line per part of the expert work).
 EXPERT_MODULES: tuple[str, ...] = (
     "electrotag.web.expert",  # replay consent (below)
+    "electrotag.web.training_path",  # the snippets of the training path (snippets_list, snippet_add, snippet_remove)
 )
 #: What ``GET /me/feedback`` shows, by part: ``(service, user) -> [item]`` (filled by the modules above).
 FEEDBACK_PARTS: dict[str, Callable[["StudyService", User], list[dict[str, Any]]]] = {}

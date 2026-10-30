@@ -11,6 +11,7 @@ import { ApiError } from './http.js';
 import { needsServer } from './demo_admin.js';
 import { rolesOf } from '../admin/model.js';
 import { nowLocalIso } from '../util.js';
+import { SNIPPET_EXPERT_OPS } from './demo_training_stages.js';
 
 /** Replay consent: whether trainees may watch replays of the caller's own sessions (expert.py, the same names). */
 const CONSENT_OPS = {
@@ -37,6 +38,7 @@ const CONSENT_OPS = {
 /** The parts of the expert work in the sandbox: one line each. */
 const PARTS = [
   CONSENT_OPS,
+  SNIPPET_EXPERT_OPS, // the training path's snippets (demo_training_stages.js)
 ];
 
 /** Operations of the expert area that the sandbox answers with needsServer (their part has no stand-in). */

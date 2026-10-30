@@ -22,7 +22,9 @@ pytest.importorskip("httpx")
 from fastapi.testclient import TestClient  # noqa: E402
 
 from electrotag.web.app import create_app  # noqa: E402
-from tests.web_helpers import SUB1, SUB2, Api, admin_audit, ann, copy_demo, make_template, submission  # noqa: E402
+from tests.web_helpers import (  # noqa: E402
+    SUB1, SUB2, Api, admin_audit, ann, copy_demo, make_template, skip_to_guided, submission,
+)
 
 BLINK = ann("b" * 32, "Eye-blink-artifact", 500, 100, ["Fp1", "Fp2"])
 EMG = ann("c" * 32, "EMG-artifact", 3000, 250, [])
@@ -210,6 +212,7 @@ def test_giving_a_recording_to_someone_who_has_it_leaves_the_report_open(client:
 
 def test_training_recordings_are_not_set_aside(client: TestClient) -> None:
     t01 = Api(client, "T01")
+    skip_to_guided(t01)
     first = next(i for i in t01.ok("get", "/assignments")["items"])
     r = t01.post("/problems", {**report(first["recording_id"], 10, outcome="unusable"), "mode": first["mode"],
                                "context_id": first["context_id"]})

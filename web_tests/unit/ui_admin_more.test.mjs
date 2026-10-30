@@ -232,7 +232,10 @@ test('demonstration: stats counts the work done, its time and annotations, by pe
   assert.equal(a01.last_active, `${today}T12:00:00.000+00:00`);
   const rec = s.recordings.find((r) => r.recording_id === items[0].recording_id);
   assert.deepEqual([rec.assigned, rec.done, rec.median_s, rec.min_annotations, rec.max_annotations], [1, 1, 600, 3, 3]);
-  // The trainee's programme counts only when training is asked for too.
+  // The trainee's programme counts only when training is asked for too (its recordings once the tour and snippets are behind them).
+  await b.login('T01', 'demo');
+  for (const stage of ['tour', 'snippets']) await b.trainingStage({ stage, action: 'skip' });
+  await b.login('ADMIN', 'demo');
   assert.ok((await b.admin('stats', { work: 'all' })).totals.assigned > s.totals.assigned);
   await assert.rejects(() => b.admin('stats', { work: 'some' }), (e) => e.status === 400);
   // A person's work, recording by recording.

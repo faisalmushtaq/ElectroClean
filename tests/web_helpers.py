@@ -105,6 +105,19 @@ class Api:
         return self.post(f"/quiz/{set_id}", body)
 
 
+def skip_to_guided(api: Any) -> None:
+    """Skip the training path's first two stages (the platform tour and the snippets), done in the browser, so that
+    a trainee's guided recordings open: the tests of the later stages start there."""
+    for stage in ("tour", "snippets"):
+        api.ok("post", "/training/stage", {"stage": stage, "action": "skip"})
+
+
+def skip_to_guided_in(service: Any, user: Any) -> None:
+    """:func:`skip_to_guided` through the service layer (the Firestore and functions tests)."""
+    for stage in ("tour", "snippets"):
+        service.call("training_stage", user, {"stage": stage, "action": "skip"})
+
+
 def submission(recordings: Path, rid: str, annotations: list[dict[str, Any]], mode: str = "standard",
                context: str = "", elapsed: float = 61.5) -> dict[str, Any]:
     return {"recording_id": rid, "mode": mode, "context_id": context, "annotations": annotations,

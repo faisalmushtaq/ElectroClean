@@ -74,6 +74,11 @@ OPERATIONS = READ_ONLY + (
     "set_delete", "set_add_reference", "set_recording_update", "set_remove_recording", "set_guided_note",
     "set_example_create", "quiz_item_add", "quiz_item_remove", "problem_resolve", "problem_return",
     "problem_reassign", "review_save")
+# The training path (electrotag/web/training_path.py): the snippets of a set, a trainee's path and the gate, and
+# what the study team does after an assessment that did not meet the criteria.
+READ_ONLY += ("snippets_list", "training_gate_get")
+OPERATIONS += ("snippets_list", "training_gate_get", "snippet_add", "snippet_remove", "training_reopen",
+               "training_assessment_set")
 
 
 # ------------------------------------------------------------------ checking input
@@ -1554,3 +1559,23 @@ class Admin:
         limit = int(_number(body, "limit", minimum=1, maximum=1000, default=100))
         aid = _aid(body.get("annotator_id")) if body.get("annotator_id") is not None else None
         return {"visits": self.store.visit_records(aid, limit)}
+
+    # ------------------------------------------------------- the training path
+    # (electrotag/web/training_path.py; the snippets are the expert channel's operations too)
+    def op_snippets_list(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.service.training_path.snippets_list(user, body)
+
+    def op_snippet_add(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.service.training_path.snippet_add(user, body)
+
+    def op_snippet_remove(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.service.training_path.snippet_remove(user, body)
+
+    def op_training_gate_get(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.service.training_path.admin_gate_get(user, body)
+
+    def op_training_reopen(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.service.training_path.admin_reopen(user, body)
+
+    def op_training_assessment_set(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.service.training_path.admin_assessment_set(user, body)

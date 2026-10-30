@@ -207,7 +207,7 @@ class WorkItem:
     mode: str
     context_id: str
     manifest: dict[str, Any]
-    status: str  # todo, in_progress, done, unusable (its annotator reported that it cannot be annotated)
+    status: str  # todo, in_progress, done, unusable (reported as one that cannot be annotated), locked (training first)
     position: int = 0
     repeat: bool = False  # a practice recording that may be annotated again
     source: str = "assignment"  # or "programme"
@@ -227,6 +227,7 @@ class WorkItem:
             "recording_id": self.recording_id, "file_name": self.manifest["file_name"],
             "format": self.manifest["format"], "mode": self.mode, "context_id": self.context_id,
             "status": self.status, "duration_s": float(timing["n_samples"]) / float(timing["sfreq"]),
+            "locked": "training_required" if self.status == "locked" else None,
             "n_channels": len(self.manifest["ch_names"]), "size_bytes": size, "repeat": self.repeat,
             # what the completion register says of a finished recording (null otherwise)
             "elapsed_s": _float_or_none(done.get("elapsed_s")) if done else None,
@@ -247,6 +248,9 @@ class StudyService:
         from electrotag.web.visits import Visits
 
         self.coach = Coach(self)
+        from electrotag.web.training_path import TrainingPath
+
+        self.training_path = TrainingPath(self)
         self.visits = Visits(self)
         self.administration = Admin(self)
         self.analyses = Analyses(self)
@@ -337,7 +341,7 @@ class StudyService:
                 prog = None
         return {"annotator_id": user.annotator_id, "display_name": user.display_name, "role": user.role,
                 "roles": list(user.roles), "study": self.study_info(), "catalogue": self.catalogue_info(),
-                "programme": prog,
+                "programme": prog, "training_gate": self.training_path.gate(user),
                 "quizzes": self.quizzes.available(user)}
 
     # ---------------------------------------------------------- what to do
@@ -390,6 +394,12 @@ class StudyService:
                 add(rid, mode, set_id, 0, "programme", repeat)
         for a in self.store.assignments(aid):
             add(a.recording_id, a.mode, a.context_id, a.position, "assignment")
+        # Real study work waits for the competency assessment (electrotag/web/training_path.py): a study recording
+        # not yet saved is "locked" while the gate is closed, so it is never the next one and cannot be opened.
+        gated = [i for i in items if self.training_path.gated(i) and i.status in ("todo", "in_progress")]
+        if gated and not self.training_path.gate(user)["open"]:
+            for i in gated:
+                i.status = "locked"
         return items
 
     def _next(self, user: User, items: list[WorkItem]) -> WorkItem | None:
@@ -398,7 +408,7 @@ class StudyService:
             nxt = self.coach.next_item(user, set_id, items)
             if nxt is not None:
                 return nxt
-        open_items = [i for i in items if i.status not in ("done", "unusable") and i.source == "assignment"]
+        open_items = [i for i in items if i.status not in ("done", "unusable", "locked") and i.source == "assignment"]
         if not open_items:
             return None
         started = [i for i in open_items if i.status == "in_progress"]
@@ -564,11 +574,16 @@ class StudyService:
                                            "saved_at": (viewable.saved or {}).get("saved_at"),
                                            "annotations": self.saved_annotations(user, viewable)})
             if revise and revisable is not None:
+                self.training_path.require_open(user, revisable)  # a revision is study work too
                 return self._revision_answer(user, revisable, status, differences)
             hint = (" To change your annotations, open it from your history with Open to revise."
                     if revisable is not None else "")
             return self._answer("done", f"You have already completed {rid}.{hint} Choose another recording from your "
                                 "list.", recording_id=rid, mode=i.mode, context_id=i.context_id)
+        unlocked = [i for i in open_items if i.status != "locked"]
+        if not unlocked:  # only study recordings, and real study work waits for the competency assessment
+            raise self.training_path.refusal(self.training_path.gate(user))
+        open_items = unlocked
         chosen = next((i for i in open_items if nxt is not None and (i.recording_id, i.mode, i.context_id)
                        == (nxt.recording_id, nxt.mode, nxt.context_id)), None)
         if chosen is None:
@@ -636,6 +651,7 @@ class StudyService:
         ``{"recording_id", "mode", "context_id", "draft": Draft}``)."""
         item = self.find_item(user, body.get("recording_id"), body.get("mode"), body.get("context_id"))
         self._refuse_unusable(item)
+        self.training_path.require_open(user, item)
         revises = None
         if item.status == "done" and not item.repeat:
             if not self.can_revise(item):
@@ -721,6 +737,7 @@ class StudyService:
 
         item = self.find_item(user, body.get("recording_id"), body.get("mode"), body.get("context_id"))
         self._refuse_unusable(item)
+        self.training_path.require_open(user, item)
         rid = item.recording_id
         revision: dict[str, Any] | None = None
         if item.status == "done" and not item.repeat:
@@ -820,7 +837,7 @@ class StudyService:
             out["feedback"] = self.coach.practice_result(user, rs, rid, saved.session.build_document(), elapsed,
                                                          loaded.info.timing.sfreq)
         elif item.mode == "guided" and rs is not None and guided_summary is not None:
-            out["guided"] = self.coach.record_guided(user, rs, rid, guided_summary)
+            out["guided"] = self.coach.record_guided(user, rs, rid, guided_summary, saved.session.build_document())
         elif item.mode == "assessment" and rs is not None:
             out["assessment"] = self.coach.assessment_result(user, rs)
         out["next"] = self.assignments(user)["next"]

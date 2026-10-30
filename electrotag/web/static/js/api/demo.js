@@ -26,6 +26,7 @@ import { primaryRole, rolesOf } from '../admin/model.js';
 export { DEMO_NOTICE };
 import * as rules from '../training/rules.js';
 import { DEFAULT_PASS, practiceDetail, practiceFeedback, practiceVerdict, retryRecording, scoreSentence } from '../training/scoring.js';
+import { STAGE_TITLES, browserStep, isFinished, isUnlocked, stagePolicy, stageStates } from '../training/stages.js';
 import { local, newId, nowLocalIso, session } from '../util.js';
 import { sha256Hex } from '../eeg/sha256.js';
 import { coveredS, fromDraft } from '../viewer/coverage.js';
@@ -33,6 +34,8 @@ import { ADJECTIVES, ANIMALS } from '../games/words.js';
 import { isConfidence, noteProblem } from '../annotate/confidence.js';
 
 const STATE_KEY = 'electrotag.demo.v2';
+/** The admin operations of the training path, which come with demo_training_stages.js. */
+const TRAINING_ADMIN_OPS = ['snippets_list', 'snippet_add', 'snippet_remove', 'training_gate_get', 'training_reopen', 'training_assessment_set'];
 const TOKEN_KEY = 'electrotag.demo.token';
 export const DEMO_PASSWORD = 'demo';
 const FIND_WINDOW_S = 10;
@@ -64,12 +67,6 @@ export const TRAINING_SET = Object.freeze({
   pass: DEFAULT_PASS,
 });
 
-// The stages of the training programme (electrotag/training/programme.py STAGE_TITLES and STAGE_TEXT).
-const STAGES = {
-  guided: ['Learn with the experts', 'Mark each artifact the way the experts did, one at a time, with help and instant feedback.'],
-  practice: ['On your own', 'Annotate a recording by yourself, then see your score and what you missed.'],
-  assessment: ['Competency assessment', 'Annotate without feedback. Your result appears here when every recording is done.'],
-};
 
 /** The answer for a segment without an artifact (electrotag.training.reference.NONE_OPTION). */
 export const QUIZ_NONE_OPTION = 'No artifact / none of these';
@@ -295,6 +292,7 @@ export class DemoBackend {
       study: this._admin.studyBlock(),
       catalogue: CATALOGUE,
       programme: this._inProgramme(aid) ? { set_id: TRAINING_SET.set_id, name: this._exampleSet().name, complete: !this._nextStep(aid).stage } : null,
+      training_gate: this._gate(),
       quizzes: this._quizAllowed(aid) ? [{ set_id: QUIZ.set_id, name: this._exampleSet().name, n_items: QUIZ.items.length,
         n_answered: Object.keys(quiz.answers).length, finished: Boolean(quiz.finished), feedback: QUIZ.feedback }] : [],
     };
@@ -447,7 +445,7 @@ export class DemoBackend {
       const nxt = this._nextStep(aid, stages);
       const lists = { guided: TRAINING_SET.guided.map((g) => g.rid), practice: TRAINING_SET.practice, assessment: [] };
       for (const s of stages) {
-        if (!['available', 'in_progress', 'completed'].includes(s.status)) continue;
+        if (!lists[s.key] || !isUnlocked(s) || s.carried) continue;
         for (const rid of lists[s.key]) add(rid, s.key, TRAINING_SET.set_id, 0, 'programme', Boolean(nxt.repeat && nxt.stage === s.key && nxt.recording_id === rid));
       }
     }
@@ -459,6 +457,7 @@ export class DemoBackend {
   _nextItem(aid, items) {
     if (this._inProgramme(aid)) {
       const nxt = this._nextStep(aid);
+      if (nxt.stage === 'tour' || nxt.stage === 'snippets') return null;
       const mine = items.filter((i) => i.source === 'programme' && i.mode === nxt.stage);
       const hit = nxt.stage ? mine.find((i) => i.rid === nxt.recording_id) : null;
       if (hit) return hit;
@@ -488,7 +487,7 @@ export class DemoBackend {
         return {
           recording_id: i.rid, file_name: i.info.file_name, format: i.info.format, mode: i.mode, context_id: i.context_id,
           status: i.status, duration_s: i.info.n_samples / i.info.sfreq, n_channels: i.info.ch_names.length,
-          size_bytes: i.info.size_bytes, repeat: i.repeat,
+          size_bytes: i.info.size_bytes, repeat: i.repeat, locked: i.status === 'locked' ? 'training_required' : null,
           elapsed_s: last ? Number((last.session || {}).elapsed_s) || 0 : null,
           n_annotations: last ? (last.annotations || []).length : null,
           completed_at: last ? last.saved_at : null,
@@ -944,13 +943,24 @@ export class DemoBackend {
 
   _tolerance() { return { ...rules.DEFAULT_TOLERANCE, ...(this._exampleSet().guided_tolerance || {}) }; }
 
-  /** A trainee's progress (training/programme.py Progress): the guided summaries and the practice attempts. */
+  /** A trainee's progress (training/programme.py Progress): the guided summaries, the practice attempts and the stage events. */
   _progress(aid) {
-    if (!this.state.progress[aid]) this.state.progress[aid] = { guided: {}, practice: {} };
-    return this.state.progress[aid];
+    if (!this.state.progress[aid]) this.state.progress[aid] = { guided: {}, practice: {}, events: [] };
+    const p = this.state.progress[aid];
+    if (!Array.isArray(p.events)) p.events = [];
+    return p;
   }
 
-  /** The three stages for one trainee (programme.py programme_state). */
+  /** The study's policy for the training path (the settings' training block). */
+  _policy() { return stagePolicy((this._admin.s.settings || {}).training); }
+
+  /** The snippets of the training set (its own, then one for each reference annotation of a guided recording). */
+  _snippetCount() {
+    const own = (this._exampleSet().snippets || []).length;
+    return own + TRAINING_SET.guided.reduce((n, g) => n + this._truthOf(g.rid).length, 0);
+  }
+
+  /** The five stages for one trainee (programme.py programme_state; the sandbox's set has no assessment). */
   _stages(aid) {
     const ctx = TRAINING_SET.set_id;
     const prog = this._progress(aid);
@@ -958,40 +968,39 @@ export class DemoBackend {
     const gTotal = TRAINING_SET.guided.map((g) => g.rid);
     const gDone = doneIn('guided', gTotal);
     const sum = (k) => gDone.reduce((a, rid) => a + Number((prog.guided[rid] || {})[k] || 0), 0);
-    const gStatus = gDone.length === gTotal.length ? 'completed' : gDone.length ? 'in_progress' : 'available';
     const attempts = Object.values(prog.practice).flat();
     const passed = attempts.some((a) => a.passed);
     // the best attempt, as Progress.best_practice: a pass first, then the score, then the type
     const better = (a, b) => (Number(a.passed) - Number(b.passed)) || (a.event_f1 - b.event_f1) || (a.label_accuracy - b.label_accuracy);
     const best = attempts.length ? attempts.reduce((b, a) => (better(a, b) > 0 ? a : b)) : null;
-    const pStatus = gStatus !== 'completed' ? 'locked' : passed ? 'completed' : attempts.length ? 'in_progress' : 'available';
-    const stage = (key, status, done, total, extra = {}) => ({ key, title: STAGES[key][0], description: STAGES[key][1], status, done, total, stars: 0, max_stars: 0,
-      seconds: 0, detail: '', result: '', ...extra });
-    return [
-      stage('guided', gStatus, gDone.length, gTotal.length, { stars: sum('stars'), max_stars: sum('max_stars'), seconds: sum('seconds') }),
-      stage('practice', pStatus, doneIn('practice', TRAINING_SET.practice).length, TRAINING_SET.practice.length, {
+    return stageStates({
+      events: prog.events, policy: this._policy(), nSnippets: this._snippetCount(), quiz: this._quizItemsOf(ctx).length > 0,
+      guided: { total: gTotal, done: gDone, stars: sum('stars'), max_stars: sum('max_stars'), seconds: sum('seconds') },
+      practice: { total: TRAINING_SET.practice, done: doneIn('practice', TRAINING_SET.practice), base: passed ? 'completed' : attempts.length ? 'in_progress' : 'available',
         seconds: attempts.reduce((a, x) => a + (x.seconds || 0), 0), detail: practiceDetail(best, this._passRule(), passed),
-        result: best ? (passed ? 'passed' : 'not_passed') : '', best }),
-      stage('assessment', 'not_used', 0, 0),
-    ];
+        result: best ? (passed ? 'passed' : 'not_passed') : '', best },
+      assessment: { total: [], done: [] },
+    });
   }
 
   /** What the Continue button of the training path does next (programme.py next_step). */
   _nextStep(aid, stages = this._stages(aid)) {
     const ctx = TRAINING_SET.set_id;
-    const [g, p] = stages;
+    const first = browserStep(stages);
+    if (first) return first;
+    const open = (k) => { const s = stages.find((x) => x.key === k); return isUnlocked(s) && !isFinished(s); };
     const n = TRAINING_SET.guided.length;
-    if (g.status !== 'completed') {
+    if (open('guided')) {
       const i = TRAINING_SET.guided.findIndex((x) => !this.state.done[this._key(aid, x.rid, 'guided', ctx)]);
       return { stage: 'guided', recording_id: TRAINING_SET.guided[i].rid, repeat: false, label: `Start recording ${i + 1} of ${n}`,
-        text: `Next: ${STAGES.guided[0]}, recording ${i + 1} of ${n}.` };
+        text: `Next: ${STAGE_TITLES.guided}, recording ${i + 1} of ${n}.` };
     }
     const list = TRAINING_SET.practice;
-    if (p.status !== 'completed') {
+    if (open('practice')) {
       const left = list.findIndex((rid) => !this.state.done[this._key(aid, rid, 'practice', ctx)]);
       if (left >= 0) {
         return { stage: 'practice', recording_id: list[left], repeat: false, label: 'Start a practice recording',
-          text: `Next: ${STAGES.practice[0]}, practice recording ${left + 1} of ${list.length}.` };
+          text: `Next: ${STAGE_TITLES.practice}, practice recording ${left + 1} of ${list.length}.` };
       }
       // the one practised longest ago comes again, so that the answers just seen in a review are not the next test
       const rid = retryRecording(list, this._progress(aid).practice);
@@ -1005,6 +1014,13 @@ export class DemoBackend {
     }
     return { stage: null, recording_id: null, repeat: false, label: 'Training complete', text: 'You have completed every stage of this training programme.' };
   }
+
+  /**
+   * The competency gate of real study work (training_path.py gate). The sandbox's training set has no
+   * assessment recordings (they need the competency report, which needs ElectroTag's Python code), so study
+   * work is always open here; a study server or Firebase locks it until the assessment is passed.
+   */
+  _gate() { return { open: true, reason: '', message: '' }; }
 
   async training() {
     return this._trainingView(this._aid());
@@ -1021,11 +1037,12 @@ export class DemoBackend {
       set_id: TRAINING_SET.set_id, name: set.name, description: set.description,
       stages: stages.map((s) => ({ key: s.key, title: s.title, description: s.description, status: s.status, done: s.done, total: s.total,
         stars: s.stars, max_stars: s.max_stars, best_score: s.key === 'practice' && s.best ? Math.round(s.best.event_f1 * 10000) / 10000 : null,
-        time_s: Math.round(s.seconds * 10) / 10, detail: s.detail, result: s.result || null })),
+        time_s: Math.round(s.seconds * 10) / 10, detail: s.detail, result: s.result || null, can_skip: s.can_skip, can_resume: s.can_resume })),
       next: nxt.stage ? { stage: nxt.stage, recording_id: item ? item.rid : null, label: nxt.label, text: nxt.text, mode: nxt.stage,
         context_id: TRAINING_SET.set_id, file_name: item ? item.info.file_name : null, repeat: nxt.repeat } : null,
       complete: !nxt.stage,
       message: nxt.text,
+      gate: this._gate(),
     };
   }
 
@@ -1381,7 +1398,10 @@ export class DemoBackend {
 
   // ------------------------------------------------------------ administration
   /** The admin area's operations (docs/web/api.md, "Administration"), in this browser: demo_admin.js. */
-  async admin(op, body = {}) { return this._admin.run(op, body || {}); }
+  async admin(op, body = {}) {
+    if (TRAINING_ADMIN_OPS.includes(op)) await this._trainingPart(); // its operations come with it (demo_training_stages.js)
+    return this._admin.run(op, body || {});
+  }
 
   // ---------------------------------------------------------------- experts
   /** The expert area's operations (docs/web/api.md, "Experts"), in this browser: demo_expert.js. */
@@ -1401,26 +1421,20 @@ export class DemoBackend {
       adjudications: { shown: r.show_outcomes_to_annotators !== false, items: [] } };
   }
 
-  /** POST /training/stage: checked as coach.py checks it; the five-stage path comes later (501 not_offered). */
-  async trainingStage(body = {}) {
-    const aid = this._aid();
-    const b = body || {};
-    if (!['tour', 'snippets', 'guided', 'practice', 'assessment'].includes(b.stage) || !['skip', 'done', 'resume'].includes(b.action)) {
-      throw new ApiError(400, 'bad_request', 'stage must be one of tour, snippets, guided, practice or assessment, and action one of skip, done or resume');
+  /** The training path's stages and snippets (training_path.py), loaded at their first use: demo_training_stages.js. */
+  async _trainingPart() {
+    if (!this.trainingStages) {
+      const { DemoTrainingStages } = await loadPart('demoTraining');
+      this.trainingStages = this.trainingStages || new DemoTrainingStages(this);
     }
-    if (b.stage === 'assessment' && b.action === 'skip') {
-      throw new ApiError(409, 'cannot_skip', 'The competency assessment cannot be skipped: it is passed before real study work begins.');
-    }
-    if (!this._inProgramme(aid)) throw new ApiError(404, 'no_programme', 'You are not taking part in a training programme');
-    throw new ApiError(501, 'not_offered', 'This study does not offer the training path\'s stages yet.');
+    return this.trainingStages;
   }
 
-  /** GET /training/snippets: the artifact snippets of the trainee's set (none yet). */
-  async trainingSnippets() {
-    const aid = this._aid();
-    if (!this._inProgramme(aid)) throw new ApiError(404, 'no_programme', 'You are not taking part in a training programme');
-    return { set_id: TRAINING_SET.set_id, snippets: [], recordings: {}, quiz: null };
-  }
+  /** POST /training/stage: skip, finish or resume a stage of the training path. */
+  async trainingStage(body = {}) { return (await this._trainingPart()).stageAction(body || {}); }
+
+  /** GET /training/snippets: the artifact snippets of the trainee's set. */
+  async trainingSnippets() { return (await this._trainingPart()).snippetsView(); }
 
   /** Forget everything saved by the sandbox in this browser. */
   reset() {

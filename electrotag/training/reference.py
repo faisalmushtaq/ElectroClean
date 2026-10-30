@@ -14,9 +14,13 @@ training recordings are never offered for study annotation and the set can be
 copied from one study to another. Other sets refer to recordings of the study
 dataset.
 
-Each recording is used for one of three purposes: ``guided`` (Stage 1 of the
-training programme, matched step by step with feedback), ``practice`` (Stage 2,
-annotated independently and then scored) or ``assessment`` (blinded).
+Each recording is used for one of three purposes: ``guided`` (learning with the
+experts, matched step by step with feedback), ``practice`` (on one's own, annotated
+independently and then scored) or ``assessment`` (blinded). A set also offers
+*snippets*, short examples of each artifact type for the training path's "Meet the
+artifacts" stage: its own (``snippets``, chosen by the study team) and one for each
+reference annotation of its guided recordings (:func:`set_snippets`). Practice and
+assessment recordings never give snippets, which would give their answers away.
 
 Reference annotations use the same canonical format as every other
 ElectroTag annotation file, with annotator ID ``REFERENCE`` and the
@@ -59,6 +63,11 @@ USE_NAMES = {
 #: How much help each guided recording gives (see electrotag/training/guided.py).
 GUIDANCE_LEVELS = ("show", "find", "find_unnamed")
 DEFAULT_DIRNAME = Path("derivatives") / "electrotag_reference_sets"
+#: The longest snippet, in seconds, and the most context shown on each side of it.
+SNIPPET_MAX_S = 60.0
+SNIPPET_MAX_CONTEXT_S = 10.0
+#: The uses of a recording that a snippet may never come from (their references are the answers).
+NO_SNIPPETS_FROM = ("practice", "assessment")
 
 
 class ReferenceSetError(ValueError):
@@ -118,6 +127,37 @@ NONE_OPTION = "No artifact / none of these"
 
 
 @dataclass
+class Snippet:
+    """A short example of an artifact type for the training path's "Meet the artifacts" stage (docs/web/api.md,
+    "Training stages"): a stretch of a recording of the set, with its type and the experts' explanation, shown
+    with ``context_s`` of EEG on each side. ``channels`` are the channels the artifact is on (none: the whole
+    montage); ``source`` says where it came from (``{"kind": "guided", "annotation_id"}`` for one made from a
+    guided reference, ``{"kind": "added", "by"}`` for one the study team added, or a library entry)."""
+
+    snippet_id: str
+    recording_id: str
+    start_s: float
+    end_s: float
+    label: str
+    explanation: str = ""
+    context_s: float = 2.0
+    channels: list[str] = field(default_factory=list)
+    source: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"snippet_id": self.snippet_id, "recording_id": self.recording_id, "start_s": self.start_s,
+                "end_s": self.end_s, "label": self.label, "explanation": self.explanation,
+                "context_s": self.context_s, "channels": list(self.channels), "source": dict(self.source)}
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> Snippet:
+        return cls(snippet_id=str(d["snippet_id"]), recording_id=str(d["recording_id"]),
+                   start_s=float(d["start_s"]), end_s=float(d["end_s"]), label=str(d["label"]),
+                   explanation=str(d.get("explanation", "")), context_s=float(d.get("context_s", 2.0)),
+                   channels=[str(c) for c in d.get("channels", [])], source=dict(d.get("source") or {}))
+
+
+@dataclass
 class ReferenceSet:
     directory: Path
     set_id: str
@@ -142,6 +182,8 @@ class ReferenceSet:
     guided: dict[str, Any] = field(default_factory=dict)
     # Stage 2 pass rule, e.g. {"event_f1": 0.8, "label_accuracy": 0.8} (see training/programme.py).
     practice_pass: dict[str, Any] = field(default_factory=dict)
+    # The snippets the study team added (Snippet.to_dict); those of the guided references are made as needed.
+    snippets: list[dict[str, Any]] = field(default_factory=list)
 
     # ------------------------------------------------------------ properties
     @property
@@ -227,6 +269,7 @@ class ReferenceSet:
             "recordings_dir": self.recordings_dir,
             "guided": self.guided,
             "practice_pass": self.practice_pass,
+            "snippets": self.snippets,
         }
 
     def save(self) -> None:
@@ -264,6 +307,7 @@ class ReferenceSet:
             recordings_dir=str(d.get("recordings_dir", "") or ""),
             guided=dict(d.get("guided", {}) or {}),
             practice_pass=dict(d.get("practice_pass", {}) or {}),
+            snippets=[dict(x) for x in (d.get("snippets") or []) if isinstance(x, dict)],
         )
 
     @classmethod
@@ -482,6 +526,72 @@ class ReferenceSet:
         items.append(item.to_dict())
         self.quiz["items"] = items
         self.save()
+
+    # ------------------------------------------------------------- snippets
+    @property
+    def own_snippets(self) -> list[Snippet]:
+        return [Snippet.from_dict(d) for d in self.snippets]
+
+    def next_snippet_id(self) -> str:
+        taken = {str(d.get("snippet_id")) for d in self.snippets}
+        n = 1
+        while f"s{n:02d}" in taken:
+            n += 1
+        return f"s{n:02d}"
+
+    def add_snippet(self, snippet: Snippet, catalogue_labels: tuple[str, ...]) -> None:
+        """Keep a snippet (in place of one with its ID). It must be of a permitted type, between 0 and
+        :data:`SNIPPET_MAX_S` long, and never from a practice or assessment recording of this set."""
+        if snippet.label not in catalogue_labels:
+            raise ReferenceSetError(f"{snippet.label!r} is not a permitted label")
+        if not 0 <= snippet.start_s < snippet.end_s:
+            raise ReferenceSetError("A snippet's end must be after its start, which is at 0 s or later")
+        if snippet.end_s - snippet.start_s > SNIPPET_MAX_S:
+            raise ReferenceSetError(f"A snippet is at most {SNIPPET_MAX_S:g} s long")
+        if not 0 <= snippet.context_s <= SNIPPET_MAX_CONTEXT_S:
+            raise ReferenceSetError(f"The context of a snippet is between 0 and {SNIPPET_MAX_CONTEXT_S:g} s")
+        use = self.recordings.get(snippet.recording_id, {}).get("use")
+        if use in NO_SNIPPETS_FROM:
+            raise ReferenceSetError(f"{snippet.recording_id} is a {use} recording of this set: a snippet of it "
+                                    "would show trainees the answers")
+        kept = [d for d in self.snippets if d.get("snippet_id") != snippet.snippet_id]
+        kept.append(snippet.to_dict())
+        self.snippets = kept
+        self.save()
+
+    def remove_snippet(self, snippet_id: str) -> None:
+        kept = [d for d in self.snippets if d.get("snippet_id") != snippet_id]
+        if len(kept) == len(self.snippets):
+            raise ReferenceSetError(f"Snippet {snippet_id!r} is not in reference set {self.set_id}")
+        self.snippets = kept
+        self.save()
+
+
+def guided_snippets(rs: ReferenceSet) -> list[Snippet]:
+    """One snippet for each reference annotation of the set's guided recordings, in the order trainees meet the
+    recordings and then by time, with the experts' note on it as the explanation. Practice and assessment
+    references never give snippets."""
+    out: list[Snippet] = []
+    for rid in rs.guided_recordings:
+        doc = rs.reference_document(rid)
+        sfreq = float(doc.recording.timing.sfreq)
+        for a in sorted(doc.annotations, key=lambda x: (x.onset_sample, x.annotation_id)):
+            out.append(Snippet(snippet_id=f"g-{a.annotation_id}", recording_id=rid, start_s=a.onset_sample / sfreq,
+                               end_s=(a.onset_sample + a.duration_samples) / sfreq, label=a.label,
+                               explanation=rs.guided_note(a.annotation_id), context_s=2.0, channels=list(a.channels),
+                               source={"kind": "guided", "annotation_id": a.annotation_id}))
+    return out
+
+
+def set_snippets(rs: ReferenceSet) -> list[Snippet]:
+    """Every snippet of a set: the study team's own first, in the order they were added, then those of the guided
+    references (:func:`guided_snippets`). A guided reference that cannot be read gives none."""
+    own = [x for x in rs.own_snippets if rs.recordings.get(x.recording_id, {}).get("use") not in NO_SNIPPETS_FROM]
+    try:
+        derived = guided_snippets(rs)
+    except (ReferenceSetError, OSError, ValueError):
+        derived = []
+    return own + derived
 
 
 def find_reference_sets(directory: Path) -> list[ReferenceSet]:
