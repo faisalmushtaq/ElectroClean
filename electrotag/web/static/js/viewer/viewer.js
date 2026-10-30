@@ -23,6 +23,7 @@ import { clampView, outsideStretches, viewSpan } from './bounds.js';
 import { nameEvery, namePx, traceWidths } from '../ui/comfort.js';
 import { icon } from '../views/common.js';
 import { confidenceFill, confidenceTagText } from '../annotate/confidence.js';
+import { layerMarks, normaliseLayers, pointerSpot } from './layers.js';
 
 const GUTTER = 92;
 const TAG_ROW_H = 20;
@@ -105,6 +106,8 @@ export class EegViewer {
     this.annotations = [];
     this.selected = new Set();
     this.ghost = null;
+    this.layers = []; // read-only marks beside the annotations, such as a correction's original (setLayers)
+    this.replayPointer = null; // where a replayed session's pointer is (setReplayPointer)
     this.flash = null;
     this.markStart = null;
     this.dragPreview = null;
@@ -321,6 +324,21 @@ export class EegViewer {
   setGhost(g) { this.ghost = g; this.invalidate(['under', 'over']); }
   setMarkStart(t, colour) { this.markStart = t === null ? null : { t, colour }; this.invalidate(['over']); }
   setDragPreview(p) { this.dragPreview = p; this.invalidate(['over']); }
+
+  /** Read-only layers of marks drawn as outlines beside the annotations (layers.js): [{id, annotations, style, prefix, visible}]. */
+  setLayers(layers) { this.layers = normaliseLayers(layers); this.invalidate(['over']); }
+
+  /** Show or hide one layer (true when it is now shown). */
+  toggleLayer(id, on = null) {
+    const l = this.layers.find((x) => x.id === id);
+    if (!l) return false;
+    l.visible = on === null ? !l.visible : Boolean(on);
+    this.invalidate(['over']);
+    return l.visible;
+  }
+
+  /** The replay's pointer: a small ring at {t, channel}, or null to hide it. */
+  setReplayPointer(p) { this.replayPointer = p && Number.isFinite(p.t) ? { t: p.t, channel: p.channel || null } : null; this.invalidate(['over']); }
   setCursor(t) { this.cursorT = t; this.invalidate(['over']); }
   setPrefix(map) { this.prefix = map || {}; this.invalidate(['over']); }
   setLabelColours(map) { this.labelColours = map || {}; this.invalidate(['over']); }
@@ -937,6 +955,7 @@ export class EegViewer {
       this._tags.push({ id: tg.a.annotation_id, x: tg.x - tg.w / 2, y, w: tg.w, h: TAG_ROW_H - 3 });
     });
     this._drawMarkers(ctx, x0, x1, y0, y1);
+    this._drawLayers(ctx);
     // the drag in progress
     if (this.dragPreview) {
       const p = this.dragPreview;
@@ -1041,6 +1060,44 @@ export class EegViewer {
     ctx.strokeStyle = COLOURS.separator;
     ctx.lineWidth = 1;
     ctx.strokeRect(x0 + 0.5, y0 + 0.5, x1 - x0 - 1, y1 - y0 - 1);
+  }
+
+  /** The layers' marks as dashed outlines with their prefix ("Original: …"), and the replay's pointer. */
+  _drawLayers(ctx) {
+    const { x0, x1, y0, y1 } = this;
+    const s0 = this.view.startS * this.sfreq;
+    const s1 = (this.view.startS + this.view.durationS) * this.sfreq;
+    ctx.font = `11px ${FONT}`;
+    for (const { layer, a } of layerMarks(this.layers, this.annotations, s0, s1)) {
+      const colour = this.catalogue.colourFor(a.label);
+      const xa = clamp(this.sampleToX(a.onset_sample), x0, x1);
+      const xb = clamp(this.sampleToX(end(a)), x0, x1);
+      ctx.strokeStyle = colour;
+      ctx.lineWidth = 1.5;
+      if (layer.style === 'dashed') ctx.setLineDash([5, 4]);
+      for (const [ya, yb] of this._rowSpans(a.channels)) ctx.strokeRect(xa + 0.5, ya + 1.5, Math.max(1, xb - xa - 1), yb - ya - 3);
+      ctx.setLineDash([]);
+      // its name at the foot of the outline, as much of it as fits: "Original: Eye-blink-artifact", "Original", or nothing
+      const text = [`${layer.prefix}${a.label}`, layer.prefix.replace(/[:\s]+$/, '')].find((x) => x && ctx.measureText(x).width + 12 <= xb - xa);
+      if (text) {
+        const w = ctx.measureText(text).width + 8;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.fillRect(xa + 2, y1 - 20, w, 16);
+        ctx.fillStyle = legibleOnWhite(colour);
+        ctx.textAlign = 'left';
+        ctx.fillText(text, xa + 6, y1 - 8);
+      }
+    }
+    const spot = pointerSpot(this.replayPointer, this.visibleRows(), this);
+    if (spot) {
+      ctx.strokeStyle = COLOURS.accent;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(spot.x, clamp(spot.y, y0 + 8, y1 - 8), 7, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = rgba(COLOURS.accent, 0.18);
+      ctx.fill();
+    }
   }
 
   _renderOverview() {

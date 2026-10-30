@@ -682,6 +682,67 @@ withdraw. Each expert decides for their own sessions only; the study's audit log
 and a save that changes nothing writes nothing. When the study's settings do not show experts'
 sessions to trainees (Study settings, Replays), the choice is kept for when they do.
 
+### Saved work
+
+Saved work lists every saved study recording, the latest version of each person's work, newest
+first, with its version, when it was saved, its number of annotations and how many corrections that
+version has. Choose a person, a recording, or whether it was corrected, to narrow the list. Each row
+has Correct and Replay; your own work has no Correct, because you revise it from your history on the
+home page, and Correct is off while the study takes no corrections (Study settings, Corrections and
+adjudication).
+
+### Correcting saved work
+
+Correct opens the recording from this computer, as annotators open theirs: the EEG never reaches
+the study, so the browser checks the file's fingerprint against the study's copy. The saved version
+opens in the annotation view with every annotating tool, and the original stays on the EEG as
+dashed outlines labelled Original, so that a mark you remove or move remains in sight; L, or Hide the
+original, takes the outlines away and brings them back. Change, add and remove marks as you would
+annotate.
+
+The Changes panel on the right lists the difference from the saved version as it stands, in the
+order of the recording: "Added Eye-blink-artifact 12.30–12.71 s", "Changed type: Eye-blink-artifact to
+Eye-artifact", "Removed EMG-artifact 4.10–4.62 s". Give each change its reason with a chip (Missed
+artifact, Not an artifact, Wrong type, Start or end, Channels, Should be split or merged, Other) and,
+if it helps the annotator, a note of up to 300 characters; a note on the whole correction may go
+below. J and K go to the next and previous change, R to its reasons. Which changes need a reason is
+the study's choice (every change, by default; or only changed and removed marks; or none), and
+Submit the correction outlines in amber each change still without one.
+
+Submit the correction asks once, then saves the correction as a new version of the person's work,
+credited to you: the five result files in `derived/corrections/` (docs/file_formats.md), with each
+change and its reason. The version you corrected never changes, the person's progress and times are
+untouched, and the analyses use the originals. The correction is saved once however often Submit is
+pressed, and when the answer does not arrive, pressing it again sends the same correction. If the
+person saves the recording again while you correct it, the study refuses yours and says so: open
+the latest version and correct that. Your work in progress is kept in this browser, never as anyone's
+draft with the study, and Back offers to keep it there, to discard it, or to carry on. When another
+expert has corrected the same version, the panel says so before you start: both corrections are
+kept, and their disagreements go to adjudication. Every correction is in the audit log, and the
+results zip holds `corrections/corrections.tsv`, a row for each change with its reason.
+
+### Replaying a session
+
+Replay plays back how a person worked on a recording, from the study's record of their sessions (the
+interaction log), on the EEG opened from this computer. Every session the person spent on the
+recording up to the version shown is played in order, a second apart. The view follows theirs, a
+small blue ring shows their pointer, their annotations build up in the Annotations tab as they made
+them, and a line under the EEG says what they did; the side panel lists the sessions and what
+happened last. Under the EEG are Play and Pause (Space), the speed from half to sixteen times (- and
+=), steps to the previous and next event (, and .) and change of the annotations (< and >), Home for
+the start, and a bar to go anywhere in the session, with a tick for each change of the annotations
+and the pauses greyed. Skip pauses (I) shortens every stillness to three seconds; moving through
+the EEG yourself leaves the person's view, and Follow again (F) returns to it. At the end, the player
+says whether the replay ends with the saved version. Notes and anything typed are never recorded, so
+a note shows only its length. A session saved before ElectroTag recorded the annotations a session
+opens with may start from the end of the session before it; when the study does not record how
+annotators work, there is nothing to replay and the saved version is shown.
+
+Experts and administrators may replay anyone while the study's replays are on (Study settings,
+Replays). Trainees may watch only the sessions of experts who agree to it (Your sessions for teaching,
+above), and only while the study shows experts' sessions to trainees; the study checks this for
+every request. Replays are logged in the watcher's own record.
+
 ## Adjudication
 
 Adjudication settles the disagreements between annotators the way a systematic review settles

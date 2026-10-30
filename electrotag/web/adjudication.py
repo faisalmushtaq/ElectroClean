@@ -214,28 +214,29 @@ def recording_units(service: StudyService, entries: list[dict[str, Any]], skip: 
 
 
 def correction_units(service: StudyService) -> list[Unit]:
-    """Two or more experts' corrections of the same saved attempt (each corrector's latest): decision 4."""
-    groups: dict[tuple[str, str, int], dict[str, dict[str, Any]]] = {}
-    for c in service.store.records("corrections"):
-        if c.get("state") != "saved" or not c.get("corrector_id"):
-            continue
-        frm = c.get("corrected_from") if isinstance(c.get("corrected_from"), dict) else {}
-        key = (str(c.get("annotator_id") or ""), str(c.get("recording_id") or ""),
-               int(frm.get("attempt") or c.get("attempt") or 1))
-        by = groups.setdefault(key, {})
-        who = str(c["corrector_id"])
-        if who not in by or int(c.get("number") or 0) > int(by[who].get("number") or 0):
-            by[who] = c
+    """Two or more experts' corrections of the same saved attempt (each corrector's latest, as
+    ``corrections.corrections_of`` gives them): decision 4."""
+    from electrotag.web.corrections import corrections_of
+
+    pairs = sorted({(str(c.get("annotator_id") or ""), str(c.get("recording_id") or ""))
+                    for c in service.store.records("corrections") if c.get("state") == "saved"})
     out = []
-    for (aid, rid, attempt), by in sorted(groups.items()):
-        if len(by) < 2:
-            continue
-        inputs = {who: Input(who, "correction", aid, attempt, str(c.get("session_id") or ""),
-                             str(c.get("output_basename") or ""), int(c.get("number") or 1),
-                             str(c.get("correction_id") or "")) for who, c in by.items()}
-        people = sorted(by)
-        out.append(Unit(unit_id_for("corrections", aid, rid, str(attempt)), "corrections", rid, people, inputs, None,
-                        _letters(people), corrected={"annotator_id": aid, "attempt": attempt}))
+    for aid, rid in pairs:
+        groups: dict[int, dict[str, dict[str, Any]]] = {}
+        for c in corrections_of(service, aid, rid):
+            if not c.get("corrector_id"):
+                continue
+            attempt = int((c.get("corrected_from") or {}).get("attempt") or c.get("attempt") or 1)
+            groups.setdefault(attempt, {})[str(c["corrector_id"])] = c
+        for attempt, by in sorted(groups.items()):
+            if len(by) < 2:
+                continue
+            inputs = {who: Input(who, "correction", aid, attempt, str(c.get("session_id") or ""),
+                                 str(c.get("output_basename") or ""), int(c.get("number") or 1),
+                                 str(c.get("correction_id") or "")) for who, c in by.items()}
+            people = sorted(by)
+            out.append(Unit(unit_id_for("corrections", aid, rid, str(attempt)), "corrections", rid, people, inputs,
+                            None, _letters(people), corrected={"annotator_id": aid, "attempt": attempt}))
     return out
 
 

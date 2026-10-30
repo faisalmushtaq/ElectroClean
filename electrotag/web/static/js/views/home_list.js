@@ -12,6 +12,7 @@ import { h, clear } from '../ui/dom.js';
 import { formatHms, local } from '../util.js';
 import { spanText } from './progress.js';
 import { feedbackCaption, moreButton, returnedLine } from './home_feedback.js';
+import { inform } from '../ui/dialog.js';
 
 export const PAGE_SIZE = 25;
 const PREFS_KEY = 'electrotag.home.list';
@@ -41,6 +42,61 @@ export function savedOf(it) {
 export function canRevise(app, it) {
   const ann = app.me && app.me.study && app.me.study.annotation;
   return Boolean(ann && ann.allow_revisions) && it.status === 'done' && it.mode === 'standard';
+}
+
+/**
+ * The experts' corrections of the annotator's work (GET /me/feedback, when the study shows them), asked for
+ * once for each list of assignments; `redraw` draws the list again when they arrive. [] until then.
+ */
+export function correctionsOf(app, redraw = null) {
+  const r = app.me && app.me.study && app.me.study.review;
+  if ((r && r.show_corrections_to_annotators === false) || !app.backend || !app.backend.myFeedback) return [];
+  const kept = app.corrections;
+  if (!kept || kept.for !== app.assignments) {
+    const mine = { for: app.assignments, items: kept ? kept.items : [] };
+    app.corrections = mine;
+    app.backend.myFeedback().then((fb) => {
+      if (app.corrections !== mine) return;
+      mine.items = (fb && fb.corrections && fb.corrections.shown && fb.corrections.items) || [];
+      if (redraw && mine.items.length) redraw();
+    }, () => { /* the list works without them */ });
+  }
+  return app.corrections.items;
+}
+
+/** The corrections of one recording of the list, newest first. */
+export function correctionsFor(app, it) {
+  return (app.corrections && app.corrections.items || []).filter((c) => c.recording_id === it.recording_id && (it.mode || 'standard') === 'standard');
+}
+
+/** "Corrected by E01: 3 changes" (the latest correction of the recording), or null. */
+export function correctedText(list) {
+  if (!list || !list.length) return null;
+  const c = list[0];
+  const n = Object.values(c.counts || {}).reduce((a, b) => a + (Number(b) || 0), 0);
+  return `Corrected by ${c.corrector_name || c.corrector_id}: ${n} change${n === 1 ? '' : 's'}${list.length > 1 ? ` (${list.length} corrections)` : ''}`;
+}
+
+/** The annotator opens the latest correction of a recording: its file from this computer, then the corrected version beside theirs. */
+export async function openCorrection(app, it, c) {
+  let target;
+  try {
+    target = await app.backend.expert('my_correction_get', { correction_id: c.correction_id });
+  } catch (exc) {
+    if (exc.status !== 401) await inform('The correction cannot be shown', exc.message);
+    return null;
+  }
+  return app.openFromComputer({ recording_id: it.recording_id, file_name: it.file_name, format: it.format }, { purpose: { kind: 'corrected', route: 'open', target,
+    title: `See the correction of ${it.file_name}`,
+    note: `${c.corrector_name || c.corrector_id} corrected your version ${c.attempt}. Open the recording from this computer: the corrected version is shown read only, with yours beside it and the reason for each change.` } });
+}
+
+function correctedCaption(app, it) {
+  const list = correctionsFor(app, it);
+  const text = correctedText(list);
+  if (!text) return null;
+  return h('button.link.caption.block.corrected-line', { type: 'button', 'data-corrected': it.recording_id, 'data-log': 'corrected-line',
+    title: 'See the correction', onclick: () => openCorrection(app, it, list[0]) }, text);
 }
 
 function time(it) {
@@ -134,7 +190,7 @@ export function recordingsCard(app) {
   const listRow = (it) => {
     const [text, cls] = it.revising ? ['Being revised', 'active'] : STATUS[it.status] || [it.status, ''];
     return h('tr', { 'data-id': it.recording_id, 'data-log-text': it.file_name },
-      h('td', {}, h('span.file', { title: it.recording_id }, it.file_name), feedbackCaption(app, it)),
+      h('td', {}, h('span.file', { title: it.recording_id }, it.file_name), feedbackCaption(app, it), correctedCaption(app, it)),
       showMode ? h('td.opt', {}, MODES[it.mode] || it.mode) : null,
       h('td.num', {}, formatHms(it.duration_s)),
       h('td.num.opt', {}, String(it.n_channels)),
@@ -146,7 +202,7 @@ export function recordingsCard(app) {
     const s = savedOf(it) || {};
     return h('tr', { 'data-id': it.recording_id, 'data-log-text': it.file_name },
       h('td.name', {}, h('span.file-line', { title: it.recording_id }, it.file_name),
-        h('span.caption.when', {}, `Saved ${savedText(s.saved_at)}${it.revising ? ' · revision under way' : ''}`), feedbackCaption(app, it)),
+        h('span.caption.when', {}, `Saved ${savedText(s.saved_at)}${it.revising ? ' · revision under way' : ''}`), feedbackCaption(app, it), correctedCaption(app, it)),
       h('td.num', {}, String(s.version || 1)),
       h('td.num.opt', {}, s.n_annotations === null || s.n_annotations === undefined ? 'n/a' : String(s.n_annotations)),
       h('td.num.opt', {}, s.elapsed_s === null || s.elapsed_s === undefined ? 'n/a' : spanText(s.elapsed_s)),
@@ -193,6 +249,7 @@ export function recordingsCard(app) {
   });
   sort.addEventListener('change', () => { st.sort = sort.value; st.page = 0; keep(); draw(); });
   drawTabs();
+  correctionsOf(app, () => { if (body.isConnected) draw(); });
   draw();
 
   return h('section.card.recordings-card', { 'data-section': 'recordings' },

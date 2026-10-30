@@ -2,7 +2,9 @@
 
 Experts open anyone's saved work to correct it, replay sessions, adjudicate conflicts and supply
 training material; administrators may do everything an expert does. :meth:`Expert.run` checks that
-the caller is an expert (or an administrator) and runs one operation from :data:`EXPERT_OPS`.
+the caller is an expert (or an administrator) and runs one operation from :data:`EXPERT_OPS`; the few
+operations of :data:`OPEN_OPS` (an annotator's own corrected version, the experts' sessions a trainee may
+watch) may be asked by anyone signed in, and check themselves who may see what.
 
 **The registry.** Each part of the expert work lives in a module of its own that registers its
 operations with :func:`expert_op` when it is imported; :data:`EXPERT_MODULES` lists those modules
@@ -47,9 +49,14 @@ EXPERT_OPS: dict[str, ExpertOp] = {}
 #: The modules that register expert operations (one line per part of the expert work).
 EXPERT_MODULES: tuple[str, ...] = (
     "electrotag.web.expert",  # replay consent (below)
+    "electrotag.web.corrections",  # corrections of saved work, and the annotator's view of them
+    "electrotag.web.replay",  # replays of sessions from the interaction log
     "electrotag.web.adjudication",  # the adjudication queue, its decisions and what annotators see of them
     "electrotag.web.library",  # the library of contradictory annotations
 )
+#: Operations that people without the expert role may ask for too; each checks itself who may see what (an
+#: annotator's own corrected version, an expert's session shown to trainees with the expert's consent).
+OPEN_OPS: set[str] = set()
 #: What ``GET /me/feedback`` shows, by part: ``(service, user) -> [item]`` (filled by the modules above).
 FEEDBACK_PARTS: dict[str, Callable[["StudyService", User], list[dict[str, Any]]]] = {}
 OP_RE = re.compile(r"^[a-z][a-z_]{0,40}$")
@@ -63,8 +70,9 @@ def is_read(op: str) -> bool:
     return bool(READ_RE.search(str(op)))
 
 
-def expert_op(name: str) -> Callable[[ExpertOp], ExpertOp]:
-    """Register a function as the expert operation ``name`` (one name, one function)."""
+def expert_op(name: str, *, open_to_all: bool = False) -> Callable[[ExpertOp], ExpertOp]:
+    """Register a function as the expert operation ``name`` (one name, one function); with ``open_to_all``
+    anyone signed in to the study may ask for it (:data:`OPEN_OPS`), and the operation checks the rest."""
     if not OP_RE.match(name):
         raise ValueError(f"Unsuitable name for an expert operation: {name!r}")
 
@@ -72,6 +80,8 @@ def expert_op(name: str) -> Callable[[ExpertOp], ExpertOp]:
         if EXPERT_OPS.get(name, fn) is not fn:
             raise ValueError(f"The expert operation {name} is registered twice")
         EXPERT_OPS[name] = fn
+        if open_to_all:
+            OPEN_OPS.add(name)
         return fn
 
     return register
@@ -109,9 +119,9 @@ class Expert:
         return self.service.store
 
     def run(self, op: Any, user: User, body: dict[str, Any]) -> dict[str, Any]:
-        if not user.is_expert:
-            raise ApiError(403, "forbidden", "Only the study's experts and administrators can use the expert area")
         ops = load_operations()
+        if not user.is_expert and not (isinstance(op, str) and op in OPEN_OPS):
+            raise ApiError(403, "forbidden", "Only the study's experts and administrators can use the expert area")
         if not isinstance(op, str) or op not in ops:
             raise ApiError(404, "not_found", f"This study does not offer the expert operation {op!r}")
         if not isinstance(body, dict):
@@ -182,5 +192,5 @@ def replay_consent_set(service: StudyService, user: User, body: dict[str, Any]) 
     return {**_consent_answer(service, user), "changed": changed["value"]}
 
 
-__all__ = ["EXPERT_MODULES", "EXPERT_OPS", "FEEDBACK_PARTS", "Expert", "consent_of", "expert_op", "feedback_part",
-           "is_read", "load_operations"]
+__all__ = ["EXPERT_MODULES", "EXPERT_OPS", "FEEDBACK_PARTS", "OPEN_OPS", "Expert", "consent_of", "expert_op",
+           "feedback_part", "is_read", "load_operations"]

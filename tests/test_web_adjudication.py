@@ -21,7 +21,7 @@ from electrotag.web.errors import ApiError  # noqa: E402
 from electrotag.web.service import StudyService  # noqa: E402
 from electrotag.web.store import User  # noqa: E402
 from electrotag.web.store_files import FilesStore  # noqa: E402
-from tests.web_helpers import SUB1, SUB2, Api, ann, copy_demo, derived_maker, make_template, submission  # noqa: E402
+from tests.web_helpers import SUB1, SUB2, Api, ann, copy_demo, make_template, submission  # noqa: E402
 
 A01, A02 = User("A01", "Annotator one"), User("A02", "Annotator two")
 E01 = User("E01", "Expert one", roles=("annotator", "expert"))
@@ -335,33 +335,36 @@ def test_an_adjudication_becomes_a_training_reference(service: StudyService, rec
 
 def test_two_corrections_of_the_same_work_are_adjudicated(service: StudyService, recordings: Path) -> None:
     service.call("submit", A01, submission(recordings, SUB1, MINE))
-    store = service.store
-    for n, (by, anns) in enumerate((("E01", [MINE[0], MINE[1]]), ("E02", [MINE[1], {**MINE[0], "label": MOVE}])),
-                                   start=1):
-        saved = store.save_derived("corrections", derived_maker(store, "A01", SUB1, anns, by=by), elapsed_s=5,
-                                   started_at="")
-        entry = store.derived_entries("corrections", "A01")[-1]
-        cid = f"{n:032x}"
-        rec = {"schema": "electrotag.correction", "schema_version": 1, "correction_id": cid, "state": "saved",
-               "annotator_id": "A01", "recording_id": SUB1, "corrected_from": {"annotator_id": "A01", "attempt": 1},
-               "corrector_id": by, "number": saved.attempt, "output_basename": entry["output_basename"],
-               "session_id": entry["session_id"]}
-        store.update_record("corrections", cid, "A01", lambda old, rec=rec: rec)
+    sub = submission(recordings, SUB1, MINE)
+
+    def correct(by: User, n: int, annotations: list[dict[str, Any]], reasons: dict[str, str]) -> None:
+        ex(service, by, "correction_save", {"correction_id": f"{n:032x}", "annotator_id": "A01", "recording_id": SUB1,
+                                            "attempt": 1, "annotations": annotations, "sha256": sub["sha256"],
+                                            "session": sub["session"],
+                                            "changes": [{"annotation_id": k, "reason": r} for k, r in reasons.items()]})
+
+    # E01 says the first mark is an eye movement; E02 says the third is not an artifact
+    correct(E01, 1, [{**MINE[0], "label": MOVE}, MINE[1], MINE[2]], {MINE[0]["annotation_id"]: "wrong_type"})
+    correct(E02, 2, [MINE[0], MINE[1]], {MINE[2]["annotation_id"]: "not_artifact"})
     uid = unit_id_for("corrections", "A01", SUB1, "1")
     E03 = User("E03", "Expert three", roles=("expert",))
     row = unit_row(service, uid, E03)
     assert row["kind"] == "corrections" and row["corrected"] == {"annotator_id": "A01", "attempt": 1}
-    assert [a["annotator_id"] for a in row["annotators"]] == ["E01", "E02"] and row["conflicts"] == 1
+    assert [a["annotator_id"] for a in row["annotators"]] == ["E01", "E02"] and row["conflicts"] == 2
     for who in (E01, E02, User("A01", roles=("annotator", "expert"))):
         assert ex_err(service, who, "adjudication_start", {"unit_id": uid}).code == "own_task"
     got = ex(service, E03, "adjudication_start", {"unit_id": uid})
-    c = got["conflicts"][0]
-    assert c["kinds"] == ["type"] and {m["annotator_id"] for m in c["marks"]} == {"E01", "E02"}
+    assert [c["kinds"] for c in got["conflicts"]] == [["type"], ["presence"]]
+    assert {m["annotator_id"] for m in got["conflicts"][0]["marks"]} == {"E01", "E02"}
     assert got["adjudication"]["inputs"]["E02"]["source"] == "correction"
-    ex(service, E03, "adjudication_decide", {"unit_id": uid, "conflict_id": c["conflict_id"], "choice": "A",
-                                             "reason_code": "type_evidence"})
+    for c, choice in zip(got["conflicts"], ("A", "B"), strict=True):
+        ex(service, E03, "adjudication_decide", {"unit_id": uid, "conflict_id": c["conflict_id"], "choice": choice,
+                                                 "reason_code": "clear_artifact"})
     fin = ex(service, E03, "adjudication_finish", {"unit_id": uid})
-    assert fin["version"]["n_annotations"] == 2
+    assert fin["version"]["n_annotations"] == 2  # the eye movement and the EMG
+    # a third correction by E01 of the same version replaces E01's earlier one (each corrector's latest)
+    correct(E01, 3, [MINE[1]], {MINE[0]["annotation_id"]: "not_artifact", MINE[2]["annotation_id"]: "not_artifact"})
+    assert [a["annotator_id"] for a in unit_row(service, uid, E03)["annotators"]] == ["E01", "E02"]
 
 
 def test_the_library_filters_and_counts(service: StudyService, recordings: Path) -> None:

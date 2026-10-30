@@ -1007,6 +1007,88 @@ def test_role_claims_on_firebase(study: str) -> None:
     assert body["error"]["details"]["error"] == "forbidden"
 
 
+# ------------------------------------------------------ corrections and replays (H2)
+def _correction(recordings: Path, cid: str, annotations: list[dict[str, Any]], reasons: dict[str, str],
+                attempt: int = 1) -> dict[str, Any]:
+    sub = submission(recordings, SUB1, annotations)
+    return {"correction_id": cid, "annotator_id": "A01", "recording_id": SUB1, "attempt": attempt,
+            "annotations": annotations, "sha256": sub["sha256"], "session": sub["session"],
+            "changes": [{"annotation_id": k, "reason": r} for k, r in reasons.items()]}
+
+
+def test_corrections_and_replays_on_firestore(service: StudyService, recordings: Path, tmp_path: Path) -> None:
+    from electrotag.app.io.naming import OutputLayout
+    from electrotag.app.session.register import CompletionRegister
+
+    store = service.store
+    store.put_user("E01", display_name="Expert one", roles=["expert", "annotator"])
+    sid = "5" * 32
+    v = ok(service, "visit_open", A01, {"client": {}})["visit_id"]
+    ctx = {"recording": SUB1, "window_no": 1}
+    ok(service, "visit_events", A01, {"visit_id": v, "events": [
+        {"t": 1.0, "type": "recording_opened", **ctx, "session_id": sid, "mode": "standard"},
+        {"t": 2.0, "type": "annotation_created", **ctx, "annotations": [
+            {"id": BLINK["annotation_id"], "label": BLINK["label"], "onset_s": 500 / 256, "offset_s": 600 / 256,
+             "channels": BLINK["channels"]}]},
+        {"t": 3.0, "type": "recording_finished", **ctx, "session_id": sid}]})
+    sub = submission(recordings, SUB1, [BLINK, EMG])
+    sub["session"]["session_id"] = sid
+    ok(service, "submit", A01, sub)
+    before = store.saved_files("A01", SUB1, "standard", "")
+    body = _correction(recordings, "6" * 32, [{**BLINK, "label": "Eye-artifact"}],
+                       {BLINK["annotation_id"]: "wrong_type", EMG["annotation_id"]: "not_artifact"})
+    assert err(service, "expert", E01, {"op": "correction_save", **body, "changes": []}).code == "reason_missing"
+    out = ok(service, "expert", E01, {"op": "correction_save", **body})
+    assert out["already"] is False and out["correction"]["counts"] == {"added": 0, "removed": 1, "changed": 1}
+    assert ok(service, "expert", E01, {"op": "correction_save", **body})["already"] is True
+    assert [e["session_id"] for e in store.derived_entries("corrections", "A01")] == ["6" * 32]
+    assert store.saved_files("A01", SUB1, "standard", "") == before, "the original never changes"
+    got = ok(service, "expert", E01, {"op": "correction_get", "correction_id": "6" * 32})
+    assert [a["label"] for a in got["annotations"]] == ["Eye-artifact"] and len(got["original"]) == 2
+    fb = ok(service, "my_feedback", A01)["corrections"]["items"]
+    assert [c["corrector_id"] for c in fb] == ["E01"] and fb[0]["changes"][0]["reason_text"] == "Wrong type"
+    assert ok(service, "expert", A01, {"op": "my_correction_get", "correction_id": "6" * 32})["corrector_id"] == "E01"
+    # the replay: the segment from the Firestore visit index, with the attempt by the session's ID
+    idx = ok(service, "expert", E01, {"op": "replay_index_get", "annotator_id": "A01", "recording_id": SUB1})
+    assert [(s["visit_id"], s["attempt"], s["outcome"]) for s in idx["segments"]] == [(v, 1, "finished")]
+    page = ok(service, "expert", E01, {"op": "replay_events_get", "visit_id": v, "window_no": 1})
+    assert [e["type"] for e in page["events"]] == ["recording_opened", "annotation_created", "recording_finished"]
+    assert err(service, "expert", A01, {"op": "replay_index_get", "annotator_id": "A01",
+                                        "recording_id": SUB1}).code == "forbidden"
+    # the export writes the correction's tree
+    root = store.results_tree(tmp_path / "tree")
+    assert len(CompletionRegister(OutputLayout(root / "derived" / "corrections")).entries()) == 1
+
+
+@pytest.mark.skipif(not (AUTH and FUNCTIONS), reason="needs the Auth and Functions emulators")
+def test_a_correction_through_et_expert(study: str, recordings: Path) -> None:
+    svc = firebase_service(study)
+    email = f"e01-{study}@example.org"
+    admin_ok(svc, "user_add", {"annotator_id": "E01", "email": email, "roles": ["annotator", "expert"],
+                               "password": "an-expert-password"})
+    a01 = sign_in(f"a01-{study}@example.org")
+    _, body = callable_("et_submit", {"study": study, **submission(recordings, SUB1, [BLINK, EMG])}, a01)
+    assert body["result"]["saved"] is True, body
+    expert = sign_in(email, "an-expert-password")
+    _, body = callable_("et_expert", {"study": study, "op": "work_list"}, expert)
+    assert [(i["annotator_id"], i["attempt"]) for i in body["result"]["items"]] == [("A01", 1)], body
+    req = {"study": study, "op": "correction_save",
+           **_correction(recordings, "7" * 32, [BLINK], {EMG["annotation_id"]: "not_artifact"})}
+    _, body = callable_("et_expert", req, expert)
+    assert body["result"]["correction"]["counts"]["removed"] == 1 and body["result"]["already"] is False, body
+    _, body = callable_("et_expert", req, expert)
+    assert body["result"]["already"] is True
+    _, body = callable_("et_expert", {**req, "correction_id": "8" * 32, "changes": []}, expert)
+    assert body["error"]["details"]["error"] == "reason_missing"
+    assert body["error"]["details"]["annotation_ids"] == [EMG["annotation_id"]]
+    _, body = callable_("et_my_feedback", {"study": study}, a01)
+    assert body["result"]["corrections"]["items"][0]["correction_id"] == "7" * 32
+    _, body = callable_("et_expert", {"study": study, "op": "my_correction_get", "correction_id": "7" * 32}, a01)
+    assert len(body["result"]["original"]) == 2
+    _, body = callable_("et_expert", {"study": study, "op": "correction_get", "correction_id": "7" * 32}, a01)
+    assert body["error"]["details"]["error"] == "forbidden"
+
+
 # ------------------------------------------------------ adjudication and the library (H4)
 DISAGREE = ([ann("a" * 32, "Eye-blink-artifact", 500, 100, ["Fp1", "Fp2"]), ann("b" * 32, "EMG-artifact", 3000, 250),
              ann("c" * 32, "Eye-blink-artifact", 5000, 100)],

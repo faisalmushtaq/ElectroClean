@@ -31,8 +31,10 @@ recorded). `idle_after_s` is how many seconds without any input count as idle
 
 When logging is on, annotators are told after they sign in: "This study
 records how you use ElectroTag (times, clicks, keys and what is on screen) for
-research. It never records what you type, such as notes or passwords. Ask the
-study team if you have questions." Annotators must
+research. The study team can replay a session from this record, step by step,
+and an expert's sessions may be shown to trainees when the expert agrees. It
+never records what you type, such as notes or passwords. Ask the study team if
+you have questions." Annotators must
 be told about the logs and agree to them under the study's ethics approval; the
 administrator guide has a paragraph on this.
 
@@ -120,8 +122,14 @@ annotator's display choices, `overlay` and `value_readout` (whether the recordin
 overlay and with the value under the pointer shown), and for work that is saved `elapsed_restored_s`, the
 time worked before when a draft was restored, `viewed_fraction`, and `revision`, the
 version a revision will save); `viewer_ready` (the viewer is on screen and
-the clock starts); `autosave` (`n_annotations`, when a draft is sent to the study); `recording_finished`
-(`session_id`, `n_annotations`, `counts_by_label`, `elapsed_s` as measured by the
+the clock starts); `annotations_snapshot` (in the browser, since 30 October 2026: the annotations
+present when a recording opens, logged right after `recording_opened` when there are any, as after a
+restored draft, in a revision or in a correction; `part` and `n_parts`, at most 60 annotations an
+event, `n_total`, `reason` (`draft`, `revision`, `correction` or the view's kind) and `annotations`,
+each summarised as in the events below, so that a replay starts from them); `autosave` (`n_annotations`,
+when a draft is sent to the study); `recording_finished`
+(`session_id`, the same ID the save carries, and in the browser `attempt`, the version saved,
+`n_annotations`, `counts_by_label`, `elapsed_s` as measured by the
 session clock, which in the browser leaves out the time paused, and in the browser also
 `viewed_fraction`, the proportion of the recording that was on the screen, from 0 to 1, leaving out
 stretches without data, `paused_s`, the seconds paused while the recording was open,
@@ -169,6 +177,29 @@ administrator's review pass belongs to the admin area, whose work is not part of
 the interaction log: the reviews given are in the study's review records
 ([file formats](file_formats.md)), and the activity tables count the reviews
 each annotator received and read.
+
+**Corrections and replays (browser).** An expert's correction of someone's saved work
+(docs/web/admin.md, "Correcting saved work") is logged in the expert's own log, in place of
+`recording_opened`: `correction_started` (`annotator_id`, `recording_id`, `attempt`, the version
+corrected, `n_annotations`, `session_id`, `resumed` when work kept in the browser was continued),
+followed by an `annotations_snapshot` of the marks it opens with; the changes then log as any
+annotating does. `correction_reason_set` (`annotation_id`, `change`, `reason`, `note_length`, never
+the note's text, and `via`) records each reason given; `correction_submitted` (`added`, `removed`,
+`changed`, `elapsed_s`, `already`, true when the study had kept that correction already,
+`correction_id`, `n_corrections_of_version`) and `correction_left` (`n_changes`, `kept`, whether the
+work stays in the browser) end it, and `state` with `original_layer` records the original shown or
+hidden. The annotator's view of a correction (docs/web/using.md, "Corrections of your work") gives
+`correction_feedback_shown` (`correction_id`, `recording_id`, `attempt`, `n_changes`) and
+`correction_feedback_item_jumped` (`correction_id`, `change`, `reason`, `item`). A replay of a
+session (docs/web/admin.md, "Replaying a session") is logged in the watcher's log as
+`replay_opened` (`annotator_id`, `recording_id`, `n_segments`, `n_events`, `attempt`),
+`replay_control` (`action`: `play`, `pause`, `speed`, `skip_pauses`, `follow`, `seek`, `start`,
+`next_event`, `prev_event`, `next_change`, `prev_change`, `scrub`, `scrub_key` or `end`, with `speed`,
+`t`, the replay's time, `on` or `via` as they apply, and for `end` whether the replay matched the
+saved version, `same` and `differing`) and `replay_closed` (`watched_s`, `ended`, `same`); the
+replayed annotations are only shown, never logged as the watcher's. The browser now also logs
+Bring it back, the work set aside in a tab returning, as `annotations_reset` (`added`, `removed`,
+`changed`).
 
 **Milestones and goals (browser).** When the game elements are on
 (docs/web/admin.md, "Study settings"), `milestone_reached` (`milestone`, such

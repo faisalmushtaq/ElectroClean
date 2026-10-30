@@ -29,6 +29,7 @@ import { AnnotationError, endSample } from './store.js';
 import { helpHtml, KEY_HINT, REVIEW_HINT, TOUCH_HINT, TOUCH_REVIEW_HINT, TOUCH_VIEW_HINT } from './help.js';
 import { edgeHalfWidthS } from '../eeg/synthetic.js';
 import { logger, keyName } from '../log/logger.js';
+import { annotationEvents, snapshotEvents } from '../log/annotation_events.js';
 import { channelsText, clamp, formatHms, friendlyDuration, local, plural, readableTextColour, UNDO_HINT, CTRL, debounce, touchFirst } from '../util.js';
 import { isTyping } from '../ui/dom.js';
 import { displayCode } from '../catalogue.js';
@@ -46,9 +47,14 @@ import { CONTEXT_S, boundsOf, itemWindow, outsideStretches } from '../viewer/bou
 export { friendlyDuration, plural };
 
 const MODE_TEXT = { standard: 'Annotation', guided: 'Guided training', practice: 'Practice', assessment: 'Assessment', tryout: 'Try-out', review: 'Practice review',
-  reviewing: 'Review', feedback: 'Feedback' };
-/** Views that only show annotations (no toolbar): a practice review, an administrator's review pass, the feedback on saved work. */
-const VIEW_ONLY_KINDS = ['review', 'reviewing', 'feedback'];
+  reviewing: 'Review', feedback: 'Feedback', correcting: 'Correction', replay: 'Replay', corrected: 'Corrected version' };
+/**
+ * Views that only show annotations (no toolbar): a practice review, an administrator's review pass, the feedback on saved work,
+ * a replay of a session and an annotator's view of a correction of their work (js/expert/, js/replay/).
+ */
+const VIEW_ONLY_KINDS = ['review', 'reviewing', 'feedback', 'replay', 'corrected'];
+/** Views of someone's work opened from the expert area or for its feedback, which their own part closes (opts.onLeave). */
+const PART_KINDS = ['correcting', 'replay', 'corrected'];
 const DRAG_PX = 3;
 const DRAW_ON_TITLE = 'Draw/edit is on: drag across the EEG to mark artifacts and change annotations. Press it to switch to view only, where nothing can change.';
 const DRAWING_OFF = 'View only: annotations cannot be drawn or changed. Press Draw/edit to mark artifacts.';
@@ -87,13 +93,6 @@ export function minutesWords(seconds) {
   const m = Math.round(s / 60);
   const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
   return m < 60 ? plural(m, 'minute') : `${plural(Math.floor(m / 60), 'hour')}${m % 60 ? ` ${plural(m % 60, 'minute')}` : ''}`;
-}
-
-function annSummary(a, sf) {
-  return { id: a.annotation_id, label: a.label, onset_s: Math.round((a.onset_sample / sf) * 1e4) / 1e4,
-    offset_s: Math.round((endSample(a) / sf) * 1e4) / 1e4, channels: [...a.channels], n_channels: a.channels.length,
-    // the confidence, and only the length of a note: its text is research content, never logged
-    confidence: a.confidence ?? null, note_length: (a.note || '').length };
 }
 
 export class Workspace {
@@ -206,14 +205,14 @@ export class Workspace {
     const s = this.s;
     const title = h('div.ws-title', {},
       this.closeBtn = h('button.btn.quiet.back', { type: 'button', 'data-log': 'close', onclick: () => this.close() },
-        icon('arrow-left'), this.kind === 'review' ? 'Training path' : this.kind === 'reviewing' ? 'Back' : 'Close'),
+        icon('arrow-left'), this.kind === 'review' ? 'Training path' : this.kind === 'reviewing' || PART_KINDS.includes(this.kind) ? 'Back' : 'Close'),
       h('div.ws-name', {}, h('h1', { title: s.recordingId }, s.recording.fileName),
         h('span.chip', { class: this.kind === 'tryout' ? 'warning' : 'active' }, MODE_TEXT[this.kind === 'annotate' ? s.mode : this.kind] || s.mode),
         this.bounds ? h('span.chip.ws-part', { 'data-log': 'task-part', title: 'This task gives you this part of the recording: the rest is hatched and is not annotated.' },
           `Your part: ${this.bounds.text}`) : null),
       this.kind === 'tryout' ? h('span.ws-banner', {}, 'This file is not part of the study, so nothing you mark is saved.') : null);
     const actions = h('div.ws-actions');
-    this.actionsEl = actions; // a review pass and the feedback view add their own forward action (review_pass.js)
+    this.actionsEl = actions; // a review pass, the feedback view, a correction and a replay add their own forward action
     if (!this.readOnly) {
       this.drawBtn = h('button.btn.toggle', { type: 'button', 'aria-pressed': 'true', 'data-log': 'draw-edit', title: DRAW_ON_TITLE, onclick: () => this.setDrawing(!this.drawing) }, 'Draw/edit');
       this.deleteBtn = h('button.btn', { type: 'button', 'data-log': 'delete', onclick: () => this.deleteSelection() }, 'Delete');
@@ -673,7 +672,17 @@ export class Workspace {
       comfort: { ...this.comfort }, overlay: Boolean(this.viewer.overlay), value_readout: Boolean(this.readoutOn),
       ...(this.bounds ? { task_window: { start_s: this.bounds.startS, end_s: this.bounds.endS } } : {}), ...extra,
     });
+    this.logSnapshot();
     logger.event('viewer_ready', {});
+  }
+
+  /**
+   * The annotations there are as the view opens (a restored draft, a revision, a correction), as
+   * annotations_snapshot events, so that a replay of the session starts from them (replay/model.js).
+   */
+  logSnapshot(reason = null) {
+    const why = reason || (this.s.revision ? 'revision' : this.s.resumed ? 'draft' : this.kind);
+    for (const [type, fields] of snapshotEvents(this.store.annotations(), this.sf, why)) logger.event(type, fields);
   }
 
   /** Run `fn` when the view closes (at once when it has closed already). */
@@ -1287,30 +1296,10 @@ export class Workspace {
     const now = new Map(this.store.annotations().map((a) => [a.annotation_id, a]));
     const prev = this._prev;
     this._prev = now;
-    const added = [...now.keys()].filter((k) => !prev.has(k));
-    const removed = [...prev.keys()].filter((k) => !now.has(k));
-    const changed = [...now.keys()].filter((k) => prev.has(k) && prev.get(k) !== now.get(k));
-    const via = logger.via();
-    const sum = (a) => annSummary(a, this.sf);
-    const base = { description: change.description, n_total: now.size, via };
-    const act = change.action;
-    if (act === 'add') {
-      logger.event('annotation_created', { ...base, annotations: added.concat(changed).map((k) => sum(now.get(k))),
-        ...(this.store.lastAutoMerged ? { auto_merged: this.store.lastAutoMerged, merged_away: removed } : {}) });
-    } else if (act === 'delete') {
-      logger.event('annotation_deleted', { ...base, annotations: removed.map((k) => sum(prev.get(k))) });
-    } else if (act === 'update' && this._logConfidenceOrNote(change.description || '', changed, prev, now, base)) {
-      // a change of confidence or note only: logged as confidence_set or note_set
-    } else if (act === 'update') {
-      const d = change.description || '';
-      const type = d.startsWith('relabel') ? 'annotation_relabelled' : /channel/.test(d) ? 'annotation_channels_changed' : 'annotation_edited';
-      logger.event(type, { ...base, annotations: changed.map((k) => sum(now.get(k))), before: changed.map((k) => sum(prev.get(k))),
-        ...(this.store.lastAutoMerged ? { auto_merged: this.store.lastAutoMerged, merged_away: removed } : {}) });
-      this._logNotes(changed, prev, now, base); // a note changed together with the times (Edit times…)
-    } else if (act === 'merge' || act === 'undo' || act === 'redo' || act === 'reset') {
-      const type = { merge: 'annotations_merged', undo: 'undo', redo: 'redo', reset: 'annotations_reset' }[act];
-      logger.event(type, { ...base, added: added.map((k) => sum(now.get(k))), removed: removed.map((k) => sum(prev.get(k))), changed: changed.map((k) => sum(now.get(k))) });
+    for (const [type, fields] of annotationEvents(change, prev, now, { sf: this.sf, via: logger.via(), autoMerged: this.store.lastAutoMerged })) {
+      logger.event(type, fields);
     }
+    const act = change.action;
     this.selection = this.selection.map((i) => (this.store.has(i) ? i : this.store.lastSurvivors.get(i))).filter((i) => i && this.store.has(i));
     this.viewer.setAnnotations(this.store.annotations());
     this.viewer.setSelection(this.selection);
@@ -2113,31 +2102,11 @@ export class Workspace {
     if ((c.title || '') !== note) { if (note) c.title = note; else c.removeAttribute('title'); }
   }
 
-  /** Log a change of confidence (confidence_set) or of a note (note_set); false for any other change. */
-  _logConfidenceOrNote(description, changed, prev, now, base) {
-    if (/^(set|clear) confidence/.test(description)) {
-      logger.event('confidence_set', { ...base, annotations: changed.map((k) => ({ id: k, label: now.get(k).label,
-        confidence: now.get(k).confidence ?? null, before: prev.get(k).confidence ?? null })) });
-      return true;
-    }
-    if (/^(add|change|remove) note$/.test(description)) { this._logNotes(changed, prev, now, base); return true; }
-    return false;
-  }
-
-  /** note_set for each annotation whose note changed: whether it was added, changed or removed, and its length (never its text). */
-  _logNotes(changed, prev, now, base) {
-    const notes = changed.filter((k) => (now.get(k).note || '') !== (prev.get(k).note || '')).map((k) => {
-      const before = prev.get(k).note || '';
-      const after = now.get(k).note || '';
-      return { id: k, label: now.get(k).label, change: !before ? 'added' : !after ? 'removed' : 'changed',
-        note_length: after.length, previous_length: before.length };
-    });
-    if (notes.length) logger.event('note_set', { ...base, annotations: notes });
-  }
-
   // ======================================================================= keys
   _key(e) {
     if (dialogOpen() || isTyping(e.target) || !this.el.isConnected) return;
+    // A part's own keys come first (a replay's Space, Home, - and =; a correction's J, K, R and L): keyHook(e) true when taken.
+    if (this.keyHook && this.keyHook(e)) return;
     const mod = e.ctrlKey || e.metaKey;
     const k = e.key;
     const pauseKey = !mod && !e.altKey && (k === 'b' || k === 'B' || k === 'Pause');
@@ -2586,6 +2555,7 @@ export class Workspace {
     }
     const c = this.clock;
     logger.event('recording_finished', { session_id: s.sessionId, n_annotations: this.store.size,
+      ...(result && Number.isInteger(result.attempt) && result.attempt > 0 ? { attempt: result.attempt } : {}),
       counts_by_label: Object.fromEntries(counts), elapsed_s: Math.round(s.elapsedS * 1000) / 1000,
       ...(this.timed ? { viewed_fraction: this._viewedFraction() } : {}),
       ...(c ? { paused_s: Math.round(c.pausedTotalS * 1000) / 1000, n_pauses: c.nPauses } : {}),
@@ -2645,6 +2615,13 @@ export class Workspace {
     if (s.submitting) { this._waitForSave(); return false; }
     if (this.clock && this.clock.paused) this.resume('close');
     if (this.kind === 'review') { this.app.leaveRecording(this, 'review_closed'); return true; }
+    if (PART_KINDS.includes(this.kind)) {
+      // A correction, a replay or the view of a corrected version: its part asks what it needs, then leaves (opts.onLeave).
+      if (this.pass && this.pass.beforeClose && !(await this.pass.beforeClose())) return false;
+      if (this.opts.onLeave) await this.opts.onLeave(this);
+      else this.app.leaveRecording(this, `${this.kind}_closed`);
+      return true;
+    }
     if (this.kind === 'reviewing' || this.kind === 'feedback') {
       if (this.review && this.review.beforeClose && !(await this.review.beforeClose())) return false;
       this.app.leaveRecording(this, `${this.kind}_closed`);

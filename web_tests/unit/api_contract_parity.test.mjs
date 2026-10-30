@@ -60,6 +60,11 @@ export const ALLOWED = [
     'any', 'agreement figures the sandbox does not compute; the review shows only the score, the share found and the share of the right type'],
   ['.*practice submit.*', 'feedback\\.per_category', 'any', 'the scores by type, which the review does not show'],
   ['.*', 'manifest\\.gaps|recordings\\..*\\.gaps', 'any', "the sandbox's third example has a stretch without data at its end, which its EDF file cannot hold"],
+  ['.*', '(.*\\.)?corrected_at', 'type', 'times: each side stamps its own'],
+  ['.*', '(.*\\.)?corrected_from\\.annotations_sha256', 'type', 'the checksum of the saved _annotations.json file, which only the server writes'],
+  ['expert replay_events_get.*', 'events\\[\\]\\.(t|wall|choose_recording|reference_set|assessment_kind)', 'any',
+    "the visit's log as each side keeps it: the server writes the desktop's visit_started and times log_closed by its clock"],
+
   // Until the sandbox's own answers (js/api/demo.js) carry `task: null`, the browser reads a missing task as none.
   ['.*', '(items\\[\\]\\.)?task', 'any', 'the sandbox makes no tasks (they need the study server: demo_admin.js SERVER_ONLY), so its items and matches have none'],
 ];
@@ -272,6 +277,10 @@ async function script(call) {
   await call('expert adjudication_list as an annotator', (s) => s.b.expert('adjudication_list', {}));
   await call('expert library_list as an annotator', (s) => s.b.expert('library_list', {}));
   await call('my feedback', (s) => s.b.myFeedback());
+  await call('my_correction_get (none)', (s) => s.b.expert('my_correction_get', { correction_id: hex(0xc0) }));
+  await call('replay_index_get as an annotator', (s) => s.b.expert('replay_index_get', { annotator_id: 'A01', recording_id: r1 }));
+  await call('teaching_list as an annotator', (s) => s.b.expert('teaching_list', {}));
+  await call('correction_save as an annotator', (s) => s.b.expert('correction_save', { correction_id: hex(0xc0) }));
   await call('training stage (not a trainee)', (s) => s.b.trainingStage({ stage: 'tour', action: 'skip' }));
   await call('training snippets (not a trainee)', (s) => s.b.trainingSnippets());
   await call('logout', (s) => s.b.logout());
@@ -286,6 +295,30 @@ async function script(call) {
   await call('expert replay_consent_set (not a choice)', (s) => s.b.expert('replay_consent_set', { teaching: 'yes' }));
   await call('expert replay_consent_get (after)', (s) => s.b.expert('replay_consent_get', {}));
   await call('expert unknown operation', (s) => s.b.expert('frobnicate_list', {}));
+  // corrections of A01's saved work (r1, saved twice) and the replay of how it went
+  await call('expert work_list', (s) => s.b.expert('work_list', {}));
+  await call('expert saved_attempt_get', (s) => s.b.expert('saved_attempt_get', { annotator_id: 'A01', recording_id: r1 }));
+  await call('expert saved_attempt_get (version 1)', (s) => s.b.expert('saved_attempt_get', { annotator_id: 'a01', recording_id: r1, attempt: 1 }));
+  await call('expert saved_attempt_get (no such version)', (s) => s.b.expert('saved_attempt_get', { annotator_id: 'A01', recording_id: r1, attempt: 9 }));
+  const C1 = ann(hex(0xc1), 'EMG-artifact', 4000, 200);
+  const correction = (s, extra = {}) => ({ correction_id: hex(0xc0), annotator_id: 'A01', recording_id: r1, attempt: 2,
+    annotations: [{ ...B1, label: 'Eye-artifact' }, C1], session: { elapsed_s: 30 }, sha256: s.mem.sha[0],
+    changes: [{ annotation_id: B1.annotation_id, reason: 'wrong_type', note: 'a slow roll' }, { annotation_id: C1.annotation_id, reason: 'missed' }], overall_note: 'Look at F7', ...extra });
+  await call('expert correction_save (a reason missing)', (s) => s.b.expert('correction_save', correction(s, { changes: [{ annotation_id: C1.annotation_id, reason: 'missed' }] })));
+  await call('expert correction_save (not a reason)', (s) => s.b.expert('correction_save', correction(s, { changes: [{ annotation_id: C1.annotation_id, reason: 'lunch' }] })));
+  await call('expert correction_save (unchanged)', (s) => s.b.expert('correction_save', correction(s, { annotations: [B1] })));
+  await call('expert correction_save (an older version)', (s) => s.b.expert('correction_save', correction(s, { attempt: 1 })));
+  await call('expert correction_save (a mark outside the recording)', (s) => s.b.expert('correction_save', correction(s, { annotations: [{ ...C1, onset_sample: 10 ** 7 }] })));
+  await call('expert correction_save', (s) => s.b.expert('correction_save', correction(s)));
+  await call('expert correction_save (again)', (s) => s.b.expert('correction_save', correction(s)));
+  await call('expert corrections_list', (s) => s.b.expert('corrections_list', { annotator_id: 'A01' }));
+  await call('expert correction_get', (s) => s.b.expert('correction_get', { correction_id: hex(0xc0) }));
+  await call('expert work_list (corrected)', (s) => s.b.expert('work_list', { corrected: true }));
+  await call('expert saved_attempt_get (corrected)', (s) => s.b.expert('saved_attempt_get', { annotator_id: 'A01', recording_id: r1 }));
+  await call('expert replay_index_get', (s) => s.b.expert('replay_index_get', { annotator_id: 'A01', recording_id: r1 }));
+  await call('expert replay_events_get (a whole visit)', (s) => s.b.expert('replay_events_get', { visit_id: s.mem.visit }));
+  await call('expert replay_events_get (no such part)', (s) => s.b.expert('replay_events_get', { visit_id: s.mem.visit, window_no: 4 }));
+  await call('expert teaching_list', (s) => s.b.expert('teaching_list', {}));
   await call('admin as an expert', (s) => s.b.admin('overview', {}));
   await call('logout', (s) => s.b.logout());
 
@@ -336,6 +369,8 @@ async function script(call) {
 
   await call('login', (s) => s.b.login('A01', s.password));
   await call('reviews', (s) => s.b.myReviews());
+  await call('my feedback (corrected)', (s) => s.b.myFeedback());
+  await call('my_correction_get', (s) => s.b.expert('my_correction_get', { correction_id: hex(0xc0) }));
   await call('assignments (returned)', (s) => s.b.assignments());
   await call('me (the quiz is for T01)', (s) => s.b.me());
   await call('quiz (for T01)', (s) => s.b.quiz(QUIZ.set_id, { action: 'get' }));
