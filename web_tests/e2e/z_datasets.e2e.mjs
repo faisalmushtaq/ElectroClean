@@ -142,6 +142,8 @@ async function flow(t, page, { people, folder, collide, study }) {
   await waitForRoute(page, 'admin-recordings');
   const add = page.locator('.admin-section[data-section="recordings"] .admin-card', { hasText: 'Add recordings from this computer' });
   await add.locator('.admin-field', { hasText: 'Dataset' }).locator('select').waitFor();
+  // the section has read the datasets and chosen the one it was opened for
+  await page.waitForFunction((id) => [...document.querySelectorAll('.admin-section[data-section="recordings"] select')].some((x) => x.value === id), datasetId);
   assert.equal(await add.locator('.admin-field', { hasText: 'Dataset' }).locator('select').inputValue(), datasetId, 'the dataset is chosen for adding');
   await page.setInputFiles('input[data-log="register-folder"]', folder);
   await page.waitForSelector('[data-log="register"]', { timeout: 120000 });
