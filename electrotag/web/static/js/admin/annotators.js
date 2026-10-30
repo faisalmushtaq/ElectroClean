@@ -12,6 +12,7 @@
 import { h, clear } from '../ui/dom.js';
 import { reviewButton, reviewCount, reviewsCard } from './reviews.js';
 import { setAsideButton } from './assignments.js';
+import { trainingGateCard } from './training_gate.js';
 import { icon } from '../views/common.js';
 import {
   INVITE_STATES, MODES, ROLES, STATUS, checkAnnotatorId, checkEmail, csvText, dateText, invitationText, inviteLink, inviteMessage, mailtoHref,
@@ -653,6 +654,7 @@ export class AnnotatorsSection {
           h('p.caption', {}, 'A trainee works through the set\'s guided recordings, then its practice recordings, then its assessment.'),
           h('div.row.inline-form', {}, prog, progSave),
           h('h3', {}, 'Remove'), removeHost)),
+      trainingGateCard(this.area, u, (n) => this.reload(n)), // the training path, its skips and the gate (training_gate.js)
       card('Work',
         h('p.caption', {}, 'Each recording given to this person, with the time it was open and not paused in their browser (breaks left out), the annotations saved, when, and how many times.'),
         itemsNote, items,

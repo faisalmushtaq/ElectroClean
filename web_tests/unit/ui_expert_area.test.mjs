@@ -78,7 +78,7 @@ test('the sandbox reads the roles of a request as admin.py does', () => {
   const ops = Object.keys(expertOps());
   for (const op of ['replay_consent_get', 'replay_consent_set', 'work_list', 'saved_attempt_get', 'correction_save', 'corrections_list', 'correction_get',
     'my_correction_get', 'replay_index_get', 'replay_events_get', 'teaching_list', 'adjudication_list', 'adjudication_get', 'adjudication_start',
-    'adjudication_decide', 'adjudication_finish', 'adjudication_reference', 'library_list', 'library_promote', 'tasks_list']) assert.ok(ops.includes(op), op);
+    'adjudication_decide', 'adjudication_finish', 'adjudication_reference', 'library_list', 'library_promote', 'tasks_list', 'snippet_add', 'snippet_remove', 'snippets_list']) assert.ok(ops.includes(op), op);
   assert.throws(() => expertOps([{ a_get: () => {} }, { a_get: () => {} }]), /given twice/);
 });
 

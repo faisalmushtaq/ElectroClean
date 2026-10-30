@@ -198,6 +198,7 @@ class Feedback:
             if item.status == "done":
                 raise ApiError(409, "already_done", f"You have saved {item.recording_id} already. Tell the study team "
                                "about the problem instead.")
+            self.service.training_path.require_open(user, item)  # setting a recording aside is study work
         rec = {"schema": "electrotag.problem_report", "schema_version": 1, "problem_id": pid, "annotator_id": aid,
                "display_name": user.display_name, "recording_id": item.recording_id,
                "file_name": item.manifest.get("file_name", ""), "mode": item.mode, "context_id": item.context_id,

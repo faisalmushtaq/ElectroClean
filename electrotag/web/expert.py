@@ -51,6 +51,7 @@ EXPERT_MODULES: tuple[str, ...] = (
     "electrotag.web.expert",  # replay consent (below)
     "electrotag.web.corrections",  # corrections of saved work, and the annotator's view of them
     "electrotag.web.replay",  # replays of sessions from the interaction log
+    "electrotag.web.training_path",  # the snippets of the training path (snippets_list, snippet_add, snippet_remove)
     "electrotag.web.adjudication",  # the adjudication queue, its decisions and what annotators see of them
     "electrotag.web.library",  # the library of contradictory annotations
     "electrotag.web.correct_marks",  # correct-the-marks exercises made from guided recordings' references

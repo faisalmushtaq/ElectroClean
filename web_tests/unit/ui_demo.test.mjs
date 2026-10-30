@@ -21,6 +21,13 @@ async function signedIn(id) {
   return b;
 }
 
+/** T01 past the first two stages of the training path (the tour and the snippets, skipped). */
+async function trainee() {
+  const b = await signedIn('T01');
+  for (const stage of ['tour', 'snippets']) await b.trainingStage({ stage, action: 'skip' });
+  return b;
+}
+
 async function matchBody(rid) {
   const rec = exampleRecording(rid);
   const fp = await rec.fingerprint();
@@ -84,7 +91,7 @@ test('drafts are kept and saving marks the recording done; a second save is refu
 });
 
 test('guided training: a wrong attempt is explained, Show me places the answer, and the path moves on', async () => {
-  const b = await signedIn('T01');
+  const b = await trainee();
   const rid = TRAINING_SET.guided[0].rid;
   // Practice is locked until the guided recordings are done.
   const practice = await b.match(await matchBody(TRAINING_SET.practice[0]));
@@ -127,13 +134,13 @@ test('guided training: a wrong attempt is explained, Show me places the answer, 
   const saved = await b.submit({ recording_id: rid, mode: 'guided', context_id: 'example', annotations: anns, session: {}, sha256: SHA });
   assert.equal(saved.saved, true);
   const t = await b.training();
-  assert.equal(t.stages[0].status, 'in_progress');
+  assert.equal(t.stages[2].status, 'in_progress');
   assert.equal(t.next.recording_id, TRAINING_SET.guided[1].rid);
   assert.equal(t.next.label, 'Start recording 2 of 2');
 });
 
 test('an extra annotation blocks Continue with the desktop message', async () => {
-  const b = await signedIn('T01');
+  const b = await trainee();
   const rid = TRAINING_SET.guided[0].rid;
   const g = await b.guided(rid);
   const t = g.current.ghost;
@@ -148,7 +155,7 @@ test('an extra annotation blocks Continue with the desktop message', async () =>
 });
 
 test('practice is scored with MISSED, EXTRA and TYPE flags', async () => {
-  const b = await signedIn('T01');
+  const b = await trainee();
   // Finish both guided recordings first (Show me for every step).
   for (const g of TRAINING_SET.guided) {
     const anns = [];
@@ -175,10 +182,10 @@ test('practice is scored with MISSED, EXTRA and TYPE flags', async () => {
   assert.equal(r.feedback.summary, `You found 6 of the experts' ${truth.length} artifacts and made 1 mark they did not make. 1 of the 6 you found has another type than theirs.`);
   assert.match(r.feedback.verdict, /^Not yet: you need a score of at least 80% .* then try this recording again from your training path\.$/);
   const t = await b.training();
-  assert.equal(t.stages[0].status, 'completed');
-  assert.equal(t.stages[1].status, r.feedback.passed ? 'completed' : 'in_progress');
-  assert.equal(t.stages[1].result, 'not_passed');
-  assert.match(t.stages[1].detail, /^Best score: \d+%, with the right type for \d+% of the artifacts found\. You found 6 of/);
+  assert.equal(t.stages[2].status, 'completed');
+  assert.equal(t.stages[3].status, r.feedback.passed ? 'completed' : 'in_progress');
+  assert.equal(t.stages[3].result, 'not_passed');
+  assert.match(t.stages[3].detail, /^Best score: \d+%, with the right type for \d+% of the artifacts found\. You found 6 of/);
   // one practice recording: it is the one tried again, and the words say so
   assert.equal(t.next.recording_id, rid);
   assert.equal(t.next.label, 'Try the practice recording again');
@@ -188,7 +195,7 @@ test('practice is scored with MISSED, EXTRA and TYPE flags', async () => {
 
 test("a guided step's time leaves out the time the recording was closed (as coach.py)", async (t) => {
   t.mock.timers.enable({ apis: ['Date'], now: 1_000_000_000 });
-  const b = await signedIn('T01');
+  const b = await trainee();
   const rid = TRAINING_SET.guided[0].rid;
   const g = await b.guided(rid); // opened: step 1 starts
   const target = g.current.ghost;
@@ -235,8 +242,8 @@ test('E01 is an expert who also annotates, and the expert channel is for experts
   assert.equal((await admin.expert('replay_consent_get', {})).consent.teaching, false); // an administrator may do what an expert does
   const t = await signedIn('T01');
   await assert.rejects(() => t.trainingStage({ stage: 'assessment', action: 'skip' }), (x) => x.status === 409 && x.code === 'cannot_skip');
-  await assert.rejects(() => t.trainingStage({ stage: 'tour', action: 'done' }), (x) => x.status === 501 && x.code === 'not_offered');
-  assert.deepEqual((await t.trainingSnippets()).snippets, []);
+  assert.equal((await t.trainingStage({ stage: 'tour', action: 'done' })).stages[0].status, 'completed');
+  assert.ok((await t.trainingSnippets()).snippets.length); // web_tests/unit/ui_training_path.test.mjs has more
 });
 
 test('a sandbox kept by an earlier version gets roles, the expert and the newer settings', async () => {

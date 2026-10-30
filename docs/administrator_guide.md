@@ -300,7 +300,7 @@ Save and Finish.
 ### Reference sets
 
 A reference set is a group of recordings with expert reference annotations,
-each marked for **guided** learning (Stage 1 of the training programme, below),
+each marked for **guided** learning (learning with the experts, the third stage of the training path, below),
 **practice** or **assessment**. The references must be prepared independently
 of the people being assessed, so that, for example, Cameron can be trained and
 assessed without having produced any of the reference material himself. The
@@ -423,14 +423,47 @@ measures are based on them.
 
 An annotator enrolled in a reference set's training programme (in the admin
 area, or with `electrotag web assign T01 --programme SET`) goes straight to
-their training path when they sign in. They work through three stages of the
-set, each unlocked by the one before: **learn with the experts** (the set's
-guided recordings), **on your own** (its practice recordings, with a pass
-mark) and the **competency assessment** (its assessment recordings). A stage
-the set has no recordings for is skipped. The training path shows the stages,
-what the annotator has done, their stars, best practice score and time, and
-the next step; the [guide for annotators](web/using.md) describes what they
-see.
+their training path when they sign in. They work through five stages, each
+unlocked once the one before is finished or skipped: **find your way around**
+(a hands-on tour of the platform on a practice recording made in the browser,
+where nothing is saved), **meet the artifacts** (short examples of each
+artifact type from the set, with the experts' notes, then the set's quiz as a
+recognition check), **learn with the experts** (the set's guided recordings),
+**on your own** (its practice recordings, with a pass mark) and the
+**competency assessment** (its assessment recordings). A stage with nothing to
+do (no recordings for it, no snippets, or the tour switched off) is not
+included. The study's training policy (the `training` settings, below) says
+which of the first four stages a trainee may skip; the assessment is never
+skipped. A skipped stage can be taken up again by the trainee, and every skip,
+taking up again and finished tour or snippets is kept as an event, with its
+time, in the trainee's progress; the competency report lists the stages
+skipped. The training path shows the stages, what the annotator has done,
+their stars, best practice score and time, and the next step; the
+[guide for annotators](web/using.md) describes what they see.
+
+**Snippets.** The examples of *meet the artifacts* are the set's snippets:
+one for each of the experts' annotations on its guided recordings, with that
+annotation's guided note as its explanation, and any the study team adds (the
+Snippets tab of a set in the admin area's Training, or the admin and expert
+operation `snippet_add`). A snippet is a stretch of a recording of the set,
+up to 60 s long, with its type, the channels it is on, an explanation and up
+to 10 s of EEG shown on each side; it is kept in the set's
+`reference_set.json` under `snippets`. Practice and assessment recordings never
+give snippets, which would show trainees their answers.
+
+**Real study work waits for the assessment.** With the default policy, a
+trainee's study recordings are locked until their competency assessment is
+passed (the competency report's status is "met"): they are listed as locked,
+with the reason, and the study refuses to open, save or set them aside. Experts
+and administrators never wait, nor does anyone outside a training programme or
+in one whose set has no assessment recordings. After an assessment that did not
+meet the criteria, the study team chooses on the trainee's page in People
+(Training path): **reopen the training**, from learning with the experts or
+from practice, so that the trainee works through the stages from there again
+and retakes the assessment (only what they save from then on counts; nothing
+saved before is changed), or **give a new assessment set**, which enrols the
+trainee in another set with assessment recordings, its learning stages counted
+as done. Both are written to the audit log.
 
 **The example training set.** Until your experts' files are ready, the example
 training set (in the admin area, or `electrotag web create-example-set`, or
@@ -614,9 +647,10 @@ and a setting that names it is refused. `gate` says what real study work waits
 for: a passed assessment (`met`), a finished one (`completed`), or nothing
 (`off`); experts and administrators never wait. `tour` begins the path with the
 platform tour, and `snippets_quiz_required` counts the snippets stage as done
-only once its recognition check is finished. The five-stage path that follows
-this policy comes with the training path's next part; until then the
-settings are kept and checked.
+only once its recognition check is finished. A change applies at once: a
+stage skipped while the policy allowed it stays skipped, and a gate switched
+off opens every trainee's study recordings. The admin area shows these under
+Study settings, Training policy.
 
 The `replay` block, `{"enabled": true, "trainees_watch_experts": true}`, says
 whether experts and administrators may replay annotators' sessions step by

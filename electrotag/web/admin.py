@@ -78,6 +78,11 @@ OPERATIONS = READ_ONLY + (
     "problem_reassign", "review_save",
     "tasks_create", "task_update", "task_remove",
     "set_planted_make", "set_planted_from", "set_planted_remove")
+# The training path (electrotag/web/training_path.py): the snippets of a set, a trainee's path and the gate, and
+# what the study team does after an assessment that did not meet the criteria.
+READ_ONLY += ("snippets_list", "training_gate_get")
+OPERATIONS += ("snippets_list", "training_gate_get", "snippet_add", "snippet_remove", "training_reopen",
+               "training_assessment_set")
 
 
 # ------------------------------------------------------------------ checking input
@@ -536,7 +541,7 @@ class Admin:
         for u in active:
             for i in self.service.work_items(User(u["annotator_id"], u.get("display_name", ""), u["role"])):
                 counts["assignments"] += 1
-                counts[i.status] += 1
+                counts["todo" if i.status == "locked" else i.status] += 1  # locked: to do once training is passed
         counts.update(self._feedback_counts())
         recent, _next = self.store.audit_page(None, 10)
         saved = sorted(self._entries(), key=lambda e: e.get("completed_at", ""), reverse=True)[:10]
@@ -1502,7 +1507,8 @@ class Admin:
             active = rec.get("status", "active") == "active"
             items = [i for i in self.service.work_items(person) if counted(i.mode)]
             mine = by_person.get(aid, [])
-            counts = {k: sum(1 for i in items if i.status == k) for k in ("done", "in_progress", "todo", "unusable")}
+            status = {id(i): "todo" if i.status == "locked" else i.status for i in items}  # locked: to do after training
+            counts = {k: sum(1 for i in items if status[id(i)] == k) for k in ("done", "in_progress", "todo", "unusable")}
             in_progress_s, last = 0.0, [str(rec.get("last_seen") or ""), last_visit.get(aid, "")]
             for i in items:
                 if i.status == "in_progress":
@@ -1611,6 +1617,26 @@ class Admin:
 
     def op_quality_list(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
         return self.service.tasks.op_quality(user, body)
+
+    # ------------------------------------------------------- the training path
+    # (electrotag/web/training_path.py; the snippets are the expert channel's operations too)
+    def op_snippets_list(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.service.training_path.snippets_list(user, body)
+
+    def op_snippet_add(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.service.training_path.snippet_add(user, body)
+
+    def op_snippet_remove(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.service.training_path.snippet_remove(user, body)
+
+    def op_training_gate_get(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.service.training_path.admin_gate_get(user, body)
+
+    def op_training_reopen(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.service.training_path.admin_reopen(user, body)
+
+    def op_training_assessment_set(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return self.service.training_path.admin_assessment_set(user, body)
 
     # ------------------------------------------------- correct the marks (H6: electrotag/web/correct_marks.py)
     def op_set_planted_get(self, user: User, body: dict[str, Any]) -> dict[str, Any]:

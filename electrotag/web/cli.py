@@ -336,7 +336,8 @@ def cmd_list(a: argparse.Namespace) -> int:
     return 0
 
 
-STATUS_TEXT = {"todo": "to do", "in_progress": "in progress", "done": "done", "unusable": "set aside"}
+STATUS_TEXT = {"todo": "to do", "in_progress": "in progress", "done": "done", "unusable": "set aside",
+               "locked": "locked"}  # locked: real study work waits for the competency assessment
 
 
 def cmd_progress(a: argparse.Namespace) -> int:
@@ -372,7 +373,8 @@ def cmd_progress(a: argparse.Namespace) -> int:
                     extra.append(f"{st.get('stars', 0)} of {st['max_stars']} stars")
                 if st.get("best_score") is not None:
                     extra.append(f"best {round(100 * st['best_score'])}% found")
-                print(f"  training: {st['title']}: {st['status'].replace('_', ' ')}, {st['done']} of {st['total']}"
+                count = f", {st['done']} of {st['total']}" if st["total"] else ""  # the tour and snippets have none
+                print(f"  training: {st['title']}: {st['status'].replace('_', ' ')}{count}"
                       + (f" ({'; '.join(extra)})" if extra else ""))
         elif isinstance(prog, dict) and prog.get("error"):
             print(f"  training: {prog.get('message', prog['error'])}")

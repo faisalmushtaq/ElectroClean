@@ -382,8 +382,18 @@ async function script(call) {
   await call('training (new)', (s) => s.b.training());
   await call('training stage (skip the assessment)', (s) => s.b.trainingStage({ stage: 'assessment', action: 'skip' }));
   await call('training stage (no such stage)', (s) => s.b.trainingStage({ stage: 'lunch', action: 'skip' }));
-  await call('training stage (skip the tour)', (s) => s.b.trainingStage({ stage: 'tour', action: 'skip' }));
+  // the five-stage path: the tour first, then the snippets (docs/web/api.md, "Training stages")
+  await call('training stage (skip a stage not open yet)', (s) => s.b.trainingStage({ stage: 'guided', action: 'skip' }));
+  await call('training stage (done of a stage that saves)', (s) => s.b.trainingStage({ stage: 'practice', action: 'done' }));
+  await call('training stage (finish the tour)', (s) => s.b.trainingStage({ stage: 'tour', action: 'done' }));
+  await call('training stage (finish the tour again)', (s) => s.b.trainingStage({ stage: 'tour', action: 'done' }));
+  await call('training stage (skip the tour, finished)', (s) => s.b.trainingStage({ stage: 'tour', action: 'skip' }));
   await call('training snippets', (s) => s.b.trainingSnippets());
+  await call('training stage (skip the snippets)', (s) => s.b.trainingStage({ stage: 'snippets', action: 'skip' }));
+  await call('training stage (skip the snippets again)', (s) => s.b.trainingStage({ stage: 'snippets', action: 'skip' }));
+  await call('training stage (resume the snippets)', (s) => s.b.trainingStage({ stage: 'snippets', action: 'resume' }));
+  await call('training stage (finish the snippets)', (s) => s.b.trainingStage({ stage: 'snippets', action: 'done' }));
+  await call('training (after the first two stages)', (s) => s.b.training());
   await call('assignments (trainee)', (s) => s.b.assignments());
   await call('match practice before the guided recordings', async (s) => s.b.match(await matchBody(r3)));
   for (const [gi, g] of TRAINING_SET.guided.entries()) {
@@ -432,6 +442,26 @@ async function script(call) {
 
   await call('login', (s) => s.b.login('ADMIN', s.password));
   await call('admin progress (after training)', (s) => s.b.admin('progress', {}));
+  await call('admin training_gate_get', (s) => s.b.admin('training_gate_get', { annotator_id: 't01' }));
+  await call('admin training_gate_get (not a trainee)', (s) => s.b.admin('training_gate_get', { annotator_id: 'A01' }));
+  await call('admin training_reopen (before an assessment)', (s) => s.b.admin('training_reopen', { annotator_id: 'T01' }));
+  await call('admin training_reopen (not a trainee)', (s) => s.b.admin('training_reopen', { annotator_id: 'A01' }));
+  await call('admin training_assessment_set (the same set)', (s) => s.b.admin('training_assessment_set', { annotator_id: 'T01', set_id: QUIZ.set_id }));
+  await call('admin snippets_list', (s) => s.b.admin('snippets_list', { set_id: QUIZ.set_id }));
+  const snippet = { set_id: QUIZ.set_id, recording_id: RIDS[1], start_s: 14, end_s: 17, label: 'Chewing-artifact', explanation: 'Rhythmic bursts on T7 and T8', channels: ['T7', 'T8'], snippet_id: 'chew' };
+  await call('admin snippet_add', (s) => s.b.admin('snippet_add', snippet));
+  await call('admin snippet_add (sent again)', (s) => s.b.admin('snippet_add', snippet));
+  await call('admin snippet_add (a practice recording)', (s) => s.b.admin('snippet_add', { ...snippet, recording_id: RIDS[2] }));
+  await call('admin snippet_add (backwards)', (s) => s.b.admin('snippet_add', { ...snippet, end_s: 13 }));
+  await call('admin snippet_add (no ID)', (s) => s.b.admin('snippet_add', { ...snippet, snippet_id: null, label: 'EMG-artifact', channels: [] }));
+  await call('admin snippets_list (after)', (s) => s.b.admin('snippets_list', { set_id: QUIZ.set_id }));
+  await call('admin snippet_remove', (s) => s.b.admin('snippet_remove', { set_id: QUIZ.set_id, snippet_id: 's01' }));
+  await call('admin snippet_remove (gone)', (s) => s.b.admin('snippet_remove', { set_id: QUIZ.set_id, snippet_id: 's01' }));
+  await call('admin snippet_remove (a guided one)', (s) => s.b.admin('snippet_remove', { set_id: QUIZ.set_id, snippet_id: 'g-x' }));
+  await call('admin expert snippets_list', (s) => s.b.expert('snippets_list', { set_id: QUIZ.set_id }));
+  await call('logout', (s) => s.b.logout());
+  await call('login', (s) => s.b.login('T01', s.password));
+  await call('training snippets (with the team\'s own)', (s) => s.b.trainingSnippets());
   await call('admin stats (all work)', (s) => s.b.admin('stats', { work: 'all' }));
   await call('admin overview (after training)', (s) => s.b.admin('overview', {}));
 }

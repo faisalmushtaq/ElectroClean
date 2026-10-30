@@ -17,7 +17,7 @@ import path from 'node:path';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
-import { signIn, waitForRoute, waitForTraces, annotations, eegPoint, drag, clickDialogButton, pressSave } from './e2e/helpers.mjs';
+import { signIn, waitForRoute, waitForTraces, annotations, eegPoint, drag, clickDialogButton, pressSave, skipFirstStages } from './e2e/helpers.mjs';
 
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
@@ -170,6 +170,8 @@ async function main() {
       const page = await newPage();
       await signIn(page, 't01@example.org', PASSWORD);
       await waitForRoute(page, 'training', 30000);
+      // the tour and the snippets skipped, each sent once to the functions (et_training_stage)
+      await skipFirstStages(page, 60000);
       const startNext = async () => {
         await page.locator('main.training .btn.primary').first().click();
         await openFile(page, (await page.textContent('main h1')).replace(/^Open\s+/, '').trim());

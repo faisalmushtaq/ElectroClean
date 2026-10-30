@@ -392,6 +392,14 @@ def find_assessment_documents(layout: OutputLayout, rs: ReferenceSet, annotator_
     return out
 
 
+def stages_skipped(layout: OutputLayout, rs: ReferenceSet, annotator_id: str) -> list[str]:
+    """The learning stages of the training path the trainee skipped (and did not take up again), from the progress
+    file in the results folder (training/programme.py); none without one."""
+    from electrotag.training.programme import Progress, stage_marks
+
+    return stage_marks(Progress.load(layout, rs.set_id, annotator_id).events).skipped
+
+
 def competency_report(layout: OutputLayout, rs: ReferenceSet, annotator_id: str, *, write: bool = True) -> dict[str, Any]:
     """Evaluate an annotator's assessment recordings; optionally write JSON and HTML reports.
 
@@ -429,6 +437,8 @@ def competency_report(layout: OutputLayout, rs: ReferenceSet, annotator_id: str,
         "criteria": criteria.to_dict(),
         "inputs": inputs,
         "software": {"electrotag": __version__},
+        # the learning stages of the training path the trainee skipped (from their progress file, when there is one)
+        "stages_skipped": stages_skipped(layout, rs, annotator_id),
     }
     if not required:
         report.update(status="not_determined", status_text="This reference set has no assessment recordings.")
@@ -612,6 +622,11 @@ def competency_html(report: dict[str, Any]) -> str:
                  + "".join(f"<li>{html.escape(r)}</li>" for r in m["recordings_not_compared"]) + "</ul>")
     if m.get("warnings"):
         p.append("<h3>Warnings</h3><ul>" + "".join(f"<li>{html.escape(w)}</li>" for w in m["warnings"]) + "</ul>")
+    if report.get("stages_skipped"):
+        from electrotag.training.programme import STAGE_TITLES
+
+        p.append("<p>Stages skipped: " + html.escape(", ".join(STAGE_TITLES.get(k, k) for k in report["stages_skipped"]))
+                 + ".</p>")
     if report.get("missing_recordings"):
         p.append("<p>Recordings still to complete:</p><ul>"
                  + "".join(f"<li>{html.escape(r)}</li>" for r in report["missing_recordings"]) + "</ul>")

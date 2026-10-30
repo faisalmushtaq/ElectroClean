@@ -14,12 +14,14 @@ import {
   actionButton, card, checkbox, checkList, chip, confirmInline, dataTable, downloadBase64, downloadText, field, loading, messageArea,
   numberInput, radios, recordingName, sectionHead, select, tabBar, textArea, textInput,
 } from './ui.js';
+import { snippetsTab } from './snippets.js';
 
 const TABS = [
   { key: 'references', title: 'Recordings and references' },
   { key: 'settings', title: 'Settings' },
   { key: 'criteria', title: 'Competency criteria' },
   { key: 'quiz', title: 'Quiz' },
+  { key: 'snippets', title: 'Snippets' }, // the training path's examples of each artifact type (snippets.js)
 ];
 const DISAGREEMENT_COLUMNS = ['kind', 'label', 'onset_s', 'offset_s', 'experts_marking', 'experts_not_marking', 'note'];
 
@@ -141,6 +143,7 @@ export class TrainingSection {
     if (this.tab === 'settings') this.body.append(this._settingsTab(s));
     else if (this.tab === 'criteria') this.body.append(this._criteriaTab(s));
     else if (this.tab === 'quiz') this.body.append(this._quizTab(s));
+    else if (this.tab === 'snippets') this.body.append(snippetsTab(this.area, s));
     else this.body.append(this._referencesTab(s));
   }
 

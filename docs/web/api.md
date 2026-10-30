@@ -140,6 +140,7 @@ password.
                              "colour": "#0067A5", "section": "Eye", "is_group": false,
                              "parent": "Eye-artifact" | null, "description": "…"}]},
   "programme": null | {"set_id": "example", "name": "…", "complete": false},  // in a training programme; complete when every stage is done
+  "training_gate": {"open": true, "reason": "" | "training_required", "message": "…"},  // see "Training stages"
   "quizzes": [{"set_id": "example", "name": "…", "n_items": 4, "n_answered": 0, "finished": false, "feedback": "immediate"}]
 }
 ```
@@ -165,7 +166,9 @@ of the conflicts in it (`GET /me/feedback`), `training` which stages of the
 training path may be skipped and what real study work waits for, and `replay`
 whether sessions are replayed and whether trainees may watch experts' sessions
 (the study settings `review`, `training` and `replay` of the
-[administrator guide](../administrator_guide.md)).
+[administrator guide](../administrator_guide.md)). `training_gate`
+says whether the person's study recordings are open, and if not why, in a
+sentence for the person (see "Training stages" below).
 
 ### Roles
 
@@ -196,8 +199,9 @@ reference.
 
 `GET /assignments` →
 `{"items": [{"recording_id", "file_name", "format", "mode": "standard" | "guided" | "practice" | "assessment",
-"context_id": "" | "<reference set>", "status": "todo" | "in_progress" | "done" | "unusable", "duration_s",
-"n_channels", "size_bytes", "repeat": false, "elapsed_s", "n_annotations", "completed_at", "draft",
+"context_id": "" | "<reference set>", "status": "todo" | "in_progress" | "done" | "unusable" | "locked", "duration_s",
+"n_channels", "size_bytes", "repeat": false, "locked": null | "training_required", "elapsed_s", "n_annotations",
+"completed_at", "draft",
 "saved": {"version", "first_saved_at", "total_elapsed_s"} | null, "revising": false,
 "problem": ProblemReport (the annotator's view) | null}],
 "next": "<recording_id>" | null, "next_item": {"recording_id", "mode", "context_id"} | null}`. `next` is the
@@ -208,6 +212,11 @@ same until something more is completed). `next_item` says in which mode and
 context. A trainee's list holds the recordings of the programme's unlocked
 stages. `repeat` is true for a practice recording the programme lets the
 trainee annotate again (its `status` is then `todo`).
+
+`locked` is the status of a study recording not yet saved while real study
+work waits for the competency assessment (`locked` then says why,
+`"training_required"`; see "Training stages" below): it is never `next`, and
+opening it is refused.
 
 `unusable` is the status of a recording its annotator reported as one that
 cannot be annotated (see "Problem reports" below): it is finished for the
@@ -501,11 +510,13 @@ only when the reference set allows the review (`review`; otherwise `flags` and
 
 ## Training programme
 
-`GET /training` → `{"set_id", "name", "description", "stages": [{"key": "guided" | "practice" | "assessment",
-"title", "description", "status": "locked" | "available" | "in_progress" | "completed" | "not_used", "done", "total",
-"stars", "max_stars", "best_score", "time_s", "detail", "result"}], "next": {"stage", "recording_id", "label", "text", "mode",
-"context_id", "file_name", "repeat"} | null, "complete": false, "message": "…"}` (404 `no_programme` for an
-annotator outside a programme). `detail` is the stage's line of results, shown on the training path:
+`GET /training` → `{"set_id", "name", "description", "stages": [{"key": "tour" | "snippets" | "guided" | "practice" |
+"assessment", "title", "description", "status": "locked" | "available" | "in_progress" | "completed" | "skipped" |
+"not_used", "done", "total", "stars", "max_stars", "best_score", "time_s", "detail", "result", "can_skip", "can_resume"}],
+"next": {"stage", "recording_id", "label", "text", "mode", "context_id", "file_name", "repeat"} | null,
+"complete": false, "message": "…", "gate": {"open", "reason", "message"}}` (404 `no_programme` for an
+annotator outside a programme). The five stages and how they unlock are in "Training stages" below; `gate` is
+`training_gate` of `GET /me`. `detail` is the stage's line of results, shown on the training path:
 for practice the best score and the pass mark (`electrotag.training.programme.practice_detail`, the
 same words as `practiceDetail` in `js/training/scoring.js`), for a finished assessment its result
 and what happens next. `result` is null, or `"passed"` / `"not_passed"` for practice once tried, and
@@ -558,18 +569,87 @@ sent; the step then gives at most one star).
 
 ### Training stages
 
+The training path has five stages, in this order: `tour` (Find your way
+around: a short, hands-on tour of the platform on a practice recording made in
+the browser, where nothing is saved), `snippets` (Meet the artifacts: short
+examples of each artifact type with the experts' notes, then a recognition
+check, which is the set's quiz), `guided` (Learn with the experts), `practice`
+(On your own) and `assessment` (the blind competency assessment). A stage
+unlocks when every stage before it is finished, which means `completed`,
+`skipped` or `not_used`. A stage with nothing to do is `not_used`: the tour when
+the study's setting `training.tour` is off, the snippets when the set has none,
+and a stage whose recordings the set does not have. A `completed` stage stays
+completed whatever is done to the stages before it. `can_skip` is true for a
+stage the study lets trainees skip (`training.skippable`) that is open now
+(`available` or `in_progress`); `can_resume` for a skipped stage. A skipped
+stage's recordings are not listed.
+
 `POST /training/stage` (`et_training_stage`) `{"stage": "tour" | "snippets" | "guided" | "practice" | "assessment",
-"action": "skip" | "done" | "resume"}` skips, finishes or resumes a stage of the
-five-stage training path (a platform tour, artifact snippets, learning with
-the experts, practice on one's own and the blind assessment). It saves, so the
-browser never sends it again by itself. The competency assessment is never
-skipped (409 `cannot_skip`); an unknown stage or action is 400 `bad_request`
-and an annotator outside a programme 404 `no_programme`. `GET /training/snippets`
-(`et_training_snippets`) → `{"set_id", "snippets": [Snippet], "recordings": {recording_id: Manifest},
-"quiz": {"n_items", "finished"} | null}`, the artifact snippets of the
-trainee's set for the second stage. The stages themselves come with the
-training path's next part: until then `POST /training/stage` answers 501
-`not_offered` for a request it accepts, and the snippets are an empty list.
+"action": "skip" | "done" | "resume"}` → the answer of `GET /training`. It saves, so the browser never sends it
+again by itself; asking for what is already so changes nothing and answers the
+path as it is. `skip` skips an open stage; `resume` takes a skipped stage up
+again (the stages after it that were not completed wait for it once more);
+`done` finishes the tour or the snippets, which are done in the browser (the
+other stages finish by what is saved). Each is kept, with its time, as an event
+of the trainee's progress (`stage_skipped`, with the policy of the moment,
+`stage_resumed` and `stage_completed`), and the competency report lists the
+stages skipped (`stages_skipped`). Errors: 400 `bad_request` for an unknown stage
+or action; 404 `no_programme` outside a programme; 409 `cannot_skip` for the
+assessment, which is never skipped, and for a stage the study does not let
+trainees skip; 409 `locked` for a stage not open yet; 409 `finished` for a stage
+completed or not used; 409 `not_done_here` for `done` of a stage that finishes by
+what is saved; 409 `quiz_required` for `done` of the snippets while their
+recognition check is unfinished and the study counts the stage as done only once
+it is finished (`training.snippets_quiz_required`).
+
+`GET /training/snippets` (`et_training_snippets`) → `{"set_id", "snippets": [Snippet], "recordings":
+{recording_id: Manifest}, "quiz": {"n_items", "finished", "required"} | null}` where
+`Snippet = {"snippet_id", "recording_id", "start_s", "end_s", "label", "explanation", "context_s": 2.0,
+"channels": [..], "source": {"kind": "guided", "annotation_id"} | {"kind": "added", "by"} | {...}}`. The snippets
+are the study team's own (`snippet_add`, below) and one for each reference
+annotation of the set's guided recordings (`snippet_id` `g-<annotation ID>`,
+with the experts' note on it as the explanation); practice and assessment
+recordings never give snippets, which would give their answers away. Only
+snippets whose recording is registered are listed, and `recordings` holds the
+public manifests the browser checks the trainee's own copies against.
+`channels` are those the artifact is on (empty: the whole montage). `quiz` is
+the set's quiz, when it has one that the trainee may take.
+
+**The competency gate.** Real study work waits until the trainee's competency
+assessment is passed: the study's `training.gate` is `met` (the competency
+report's status, the default), `completed` (every assessment recording saved,
+whatever the result) or `off`. Nobody waits who is an expert or an
+administrator, who takes no training programme, or whose programme's set has
+no assessment recordings. While the gate is closed, `training_gate` is
+`{"open": false, "reason": "training_required", "message": "…"}`, the study
+recordings not yet saved are `locked` in `GET /assignments`, and `POST /match`
+for one of them, a draft (`PUT /drafts/…`), saving (`POST /submissions`), a
+revision and setting one aside (`POST /problems` with `outcome` `unusable`) are
+refused with 403 `training_required` and the same message. Training recordings
+never wait.
+
+**After an assessment that did not meet the criteria** the study team either
+reopens the trainee's training or gives them a new assessment set, both in the
+admin area and both audited (`training_reopen` and `training_assessment_set`,
+below). Reopening sends the trainee back to the guided or the practice stage:
+from there each stage counts only what is saved from then on (its recordings
+are offered again, with `repeat` true, as new attempts; nothing saved before is
+changed), and the assessment is taken once more. A new assessment set enrols
+the trainee in that set with its learning stages counted as done (their
+`detail` says where), so the next step is its assessment.
+
+These are the administrative operations of the training path (`POST /admin/{op}`,
+`et_admin`); the three for snippets are also operations of the expert channel
+(`POST /expert/{op}`, `et_expert`), since experts supply training material too:
+
+| op | body | answer |
+| --- | --- | --- |
+| `snippets_list` | `{"set_id"}` | `{"set_id", "snippets": [Snippet] (the study team's), "guided": [Snippet] (made from the guided references), "recordings": [{"recording_id", "file_name", "use", "duration_s", "ch_names"}]}`, the recordings a snippet may come from (the set's own, less its practice and assessment recordings) |
+| `snippet_add` | `{"set_id", "recording_id", "start_s", "end_s", "label", "explanation"?, "context_s"?: 2.0, "channels"?: [..], "snippet_id"?, "source"?}` | `{"snippet"}`. The same `snippet_id` again replaces it, so a request that reaches the study twice keeps one; without one the next free `s01`, `s02`, … is used. At most 60 s long, with up to 10 s of context. 422 `reveals_answers` for a practice or assessment recording of the set; 404 `unknown_recording`; 400 `bad_request` for times outside the recording, a type that is not the study's or a channel it does not have. Audited (`snippet_add`, the explanation counted by its length). |
+| `snippet_remove` | `{"set_id", "snippet_id"}` | `{}`; one that is gone already changes nothing. 409 `guided_snippet` for one made from a guided reference. Audited. |
+| `training_gate_get` | `{"annotator_id"}` | `{"annotator_id", "training_gate", "programme": GET /training's answer \| null, "events": [{"event", "stage", "at", "by", "from", "from_set"}], "skipped": ["tour", …], "can_reopen", "can_assign_set", "assessment_sets": [{"set_id", "name", "n_assessment"}]}`: the trainee's path as they see it, the gate, what happened to the stages, and whether the two actions after an assessment are open (once it is finished and not met) |
+| `training_reopen` | `{"annotator_id", "from"?: "practice" \| "guided"}` | the answer of `training_gate_get`. 409 `not_finished` before the assessment is finished, 409 `already_met` after a pass; 404 `no_programme`. Audited. |
+| `training_assessment_set` | `{"annotator_id", "set_id"}` | the answer of `training_gate_get`, in the new set. 409 `same_set`, 409 `not_finished`, 409 `already_met`, 422 `no_assessment` for a set without assessment recordings, 409 `not_allowed` for a set the trainee may not use. Audited. |
 
 ## Interaction logs
 

@@ -51,9 +51,9 @@ test('only administrators can use the admin area; ADMIN is a built-in account', 
   const b = await demo('ADMIN');
   assert.equal((await b.me()).role, 'admin');
   const o = await b.admin('overview');
-  // T01's practice recording is not counted while its stage is locked, as on the server
+  // T01's training recordings are not counted while their stages are locked behind the tour, as on the server
   // E01, the built-in expert, annotates too: each account counts under every role it holds
-  assert.deepEqual(o.counts, { recordings: 3, annotators: 3, experts: 1, admins: 1, assignments: 5, done: 0, in_progress: 0, todo: 5, unusable: 0, problems_open: 0, reviewed: 0 });
+  assert.deepEqual(o.counts, { recordings: 3, annotators: 3, experts: 1, admins: 1, assignments: 3, done: 0, in_progress: 0, todo: 3, unusable: 0, problems_open: 0, reviewed: 0 });
   assert.deepEqual(o.recent, []);
   await assert.rejects(() => b.admin('no_such_operation'), (e) => e.status === 404);
 });
@@ -110,6 +110,10 @@ test('assignments: listing, unassigning, and finished work stays', async () => {
   const a01 = (await b.admin('assignments_list', { annotator_id: 'A01' })).items;
   assert.equal(a01.length, 3);
   assert.ok(a01.every((i) => i.mode === 'standard' && i.status === 'todo' && i.attempts === 0));
+  assert.deepEqual((await b.admin('assignments_list', { annotator_id: 'T01' })).items, []); // the path begins with the tour
+  await as(b, 'T01');
+  for (const stage of ['tour', 'snippets']) await b.trainingStage({ stage, action: 'skip' });
+  await as(b, 'ADMIN');
   const t01 = (await b.admin('assignments_list', { annotator_id: 'T01' })).items;
   // the recordings of the programme's unlocked stages
   assert.deepEqual(t01.map((i) => [i.mode, i.context_id]), [['guided', 'example'], ['guided', 'example']]);
@@ -258,17 +262,21 @@ test('the demonstration training set: its guided notes, pass mark and guidance r
   await b.admin('set_update', { set_id: 'example', practice_pass: { event_f1: 0.5, label_accuracy: 0.5 } });
   await b.admin('set_recording_update', { set_id: 'example', recording_id: TRAINING_SET.guided[1].rid, guidance: 'find_unnamed' });
   await as(b, 'T01');
+  for (const stage of ['tour', 'snippets']) await b.trainingStage({ stage, action: 'skip' });
   const g = await b.guided(rid);
   assert.equal(g.current.note, 'A blink: both frontal channels dip together.');
   assert.equal((await b.guided(TRAINING_SET.guided[1].rid)).guidance, 'find_unnamed');
   const path = await b.training();
-  assert.match(path.stages[1].detail, /To pass, you need a score of at least 50% and the right type for at least 50% of the artifacts you find\.$/);
+  assert.match(path.stages[3].detail, /To pass, you need a score of at least 50% and the right type for at least 50% of the artifacts you find\.$/);
   await as(b, 'ADMIN');
   // The programme can be given to another account, but only this set runs as a programme here.
   await b.admin('user_add', { annotator_id: 'T02', password: 'trainee two' });
   await b.admin('programme_set', { annotator_id: 'T02', set_id: 'example' });
   await as(b, 'T02', 'trainee two');
   assert.equal((await b.me()).programme.set_id, 'example');
+  assert.equal((await b.assignments()).items.length, 0); // the tour comes first
+  await b.trainingStage({ stage: 'tour', action: 'done' });
+  await b.trainingStage({ stage: 'snippets', action: 'skip' });
   assert.equal((await b.assignments()).items.length, 2);
   await as(b, 'ADMIN');
   await assert.rejects(() => b.admin('programme_set', { annotator_id: 'T02', set_id: 'other' }), (e) => e.status === 404);

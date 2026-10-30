@@ -245,11 +245,11 @@ export const tests = [
       await clickDialogButton(page, 'Save and Finish');
       await page.waitForSelector('.dialog .dialog-title', { timeout: 15000 });
       await page.locator('.dialog-buttons button', { hasText: /Back to my recordings|^OK$/ }).first().click();
-      // T01 sees nothing to watch until E01 agrees
+      // T01 sees nothing to watch until E01 agrees: Watch an expert at work is on Learn with the experts, on the training path
       await switchTo(page, 'T01');
-      await page.evaluate(() => globalThis.ElectroTag.showHome());
-      await waitForRoute(page, 'home');
-      await page.click('.watch-entry');
+      await page.evaluate(() => globalThis.ElectroTag.showTraining());
+      await waitForRoute(page, 'training');
+      await page.click('[data-stage="guided"] .watch-entry');
       await page.waitForSelector('.dialog .dialog-title:text("Watch an expert")');
       assert.match(await page.textContent('.dialog'), /No expert has a session to show yet/);
       await clickDialogButton(page, 'OK');
@@ -257,10 +257,10 @@ export const tests = [
       await switchTo(page, 'E01');
       await page.evaluate(() => globalThis.ElectroTag.backend.expert('replay_consent_set', { teaching: true }));
       await switchTo(page, 'T01');
-      await page.evaluate(() => globalThis.ElectroTag.showHome());
-      await waitForRoute(page, 'home');
+      await page.evaluate(() => globalThis.ElectroTag.showTraining());
+      await waitForRoute(page, 'training');
       await t.screenshot(page, 'watch_entry');
-      await page.click('.watch-entry');
+      await page.click('[data-stage="guided"] .watch-entry');
       await page.waitForSelector('.dialog.watch-dialog .watch-list li');
       assert.match(await page.textContent('.watch-list'), /E01\): sub-demo02_task-rest_eeg\.edf, 1 annotation/);
       await t.screenshot(page, 'watch_dialog');

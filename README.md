@@ -19,7 +19,7 @@ from the admin area of the same application.
 |---|---|---|
 | **Annotation** | View continuous EEG (EDF, EDF+, BDF or BrainVision), mark artifacts by mouse, keyboard or touch (on a computer or an iPad), and save with Save and Finish; unfinished work is kept as a draft. | The browser application |
 | **Inter-rater agreement** | Compare annotators by category, time and channel: time-resolved and event-based agreement, with an HTML report and tables. | The admin area, or `electrotag agreement` |
-| **Training and assessment** | A training programme from guided learning with the experts to practice with a pass mark, a blinded competency assessment with criteria set by the study, and a short-segment quiz. | The browser application; set up in the admin area or with `electrotag admin` |
+| **Training and assessment** | A five-stage training programme, from a tour of the platform and examples of each artifact type through guided learning with the experts and practice with a pass mark to a blinded competency assessment with criteria set by the study, which study work waits for; and a short-segment quiz. | The browser application; set up in the admin area or with `electrotag admin` |
 | **Interaction logs** | A time-stamped record of how each annotator works, as research data, with tables and learning curves. | The admin area, or `electrotag activity` |
 
 The original EEG files and their metadata are never modified.
@@ -250,10 +250,13 @@ A lead researcher prepares a *reference set* of expert-annotated recordings
 (from one expert, a consensus of several, or an adjudicated consensus), marks
 each recording for guided learning, practice or assessment, and can set
 competency criteria. An annotator enrolled in the training programme first
-learns with the experts, one artifact at a time with specific feedback, then
-annotates practice recordings on their own until one reaches the pass mark,
-and then takes the blinded assessment, which ends with a reproducible
-competency report. The experts' annotations stay with the study and never
+takes a short, hands-on tour of the platform and looks through examples of
+each artifact type with the experts' notes, then learns with the experts, one
+artifact at a time with specific feedback, then annotates practice recordings
+on their own until one reaches the pass mark, and then takes the blinded
+assessment, which ends with a reproducible competency report. The study may let
+trainees skip any stage but the assessment, and study work waits until the
+assessment is passed. The experts' annotations stay with the study and never
 reach the browser. See the [administrator guide](docs/administrator_guide.md).
 
 ## Interaction logs

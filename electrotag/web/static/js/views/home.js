@@ -3,14 +3,13 @@
 // and an estimate of the time left at their own pace (progress.js).
 
 import { h } from '../ui/dom.js';
-import { appHeader } from './common.js';
+import { appHeader, icon } from './common.js';
 import { docsUrl } from '../ui/docs.js';
 import { ask } from '../ui/dialog.js';
 import { formatHms, local } from '../util.js';
 import { quizCard } from '../training/quiz_card.js';
 import { deviceHomeLine } from './device.js';
 import { recordingsCard } from './home_list.js';
-import { watchExpertEntry } from '../replay/watch.js';
 import { partNow } from '../lazy.js';
 import { localDraft } from '../annotate/local_drafts.js';
 import { todayKey } from '../annotate/clock.js';
@@ -82,6 +81,9 @@ export function homeView(app) {
   const nextId = app.assignments && app.assignments.next;
   const next = items.find((i) => i.recording_id === nextId) || null;
   const training = programme && !programme.complete;
+  // Real study work waits for the competency assessment (GET /me training_gate): the list shows those recordings locked.
+  const gate = app.me && app.me.training_gate;
+  const waiting = Boolean(gate && gate.open === false && items.some((i) => i.status === 'locked'));
   const b = app.backend;
   const p = annotatorProgress(app, items, next);
   const cont = p.continue;
@@ -89,7 +91,11 @@ export function homeView(app) {
   const nextCard = h('section.card.next-card', {},
     training
       ? [h('h2', {}, 'Training programme'), h('p.subtitle', {}, `${programme.name}. Your training path shows each stage and what to do next.`),
-        h('div.btn-row', {}, h('button.btn.primary', { type: 'button', onclick: () => app.go('training') }, 'Go to my training path'), watchExpertEntry(app))]
+        waiting ? gateLine(gate) : null,
+        h('div.btn-row', {}, h('button.btn.primary', { type: 'button', onclick: () => app.go('training') }, 'Go to my training path'))]
+      : waiting && !cont && !next
+        ? [h('h2', {}, 'Your study recordings are locked'), gateLine(gate),
+          h('div.btn-row', {}, h('button.btn.primary', { type: 'button', 'data-log': 'training-path', onclick: () => app.go('training') }, 'See my training path'))]
       : cont
         ? continueContent(app, cont)
       : next
@@ -169,6 +175,11 @@ export function expertCard(app) {
       + 'The originals are never changed: a correction is a new version, credited to you.'),
     lines.map((l) => h('p.caption', {}, l)),
     h('div.btn-row', {}, h('button.btn', { type: 'button', 'data-log': 'open-expert', onclick: () => app.showExpert('expert') }, 'Open the expert area')));
+}
+
+/** Why the study recordings are locked (the gate's message, in the study's words), with the lock drawn beside it. */
+function gateLine(gate) {
+  return h('p.caption.gate-line', { 'data-log': 'training-gate' }, icon('lock'), h('span', {}, gate.message || 'Your study recordings open once you pass the competency assessment.'));
 }
 
 /** The decisions on the annotator's disagreements (js/expert/outcomes.js), filled in once they are read. */

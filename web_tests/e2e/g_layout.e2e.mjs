@@ -3,7 +3,7 @@
 // at the common laptop sizes and with the browser's zoom at 150% and 200%: the type buttons keep
 // their codes, the line at the bottom gives a whole instruction, nothing is drawn over anything else,
 // and a window made small by zooming in can carry on.
-import { signIn, waitForRoute, waitForTraces, eegPoint, drag, clickDialogButton, openExample } from './helpers.mjs';
+import { signIn, waitForRoute, waitForTraces, eegPoint, drag, clickDialogButton, openExample, skipFirstStages } from './helpers.mjs';
 
 async function noSideways(page) {
   return page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
@@ -58,6 +58,7 @@ export const tests = [
       await waitForRoute(page, 'training');
       assert.ok(await noSideways(page));
       await t.screenshot(page, 'training_path');
+      await skipFirstStages(page);
       await page.locator('main.training .btn.primary').click();
       await page.locator('.example-card button').click();
       await waitForRoute(page, 'annotate');

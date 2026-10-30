@@ -29,6 +29,7 @@ from tests.web_helpers import (  # noqa: E402
     SUB3,
     Api,
     admin_audit,
+    skip_to_guided,
     ann,
     as_wire,
     build_manifests,
@@ -247,6 +248,9 @@ def test_assignments_and_programmes(client: TestClient, admin: Api, recordings: 
     items = admin.admin_ok("assignments_list", {"annotator_id": "A01"})["items"]
     assert [(i["recording_id"], i["status"]) for i in items] == [(SUB1, "done"), (SUB2, "todo"), (SUB3, "todo")]
     assert items[0]["attempts"] == 1 and items[0]["last_activity"]
+    everyone = admin.admin_ok("assignments_list")["items"]
+    assert {i["annotator_id"] for i in everyone} == {"A01", "A02"}  # T01's path begins with the tour
+    skip_to_guided(Api(client, "T01"))  # its guided recordings are T01's once the first two stages are skipped
     everyone = admin.admin_ok("assignments_list")["items"]
     assert {i["annotator_id"] for i in everyone} == {"A01", "A02", "T01"}
     admin.admin_ok("user_add", {"annotator_id": "A03"})
@@ -491,6 +495,7 @@ def test_reference_sets_from_saved_annotations(client: TestClient, admin: Api, r
     admin.admin_ok("set_update", {"set_id": "pilot", "practice_review": False})
     admin.admin_ok("programme_set", {"annotator_id": "T02", "set_id": "pilot"})
     t02 = Api(client, "T02", admin.admin_ok("user_reset_password", {"annotator_id": "T02"})["temporary_password"])
+    t02.ok("post", "/training/stage", {"stage": "tour", "action": "skip"})  # the set has no snippets
     m = t02.ok("post", "/match", match_body(recordings, SUB2))
     assert m["status"] == "matched" and m["mode"] == "practice" and m["context_id"] == "pilot"
     r = t02.ok("post", "/submissions", submission(recordings, SUB2, [EMG], "practice", "pilot"))
@@ -572,6 +577,7 @@ def test_the_example_set_from_the_admin_area(tmp_path: Path) -> None:
     data_name = f"electrotag-example-set/{GUIDED1}".replace(".vhdr", ".eeg")
     data = z.read(data_name)
     t01 = Api(client, "T01")
+    skip_to_guided(t01)
     m = t01.ok("post", "/match", {"file_name": Path(GUIDED1).name, "size_bytes": len(data),
                                   "sha256": hashlib.sha256(data).hexdigest()})
     assert m["status"] == "matched" and m["mode"] == "guided"

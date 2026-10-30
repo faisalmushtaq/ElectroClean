@@ -53,7 +53,7 @@ Annotated_Events/
     training/<reference set>/assessment/annotator-A01/...
     training/<reference set>/reports/annotator-A01_competency_report.{json,html}
     training/<reference set>/quiz/annotator-A01_quiz_<mode>_<session>.json
-    training_progress/<reference set>/annotator-A01.json   stars, scores and times in the programme
+    training_progress/<reference set>/annotator-A01.json   stars, scores, times and stage events in the programme
     interaction_logs/annotator-A01/<YYYYMMDDTHHMMSS>_<mode>.jsonl   one log per visit
     activity_reports/<date and time>/   tables and report made from the logs
     problem_reports/problem_reports.{tsv,json}   problems annotators reported (results zip and export)
@@ -522,10 +522,12 @@ not to restore, is moved to `.electrotag/interrupted/autosave/`.
 per-recording provenance including the consensus rule), `criteria`
 (competency criteria), optional `analysis` overrides, `quiz` items (an item promoted from the library of conflicts keeps its `source`),
 `practice_review`, the training programme's `guided` settings (tolerance and
-the experts' notes), `practice_pass`, `snippets` (artifact snippets:
-`snippet_id`, `recording_id`, `start_s`, `end_s`, `label`, `explanation`,
-`context_s` and `source`), `recordings_dir` for a self-contained set,
-`assigned_annotators`, and `show_full_report_to_annotator` (false by default; it
+the experts' notes), `practice_pass`, `recordings_dir` for a self-contained set,
+`assigned_annotators`, `snippets` (the examples of artifact types for the training path's *Meet the
+artifacts* that the study team added or promoted from the library of conflicts: `snippet_id`, `recording_id`,
+`start_s`, `end_s`, `label`, `explanation`, `context_s`, `channels` and `source`;
+those made from the guided references are not stored), and
+`show_full_report_to_annotator` (false by default; it
 let the desktop application offer annotators the full report, while the browser
 application shows them their result and the criteria only, and the full report
 with the missed and extra artifacts is for the administrator; the older key
@@ -540,8 +542,10 @@ saying that it was declared when the set was created), `reference_provenance`
 adjudicator, agreement rule, date added), required and missing recordings,
 criteria, `status` (`met`, `not_met`, `not_determined`, `incomplete`), the
 individual `checks`, all `metrics` (overall, per category, missed, extra and
-relabelled artifacts), the SHA-256 of every input file, the software version
-and `results_sha256`, a digest of the results that is identical whenever the
+relabelled artifacts), `stages_skipped` (the stages of the training path the
+trainee skipped and did not take up again: `tour`, `snippets`, `guided`,
+`practice`), the SHA-256 of every input file, the software version and
+`results_sha256`, a digest of the results that is identical whenever the
 report is regenerated from the same inputs.
 
 ## Agreement analysis outputs

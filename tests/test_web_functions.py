@@ -197,10 +197,10 @@ def test_a_privileged_role_needs_both_the_claim_and_the_account(main) -> None:
     with pytest.raises(https_fn.HttpsError) as e:
         call(main, "et_training_stage", {"study": "demo", "stage": "assessment", "action": "skip"}, t01)
     assert e.value.details["error"] == "cannot_skip"
-    with pytest.raises(https_fn.HttpsError) as e:
-        call(main, "et_training_stage", {"study": "demo", "stage": "tour", "action": "done"}, t01)
-    assert e.value.code.value == "unimplemented" and e.value.details["error"] == "not_offered"
-    assert call(main, "et_training_snippets", {"study": "demo"}, t01)["snippets"] == []
+    tr = call(main, "et_training_stage", {"study": "demo", "stage": "tour", "action": "done"}, t01)
+    assert tr["stages"][0]["status"] == "completed" and tr["next"]["stage"] == "snippets"
+    snippets = call(main, "et_training_snippets", {"study": "demo"}, t01)
+    assert snippets["snippets"] and set(snippets["recordings"]) == {s["recording_id"] for s in snippets["snippets"]}
 
 
 def test_unexpected_errors_are_hidden(main, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -212,7 +212,8 @@ def test_unexpected_errors_are_hidden(main, monkeypatch: pytest.MonkeyPatch) -> 
 
 
 def test_a_guided_check_does_not_import_pandas_scipy_or_mne(template: Path, tmp_path: Path) -> None:
-    """Cold starts: the guided coach's answers need neither pandas, SciPy nor MNE-Python."""
+    """Cold starts: the guided coach's answers, and skipping a stage of the training path, need neither pandas,
+    SciPy nor MNE-Python."""
     study = copy_demo(template, tmp_path)
     code = f"""
 import importlib.util, inspect, json, sys
@@ -229,6 +230,8 @@ def call(name, data):
     req = https_fn.CallableRequest(data={{"study": "demo", **data}}, raw_request=None,
                                    auth=https_fn.AuthData(uid="u", token=claims))
     return inspect.unwrap(getattr(m, name))(req)
+call("et_training_stage", {{"stage": "tour", "action": "skip"}})
+call("et_training_stage", {{"stage": "snippets", "action": "skip"}})
 call("et_guided_get", {{"recording_id": {GUIDED1!r}}})
 r = call("et_guided_check", {{"recording_id": {GUIDED1!r}, "step": 1, "annotations": []}})
 print(json.dumps({{"problems": r["problems"], "loaded": [x for x in ("pandas", "scipy", "mne") if x in sys.modules]}}))

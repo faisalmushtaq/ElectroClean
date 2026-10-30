@@ -1,5 +1,9 @@
 """The training programme on the server: stages, the guided coach, practice scores, the assessment.
 
+The five-stage path's own operations (skipping and resuming stages, the snippets, the competency gate
+of real study work, and what the study team does after an assessment) are in
+:mod:`electrotag.web.training_path`; this module asks it for the study's policy.
+
 The rules are those of the desktop application (electrotag/training/): the same stages and pass
 rule (:mod:`~electrotag.training.programme`), the same matching, feedback and stars
 (:mod:`~electrotag.training.guided`), the same practice feedback and review flags
@@ -34,6 +38,7 @@ from electrotag.training.guided import (
 from electrotag.training.programme import (
     PassRule,
     Progress,
+    StagePolicy,
     StageState,
     next_step,
     practice_verdict,
@@ -51,6 +56,14 @@ if TYPE_CHECKING:
 
 FIND_WINDOW_S = 10.0  # as the desktop coach: a "find" step shows at least 10 s
 UNDO_HINT = "Ctrl+Z (⌘Z on a Mac) to undo"
+
+#: Guided recordings whose guidance another part of the training path handles (such as "correct the marks",
+#: where the trainee puts right a version of the experts' marks with deliberate mistakes): guidance -> an object
+#: with ``view(coach, user, rs, item) -> dict`` (the answer of ``GET /training/guided/{rid}``),
+#: ``verify(coach, user, rs, rid, annotations, sfreq) -> dict`` (the summary kept with the saved files, or an
+#: ApiError) and ``record(coach, user, rs, rid, summary, document) -> dict`` (the ``guided`` of the answer to the
+#: save). Guidance not listed here is the step-by-step coach below.
+GUIDANCE_KINDS: dict[str, Any] = {}
 
 
 def _signature(anns: list[ArtifactAnnotation]) -> str:
@@ -87,10 +100,28 @@ class Coach:
     def _quick_keys(self) -> dict[str, int]:
         return {name: i for i, name in enumerate(self.service.settings.quick_labels, start=1)}
 
+    def policy(self) -> StagePolicy:
+        """The study's policy for the training path (its ``training`` settings)."""
+        return StagePolicy.from_settings(getattr(self.service.settings, "training", None))
+
+    def saves(self, aid: str) -> Any:
+        """``saves(annotator_id, mode, set_id) -> {recording: number of saves}`` from the completion register."""
+        entries = self.store.completion_entries(aid)
+
+        def count(annotator_id: str, mode: str, set_id: str) -> dict[str, int]:
+            out: dict[str, int] = {}
+            for e in entries:
+                if (e.get("mode", "standard") == mode and e.get("context", "") == set_id
+                        and e.get("status") == "completed"):
+                    out[e["recording_id"]] = out.get(e["recording_id"], 0) + 1
+            return out
+        return count
+
     def _states(self, rs: ReferenceSet, aid: str, prog: Progress | None = None) -> tuple[list[StageState], Progress]:
         prog = prog if prog is not None else self.store.progress(rs, aid)
         states = programme_state(None, rs, aid, prog, completed=self.store.completed,
-                                 report=lambda: self.store.report_result(rs.set_id, aid))
+                                 report=lambda: self.store.report_result(rs.set_id, aid), policy=self.policy(),
+                                 saves=self.saves(aid))
         return states, prog
 
     def _next_step(self, rs: ReferenceSet, aid: str, states: list[StageState], prog: Progress) -> Any:
@@ -108,9 +139,12 @@ class Coach:
         out: list[tuple[str, str, bool]] = []
         for key, recordings in (("guided", rs.guided_recordings), ("practice", rs.practice_recordings),
                                 ("assessment", rs.assessment_recordings)):
-            if states[key].unlocked:
+            st = states[key]
+            if st.unlocked and not st.carried:  # a stage done in the trainee's earlier set lists nothing
                 for rid in recordings:
-                    out.append((rid, key, bool(nxt.repeat and nxt.stage == key and nxt.recording_id == rid)))
+                    # saved before the study team reopened the training: annotated again, as a new attempt
+                    again = rid in st.redo or bool(nxt.repeat and nxt.stage == key and nxt.recording_id == rid)
+                    out.append((rid, key, again))
         return out
 
     def next_item(self, user: User, set_id: str, items: list[WorkItem]) -> WorkItem | None:
@@ -122,6 +156,8 @@ class Coach:
         if nxt.stage is None:
             return None
         mine = [i for i in items if i.source == "programme" and i.mode == nxt.stage and i.context_id == set_id]
+        if nxt.stage in ("tour", "snippets"):
+            return None  # done in the browser, with no recording of the study
         if nxt.recording_id is not None:
             return next((i for i in mine if i.recording_id == nxt.recording_id), None)
         open_items = [i for i in mine if i.status != "done"]
@@ -156,7 +192,9 @@ class Coach:
             raise self._api(404, "no_reference_set", f"The training set {set_id} was not found on the server")
         states, prog = self._states(rs, user.annotator_id)
         nxt = self._next_step(rs, user.annotator_id, states, prog)
-        best = prog.best_practice()
+        from electrotag.training.programme import stage_marks
+
+        best = prog.best_practice(dict((stage_marks(prog.events).reopened or {}).get("practice_seen") or {}))
         stages = []
         for s in states:
             stages.append({
@@ -164,6 +202,7 @@ class Coach:
                 "done": s.done, "total": s.total, "stars": s.stars, "max_stars": s.max_stars,
                 "best_score": (round(float(best.get("event_f1", 0.0)), 4) if (s.key == "practice" and best) else None),
                 "time_s": round(float(s.seconds), 1), "detail": s.detail, "result": s.result or None,
+                "can_skip": s.can_skip, "can_resume": s.can_resume,
             })
         next_view = None
         if nxt.stage is not None:
@@ -172,34 +211,17 @@ class Coach:
                          "label": nxt.label, "text": nxt.text, "mode": nxt.stage, "context_id": set_id,
                          "file_name": item.manifest["file_name"] if item else None, "repeat": nxt.repeat}
         return {"set_id": rs.set_id, "name": rs.name or rs.set_id, "description": rs.description,
-                "stages": stages, "next": next_view, "complete": nxt.stage is None, "message": nxt.text}
+                "stages": stages, "next": next_view, "complete": nxt.stage is None, "message": nxt.text,
+                "gate": self.service.training_path.gate(user)}
 
-    # ------------------------------------------------- the five-stage path (later part)
-    #: The stages of ``POST /training/stage`` and what may be done to them (docs/web/api.md, "Training stages").
-    STAGE_KEYS = ("tour", "snippets", "guided", "practice", "assessment")
-    STAGE_ACTIONS = ("skip", "done", "resume")
-
+    # ------------------------------------------------------- the five-stage path
     def stage_action(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
-        """``POST /training/stage``: the request is checked here; skipping, finishing and resuming the stages of
-        the five-stage path come with that path (until then the study answers 501 ``not_offered``)."""
-        stage, action = body.get("stage"), body.get("action")
-        if stage not in self.STAGE_KEYS or action not in self.STAGE_ACTIONS:
-            raise self._api(400, "bad_request", "stage must be one of tour, snippets, guided, practice or assessment, "
-                            "and action one of skip, done or resume")
-        if stage == "assessment" and action == "skip":
-            raise self._api(409, "cannot_skip", "The competency assessment cannot be skipped: it is passed before "
-                            "real study work begins.")
-        if not self.store.programme(user.annotator_id):
-            raise self._api(404, "no_programme", "You are not taking part in a training programme")
-        raise self._api(501, "not_offered", "This study does not offer the training path's stages yet.")
+        """``POST /training/stage``: skip, finish or resume a stage (electrotag/web/training_path.py)."""
+        return self.service.training_path.stage_action(user, body)
 
     def snippets_view(self, user: User) -> dict[str, Any]:
-        """``GET /training/snippets``: the artifact snippets of the trainee's set and the manifests of their
-        recordings. Sets keep no snippets yet, so the gallery is empty (and its quiz is the set's own)."""
-        set_id = self.store.programme(user.annotator_id)
-        if not set_id:
-            raise self._api(404, "no_programme", "You are not taking part in a training programme")
-        return {"set_id": set_id, "snippets": [], "recordings": {}, "quiz": None}
+        """``GET /training/snippets``: the snippets of the trainee's set (electrotag/web/training_path.py)."""
+        return self.service.training_path.snippets_view(user)
 
     # -------------------------------------------------------------- guided
     def _guided(self, user: User, recording_id: str) -> tuple[ReferenceSet, WorkItem]:
@@ -335,6 +357,9 @@ class Coach:
 
     def guided_view(self, user: User, rid: str) -> dict[str, Any]:
         rs, item = self._guided(user, rid)
+        kind = GUIDANCE_KINDS.get(rs.guidance_for(rid))
+        if kind is not None:
+            return kind.view(self, user, rs, item)
         steps = self._steps(rs, rid)
         st = self._state(user, rs, rid)
         tol = Tolerance.from_dict(rs.guided.get("tolerance"))
@@ -485,6 +510,9 @@ class Coach:
     def verify_for_saving(self, user: User, rs: ReferenceSet, rid: str, anns: list[ArtifactAnnotation],
                           sfreq: float) -> dict[str, Any]:
         """Save and Finish of a guided recording: every step must still match and nothing extra be marked."""
+        kind = GUIDANCE_KINDS.get(rs.guidance_for(rid))
+        if kind is not None:
+            return kind.verify(self, user, rs, rid, anns, sfreq)
         steps = self._steps(rs, rid)
         st = self._state(user, rs, rid)
         tol = Tolerance.from_dict(rs.guided.get("tolerance"))
@@ -514,7 +542,11 @@ class Coach:
                             "Delete them before you save.")
         return dict(st["summary"] or self._summary(st, len(steps), rs.guidance_for(rid)))
 
-    def record_guided(self, user: User, rs: ReferenceSet, rid: str, summary: dict[str, Any]) -> dict[str, Any]:
+    def record_guided(self, user: User, rs: ReferenceSet, rid: str, summary: dict[str, Any],
+                      document: Any = None) -> dict[str, Any]:
+        kind = GUIDANCE_KINDS.get(rs.guidance_for(rid))
+        if kind is not None:
+            return kind.record(self, user, rs, rid, summary, document)
         try:
             self.store.progress(rs, user.annotator_id).record_guided(rid, summary)
         except OSError:
@@ -577,7 +609,9 @@ class Coach:
         from electrotag.training.assessment import competency_summary_html
 
         total = rs.assessment_recordings
-        done = self.store.completed(user.annotator_id, "assessment", rs.set_id) & set(total)
+        # what counts as done since the study team reopened the training, if they did (programme.stage_marks)
+        a = next(s for s in self._states(rs, user.annotator_id)[0] if s.key == "assessment")
+        done = set(a.done_ids)
         if len(done) < len(total):
             return {"complete": False, "done": len(done), "total": len(total),
                     "message": "Your annotations for this assessment recording were saved."}

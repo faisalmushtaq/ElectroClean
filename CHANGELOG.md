@@ -45,8 +45,8 @@ beside their own, with each change and its reason, when the study shows correcti
 plays a person's sessions on a recording back from the interaction log, with play, pause, speed,
 steps by event or by change, a scrubber, Skip pauses and Follow the annotator, and says at the end
 whether the replay matches the saved version. Experts and administrators may replay anyone; trainees
-watch only the sessions of experts who agreed to it, through Watch an expert at work on the home
-page, and the study checks this for every request. The browser now logs a snapshot of the
+watch only the sessions of experts who agreed to it, through Watch an expert at work on their
+training path (the Learn with the experts stage), and the study checks this for every request. The browser now logs a snapshot of the
 annotations a recording opens with (`annotations_snapshot`), sends the session's ID with each save,
 and logs work brought back in a tab; the logging notice says that sessions can be replayed. The
 results zip and the export hold `corrections/corrections.tsv` and `.json`, and the demonstration does
@@ -84,6 +84,22 @@ at its moment in the EEG, the list downloads as TSV or JSON, and an entry can be
 a training snippet that keeps where it came from. The results hold every decision
 (`adjudications/decisions.tsv`) and the library (`library/library.tsv`). The sandbox says that this
 needs a study server.
+
+The training path now has five stages: Find your way around, a hands-on tour of the annotation view on
+a practice recording made in the browser (each step, from moving through the recording to Save and
+Finish, names its keys and is ticked when it is done, and nothing is kept); Meet the artifacts, a
+gallery of short examples of each artifact type from the set, with the experts' notes, followed by
+the set's quiz as a recognition check; then Learn with the experts, On your own and the Competency
+assessment as before. A trainee may skip any stage but the assessment, as the study's training policy
+allows (Study settings, Training policy), after a question, and take a skipped stage up again with Do
+it after all; every skip is kept with the trainee's progress, logged, and listed in the competency
+report. Real study work now waits for a passed assessment by default: a trainee's study recordings
+are listed as Locked, with the reason on the home page and the training path, and the study refuses
+to open, save or set them aside until the assessment is met (experts and administrators never wait).
+After an assessment that did not meet the criteria, the study team reopens the training or gives a
+new assessment set from the trainee's page in People, each audited. Training has a Snippets tab for
+the study team's own examples, which experts can add too; practice and assessment recordings never
+give snippets. On the training path the next step and its button now come first, above the stages.
 
 The agreement analysis can now compare the experts' versions as well as the originals. Versions, in
 the admin area's Analyses (`versions` in the operation, `--versions` for `electrotag-agreement`),
