@@ -20,7 +20,8 @@ split      one person has two or more marks in the cluster
 Each cluster has a stable identifier, made from the people and the annotation IDs of its marks
 (:func:`conflict_id`), so that decisions stored against it stay attached as long as the inputs are
 the same frozen versions. An adjudicator decides each conflict (:func:`apply_decision`): keep one
-person's marks, keep all of them, keep none, or replace them with marks of their own. The
+person's marks, keep all of them, keep none, keep some marks chosen one by one (from different people
+if need be), or replace them with marks of their own. The
 adjudicated version is the agreed marks plus the decided ones (:func:`adjudicated_annotations`).
 
 Everything here is plain Python on annotation documents: no web code, no files.
@@ -41,12 +42,16 @@ from electrotag.reliability.matching import channel_jaccard, events_for, match_e
 
 #: The kinds of conflict, in the order they are listed.
 KINDS = ("presence", "type", "timing", "channels", "split")
-#: What an adjudicator may decide, besides keeping one person's marks (their letter).
-CHOICE_WORDS = ("all", "none", "edited")
+#: What an adjudicator may decide, besides keeping one person's marks (their letter): everyone's marks, none, some
+#: marks chosen one by one (from different people, ``picks``), or marks of their own (``marks``).
+CHOICE_WORDS = ("all", "none", "pick", "edited")
 #: Letters given to the versions compared, in order (at most six people per adjudication).
 LETTERS = ("A", "B", "C", "D", "E", "F")
 #: The most marks an adjudicator's own replacement of a conflict may hold.
 MAX_EDITED_MARKS = 5
+#: How a decision turned out for one of the people compared (:func:`outcome_for`): what they marked, or did not
+#: mark, measured against what the decision kept.
+OUTCOMES = ("yours_kept", "all_kept", "part_kept", "other_kept", "none_kept", "edited")
 
 
 class ConflictError(ValueError):
@@ -285,8 +290,9 @@ def apply_decision(cluster: Cluster, decision: Mapping[str, Any],
     """The marks a decision keeps for a conflict.
 
     ``choice`` is a letter (that person's marks as they are), ``all`` (everyone's, merged by type: one mark per
-    type spanning that type's marks, on the channels they cover together), ``none`` (no mark), or ``edited``
-    (``marks``: the adjudicator's own, given as annotations)."""
+    type spanning that type's marks, on the channels they cover together), ``none`` (no mark), ``pick``
+    (``picks``: the marks chosen one by one, ``{"letter", "annotation_id"}``, from one person or several, each as
+    it is) or ``edited`` (``marks``: the adjudicator's own, given as annotations)."""
     choice = decision.get("choice")
     base = cluster.cluster_id
     if choice in cluster.letters:
@@ -296,6 +302,10 @@ def apply_decision(cluster: Cluster, decision: Mapping[str, Any],
         return _union_by_label(cluster.marks, tuple(ch_names), base)
     if choice == "none":
         return []
+    if choice == "pick":
+        chosen = picked_marks(cluster, decision.get("picks"))
+        return [_annotation(f"{base}-{m.letter}{n}", m.label, m.start, m.stop, m.channels)
+                for n, m in enumerate(chosen, start=1)]
     if choice == "edited":
         marks = list(decision.get("marks") or [])
         if not 1 <= len(marks) <= MAX_EDITED_MARKS:
@@ -307,6 +317,62 @@ def apply_decision(cluster: Cluster, decision: Mapping[str, Any],
             out.append(a.with_changes(annotation_id=f"{base}-e{n}", confidence=None, note=""))
         return out
     raise ConflictError(f"Unknown choice {choice!r}")
+
+
+def picked_marks(cluster: Cluster, picks: Any) -> list[Mark]:
+    """The marks of a ``pick`` decision, in the cluster's order; raises :class:`ConflictError` when a pick is not one
+    of the cluster's marks, is given twice, or when nothing is picked."""
+    if not isinstance(picks, (list, tuple)) or not picks:
+        raise ConflictError("Choose at least one mark to keep")
+    want: set[tuple[str, str]] = set()
+    for p in picks:
+        if not isinstance(p, Mapping):
+            raise ConflictError("Each mark kept is given by its letter and annotation_id")
+        key = (str(p.get("letter") or ""), str(p.get("annotation_id") or ""))
+        if key in want:
+            raise ConflictError("A mark is chosen twice")
+        want.add(key)
+    found = [m for m in cluster.marks if (m.letter, m.annotation_id) in want]
+    if len(found) != len(want):
+        raise ConflictError("A mark chosen is not one of this conflict's marks")
+    return found
+
+
+def kept_marks(cluster: Cluster, decision: Mapping[str, Any]) -> set[tuple[str, str]]:
+    """The marks of the people compared that a decision keeps, as (letter, annotation ID): one person's, everyone's,
+    the ones picked, or none (``none``, and ``edited``, whose marks are the adjudicator's own)."""
+    choice = decision.get("choice")
+    if choice in cluster.letters:
+        return {(m.letter, m.annotation_id) for m in cluster.marks_of(str(choice))}
+    if choice == "all":
+        return {(m.letter, m.annotation_id) for m in cluster.marks}
+    if choice == "pick":
+        return {(m.letter, m.annotation_id) for m in picked_marks(cluster, decision.get("picks"))}
+    return set()
+
+
+def outcome_for(cluster: Cluster, decision: Mapping[str, Any], letter: str) -> str:
+    """How a decision turned out for the person behind ``letter`` (one of :data:`OUTCOMES`), from what it kept
+    rather than from which letter was chosen: keeping a version without a mark agrees with everyone who left it
+    unmarked too.
+
+    ``yours_kept``: what they did stood (their marks kept and nobody else's, or no mark where they had none);
+    ``all_kept``: their marks kept together with others'; ``part_kept``: some of their marks kept, not all;
+    ``other_kept``: others' marks kept, none of theirs; ``none_kept``: their marks dropped and nothing kept;
+    ``edited``: the adjudicator's own marks replace the conflict."""
+    if decision.get("choice") == "edited":
+        return "edited"
+    mine = {(m.letter, m.annotation_id) for m in cluster.marks_of(letter)}
+    kept = kept_marks(cluster, decision)
+    others = kept - mine
+    if not mine:
+        return "other_kept" if others else "yours_kept"
+    got = kept & mine
+    if not got:
+        return "other_kept" if others else "none_kept"
+    if got != mine:
+        return "part_kept"
+    return "all_kept" if others else "yours_kept"
 
 
 def adjudicated_annotations(clusters: Iterable[Cluster], decisions: Mapping[str, Mapping[str, Any]],
@@ -332,6 +398,6 @@ def label_pair(cluster: Cluster) -> tuple[str, str] | None:
     return (labels[0], labels[1]) if len(labels) == 2 else None
 
 
-__all__ = ["CHOICE_WORDS", "KINDS", "LETTERS", "MAX_EDITED_MARKS", "Cluster", "ConflictError", "ConflictRules", "Mark",
-           "adjudicated_annotations", "agreed_mark", "apply_decision", "conflict_id", "find_clusters", "kinds_of",
-           "label_pair"]
+__all__ = ["CHOICE_WORDS", "KINDS", "LETTERS", "MAX_EDITED_MARKS", "OUTCOMES", "Cluster", "ConflictError",
+           "ConflictRules", "Mark", "adjudicated_annotations", "agreed_mark", "apply_decision", "conflict_id",
+           "find_clusters", "kept_marks", "kinds_of", "label_pair", "outcome_for", "picked_marks"]

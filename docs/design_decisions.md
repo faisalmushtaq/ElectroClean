@@ -659,6 +659,20 @@ expert promotes (a quiz item or a snippet, with the conflict it came from) is st
 costs a few file reads per unit, which is fine for hundreds of recordings; the call looks at no
 more than 500 units.
 
+After the first hands-on review (30 October), four more decisions. An annotator's outcome is worked
+out from what a decision kept, rather than from which letter was chosen: with three people, keeping
+the version of someone who left a place unmarked also agrees with everyone else who left it
+unmarked, and a card that judged by the letter told them the opposite. Keeping marks of several
+people for one place (`pick`) became a choice of its own, rather than an edited copy, so that the
+annotators whose marks were kept are told so and the analyses count it. A finished adjudication can
+be reopened, as screening tools allow, but nothing is overwritten: the record keeps what was
+finished in its history, every adjudicated version stays in the derived tree, and the latest
+finished one counts, so a reopened adjudication goes on giving its earlier answer until the newer
+one exists. There is no study-wide default reason: a reason records the adjudicator's judgement at
+that place, and a default would fill the record with reasons nobody gave; Shift and a digit makes a
+chosen reason one key, and the study's rule can ask for reasons only when keeping nothing or
+drawing a mark.
+
 ## Decisions still open
 
 1. **Agreement settings to pre-register:** bin widths, the bin coverage rule,

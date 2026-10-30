@@ -274,11 +274,14 @@ def test_annotators_see_the_outcome_of_their_conflicts(service: StudyService, re
     item = fb["items"][0]
     assert item["recording_id"] == SUB1 and len(item["conflicts"]) == 3
     outcomes = [(c["decision"]["outcome"], len(c["yours"]), len(c["others"])) for c in item["conflicts"]]
-    assert outcomes == [("other_kept", 1, 1), ("yours_kept", 1, 0), ("all_kept", 0, 1)]
+    # from what was kept: at 32 s A01 had no mark and A02's was kept, so a colleague's mark was kept
+    assert outcomes == [("other_kept", 1, 1), ("yours_kept", 1, 0), ("other_kept", 0, 1)]
+    assert item["k"] == 2 and item["reopened"] is False
     assert item["conflicts"][0]["decision"]["reason"] == "seen in the EEG"
     assert "A02" not in json.dumps(item) and "E01" not in json.dumps(item)  # nobody else is named
     other = service.call("my_feedback", A02, {})["adjudications"]["items"][0]["conflicts"]
-    assert [c["decision"]["outcome"] for c in other] == ["yours_kept", "other_kept", "all_kept"]
+    # A02's own mark at 32 s, kept by "all" with nobody else's: what they did stood
+    assert [c["decision"]["outcome"] for c in other] == ["yours_kept", "other_kept", "yours_kept"]
     service.call("admin", ADMIN, {"op": "settings_update",
                                   "settings": {"review": {"show_outcomes_to_annotators": False}}})
     assert service.call("my_feedback", A01, {})["adjudications"] == {"shown": False, "items": []}
@@ -355,6 +358,11 @@ def test_two_corrections_of_the_same_work_are_adjudicated(service: StudyService,
         assert ex_err(service, who, "adjudication_start", {"unit_id": uid}).code == "own_task"
     got = ex(service, E03, "adjudication_start", {"unit_id": uid})
     assert [c["kinds"] for c in got["conflicts"]] == [["type"], ["presence"]]
+    # the adjudicator sees why each expert changed the work, and the original they corrected
+    e01 = next(v for v in got["versions"] if v["annotator_id"] == "E01")
+    assert [(c["annotation_id"], c["change"], c["reason"], c["reason_text"]) for c in e01["changes"]] == [
+        (MINE[0]["annotation_id"], "changed", "wrong_type", "Wrong type")]
+    assert got["original"]["annotator_id"] == "A01" and len(got["original"]["annotations"]) == 3
     assert {m["annotator_id"] for m in got["conflicts"][0]["marks"]} == {"E01", "E02"}
     assert got["adjudication"]["inputs"]["E02"]["source"] == "correction"
     for c, choice in zip(got["conflicts"], ("A", "B"), strict=True):
@@ -382,6 +390,7 @@ def test_the_library_filters_and_counts(service: StudyService, recordings: Path)
     e0 = next(e for e in lib["entries"] if e["conflict_id"] == c0)
     assert e0["entry_id"] == f"{U1}:{c0}" and e0["status"] == "decided" and e0["decision"]["choice"] == "B"
     assert e0["adjudicator_id"] == "E01" and e0["annotators"] == ["A01", "A02"] and not e0["finished"]
+    assert e0["promoted"] == []
     assert {m["annotator_id"] for m in e0["marks"]} == {"A01", "A02"}
 
     def n(**f: Any) -> int:
@@ -421,14 +430,18 @@ def test_entries_are_promoted_with_their_provenance_once(service: StudyService, 
     rs = service.store.reference_set(set_id)
     assert len(rs.quiz_items) == 1 and rs.quiz_items[0].source["promote_id"] == "1" * 32
     assert service.store.manifest(f"set:{set_id}", SUB1) is not None  # copied into the set, as for a reference
-    # a snippet; an undecided conflict needs a label
+    lib = {e["entry_id"]: e for e in ex(service, E01, "library_list")["entries"]}
+    assert lib[f"{U1}:{c0}"]["promoted"] == [{"set_id": set_id, "to": "quiz_item", "id": "q01"}]
+    # a snippet; an undecided conflict is refused, whatever it would become
     snip = ex(service, E01, "library_promote", {"promote_id": "3" * 32, "entry_id": f"{U1}:{c0}", "to": "snippet",
                                                 "set_id": set_id, "explanation": "Sideways eye movement"})
     assert snip["snippet"]["snippet_id"] == "s01" and snip["snippet"]["label"] == MOVE
     assert service.store.reference_set(set_id).snippets[0]["source"]["promote_id"] == "3" * 32
-    e = ex_err(service, E01, "library_promote", {"promote_id": "4" * 32, "entry_id": f"{U1}:{c1}", "to": "quiz_item",
-                                                 "set_id": set_id})
-    assert e.code == "undecided"
+    for to in ("quiz_item", "snippet"):
+        e = ex_err(service, E01, "library_promote", {"promote_id": "4" * 32, "entry_id": f"{U1}:{c1}", "to": to,
+                                                     "set_id": set_id, "label": BLINK})
+        assert e.code == "undecided" and e.status == 409
+    ex(service, E01, "adjudication_decide", {"unit_id": U1, "conflict_id": c1, "choice": "A", "reason": "a blink"})
     labelled = ex(service, E01, "library_promote", {"promote_id": "4" * 32, "entry_id": f"{U1}:{c1}", "to": "quiz_item",
                                                     "set_id": set_id, "label": BLINK, "start_s": 19.5, "end_s": 21})
     assert (labelled["item"]["item_id"], labelled["item"]["start_s"]) == ("q02", 19.5)
@@ -458,6 +471,10 @@ def test_the_results_hold_the_decisions_and_the_library(service: StudyService, r
     assert decisions[0].split("\t")[:3] == ["unit_id", "unit_kind", "recording_id"] and len(decisions) == 4
     assert all(row.split("\t")[12] == "A" for row in decisions[1:])
     assert library[0].startswith("entry_id\tunit_id") and len(library) == 4
+    head = library[0].split("\t")
+    row = dict(zip(head, library[1].split("\t"), strict=True))
+    # the letters change from unit to unit: the export says who each one is, and whose marks were kept
+    assert (row["letters"], row["choice"], row["kept_annotator_ids"]) == ("A=A01,B=A02", "A", "A01")
 
 
 def test_the_routes_of_the_server(template: Path, study: Path, recordings: Path) -> None:
@@ -526,3 +543,81 @@ def test_tasks_made_by_the_tasks_part_are_units_with_their_conflicts_counted(ser
     ex(service, E01, "adjudication_finish", {"unit_id": tid})
     out = service.call("admin", ADMIN, {"op": "tasks_list"})["tasks"]
     assert next(t for t in out if t["task_id"] == tid)["status"] == "adjudicated"
+
+
+def test_marks_of_different_people_are_kept_for_one_conflict(service: StudyService, recordings: Path) -> None:
+    from electrotag.web.library import library_rows
+
+    two_saved(service, recordings)
+    got = ex(service, E01, "adjudication_start", {"unit_id": U1})
+    c0 = got["conflicts"][0]
+    picks = [{"letter": m["letter"], "annotation_id": m["annotation_id"]} for m in c0["marks"]]
+    body = {"unit_id": U1, "conflict_id": c0["conflict_id"], "choice": "pick", "reason_code": "both_valid"}
+    out = ex(service, E01, "adjudication_decide", {**body, "picks": picks})
+    d = out["conflict"]["decision"]
+    assert d["choice"] == "pick" and sorted(r["label"] for r in d["result"]) == [BLINK, MOVE]
+    assert ex(service, E01, "adjudication_decide", {**body, "picks": picks[::-1]})["already"] is True
+    for bad in ([], [{"letter": "A", "annotation_id": "nope"}], [picks[0], picks[0]], None):
+        assert ex_err(service, E01, "adjudication_decide", {**body, "picks": bad}).code == "invalid_choice"
+    # up to five marks of the adjudicator's own
+    c1 = got["conflicts"][1]["conflict_id"]
+    own = [ann(str(i), BLINK, 4900 + 40 * i, 30) for i in range(5)]
+    out = ex(service, E01, "adjudication_decide", {"unit_id": U1, "conflict_id": c1, "choice": "edited",
+                                                   "reason": "five blinks", "marks": own})
+    assert len(out["conflict"]["decision"]["result"]) == 5
+    assert ex_err(service, E01, "adjudication_decide", {"unit_id": U1, "conflict_id": c1, "choice": "edited",
+                                                         "reason": "six", "marks": own + own[:1]}).code \
+        == "invalid_annotation"
+    entry = next(e for e in ex(service, E01, "library_list", {"choice": "pick"})["entries"])
+    assert library_rows([entry])[0]["kept_annotator_ids"] == ["A01", "A02"]
+
+
+def test_a_finished_adjudication_is_reopened_and_the_latest_finished_version_counts(
+        service: StudyService, recordings: Path, study: Path) -> None:
+    def agreement() -> dict[str, Any]:
+        out = service.call("admin", ADMIN, {"op": "agreement", "config": {"resolutions_s": [1.0]},
+                                            "versions": "adjudicated", "annotator_ids": ["A01", "A02"]})
+        table = out["tables"]["adjudication.tsv"].splitlines()
+        return dict(zip(table[0].split("\t"), table[1].split("\t"), strict=True))
+
+    two_saved(service, recordings)
+    assert ex_err(service, E01, "adjudication_reopen", {"unit_id": U1}).code == "not_started"
+    got = ex(service, E01, "adjudication_start", {"unit_id": U1})
+    decide_all(service, got)
+    ex(service, E01, "adjudication_finish", {"unit_id": U1})
+    assert agreement()["n_adjudicated"] == "3"
+    # only the adjudicator (or an administrator) reopens it, never someone whose work it compares
+    assert ex_err(service, E02, "adjudication_reopen", {"unit_id": U1}).code == "not_yours"
+    a02x = User("A02", "Annotator two", roles=("annotator", "expert"))
+    assert ex_err(service, a02x, "adjudication_reopen", {"unit_id": U1}).code == "own_task"
+    out = ex(service, E01, "adjudication_reopen", {"unit_id": U1, "reason": "a second look at 32 s"})
+    rec = out["adjudication"]
+    assert out["already"] is False and rec["state"] == "in_progress" and rec["version"] is None
+    assert len(rec["history"]) == 1 and rec["history"][0]["version"]["attempt"] == 1
+    assert rec["history"][0]["reason"] == "a second look at 32 s" and len(rec["decisions"]) == 3
+    assert ex(service, E01, "adjudication_reopen", {"unit_id": U1})["already"] is True
+    assert unit_row(service)["status"] == "adjudicating"
+    audit = next(x for x in service.store.audit_page(None, 50)[0] if x["op"] == "adjudication_reopen")
+    assert audit["details"]["reason_length"] == len("a second look at 32 s") and "reason" not in audit["details"]
+    # until it is finished again, the version finished before is the one that counts
+    fb = service.call("my_feedback", A01, {})["adjudications"]["items"][0]
+    assert fb["reopened"] is True and len(fb["conflicts"]) == 3
+    assert agreement()["n_adjudicated"] == "3"
+    set_id = service.call("admin", ADMIN, {"op": "set_create", "set_id": "reopened"})["set"]["set_id"]
+    ref = ex(service, E01, "adjudication_reference", {"unit_id": U1, "set_id": set_id, "use": "practice"})
+    assert next(r for r in ref["set"]["recordings"] if r["recording_id"] == SUB1)["n_reference_events"] == 3
+    # a changed decision, and finished again: a newer version, the earlier one kept
+    c2 = got["conflicts"][2]["conflict_id"]
+    ex(service, E01, "adjudication_decide", {"unit_id": U1, "conflict_id": c2, "choice": "all", "reason": "both"})
+    fin = ex(service, E01, "adjudication_finish", {"unit_id": U1})
+    assert fin["version"]["attempt"] == 2 and fin["adjudication"]["state"] == "finished"
+    entries = service.store.derived_entries("adjudications", ADJUDICATED)
+    assert len(entries) == 2
+    assert service.store.derived_files("adjudications", ADJUDICATED, SUB1, 1)  # never deleted
+    row = agreement()
+    assert (row["n_adjudicated"], row["kept_all"], row["kept_one"]) == ("4", "1", "2")
+    fb = service.call("my_feedback", A01, {})["adjudications"]["items"][0]
+    assert fb["reopened"] is False and fb["conflicts"][2]["decision"]["outcome"] == "other_kept"
+    # an administrator may reopen it, and continues it themselves
+    out = ex(service, ADMIN, "adjudication_reopen", {"unit_id": U1})
+    assert out["adjudication"]["adjudicator_id"] == "ADMIN" and len(out["adjudication"]["history"]) == 2
