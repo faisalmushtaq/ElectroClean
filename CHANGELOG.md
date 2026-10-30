@@ -23,6 +23,19 @@ out as tasks now writes each person's assignments in one step, which on Firebase
 share-out far quicker. This part covers the study's records and operations
 (docs/web/api.md, "Datasets, collections, groups and hand-outs").
 
+The study team can track who has rated which recordings and when. For every dataset, collection and
+hand-out, the admin area's figures give each person's recordings given, opened, in progress, saved,
+revised, set aside and waiting for the training gate, with the overdue ones and the dates, and for any
+one of them a grid of its recordings against people, paged a thousand at a time and filtered by
+status, person, overdue work, ratings or a search, showing each recording's ratings against its
+target. Everything is derived from the study's own records, and a study of 5,000 recordings and ten
+people answers in about a second; on Firebase the figures are kept for up to two minutes and can be
+read again at once. The study sends no email: the admin area lists what would be notified instead
+(datasets and collections newly fully rated, a reminder for each person with overdue work as they
+would read it, and a weekly summary the team can copy). The results zip and `electrotag web export`
+gain a `datasets/` folder with the datasets, collections, groups with their membership history,
+hand-outs and the tracking at that moment (docs/file_formats.md).
+
 Annotators given recordings with a due date see a Due card on their first page, one line for each
 hand-out with its title, how many of its recordings are left and the date, marked Overdue once the date
 has passed while work remains; Show these narrows the list to that hand-out. The To do and All tabs list
