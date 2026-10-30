@@ -376,3 +376,40 @@ def build_events_sidecar(
         "notes": notes,
     }
     return out, notes
+
+
+# ----------------------------------------------------------------------------- bad channels
+#: Columns of the ``_channels.tsv`` written beside an annotator's results when they marked channels bad,
+#: as in a BIDS ``channels.tsv`` (name, type and units, then status and status_description).
+CHANNELS_COLUMNS = ["name", "type", "units", "status", "status_description"]
+#: BIDS channel types for MNE's.
+_BIDS_TYPES = {"eeg": "EEG", "eog": "EOG", "ecg": "ECG", "emg": "EMG", "misc": "MISC", "stim": "TRIG",
+               "resp": "RESP", "seeg": "SEEG", "ecog": "ECOG", "temperature": "TEMP", "gsr": "GSR"}
+
+
+def bids_channel_type(mne_type: str) -> str:
+    t = str(mne_type or "").strip().lower()
+    return _BIDS_TYPES.get(t, t.upper() or "MISC")
+
+
+def channels_tsv_bytes(doc: AnnotationDocument, channel_types: dict[str, str] | None = None) -> bytes:
+    """The annotator's judgement of each shown channel as a BIDS-style ``channels.tsv``: ``status`` is ``bad``
+    for the channels they marked bad for the whole recording (with a ``status_description`` saying so) and
+    ``good`` for the others. ``units`` is ``n/a``: the dataset's own ``channels.tsv`` gives them."""
+    from electrotag.app.annotations.model import bad_channel_description
+
+    types = channel_types or {}
+    bad = set(doc.bad_channels)
+    rows = [[name, bids_channel_type(types.get(name, "eeg")), NA, "bad" if name in bad else "good",
+             bad_channel_description(doc.annotator_id) if name in bad else NA] for name in doc.recording.ch_names]
+    return tsv_bytes(CHANNELS_COLUMNS, rows)
+
+
+def bad_channels_from_channels_tsv(data: bytes | str) -> tuple[str, ...]:
+    """The channels with status ``bad`` in a ``channels.tsv``, in the order of the file."""
+    text = data.decode("utf-8") if isinstance(data, bytes) else data
+    columns, rows = parse_tsv_text(text, "channels.tsv")
+    if "name" not in columns or "status" not in columns:
+        raise ExportError("channels.tsv lacks the name or status column")
+    i, j = columns.index("name"), columns.index("status")
+    return tuple(r[i] for r in rows if r[j] == "bad")

@@ -689,7 +689,13 @@ a change to apply to it.
 random among those they have not finished, in a reproducible order made from a seed and the
 annotator's ID, or in the order they were assigned. Unfinished work always comes first.
 **Annotation** chooses the artifact types on the number keys 1 to 9, in the order the toolbar shows
-them, and the shortest annotation in samples. Under Long sessions it also sets three comforts for
+them, and the shortest annotation in samples. Data-artifact, the type for an artifact whose type
+cannot be told, always has the key 0 and its own Uncertain button, so it is left out of the numbered
+keys when it is chosen for one. **Join a mark that overlaps another of the same type**
+(`annotation.merge_overlapping`, on by default) joins a mark drawn or changed so that it overlaps
+another of the same type on the same channels into one, and tells the annotator, whose Undo takes it
+back; off, overlapping marks stay as drawn. Marks with a gap between them, however brief, and marks
+that only touch are never joined, so separate occurrences stay separate. Under Long sessions it also sets three comforts for
 annotators who work for hours: after how many minutes of work since their last break they are
 offered a break (50 by default), after how many minutes without any input the working-time clock
 pauses itself (3 by default), and whether Save and Finish first lists the parts of the recording that
@@ -796,7 +802,11 @@ session" below says how to give them sessions to watch.
 
 Saved work lists every saved study recording, the latest version of each person's work, newest
 first, with its version, when it was saved, its number of annotations and how many corrections that
-version has. Choose a person, a recording, or whether it was corrected, to narrow the list. Each row
+version has. Under the number of annotations, "2 marks need review" counts the marks of the
+uncertain type, Data-artifact, which annotators make when they can see an artifact but cannot tell
+its type, and a line counts the channels the annotator marked bad for the whole recording. Choose a
+person, a recording, whether it was corrected, or Marks need review, to narrow the list; Correct or
+Everyone then shows those marks, labelled Uncertain on the EEG. Each row
 has Correct, Replay and Everyone (everyone's marks on that recording, with this person in a lane:
 "Everyone's marks on one recording" below); your own work has no Correct, because you revise it from your history on the
 home page, and Correct is off while the study takes no corrections (Study settings, Corrections and
@@ -901,6 +911,10 @@ with how many chose each, and who; a click lists everyone who marked that moment
 in a lane, which gives them a lane of their own. The crowd's list in the side panel finds anyone by
 ID or name, with the same button.
 
+**Needs review**, above the disagreements when there are any, counts the marks of the uncertain type
+(Data-artifact) and says whose they are; Show only these sets the type filter to them. On the EEG
+these marks are labelled Uncertain.
+
 The **filters** narrow what is shown: a type (the lanes and the crowd show only marks of that
 type), a role (annotators, experts or administrators in the crowd), and when the work was saved.
 When the study describes people further, for example by group or by experience, a filter for each
@@ -940,8 +954,10 @@ The **queue** (Adjudication in the expert area's menu, and in the Study group of
 menu) lists what can be adjudicated: each study recording given to two or more people, each task
 once its annotators have saved, and each saved recording that two or more experts have corrected,
 so that their corrections are settled before the corrected version is used. Its tabs show what is
-Ready (everyone has saved and there are conflicts), In progress, Finished, and Waiting (someone has
-not saved yet, or everyone agrees); the queue opens on In progress when you have adjudications of
+Ready (everyone has saved and there are conflicts), In progress, Finished, Waiting (someone has
+not saved yet, or everyone agrees) and Needs review, every row whose versions hold marks of the
+uncertain type (Data-artifact), whatever its status, with a chip such as "2 marks need review" beside
+its conflicts; the queue opens on In progress when you have adjudications of
 your own under way, and lists your own first. Each row says what is compared (the whole recording,
 a part of it, or the corrections of someone's version), its annotators, the number of conflicts and
 how many are decided, and the adjudicator; a row you cannot start says why (your own work, or

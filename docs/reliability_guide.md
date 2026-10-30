@@ -288,6 +288,25 @@ disjoint set the expert sees a channel conflict. A study whose experts should lo
 in the channels sets `channel_jaccard` higher, up to 1, which asks for the same channels exactly; the
 setting is frozen with each adjudication when it starts.
 
+### Channels marked bad and uncertain marks
+
+Annotators can mark a channel as bad for the whole recording. Their agreement on this is reported in
+tables of its own, apart from the artifact tables. `bad_channels_by_channel.tsv` lists every channel
+someone marked bad, with how many of the recording's annotators did and who.
+`bad_channels_pairwise.tsv` compares each pair of annotators of a recording with each channel as one
+unit, bad or not, and gives the 2×2 counts, the proportion and positive agreement and Cohen's kappa,
+computed as in the time-resolved tables. The artifact tables are left as they are: a mark on a
+channel its annotator also called bad still counts. Leaving such channels out would change what each
+annotator is compared with, differently for each pair, and the bad-channel tables show where it
+matters; a study that wants those channels left out can name them in `channel_exclude`.
+
+A mark of the uncertain type, *Data-artifact*, shown to annotators as Uncertain / needs review, is
+an artifact whose type the annotator could not tell. In the artifact tables it is a category of its
+own, as every type is, so it never counts as agreement with a specific type. `uncertain_by_annotator.tsv`
+counts these marks apart for each recording and annotator: how many, their share of the annotator's
+marks, their time and the share of the recording they cover. A high share points to an annotator, or
+a recording, that the experts should look at.
+
 ## 4. Category disagreements
 
 `confusion_time_weighted.tsv` gives, for each pair of annotators, the time

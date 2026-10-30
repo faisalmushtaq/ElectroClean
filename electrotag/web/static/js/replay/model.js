@@ -306,6 +306,8 @@ export function captionOf(e) {
     case 'recording_finished': return `Save and Finish with ${e.n_annotations ?? 'the'} annotations`;
     case 'closed_without_saving': return e.kept ? 'Closed, to finish later' : 'Closed without saving';
     case 'coverage_check': return 'Checked the parts not yet viewed';
+    case 'channel_bad': return e.bad ? `Marked ${e.channel} bad for the whole recording` : `Marked ${e.channel} good again`;
+    case 'channel_selection_cleared': return 'Cleared the channel selection';
     default: return null;
   }
 }

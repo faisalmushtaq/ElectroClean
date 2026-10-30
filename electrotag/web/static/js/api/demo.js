@@ -615,7 +615,8 @@ export class DemoBackend {
           : this._metadataMessage(revisable.rid), {
           ...where(revisable), manifest: await this._publicManifest(revisable.rid), differences,
           draft: draft && draft.revises === version ? draft : null,
-          revision: { version: version + 1, revises: version, saved_at: last.saved_at, annotations: last.annotations.map(annotationOut) } });
+          revision: { version: version + 1, revises: version, saved_at: last.saved_at, annotations: last.annotations.map(annotationOut),
+            bad_channels: [...(last.bad_channels || [])] } });
       }
       const hint = revisable ? ' To change your annotations, open it from your history with Open to revise.' : '';
       return DemoBackend._answer('done', `You have already completed ${rid}.${hint} Choose another recording from your list.`, where(mine[0]));
@@ -656,8 +657,10 @@ export class DemoBackend {
     if (!Array.isArray(viewed) || viewed.length > 5000 || viewed.some((p) => !Array.isArray(p) || p.length !== 2 || p.some((x) => typeof x !== 'number' || !Number.isFinite(x)) || !(p[0] >= 0 && p[0] <= p[1]))) {
       throw new ApiError(422, 'invalid_draft', 'draft.viewed must be a list of [start_s, end_s] pairs of seconds');
     }
+    const bad = draft.bad_channels === undefined ? [] : draft.bad_channels;
+    if (!Array.isArray(bad) || bad.length > 4096 || bad.some((c) => typeof c !== 'string' || c.length > 200)) throw new ApiError(422, 'invalid_draft', 'draft.bad_channels must be a list of channel names');
     const saved_at = nowLocalIso();
-    this.state.drafts[item.key] = { annotations: anns, view: draft.view || {}, elapsed_s: Math.min(elapsed, MAX_ELAPSED_S), viewed, saved_at,
+    this.state.drafts[item.key] = { annotations: anns, view: draft.view || {}, elapsed_s: Math.min(elapsed, MAX_ELAPSED_S), viewed, saved_at, bad_channels: [...new Set(bad)],
       ...(revises !== null ? { revises } : {}) };
     this._save();
     return { saved_at };
@@ -710,6 +713,16 @@ export class DemoBackend {
     return annotations.map((a) => ({ ...a, channels: info.ch_names.filter((c) => (a.channels || []).includes(c)), confidence: a.confidence ?? null, note: (a.note || '').trim() }));
   }
 
+  /** As service.py parse_bad_channels: the channels marked bad for the whole recording, shown ones only, in recording order. */
+  _badChannels(list, info) {
+    if (list === undefined || list === null) return [];
+    if (!Array.isArray(list) || list.some((c) => typeof c !== 'string')) throw new ApiError(422, 'invalid_annotation', 'bad_channels must be a list of channel names');
+    if (new Set(list).size !== list.length) throw new ApiError(422, 'invalid_annotation', 'bad_channels lists a channel more than once');
+    const unknown = [...new Set(list)].filter((c) => !info.ch_names.includes(c)).sort();
+    if (unknown.length) throw new ApiError(422, 'invalid_annotation', `bad_channels names channels that are not shown: ${unknown.slice(0, 5).join(', ')}`);
+    return info.ch_names.filter((c) => list.includes(c));
+  }
+
   /** As service.py confidence_and_note: a confidence is a whole number from 1 to 5 or none, and a note one line of at most 200 characters. */
   _checkConfidenceAndNote(a, where, code) {
     if (a.confidence !== undefined && a.confidence !== null && !isConfidence(a.confidence)) {
@@ -743,6 +756,7 @@ export class DemoBackend {
     if (typeof elapsed !== 'number' || !Number.isFinite(elapsed)) throw new ApiError(422, 'invalid_session', 'session.elapsed_s must be a number');
     if (elapsed < 0) throw new ApiError(422, 'invalid_session', 'session.elapsed_s must be at least 0');
     const annotations = this._validate(body.annotations, info);
+    const badChannels = this._badChannels(body.bad_channels, info);
     const guidedSummary = item.mode === 'guided' ? this._verifyGuided(aid, rid, annotations) : null;
     const sid = sessionInfo.session_id;
     if (sid !== undefined && sid !== null && (typeof sid !== 'string' || !/^[0-9a-f]{32}$/i.test(sid))) {
@@ -769,7 +783,7 @@ export class DemoBackend {
     }
     this.state.submissions.push({
       key, annotator_id: aid, recording_id: rid, mode: item.mode, context_id: item.context_id, attempt, saved_at,
-      annotations, session: { ...sessionInfo, elapsed_s: Math.min(elapsed, MAX_ELAPSED_S) }, sha256: String(body.sha256).toLowerCase(),
+      annotations, bad_channels: badChannels, session: { ...sessionInfo, elapsed_s: Math.min(elapsed, MAX_ELAPSED_S) }, sha256: String(body.sha256).toLowerCase(),
       confidence_setting: this._admin.studyBlock().annotation.confidence,
       recording: { file_name: info.file_name, sfreq: info.sfreq, n_samples: info.n_samples, ch_names: info.ch_names, size_bytes: info.size_bytes },
       guided: guidedSummary, feedback: out.feedback ? { passed: out.feedback.passed, metrics: out.feedback.metrics } : null,
@@ -780,7 +794,7 @@ export class DemoBackend {
     this._save();
     // the output files, named as the server's OutputLayout names them
     const base = this._outputBasename(info, aid, attempt);
-    out.files = ['annotations.json', 'events.json', 'events.tsv', 'session.json', 'time_viewed.txt'].map((f) => `${base}_${f}`);
+    out.files = ['annotations.json', ...(badChannels.length ? ['channels.tsv'] : []), 'events.json', 'events.tsv', 'session.json', 'time_viewed.txt'].map((f) => `${base}_${f}`);
     out.next = (await this.assignments()).next;
     return out;
   }
@@ -1369,6 +1383,8 @@ export class DemoBackend {
           scope: a.channels.length ? 'channels' : 'whole_montage', created_at: a.created_at, modified_at: a.modified_at,
           confidence: a.confidence ?? null, note: a.note || '',
         })),
+        // the channels the annotator marked bad for the whole recording (docs/file_formats.md, schema 1.2.0)
+        bad_channels: [...(s.bad_channels || [])],
       };
     });
     return {

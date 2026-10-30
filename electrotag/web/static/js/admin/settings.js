@@ -174,6 +174,8 @@ export class SettingsSection {
     idlePause.name = 'idle_pause_minutes';
     const coverage = checkbox('Before Save and Finish, list the parts of the recording that have not been on the screen', (an.coverage_check ?? 'warn') !== 'off');
     const revisions = checkbox('Let annotators revise recordings they have finished', an.allow_revisions !== false);
+    const mergeOverlapping = checkbox('Join a mark that overlaps another of the same type on the same channels into one (marks with a gap between them always stay separate)', an.merge_overlapping !== false);
+    mergeOverlapping.input.name = 'merge_overlapping';
     const confidence = confidenceChoice(an.confidence);
     const reviews = checkbox('Let administrators review saved recordings (Agree, Caveat or Comment on each annotation)', an.allow_reviews !== false);
     const showReviews = checkbox('Show reviews to the annotators whose work was reviewed (off: blind reviews)', an.show_reviews_to_annotators !== false);
@@ -242,6 +244,7 @@ export class SettingsSection {
           idle_pause_minutes: numberOf(idlePause, 'Pause after', { min: 0, max: 60 }),
           coverage_check: coverage.input.checked ? 'warn' : 'off', allow_revisions: revisions.input.checked,
           allow_reviews: reviews.input.checked, show_reviews_to_annotators: showReviews.input.checked,
+          merge_overlapping: mergeOverlapping.input.checked,
           confidence: confidence.value() },
         gamification: { enabled: games.input.checked, leaderboard: board.input.checked, leaderboard_viewed_only: boardFull.input.checked },
         review: { corrections: corrections.input.checked, show_corrections_to_annotators: showCorrections.input.checked,
@@ -311,6 +314,8 @@ export class SettingsSection {
         h('p.caption', {}, 'The artifact types on the number keys 1 to 9 (the toolbar shows them in this order).'),
         h('div.key-grid', {}, keys.map((k, i) => h('label.key-row', {}, h('kbd', {}, String(i + 1)), k))),
         field('Shortest annotation (samples)', shortest),
+        mergeOverlapping,
+        h('p.caption', {}, 'When a join happens the annotator is told, and Undo takes it back. Off, overlapping marks of one type stay as drawn, and Merge in the Annotations list still joins marks on request.'),
         revisions,
         h('p.caption', {}, 'A revision is saved as a new version beside the earlier ones, which are kept unchanged; analyses use the latest version.'),
         reviews, showReviews,

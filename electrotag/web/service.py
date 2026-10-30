@@ -92,6 +92,21 @@ def confidence_and_note(a: dict[str, Any], where: str,
     return confidence, note
 
 
+def parse_bad_channels(items: Any, info: RecordingInfo, code: str = "invalid_annotation") -> tuple[str, ...]:
+    """The channels the annotator marked bad for the whole recording, checked and put in recording order."""
+    if items is None:
+        return ()
+    if not isinstance(items, list) or not all(isinstance(c, str) for c in items):
+        raise ApiError(422, code, "bad_channels must be a list of channel names")
+    if len(set(items)) != len(items):
+        raise ApiError(422, code, "bad_channels lists a channel more than once")
+    unknown = sorted(set(items).difference(info.ch_names))
+    if unknown:
+        raise ApiError(422, code, f"bad_channels names channels that are not shown: {', '.join(unknown[:5])}")
+    chosen = set(items)
+    return tuple(c for c in info.ch_names if c in chosen)
+
+
 def parse_annotations(items: Any, info: RecordingInfo, catalogue: Any, min_samples: int) -> list[ArtifactAnnotation]:
     """The browser's annotations as ElectroTag annotations, each checked as the desktop checks them."""
     if not isinstance(items, list):
@@ -311,7 +326,8 @@ class StudyService:
                            "break_reminder_minutes": s.break_reminder_minutes,
                            "idle_pause_minutes": s.idle_pause_minutes, "coverage_check": s.coverage_check,
                            "allow_revisions": s.allow_revisions, "allow_reviews": s.allow_reviews,
-                           "show_reviews_to_annotators": s.show_reviews_to_annotators, "confidence": s.confidence},
+                           "show_reviews_to_annotators": s.show_reviews_to_annotators, "confidence": s.confidence,
+                           "merge_overlapping": s.merge_overlapping},
             "gamification": {"enabled": s.gamification_enabled,
                              "leaderboard": s.gamification_enabled and s.gamification_leaderboard},
             "review": {"show_corrections_to_annotators": s.review.show_corrections_to_annotators,
@@ -635,6 +651,15 @@ class StudyService:
         return [{k: a.get(k, defaults.get(k, "")) for k in keys}
                 for a in doc.get("annotations", []) if isinstance(a, dict)]
 
+    def saved_bad_channels(self, user: User, item: WorkItem) -> list[str]:
+        """The channels marked bad in the latest saved attempt (none in files written before version 1.2.0)."""
+        raw = self.store.saved_document(user.annotator_id, item.recording_id, item.mode, item.context_id)
+        try:
+            listed = json.loads(raw).get("bad_channels") if raw is not None else None
+        except (ValueError, AttributeError):
+            listed = None
+        return [str(c) for c in listed] if isinstance(listed, list) else []
+
     def _revision_answer(self, user: User, item: WorkItem, status: str, differences: list[str]) -> dict[str, Any]:
         version = int((item.saved or {}).get("version") or 1)
         record = self.store.draft(user.annotator_id, item.key) or {}
@@ -650,7 +675,8 @@ class StudyService:
                             differences=differences, task=self.tasks.item_task(item),
                             revision={"version": version + 1, "revises": version,
                                       "saved_at": (item.saved or {}).get("saved_at"),
-                                      "annotations": self.saved_annotations(user, item)})
+                                      "annotations": self.saved_annotations(user, item),
+                                      "bad_channels": self.saved_bad_channels(user, item)})
 
     @staticmethod
     def _refuse_unusable(item: WorkItem) -> None:
@@ -686,6 +712,9 @@ class StudyService:
         for i, a in enumerate(anns, start=1):  # kept as sent; checked in full when the recording is saved
             confidence_and_note(a, f"draft annotation {i}", "invalid_draft")
         self.tasks.check_item(item, anns)  # a task's window: nothing outside it (422 outside_window)
+        bad = draft.get("bad_channels", [])
+        if not isinstance(bad, list) or len(bad) > 4096 or not all(isinstance(c, str) and len(c) <= 200 for c in bad):
+            raise ApiError(422, "invalid_draft", "draft.bad_channels must be a list of channel names")
         view = draft.get("view")
         if view is not None and not isinstance(view, dict):
             raise ApiError(422, "invalid_draft", "draft.view must be an object")
@@ -699,7 +728,7 @@ class StudyService:
         record = {"schema": "electrotag.web_draft", "recording_id": item.recording_id, "mode": item.mode,
                   "context_id": item.context_id, "annotator_id": user.annotator_id, "saved_at": saved_at,
                   "draft": {"annotations": anns, "view": view or {}, "elapsed_s": float(elapsed), "viewed": viewed,
-                            "saved_at": saved_at}}
+                            "saved_at": saved_at, "bad_channels": list(dict.fromkeys(bad))}}
         if revises is not None:
             record["revises"] = revises
             record["draft"]["revises"] = revises
@@ -796,6 +825,7 @@ class StudyService:
         loaded.warnings.extend(warnings)
         anns = parse_annotations(body.get("annotations"), loaded.info, self.store.catalogue,
                                  self.settings.min_duration_samples)
+        bad_channels = parse_bad_channels(body.get("bad_channels"), loaded.info)
         self.tasks.check_item(item, anns)  # a task's window: nothing outside it (422 outside_window)
         context: dict[str, Any] = {}
         if revision is not None:
@@ -831,6 +861,7 @@ class StudyService:
             s = WebSession(layout=layout, settings=self.settings, filters=filters, catalogue=self.store.catalogue,
                            loaded=loaded, annotator_id=user.annotator_id, display_name=user.display_name,
                            mode=item.mode, context=context, initial_annotations=anns,
+                           initial_bad_channels=bad_channels,
                            allow_repeat=item.repeat or revision is not None, autosave_enabled=False, client=client,
                            server=self.store.kind, session_id=session_id,
                            expected_attempt=revision["version"] if revision is not None else None)

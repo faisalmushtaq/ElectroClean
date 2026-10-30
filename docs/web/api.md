@@ -60,7 +60,7 @@ Manifest = {                          // what the browser needs to show a regist
   "fingerprint": {"algorithm": "sha256", "role": "eeg", "hex": "…", "size_bytes": 123456}
 }
 
-Draft = {"annotations": [Annotation], "view": {"start_s": 12.0, "duration_s": 10.0, "first_channel": 0,
+Draft = {"annotations": [Annotation], "bad_channels": ["T7"], "view": {"start_s": 12.0, "duration_s": 10.0, "first_channel": 0,
          "n_channels": 32, "scale_factor": 1.0}, "elapsed_s": 312.4,
          "viewed": [[0.0, 64.5], [120.0, 130.0]], "saved_at": "…",
          "revises": 1,                // only in the draft of a revision: the version being revised
@@ -72,6 +72,11 @@ other than a whole number from 1 to 5 or none (a string, a fraction, 0 or `true`
 longer than 200 characters, is refused with 422 (`invalid_annotation` when saving, `invalid_draft`
 for a draft). Answers that return saved annotations (a revision's `annotations`) give both,
 `confidence` null and `note` "" when there is none.
+
+`bad_channels` lists the channels the annotator marked bad for the whole recording (names of the
+manifest's `ch_names`; `[]` or left out for none). A draft keeps them as sent (a list of names of at
+most 200 characters, 422 `invalid_draft` otherwise); a submission checks them (below). They are
+the annotator's own, and never change the manifest's `bad_channels`, the study's own.
 
 A draft's `elapsed_s` is the time worked so far, without the time paused (at least 0, or 422
 `invalid_draft`; more than a week is kept as a week). `viewed` lists the
@@ -128,7 +133,8 @@ password.
     "annotation": {"min_duration_samples": 1, "quick_labels": ["Eye-blink-artifact", "…"],
                    "break_reminder_minutes": 50, "idle_pause_minutes": 3, "coverage_check": "warn" | "off",
                    "allow_revisions": true, "allow_reviews": true, "show_reviews_to_annotators": true,
-                   "confidence": "optional" | "every_mark"},
+                   "confidence": "optional" | "every_mark",
+                   "merge_overlapping": true},   // overlapping marks of one type on the same channels join
     "gamification": {"enabled": true, "leaderboard": true},
     "review": {"show_corrections_to_annotators": true, "show_outcomes_to_annotators": true},
     "training": {"skippable": ["tour", "snippets", "guided", "practice"], "gate": "met" | "completed" | "off"},
@@ -252,7 +258,8 @@ the seconds of the recording in the draft's `viewed` (overlaps counted once);
   "draft": Draft | null,                // unfinished work to continue, if any
   "differences": ["…"],                 // matched_metadata: how the file differs from the study's copy
   "repeat": false,                      // a practice recording being annotated again
-  "revision": null | {"version": 2, "revises": 1, "saved_at": "…", "annotations": [Annotation]},
+  "revision": null | {"version": 2, "revises": 1, "saved_at": "…", "annotations": [Annotation],
+                      "bad_channels": ["T7"]},   // the channels marked bad in the version revised
   "saved": null | {"version": 1, "saved_at": "…", "annotations": [Annotation]}   // with view_saved
 }
 ```
@@ -304,6 +311,7 @@ cannot be annotated takes no draft and no submission (409 `unusable`).
 {
   "recording_id": "…", "mode": "standard", "context_id": "",
   "annotations": [Annotation],
+  "bad_channels": ["T7"],                      // optional: the channels marked bad for the whole recording
   "session": {"started_at": "…", "elapsed_s": 912.3, "visit_id": "…", "session_id": "<32 hex>",
               "filters": {"highpass_hz": 1.0, "notch_hz": 50.0, "notch_harmonics": false, "method": "fir"},
               "view": Draft.view,
@@ -327,7 +335,10 @@ the session's ID, so the interaction log and the results of a session carry
 the same ID. Without it, or when a saved result of the annotator already has
 that ID, the server makes one. `session.viewed_fraction` (0 to 1), when the
 browser measures it, is kept with the session's display state and counts
-towards the milestones for recordings viewed in full.
+towards the milestones for recordings viewed in full. `bad_channels` must be a list of
+channels shown (the manifest's `ch_names`), each once (422 `invalid_annotation` otherwise); they
+are saved in recording order in the `_annotations.json` and, when there are any, in a sixth file,
+`_channels.tsv` (docs/file_formats.md), which the save checks like the others.
 
 → `{"saved": true, "files": ["…_annotations.json", "…_events.tsv", "…"], "attempt": 1,
 "feedback": PracticeFeedback | null, "guided": GuidedSaved | null, "assessment": AssessmentSaved | null,
@@ -1007,7 +1018,7 @@ interaction log. The operations are in `electrotag/web/corrections.py` and
 
 | op | body | answer | saves? |
 | --- | --- | --- | --- |
-| `work_list` | `{"annotator_id"?, "recording_id"?, "corrected"?: bool, "limit"?: 200}` (at most 1000) | `{"items": [{"annotator_id", "display_name", "recording_id", "file_name", "attempt", "saved_at", "n_annotations", "corrections", "task_id": null, "own": bool}], "total", "corrections_on": bool}`: the latest saved attempt of each person and study recording, newest first; `corrections` counts the corrections of that attempt, and `own` marks the caller's own work | read |
+| `work_list` | `{"annotator_id"?, "recording_id"?, "corrected"?: bool, "limit"?: 200}` (at most 1000) | `{"items": [{"annotator_id", "display_name", "recording_id", "file_name", "attempt", "saved_at", "n_annotations", "n_needs_review", "n_bad_channels", "corrections", "task_id": null, "own": bool}], "total", "corrections_on": bool}`: the latest saved attempt of each person and study recording, newest first; `n_needs_review` counts its marks of the uncertain type (`Data-artifact`) and `n_bad_channels` the channels marked bad (both null for a version saved before they were kept); `corrections` counts the corrections of that attempt, and `own` marks the caller's own work | read |
 | `saved_attempt_get` | `{"annotator_id", "recording_id", "attempt"?}` | `{"annotator_id", "display_name", "recording_id", "file_name", "mode", "context_id", "attempt", "latest", "attempts": [1, 2], "saved_at", "manifest", "annotations": [Annotation], "reviews": [Review], "corrections": [Correction], "own", "corrections_on", "reason_required", "reasons": {code: words}}`: one saved attempt (the latest by default) with what the correction view needs. 404 `no_saved_annotations`, `unknown_recording`; 409 `not_for_training` | read |
 | `correction_save` | `{"correction_id": "<32 hex>", "annotator_id", "recording_id", "attempt", "annotations": [Annotation], "changes": [{"annotation_id", "reason", "note"?}], "overall_note"?, "session": Submission.session, "sha256"}` | `{"correction": Correction, "already": bool, "files": ["…_annotations.json", …]}`. Errors: 409 `corrections_off`, `own_work`, `not_latest`, `busy`, `conflict`; 422 `no_changes`, `reason_missing` (with `annotation_ids`), `invalid_annotation`, `invalid_session`; 400 `bad_request` (an unknown reason, a reason that does not suit its change, a note over 300 characters, an overall note over 1000). Audited (`correction_save`) | **save** |
 | `corrections_list` | `{"annotator_id"?, "recording_id"?, "corrector_id"?}` | `{"corrections": [Correction]}`, newest first | read |
@@ -1306,9 +1317,11 @@ keeps.
 `UnitOut` = `{"unit_id", "task_id" (tasks only, otherwise null), "kind", "recording_id",
 "file_name", "window": null | {"start_sample", "end_sample", "start_s", "end_s"}, "k", "saved",
 "annotators": [{"letter", "annotator_id", "display_name", "saved"}], "corrected": null |
-{"annotator_id", "attempt"}, "status", "conflicts", "agreed", "decided", "adjudicator_id",
+{"annotator_id", "attempt"}, "status", "conflicts", "agreed", "needs_review", "decided", "adjudicator_id",
 "adjudicator_name", "started_at", "finished_at", "yours", "own", "notes"}`; `own` is true when the
-caller's work is part of it.
+caller's work is part of it. `needs_review` counts the marks of the uncertain type (`Data-artifact`,
+Uncertain / needs review) in the versions compared, null until everyone has saved; the queue's
+Needs review tab lists the units with any, whatever their status.
 
 | op | body | answer | saves? |
 | --- | --- | --- | --- |
@@ -1329,7 +1342,7 @@ caller's work is part of it.
 "finished_at", "blinded": false, "inputs": {person: {"letter", "source", "annotator_id",
 "attempt", "session_id", "output_basename", "annotations_sha256", "number"?, "correction_id"?}},
 "letters", "rules", "decisions": {conflict_id: {"choice", "marks", "picks", "reason_code",
-"reason", "decided_at", "decided_by"}}, "version", "counts": {"conflicts", "decided", "agreed"},
+"reason", "decided_at", "decided_by"}}, "version", "counts": {"conflicts", "decided", "agreed", "needs_review"},
 "history"?: [what was finished before each reopening], "reopened_at"?}`.
 `blinded` is kept for a future crowd study that hides who made each mark.
 

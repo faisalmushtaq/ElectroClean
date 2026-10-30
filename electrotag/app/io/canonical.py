@@ -15,6 +15,7 @@ from typing import Any
 from electrotag import __version__
 from electrotag.app.annotations.labels import LabelCatalogue, default_catalogue
 from electrotag.app.annotations.model import (
+    BAD_CHANNEL_CONVENTION,
     CONFIDENCE_CONVENTION,
     CHANNEL_CONVENTION,
     SCHEMA_ANNOTATIONS,
@@ -39,6 +40,8 @@ ANNOTATION_FILE_FIELDS = {
     "confidence_convention": "Meaning of each annotation's confidence: a 5-point scale (1 to 5; null: not rated).",
     "label_catalogue": "Catalogue id, version, SHA-256 and the (value, label) pairs used.",
     "annotations": "List of annotation records (see ArtifactAnnotation.to_dict).",
+    "bad_channels": "Channels the annotator marked bad for the whole recording, in recording order (absent before "
+    "version 1.2.0), with bad_channel_convention saying what they mean.",
 }
 
 
@@ -101,6 +104,8 @@ def document_to_dict(doc: AnnotationDocument) -> dict[str, Any]:
         "label_catalogue": doc.catalogue.to_metadata(),
         "n_annotations": len(doc.annotations),
         "annotations": [a.to_dict(timing, doc.catalogue) for a in doc.sorted_annotations()],
+        "bad_channel_convention": BAD_CHANNEL_CONVENTION,
+        "bad_channels": list(doc.bad_channels),
     }
 
 
@@ -127,6 +132,9 @@ def document_from_dict(data: dict[str, Any], *, validate: bool = True) -> Annota
         anns.append(ann)
     if "n_annotations" in data and int(data["n_annotations"]) != len(anns):
         raise AnnotationError("n_annotations does not match the number of annotation records")
+    bad = data.get("bad_channels") or []
+    if not isinstance(bad, list) or not all(isinstance(c, str) for c in bad):
+        raise AnnotationError("bad_channels must be a list of channel names")
     annot = data.get("annotator", {})
     session = data.get("session", {})
     doc = AnnotationDocument(
@@ -141,6 +149,7 @@ def document_from_dict(data: dict[str, Any], *, validate: bool = True) -> Annota
         app_version=str(session.get("app_version", "")),
         context=dict(session.get("context") or {}),
         confidence_mode=str(session.get("confidence") or ""),
+        bad_channels=tuple(bad),
     )
     if validate:
         doc.validate()

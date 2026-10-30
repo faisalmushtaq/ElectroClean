@@ -12,6 +12,18 @@ export function displayCode(code) {
   return c.charAt(0) + c.slice(1).toLowerCase();
 }
 
+/**
+ * The type for an artifact that is visible but whose type cannot be told: HED's Data-artifact (code 130),
+ * the parent of every artifact term, shown as "Uncertain / needs review". It is one key away (0, and its
+ * own button in the toolbar), and a mark of it needs an expert's review: the expert area lists such marks
+ * (electrotag/app/annotations/labels.py UNCERTAIN_LABEL).
+ */
+export const UNCERTAIN_LABEL = 'Data-artifact';
+export const UNCERTAIN_TEXT = 'Uncertain / needs review';
+
+/** True for a mark that needs an expert's review: one of the uncertain type. */
+export const needsReview = (a) => Boolean(a) && (typeof a === 'string' ? a : a.label) === UNCERTAIN_LABEL;
+
 export class Catalogue {
   constructor(data) {
     this.labels = (data && data.labels ? data.labels : []).map((l) => ({
@@ -45,11 +57,15 @@ export class Catalogue {
     return l ? l.colour : '#808080';
   }
 
-  /** "Eye-blink-artifact  (103)" and, for group terms, "– exact type unclear". */
+  /** "Eye-blink-artifact  (103)" and, for group terms, "– exact type unclear" (for the uncertain type, what it is for). */
   labelText(label) {
     const l = this.get(label);
+    if (l.label === UNCERTAIN_LABEL) return `${l.label}  (${l.value})  – ${UNCERTAIN_TEXT.toLowerCase()}`;
     return `${l.label}  (${l.value})` + (l.is_group ? '  – exact type unclear' : '');
   }
+
+  /** The uncertain type, when the catalogue has it. */
+  get uncertain() { return this._by.get(UNCERTAIN_LABEL) || null; }
 
   /** The labels grouped under their family headings, in catalogue order. */
   sections() {
@@ -66,9 +82,12 @@ export class Catalogue {
     return this.labels.filter((l) => !l.is_group).map((l) => l.label);
   }
 
-  /** The types on keys 1 to 9: the study's choice (unknown names left out), else the first specific types. */
+  /**
+   * The types on keys 1 to 9: the study's choice (unknown names left out), else the first specific types.
+   * The uncertain type is left out: it has its own key (0) and button.
+   */
   quickLabels(chosen) {
-    const ok = (chosen || []).filter((n) => this.has(n)).slice(0, 9);
+    const ok = (chosen || []).filter((n) => this.has(n) && n !== UNCERTAIN_LABEL).slice(0, 9);
     return ok.length ? ok : this.specificLabels().slice(0, 9);
   }
 

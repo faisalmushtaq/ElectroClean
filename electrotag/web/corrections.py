@@ -222,6 +222,15 @@ def saved_attempt(service: StudyService, aid: str, rid: str, attempt: int | None
     return entry, wire_annotations(doc), raw
 
 
+def _bad_channels_of(raw: bytes, ch_names: tuple[str, ...]) -> tuple[str, ...]:
+    """The channels the annotator marked bad in a saved ``_annotations.json``: a correction keeps them as they were."""
+    try:
+        listed = json.loads(raw).get("bad_channels") or []
+    except (ValueError, AttributeError):
+        return ()
+    return tuple(c for c in ch_names if c in set(map(str, listed)))
+
+
 def _whole(value: Any, what: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int):
         raise _bad(f"{what} must be a whole number")
@@ -337,6 +346,9 @@ def work_list(service: StudyService, user: User, body: dict[str, Any]) -> dict[s
         items.append({"annotator_id": a, "display_name": names.get(a, ""), "recording_id": r,
                       "file_name": m.get("file_name", ""), "attempt": attempt_of(last),
                       "saved_at": last.get("completed_at") or None, "n_annotations": _int(last.get("n_annotations")),
+                      # marks of the uncertain type, and channels marked bad (null for saves made before they were kept)
+                      "n_needs_review": _int(last.get("n_needs_review")),
+                      "n_bad_channels": _int(last.get("n_bad_channels")),
                       "corrections": n, "task_id": tasks.get((a, r)) or None, "own": a == user.annotator_id})
     items.sort(key=lambda i: (str(i["saved_at"] or ""), i["annotator_id"], i["recording_id"]), reverse=True)
     return {"items": items[:limit], "total": len(items),
@@ -520,6 +532,7 @@ def correction_save(service: StudyService, user: User, body: dict[str, Any]) -> 
                            catalogue=store.catalogue, loaded=loaded, annotator_id=aid,
                            display_name=f"{aid} corrected by {user.annotator_id}", mode="standard",
                            context={"derived": derived}, initial_annotations=parsed, allow_repeat=True,
+                           initial_bad_channels=_bad_channels_of(raw, loaded.info.ch_names),
                            autosave_enabled=False, client={}, server=store.kind, session_id=cid)
             return s
 

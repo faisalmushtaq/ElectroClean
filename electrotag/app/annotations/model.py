@@ -14,7 +14,8 @@ from electrotag.app.annotations.labels import LabelCatalogue, LabelError
 from electrotag.app.annotations.timing import RecordingTiming, TimingError
 
 SCHEMA_ANNOTATIONS = "electrotag.annotations"
-SCHEMA_VERSION = "1.1.0"  # 1.1.0: each annotation's confidence and note, and the study's confidence setting
+SCHEMA_VERSION = "1.2.0"  # 1.1.0: each annotation's confidence and note, and the study's confidence setting;
+#                            1.2.0: the channels the annotator marked bad for the whole recording
 
 #: How confident the annotator is of an annotation: an ordinal 5-point Likert scale with these anchors
 #: (None when no rating was given).
@@ -41,6 +42,20 @@ CONFIDENCE_CONVENTION = {
                       "may still have been left unrated.",
     },
 }
+
+#: What the annotations file's ``bad_channels`` (and the ``_channels.tsv`` written beside it) mean.
+BAD_CHANNEL_CONVENTION = {
+    "meaning": "Channels this annotator marked as bad (unusable) for the whole recording, in recording order.",
+    "source": "The annotator's own judgement while annotating; the study's own bad channels (the dataset's "
+    "channels.tsv) are input and are recorded in the session file, never here.",
+    "channels_tsv": "When the list is not empty, a BIDS-style _channels.tsv beside this file gives every shown "
+    "channel with status good or bad and a status_description.",
+}
+
+#: The status_description of a channel the annotator marked bad (in the ``_channels.tsv`` written beside the results).
+def bad_channel_description(annotator_id: str) -> str:
+    return f"Marked bad for the whole recording by annotator {annotator_id}"
+
 
 CHANNEL_CONVENTION = {
     "encoding": "List of channel names exactly as they appear in the recording.",
@@ -321,6 +336,9 @@ class AnnotationDocument:
     #: The study's ``annotation.confidence`` setting when the annotations were made ("" when not recorded,
     #: as in files written before version 1.1.0).
     confidence_mode: str = ""
+    #: The channels the annotator marked bad for the whole recording, in recording order (none in files
+    #: written before version 1.2.0).
+    bad_channels: tuple[str, ...] = ()
 
     def sorted_annotations(self) -> list[ArtifactAnnotation]:
         return sorted(
@@ -334,6 +352,14 @@ class AnnotationDocument:
             raise AnnotationError("Annotation identifiers must be unique within a document")
         for ann in self.annotations:
             validate_annotation(ann, self.recording, self.catalogue, min_samples)
+        bad = tuple(self.bad_channels)
+        if len(set(bad)) != len(bad):
+            raise AnnotationError("A bad channel is listed more than once")
+        unknown = [c for c in bad if c not in self.recording.ch_names]
+        if unknown:
+            raise AnnotationError(f"Bad channels not in the recording: {', '.join(unknown)}")
+        if bad != tuple(c for c in self.recording.ch_names if c in bad):
+            raise AnnotationError("Bad channels must be listed in recording order")
 
     def counts_by_label(self) -> dict[str, int]:
         counts = {label: 0 for label in self.catalogue.label_names}

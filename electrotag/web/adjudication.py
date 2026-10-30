@@ -366,16 +366,25 @@ def _count_key(service: StudyService, unit: Unit) -> str:
                       sort_keys=True, default=str)
 
 
-def counts_of(service: StudyService, unit: Unit) -> tuple[int, int]:
-    """(conflicts, agreed marks) of a unit whose versions are all saved, from the cache when the same versions were
-    counted before."""
+def _tally(service: StudyService, unit: Unit) -> tuple[int, int, int]:
+    """(conflicts, agreed marks, marks needing review) of a unit whose versions are all saved, from the cache when
+    the same versions were counted before. A mark needs review when it is of the uncertain type (Data-artifact,
+    labels.needs_review), in any of the versions compared."""
+    from electrotag.app.annotations.labels import needs_review
+
     key = _count_key(service, unit)
     if key not in _COUNTS:
         cmp = compare(service, unit)
         if len(_COUNTS) >= _COUNTS_MAX:
             _COUNTS.clear()
-        _COUNTS[key] = (len(cmp.conflicts), len(cmp.clusters) - len(cmp.conflicts))
+        review = sum(1 for d in cmp.docs.values() for a in d.annotations if needs_review(a.label))
+        _COUNTS[key] = (len(cmp.conflicts), len(cmp.clusters) - len(cmp.conflicts), review)
     return _COUNTS[key]
+
+
+def counts_of(service: StudyService, unit: Unit) -> tuple[int, int]:
+    """(conflicts, agreed marks) of a unit whose versions are all saved (see :func:`_tally`)."""
+    return _tally(service, unit)[:2]
 
 
 def _register_counter() -> None:
@@ -425,7 +434,7 @@ def _window_out(window: tuple[int, int] | None, sfreq: float) -> dict[str, Any] 
 
 
 def unit_out(service: StudyService, user: User, unit: Unit, record: dict[str, Any] | None,
-             n_conflicts: int | None, n_agreed: int | None = None) -> dict[str, Any]:
+             n_conflicts: int | None, n_agreed: int | None = None, needs_review: int | None = None) -> dict[str, Any]:
     m = service.store.manifest(SCOPE_STUDY, unit.recording_id) or {}
     sfreq = float((m.get("timing") or {}).get("sfreq") or 1.0)
     letters = dict(record.get("letters") or {}) if record else unit.letters
@@ -445,6 +454,8 @@ def unit_out(service: StudyService, user: User, unit: Unit, record: dict[str, An
         "corrected": unit.corrected,
         "status": status_of(unit, record, n_conflicts),
         "conflicts": counts.get("conflicts", n_conflicts), "agreed": counts.get("agreed", n_agreed),
+        # marks of the uncertain type in the versions compared (null until everyone has saved)
+        "needs_review": counts.get("needs_review", needs_review),
         "decided": len(record.get("decisions") or {}) if record else 0,
         "adjudicator_id": record.get("adjudicator_id") if record else None,
         "adjudicator_name": record.get("adjudicator_name") if record else None,
@@ -620,13 +631,13 @@ def adjudication_list(service: StudyService, user: User, body: dict[str, Any]) -
         if rid is not None and u.recording_id != rid:
             continue
         rec = records.get(u.unit_id)
-        n = a = None
+        n = a = r = None
         if rec is None and u.complete:
             try:
-                n, a = counts_of(service, u)
+                n, a, r = _tally(service, u)
             except ApiError:
                 continue  # a version that cannot be read is left out of the queue (the admin area shows it)
-        row = unit_out(service, user, u, rec, n, a)
+        row = unit_out(service, user, u, rec, n, a, r)
         counts[row["status"]] += 1
         if want is None or row["status"] == want:
             out.append(row)
@@ -670,6 +681,8 @@ def adjudication_get(service: StudyService, user: User, body: dict[str, Any]) ->
 @expert_op("adjudication_start")
 def adjudication_start(service: StudyService, user: User, body: dict[str, Any]) -> dict[str, Any]:
     """Start (or continue) adjudicating a unit: its inputs and the matching rules are frozen now."""
+    from electrotag.app.annotations.labels import needs_review
+
     uid = _unit_id(body)
     rec = _record(service, uid)
     unit = find_unit(service, uid, rec)
@@ -693,7 +706,9 @@ def adjudication_start(service: StudyService, user: User, body: dict[str, Any]) 
            "inputs": {p: unit.inputs[p].frozen(x, cmp.shas[p]) for p, x in cmp.letters.items()},
            "letters": dict(cmp.letters), "rules": cmp.rules.to_dict(), "decisions": {}, "version": None,
            "counts": {"conflicts": len(cmp.conflicts), "decided": 0,
-                      "agreed": len(cmp.clusters) - len(cmp.conflicts)}}
+                      "agreed": len(cmp.clusters) - len(cmp.conflicts),
+                      "needs_review": sum(1 for d in cmp.docs.values() for a in d.annotations
+                                          if needs_review(a.label))}}
     made = {"yes": False}
 
     def change(old: dict[str, Any] | None) -> dict[str, Any] | None:

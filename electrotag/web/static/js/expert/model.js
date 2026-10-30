@@ -41,12 +41,20 @@ export const QUEUE_TABS = Object.freeze([
   { key: 'progress', title: 'In progress', statuses: ['adjudicating'] },
   { key: 'finished', title: 'Finished', statuses: ['adjudicated'] },
   { key: 'waiting', title: 'Waiting', statuses: ['collecting', 'agreed'] },
+  // marks of the uncertain type (Uncertain / needs review), whatever the unit's status
+  { key: 'review', title: 'Needs review', statuses: null, review: true },
   { key: 'all', title: 'All', statuses: null },
 ]);
 
 export function tabRows(units, key) {
   const tab = QUEUE_TABS.find((t) => t.key === key) || QUEUE_TABS[0];
+  if (tab.review) return (units || []).filter((u) => (u.needs_review || 0) > 0);
   return (units || []).filter((u) => !tab.statuses || tab.statuses.includes(u.status));
+}
+
+/** "2 marks need review" for a unit or a saved version with marks of the uncertain type, or ''. */
+export function reviewText(n) {
+  return n > 0 ? `${n} ${n === 1 ? 'mark needs' : 'marks need'} review` : '';
 }
 
 export function tabCounts(units) {

@@ -18,7 +18,7 @@ sys.path.insert(0, str(REPO))
 from electrotag.app.annotations.labels import default_catalogue  # noqa: E402
 
 
-COMFORT_KEYS = ("break_reminder_minutes", "idle_pause_minutes", "coverage_check", "confidence")
+COMFORT_KEYS = ("break_reminder_minutes", "idle_pause_minutes", "coverage_check", "confidence", "merge_overlapping")
 #: The settings blocks a study's administrator sees and may change (electrotag/web/admin.py SETTINGS_BLOCKS).
 SETTINGS_BLOCKS = ("filters", "display", "channels", "selection", "logging", "annotation", "loading", "discovery",
                    "gamification", "review", "training", "replay")
@@ -43,7 +43,7 @@ def main() -> int:
         f"export const DEFAULT_QUICK_LABELS = {json.dumps(settings['annotation']['quick_labels'])};\n\n"
         f"export const DEFAULT_SCALINGS = {json.dumps(settings['display']['scalings'])};\n\n"
         f"export const DEFAULT_HIDE = {json.dumps(settings['channels']['hide'])};\n\n"
-        "// Pauses, break reminders, the check of what has been viewed and confidence (annotation block).\n"
+        "// Pauses, break reminders, the check of what has been viewed, confidence and the joining of overlapping marks (annotation block).\n"
         f"export const DEFAULT_ANNOTATION = {json.dumps({k: settings['annotation'][k] for k in COMFORT_KEYS})};\n\n"
         "// Every block of settings the admin area shows (SETTINGS_BLOCKS in electrotag/web/admin.py).\n"
         f"export const DEFAULT_SETTINGS = {json.dumps({b: settings[b] for b in SETTINGS_BLOCKS})};\n",
