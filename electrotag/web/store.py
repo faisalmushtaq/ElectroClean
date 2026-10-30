@@ -40,6 +40,10 @@ MODES = ("standard", "guided", "practice", "assessment")
 #: expert work: tasks (``annotator_id`` ""), corrections (the corrected person's), adjudications (the
 #: adjudicator's) and gold scores (docs/web/api.md, "Experts").
 RECORD_KINDS = ("problems", "reviews", "unusable", "tasks", "corrections", "adjudications", "gold")
+#: The records of the study's datasets (electrotag/web/datasets.py; docs/web/api.md, "Datasets, collections, groups
+#: and hand-outs"): the details of source datasets, collections, groups of people, hand-outs and the notices that
+#: would be sent about them, each with ``annotator_id`` "".
+RECORD_KINDS += ("datasets", "collections", "groups", "handouts", "notices")
 #: A record's ID: letters, digits, "_" and "-" (the browser makes 32 hexadecimal characters).
 RECORD_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
 #: The roles a person can be given now. One person may hold several (an expert who also annotates).
@@ -140,6 +144,12 @@ class Assignment:
     position: int = 0
     #: The task this assignment belongs to ("" for an assignment made without one: docs/web/api.md, "Tasks").
     task_id: str = ""
+    #: The hand-out that gave the assignment, or that it was linked to later ("" for none: docs/web/api.md,
+    #: "Datasets, collections, groups and hand-outs").
+    handout_id: str = ""
+    #: When the assignment was made, where the store keeps it (the files store); "" otherwise (Firestore, where
+    #: the hand-out's ``recipients`` say when it was given).
+    assigned_at: str = ""
 
 
 @dataclass
@@ -406,9 +416,46 @@ class Store(ABC):
 
     @abstractmethod
     def assign(self, annotator_id: str, recording_ids: list[str], *, mode: str = "standard",
-               context_id: str = "", task_id: str = "") -> int:
+               context_id: str = "", task_id: str = "", handout_id: str = "") -> int:
         """Add assignments (those already there are kept as they are, except that one without a task is
-        linked to ``task_id`` when one is given); returns how many were added."""
+        linked to ``task_id`` when one is given, and one without a hand-out to ``handout_id``); returns how
+        many were added."""
+
+    # ----------------------------------------------- datasets and hand-outs (datasets.py)
+    def assign_many(self, annotator_id: str, items: list[tuple[str, str]], *, handout_id: str = "") -> int:
+        """Study assignments (mode ``standard``) of one person, ``items`` being ``(recording_id, task_id)``
+        pairs, in one step where the store can (one transaction on Firestore); the same rules as
+        :meth:`assign`. Returns how many were added."""
+        by_task: dict[str, list[str]] = {}
+        for rid, tid in items:
+            by_task.setdefault(tid, []).append(rid)
+        return sum(self.assign(annotator_id, rids, task_id=tid, handout_id=handout_id)
+                   for tid, rids in by_task.items())
+
+    def unlink_handout(self, handout_id: str) -> int:
+        """Clear ``handout_id`` from every assignment that carries it (the assignments stay); returns how many."""
+        raise StoreError("This store cannot unlink hand-outs")
+
+    def manifest_heads(self, scope: str = "study") -> list[dict[str, Any]]:
+        """Light rows of the manifests of ``scope``, without reading their channels and events where the store
+        can: ``recording_id``, ``file_name``, ``format``, ``dataset_id`` ("" for the default dataset),
+        ``retired``, ``registered_at``, ``sfreq``, ``n_samples``, ``n_channels``, ``size_bytes``."""
+        from electrotag.web.manifest import manifest_head
+
+        return [manifest_head(m) for m in self.manifests() if m.get("scope") == scope]
+
+    def opened_index(self) -> list[dict[str, Any]]:
+        """Every opening of a recording that the visit index knows: ``{"annotator_id", "recording_id", "mode",
+        "opened_at"}`` (``opened_at`` is the visit's start plus the opening's ``opened_t``)."""
+        from electrotag.web.manifest import opened_at
+
+        out = []
+        for v in self.visit_records(None, 100_000):
+            for r in self.visit_index(v["visit_id"]):
+                out.append({"annotator_id": v["annotator_id"], "recording_id": r.get("recording_id", ""),
+                            "mode": r.get("mode", "standard"),
+                            "opened_at": opened_at(v.get("started_at", ""), r.get("opened_t"))})
+        return out
 
     @abstractmethod
     def unassign_item(self, annotator_id: str, recording_id: str, mode: str, context_id: str) -> bool:

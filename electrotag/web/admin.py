@@ -83,6 +83,16 @@ OPERATIONS = READ_ONLY + (
 READ_ONLY += ("snippets_list", "training_gate_get")
 OPERATIONS += ("snippets_list", "training_gate_get", "snippet_add", "snippet_remove", "training_reopen",
                "training_assessment_set")
+# Datasets, collections, groups and hand-outs (electrotag/web/datasets.py), and the tracking of who has rated what
+# with the notices that would be sent about it (electrotag/web/tracking.py).
+DATASET_READS = ("datasets_list", "dataset_get", "collections_list", "collection_get", "groups_list",
+                 "handouts_list", "handouts_preview_get")
+DATASET_WRITES = ("dataset_create", "dataset_update", "dataset_remove", "recordings_move", "collection_create",
+                  "collection_update", "collection_remove", "group_create", "group_update", "group_remove",
+                  "handout_create", "handout_update", "handout_withdraw")
+TRACKING_READS = ("tracking_datasets_get", "tracking_recordings_get", "notify_preview_get")
+READ_ONLY += DATASET_READS + TRACKING_READS
+OPERATIONS += DATASET_READS + TRACKING_READS + DATASET_WRITES
 
 
 # ------------------------------------------------------------------ checking input
@@ -346,6 +356,9 @@ class Admin:
                 return getattr(self, f"op_{op}")(user, body)
             except AccountProblem as exc:
                 raise ApiError(exc.status, exc.code, exc.message) from exc
+            finally:
+                if op not in READ_ONLY:  # the tracking figures this instance keeps are out of date after a change
+                    self.service.tracking.forget()
 
     def _audit(self, user: User, op: str, summary: str, **details: Any) -> None:
         audit.record(self.store, user.annotator_id, op, summary, details)
@@ -1672,3 +1685,29 @@ class Admin:
         from electrotag.web.correct_marks import remove
 
         return remove(self.service, user, body)
+
+
+# ------------------------------------------- datasets, collections, groups and hand-outs (electrotag/web/datasets.py)
+def _dataset_op(name: str) -> Any:
+    def op(self: Admin, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return getattr(self.service.datasets, f"op_{name}")(user, body)
+
+    op.__name__ = f"op_{name}"
+    op.__doc__ = f"``{name}``: :meth:`electrotag.web.datasets.Datasets.op_{name}`."
+    return op
+
+
+def _tracking_op(name: str) -> Any:
+    def op(self: Admin, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        return getattr(self.service.tracking, f"op_{name}")(user, body)
+
+    op.__name__ = f"op_{name}"
+    op.__doc__ = f"``{name}``: :meth:`electrotag.web.tracking.Tracking.op_{name}`."
+    return op
+
+
+for _name in DATASET_READS + DATASET_WRITES:
+    setattr(Admin, f"op_{_name}", _dataset_op(_name))
+for _name in TRACKING_READS:
+    setattr(Admin, f"op_{_name}", _tracking_op(_name))
+del _name

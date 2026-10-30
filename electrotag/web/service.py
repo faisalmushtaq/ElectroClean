@@ -269,6 +269,12 @@ class StudyService:
         from electrotag.web.tasks import Tasks
 
         self.tasks = Tasks(self)
+        # datasets, collections, groups and hand-outs, and the tracking of them (docs/web/api.md, "Datasets, ...")
+        from electrotag.web.datasets import Datasets
+        from electrotag.web.tracking import Tracking
+
+        self.datasets = Datasets(self)
+        self.tracking = Tracking(self)
 
     # ----------------------------------------------------------------- basics
     @property

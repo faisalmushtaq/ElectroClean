@@ -915,6 +915,130 @@ record. If the files differ, the answer is 422 `example_unavailable`, and
 `electrotag web create-example-set` makes the set from a computer with
 ElectroTag installed.
 
+### Datasets, collections, groups and hand-outs
+
+The study team keeps its recordings in **datasets** and hands them out to
+people and **groups** (`electrotag/web/datasets.py`). A *source dataset* is
+where recordings come from ("Youth low-density 2026", "OpenNeuro ds003420"),
+with its details. Each study recording belongs to exactly one, named by
+`registration.dataset_id` in its manifest; a recording without one belongs to
+the built-in dataset `study-recordings` ("Study recordings"), which holds the
+recordings registered before datasets existed and those added without choosing
+one. The built-in dataset is listed always and gets a record the first time it
+is edited, so no manifest is ever rewritten for it. A *collection* is a
+hand-picked, ordered list of study recordings from any datasets ("Pilot: 20
+hard recordings"). Datasets cover the study's own recordings (scope `study`);
+the recordings of a reference set stay with their set.
+
+A **hand-out** gives a dataset or a collection to chosen people and groups,
+in one of two ways. With `"mode": "all"` everyone gets all of it: each person
+is given every recording of the target that is not retired, as ordinary
+assignments carrying the hand-out's ID (a recording the person has already is
+kept as it is, and linked to the hand-out when it had none, so that it takes the
+hand-out's due date). With `"mode": "k"` the recordings are shared out k per
+recording through the Tasks section's own share-out (below, "Tasks, windows and
+known answers"): the preview is `tasks_preview_get`'s, the tasks carry the
+hand-out's ID, and the Tasks rules hold, so a recording that has an open task
+already is skipped as `has_task`. A hand-out can follow its groups: someone
+added to a group later is given what the group's open "all" hand-outs hold, in
+the same `group_update`, unless the call says `"give_existing": false`.
+Recordings added to a target after it was handed out wait until the team gives
+them (`handout_update` with `"give_new_recordings": true`). Withdrawing a
+hand-out takes back only what it gave that nobody has started; saved work,
+drafts and recordings set aside stay.
+
+Annotators see a hand-out only by its **title**, which the study team sets:
+by default the dataset's name for a source dataset, and "Recordings due 20
+November" (or "Recordings to annotate" without a due date) for a collection.
+The names, descriptions and notes of datasets and collections, and the team's
+note on a hand-out, stay in the admin area: `GET /me`, `GET /assignments`,
+`POST /match` and the home page never carry them.
+
+Each dataset and collection has a **target number of ratings** per recording,
+`ratings_target` (2 unless the team chooses otherwise, from 1 to 20). A
+recording counts as rated when at least that many different people have saved
+it in study mode (a revision counts once per person; a report that the
+recording cannot be annotated is shown beside the ratings and is not one). A
+dataset or collection is **fully rated** when every recording of it that is not
+retired has met its target.
+
+Every create operation takes `"request_id": "<32 hex>"`, made by the browser
+for that request: the same `request_id` again answers the record kept, with
+`"already": true`, so an answer that arrives late never makes a second one.
+Writes are never repeated automatically; reads end in `_get` or `_list`.
+
+```jsonc
+DatasetRecord = {"dataset_id": "youth-ld-2026", "name", "description", "origin", "licence", "citation",
+  "contact", "notes", "path_prefix": "" /* added in front of the IDs registered into it */,
+  "ratings_target": 2, "default": false, "state": "active" | "archived", "created_at", "created_by",
+  "updated_at", "summary": {"n_recordings", "n_retired", "formats": {"edf": 120}, "sfreq": [256.0],
+  "n_channels": {"min", "max"}, "duration_s", "size_bytes", "first_registered_at", "last_registered_at"},
+  "n_handouts", "ratings": {"0": 3000, "1": 1500, "2": 400, "3+": 100} /* recordings by number of people */,
+  "n_rated": 400 /* recordings that met the target */, "fully_rated": false}
+RecordingRow = {"recording_id", "file_name", "format", "duration_s", "n_channels", "dataset_id", "retired",
+  "registered_at", "n_given", "n_rated"}
+CollectionRecord = {"collection_id": "c-<10 hex>", "name", "description", "ratings_target": 2,
+  "n_recordings", "n_missing", "n_retired", "datasets": {"<dataset_id>": 12}, "built_from": null | {...},
+  "state": "active" | "archived", "created_at", "created_by", "updated_at", "changes": [..],
+  "n_rated", "fully_rated", "recording_ids"?: [..] /* collection_get only */}
+GroupRecord = {"group_id": "g-<10 hex>", "name", "description", "state": "active" | "archived",
+  "members": ["A01"], "history": [{"annotator_id", "added_at", "added_by", "removed_at", "removed_by"}],
+  "created_at", "created_by"}
+HandoutOut = {"handout_id": "h-<10 hex>", "name", "title" /* what annotators see */,
+  "target": {"kind": "dataset" | "collection", "id", "name"}, "mode": "all" | "k", "k": 2 | null,
+  "people", "groups", "follow_groups", "due_at": "2026-11-20" | null, "note", "state": "open" | "withdrawn",
+  "handed_out_at", "handed_out_by", "recipients": [{"annotator_id", "via": "person" | "group:<gid>",
+  "given_at", "given_by", "added", "already"}], "n_tasks": 40 | null, "new_recordings": 0,
+  "counts": {"people", "recordings", "given", "opened", "in_progress", "saved", "set_aside", "overdue_people"},
+  "per_person": [{"annotator_id", "given", "saved", "set_aside", "remaining", "overdue"}], "complete": false}
+HandoutRequest = {"target": {"kind": "dataset" | "collection", "id"}, "people"?: [aid], "groups"?: [gid],
+  "mode": "all" | "k", "k"?: 2 /* review.k_default */, "due_at"?: "YYYY-MM-DD" | null, "name"?, "title"?,
+  "note"?, "follow_groups"?: false}
+```
+
+A due date is a day: the hand-out is **overdue** for a person from the day
+after it (by the study's local date) while something it gives them is neither
+saved nor set aside. Due dates do not change the order of work, which the
+study's selection strategy decides.
+
+| op | body | answer |
+| --- | --- | --- |
+| `datasets_list` | `{"state"?}` | `{"datasets": [DatasetRecord], "default_id": "study-recordings"}`; the built-in dataset is always listed |
+| `dataset_get` | `{"dataset_id"}` | `{"dataset": DatasetRecord, "recordings": [RecordingRow]}`; 404 `unknown_dataset` |
+| `dataset_create` | `{"request_id", "dataset_id"?, "name", "description"?, "origin"?, "licence"?, "citation"?, "contact"?, "notes"?, "path_prefix"?, "ratings_target"?}` | `{"dataset", "already"}`; 409 `dataset_exists`; 400 `bad_request` (the ID, or a prefix that is not a plain relative folder). Audited |
+| `dataset_update` | `{"dataset_id", ...the fields?, "state"?}` | `{"dataset", "changed"}`; `path_prefix` is fixed once the dataset has recordings (409 `has_recordings`). Audited when something changed |
+| `dataset_remove` | `{"dataset_id"}` | `{}`; 409 `not_empty` (it has recordings), 409 `in_use` (an open hand-out), 409 `default_dataset`. Audited |
+| `recordings_move` | `{"recording_ids": [..], "dataset_id"}` | `{"moved": [..], "already": [..]}`; 404 `unknown_recording`, 404 `unknown_dataset`, 409 `archived`. Audited |
+| `recordings_register` (changed) | adds `"dataset_id"?` | as before. An unknown dataset is 404 `unknown_dataset`, an archived one 409 `archived`. A recording ID registered already in another dataset is skipped, even with `replace`. With the dataset's `path_prefix`, the IDs are prefixed before they are checked, and `added` holds the prefixed IDs |
+| `recordings_list` (changed) | adds `"dataset_id"?` | `RecordingRecord` gains `dataset_id` |
+| `recording_remove` (changed) | as before | also takes the recording out of every collection (audit details `collections`) |
+| `collections_list` | `{}` | `{"collections": [CollectionRecord]}` without `recording_ids` |
+| `collection_get` | `{"collection_id"}` | `{"collection": CollectionRecord with recording_ids, "recordings": [RecordingRow]}`; 404 `unknown_collection` |
+| `collection_create` | `{"request_id", "collection_id"?, "name", "description"?, "recording_ids": [..], "built_from"?, "ratings_target"?}` | `{"collection", "skipped": [{"recording_id", "reason"}], "already"}`; 413 `too_large` above 2,000 recordings. Audited |
+| `collection_update` | `{"collection_id", "name"?, "description"?, "ratings_target"?, "add"?: [..], "remove"?: [..], "order"?: [..], "state"?}` | `{"collection", "changed"}`; `order` must hold the current recordings in a new order (400). Audited |
+| `collection_remove` | `{"collection_id"}` | `{}`; 409 `in_use` (an open hand-out). Audited |
+| `groups_list` | `{}` | `{"groups": [GroupRecord]}` |
+| `group_create` | `{"request_id", "group_id"?, "name", "description"?, "members"?: [aid]}` | `{"group", "already"}`; 404 `unknown_user`. Audited |
+| `group_update` | `{"group_id", "name"?, "description"?, "add"?: [aid], "remove"?: [aid], "give_existing"?: true, "state"?}` | `{"group", "changed", "given": [{"handout_id", "annotator_id", "added"}]}`; adding a member twice changes nothing. Audited |
+| `group_remove` | `{"group_id"}` | `{}`; 409 `in_use` (an open hand-out names it). Audited |
+| `handouts_list` | `{"state"?, "target"?, "annotator_id"?, "overdue"?: bool}` | `{"handouts": [HandoutOut], "today": "2026-10-30"}` |
+| `handouts_preview_get` | `HandoutRequest` | `{"recipients": [{"annotator_id", "via", "new", "already", "annotates", "study_locked"}], "recordings", "skipped": [{"recording_id", "reason"}], "tasks_preview": tasks_preview_get's answer \| null, "warnings": ["…"]}`; nothing is kept |
+| `handout_create` | `HandoutRequest` + `request_id` | `{"handout": HandoutOut, "added", "already_had", "skipped", "tasks": tasks_create's answer \| null, "already"}`; 404 `unknown_dataset`, `unknown_collection`, `unknown_group` or `unknown_user`, 409 `archived`, 409 `disabled`, 400 `k_too_large`, 413 `too_many_assignments`. Audited |
+| `handout_update` | `{"handout_id", "due_at"?, "name"?, "title"?, "note"?, "follow_groups"?, "add_people"?: [aid], "give_new_recordings"?: true}` | `{"handout", "added", "tasks"?}`; 409 `withdrawn`. Audited |
+| `handout_withdraw` | `{"handout_id"}` | `{"handout", "removed", "kept"}`; 409 `already_withdrawn`. Audited |
+| `tracking_datasets_get` | `{"kind"?: "dataset" \| "collection" \| "handout", "refresh"?: false}` | `{"generated_at", "cached", "today", "people": [{"annotator_id", "display_name", "roles", "status"}], "rows": [{"kind", "id", "name", "n_recordings", "n_retired", "ratings_target", "ratings", "n_rated", "complete", "cells": {"A01": {"given", "opened", "in_progress", "saved", "revised", "set_aside", "locked", "first_assigned_at", "last_saved_at", "due_at", "overdue"}}}]}` |
+| `tracking_recordings_get` | `{"kind", "id", "status"?, "annotator_id"?, "overdue"?: bool, "query"?, "offset"?: 0, "limit"?: 1000, "refresh"?}` | `{"generated_at", "cached", "target": {"kind", "id", "name"}, "people": [..], "total", "offset", "next": int \| null, "rows": [{"recording_id", "file_name", "dataset_id", "retired", "n_given", "n_rated", "ratings_target", "cells": {"A01": Cell}}]}`; `limit` 1 to 1,000 (400) |
+| `notify_preview_get` | `{"kind"?: "weekly" \| "complete" \| "overdue" \| "all"}` | `{"notices": [{"notice_id", "kind", "to": [aid], "subject", "text"}]}`: what would be notified (datasets newly fully rated, people with overdue work, a weekly summary the team can copy). Nothing is sent |
+| `overview` (changed) | | `counts` gains `overdue` (people with an overdue hand-out) and `handouts_open` |
+
+On the annotator's side, each item of `GET /assignments` gains `"handout": null
+| {"handout_id", "title", "due_at", "overdue"}`, naming the open hand-out with
+the earliest due date that covers it (a finished item keeps it, for grouping,
+with `overdue` false), and the answer gains `"due": [{"handout_id", "title",
+"due_at", "total", "remaining", "overdue"}]` for the open hand-outs with a due
+date, earliest first. Neither carries dataset or collection names, nor the
+team's note.
+
 ### The short-segment quiz (annotators)
 
 A reference set with quiz items offers its quiz to the annotators allowed to

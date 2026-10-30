@@ -440,3 +440,33 @@ class ManifestStore:
     def by_fingerprint(self, sha256: str, size: int) -> list[dict[str, Any]]:
         sha = (sha256 or "").lower()
         return [m for m in self._load().values() if sha and fingerprint_of(m) == (sha, int(size))]
+
+
+# ------------------------------------------------------------------ datasets (electrotag/web/datasets.py)
+def dataset_of(m: dict[str, Any]) -> str:
+    """The source dataset a study recording belongs to: ``registration.dataset_id``, "" for the built-in
+    default dataset (recordings registered before datasets existed, or without choosing one)."""
+    return str((m.get("registration") or {}).get("dataset_id") or "")
+
+
+def manifest_head(m: dict[str, Any]) -> dict[str, Any]:
+    """The small fields of a manifest that the dataset pages and tracking read (:meth:`Store.manifest_heads`)."""
+    reg = m.get("registration") or {}
+    t = m.get("timing") or {}
+    _sha, size = fingerprint_of(m)
+    return {"recording_id": m["recording_id"], "file_name": m.get("file_name", ""), "format": m.get("format", ""),
+            "dataset_id": dataset_of(m), "retired": bool(reg.get("retired", False)),
+            "registered_at": reg.get("registered_at") or m.get("created_at", ""),
+            "sfreq": float(t.get("sfreq") or 0.0), "n_samples": int(t.get("n_samples") or 0),
+            "n_channels": len(m.get("ch_names") or []), "size_bytes": size}
+
+
+def opened_at(started_at: str, opened_t: Any) -> str:
+    """When a recording was opened in a visit: the visit's start plus the opening's seconds (``opened_t``)."""
+    from datetime import datetime, timedelta
+
+    try:
+        start = datetime.fromisoformat(str(started_at).replace("Z", "+00:00"))
+        return (start + timedelta(seconds=float(opened_t or 0.0))).isoformat(timespec="milliseconds")
+    except (TypeError, ValueError):
+        return str(started_at or "")
