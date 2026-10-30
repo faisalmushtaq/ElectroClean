@@ -377,7 +377,7 @@ arrangements allow reminders to annotators and summaries to the team that name t
 the admin area lists what would be notified (`notify_preview_get` in `electrotag/web/tracking.py`:
 datasets and collections newly fully rated, each person's overdue reminder, and a weekly summary the
 team can copy), and `Tracking.notices` is the seam a notifier would send from. The plan for later is
-section 3.3 of the technical design of the dataset library: a `notify` settings block that is off
+a `notify` settings block that is off
 until the team turns it on; one `Notifier` with a transport per kind (SMTP for the server, reading
 its settings and password from environment variables only, and the same code in a scheduled Firebase
 function with the password in Secret Manager); each notice reserved under its `notice_id` in the
