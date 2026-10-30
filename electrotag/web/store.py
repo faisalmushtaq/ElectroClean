@@ -40,6 +40,8 @@ MODES = ("standard", "guided", "practice", "assessment")
 #: expert work: tasks (``annotator_id`` ""), corrections (the corrected person's), adjudications (the
 #: adjudicator's) and gold scores (docs/web/api.md, "Experts").
 RECORD_KINDS = ("problems", "reviews", "unusable", "tasks", "corrections", "adjudications", "gold")
+#: The sign-up questionnaire's answers and each person's contact details, kept apart (electrotag/web/questionnaire.py).
+RECORD_KINDS += ("questionnaires", "contacts")
 #: A record's ID: letters, digits, "_" and "-" (the browser makes 32 hexadecimal characters).
 RECORD_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
 #: The roles a person can be given now. One person may hold several (an expert who also annotates).

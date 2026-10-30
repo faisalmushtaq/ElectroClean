@@ -292,6 +292,39 @@ class ReplaySettings:
 
 
 @dataclass(frozen=True)
+class QuestionnaireSettings:
+    """questionnaire: the sign-up questionnaire and contact details (electrotag/config/questionnaire.py)."""
+
+    enabled: bool = True  # annotators and experts answer it before any work opens
+    demographics: bool = True  # include the demographic questions (only where the ethics approval covers them)
+    questions: tuple[dict[str, Any], ...] | None = None  # None: the default questionnaire
+    contacts: dict[str, str] = field(default_factory=lambda: dict(_DEFAULT_CONTACTS))
+
+    @classmethod
+    def from_dict(cls, block: dict[str, Any]) -> QuestionnaireSettings:
+        from electrotag.config.questionnaire import QuestionnaireError, check_contacts, check_questions
+
+        d = cls()
+        try:
+            questions = check_questions(block.get("questions"))
+            contacts = check_contacts(block.get("contacts"))
+        except QuestionnaireError as exc:
+            raise SettingsError(str(exc)) from exc
+        return cls(enabled=_flag(block, "questionnaire", "enabled", d.enabled),
+                   demographics=_flag(block, "questionnaire", "demographics", d.demographics),
+                   questions=None if questions is None else tuple(questions), contacts=contacts)
+
+    def effective(self) -> list[dict[str, Any]]:
+        """The questions people are asked now (the demographic group left out when it is switched off)."""
+        from electrotag.config.questionnaire import effective_questions
+
+        return effective_questions(None if self.questions is None else list(self.questions), self.demographics)
+
+
+_DEFAULT_CONTACTS = {"full_name": "required", "email": "required", "phone": "optional", "institution": "optional"}
+
+
+@dataclass(frozen=True)
 class Settings:
     """All application settings after merging defaults and study overrides."""
 
@@ -341,6 +374,7 @@ class Settings:
     review: ReviewSettings = field(default_factory=ReviewSettings)
     training: TrainingPolicy = field(default_factory=TrainingPolicy)
     replay: ReplaySettings = field(default_factory=ReplaySettings)
+    questionnaire: QuestionnaireSettings = field(default_factory=QuestionnaireSettings)
     raw: dict[str, Any] = field(repr=False, default_factory=dict)
 
     @classmethod
@@ -409,6 +443,7 @@ class Settings:
                 review=ReviewSettings.from_dict(_block(data, "review")),
                 training=TrainingPolicy.from_dict(_block(data, "training")),
                 replay=ReplaySettings.from_dict(_block(data, "replay")),
+                questionnaire=QuestionnaireSettings.from_dict(_block(data, "questionnaire")),
                 raw=copy.deepcopy(data),
             )
         except KeyError as exc:  # pragma: no cover - defaults always complete

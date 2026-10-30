@@ -92,6 +92,10 @@ def new_study(template: Path, with_users: bool = True) -> str:
         run_cli("assign", "A01", "--all", "--study", sid)
         run_cli("assign", "A02", "--all", "--study", sid)
         run_cli("assign", "T01", "--programme", "example", "--study", sid)
+        from electrotag.web.questionnaire import prefill_example
+
+        for u in (A01, A02, T01):  # they have answered the sign-up questionnaire (the functions check it)
+            prefill_example(store, u.annotator_id, u.display_name)
     return sid
 
 
@@ -1321,3 +1325,72 @@ def test_agreement_of_the_derived_versions_over_firestore(service: StudyService,
     rows = adj["tables"]["adjudication.tsv"].splitlines()
     row = dict(zip(rows[0].split("\t"), rows[1].split("\t"), strict=True))
     assert row["unit_id"] == uid and row["adjudicator"] == "E01" and row["kept_one"] == str(len(got["conflicts"]))
+
+
+# ------------------------------------------------------------------ the sign-up questionnaire
+QUESTIONNAIRE = {"datasets_analysed": "0", "eeg_years": "Less than 1", "annotation_hours": "None",
+                 "artifact_training": "Other", "eeg_systems": ["Other"], "eeg_setting": "Research",
+                 "confidence": "prefer_not_to_say", "career_stage": "PhD", "discipline": "Psychology",
+                 "country": "Wales", "age_band": "prefer_not_to_say", "gender": "Woman", "first_language": "Welsh"}
+
+
+@pytest.mark.questionnaire
+def test_the_questionnaire_and_contacts_on_firestore(template: Path, tmp_path: Path) -> None:
+    """Answers with their history and the contact details, kept apart, the gate and the files of the results."""
+    from electrotag.web.export import results_zip_file
+
+    sid = new_study(template, with_users=False)
+    store = FirestoreStore(firestore_client(PROJECT), sid)
+    store.put_user("Q01", display_name="New one", role="annotator")
+    service = StudyService(store)
+    q01 = User("Q01", "New one")
+    status = ok(service, "me", q01)["questionnaire"]
+    assert status["asked"] is True and status["answered"] is False
+    assert err(service, "training_stage", q01, {"stage": "tour", "action": "skip"}).code == "questionnaire_required"
+    body = {"answers": QUESTIONNAIRE, "other": {"artifact_training": "Night classes"},
+            "contacts": {"full_name": "Cerys Jones", "email": "cerys@example.org"}}
+    first = ok(service, "questionnaire", q01, body)
+    assert first["changed"] is True and first["n_versions"] == 1
+    assert ok(service, "questionnaire", q01, body)["changed"] is False  # sent twice, kept once
+    second = ok(service, "questionnaire", q01, {**body, "answers": {**QUESTIONNAIRE, "datasets_analysed": "1–2"}})
+    assert second["n_versions"] == 2
+    assert err(service, "training_stage", q01, {"stage": "tour", "action": "skip"}).code == "no_programme"
+    got = service.admin("questionnaire_get", ADMIN, {"annotator_id": "Q01"})
+    assert [h["answers"]["datasets_analysed"] for h in got["history"]] == ["1–2", "0"]
+    assert got["contacts"]["full_name"] == "Cerys Jones"
+    assert store.records("questionnaires", "Q01")[0]["history"][0]["other"] == {"artifact_training": "Night classes"}
+    # the files of the results: answers by ID, the contacts only when asked for
+    import zipfile
+
+    path = results_zip_file(store)
+    with zipfile.ZipFile(path) as z:
+        names = z.namelist()
+        tsv = z.read(next(n for n in names if n.endswith("questionnaire/answers.tsv"))).decode("utf-8")
+        assert "contacts.csv" not in names and "Cerys" not in tsv and "Night classes" in tsv
+    path.unlink()
+    path = results_zip_file(store, include_contacts=True)
+    with zipfile.ZipFile(path) as z:
+        assert "Q01,Cerys Jones,cerys@example.org" in z.read("contacts.csv").decode("utf-8")
+    path.unlink()
+    audit = json.dumps(store.audit_page(None, 50)[0])
+    assert "Q01's contact details changed" in audit and "Cerys" not in audit and "cerys@" not in audit
+
+
+@pytest.mark.skipif(not (AUTH and FUNCTIONS), reason="needs the Auth and Functions emulators")
+def test_the_questionnaire_through_the_functions(template: Path) -> None:
+    """et_questionnaire reads and saves; the functions refuse work until it is answered."""
+    sid = new_study(template, with_users=False)
+    email = f"q01-{sid}@example.org"
+    run_cli("add-user", "Q01", "--study", sid, "--email", email, "--password", PASSWORD, "--name", "New one")
+    token = sign_in(email)
+    _, body = callable_("et_training_stage", {"study": sid, "stage": "tour", "action": "skip"}, token)
+    assert body["error"]["details"]["error"] == "questionnaire_required"
+    _, body = callable_("et_questionnaire", {"study": sid}, token)
+    assert body["result"]["contacts"]["values"]["email"] == email and body["result"]["answered_at"] is None
+    _, body = callable_("et_questionnaire", {"study": sid, "answers": QUESTIONNAIRE,
+                                             "contacts": {"full_name": "Cerys Jones", "email": email}}, token)
+    assert body["result"]["n_answered"] == len(QUESTIONNAIRE)
+    _, body = callable_("et_me", {"study": sid}, token)
+    assert body["result"]["questionnaire"]["answered"] is True
+    _, body = callable_("et_training_stage", {"study": sid, "stage": "tour", "action": "skip"}, token)
+    assert body["error"]["details"]["error"] == "no_programme"

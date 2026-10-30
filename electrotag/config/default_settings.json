@@ -92,5 +92,25 @@
   "replay": {
     "enabled": true,
     "trainees_watch_experts": true
+  },
+  "questionnaire": {
+    "enabled": true,
+    "demographics": true,
+    "questions": [
+      {"id": "datasets_analysed", "group": "experience", "text": "How many EEG datasets have you analysed?", "type": "choice", "required": true, "options": ["0", "1–2", "3–10", "11–30", "31–100", "Over 100"], "help": "Count each study or collection of recordings you have processed or analysed as one dataset."},
+      {"id": "eeg_years", "group": "experience", "text": "How many years have you worked with EEG?", "type": "choice", "required": true, "options": ["Less than 1", "1–2", "3–5", "6–10", "More than 10"]},
+      {"id": "annotation_hours", "group": "experience", "text": "About how many hours have you spent marking artifacts in EEG?", "type": "choice", "required": true, "options": ["None", "Fewer than 10", "10–50", "51–200", "201–1000", "More than 1000"]},
+      {"id": "artifact_training", "group": "experience", "text": "Have you had formal training in recognising EEG artifacts?", "type": "choice", "required": true, "options": ["No formal training", "Informal training from colleagues", "A course or workshop", "Clinical EEG training or accreditation", "Other"], "other_option": "Other"},
+      {"id": "eeg_systems", "group": "experience", "text": "Which EEG systems have you used?", "type": "multi", "required": true, "options": ["BioSemi", "Brain Products", "EGI (Magstim EGI)", "ANT Neuro", "g.tec", "Neuroscan (Compumedics)", "A clinical system (such as Natus or Nihon Kohden)", "A consumer system (such as Emotiv or Muse)", "OpenBCI", "None yet", "Other"], "other_option": "Other", "help": "Choose all that apply."},
+      {"id": "eeg_setting", "group": "experience", "text": "Is your EEG experience clinical or research?", "type": "choice", "required": true, "options": ["Research", "Clinical", "Both", "Neither yet"]},
+      {"id": "confidence", "group": "experience", "text": "How confident are you at recognising artifacts in EEG?", "type": "choice", "required": true, "options": ["1 (not at all confident)", "2", "3", "4", "5 (very confident)"]},
+      {"id": "career_stage", "group": "career", "text": "What is your career stage?", "type": "choice", "required": true, "options": ["Undergraduate", "Master's", "PhD", "Postdoc", "Faculty", "Clinician", "EEG technologist", "Industry", "Other"], "other_option": "Other"},
+      {"id": "discipline", "group": "career", "text": "What is your discipline?", "type": "choice", "required": true, "options": ["Neuroscience", "Psychology", "Engineering", "Medicine", "Other"], "other_option": "Other"},
+      {"id": "country", "group": "career", "text": "Which country do you work in?", "type": "text", "required": true},
+      {"id": "age_band", "group": "demographics", "text": "What is your age?", "type": "choice", "required": true, "options": ["18–24", "25–34", "35–44", "45–54", "55–64", "65 or over"]},
+      {"id": "gender", "group": "demographics", "text": "What is your gender?", "type": "choice", "required": true, "options": ["Woman", "Man", "Non-binary", "Prefer to self-describe"], "other_option": "Prefer to self-describe"},
+      {"id": "first_language", "group": "demographics", "text": "What is your first language?", "type": "text", "required": true}
+    ],
+    "contacts": {"full_name": "required", "email": "required", "phone": "optional", "institution": "optional"}
   }
 }

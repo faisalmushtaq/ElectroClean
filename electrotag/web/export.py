@@ -150,8 +150,9 @@ def record_files(store: Any) -> dict[str, bytes]:
     of conflicts (adjudication.py)."""
     from electrotag.web.adjudication import adjudication_files
     from electrotag.web.feedback import feedback_files
+    from electrotag.web.questionnaire import questionnaire_files
 
-    return {**feedback_files(store), **adjudication_files(store)}
+    return {**feedback_files(store), **adjudication_files(store), **questionnaire_files(store)}
 
 
 def _export_derived(store: Any, layout: OutputLayout, settings: Any, counts: dict[str, int]) -> None:
@@ -184,10 +185,11 @@ def _export_derived(store: Any, layout: OutputLayout, settings: Any, counts: dic
 MAX_RESULTS_ZIP = 25_000_000
 
 
-def results_zip_file(store: Any) -> Path:
+def results_zip_file(store: Any, *, include_contacts: bool = False) -> Path:
     """A zip of the study's results folder (results, interaction logs, training progress, reports, quiz results,
-    problem reports and reviews) with the study's settings, audit log and manifests under ``study/`` and a
-    README, in a temporary file the caller deletes."""
+    problem reports, reviews and the questionnaire's answers by annotator ID) with the study's settings, audit log
+    and manifests under ``study/`` and a README, in a temporary file the caller deletes. With
+    ``include_contacts``, also ``contacts.csv``: everyone's name and contact details, which identify people."""
     import tempfile
     import zipfile
 
@@ -218,7 +220,14 @@ def results_zip_file(store: Any) -> Path:
                 zf.writestr(f"{base}/{rel}", data)
             for rel, data in study_record_files(store).items():
                 zf.writestr(rel, data)
-            zf.writestr("README.txt", results_readme(store.name, base, now_local_iso()))
+            readme = results_readme(store.name, base, now_local_iso())
+            if include_contacts:
+                from electrotag.web.questionnaire import CONTACTS_WARNING, Questionnaire, contacts_csv
+
+                zf.writestr("contacts.csv", contacts_csv(Questionnaire.rows_of(store)))
+                readme += ("\ncontacts.csv holds the full name and contact details of each person, by annotator ID. "
+                           f"{CONTACTS_WARNING}\n")
+            zf.writestr("README.txt", readme)
     return Path(tmp.name)
 
 
@@ -251,7 +260,9 @@ def results_readme(study_name: str, base: str, when: str) -> str:
         "progress and competency reports, the quiz results, the problem reports, the reviews, and the tasks\n"
         "that shared recordings out with their known-answer scores (tasks/).\n"
         f"{base}/derived/ holds the versions made from them (experts' corrections, adjudicated versions), each\n"
-        "kind with its own completion register; the originals are never changed.\n\n"
+        "kind with its own completion register; the originals are never changed.\n"
+        f"{base}/questionnaire/ holds the answers to the sign-up questionnaire by annotator ID (answers.tsv, one\n"
+        "row for each set of answers given, and answers.json with the wording of each version answered).\n\n"
         f"study/{STUDY_CONFIG_FILENAME} holds the study's settings, study/audit_log.jsonl every change an\n"
         "administrator made (oldest first, one JSON object a line), and study/manifests.json the description\n"
         "of each registered recording (its fingerprint, timing, channels and events). The EEG files\n"
