@@ -324,16 +324,16 @@ export const tests = [
       if (!offered) throw new SkipTest('the sandbox does not answer the datasets operations yet (js/api/demo_library.js)');
       const data = await sandboxFolder();
       try {
-        const ids = await flow(t, page, { people: ['A01', 'A02'], folder: data.folder, collide: false, study: false });
-        const has = async (op) => page.evaluate(async (o) => { try { await globalThis.ElectroTag.backend.admin(o, { kind: 'dataset' }); return true; } catch { return false; } }, op);
-        await tracking(t, page, { datasetId: ids.datasetId, p1: 'A01', offered: await has('tracking_datasets_get') });
-        await notices(t, page, await has('notify_preview_get'));
+        const ids = await flow(t, page, { people: ['A01', 'E01'], folder: data.folder, collide: false, study: false });
+        const has = async (op, body) => page.evaluate(async ([o, b]) => { try { await globalThis.ElectroTag.backend.admin(o, b); return true; } catch { return false; } }, [op, body]);
+        await tracking(t, page, { datasetId: ids.datasetId, p1: 'A01', offered: await has('tracking_datasets_get', { kind: 'dataset' }) });
+        await notices(t, page, await has('notify_preview_get', { kind: 'all' }));
         // the sandbox says plainly that a share-out k per recording needs a study server
         await section(page, 'admin-handouts');
         const ho = page.locator('[data-card="handout-form"]');
         await ho.locator('.admin-field', { hasText: 'Dataset or collection' }).locator('select').selectOption(`collection:${ids.collectionId}`);
         await ho.locator('input[data-name="handout-people"][value="A01"]').check();
-        await ho.locator('input[data-name="handout-people"][value="A02"]').check();
+        await ho.locator('input[data-name="handout-people"][value="E01"]').check();
         await ho.locator('input[name="handout-mode"][value="k"]').check();
         await page.click('[data-log="handout-preview"]');
         await until(page, /needs? a study server|study server or Firebase/, '[data-card="handout-form"]');
