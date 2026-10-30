@@ -434,6 +434,11 @@ class Tasks:
                               "decided": (adj.get("counts") or {}).get("decided")} if adj else None),
         }
 
+    def outs(self, tasks: list[dict[str, Any]], *, count_conflicts: bool = True) -> list[dict[str, Any]]:
+        """TaskOut of several tasks, reading the register, drafts and adjudications once for all of them."""
+        seen = _Seen()
+        return [self.out(t, seen, count_conflicts=count_conflicts) for t in tasks]
+
     # ------------------------------------------------ what an annotator receives
     def item_task(self, item: WorkItem, tasks: dict[str, dict[str, Any]] | None = None) -> dict[str, Any] | None:
         """``task`` of an assignment item and of ``POST /match``: ``{"task_id", "window"}`` or None. Nothing says
@@ -459,6 +464,15 @@ class Tasks:
     def window_of(self, item: WorkItem) -> dict[str, Any] | None:
         task = self.task_of(item)
         return task.get("window") if task else None
+
+    def window_for(self, annotator_id: str, recording_id: str) -> dict[str, Any] | None:
+        """The window ({start_sample, end_sample}) of the task in which a person holds a study recording, or None
+        (no task, or the whole recording): for checking a version of their work made by someone else."""
+        for a in self.store.assignments(annotator_id):
+            if a.recording_id == recording_id and a.mode == "standard" and a.task_id:
+                task = self.get(a.task_id)
+                return task.get("window") if task else None
+        return None
 
     def check_item(self, item: WorkItem, annotations: list[Any]) -> None:
         """``submit`` and ``put_draft``: the annotations of a window task lie inside its window."""

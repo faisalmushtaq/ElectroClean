@@ -236,6 +236,11 @@ def test_a_window_is_kept_in_drafts_and_saves(admin: Api, client: TestClient, re
     assert {p["annotator_id"]: p["status"] for p in st["people"]} == {"A03": "done", "A04": "todo"}
     # A01 holds SUB3 without a task: no window for them
     assert item(person(client, "A01"), SUB3)["task"] is None
+    tasks = admin.client.app.state.service.tasks
+    assert tasks.window_for("A03", SUB3) == {"start_sample": 2560, "end_sample": 5120}
+    assert tasks.window_for("A01", SUB3) is None and tasks.window_for("A03", SUB1) is None
+    outs = tasks.outs(tasks.for_recording(SUB3))
+    assert [o["task_id"] for o in outs] == [t["task_id"]] and outs[0]["counts"]["saved"] == 1
     person(client, "A01").ok("post", "/submissions", submission(recordings, SUB3, [outside]))
 
 
