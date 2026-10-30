@@ -42,10 +42,13 @@ import { microvoltText } from '../viewer/geometry.js';
 import { mapLayout, projectPositions } from '../viewer/head_map.js';
 import { readElectrodes, sidecarsOf } from '../eeg/electrodes.js';
 import { centredStart, clampTime, parseTimeText } from './goto.js';
+import { forgetOpen, noteOpen } from './reopen.js';
 import { CONTEXT_S, boundsOf, itemWindow, outsideStretches } from '../viewer/bounds.js';
 
 export { friendlyDuration, plural };
 
+/** The kinds of view that open again after a reload of the page (reopen.js). */
+const REOPENS = ['annotate', 'tryout'];
 const MODE_TEXT = { standard: 'Annotation', guided: 'Guided training', practice: 'Practice', assessment: 'Assessment', tryout: 'Try-out', tour: 'Platform tour', review: 'Practice review',
   reviewing: 'Review', feedback: 'Feedback', correcting: 'Correction', replay: 'Replay', corrected: 'Corrected version', overlay: 'Everyone\'s marks' };
 /**
@@ -211,7 +214,7 @@ export class Workspace {
         h('span.chip', { class: this.kind === 'tryout' || this.kind === 'tour' ? 'warning' : 'active' }, MODE_TEXT[this.kind === 'annotate' ? s.mode : this.kind] || s.mode),
         this.bounds ? h('span.chip.ws-part', { 'data-log': 'task-part', title: 'This task gives you this part of the recording: the rest is hatched and is not annotated.' },
           `Your part: ${this.bounds.text}`) : null),
-      this.kind === 'tryout' ? h('span.ws-banner', {}, 'This file is not part of the study, so nothing you mark is saved.')
+      this.kind === 'tryout' ? h('span.ws-banner', {}, 'This file is not part of the study: your marks are kept only in this browser. Download them to keep them.')
         : this.kind === 'tour' ? h('span.ws-banner', {}, 'A practice recording for the tour: nothing you mark is kept.') : null);
     const actions = h('div.ws-actions');
     this.actionsEl = actions; // a review pass, the feedback view, a correction and a replay add their own forward action
@@ -609,6 +612,14 @@ export class Workspace {
     const visibility = () => this._visibility();
     document.addEventListener('visibilitychange', visibility);
     this._listeners.push(() => document.removeEventListener('visibilitychange', visibility));
+    // A reload or a closing page: this browser's copy is written at once, before the page goes (the
+    // write is synchronous). visibilitychange comes too, in most browsers, and sends the draft to the study.
+    const leaving = () => { if (this.s.mayKeepLocal) this.s.saveLocal(); };
+    for (const type of ['pagehide', 'beforeunload']) {
+      window.addEventListener(type, leaving);
+      this._listeners.push(() => window.removeEventListener(type, leaving));
+    }
+    if (REOPENS.includes(this.kind)) noteOpen(this.s); // opened again after a reload (reopen.js)
     if (this.s.resumed && this.timed) this._welcomeBack();
     if (this.kind === 'annotate') this._offerDiscarded();
   }
@@ -646,7 +657,8 @@ export class Workspace {
   _visibility() {
     const s = this.s;
     if (document.visibilityState === 'hidden') {
-      if (s.canSave) { s.saveLocal(); s.saveRemote({ force: true, keepalive: true }); }
+      if (s.mayKeepLocal) s.saveLocal();
+      if (s.canSave) s.saveRemote({ force: true, keepalive: true });
       if (this.clock && this.clock.paused) this._hiddenWhilePaused = true;
       // Out of sight for more than a few seconds (another tab or app, the iPad locked): a pause
       // from the moment the page was hidden.
@@ -719,6 +731,7 @@ export class Workspace {
     // gone, where it would bring back work discarded since, or overwrite a newer draft of the recording.
     this.s.close();
     this.s.onSaved = null;
+    if (REOPENS.includes(this.kind)) forgetOpen(); // left on purpose: a reload now shows the page it went to
     this._listeners.forEach((f) => f());
     this.store.removeListener(this._storeListener);
     if (this.coach) this.coach.destroy();
@@ -2650,11 +2663,12 @@ export class Workspace {
     }
     if (this.kind === 'tryout') {
       if (this.store.size) {
-        const c = await choose('Close the try-out?', `Nothing you marked in this file is kept.\n\nDownload my annotations: save them as a file first.`,
+        const c = await choose('Close the try-out?', `Your marks in this file are kept only in this browser, and closing lets them go.\n\nDownload my annotations: save them as a file first.`,
           ['Download my annotations', 'Close', 'Keep looking'], 0);
         if (c === 'Keep looking') return false;
         if (c === 'Download my annotations') { this.downloadTryOut(); return false; }
       }
+      await s.discardDrafts({ close: true }); // this browser's copy goes with the try-out
       this.app.leaveRecording(this, 'tryout_closed');
       return true;
     }

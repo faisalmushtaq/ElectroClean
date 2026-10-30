@@ -5,6 +5,16 @@ Each section below describes the changes in one version of ElectroTag;
 
 ## Unreleased
 
+Reloading the page while annotating no longer loses any work. The browser's copy of a draft is now
+written 0.3 s after a change (it was 1.2 s) and again, synchronously, when the page is hidden,
+reloaded or closed, and after a reload the recording that was open opens again with its work restored
+(a sandbox example or training recording and a copy kept on the device by themselves; a file from the
+computer once it is chosen again, which the open page asks for). The newer of the browser's copy and
+the study's draft is now chosen by the moment each was kept: their times were compared as text, so a
+person west of the study's time zone (a Firebase study keeps UTC) got the study's older draft, which
+can be up to 30 s behind, and lost the marks made since. Try-out mode, for a file outside the study,
+keeps its marks in this browser by the file's fingerprint, so a reload no longer loses them either.
+
 Experts and administrators can put everyone's saved marks on one recording over the same EEG, from
 Saved work, the adjudication queue, the library, a replay and a recording's page in the admin area.
 Up to eight people have lanes of their own, each with a colour that stays distinct for colour-blind

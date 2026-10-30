@@ -81,7 +81,7 @@ export const tests = [
       await page.click('text=Look at it without saving');
       await waitForRoute(page, 'annotate');
       await waitForTraces(page);
-      assert.match(await page.textContent('.ws-header'), /nothing you mark is saved/);
+      assert.match(await page.textContent('.ws-header'), /your marks are kept only in this browser/);
       assert.equal(await page.locator('.ws-actions button.primary').textContent(), 'Download my annotations');
       await page.keyboard.press('3');
       await drag(page, await eegPoint(page, 1.0), await eegPoint(page, 2.0));

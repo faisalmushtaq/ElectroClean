@@ -223,7 +223,9 @@ right name, sampling rate, length and channels but its contents differ from the 
 may have been converted or re-saved), ElectroTag explains the difference and lets you choose
 between opening it anyway and choosing the study's copy; ask your study team if you are not sure.
 A file that is not part of the study can still be looked at in try-out mode, which is clearly
-labelled and saves nothing. A recording of the study that is not yours at the moment, or one you
+labelled and sends nothing to the study. Your marks in a try-out are kept only in this browser, so a
+reload of the page does not lose them: choose the same file again and they come back. Download my
+annotations saves them as a file, and closing the try-out lets them go. A recording of the study that is not yours at the moment, or one you
 have already finished, is not opened, and the page says which of the two it is.
 
 When the page was opened for one recording (Open next recording, or a stage of your training path)
@@ -678,6 +680,16 @@ work is safe in this browser meanwhile, and the draft goes to the study as soon 
 returns; the line then says that the study has your latest draft. Until then, the draft cannot
 follow you to another browser. Save and Finish is never sent again by itself: press it again once
 the connection is back. The saved time worked on the recording leaves out every pause.
+
+Reloading the page, or closing the tab and opening it again, keeps your work too, in the sandbox and
+in a study alike. The browser's copy is written a fraction of a second after each change and again
+the moment the page goes, so a mark or an edit made just before the reload is in it. After the
+reload the recording opens again where you were, with your work restored and no question asked: a
+built-in example of the sandbox, a training recording of the sandbox and a recording kept on this
+device open by themselves, and for a file from your computer the open page names it and asks you to
+choose it again, since a web page may read a file only when you choose it. When the browser's copy
+and the study's draft differ, the newer one is used, compared by the moment each was kept, so a
+study whose computer keeps another time zone than yours makes no difference.
 
 ‹ Close asks whether to close and finish later, which keeps your draft with your annotations and
 time, or to discard them, which asks a second time. When you open a recording that has a draft

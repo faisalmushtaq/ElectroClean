@@ -124,6 +124,7 @@ export class App {
     // A bookmarked section of the admin area opens again once its administrator has signed in.
     const asked = (location.hash || '').replace(/^#/, '');
     if (ADMIN_ROUTE.test(asked) || EXPERT_ROUTE.test(asked)) this._adminReturn = asked;
+    this._reloadedIn = asked; // the page's view before a reload (a recording opens again: annotate/reopen.js)
     const invite = takeInvite();
     this._render(h('main.page.loading', {}, h('p.subtitle', {}, 'Starting ElectroTag…')), 'signin');
     let where;
@@ -258,6 +259,13 @@ export class App {
     // tried again when it is needed.
     preloadParts([...(this.backend.isDemo ? [] : ['readers']), ...(this.isAdmin ? [] : ['home']), ...PRELOAD, ...(this.me.programme ? ['coach', 'practice'] : [])]);
     const want = (location.hash || '').replace(/^#/, '');
+    // A reload while a recording was open: it opens again where it was (annotate/reopen.js).
+    const reloadedIn = this._reloadedIn;
+    this._reloadedIn = null;
+    if (want === 'annotate' || reloadedIn === 'annotate') {
+      const reopen = await loadPart('reopen').catch(() => null);
+      if (reopen && await reopen.reopenAfterReload(this)) return;
+    }
     // Administrators start in the admin area (or where a reload left them); they can still annotate.
     const back = this._adminReturn;
     this._adminReturn = null;
@@ -951,8 +959,9 @@ export class App {
       this.openView && this.openView.showProblem(exc.message, [this.openView.chooseAgainButton()]);
       return;
     }
-    if (!tryOut) {
-      const draft = session.pickDraft(match.draft);
+    {
+      // A try-out's work is kept only in this browser (session.js), so it has no draft with the study.
+      const draft = session.pickDraft(tryOut ? null : match.draft);
       if (draft) {
         const resume = Boolean(this.openView && this.openView.resume);
         const yes = resume || await this._askRestore(session, draft);
