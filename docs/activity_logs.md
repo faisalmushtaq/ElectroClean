@@ -159,6 +159,16 @@ believed it was connected) is logged once when drafts stop reaching the study,
 and `draft_sent_again` when one reaches it again; the draft is in the browser
 meanwhile.
 
+**Own files (browser).** `own_results_downloaded` (`recording_id`, `mode`,
+`version`, `n_files`, and `as`: `zip` or `files`) records that the annotator
+downloaded their own saved files of a recording, from the Saved dialog or the
+History.
+
+**The artifact reference guide (browser).** `guide_opened` (`where`: `panel`,
+the annotation view's Guide tab, `tab`, a new tab, or `page`; and `label`, the
+type it opened at, or null); `guide_search` (`n_chars`, the length of what was
+typed, never the words, and `n_matches`); `guide_printed`.
+
 **Revisions (browser).** An annotator may open a recording they finished and
 submit it again as a new version (docs/web/using.md, "History and revisions").
 `revision_started` (`session_id`, `recording_id`, `version`, the version a

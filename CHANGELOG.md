@@ -102,6 +102,33 @@ mark (three quarters of a finger's reach on a touch screen), the study setting
 `annotation.merge_overlapping` can switch the joining of overlapping marks off, and the browser's and
 the study's annotation stores are checked to behave identically, edit by edit.
 
+An artifact reference guide describes every type of the catalogue on one searchable, printable
+page: its HED-SCORE name, short name, code and key, the HED-SCORE definition, where it shows on the
+scalp, its frequency, shape and typical duration, how to tell it from its look-alikes, and, for
+sixteen types, a live simulated example drawn with the snippets' viewer, so that it works offline and
+in the sandbox. It opens as the annotation view's new Guide tab, from the Help tab, from About this
+type in the type list, from the training path, and at its own address (`#guide`) without signing in.
+The sandbox's simulation gained the vertical eye movement, nystagmus, tongue movement, pulse,
+respiration, sweat and electrode movement for these examples.
+
+Annotators can download their own annotations of a saved recording, as the files the study keeps:
+the BIDS `_events.tsv` and its `_events.json`, the `_annotations.json` with their ratings and notes,
+and the session details, as one small zip file or as separate files. The Saved dialog after Save and
+Finish offers them, and so do Download in the History and the recording's More menu, for any saved
+version. A new read operation, `GET /me/results/{recording_id}` (`et_my_results` on Firebase), gives
+only the caller's own files; the sandbox makes the same files in the browser, its `_events.tsv` row
+for row as the server writes it.
+
+Reloading the page while annotating no longer loses any work. The browser's copy of a draft is now
+written 0.3 s after a change (it was 1.2 s) and again, synchronously, when the page is hidden,
+reloaded or closed, and after a reload the recording that was open opens again with its work restored
+(a sandbox example or training recording and a copy kept on the device by themselves; a file from the
+computer once it is chosen again, which the open page asks for). The newer of the browser's copy and
+the study's draft is now chosen by the moment each was kept: their times were compared as text, so a
+person west of the study's time zone (a Firebase study keeps UTC) got the study's older draft, which
+can be up to 30 s behind, and lost the marks made since. Try-out mode, for a file outside the study,
+keeps its marks in this browser by the file's fingerprint, so a reload no longer loses them either.
+
 Experts and administrators can put everyone's saved marks on one recording over the same EEG, from
 Saved work, the adjudication queue, the library, a replay and a recording's page in the admin area.
 Up to eight people have lanes of their own, each with a colour that stays distinct for colour-blind

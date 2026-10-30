@@ -786,6 +786,12 @@ page gives the command to use instead: on a study server the results are already
 folder's `Annotated_Events`, and on Firebase `electrotag-web export` writes them into the same
 folders (docs/web/firebase.md).
 
+Annotators can download their own saved files of each recording themselves, from the Saved dialog
+after Save and Finish and from their History (see "Your own files" in the
+[annotators' guide](using.md#your-own-files)). They get exactly the files that this zip holds for
+them, one recording and one version at a time, and never anyone else's; Download all results (zip)
+stays the way to collect the whole study.
+
 ## Reviewing saved work
 
 A lead annotator can spot-check a saved recording, annotation by annotation, and the annotator sees

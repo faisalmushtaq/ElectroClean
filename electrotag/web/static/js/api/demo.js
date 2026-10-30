@@ -833,6 +833,9 @@ export class DemoBackend {
   /** GET /me/reviews: the reviews of this annotator's saved work, when the study shows them. */
   async myReviews() { return this.feedback.mine(); }
 
+  /** GET /me/results (demo_export.js). */
+  async myResults(recordingId, mode, contextId, version) { return (await import('./demo_export.js')).myResults(this, recordingId, mode, contextId, version); }
+
   // ------------------------------------------------------------ achievements
   /** GET /me/achievements (docs/web/api.md, "Achievements"), from the sandbox's own state. */
   /** GET /me/questionnaire: the sign-up questionnaire, the answers and contact details (demo_questionnaire.js). */

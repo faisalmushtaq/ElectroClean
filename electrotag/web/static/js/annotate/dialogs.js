@@ -15,7 +15,7 @@ import { parseTimeText } from './goto.js';
  * The searchable list of every artifact type. Resolves with the chosen label, or null.
  * `at` ({x, y}, client coordinates) places it next to the pointer.
  */
-export function pickType({ title, catalogue, current = null, quick = [], at = null }) {
+export function pickType({ title, catalogue, current = null, quick = [], at = null, about = null }) {
   const search = h('input.field', { type: 'search', placeholder: 'Type part of a name or code, for example blink or 103', 'aria-label': 'Search the artifact types', autocomplete: 'off', spellcheck: 'false' });
   const list = h('div.picker-list', { role: 'listbox', 'aria-label': 'Artifact types', tabindex: '0' });
   const hint = h('p.caption', {}, 'Enter chooses the highlighted type. Group terms, in italics, are for artifacts whose exact type is unclear.');
@@ -56,10 +56,18 @@ export function pickType({ title, catalogue, current = null, quick = [], at = nu
     if (text) active = 0;
     mark();
   };
+  // "About this type": the highlighted type in the artifact reference guide (js/guide/guide.js), which `about` opens.
+  const aboutBtn = about ? h('button.link.picker-about', { type: 'button', 'data-log': 'type-about',
+    onmousedown: (e) => e.preventDefault(),
+    onclick: () => { const el = items[active]; if (el && close) { const label = el.dataset.label; close(null); about(label); } } }, 'About this type') : null;
   const mark = () => {
     items.forEach((el, i) => el.classList.toggle('active', i === active));
     const el = items[active];
     if (el) el.scrollIntoView({ block: 'nearest' });
+    if (aboutBtn) {
+      aboutBtn.hidden = !el;
+      if (el) aboutBtn.setAttribute('aria-label', `About ${el.dataset.label}, in the artifact reference guide`);
+    }
   };
   search.addEventListener('input', render);
   search.addEventListener('keydown', (e) => {
@@ -67,7 +75,7 @@ export function pickType({ title, catalogue, current = null, quick = [], at = nu
     else if (e.key === 'ArrowUp') { e.preventDefault(); active = Math.max(0, active - 1); mark(); }
     else if (e.key === 'Enter') { e.preventDefault(); const el = items[active]; if (el && close) close(el.dataset.label); }
   });
-  const body = h('div.picker', {}, search, list, hint);
+  const body = h('div.picker', {}, search, list, aboutBtn ? h('div.picker-foot', {}, hint, aboutBtn) : hint);
   render();
   return showDialog({
     title, body, buttons: [{ label: 'Cancel', value: null }], cancelValue: null, className: 'picker-dialog',

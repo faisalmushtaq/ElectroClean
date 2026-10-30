@@ -34,7 +34,7 @@ OPERATIONS = {"et_me": "me", "et_assignments": "assignments", "et_match": "match
               "et_achievements": "achievements", "et_problem_report": "problem_report",
               "et_my_reviews": "my_reviews", "et_expert": "expert", "et_my_feedback": "my_feedback",
               "et_training_stage": "training_stage", "et_training_snippets": "training_snippets",
-              "et_questionnaire": "questionnaire"}
+              "et_questionnaire": "questionnaire", "et_my_results": "my_results"}
 
 
 def load_main():

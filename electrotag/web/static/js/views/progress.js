@@ -3,6 +3,8 @@
 // work of today, the unfinished recording to continue, and an estimate of the time left at the
 // annotator's own pace. The times are those saved with each recording (elapsed_s, pauses left out).
 
+import { draftTime } from '../annotate/local_drafts.js';
+
 /** Finished recordings needed before the time left is estimated. */
 export const MIN_FOR_ESTIMATE = 2;
 
@@ -69,7 +71,7 @@ export function progressSummary(items, { drafts = () => null, todayS = 0, now = 
     const theirs = i.draft || null;
     const pick = [theirs, mine && { elapsed_s: Number(mine.elapsed_s) || 0, n_annotations: (mine.annotations || []).length,
       viewed_s: Array.isArray(mine.viewed) ? mine.viewed.reduce((t, [a, b]) => t + Math.max(0, b - a), 0) : null, saved_at: mine.saved_at || null }]
-      .filter(Boolean).sort((a, b) => String(b.saved_at || '').localeCompare(String(a.saved_at || '')))[0] || null;
+      .filter(Boolean).sort((a, b) => draftTime(b) - draftTime(a))[0] || null;
     unfinished.set(i, pick);
   }
   const startedS = [...unfinished.values()].reduce((t, d) => t + (d && Number(d.elapsed_s) > 0 ? Number(d.elapsed_s) : 0), 0);

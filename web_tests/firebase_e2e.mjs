@@ -53,9 +53,11 @@ function setUpStudy() {
   py('register', path.join(demo, 'recordings', 'study'), ...store);
   py('register', path.join(demo, 'training-source'), ...store);
   py('add-user', 'A01', ...store, '--email', 'a01@example.org', '--password', PASSWORD, '--name', 'Annotator one');
+  py('add-user', 'A02', ...store, '--email', 'a02@example.org', '--password', PASSWORD, '--name', 'Annotator two');
   py('add-user', 'T01', ...store, '--email', 't01@example.org', '--password', PASSWORD, '--name', 'Trainee one');
   py('add-user', 'ADMIN', ...store, '--email', 'admin@example.org', '--password', PASSWORD, '--name', 'Study lead', '--admin');
   py('assign', 'A01', '--all', ...store);
+  py('assign', 'A02', '--all', ...store);
   py('assign', 'T01', '--programme', 'example', ...store);
   return demo;
 }
@@ -114,8 +116,8 @@ async function main() {
   let failed = 0;
 
   let lastPage = null;
-  async function newPage() {
-    const context = await browser.newContext({ viewport: { width: 1600, height: 950 }, locale: 'en-GB' });
+  async function newPage({ timezoneId } = {}) {
+    const context = await browser.newContext({ viewport: { width: 1600, height: 950 }, locale: 'en-GB', ...(timezoneId ? { timezoneId } : {}) });
     const page = await context.newPage();
     page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
     page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource|favicon/.test(m.text())) errors.push(`console: ${m.text()}`); });
@@ -173,6 +175,35 @@ async function main() {
       await page.click('.rec-tabs [data-tab="history"]');
       await page.locator('.recordings-card table.history tbody tr button', { hasText: 'Open to revise' }).waitFor();
       await page.evaluate(() => globalThis.ElectroTag.flushLog());
+    }],
+    ['a reload right after a mark loses nothing, west of the functions\' time zone', async () => {
+      // The functions keep a draft's time in UTC and this browser in New York's time: the newer is
+      // chosen by the moment, so the mark made just before the reload is there (docs/web/using.md).
+      const page = await newPage({ timezoneId: 'America/New_York' });
+      await signIn(page, 'a02@example.org', PASSWORD);
+      await waitForRoute(page, 'home', 30000);
+      await page.click('[data-log="open-next"]');
+      await waitForRoute(page, 'open');
+      const name = (await page.textContent('main h1')).replace(/^Open\s+/, '').trim();
+      await openFile(page, name);
+      await waitForRoute(page, 'annotate', 60000);
+      await waitForTraces(page);
+      await page.keyboard.press('1');
+      await drag(page, await eegPoint(page, 3.0), await eegPoint(page, 3.4));
+      assert.equal(await page.evaluate(() => globalThis.ElectroTag.ws.s.saveRemote({ force: true })), true); // the study has one
+      await page.keyboard.press('3');
+      await drag(page, await eegPoint(page, 5.0), await eegPoint(page, 5.5));
+      await page.reload();
+      await waitForRoute(page, 'open', 60000);
+      assert.match(await page.textContent('.reopen-note'), /Your work is kept: choose the file again/);
+      await openFile(page, name);
+      await waitForRoute(page, 'annotate', 60000);
+      await waitForTraces(page);
+      assert.deepEqual((await annotations(page)).map((a) => a.label).sort(), ['EMG-artifact', 'Eye-blink-artifact']);
+      await page.click('[data-log="close"]');
+      await clickDialogButton(page, 'Discard and close');
+      await clickDialogButton(page, 'Delete them');
+      await waitForRoute(page, 'home', 60000);
     }],
     ['a trainee is guided by the functions and a practice recording is scored', async () => {
       const page = await newPage();

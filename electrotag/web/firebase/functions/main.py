@@ -247,3 +247,8 @@ def et_problem_report(req: https_fn.CallableRequest) -> Any:
 @https_fn.on_call()
 def et_my_reviews(req: https_fn.CallableRequest) -> Any:
     return handle("my_reviews", req)
+
+
+@https_fn.on_call()
+def et_my_results(req: https_fn.CallableRequest) -> Any:
+    return handle("my_results", req)

@@ -233,6 +233,11 @@ export class FirebaseBackend {
   /** The reviews of the annotator's saved work: a read, so asked again once after a failure. */
   myReviews() { return this._call('et_my_reviews', {}, { retry: true }); }
 
+  /** One's own saved files of a recording (a read, so it may be asked again). */
+  myResults(recordingId, mode = 'standard', contextId = '', version = null) {
+    return this._call('et_my_results', { recording_id: recordingId, mode: mode || 'standard', context_id: contextId || '', ...(version ? { version } : {}) }, { retry: true });
+  }
+
   /** The corrections of the annotator's work and the outcomes of its conflicts: a read. */
   myFeedback() { return this._call('et_my_feedback', {}, { retry: true }); }
 

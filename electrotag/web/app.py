@@ -358,6 +358,12 @@ def create_app(study_dir: Path | str, *, demo: bool = False, allowed_origins: li
     async def my_feedback(request: Request) -> JSONResponse:
         return await authed(request, "my_feedback")
 
+    @app.get(p + "/me/results/{recording_id:path}")
+    async def my_results(request: Request, recording_id: str, mode: str = "standard", context: str = "",
+                         version: str = "") -> JSONResponse:
+        return await authed(request, "my_results", {"recording_id": recording_id, "mode": mode, "context_id": context,
+                                                    "version": version or None})
+
     @app.post(f"{p}/problems")
     async def problem_report(request: Request) -> JSONResponse:
         return await authed(request, "problem_report", await body_of(request))

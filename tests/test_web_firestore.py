@@ -166,6 +166,12 @@ def test_revisions_and_achievements_on_firestore(service: StudyService, recordin
                                                              "sub-001_task-rest_eeg_annotator-A01_attempt-02"]
     latest = service.store.saved_files("A01", SUB1, "standard", "")
     assert all("_attempt-02" in n for n in latest) and not set(latest) & set(first)
+    # each version downloads as the annotator's own files, exactly as kept (GET /me/results)
+    mine = ok(service, "my_results", A01, {"recording_id": SUB1})
+    assert mine["version"] == 2 and {f["name"]: f["text"].encode() for f in mine["files"]} == latest
+    v1 = ok(service, "my_results", A01, {"recording_id": SUB1, "version": 1})
+    assert {f["name"]: f["text"].encode() for f in v1["files"]} == first
+    assert err(service, "my_results", A02, {"recording_id": SUB1}).code == "not_saved"
     root = service.store.results_tree(tmp_path / "tree")  # both attempts are kept and exported
     assert len(list(root.rglob("sub-001_task-rest_eeg_annotator-A01*_annotations.json"))) == 2
     # achievements: the counters, the goal and a leaderboard too small to show

@@ -172,6 +172,12 @@ export class HttpBackend {
   /** GET /me/reviews: the reviews of the annotator's saved work ({shown, reviews}). */
   myReviews() { return this._request('GET', '/me/reviews'); }
 
+  /** One's own saved files of a recording (the latest version, or `version`), as the study keeps them. */
+  myResults(recordingId, mode = 'standard', contextId = '', version = null) {
+    const q = `?mode=${encodeURIComponent(mode || 'standard')}&context=${encodeURIComponent(contextId || '')}${version ? `&version=${encodeURIComponent(version)}` : ''}`;
+    return this._request('GET', `/me/results/${idPath(recordingId)}${q}`);
+  }
+
   /** GET /me/feedback: the corrections of the annotator's saved work and the outcomes of its conflicts. */
   myFeedback() { return this._request('GET', '/me/feedback'); }
 

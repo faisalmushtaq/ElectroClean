@@ -8,6 +8,7 @@ import { h } from '../ui/dom.js';
 import { showMenu } from '../ui/menu.js';
 import { icon } from './common.js';
 import { reportProblem } from '../annotate/problem.js';
+import { loadPart } from '../lazy.js';
 
 /** The reviews of the annotator's work, newest first (app.reviews, from GET /me/reviews), of one recording. */
 export function reviewsOf(app, it) {
@@ -46,6 +47,15 @@ export function feedbackCaption(app, it) {
 }
 
 /** The More button of a row: Report a problem…, and See the feedback when the work was reviewed. */
+/** True when the person has a saved version of the item, whose files they can download. */
+export function hasSaved(it) { return Boolean(it && (it.status === 'done' || (it.saved && typeof it.saved === 'object'))); }
+
+/** Download one's own files of a saved item (views/my_files.js, loaded at the first download). */
+export async function downloadSaved(app, it, opts = {}) {
+  const { downloadMine } = await loadPart('myFiles');
+  return downloadMine(app, it, opts);
+}
+
 export function moreButton(app, it) {
   const name = it.file_name || it.recording_id;
   const b = h('button.btn.small.icon.quiet.row-more', { type: 'button', 'aria-label': `More for ${name}`, title: 'More', 'aria-haspopup': 'menu',
@@ -55,6 +65,10 @@ export function moreButton(app, it) {
     const r = b.getBoundingClientRect();
     const items = [{ label: 'Report a problem with this recording…', onSelect: () => app.reportProblemFor(it, 'home') }];
     if (canSeeFeedback(app, it)) items.push({ label: 'See the feedback…', onSelect: () => app.openFeedback(it) });
+    if (hasSaved(it)) { // one's own saved files of it (views/my_files.js)
+      items.push({ label: 'Download my annotations (zip)', onSelect: () => downloadSaved(app, it) },
+        { label: 'Download my annotations as separate files', onSelect: () => downloadSaved(app, it, { separate: true }) });
+    }
     showMenu(items, r.left, r.bottom + 4, { className: 'row-menu', opener: b });
   });
   return b;

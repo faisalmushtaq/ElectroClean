@@ -19,7 +19,7 @@ import { appHeader, downloadFiles, smallScreenNotice } from './views/common.js';
 import { friendlyDuration, nowLocalIso, plural, session } from './util.js';
 import { loadPart, loadParts, partNow, preloadParts } from './lazy.js';
 
-const VIEWS = ['signin', 'home', 'open', 'annotate', 'review', 'training', 'quiz', 'questionnaire'];
+const VIEWS = ['signin', 'home', 'open', 'annotate', 'review', 'training', 'quiz', 'questionnaire', 'guide'];
 /** The admin area's plain hashes (js/admin/model.js lists its sections). */
 const ADMIN_ROUTE = /^admin(-[a-z]+)?$/;
 /** The expert area's plain hashes (js/expert/sections.js lists its sections; the same rule as its EXPERT_ROUTE). */
@@ -124,8 +124,10 @@ export class App {
     // A bookmarked section of the admin area opens again once its administrator has signed in.
     const asked = (location.hash || '').replace(/^#/, '');
     if (ADMIN_ROUTE.test(asked) || EXPERT_ROUTE.test(asked)) this._adminReturn = asked;
+    this._reloadedIn = asked; // annotate/reopen.js
     const invite = takeInvite();
     this._render(h('main.page.loading', {}, h('p.subtitle', {}, 'Starting ElectroTag…')), 'signin');
+    if (asked === 'guide') { await this.showGuide(); return; } // no sign-in
     let where;
     try { where = await findBackend(); } catch { where = { kind: 'demo', source: 'none' }; }
     this.where = where;
@@ -258,6 +260,13 @@ export class App {
     // tried again when it is needed.
     preloadParts([...(this.backend.isDemo ? [] : ['readers']), ...(this.isAdmin ? [] : ['home']), ...PRELOAD, ...(this.me.programme ? ['coach', 'practice'] : [])]);
     const want = (location.hash || '').replace(/^#/, '');
+    // a reload while a recording was open: it opens again
+    const reloadedIn = this._reloadedIn;
+    this._reloadedIn = null;
+    if (want === 'annotate' || reloadedIn === 'annotate') {
+      const reopen = await loadPart('reopen').catch(() => null);
+      if (reopen && await reopen.reopenAfterReload(this)) return;
+    }
     // Administrators start in the admin area (or where a reload left them); they can still annotate.
     const back = this._adminReturn;
     this._adminReturn = null;
@@ -438,6 +447,10 @@ export class App {
       this.quizView.destroy(); // the quiz's answers are with the study; its recordings are closed
       this.quizView = null;
     }
+    if (this.guideView && this.guideView.el !== el) {
+      this.guideView.destroy();
+      this.guideView = null;
+    }
     if (this.snippetsView && this.snippetsView.el !== el) {
       this.snippetsView.destroy(); // the training path's snippets (js/training/snippets.js): their recordings are closed
       this.snippetsView = null;
@@ -553,6 +566,7 @@ export class App {
       if (!dialogOpen()) this.ws.close();
       return;
     }
+    if (want === 'guide') { this.showGuide(); return; }
     if (!this.me) { if (want !== 'signin') this.showSignin(); return; }
     if (ADMIN_ROUTE.test(want)) { if (this.isAdmin) this.showAdmin(want); else this.showHome(); return; }
     if (EXPERT_ROUTE.test(want)) { if (this.isExpert) this.showExpert(want); else this.showHome(); return; }
@@ -576,6 +590,11 @@ export class App {
   goBack() {
     if (this.me && this.me.programme && this._fromTraining) this.showTraining();
     else this.showHome();
+  }
+
+  /** The artifact reference guide as a page of its own (js/guide/guide.js). */
+  showGuide() {
+    return this._withParts(['guide'], 'guide', ({ showGuidePage }) => showGuidePage(this));
   }
 
   showHome() {
@@ -996,8 +1015,9 @@ export class App {
       this.openView && this.openView.showProblem(exc.message, [this.openView.chooseAgainButton()]);
       return;
     }
-    if (!tryOut) {
-      const draft = session.pickDraft(match.draft);
+    {
+      // a try-out's work is only in this browser
+      const draft = session.pickDraft(tryOut ? null : match.draft);
       if (draft) {
         const resume = Boolean(this.openView && this.openView.resume);
         const yes = resume || await this._askRestore(session, draft);
@@ -1098,23 +1118,24 @@ export class App {
     }
     const next = result.next ? (this.assignments.items || []).find((i) => i.recording_id === result.next) : null;
     const demo = this.backend.isDemo ? `\n\n${DEMO_NOTICE}` : '';
+    const extra = await loadPart('myFiles').then((m) => m.savedFor(this, s, result), () => null); // the files just saved, to keep
     const milestone = reached.length ? `\n\nMilestone reached: ${reached.map((m) => m.name).join(', ')}.` : '';
     this.celebrate = reached;
     this.showHome();
     if (s.revision) {
       const v = (result.revision && result.revision.version) || s.revision.version;
       const go = next ? await ask('Revision saved', `Your revision of ${fileName} is saved as version ${v}. Version ${v - 1} is kept as it was.${milestone}${demo}\n\nNext: ${next.file_name}.`,
-        { yes: 'Open next recording', no: 'Back to my recordings' })
-        : await inform('Revision saved', `Your revision of ${fileName} is saved as version ${v}. Version ${v - 1} is kept as it was.${milestone}${demo}`);
+        { yes: 'Open next recording', no: 'Back to my recordings', extra })
+        : await inform('Revision saved', `Your revision of ${fileName} is saved as version ${v}. Version ${v - 1} is kept as it was.${milestone}${demo}`, { extra });
       if (next && go) this.openAssignment(next);
       return;
     }
     if (next) {
       const go = await ask('Saved', `Your annotations of ${fileName} are saved and the recording is complete.${milestone}${demo}\n\nNext: ${next.file_name}.`,
-        { yes: 'Open next recording', no: 'Back to my recordings' });
+        { yes: 'Open next recording', no: 'Back to my recordings', extra });
       if (go) this.openAssignment(next);
     } else {
-      await inform('Saved', `Your annotations of ${fileName} are saved and the recording is complete. That was your last recording.${milestone}${demo}`);
+      await inform('Saved', `Your annotations of ${fileName} are saved and the recording is complete. That was your last recording.${milestone}${demo}`, { extra });
     }
   }
 

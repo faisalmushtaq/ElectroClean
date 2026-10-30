@@ -148,9 +148,9 @@ export const tests = [
       });
       assert.equal(r.sideways, false);
       assert.ok(r.scrolls && r.apart, 'the view scrolls down to the panel and the line at the bottom, drawn one under the other');
-      // The choice lasts for this tab: a reload keeps the views.
+      // The choice lasts for this tab: a reload keeps the views (and the recording opens again where it was).
       await page.reload();
-      await waitForRoute(page, 'home');
+      await waitForRoute(page, 'annotate');
       assert.equal(await page.isVisible('.small-screen'), false);
     },
   },
