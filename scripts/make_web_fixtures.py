@@ -32,7 +32,7 @@ sys.path.insert(0, str(ROOT))
 import numpy as np  # noqa: E402
 
 #: Bump when fixtures or expected values change; the tests regenerate older fixtures.
-FIXTURE_VERSION = 4
+FIXTURE_VERSION = 5
 
 DEFAULT_OUT = ROOT / "web_tests" / "fixtures"
 HIDE = [
@@ -966,7 +966,12 @@ def main() -> None:
     args = ap.parse_args()
     out: Path = args.out
     index = make_all(out)
-    manifest = {"version": FIXTURE_VERSION, "fixtures": index, "datasets": make_datasets(out / "datasets")}
+    from make_channel_matrix import make_matrix
+
+    index.update(make_matrix(out / "matrix"))
+    datasets = make_datasets(out / "datasets")
+    datasets["matrix"] = {"root": "matrix"}
+    manifest = {"version": FIXTURE_VERSION, "fixtures": index, "datasets": datasets}
     if args.perf:
         manifest["perf"] = make_perf(out)
     elif (out / "manifest.json").exists():

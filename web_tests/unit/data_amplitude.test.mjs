@@ -16,7 +16,7 @@ import { ensureFixtures, expected, fixtureFiles } from "./_fixtures.mjs";
 
 const manifest = ensureFixtures();
 const CHECKED = Object.entries(manifest.fixtures)
-  .filter(([name, f]) => !f.error && expected(name).amplitude)
+  .filter(([name, f]) => !f.error && !f.mne_error && expected(name).amplitude)
   .map(([name]) => name);
 
 for (const name of CHECKED) {

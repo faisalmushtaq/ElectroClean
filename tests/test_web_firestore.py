@@ -30,7 +30,7 @@ from electrotag.web.cli import main as cli  # noqa: E402
 from electrotag.web.errors import ApiError  # noqa: E402
 from electrotag.web.firebase import firestore_client  # noqa: E402
 from electrotag.web.service import StudyService  # noqa: E402
-from electrotag.web.store import User, item_key  # noqa: E402
+from electrotag.web.store import StoreError, User, item_key  # noqa: E402
 from electrotag.web.store_firestore import FirestoreStore  # noqa: E402
 from tests.web_helpers import (  # noqa: E402
     GUIDED1,
@@ -1171,6 +1171,33 @@ DISAGREE = ([ann("a" * 32, "Eye-blink-artifact", 500, 100, ["Fp1", "Fp2"]), ann(
              ann("c" * 32, "Eye-blink-artifact", 5000, 100)],
             [ann("d" * 32, "Eye-movement-artifact", 500, 100, ["Fp1", "Fp2"]), ann("e" * 32, "EMG-artifact", 3000, 250),
              ann("f" * 32, "Eye-blink-artifact", 8000, 75)])
+
+
+def test_large_records_of_the_expert_work_are_kept_compressed(service: StudyService) -> None:
+    """An adjudication of a 256-channel recording whose decisions hold edited marks on most channels passes a
+    megabyte as JSON, more than one Firestore document holds: it is kept compressed, and read back whole."""
+    from electrotag.web.store_firestore import BLOB_LIMIT
+
+    store = service.store
+    channels = [f"E{i}" for i in range(1, 257)]
+    marks = [{"label": "EMG-artifact", "onset_sample": 1000 * k, "duration_samples": 500, "channels": channels[:-1]}
+             for k in range(5)]
+    decisions = {f"c-{k:016x}": {"choice": "edited", "marks": marks} for k in range(300)}
+    record = {"unit_id": "r-big", "decisions": decisions}
+    assert len(json.dumps(record)) > 2 * BLOB_LIMIT
+    store.update_record("adjudications", "r-big", "E01", lambda old: record)
+    assert store.records("adjudications", "E01") == [record]
+    snap = store.doc.collection("adjudications").document("r-big").get().to_dict()
+    assert snap["record_json"] is None and len(snap["record_blob"]) < BLOB_LIMIT
+    # a change reads the compressed record, and a small record is kept as plain JSON again
+    got = store.update_record("adjudications", "r-big", "E01", lambda old: {"unit_id": old["unit_id"], "decisions": {}})
+    assert got == {"unit_id": "r-big", "decisions": {}}
+    assert json.loads(store.doc.collection("adjudications").document("r-big").get().to_dict()["record_json"]) == got
+    # what would not fit even compressed is refused, and the record stays as it was
+    noise = {"unit_id": "r-big", "blob": os.urandom(1_200_000).hex()}
+    with pytest.raises(StoreError, match="too large"):
+        store.update_record("adjudications", "r-big", "E01", lambda old: noise)
+    assert store.records("adjudications", "E01") == [got]
 
 
 def test_adjudication_and_the_library_on_firestore(service: StudyService, recordings: Path, tmp_path: Path) -> None:

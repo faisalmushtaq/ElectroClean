@@ -14,8 +14,9 @@ import { ensureFixtures, expected, fixtureFiles } from "./_fixtures.mjs";
 
 const manifest = ensureFixtures();
 const LOWER_RATE = { edf_mixed: ["Resp"] };
+for (const [name, f] of Object.entries(manifest.fixtures)) if (f.lower_rate) LOWER_RATE[name] = f.lower_rate;
 const WITH_FILTERS = Object.entries(manifest.fixtures)
-  .filter(([name, f]) => !f.error && expected(name).filtered.length)
+  .filter(([name, f]) => !f.error && !f.mne_error && expected(name).filtered.length)
   .map(([name]) => name);
 
 async function open(name, options = {}) {

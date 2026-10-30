@@ -68,6 +68,30 @@ records are not contiguous in time. A BrainVision data file must hold a whole
 number of samples and agree with its header, and its companion files must be
 present. A recording that cannot be registered is named with the reason, and
 the others are registered; register again once the files have been put right.
+A BrainVision header that gives the same name to two or more channels is refused too, because
+MNE-Python cannot read it: give each channel a name of its own in a copy of the `.vhdr` file (it is
+text) and register the copy.
+
+ElectroTag has been checked with recordings of 1 to 257 channels, from two-channel sleep headbands
+to EGI's 256-channel HydroCel nets, BioSemi's A1 to H32 and EGI's E1 to E256 with Cz or VREF, at
+sampling rates from 100 to 16384 Hz, on synthetic recordings of every format and on public
+recordings ([testing guide](testing_guide.md), "Real recordings"). The study's checks of a
+registration accept up to 4096 channels. An EDF file may hold signals at different rates; the slower
+ones (a respiration or temperature signal, say) are shown at the recording's rate, interpolated, and
+the browser names them when the recording opens. A registration is at most 2 MB, which leaves room for about
+29,000 original events (each takes about 70 bytes; a 256-channel recording with few events takes
+8 to 20 kB, or 30 kB with long channel names). A save holds at most 20,000 annotations; an annotation
+that names every channel of a 256-channel recording takes about 2 kB, so even thousands of them fit
+in one save. Large values are kept compressed on Firebase and split over several documents when
+they would not fit in one, so a 256-channel study keeps its manifests, drafts, saves and adjudications
+whole.
+
+Registering with `electrotag web register` reads each recording with MNE-Python and filters a
+display copy of it, which for a large recording is kept in a temporary memory-mapped file (8 bytes
+for each sample of each shown channel): a 2 GB BDF of 256 channels at 2048 Hz took three and a half
+minutes and 5.6 GB of temporary disk space. The admin area registers the same recording in the
+browser in about half a minute, as it filters only the windows the amplitude check reads; prefer it
+for long high-density recordings, or check that the computer's temporary folder has the space.
 
 The original events come from the BIDS `events.tsv` when there is one.
 Otherwise the annotations stored in an EDF+ or BDF+ file are used, or the

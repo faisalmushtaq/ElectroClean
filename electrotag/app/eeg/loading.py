@@ -152,12 +152,37 @@ def changed_since(files: RecordingFiles, fingerprint: dict[str, Any]) -> list[st
     return changed
 
 
+def duplicate_names_problem(duplicates: list[tuple[str, list[int]]]) -> str:
+    """Plain words for channel names that a BrainVision header gives to more than one channel
+    (js/eeg/brainvision.js words it the same way)."""
+
+    def numbers(idx: list[int]) -> str:
+        return ", ".join(str(i) for i in idx[:-1]) + f" and {idx[-1]}"
+
+    parts = [f"{name!r} to channels {numbers(idx)}" for name, idx in duplicates[:5]]
+    if len(duplicates) > 5:
+        parts.append(f"{len(duplicates) - 5} more name(s) to several channels")
+    listed = parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + f" and {parts[-1]}"
+    return (
+        f"its header gives the name {listed}. MNE-Python, which ElectroTag uses to read recordings, cannot "
+        "read a BrainVision recording whose channels share a name: give each channel a name of its own in a "
+        "copy of the header (the .vhdr file, which is text) and open the copy"
+    )
+
+
 def _read_raw(files: RecordingFiles, preload: bool | str) -> tuple[Any, list[str]]:
     import mne
 
     from mne.utils import catch_logging
 
     path = files.path
+    if files.format == "brainvision" and files.header is not None and files.header.duplicate_names():
+        # MNE-Python renames duplicates and then fails ("Channel Cz-0 has no associated original unit")
+        raise RecordingLoadError(
+            f"{path.name} could not be read as a {files.format_name} recording: "
+            + duplicate_names_problem(files.header.duplicate_names()),
+            kind="corrupt_recording",
+        )
     # MNE only emits its warnings (e.g. "markers outside data range") when its
     # log level is WARNING or lower; they are captured here, not printed.
     with warnings.catch_warnings(record=True) as caught, catch_logging():

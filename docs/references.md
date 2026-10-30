@@ -46,6 +46,110 @@ Coordinate systems. https://bids-specification.readthedocs.io/en/stable/appendic
 (CapTrak is right-anterior-superior; EEGLAB, EEGLAB-HJ, CTF, 4DBti and
 KitYokogawa are anterior-left-superior; checked 29 October 2026)
 
+## EEG recordings used to test the readers
+
+The public recordings below were used on 30 October 2026 to check that the browser reads recordings
+of 2 to 257 channels as MNE-Python reads them (docs/testing_guide.md, "Real recordings"). None of
+them is in the repository. Each entry was checked against the dataset's own page and its DOI, and
+its licence against the dataset's description; the PhysioNet databases are under the Open Data
+Commons Attribution License v1.0 and the OpenNeuro datasets under CC0. The OpenNeuro entries give
+the authors as each dataset's description gives them, in the order of the datasets' accession
+numbers.
+
+Guttag, J. (2010). CHB-MIT Scalp EEG Database (version 1.0.0). PhysioNet.
+https://doi.org/10.13026/C2K01R (ODC-By 1.0). Its original publication: Shoeb,
+A. H. (2009). Application of machine learning to epileptic seizure onset
+detection and treatment [Doctoral thesis, Massachusetts Institute of
+Technology]. http://hdl.handle.net/1721.1/54669
+
+Kemp, B. (2013). Sleep-EDF Database Expanded (version 1.0.0). PhysioNet.
+https://doi.org/10.13026/C2X676 (ODC-By 1.0). Its original publication: Kemp,
+B., Zwinderman, A. H., Tuk, B., Kamphuisen, H. A. C., & Oberyé, J. J. L.
+(2000). Analysis of a sleep-dependent neuronal feedback loop: the slow-wave
+microcontinuity of the EEG. *IEEE Transactions on Biomedical Engineering*,
+47(9), 1185–1194. https://doi.org/10.1109/10.867928
+
+Pollard, T., Moody, B. E., Lehman, L. H., Gow, B. J., Fernandes, C., Xie, C.,
+Johnson, A., Mark, R. G., & Heldt, T. (2026). PhysioNet as a global platform
+for biomedical research. *Nature Health*, 1, 792–795.
+https://doi.org/10.1038/s44360-026-00096-z (the citation PhysioNet asks for
+with its databases)
+
+Schalk, G. (2009). EEG Motor Movement/Imagery Dataset (version 1.0.0).
+PhysioNet. https://doi.org/10.13026/C28G6P (ODC-By 1.0). Its original
+publication: Schalk, G., McFarland, D. J., Hinterberger, T., Birbaumer, N., &
+Wolpaw, J. R. (2004). BCI2000: a general-purpose brain-computer interface (BCI)
+system. *IEEE Transactions on Biomedical Engineering*, 51(6), 1034–1043.
+https://doi.org/10.1109/TBME.2004.827072
+
+Arnaud Delorme & Scott Makeig (2021). Visual Oddball Task (256 channels)
+(version 1.1.0) [Data set]. OpenNeuro ds002578.
+https://doi.org/10.18112/openneuro.ds002578.v1.1.0 (CC0)
+
+Ahmad Mheich, Olivier Dufor, Sahar Yassine, Aya Kabbara, Arnaud Biraben,
+Fabrice Wendling, et al. (2020). HD-EEGtask(Dataset 1) (version 1.0.2) [Data
+set]. OpenNeuro ds003420. https://doi.org/10.18112/openneuro.ds003420.v1.0.2
+(CC0)
+
+Ahmad Mheich, Olivier Dufor, Sahar Yassine, Aya Kabbara, Arnaud Biraben,
+Fabrice Wendling, et al. (2020). HD-EEGtask(Dataset 2) (version 1.0.2) [Data
+set]. OpenNeuro ds003421. https://doi.org/10.18112/openneuro.ds003421.v1.0.2
+(CC0)
+
+Yulin Wang, Wei Duan, Debo Dong, Lihong Ding, & Xu Lei (2022). A test-retest
+resting and cognitive state EEG dataset (version 1.0.1) [Data set]. OpenNeuro
+ds004148. https://doi.org/10.18112/openneuro.ds004148.v1.0.1 (CC0)
+
+Giovanni M Di Liberto, Michael P Broderick, Ole Bialas, & Edmund C Lalor
+(2023). EEG responses to continuous naturalistic speech (version 1.0.8) [Data
+set]. OpenNeuro ds004408. https://doi.org/10.18112/openneuro.ds004408.v1.0.8
+(CC0)
+
+Seitaro Iwama, Masumi Morishige, Yoshikazu Takahashi, Ryotaro Hirose, Midori
+Kodama, & Junichi Ushiba (2023). The BMI-HDEEG dataset 4 (version 1.0.2) [Data
+set]. OpenNeuro ds004448. https://doi.org/10.18112/openneuro.ds004448.v1.0.2
+(CC0)
+
+Joseph H. Rudoler, Matthew R. Dougherty, Brandon S. Katerman, James P. Bruska,
+Woohyeuk Chang, David J. Halpern, et al. (2023). Spatial memory and
+non-invasive closed-loop stimulus timing (version 1.0.0) [Data set]. OpenNeuro
+ds004706. https://doi.org/10.18112/openneuro.ds004706.v1.0.0 (CC0)
+
+Yukako Ito (2024). UV_EEG (version 1.0.0) [Data set]. OpenNeuro ds005274.
+https://doi.org/10.18112/openneuro.ds005274.v1.0.0 (CC0)
+
+Zhao Xiangyue, Zhou Jingyao, Zhang Libo, Duan Haoqing, Wei Shiyu, Bi Yanzhi, et
+al. (2024). 26 By Biosemi (version 1.0.0) [Data set]. OpenNeuro ds005284.
+https://doi.org/10.18112/openneuro.ds005284.v1.0.0 (CC0)
+
+Zhao Xiangyue, Zhou Jingyao, Zhang Libo, Duan Haoqing, Wei Shiyu, Bi Yanzhi, et
+al. (2024). 39 By BP (version 1.0.0) [Data set]. OpenNeuro ds005289.
+https://doi.org/10.18112/openneuro.ds005289.v1.0.0 (CC0)
+
+Eduardo López-Larraz, María Sierra-Torralba, Sergio Clemente, Galit Fierro,
+David Oriol, Javier Minguez, et al. (2026). The Bitbrain Open Access Sleep
+(BOAS) dataset (version 1.1.3) [Data set]. OpenNeuro ds005555.
+https://doi.org/10.18112/openneuro.ds005555.v1.1.3 (CC0)
+
+María Melcón, Enrique Stern, Lydia Arana, & Almudena Capilla (2025). EEG data
+during three near-threshold visual detection tasks: a no-cue task, a
+noninformative cue task (50% validity), and an informative cue task (100%
+validity) (version 1.0.0) [Data set]. OpenNeuro ds006171.
+https://doi.org/10.18112/openneuro.ds006171.v1.0.0 (CC0)
+
+Petunia Reinke, Lisa Deneke, & Sebastian Ocklenburg (2026). EEG-Asymmetries
+Dataset (version 1.0.0) [Data set]. OpenNeuro ds007172.
+https://doi.org/10.18112/openneuro.ds007172.v1.0.0 (CC0)
+
+Tamari Shalamberidze, Kyle Nash, & Jeremy B. Caplan (2026). Resting-State EEG
+and Trait Anxiety (version 1.0.0) [Data set]. OpenNeuro ds007609.
+https://doi.org/10.18112/openneuro.ds007609.v1.0.0 (CC0)
+
+Laura Raiff, Gabrielle Bulter, Kailyn McFarlane, Bharath Chandrasekaran, &
+Kevin R. Sitek (2026). Auditory-motor EEG (one-channel) (version 1.0.4) [Data
+set]. OpenNeuro ds008161. https://doi.org/10.18112/openneuro.ds008161.v1.0.4
+(CC0)
+
 ## Software
 
 Gramfort, A., Luessi, M., Larson, E., Engemann, D. A., Strohmeier, D.,

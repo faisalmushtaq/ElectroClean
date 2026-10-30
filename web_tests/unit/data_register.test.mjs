@@ -38,8 +38,8 @@ function python() {
 const PYTHON = python();
 
 /** The files of a dataset as a folder picker gives them (webkitRelativePath from the folder picked). */
-async function datasetFiles(name) {
-  const base = join(FIXTURES, manifest.datasets[name].root);
+async function datasetFiles(name, root = null) {
+  const base = root || join(FIXTURES, manifest.datasets[name].root);
   const out = [];
   const walk = async (dir) => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -81,12 +81,23 @@ const JOBS = [
     dataset: "edge",
     settings: { channels: { types: { DIN: "stim" } }, filters: { highpass_hz: 60.0 } },
   },
+  // scripts/make_channel_matrix.py: 1 to 257 channels, every format, rate and naming scheme, and the edge cases
+  { name: "the channel matrix, default settings", dataset: "matrix", settings: {} },
 ];
+// Real recordings, when ELECTROTAG_REAL_EEG names a folder: each folder in it is registered as a dataset
+// (docs/testing_guide.md, "Real recordings").
+const REAL = process.env.ELECTROTAG_REAL_EEG;
+if (REAL) {
+  for (const e of readdirSync(REAL).sort()) {
+    const root = join(REAL, e);
+    if (!e.startsWith(".") && statSync(root).isDirectory()) JOBS.push({ name: `real data: ${e}`, dataset: e, root, settings: {} });
+  }
+}
 
 let expectedCache = null;
 function expectedManifests() {
   if (expectedCache) return expectedCache;
-  const jobs = JOBS.map((j) => ({ root: join(FIXTURES, manifest.datasets[j.dataset].root), settings: j.settings, scope: j.scope || "study" }));
+  const jobs = JOBS.map((j) => ({ root: j.root || join(FIXTURES, manifest.datasets[j.dataset].root), settings: j.settings, scope: j.scope || "study" }));
   const r = spawnSync(PYTHON, ["-I", join(ROOT, "web_tests", "register_parity.py")], {
     cwd: ROOT,
     input: JSON.stringify(jobs),
@@ -138,10 +149,10 @@ function differences(js, py, path, ctx, out = []) {
 const skipPython = !PYTHON && "no Python with ElectroTag and MNE-Python (set ELECTROTAG_PYTHON)";
 
 JOBS.forEach((job, k) => {
-  test(`the same manifests as the desktop's registration: ${job.name}`, { skip: skipPython, timeout: 300000 }, async () => {
+  test(`the same manifests as the desktop's registration: ${job.name}`, { skip: skipPython, timeout: job.root ? 3600000 : 300000 }, async () => {
     const py = expectedManifests()[k];
     const ctx = { rootParent: `${dirname(py.root)}/` };
-    const files = await datasetFiles(job.dataset);
+    const files = await datasetFiles(job.dataset, job.root);
     const stages = new Set();
     const out = await buildManifests(files, { settings: job.settings, scope: job.scope, catalogue: CATALOGUE, worker: false, onProgress: (p) => stages.add(p.stage) });
     assert.deepEqual(out.manifests.map((m) => m.recording_id), py.manifests.map((m) => m.recording_id), "the same recordings");
@@ -153,7 +164,7 @@ JOBS.forEach((job, k) => {
       py.failures.map((f) => [f.recording_id, f.reason.split(ctx.rootParent).join("")]),
       "the same recordings refused, for the same reasons",
     );
-    assert.ok(stages.has("start") && stages.has("done") && stages.has("fingerprint"), [...stages].join(", "));
+    assert.ok(stages.has("start") && stages.has("done") && (stages.has("fingerprint") || !out.manifests.length), [...stages].join(", "));
   });
 });
 
@@ -166,7 +177,7 @@ const KNOWN_REFUSALS = new Map();
 test("the study server accepts every manifest the browser builds, and keeps it as it is", { skip: skipPython, timeout: 300000 }, async (t) => {
   const built = [];
   for (const job of JOBS) {
-    const out = await buildManifests(await datasetFiles(job.dataset), { settings: job.settings, scope: job.scope, catalogue: CATALOGUE, worker: false });
+    const out = await buildManifests(await datasetFiles(job.dataset, job.root), { settings: job.settings, scope: job.scope, catalogue: CATALOGUE, worker: false });
     built.push({ job, manifests: out.manifests });
   }
   const input = built.map(({ job, manifests }) => ({ manifests, scope: job.scope || "study", suffixes: registrationSettings(job.settings).suffixes }));

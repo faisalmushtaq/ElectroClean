@@ -4,29 +4,38 @@
 // desktop application's refusals.
 
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { openAsBlob, readdirSync, statSync } from "node:fs";
+import { basename, join, relative } from "node:path";
 import test from "node:test";
 
 import { openRecording } from "../../electrotag/web/static/js/eeg/recording.js";
 import { finishStimSteps, parseTals, stimEvents, stimSteps } from "../../electrotag/web/static/js/eeg/edf.js";
 import { parseIni, parseVhdr, parseVmrk } from "../../electrotag/web/static/js/eeg/brainvision.js";
-import { ensureFixtures, expected, fixtureFiles } from "./_fixtures.mjs";
+import { ensureFixtures, expected, fixtureFiles, fixturePython, ROOT } from "./_fixtures.mjs";
 
 const manifest = ensureFixtures();
 const READABLE = Object.entries(manifest.fixtures)
-  .filter(([, f]) => !f.error)
+  .filter(([, f]) => !f.error && !f.mne_error)
   .map(([name]) => name);
 const REFUSED = Object.entries(manifest.fixtures).filter(([, f]) => f.error);
 /** Channels whose samples MNE resamples with an FFT and the browser interpolates linearly. */
 const LOWER_RATE = { edf_mixed: ["Resp"] };
+for (const [name, f] of Object.entries(manifest.fixtures)) if (f.lower_rate) LOWER_RATE[name] = f.lower_rate;
 
 async function open(name, options = {}) {
   return openRecording(await fixtureFiles(manifest, name), { worker: false, ...options });
 }
 
-for (const name of READABLE) {
-  test(`${name}: header, channels and markers as MNE reads them`, async () => {
-    const exp = expected(name);
-    const rec = await open(name);
+/**
+ * The comparisons with MNE-Python for one recording: its header, channels and markers, its samples
+ * and its fingerprint. openIt opens it, expOf gives what MNE read (make_web_fixtures.describe) and
+ * lowerNames its channels at a lower rate than the others.
+ */
+function readerTests(name, openIt, expOf, lowerNames, options = {}) {
+  test(`${name}: header, channels and markers as MNE reads them`, options, async () => {
+    const exp = expOf();
+    const rec = await openIt();
     try {
       assert.equal(rec.format, exp.format);
       assert.equal(rec.sfreq, exp.sfreq);
@@ -65,11 +74,11 @@ for (const name of READABLE) {
     }
   });
 
-  test(`${name}: samples in volts within float32 precision of MNE's`, async () => {
-    const exp = expected(name);
-    const rec = await open(name);
+  test(`${name}: samples in volts within float32 precision of MNE's`, options, async () => {
+    const exp = expOf();
+    const rec = await openIt();
     try {
-      const lower = new Set((LOWER_RATE[name] || []).map((n) => exp.ch_names.indexOf(n)));
+      const lower = new Set(lowerNames.map((n) => exp.ch_names.indexOf(n)));
       // lower-rate channels: MNE resamples with an FFT, the browser interpolates linearly; they
       // agree to a few per cent of the channel's range (more at the very end, where the FFT wraps)
       const range = exp.ch_names.map((_, c) => {
@@ -105,9 +114,9 @@ for (const name of READABLE) {
     }
   });
 
-  test(`${name}: fingerprint is hashlib's SHA-256 of the data file`, async () => {
-    const exp = expected(name);
-    const rec = await open(name);
+  test(`${name}: fingerprint is hashlib's SHA-256 of the data file`, options, async () => {
+    const exp = expOf();
+    const rec = await openIt();
     try {
       const progress = [];
       const fp = await rec.fingerprint((f) => progress.push(f));
@@ -118,6 +127,8 @@ for (const name of READABLE) {
     }
   });
 }
+
+for (const name of READABLE) readerTests(name, () => open(name), () => expected(name), LOWER_RATE[name] || []);
 
 for (const [name, info] of REFUSED) {
   test(`${name}: refused as the desktop refuses it`, async () => {
@@ -264,3 +275,42 @@ test("BrainVision: missing companions, ASCII data and unknown formats are explai
   );
   assert.throws(() => parseVhdr(text, "a.vhdr"), /ASCII text, which the browser version cannot read/);
 });
+
+// Real recordings, when ELECTROTAG_REAL_EEG names a folder: every .edf, .bdf and .vhdr file below it is
+// read here and by MNE-Python (web_tests/register_parity.py --describe) and compared as the test
+// recordings are; a file MNE-Python cannot read must be refused here too. docs/testing_guide.md says
+// which public recordings were used. The recordings stay where they are and are only read.
+const REAL = process.env.ELECTROTAG_REAL_EEG;
+if (REAL) {
+  const found = [];
+  const walk = (dir) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      if (e.name.startsWith(".")) continue;
+      const p = join(dir, e.name);
+      if (statSync(p).isDirectory()) walk(p); // folders given as symbolic links too
+      else if (/\.(edf|bdf|vhdr)$/i.test(e.name)) found.push(p);
+    }
+  };
+  walk(REAL);
+  found.sort();
+  const r = spawnSync(fixturePython(), ["-I", join(ROOT, "web_tests", "register_parity.py"), "--describe"], {
+    cwd: ROOT,
+    input: JSON.stringify(found.map((path) => ({ path }))),
+    encoding: "utf8",
+    maxBuffer: 1 << 30,
+  });
+  if (r.status !== 0) throw new Error(`register_parity.py --describe failed:\n${(r.stderr || "").slice(-3000)}`);
+  const described = JSON.parse(r.stdout);
+  const filesOf = (paths) => Promise.all(paths.map(async (p) => new File([await openAsBlob(p)], basename(p))));
+  described.forEach((exp, k) => {
+    const label = `real recording ${relative(REAL, found[k])}`;
+    if (exp.error) {
+      test(`${label}: refused, as MNE-Python cannot read it`, async () => {
+        await assert.rejects(filesOf(exp.paths).then((files) => openRecording(files, { worker: false })));
+      });
+      return;
+    }
+    readerTests(label, async () => openRecording(await filesOf(exp.paths), { worker: false }), () => exp, exp.lower_rate,
+      { timeout: 30 * 60 * 1000 });
+  });
+}

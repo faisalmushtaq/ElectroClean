@@ -93,6 +93,82 @@ from it. Create a dataset with
 demonstration's recordings and the example training set are made with the same
 code.
 
+`scripts/make_channel_matrix.py` writes a covering set of 31 recordings across channel counts,
+formats and edge cases, from one channel to 257: EDF, EDF+, BDF and BrainVision (INT_16 and
+IEEE_FLOAT_32, multiplexed and vectorized) at 128, 160, 250, 256, 500, 512, 1000 and 2048 Hz, named
+in the 10-20, 10-10 and 10-05 systems, as BioSemi's A1 to H32, as EGI's E1 to E256 with Cz, with VREF
+or with neither, as plain numbers, as bipolar pairs, with spaces, in mixed case, in latin-1 and with
+long names in other scripts, with EOG, ECG, EMG, respiration, temperature and trigger channels. Its
+edge cases are the ones that have broken readers before: signals at different rates in one EDF, an
+EDF+ annotation signal, recordings of three and of 64 samples, data records of 0.04 and 2.5 s, an
+empty physical range, channels that hold only zeros, duplicate names in EDF and in BrainVision, and
+headers that are empty, announce no signals, give a number that is not a number or a size that
+disagrees with their signals. The cases are chosen so that each value of each dimension appears at
+least once, which keeps the set to about 12 MB, so `make_web_fixtures.py` writes it at test time into
+`web_tests/fixtures/matrix/`. There `data_readers.test.mjs`, `data_filtering.test.mjs` and
+`data_amplitude.test.mjs` compare the browser's reading with MNE-Python's, `data_register.test.mjs`
+compares the browser's manifests and refusals with Python's, and `tests/test_channel_matrix.py`
+registers every case with Python and runs a 256-channel study through saving, the agreement analysis
+with channel-level matching and adjudication. `python scripts/make_channel_matrix.py --list` lists
+the cases, and `--big FILE.bdf --channels 256 --sfreq 2048 --minutes 22` writes one BDF of about
+2 GB, one data record at a time, for timing the fingerprint of a large file (delete it afterwards).
+
+## Real recordings
+
+The readers, the registration and the Python pipeline can also be checked on real recordings, which
+are never part of the repository. Put each dataset in a folder of its own inside one folder, with the
+recordings named as BIDS names them (`…_eeg.edf`, `…_eeg.bdf` or `…_eeg.vhdr` with its `.vmrk` and
+`.eeg`, beside any `channels.tsv`, `events.tsv` and `electrodes.tsv`), and point
+`ELECTROTAG_REAL_EEG` at that folder:
+
+```bash
+export ELECTROTAG_REAL_EEG=/path/to/real-eeg
+node --test web_tests/unit/data_readers.test.mjs web_tests/unit/data_register.test.mjs
+python -m pytest tests/test_real_eeg.py -s
+```
+
+`data_readers.test.mjs` then reads every recording below the folder in the browser's code and with
+MNE-Python (`web_tests/register_parity.py --describe`) and compares the names, types, sampling rate,
+length, annotations, triggers and values at the edges and at random places, as it does for the test
+recordings; a recording MNE-Python cannot read must be refused by the browser too.
+`data_register.test.mjs` registers each dataset folder in the browser and with Python and compares the
+manifests field by field, and `tests/test_real_eeg.py` registers each one with Python and checks the
+manifests against MNE-Python's reading and the study server's checks. The files are only read. On
+30 October 2026 the check passed on the recordings below, one file from each dataset
+([references](references.md) gives each dataset in full). Two were converted with MNE-Python
+from EEGLAB files, which ElectroTag does not read: ds007609 to EDF (with `mne.export.export_raw`) and
+the first 1200 s of ds002578 to BrainVision IEEE_FLOAT_32 (with pybv). ds005274's header names a data
+file that is not in the dataset, and both readers refuse it in the same words.
+
+| Dataset | Format | Channels | Rate (Hz) | Length | What makes it hard |
+| --- | --- | --- | --- | --- | --- |
+| BOAS, OpenNeuro ds005555 | EDF | 2 | 256 | 7.2 h | a consumer headband |
+| Auditory-motor EEG, ds008161 | BDF | 4 + Status | 16384 | 340 s | the highest rate |
+| UV_EEG, ds005274 | BrainVision | 6 | 500 | | a header naming files that do not exist |
+| Sleep-EDF Expanded, SC4001E0 | EDF | 7 | 100 and 1 | 22 h | signals at two rates, temperature and an event marker |
+| CHB-MIT, chb01_03 | EDF | 23 | 256 | 1 h | bipolar names, one name twice |
+| EEG-Asymmetries, ds007172 | BrainVision float32 | 32 | 500 | 312 s | |
+| Test-retest resting state, ds004148 | BrainVision float32 | 61 | 500 | 300 s | electrodes.tsv |
+| EEG Motor Movement/Imagery, S001R03 | EDF+ | 64 | 160 | 125 s | annotations |
+| 39 By BP, ds005289 | BrainVision INT_16 | 64 | 1000 | 301 s | 16-bit integers |
+| 26 By Biosemi, ds005284 | BDF | 64 + Status | 1024 | 328 s | the Status channel |
+| Continuous speech, ds004408 | BrainVision float32 | 128 | 512 | 196 s | BioSemi names A1 to D32 |
+| BMI-HDEEG 4, ds004448 | EDF | 129 | 1000 | 6 s | EGI with Cz, whose physical range is empty |
+| Spatial memory, ds004706 | BDF | 136 + Status | 2048 | 5 s | BioSemi 128 with EXG channels |
+| Near-threshold detection, ds006171 | BDF | 143 + Status | 1024 | 1004 s | 444 MB; Unicode digits in events.tsv |
+| Visual oddball, ds002578 | BrainVision float32 | 256 | 256 | 1200 s | BioSemi 256, 2253 events, a flat channel |
+| Trait anxiety, ds007609 | EDF | 256 | 500 | 267 s | EGI HydroCel 256 |
+| HD-EEGtask 1, ds003420 | BrainVision float32 | 256 | 1000 | 422 s | EGI E1 to E256 |
+| HD-EEGtask 2, ds003421 | BrainVision float32 | 257 | 1000 | 449 s | E1 to E256 and Cz |
+
+Three differences were found and put right. The browser's display filter left rounding residue of
+about 10^-18 V in a channel that holds only zeros, because two channels share one Fourier transform,
+so the amplitude check counted a dead channel that MNE-Python leaves out (ds002578); the sample
+column of ds006171's `events.tsv` holds digits of other scripts, which Python's `int()` reads and the
+browser did not; and the browser worded two refusals of a broken header differently from Python.
+A BrainVision header that gives one name to several channels is now refused by both, in plain words,
+because MNE-Python cannot read it.
+
 ## Coverage of the required tests
 
 | # | Requirement | Tests |
@@ -196,3 +272,16 @@ recording of 30 minutes at 1024 Hz are in
 registration, which reads each recording with MNE-Python: a 60-minute,
 64-channel recording at 500 Hz (0.46 GB data file) took 14 s to load,
 fingerprint and filter in memory, and 19 s with the memory-mapped display copy.
+
+On 30 October 2026 a BDF of 256 channels and Status at 2048 Hz for 22 minutes (2.08 GB, written with
+`make_channel_matrix.py --big`) was read in Node.js with the browser's code: the streamed SHA-256 took
+24 s (86 MB/s) with the process at 160 MB, opening it with the fingerprint computed in the same pass
+took 29 s at 690 MB, and a filtered 10-second window of all 256 channels took 2.3 s on the page without
+helper workers. Python's `hashlib` took 7 s. Registering it with `electrotag web register` took 207 s
+and needed 5.6 GB of temporary disk space for the memory-mapped display copy (8 bytes for every sample
+of every shown channel), which it removes afterwards; the admin area builds the same manifest in the
+browser, which filters only the short windows that the amplitude check reads. On the real recordings
+above, registration in the browser took 0.2 to 12 s per recording and with Python 0.3 to 54 s (the
+256-channel BrainVision recording of ds003420, 432 MB). Saving 60 annotations on 256 channels took
+0.1 s, the agreement analysis of 22 recordings from 2 annotators with channel-level matching 12 s, and
+each adjudication decision on a 256-channel recording 0.1 s.

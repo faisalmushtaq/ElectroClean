@@ -24,7 +24,8 @@ Everything lives under ``studies/{study_id}``::
         derived/{kind}_{annotator_id}_{key}_{attempt}   a derived version (a correction, an adjudicated
                                             version): its register row and files, kept apart from the
                                             submissions so it is never anyone's attempt
-        tasks/, corrections/, adjudications/, gold/   the records of the expert work (record_json)
+        tasks/, corrections/, adjudications/, gold/   the records of the expert work (record_json, or
+                                            record_blob, compressed, when a record is large)
         result_files/{key}                  other result files, as written (the quiz results)
         progress/{set}_{annotator_id}       stars, scores and times (training_progress)
         reports/{set}_{annotator_id}        the competency report
@@ -114,6 +115,27 @@ def pack(obj: Any) -> bytes:
 
 def unpack(data: bytes) -> Any:
     return json.loads(zlib.decompress(data).decode("utf-8"))
+
+
+def _record_fields(record: dict[str, Any]) -> dict[str, Any]:
+    """A record of the expert work as the fields of its document: plain JSON (``record_json``) while it fits,
+    compressed (``record_blob``) when it would not. An adjudication of a 256-channel recording whose
+    decisions hold edited marks on most channels can pass a megabyte as JSON; its channel names compress
+    many times over."""
+    text = json.dumps(record, separators=(",", ":"))
+    if len(text.encode("utf-8")) <= BLOB_LIMIT:
+        return {"record_json": text, "record_blob": None}
+    packed = pack(record)
+    if len(packed) > BLOB_LIMIT:
+        raise StoreError("The record is too large to keep")
+    return {"record_json": None, "record_blob": packed}
+
+
+def _record_value(d: dict[str, Any]) -> dict[str, Any]:
+    """The record a document of the expert work holds (see :func:`_record_fields`)."""
+    if d.get("record_blob") is not None:
+        return unpack(d["record_blob"])
+    return json.loads(d.get("record_json") or "{}")
 
 
 def _batches(events: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
@@ -1121,7 +1143,7 @@ class FirestoreStore(Store):
         q: Any = self.doc.collection(kind)
         if annotator_id is not None:
             q = q.where(filter=FieldFilter("annotator_id", "==", annotator_id))
-        return [json.loads((s.to_dict() or {}).get("record_json") or "{}") for s in q.stream()]
+        return [_record_value(s.to_dict() or {}) for s in q.stream()]
 
     def update_record(self, kind: str, record_id: str, annotator_id: str,
                       change: Callable[[dict[str, Any] | None], dict[str, Any] | None]) -> dict[str, Any] | None:
@@ -1132,14 +1154,11 @@ class FirestoreStore(Store):
         @firestore.transactional
         def update(tx: Any) -> dict[str, Any] | None:
             snap = ref.get(transaction=tx)
-            old = json.loads((snap.to_dict() or {}).get("record_json") or "{}") if snap.exists else None
+            old = _record_value(snap.to_dict() or {}) if snap.exists else None
             new = change(None if old is None else dict(old))
             if new is None:
                 return old
-            text = json.dumps(new, separators=(",", ":"))
-            if len(text.encode("utf-8")) > BLOB_LIMIT:
-                raise StoreError("The record is too large to keep")
-            tx.set(ref, {"annotator_id": annotator_id, "record_json": text, "updated_at": now_local_iso()})
+            tx.set(ref, {"annotator_id": annotator_id, **_record_fields(new), "updated_at": now_local_iso()})
             return new
 
         return update(self.client.transaction())

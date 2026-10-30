@@ -388,6 +388,12 @@ function runStage(srcA, srcB, srcStart, s0, s1, o0, o1, step) {
   return [outA, outB];
 }
 
+/** Whether every sample of a signal is zero. */
+function isAllZero(src) {
+  for (let i = 0; i < src.length; i++) if (src[i] !== 0) return false;
+  return true;
+}
+
 /**
  * Filter up to two signals of the segment [s0, s1) and return the filtered samples [o0, o1).
  * srcA and srcB hold the unfiltered samples from srcStart and must cover
@@ -397,6 +403,17 @@ function runStage(srcA, srcB, srcStart, s0, s1, o0, o1, step) {
  */
 export function filterPair(plan, srcA, srcB, srcStart, s0, s1, o0, o1) {
   if (!plan.steps.length) throw new Error("no filter steps");
+  // A channel that holds only zeros (an electrode switched off, say) filters to exact zeros, as
+  // MNE's filter gives; sharing a complex FFT with its partner would leave rounding residue of
+  // the partner (about 1e-18 V) in it, and the amplitude check would then count it as not flat.
+  const zeroA = isAllZero(srcA);
+  const zeroB = srcB ? isAllZero(srcB) : false;
+  if (zeroA || zeroB) {
+    const M = o1 - o0;
+    const a = zeroA ? new Float64Array(M) : filterPair(plan, srcA, null, srcStart, s0, s1, o0, o1)[0];
+    const b = !srcB ? null : zeroB ? new Float64Array(M) : filterPair(plan, srcB, null, srcStart, s0, s1, o0, o1)[0];
+    return [a, b];
+  }
   const W = plan.halfWidth;
   if (plan.combined && o0 - W >= s0 && o1 + W <= s1) {
     return runStage(srcA, srcB, srcStart, s0, s1, o0, o1, plan.combined);

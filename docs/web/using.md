@@ -244,6 +244,12 @@ admin area) the first time you need it, and says "Loading…" while one is on it
 connection. If a part cannot be fetched, the page says so and offers Try again; your work is safe,
 and reloading the page also helps if Try again does not.
 
+Recordings of any size the study registered can be opened: ElectroTag has been checked with
+recordings of 1 to 257 channels at up to 16384 samples a second. Working out the fingerprint of a
+large file takes longer, about half a minute for a 2 GB recording of 256 channels, and the progress
+is shown meanwhile. A BrainVision recording whose header gives the same name to two channels cannot
+be opened; the page says which names, and the study team can make a corrected copy of the header.
+
 If you worked on the recording before without finishing it, ElectroTag offers to restore your
 unfinished work, with the number of annotations and the time spent. Choose Restore and continue, or
 Start afresh to begin again. A restored draft opens exactly where you left off: the same moment of

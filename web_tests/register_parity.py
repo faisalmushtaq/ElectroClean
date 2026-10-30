@@ -20,6 +20,11 @@ answers how Python writes and reads the values that js/eeg/pyfmt.js and pyjson.j
 ``electrotag.app.io.bids.loads_json`` reports for a sidecar, UTF-8 errors, the desktop's
 parse_float and parse_int_code, timedelta's rounding), for web_tests/unit/data_register_py.test.mjs.
 
+    python -I web_tests/register_parity.py --describe < paths.json
+
+answers what MNE-Python reads from recordings anywhere on disk, for the opt-in check of real
+recordings (ELECTROTAG_REAL_EEG) in web_tests/unit/data_readers.test.mjs.
+
     python -I web_tests/register_parity.py --check < manifests.json
 
 passes manifests built in the browser through the study server's own checks
@@ -127,7 +132,54 @@ def check(jobs: list[dict]) -> dict:
     return {"results": out}
 
 
+def describe_files(jobs: list[dict]) -> list[dict]:
+    """What MNE-Python reads from recordings anywhere on disk (--describe), in the shape of the
+    ``*.expected.json`` files of scripts/make_web_fixtures.py, for the opt-in check of real recordings
+    (ELECTROTAG_REAL_EEG) in web_tests/unit/data_readers.test.mjs. Each job is {"path": <the .edf, .bdf
+    or .vhdr file>}; the answer gives, per job, the description, or {"error": what MNE-Python said}."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    import numpy as np
+    from make_web_fixtures import describe, read_raw
+
+    from electrotag.app.io.discovery import read_vhdr_header
+    from electrotag.app.io.edf import read_edf_header
+
+    out = []
+    for job in jobs:
+        path = Path(job["path"])
+        fmt = {".edf": "edf", ".bdf": "bdf", ".vhdr": "brainvision"}.get(path.suffix.lower())
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                raw = read_raw(path, fmt)
+            lower: list[str] = []
+            if fmt == "brainvision":
+                head = read_vhdr_header(path)
+                files = [path, path.parent / (head.marker_file or ""), path.parent / (head.data_file or "")]
+                data_file = files[2]
+            else:
+                files, data_file = [path], path
+                h = read_edf_header(path)
+                top = max(h.samples_per_record)
+                lower = [lab for lab, n in zip(h.labels, h.samples_per_record, strict=False) if 0 < n < top]
+            n = int(raw.n_times)
+            w = min(n, 64)
+            rng = np.random.default_rng(1)
+            idx = sorted({0, n - 1, *map(int, rng.integers(0, n, 16))})
+            info = describe(raw, fmt, data_file, files, filters=[], windows=[(0, w), (n // 2, n // 2 + w), (n - w, n)],
+                            sample_idx=idx)
+            info["paths"] = [str(f) for f in files]
+            info["lower_rate"] = [c for c in raw.ch_names if c in lower]
+            out.append(info)
+        except Exception as exc:  # noqa: BLE001 - the browser must refuse what MNE cannot read
+            out.append({"error": f"{type(exc).__name__}: {exc}", "paths": [str(path)]})
+    return out
+
+
 def main() -> int:
+    if sys.argv[1:] == ["--describe"]:
+        json.dump(describe_files(json.load(sys.stdin)), sys.stdout)
+        return 0
     if sys.argv[1:] == ["--python-text"]:
         json.dump(python_text(json.load(sys.stdin)), sys.stdout)
         return 0

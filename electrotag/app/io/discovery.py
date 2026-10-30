@@ -28,6 +28,7 @@ def recording_format(path: Path | str) -> str | None:
 
 
 _KEY_RE = re.compile(r"^\s*([A-Za-z]+)\s*=\s*(.*?)\s*$")
+_CHANNEL_RE = re.compile(r"^ch(\d+)\s*=\s*(.*?)\s*$", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -39,6 +40,16 @@ class VhdrHeader:
     data_points: int | None
     data_orientation: str | None
     codepage: str | None
+    #: The names of [Channel Infos], in channel order ("" for a channel without an entry).
+    channel_names: tuple[str, ...] = ()
+
+    def duplicate_names(self) -> list[tuple[str, list[int]]]:
+        """Names given to more than one channel, with the channels' numbers (from 1)."""
+        seen: dict[str, list[int]] = {}
+        for i, name in enumerate(self.channel_names):
+            if name:
+                seen.setdefault(name, []).append(i + 1)
+        return [(name, idx) for name, idx in seen.items() if len(idx) > 1]
 
 
 @dataclass
@@ -137,12 +148,21 @@ def read_vhdr_header(vhdr: Path) -> VhdrHeader:
         text = raw.decode("latin-1")
     section = ""
     values: dict[tuple[str, str], str] = {}
+    channels: dict[int, str] = {}
     for line in text.splitlines():
         stripped = line.strip()
         if not stripped or stripped.startswith(";"):
             continue
         if stripped.startswith("[") and stripped.endswith("]"):
             section = stripped[1:-1].strip().lower()
+            if section == "comment":
+                break  # MNE-Python reads the header up to [Comment]
+            continue
+        if section == "channel infos":
+            ch = _CHANNEL_RE.match(stripped)
+            if ch:
+                # the name is the text before the first comma, with \1 standing for a comma
+                channels[int(ch.group(1))] = ch.group(2).split(",")[0].replace("\\1", ",")
             continue
         m = _KEY_RE.match(stripped)
         if m:
@@ -165,6 +185,7 @@ def read_vhdr_header(vhdr: Path) -> VhdrHeader:
         data_points=as_int(get("datapoints")),
         data_orientation=get("dataorientation"),
         codepage=get("codepage"),
+        channel_names=tuple(channels.get(i, "") for i in range(1, max(channels, default=0) + 1)),
     )
 
 

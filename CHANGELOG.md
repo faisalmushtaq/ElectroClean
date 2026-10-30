@@ -5,6 +5,21 @@ Each section below describes the changes in one version of ElectroTag;
 
 ## Unreleased
 
+Recordings of every channel count up to 256 (and 257, EGI's nets with their reference) have been
+checked in the browser against MNE-Python, through registration, saving, the agreement analysis and
+adjudication, on a new synthetic set (`scripts/make_channel_matrix.py`, 31 recordings in every
+format, rate, naming scheme and edge case) and on 18 public recordings of 2 to 257 channels. Four
+differences were put right. A channel that holds only zeros (an EGI reference or an unused BioSemi
+EXG channel) now filters to zeros in the browser, as in MNE-Python, so the amplitude check leaves it
+out in both. Digits of other scripts in an `events.tsv` are read as Python reads them. A BrainVision
+header that gives one name to several channels, which MNE-Python cannot read, is refused in plain words
+at registration and in the browser alike, naming the channels. The browser words the refusal of an
+EDF header with a field that is not a number, and of a BrainVision header without channels, as Python
+does. On Firebase, a record of the expert work that would not fit in one document as text (an
+adjudication of a 256-channel recording with many edited marks, say) is now kept compressed instead of
+being refused. `ELECTROTAG_REAL_EEG` runs the readers, registration and Python checks on a folder of
+real recordings; the testing guide says how, and lists the recordings used.
+
 Accounts can now hold several roles: annotator, expert and administrator, as an expert who also
 annotates does. The study keeps both the set and the older single role (the first of them), and
 studies made before read as they were; on Firebase each person's roles are written into their
