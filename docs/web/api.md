@@ -1243,6 +1243,32 @@ majority, and without `weights` nothing changes. `"gold"` takes each person's `w
 1000, one for each of `annotator_ids` and not all 0 (400 otherwise); `weights` with `min_agreement`
 is 422 `invalid_consensus`. The consensus rule kept with the reference records the weights.
 
+**Correct the marks.** A guided recording of a reference set can carry an exercise: a copy of the
+experts' marks with deliberate mistakes, which trainees put right in "Learn with the experts". It is
+kept with the set (`guided.planted[recording_id]`) and made with `electrotag/training/planted.py`
+(`electrotag/web/correct_marks.py` in the service). Experts and administrators reach it through the
+expert channel; the admin channel offers the same operations, with `set_planted_get` for
+`planted_get`. Each saving operation is audited, never repeated by the browser, and answers
+`{"planted", "warnings", "set": SetRecord}` (`warnings` names how many trainees did the recording
+already, whose results stay as they were).
+
+| op | body | answer |
+| --- | --- | --- |
+| `planted_list` | `{}` | `{"sets": [{"set_id", "name", "recordings": [{"recording_id", "n_reference", "planted": null \| {"n_errors", "seed", "method", "made_by", "made_at", "capped", "stale"}}]}]}`: every set's guided recordings |
+| `planted_get` | `{"set_id", "recording_id"}` | `{"set_id", "set_name", "recording_id", "file_name", "manifest", "reference": [Annotation], "tolerance", "planted": Planted \| null, "done_by", "instruction"}` |
+| `set_planted_make` | `{"set_id", "recording_id", "seed"?, "counts"?: {"missing": 1, "type": 1, "boundary": 1, "extra": 1}}` | the mistakes planted from `seed` (0 to 999999; a new one when left out), replacing the recording's exercise. 409 `not_guided` for a recording not used for guided learning, 404 `not_in_set`, 422 `no_reference_marks`; counts from 0 to 20 of each kind, at least one in all (400) |
+| `set_planted_from` | `{"set_id", "recording_id", "source": Source}` | an expert's own deliberately flawed annotations as the exercise (Source `annotator` or `document`); the mistakes are found by comparing them with the reference (kinds `missing`, `type`, `boundary`, `channels`, `extra`). 422 `no_mistakes` when they agree with the reference within the guided tolerance, 422 `invalid_document` for another recording |
+| `set_planted_remove` | `{"set_id", "recording_id"}` | `{"set"}`; 404 `no_exercise` |
+
+`Planted = {"annotations": [Annotation], "errors": [{"kind", "reference_id", "planted_id", "label",
+"planted_label"?, "edge"?, "shift_s"?, "onset_sample", "end_sample", "onset_s", "offset_s",
+"detail"}], "n_errors", "seed", "counts", "capped", "notes", "method": "auto" | "from_annotations",
+"made_by", "made_at", "stale"}`. The same seed always gives the same exercise. Every mark of the copy
+has a new ID, so that nothing in it shows which marks were changed. `capped` (with `notes`) says that
+the reference had too few marks, or too little room, for every mistake asked for; at most half of
+the reference's marks are changed. `stale` is true when the reference was replaced after the
+exercise was made: trainees are then not given it until it is made again.
+
 ## The same operations on Firebase
 
 On Firebase every operation above is a callable Cloud Function (Python, 2nd

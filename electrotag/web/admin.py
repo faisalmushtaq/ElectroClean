@@ -67,7 +67,8 @@ STATS_WORK = ("study", "all")
 READ_ONLY = ("overview", "settings_get", "users_list", "assignments_list", "recordings_list", "sets_list",
              "set_guided_notes", "quiz_items", "progress", "stats", "agreement", "activity", "competency",
              "results_zip", "audit", "visits", "problems_list", "reviews_list", "saved_attempt_get",
-             "tasks_list", "tasks_preview_get", "quality_list")
+             "tasks_list", "tasks_preview_get", "quality_list",
+             "set_planted_get")
 OPERATIONS = READ_ONLY + (
     "settings_update", "user_add", "user_update", "user_reset_password", "user_invite", "user_invite_revoke",
     "user_remove", "assign", "unassign",
@@ -75,7 +76,8 @@ OPERATIONS = READ_ONLY + (
     "set_delete", "set_add_reference", "set_recording_update", "set_remove_recording", "set_guided_note",
     "set_example_create", "quiz_item_add", "quiz_item_remove", "problem_resolve", "problem_return",
     "problem_reassign", "review_save",
-    "tasks_create", "task_update", "task_remove")
+    "tasks_create", "task_update", "task_remove",
+    "set_planted_make", "set_planted_from", "set_planted_remove")
 
 
 # ------------------------------------------------------------------ checking input
@@ -1609,3 +1611,24 @@ class Admin:
 
     def op_quality_list(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
         return self.service.tasks.op_quality(user, body)
+
+    # ------------------------------------------------- correct the marks (H6: electrotag/web/correct_marks.py)
+    def op_set_planted_get(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        from electrotag.web.correct_marks import get
+
+        return get(self.service, user, body)
+
+    def op_set_planted_make(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        from electrotag.web.correct_marks import make
+
+        return make(self.service, user, body)
+
+    def op_set_planted_from(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        from electrotag.web.correct_marks import make_from
+
+        return make_from(self.service, user, body)
+
+    def op_set_planted_remove(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
+        from electrotag.web.correct_marks import remove
+
+        return remove(self.service, user, body)
