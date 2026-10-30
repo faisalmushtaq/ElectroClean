@@ -98,10 +98,11 @@ async function save(s, id, annotations, password = PASSWORD) {
     session: { started_at: '2026-10-30T10:00:00.000+00:00', elapsed_s: 60 } });
 }
 
-/** Accounts made by the administrator, given SUB1, with the training gate off so that they may save it. */
+/** Accounts made by the administrator, given SUB1, with the training gate and the sign-up questionnaire off so that
+ *  they may save it at once. */
 async function people(s, ids, password) {
   const admin = await login(s, 'ADMIN');
-  await api(s, admin, '/admin/settings_update', { settings: { training: { gate: 'off' } } });
+  await api(s, admin, '/admin/settings_update', { settings: { training: { gate: 'off' }, questionnaire: { enabled: false } } });
   for (const id of ids) await api(s, admin, '/admin/user_add', { annotator_id: id, display_name: `Person ${id}`, password });
   await api(s, admin, '/admin/assign', { annotator_ids: ids, recording_ids: [SUB1] });
 }

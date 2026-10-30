@@ -17,7 +17,8 @@ REPO = Path(__file__).resolve().parents[1]
 FUNCTIONS = REPO / "electrotag" / "web" / "firebase" / "functions" / "main.py"
 NUMBERS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven",
            "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty",
-           "twenty-one", "twenty-two", "twenty-three", "twenty-four", "twenty-five"]
+           "twenty-one", "twenty-two", "twenty-three", "twenty-four", "twenty-five", "twenty-six", "twenty-seven", "twenty-eight",
+           "twenty-nine", "thirty"]
 TEXT_SUFFIXES = {".md", ".py", ".js", ".mjs", ".html", ".css", ".yml", ".yaml", ".toml", ".txt", ".sh", ".json"}
 SKIP_DIRS = {".git", ".venv", "venv", "node_modules", "__pycache__", "fixtures", "example_output", "vendor"}
 

@@ -294,28 +294,9 @@ export class App {
    * once it is saved; otherwise opened from home to change the answers. The interaction log is paused while it is
    * shown and records only that it was answered, with the number of questions answered.
    */
-  async showQuestionnaire({ first = false, then = null } = {}) {
-    loadPart('questionnaire').catch(() => {}); // fetched while the study is asked
-    let data;
-    try {
-      data = await this.backend.questionnaire();
-    } catch (exc) {
-      if (exc.status === 401) return;
-      this._render(h('div.view', {}, appHeader(this), h('main.page', {}, h('h1', {}, 'A few questions before you start'),
-        h('p.banner', { role: 'alert' }, `The questionnaire could not be loaded: ${exc.message}`),
-        h('div.btn-row', {}, h('button.btn.primary', { type: 'button', onclick: () => this.showQuestionnaire({ first, then }) }, 'Try again')))), 'questionnaire');
-      return;
-    }
-    await this._withParts(['questionnaire'], 'questionnaire', ({ questionnaireView }) => {
-      const onSaved = async (answer, nAnswered) => {
-        this._resumeLog();
-        logger.event('questionnaire_answered', { n_answered: nAnswered }); // never an answer, nor anything typed
-        if (this.me) this.me.questionnaire = { ...(this.me.questionnaire || {}), answered: true, answered_at: answer.answered_at, version: answer.answered_version, missing: 0 };
-        if (then) await then();
-        else this.showHome();
-      };
-      this._render(questionnaireView(this, data, { first, onSaved, onLeave: () => this.showHome() }), 'questionnaire');
-    });
+  showQuestionnaire(opts = {}) {
+    const asked = this.backend.questionnaire().then((data) => ({ data }), (error) => ({ error })); // while the part loads
+    return this._withParts(['questionnaire'], 'questionnaire', ({ openQuestionnaire }) => openQuestionnaire(this, asked, opts));
   }
 
   /** A trainee with stages still to do (once training is complete, home and its next recording come first). */

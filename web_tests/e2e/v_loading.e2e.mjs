@@ -17,8 +17,11 @@ import { signIn, waitForRoute, openExample } from './helpers.mjs';
  * The sign-up questionnaire (the default questions in the sandbox's copy of the settings, and the app's way to
  * the questionnaire before the first view) brought it to 473 KB; the page, its rules and the sandbox's
  * stand-in load when used.
+ * Bad channels and Uncertain in the sandbox's saving and drafts, downloading one's saved files, the guide's route
+ * and reopening after a reload, together, brought it to 478 KB (140 KB on a study server, with the questionnaire's
+ * page moved into its part); the guide, the files and the questionnaire's page load when used.
  */
-const SIGNIN_BUDGET_KB = { server: 140, demo: 476 };
+const SIGNIN_BUDGET_KB = { server: 142, demo: 480 };
 
 /**
  * Modules that belong to later views and must not load with the sign-in page (the demonstration's

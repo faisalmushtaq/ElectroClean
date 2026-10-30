@@ -401,8 +401,9 @@ checks on its own. The uncertain type is HED's `Data-artifact` (code 130), the p
 artifact term, since HED-SCORE 2.2.0 has no modifier for an uncertain artifact; the agreement tables
 count it like any other type, with its own table `uncertain_by_annotator.tsv`, and bad channels stay
 inside the artifact agreement tables, a choice the project lead may want to revisit. The sign-in
-page's JavaScript is within 1 kB of its budget (`v_loading`), so the next addition to what it loads
-needs something moved behind `js/lazy.js` first.
+page's JavaScript is within 2 kB of its budget (`v_loading`: 140 of 142 kB on a study server, 478 of
+480 kB in the demonstration), so the next addition to what it loads should move something behind
+`js/lazy.js` first.
 
 **7. Housekeeping.** The project's `ruff` settings give only the line length, so a recent `ruff`
 applies many style rules the code was never written to; `ruff check --select E,F,W,B` is the useful

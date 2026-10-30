@@ -10,6 +10,7 @@
 
 import { h } from '../ui/dom.js';
 import { appHeader } from './common.js';
+import { logger } from '../log/logger.js';
 import { PREFER_NOT, PREFER_NOT_LABEL, answeredCount } from './questionnaire_model.js';
 
 let seq = 0;
@@ -90,6 +91,31 @@ function contactFields(spec) {
     out.push({ key: f.key, input });
   }
   return { el: box, read: () => Object.fromEntries(out.map((f) => [f.key, f.input.value.trim()])) };
+}
+
+
+/**
+ * App.showQuestionnaire's page, once `asked` (the answer of GET /me/questionnaire, as `{data}` or `{error}`) has come:
+ * the form, or a message with Try again. The interaction log is paused while it is shown (app.js) and records only
+ * that it was answered, with the number of questions answered.
+ */
+export async function openQuestionnaire(app, asked, { first = false, then = null } = {}) {
+  const { data, error } = await asked;
+  if (error) {
+    if (error.status === 401) return;
+    app._render(h('div.view', {}, appHeader(app), h('main.page', {}, h('h1', {}, 'A few questions before you start'),
+      h('p.banner', { role: 'alert' }, `The questionnaire could not be loaded: ${error.message}`),
+      h('div.btn-row', {}, h('button.btn.primary', { type: 'button', onclick: () => app.showQuestionnaire({ first, then }) }, 'Try again')))), 'questionnaire');
+    return;
+  }
+  const onSaved = async (answer, nAnswered) => {
+    app._resumeLog();
+    logger.event('questionnaire_answered', { n_answered: nAnswered }); // never an answer, nor anything typed
+    if (app.me) app.me.questionnaire = { ...(app.me.questionnaire || {}), answered: true, answered_at: answer.answered_at, version: answer.answered_version, missing: 0 };
+    if (then) await then();
+    else app.showHome();
+  };
+  app._render(questionnaireView(app, data, { first, onSaved, onLeave: () => app.showHome() }), 'questionnaire');
 }
 
 /**
