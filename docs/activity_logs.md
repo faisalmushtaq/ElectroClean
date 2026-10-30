@@ -356,6 +356,25 @@ finished elsewhere), `quiz_stopped` (`answered`, `n_items`: Stop for now) and
 `quiz_ended_early` (`answered`, `n_items`: End the quiz now, which is followed
 by `quiz_finished`).
 
+**Adjudication and the library.** The expert area is logged like annotation
+work. Opening an adjudication logs `recording_opened` (with `segment`
+`adjudication` and the `unit_id`) and `adjudication_opened` (`unit_id`,
+`n_conflicts`, `decided`, `mode`: `decide` or `view`, and `letters`, the number
+of versions compared). Choosing what to keep logs `adjudication_choice`
+(`conflict_id`, `choice`, `via`); each decision the study keeps logs
+`adjudication_decision` (`conflict_id`, `kinds`, `choice`, `reason_code`,
+`reason_length`, `seconds` on the conflict before deciding, and `already` when
+the study had it); the reason's text is never logged. `adjudication_skipped`
+(`conflict_id`), `adjudication_lanes` (`mode`: `all` or the one letter shown),
+`adjudication_finished` (`unit_id`, `n_conflicts`, `by_choice`) and
+`adjudication_closed` (`unit_id`, `decided`, `n_conflicts`, `reason`) follow
+the rest. In the library: `library_filtered` (the names of the filters used,
+never what was typed in the search, and the number shown), `library_opened_entry`
+(`status`, `kinds`), `library_downloaded` (`kind`, `n`) and `library_promoted`
+(`to`, `already`, `explanation_length`). On an annotator's home page,
+`adjudication_outcomes_shown` (`recordings`, `conflicts`) and
+`adjudication_outcome_opened` (`conflicts`).
+
 **Training.** The training programme records its own events in the same log,
 with names starting `guided_`, `practice_`, `assessment_`, `training_` or
 `stage_`. On the training path: `training_path_opened` (the state of each

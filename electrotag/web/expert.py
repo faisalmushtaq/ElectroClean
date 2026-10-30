@@ -51,6 +51,8 @@ EXPERT_MODULES: tuple[str, ...] = (
     "electrotag.web.expert",  # replay consent (below)
     "electrotag.web.corrections",  # corrections of saved work, and the annotator's view of them
     "electrotag.web.replay",  # replays of sessions from the interaction log
+    "electrotag.web.adjudication",  # the adjudication queue, its decisions and what annotators see of them
+    "electrotag.web.library",  # the library of contradictory annotations
 )
 #: Operations that people without the expert role may ask for too; each checks itself who may see what (an
 #: annotator's own corrected version, an expert's session shown to trainees with the expert's consent).

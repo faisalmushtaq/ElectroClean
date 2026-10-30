@@ -137,7 +137,7 @@ export function homeView(app) {
       guideLine(),
       h('div.home-grid', {},
         h('div.col', {}, nextCard, expertCard(app), !training && items.length ? progressCard(p) : null, programme && !training ? trainingDoneCard(app) : null,
-          list, quizCard(app)),
+          list, outcomesHost(app), quizCard(app)),
         sideColumn([...games(app), demo]))));
 }
 
@@ -169,6 +169,15 @@ export function expertCard(app) {
       + 'The originals are never changed: a correction is a new version, credited to you.'),
     lines.map((l) => h('p.caption', {}, l)),
     h('div.btn-row', {}, h('button.btn', { type: 'button', 'data-log': 'open-expert', onclick: () => app.showExpert('expert') }, 'Open the expert area')));
+}
+
+/** The decisions on the annotator's disagreements (js/expert/outcomes.js), filled in once they are read. */
+function outcomesHost(app) {
+  const review = app.me && app.me.study && app.me.study.review;
+  if (!review || review.show_outcomes_to_annotators === false || !app.backend || !app.backend.myFeedback || (app.me && app.me.programme)) return null;
+  const host = h('div.outcomes-host');
+  import('../expert/outcomes.js').then((m) => m.fillOutcomes(app, host)).catch(() => host.remove());
+  return host;
 }
 
 /** After training: a line that it is complete, with the way back to the training path. */

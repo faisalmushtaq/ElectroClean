@@ -271,6 +271,11 @@ async function script(call) {
   await call('visit close', (s) => s.b.closeVisit(s.mem.visit, 'signed_out'));
   await call('admin as an annotator', (s) => s.b.admin('overview', {}));
   await call('expert as an annotator', (s) => s.b.expert('replay_consent_get', {}));
+  // Adjudication and the library (adjudication_*, library_*) are server-only: conflicts are found with the study's
+  // Python code (the agreement analysis's matching), so the sandbox answers needs_server for each of them
+  // (js/api/demo_adjudication.js, checked in ui_adjudication_model.test.mjs). Both sides refuse an annotator alike.
+  await call('expert adjudication_list as an annotator', (s) => s.b.expert('adjudication_list', {}));
+  await call('expert library_list as an annotator', (s) => s.b.expert('library_list', {}));
   await call('my feedback', (s) => s.b.myFeedback());
   await call('my_correction_get (none)', (s) => s.b.expert('my_correction_get', { correction_id: hex(0xc0) }));
   await call('replay_index_get as an annotator', (s) => s.b.expert('replay_index_get', { annotator_id: 'A01', recording_id: r1 }));

@@ -35,7 +35,7 @@ test('the expert area has its routes, and only experts and administrators use it
 });
 
 test('a recording is opened for its purpose; an unknown purpose says so', async () => {
-  for (const k of ['review', 'correct', 'replay', 'corrected']) assert.equal(typeof PURPOSES[k], 'function', k);
+  for (const k of ['review', 'correct', 'replay', 'corrected', 'adjudicate', 'library']) assert.equal(typeof PURPOSES[k], 'function', k);
   const seen = [];
   registerPurpose('try', async (app, args) => { seen.push(args.target.recording_id); });
   assert.throws(() => registerPurpose('try', async () => {}), /registered twice/);
@@ -77,7 +77,8 @@ test('the sandbox reads the roles of a request as admin.py does', () => {
   assert.throws(() => rolesFrom({ role: 'annotator', roles: ['admin'] }, { required: true }), /say different things/);
   const ops = Object.keys(expertOps());
   for (const op of ['replay_consent_get', 'replay_consent_set', 'work_list', 'saved_attempt_get', 'correction_save', 'corrections_list', 'correction_get',
-    'my_correction_get', 'replay_index_get', 'replay_events_get', 'teaching_list']) assert.ok(ops.includes(op), op);
+    'my_correction_get', 'replay_index_get', 'replay_events_get', 'teaching_list', 'adjudication_list', 'adjudication_get', 'adjudication_start',
+    'adjudication_decide', 'adjudication_finish', 'adjudication_reference', 'library_list', 'library_promote', 'tasks_list']) assert.ok(ops.includes(op), op);
   assert.throws(() => expertOps([{ a_get: () => {} }, { a_get: () => {} }]), /given twice/);
 });
 

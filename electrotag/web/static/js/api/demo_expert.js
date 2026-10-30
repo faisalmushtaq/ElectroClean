@@ -12,6 +12,7 @@ import { needsServer } from './demo_admin.js';
 import { rolesOf } from '../admin/model.js';
 import { nowLocalIso } from '../util.js';
 import { CORRECTION_FEEDBACK, CORRECTION_OPEN_OPS, CORRECTION_OPS } from './demo_corrections.js';
+import { ADJUDICATION_OPS } from './demo_adjudication.js';
 
 /** Replay consent: whether trainees may watch replays of the caller's own sessions (expert.py, the same names). */
 const CONSENT_OPS = {
@@ -39,6 +40,7 @@ const CONSENT_OPS = {
 const PARTS = [
   CONSENT_OPS,
   CORRECTION_OPS, // corrections of saved work and replays (demo_corrections.js)
+  ADJUDICATION_OPS, // adjudication and the library: they need the study's Python code (needsServer)
 ];
 
 /** Operations that people without the expert role may ask for too (expert.py OPEN_OPS); each checks the rest itself. */

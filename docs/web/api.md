@@ -1109,10 +1109,92 @@ letters and the scoring are the study server's own code.
 
 ### Adjudication and the library
 
-The adjudication queue and the library of conflicts and their resolutions
-(`tasks_list`, `adjudication_get`, `adjudication_start`, `adjudication_decide`,
-`adjudication_finish`, `adjudication_reference`, `library_list` and
-`library_promote`) are described here when they are offered.
+Adjudication works as the dual screening of a systematic review does (Covidence, Rayyan). Two or
+more people annotate the same recording independently; once they have all saved it, the study
+compares their versions with the agreement analysis's matching rules and lists every
+**conflict**; an expert who did not annotate it decides each one, and finishing saves the
+**adjudicated version**, a derived version of its own. Adjudication is not blinded: the
+adjudicator sees who made each mark. Nobody adjudicates what they annotated (409 `own_task`).
+The code is `electrotag/reliability/conflicts.py` (finding conflicts, without web code),
+`electrotag/web/adjudication.py` and `electrotag/web/library.py`.
+
+What can be adjudicated is a **unit**, found afresh at every call:
+
+| kind | unit ID | what is compared |
+| --- | --- | --- |
+| `task` | the task's `task_id` | the latest saved attempts of the task's annotators, within its window when it has one (known-answer tasks are never adjudicated) |
+| `recording` | `r-` and 12 hexadecimal characters | a study recording given to (or saved by) two or more people without a task: everyone given it, except those who reported that it cannot be annotated, and everyone who saved it |
+| `corrections` | `k-` and 12 hexadecimal characters | two or more experts' corrections of the same saved attempt (each corrector's latest), so that their disagreements are settled before the corrected version is used |
+
+Its status is derived: `collecting` (someone has not saved yet), `ready` (all have, and there are
+conflicts), `agreed` (all have, and nothing conflicts), `adjudicating` (started) and
+`adjudicated` (finished). The versions compared carry letters (A, B, …; a task's own letters when
+it has them, otherwise in the order of the people's IDs), which the keys of the adjudication view
+use.
+
+Conflicts are found with `matching.events_for` and `matching.match_events` (one-to-one,
+preferring the same type) for every pair of versions, with the study's `review.matching` rules;
+matched marks are joined across the pairs into **clusters**, and a cluster on which the versions
+differ is a conflict of one or more kinds: `presence` (some versions have no mark there), `type`,
+`timing` (an onset or an offset further apart than the tolerance), `channels` (the channels
+overlap less than `channel_jaccard`; a whole-montage mark covers every channel) and `split` (one
+version has two or more marks in it). A conflict's ID, `c-` and 16 hexadecimal characters, comes
+from the people and annotation IDs of its marks, so it stays the same for the same versions.
+
+`Conflict` = `{"conflict_id", "kinds": ["type"], "onset_sample", "offset_sample", "onset_s",
+"offset_s", "marks": [{"letter", "annotator_id", "display_name", "annotation_id", "label",
+"onset_sample", "duration_samples", "onset_s", "offset_s", "channels", "confidence", "note"}],
+"missing": ["B"], "missing_ids": ["A02"], "labels": [..], "pair": [a, b] | null, "decision":
+null | {"choice", "marks", "reason_code", "reason", "decided_at", "decided_by", "result":
+[Annotation]}}`. `pair` names the two types of a type conflict; `result` is what the decision
+keeps.
+
+`UnitOut` = `{"unit_id", "task_id" (tasks only, otherwise null), "kind", "recording_id",
+"file_name", "window": null | {"start_sample", "end_sample", "start_s", "end_s"}, "k", "saved",
+"annotators": [{"letter", "annotator_id", "display_name", "saved"}], "corrected": null |
+{"annotator_id", "attempt"}, "status", "conflicts", "agreed", "decided", "adjudicator_id",
+"adjudicator_name", "started_at", "finished_at", "yours", "own", "notes"}`; `own` is true when the
+caller's work is part of it.
+
+| op | body | answer | saves? |
+| --- | --- | --- | --- |
+| `adjudication_list` | `{"status"?, "recording_id"?}` | `{"units": [UnitOut], "counts": {status: n}, "total"}`: the queue, those in progress first. A unit whose versions cannot be read is left out | read |
+| `adjudication_get` | `{"unit_id"}` (`task_id` is taken too) | `{"unit": UnitOut, "adjudication": Adjudication \| null, "versions": [{"letter", "annotator_id", "display_name", "source": "original" \| "correction", "attempt", "number", "annotations": [Annotation]}], "conflicts": [Conflict], "agreed": [{"cluster_id", "mark": Annotation, "letters"}], "manifest": Manifest, "file_name", "blinded": false, "rules", "progress": {"conflicts", "decided"}, "reason_required", "reason_codes"}`: once started, from the versions frozen then. 409 `not_ready` while someone has not saved, `own_task`; 404 `not_found` | read |
+| `adjudication_start` | `{"unit_id"}` | as `adjudication_get`, with `"already"`: freezes the inputs (each version's attempt, session and the SHA-256 of its `_annotations.json`) and the matching rules. Starting one's own again is the same adjudication. 409 `not_ready` (not all saved, or nothing conflicts), `own_task`, `taken` (with `adjudicator_id`). Audited (`adjudication_start`) | **save** |
+| `adjudication_decide` | `{"unit_id", "conflict_id", "choice", "marks"?, "reason_code"?, "reason"?}` | `{"conflict": Conflict, "progress", "already"}`. `choice` is a letter (that version's marks as they are), `all` (every version's marks, one mark per type spanning that type's marks, on the channels they cover together), `none`, or `edited` with 1 to 5 `marks` (annotations, given IDs of their own). A reason is needed as `review.reason_required` says: `always`, `edited_or_none`, or `never`; it is a `reason_code` (`clear_artifact`, `not_artifact`, `type_evidence`, `boundary_evidence`, `channels_evidence`, `both_valid`, `other`, which needs words) or a `reason` of at most 200 characters on one line. The same decision again changes nothing; a decision can be changed until the adjudication is finished. 409 `not_started`, `not_yours`, `finished`; 422 `unknown_conflict`, `invalid_choice`, `reason_missing`, `invalid_annotation`, `outside_window`. Audited, with the reason's length only | **save** |
+| `adjudication_finish` | `{"unit_id"}` | `{"adjudication": Adjudication, "version": {"attempt", "output_basename", "session_id", "n_annotations", "files"}, "already"}`: saves the adjudicated version (the agreed marks, each at the median onset and offset of its marks on the channels most of them cover, and the decided marks) with the journalled save into `derived/adjudications/annotator-ADJUDICATED/`, display name "Adjudicated (E01)", and `context.derived = {"kind": "adjudication", "task_id", "unit_kind", "adjudicator_id", "inputs", "rules", "window", "corrected", "n_conflicts", "decisions_sha256", "blinded": false}`. Saved once: an answer lost on its way is found again by its session ID. 409 `undecided` (with `n`). Audited | **save** |
+| `adjudication_reference` | `{"unit_id", "set_id", "use", "provenance"?}` | the answer of `set_add_reference` with the Source `{"kind": "adjudication", "task_id": "<unit ID>"}`, which the admin operation takes too: method `adjudicated`, the versions' people as the experts, the adjudicator, and the adjudicated file and the versions' files as its sources. 409 `not_finished`; 422 `window_task` for a unit with a window (a reference covers the whole recording) | **save** |
+| `tasks_list` | `{"status"?, "recording_id"?}` | `{"tasks": [TaskOut], "counts": {status: n}}` (docs above, "Tasks, windows and known answers"), known-answer tasks left out; the conflicts of a task whose annotators have all saved are counted, and the count is kept for as long as the same versions are compared. The adjudication part registers the counter that tells `ready` from `agreed` (`tasks.register_conflict_counter`) | read |
+| `library_list` | `{"label"?, "pair"?: [a, b] \| "a\|b", "annotator_id"?, "status"?: "awaiting" \| "open" \| "decided", "choice"?: "one" \| "all" \| "none" \| "edited" \| letter, "kind"?, "recording_id"?, "q"?, "offset"?: 0, "limit"?: 200 (at most 500)}` | `{"entries": [LibraryEntry], "total", "facets": {"labels", "pairs", "kinds", "choices", "status", "annotators", "recordings"}, "filters", "sets": [{"set_id", "name", "none_option"}]}`: the conflicts of every unit that has some, derived afresh; the facets count every entry. `q` searches the file name, the types and the reasons | read |
+| `library_promote` | `{"promote_id": "<32 hex>", "entry_id", "to": "quiz_item" \| "snippet", "set_id", "label"?, "explanation"?, "start_s"?, "end_s"?, "context_s"?: 2.0}` | `{"item": QuizItem}` or `{"snippet": Snippet}`, with `"already"`. The label and times start from the decision (the conflict's when nothing is kept), the explanation from the reason; the item keeps `source: {"library_entry", "task_id", "conflict_id", "promote_id", "promoted_by", "promoted_at", "kinds", "decision"}`. The same `promote_id`, or the same entry promoted to the same set again, gives what was made before. A self-contained set gets a copy of the recording's manifest, as for a reference. 409 `undecided` without a label for a conflict not yet decided; 404 `unknown_entry`. Audited | **save** |
+
+`Adjudication` (records of kind `adjudications`, one per unit, kept under the adjudicator) =
+`{"unit_id", "task_id", "unit_kind", "recording_id", "file_name", "window", "corrected",
+"adjudicator_id", "adjudicator_name", "state": "in_progress" | "finished", "started_at",
+"finished_at", "blinded": false, "inputs": {person: {"letter", "source", "annotator_id",
+"attempt", "session_id", "output_basename", "annotations_sha256", "number"?, "correction_id"?}},
+"letters", "rules", "decisions": {conflict_id: {"choice", "marks", "reason_code", "reason",
+"decided_at", "decided_by"}}, "version", "counts": {"conflicts", "decided", "agreed"}}`.
+`blinded` is kept for a future crowd study that hides who made each mark.
+
+`LibraryEntry` = `{"entry_id": "<unit ID>:<conflict ID>", "task_id", "unit_id", "unit_kind",
+"conflict_id", "recording_id", "file_name", "window", "kinds", "labels", "pair", "onset_s",
+"offset_s", "onset_sample", "offset_sample", "marks", "missing", "missing_ids", "annotators",
+"letters", "status", "decision", "adjudicator_id", "finished"}`. Nothing of the library is stored
+apart from what is promoted. `Snippet` = `{"snippet_id": "s01", "recording_id", "start_s",
+"end_s", "label", "explanation", "context_s", "source"}`, kept in the reference set's
+`snippets`.
+
+In `GET /me/feedback`, the `adjudications` part lists, newest first, each finished adjudication
+that compared the caller's version: `{"task_id", "unit_kind", "recording_id", "file_name",
+"finished_at", "window", "conflicts": [{"conflict_id", "kinds", "onset_s", "offset_s",
+"yours": [mark], "others": [{"label", "onset_s", "offset_s", "channels"}], "decision":
+{"outcome": "yours_kept" | "other_kept" | "all_kept" | "none_kept" | "edited", "marks":
+[Annotation], "reason", "reason_code", "reason_text"}}]}`. Nobody else is named, the adjudicator
+included.
+
+The sandbox cannot find conflicts (that needs the study's Python code), so it answers each of
+these operations with 501 `needs_server`.
 
 ### Derived versions in the analyses
 

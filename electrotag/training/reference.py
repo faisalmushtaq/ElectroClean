@@ -83,9 +83,12 @@ class QuizItem:
     accepted_labels: list[str] = field(default_factory=list)
     explanation: str = ""
     context_s: float = 2.0
+    # Where the item came from, when it was made from something else: an entry of the library of
+    # adjudicated conflicts ({"library_entry", "task_id", "conflict_id", "promote_id", ...}); {} otherwise.
+    source: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        out = {
             "item_id": self.item_id,
             "recording_id": self.recording_id,
             "start_s": self.start_s,
@@ -95,6 +98,9 @@ class QuizItem:
             "explanation": self.explanation,
             "context_s": self.context_s,
         }
+        if self.source:
+            out["source"] = dict(self.source)
+        return out
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> QuizItem:
@@ -107,6 +113,7 @@ class QuizItem:
             accepted_labels=[str(x) for x in d.get("accepted_labels", [])],
             explanation=str(d.get("explanation", "")),
             context_s=float(d.get("context_s", 2.0)),
+            source=dict(d.get("source") or {}),
         )
 
     def is_correct(self, answer: str) -> bool:
@@ -142,6 +149,9 @@ class ReferenceSet:
     guided: dict[str, Any] = field(default_factory=dict)
     # Stage 2 pass rule, e.g. {"event_f1": 0.8, "label_accuracy": 0.8} (see training/programme.py).
     practice_pass: dict[str, Any] = field(default_factory=dict)
+    # Artifact snippets shown to trainees: {"snippet_id", "recording_id", "start_s", "end_s", "label",
+    # "explanation", "context_s", "source"} (docs/web/api.md, "Training stages").
+    snippets: list[dict[str, Any]] = field(default_factory=list)
 
     # ------------------------------------------------------------ properties
     @property
@@ -227,6 +237,7 @@ class ReferenceSet:
             "recordings_dir": self.recordings_dir,
             "guided": self.guided,
             "practice_pass": self.practice_pass,
+            "snippets": self.snippets,
         }
 
     def save(self) -> None:
@@ -264,6 +275,7 @@ class ReferenceSet:
             recordings_dir=str(d.get("recordings_dir", "") or ""),
             guided=dict(d.get("guided", {}) or {}),
             practice_pass=dict(d.get("practice_pass", {}) or {}),
+            snippets=[dict(x) for x in d.get("snippets", []) or [] if isinstance(x, dict)],
         )
 
     @classmethod
@@ -466,6 +478,16 @@ class ReferenceSet:
 
         CompetencyCriteria.from_dict(criteria)  # validates
         self.criteria = criteria
+        self.save()
+
+    def add_snippet(self, snippet: dict[str, Any]) -> None:
+        """Add an artifact snippet (or replace the one with its ``snippet_id``)."""
+        sid = str(snippet.get("snippet_id") or "")
+        if not sid:
+            raise ReferenceSetError("A snippet needs a snippet_id")
+        if float(snippet.get("end_s", 0)) <= float(snippet.get("start_s", 0)):
+            raise ReferenceSetError("A snippet's end must be after its start")
+        self.snippets = [x for x in self.snippets if x.get("snippet_id") != sid] + [dict(snippet)]
         self.save()
 
     def add_quiz_item(self, item: QuizItem, catalogue_labels: tuple[str, ...]) -> None:
