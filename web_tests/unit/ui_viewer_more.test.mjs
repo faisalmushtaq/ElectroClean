@@ -11,6 +11,7 @@ import { coordinateSystemOf, electrodeFilesToKeep, electrodeSidecars, parseElect
 import { centredStart, clampTime, parseTimeText } from '../../electrotag/web/static/js/annotate/goto.js';
 import { OVERLAY_SPAN, microvoltText, overlayAlpha, overlayGain } from '../../electrotag/web/static/js/viewer/geometry.js';
 import { DEMO_CHANNELS, channelType } from '../../electrotag/web/static/js/eeg/synthetic.js';
+import { layerMarks, normaliseLayers, pointerSpot, sameMark } from '../../electrotag/web/static/js/viewer/layers.js';
 
 const near = (a, b, tol = 1e-3) => Math.abs(a - b) <= tol;
 const at = (name) => { const p = standardPosition(name); assert.ok(p, `${name} has a position`); return p; };
@@ -237,4 +238,26 @@ test('the map of a dense cap opens whole, and + climbs in even steps to the size
   const demo = mapLayout(DEMO_CHANNELS.map((name) => ({ name, type: channelType(name) }))).points;
   const d = mapScale(demo, { widthPx: 700, heightPx: 440, targetPx: 28 });
   assert.deepEqual(mapScales(d.fit, d.needed), MAP_ZOOMS.map((z) => d.fit * z));
+});
+
+test('the layers in the viewer: the original\'s marks that the annotations on screen do not show, and the replay\'s pointer', () => {
+  const m = (id, label, on, dur, channels = []) => ({ annotation_id: id, label, onset_sample: on, duration_samples: dur, channels });
+  const original = [m('a', 'EMG-artifact', 100, 50), m('b', 'Eye-blink-artifact', 400, 100, ['Fp1', 'Fp2']), m('c', 'EMG-artifact', 5000, 50),
+    m('d', 'Chewing-artifact', 900, 100)];
+  const current = [m('a', 'EMG-artifact', 100, 50), m('b', 'Eye-blink-artifact', 400, 100, ['Fp2', 'Fp1']), m('d', 'Chewing-artifact', 880, 120)];
+  assert.ok(sameMark(original[1], current[1]), 'channels in another order are the same');
+  assert.ok(!sameMark(original[3], current[2]));
+  const layers = [{ id: 'original', annotations: original, style: 'dashed', prefix: 'Original: ' }];
+  // a: shown by the annotation; b: the same; c: removed (but outside the view); d: moved
+  assert.deepEqual(layerMarks(layers, current, 0, 2560).map((x) => x.a.annotation_id), ['d']);
+  assert.deepEqual(layerMarks(layers, current, 0, 6000).map((x) => x.a.annotation_id), ['c', 'd']);
+  assert.equal(layerMarks(layers, current, 0, 6000)[0].layer.prefix, 'Original: ');
+  assert.deepEqual(layerMarks([{ ...layers[0], visible: false }], current, 0, 6000), [], 'a hidden layer draws nothing');
+  assert.deepEqual(normaliseLayers([null, { annotations: [] }]).map((l) => [l.id, l.style, l.visible]), [['layer-1', 'dashed', true]]);
+  const geo = { x0: 100, x1: 900, y0: 30, y1: 530, tToX: (t) => 100 + t * 80, rowCentre: (r) => 30 + (r + 0.5) * 50 };
+  const rows = [{ row: 0, ch: { name: 'Fp1' } }, { row: 1, ch: { name: 'Fp2' } }];
+  assert.deepEqual(pointerSpot({ t: 2, channel: 'Fp2' }, rows, geo), { x: 260, y: 105, onChannel: true });
+  assert.deepEqual(pointerSpot({ t: 2, channel: 'O1' }, rows, geo), { x: 260, y: 280, onChannel: false }, 'a channel off screen: the middle');
+  assert.equal(pointerSpot({ t: 20, channel: 'Fp1' }, rows, geo), null, 'outside the view');
+  assert.equal(pointerSpot(null, rows, geo), null);
 });

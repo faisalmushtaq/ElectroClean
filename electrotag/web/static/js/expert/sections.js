@@ -10,6 +10,7 @@ export const EXPERT_ROUTE = /^expert(-[a-z]+)?$/;
 
 export const EXPERT_SECTIONS = Object.freeze([
   { key: 'overview', route: 'expert', title: 'Overview', load: null },
+  { key: 'work', route: 'expert-work', title: 'Saved work', load: () => import('./work.js').then((m) => m.SavedWork) },
 ]);
 
 export function expertSectionForRoute(route, sections = EXPERT_SECTIONS) {

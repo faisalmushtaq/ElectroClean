@@ -113,6 +113,9 @@
   --i-note: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linejoin='round'%3E%3Cpath d='M3.5 2.5h6l3 3v8h-9z'/%3E%3Cpath d='M9.5 2.5v3h3M5.5 8.5h5M5.5 11h3.5'/%3E%3C/svg%3E");
   --i-more: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='black'%3E%3Ccircle cx='3.5' cy='8' r='1.25'/%3E%3Ccircle cx='8' cy='8' r='1.25'/%3E%3Ccircle cx='12.5' cy='8' r='1.25'/%3E%3C/svg%3E");
   --i-star-empty: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1' stroke-linejoin='round'%3E%3Cpath d='M8 2.6l1.6 3.7 4 .4-3 2.6.9 3.9L8 11.1l-3.5 2.1.9-3.9-3-2.6 4-.4z'/%3E%3C/svg%3E");
+  --i-step-back: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='square' stroke-linejoin='round'%3E%3Cpath d='M4.5 3.5v9'/%3E%3Cpath d='M12 3.5v9L6 8z'/%3E%3C/svg%3E");
+  --i-step-forward: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='square' stroke-linejoin='round'%3E%3Cpath d='M11.5 3.5v9'/%3E%3Cpath d='M4 3.5v9l6-4.5z'/%3E%3C/svg%3E");
+  --i-to-start: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='square' stroke-linejoin='round'%3E%3Cpath d='M3.5 3.5v9'/%3E%3Cpath d='M8.5 4.5 5 8l3.5 3.5M12.5 4.5 9 8l3.5 3.5'/%3E%3C/svg%3E");
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -182,6 +185,9 @@ kbd .ico { width: 12px; height: 12px; }
 .ico-skip-forward { --i: var(--i-skip-forward); }
 .ico-note { --i: var(--i-note); }
 .ico-more { --i: var(--i-more); }
+.ico-step-back { --i: var(--i-step-back); }
+.ico-step-forward { --i: var(--i-step-forward); }
+.ico-to-start { --i: var(--i-to-start); }
 .stars { display: inline-flex; gap: 2px; vertical-align: -2px; margin-right: 8px; color: var(--ink); }
 .stars .ico { width: 14px; height: 14px; }
 
@@ -1257,3 +1263,46 @@ button.review-line { text-align: left; font: var(--t-14); }
 .map-box { position: absolute; border: 1px solid var(--accent); background: rgba(43, 67, 146, 0.08); pointer-events: none; }
 .map-note { margin: 8px 0 0; }
 .dialog.wide:has(.channel-map-block:not([hidden])) { max-width: 760px; }
+/* An expert's correction (js/expert/correction_pass.js), the annotator's view of one (correction_feedback.js) and the
+   replay of a session (js/replay/player.js), in the annotation view. A change without the reason the study asks for is
+   outlined in the warning colour; a correction is shown to the annotator in the accent blue, never red. */
+.view.annotate.correcting .ws-side > .review-host, .view.annotate.replaying .ws-side > .review-host { max-height: 72%; }
+.correction-pass, .replay-panel { overflow-y: auto; min-height: 0; }
+.correction-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 8px; }
+.correction-progress { margin: 0; }
+.correction-row .review-item-head { flex: 1 1 100%; flex-wrap: wrap; }
+.correction-text { flex: 1 1 160px; min-width: 0; }
+.correction-kind { height: 20px; padding: 0 8px; font: var(--t-12); }
+.correction-row[data-change="added"] .correction-kind::before { background: var(--accent); }
+.correction-row[data-change="removed"] .correction-kind::before { background: var(--text-secondary); }
+.correction-row.needs-reason { outline: 2px solid var(--warning-bar); outline-offset: -2px; background: var(--warning-bg); }
+.reason-chips { display: flex; flex: 1 1 100%; flex-wrap: wrap; gap: 4px; padding: 0; background: transparent; }
+.reason-chips .seg { background: var(--fill); }
+@media (hover: hover) { .reason-chips .seg:hover:not(:disabled):not([aria-pressed="true"]) { background: var(--fill-hover); } }
+.reason-chips .seg[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+.correction-others { margin: 8px 0; }
+.correction-feedback .feedback-chip { border-color: var(--accent); color: var(--accent); }
+.replay-bar { display: flex; flex-direction: column; gap: 8px; padding: 8px 8px 0 0; }
+.replay-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.replay-play { min-width: 88px; }
+.replay-time { font: var(--t-14); color: var(--text-secondary); font-variant-numeric: tabular-nums lining-nums; margin: 0 8px; }
+.replay-speeds .seg { padding: 0 8px; font-variant-numeric: tabular-nums lining-nums; }
+.replay-scrub { position: relative; height: 24px; cursor: pointer; touch-action: none; }
+.replay-track { position: absolute; left: 0; right: 0; top: 10px; height: 4px; background: var(--hairline); }
+.replay-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--ink); }
+.replay-handle { position: absolute; top: -6px; width: 16px; height: 16px; margin-left: -8px; border-radius: 50%; background: var(--ink); }
+.replay-tick { position: absolute; top: -6px; width: 2px; height: 16px; margin-left: -1px; background: var(--accent); }
+.replay-idle { position: absolute; top: 0; bottom: 0; background: var(--text-disabled); }
+.replay-seg { position: absolute; top: -8px; width: 1px; height: 20px; background: var(--ink); }
+.replay-toggle { display: inline-flex; align-items: center; gap: 4px; font: var(--t-14); }
+.replay-caption { margin: 0; min-height: 24px; font: var(--t-16); color: var(--ink); }
+.replay-segments, .replay-recent { list-style: none; margin: 8px 0; padding: 0; }
+.replay-segments li.current { color: var(--accent); font-weight: 600; }
+.replay-recent li { padding: 4px 0; border-bottom: 1px solid var(--hairline); font: var(--t-14); }
+.replay-recent li.change { color: var(--accent); }
+.replay-at { color: var(--text-secondary); font-variant-numeric: tabular-nums lining-nums; }
+.replay-end { margin-top: 12px; }
+.watch-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.watch-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--hairline); }
+.corrected-line { text-align: left; }
+@media (pointer: coarse) { .replay-scrub { height: 40px; } .replay-track { top: 18px; } }

@@ -71,9 +71,26 @@ async function openReview(app, { recording, fp, view, target }) {
   } });
 }
 
+/**
+ * A purpose whose view is in a part of its own (js/lazy.js): the file is checked against the study's copy,
+ * then the part's `open` function takes it (corrections and replays: js/expert/, js/replay/).
+ */
+function fromPart(part, fn, verb, kind) {
+  const open = async (app, { recording, fp, view, target }) => {
+    if (!(await checkStudyCopy(app, recording, fp, view, target, { verb, kind }))) return;
+    const parts = await app._openingParts([part], () => open(app, { recording, fp, view, target }));
+    if (!parts || !app._stillOpen(view)) return;
+    await parts[0][fn](app, { recording, fp, view, target });
+  };
+  return open;
+}
+
 /** What each purpose does once its file is read: one line per purpose. */
 export const PURPOSES = {
   review: openReview,
+  correct: fromPart('corrections', 'openCorrection', 'Correct', 'correction'), // an expert's correction (js/expert/correction_pass.js)
+  replay: fromPart('replay', 'openReplay', 'Replay', 'replay'), // a replay of a session (js/replay/player.js)
+  corrected: fromPart('correctionFeedback', 'openCorrected', 'Open', 'corrected'), // the annotator's view of a correction
 };
 
 /** Add a purpose (a later part may also add its line to PURPOSES above). */

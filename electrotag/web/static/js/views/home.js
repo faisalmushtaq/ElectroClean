@@ -10,6 +10,7 @@ import { formatHms, local } from '../util.js';
 import { quizCard } from '../training/quiz_card.js';
 import { deviceHomeLine } from './device.js';
 import { recordingsCard } from './home_list.js';
+import { watchExpertEntry } from '../replay/watch.js';
 import { partNow } from '../lazy.js';
 import { localDraft } from '../annotate/local_drafts.js';
 import { todayKey } from '../annotate/clock.js';
@@ -88,7 +89,7 @@ export function homeView(app) {
   const nextCard = h('section.card.next-card', {},
     training
       ? [h('h2', {}, 'Training programme'), h('p.subtitle', {}, `${programme.name}. Your training path shows each stage and what to do next.`),
-        h('div.btn-row', {}, h('button.btn.primary', { type: 'button', onclick: () => app.go('training') }, 'Go to my training path'))]
+        h('div.btn-row', {}, h('button.btn.primary', { type: 'button', onclick: () => app.go('training') }, 'Go to my training path'), watchExpertEntry(app))]
       : cont
         ? continueContent(app, cont)
       : next
