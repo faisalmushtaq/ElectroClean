@@ -323,7 +323,8 @@ def _facets(service: StudyService, aids: list[str]) -> tuple[list[dict[str, Any]
             v = [str(x) for x in v] if isinstance(v, (list, tuple)) else str(v)
             of[aid][key] = v
             values.update(v if isinstance(v, list) else [v])
-        described.append({"key": key, "title": title, "values": sorted(values)})
+        if values:  # a filter with nothing to choose is left out
+            described.append({"key": key, "title": title, "values": sorted(values)})
     return described, of
 
 

@@ -365,6 +365,9 @@ async function script(call) {
   for (const op of ['overview', 'users_list', 'assignments_list', 'recordings_list', 'sets_list', 'settings_get', 'progress', 'stats', 'problems_list', 'reviews_list', 'quiz_items', 'audit', 'visits']) {
     await call(`admin ${op}`, (s) => s.b.admin(op, op === 'quiz_items' ? { set_id: QUIZ.set_id } : {}));
   }
+  // a group, then everyone's marks again with the filter by group (overlay_facets.py)
+  await call('admin group_create', (s) => s.b.admin('group_create', { request_id: hex(0xd7), name: 'Pilot', members: ['A01'] }));
+  await call('expert overlay_get (with a group)', (s) => s.b.expert('overlay_get', { recording_id: r1 }));
   await call('admin saved_attempt_get', (s) => s.b.admin('saved_attempt_get', { annotator_id: 'A01', recording_id: r1, mode: 'standard', context_id: '' }));
   await call('admin review_save', (s) => s.b.admin('review_save', { review_id: hex(0xb1), annotator_id: 'A01', recording_id: r1, mode: 'standard', context_id: '', attempt: 2,
     overall_note: 'Good work', items: [{ annotation_id: B1.annotation_id, status: 'agree', note: '' }, { annotation_id: null, onset_sample: 5000, duration_samples: 250, channels: [], status: 'comment', note: 'a blink here?' }] }));

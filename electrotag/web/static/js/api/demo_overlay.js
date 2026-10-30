@@ -7,6 +7,7 @@
 import { ApiError } from './http.js';
 import { rolesOf } from '../admin/model.js';
 import { binCounts } from '../expert/crowd.js';
+import { PREFER_NOT, PREFER_NOT_LABEL } from '../views/questionnaire_model.js';
 
 const MAX_LANES = 8;
 const MAX_PAGE = 500;
@@ -147,11 +148,12 @@ class Overlay {
     if (anonymous) saved.sort((p, q) => String(p.saved_at || '').localeCompare(String(q.saved_at || '')) || p.annotator_id.localeCompare(q.annotator_id));
     else saved.sort((p, q) => (p.annotator_id < q.annotator_id ? -1 : p.annotator_id > q.annotator_id ? 1 : 0));
     const tables = new Tables(chNames);
+    const [facets, facetOf] = anonymous ? [[], {}] : await this.facets(saved.map((p) => p.annotator_id));
     const people = saved.slice(offset, offset + limit).map((p, i) => {
       const u = this.b._admin.user(p.annotator_id);
       const out = { annotator_id: anonymous ? `Person ${offset + i + 1}` : p.annotator_id, display_name: anonymous ? '' : (u && u.display_name) || '',
         roles: anonymous || !u ? [] : rolesOf(u), you: p.annotator_id === me.aid, source: 'saved', of: null, by: null, attempt: p.attempt,
-        saved_at: p.saved_at, n_marks: p.marks.length, facets: {}, marks: tables.flat(p.marks) };
+        saved_at: p.saved_at, n_marks: p.marks.length, facets: facetOf[p.annotator_id] || {}, marks: tables.flat(p.marks) };
       if (detail.has(p.annotator_id)) out.ids = p.marks.map((m) => m.id);
       return out;
     });
@@ -172,8 +174,35 @@ class Overlay {
     const crowd = offset === 0 ? binCounts(saved.map((p) => p.marks.map((m) => [m.onset, m.dur, !m.channels.length])), info.n_samples, info.sfreq) : null;
     const next = offset + limit < saved.length ? offset + limit : null;
     return { recording_id: rid, file_name: info.file_name, mode, context_id: ctx, manifest: await this.b._publicManifest(rid), sfreq: Number(info.sfreq),
-      n_samples: Number(info.n_samples), channels: chNames, anonymous, labels: tables.labels, sets: tables.sets, people, derived, facets: [], crowd,
+      n_samples: Number(info.n_samples), channels: chNames, anonymous, labels: tables.labels, sets: tables.sets, people, derived, facets, crowd,
       total: saved.length, offset, next_offset: next };
+  }
+
+  /** The filters by group and by datasets analysed, as electrotag/web/overlay_facets.py gives them: the facets
+   *  that have values, and each person's values. */
+  async facets(aids) {
+    const groups = Object.values((this.b._admin.s.library || {}).groups || {}).filter((g) => g.state !== 'removed');
+    const quest = await this.b._questionnairePart();
+    const found = { experience: {}, group: {} };
+    for (const aid of aids) {
+      const names = groups.filter((g) => (g.history || []).some((r) => !r.removed_at && r.annotator_id === aid))
+        .map((g) => String(g.name || g.group_id || '')).sort();
+      if (names.length) found.group[aid] = names;
+      const band = ((quest._latest(aid) || {}).answers || {}).datasets_analysed;
+      if (band != null && band !== '') found.experience[aid] = band === PREFER_NOT ? PREFER_NOT_LABEL : String(band);
+    }
+    const titles = { experience: 'Datasets analysed', group: 'Group' };
+    const facets = [];
+    const of = {};
+    for (const key of ['experience', 'group']) {
+      const values = new Set();
+      for (const [aid, v] of Object.entries(found[key])) {
+        (of[aid] = of[aid] || {})[key] = v;
+        for (const x of [].concat(v)) values.add(x);
+      }
+      if (values.size) facets.push({ key, title: titles[key], values: [...values].sort() });
+    }
+    return [facets, of];
   }
 
   async overlay_teaching_list() {

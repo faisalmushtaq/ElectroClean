@@ -1642,7 +1642,10 @@ corrections of each person's latest version (one for each expert who corrected i
 **Facets.** Other parts of the study describe people for the view's filters (groups of people,
 experience bands) with `electrotag.web.overlay.register_facet(key, title)`, a function
 `(service, annotator_ids) -> {annotator_id: value or [values]}`. Each facet comes in `facets`
-with its values, and on each person under its key; a study without any has none.
+with its values, and on each person under its key; a facet nobody has a value for is left
+out. `electrotag/web/overlay_facets.py` registers two: `group` (the names of the person's
+current groups, removed groups left out) and `experience` (the band of datasets analysed in the
+person's latest questionnaire answers). The sandbox gives the same.
 
 The answer reads each saved version once and keeps it in memory, since a saved version never
 changes. 400 `bad_request` for a body it cannot use (an `include` it does not know, more than

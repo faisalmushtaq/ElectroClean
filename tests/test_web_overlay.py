@@ -22,6 +22,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from electrotag.web import overlay  # noqa: E402
 from electrotag.web.app import create_app  # noqa: E402
+from electrotag.web.questionnaire import EXAMPLE_ANSWERS  # noqa: E402
 from tests.web_helpers import GUIDED1, SUB1, Api, ann, copy_demo, derived_maker, make_template, submission  # noqa: E402
 
 CASES = json.loads((Path(__file__).resolve().parents[1] / "web_tests" / "unit" / "overlay_crowd_cases.json")
@@ -144,7 +145,7 @@ def test_everyones_latest_marks_compactly_with_the_crowd(client: TestClient, adm
     sf = got["sfreq"]
     assert crowd["marking"][int(500 // sf)] == 2 and crowd["whole"][int(3000 // sf)] == 1
     assert crowd["marking"][int(4000 // sf)] == 0 and crowd["whole"][int(500 // sf)] == 0
-    assert got["derived"] == [] and got["facets"] == []
+    assert got["derived"] == [] and [f["key"] for f in got["facets"]] == ["experience"]  # the demo's answers
     # administrators see the same
     assert expert_ok(admin, "overlay_get", {"recording_id": SUB1})["total"] == 3
     # what is asked is checked
@@ -212,11 +213,37 @@ def test_the_corrected_and_adjudicated_versions_as_lanes(client: TestClient, adm
 def test_facets_describe_people_for_the_filters(client: TestClient, admin: Api, recordings: Path,
                                                 monkeypatch: pytest.MonkeyPatch) -> None:
     three_people(client, admin, recordings)
+    monkeypatch.setattr(overlay, "FACETS", {})
     monkeypatch.setitem(overlay.FACETS, "group", ("Group", lambda service, aids: {"A01": ["Leeds RAs", "Pilot"],
                                                                                   "A02": "Leeds RAs"}))
     got = expert_ok(Api(client, "E01"), "overlay_get", {"recording_id": SUB1})
     assert got["facets"] == [{"key": "group", "title": "Group", "values": ["Leeds RAs", "Pilot"]}]
     assert [p["facets"] for p in got["people"]] == [{"group": ["Leeds RAs", "Pilot"]}, {"group": "Leeds RAs"}, {}]
+
+
+def test_the_filters_by_group_and_by_datasets_analysed(client: TestClient, admin: Api, recordings: Path) -> None:
+    """The study's own facets: the groups of the admin area and the band of datasets analysed from the sign-up
+    questionnaire (the latest answers); a removed group gives nothing."""
+    three_people(client, admin, recordings)
+    admin.admin_ok("group_create", {"request_id": "f" * 32, "name": "Pilot", "members": ["A01", "A02"]})
+    gone = admin.admin_ok("group_create", {"request_id": "e" * 32, "name": "Old", "members": ["A01"]})["group"]
+    admin.admin_ok("group_remove", {"group_id": gone["group_id"]})
+    contacts = {"full_name": "Ama Owusu", "email": "ama@example.org", "phone": "", "institution": ""}
+    a01 = Api(client, "A01")
+    for band in ("11–30", "31–100"):
+        a01.ok("post", "/me/questionnaire", {"answers": {**EXAMPLE_ANSWERS, "datasets_analysed": band},
+                                             "contacts": contacts, "other": {}})
+    got = expert_ok(Api(client, "E01"), "overlay_get", {"recording_id": SUB1})
+    facets = {f["key"]: f for f in got["facets"]}
+    assert facets["group"] == {"key": "group", "title": "Group", "values": ["Pilot"]}
+    bands = {p["annotator_id"]: p["facets"].get("experience") for p in got["people"]}
+    assert bands["A01"] == "31–100", "the latest answers count"
+    assert bands["A02"] == EXAMPLE_ANSWERS["datasets_analysed"], "the demonstration's accounts start answered"
+    assert facets["experience"]["title"] == "Datasets analysed"
+    assert set(facets["experience"]["values"]) == {b for b in bands.values() if b}
+    groups = {p["annotator_id"]: p["facets"].get("group") for p in got["people"]}
+    assert groups == {"A01": ["Pilot"], "A02": ["Pilot"], "A03": None}, "a removed group gives nothing"
+    assert "Ama Owusu" not in json.dumps(got), "the overlay never carries a person's contact details"
 
 
 # ------------------------------------------------------------------ who may see it

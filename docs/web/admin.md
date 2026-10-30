@@ -1111,8 +1111,10 @@ ID or name, with the same button.
 
 The **filters** narrow what is shown: a type (the lanes and the crowd show only marks of that
 type), a role (annotators, experts or administrators in the crowd), and when the work was saved.
-When the study describes people further, for example by group or by experience, a filter for each
-appears beside these. Offer the corrected versions and Offer the adjudicated version add those
+Two more appear beside these once the study has the information: Group, for the groups of
+the Datasets page (a person in several groups passes for each), and Datasets analysed, the band
+each person gave in their latest answers to the sign-up questionnaire. Nobody's name or contact
+details reach this view through them. Offer the corrected versions and Offer the adjudicated version add those
 derived versions to the list, to be shown in lanes; the crowd always holds people's own work only.
 
 **Disagreements** are the stretches where some of the people shown marked an artifact and others

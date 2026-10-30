@@ -86,7 +86,8 @@ readers, a pattern as a second cue and their ID on every mark, and their marks o
 in the same colour and line pattern; everyone else is a crowd, a band under each channel (and a lane
 for whole-montage marks) shaded by the share of people marking each moment. Hovering a band gives the
 share, the types and who; a click lists everyone there, to give one of them a lane. The view filters
-by type, role and saved date (and by the study's groups or experience bands, where it has them),
+by type, role and saved date, and by group and by the band of datasets analysed from the sign-up
+questionnaire once the study has them,
 steps through the disagreements with N and P, offers the corrected and adjudicated versions as lanes,
 and downloads its summary as TSV. It opens in under a second with 200 people, from one compact
 answer of the new expert operation `overlay_get` (about 350 kB for 300 people of 50 marks on 256

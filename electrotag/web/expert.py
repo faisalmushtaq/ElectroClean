@@ -56,6 +56,7 @@ EXPERT_MODULES: tuple[str, ...] = (
     "electrotag.web.library",  # the library of contradictory annotations
     "electrotag.web.correct_marks",  # correct-the-marks exercises made from guided recordings' references
     "electrotag.web.overlay",  # everyone's marks on one recording: lanes and the crowd (overlay_get)
+    "electrotag.web.overlay_facets",  # the overlay's filters by group and by experience
 )
 #: Operations that people without the expert role may ask for too; each checks itself who may see what (an
 #: annotator's own corrected version, an expert's session shown to trainees with the expert's consent).
