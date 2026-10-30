@@ -283,5 +283,8 @@ of every shown channel), which it removes afterwards; the admin area builds the 
 browser, which filters only the short windows that the amplitude check reads. On the real recordings
 above, registration in the browser took 0.2 to 12 s per recording and with Python 0.3 to 54 s (the
 256-channel BrainVision recording of ds003420, 432 MB). Saving 60 annotations on 256 channels took
-0.1 s, the agreement analysis of 22 recordings from 2 annotators with channel-level matching 12 s, and
-each adjudication decision on a 256-channel recording 0.1 s.
+0.1 s, and 200 annotations 0.3 s; each adjudication decision on a 256-channel recording took 0.1 s.
+The agreement analysis with channel-level matching took 16 s for the 22 recordings of the channel
+matrix from two annotators, and 30 s for five real recordings of 136 to 256 channels with 200
+annotations each, most of them on a different set of channels (68 s before the time-resolved
+comparison learned to count only the bins near each channel's marks).

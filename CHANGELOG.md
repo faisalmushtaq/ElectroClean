@@ -17,7 +17,9 @@ at registration and in the browser alike, naming the channels. The browser words
 EDF header with a field that is not a number, and of a BrainVision header without channels, as Python
 does. On Firebase, a record of the expert work that would not fit in one document as text (an
 adjudication of a 256-channel recording with many edited marks, say) is now kept compressed instead of
-being refused. `ELECTROTAG_REAL_EEG` runs the readers, registration and Python checks on a folder of
+being refused. The agreement analysis by channel counts only the time bins near each channel's marks,
+with exactly the same results, which halves its time on high-density recordings (five real recordings
+of up to 256 channels with 200 annotations each: 30 s instead of 68 s). `ELECTROTAG_REAL_EEG` runs the readers, registration and Python checks on a folder of
 real recordings; the testing guide says how, and lists the recordings used.
 
 Accounts can now hold several roles: annotator, expert and administrator, as an expert who also

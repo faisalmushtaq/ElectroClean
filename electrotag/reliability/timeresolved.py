@@ -40,9 +40,8 @@ from electrotag.reliability.config import ANY_ARTIFACT, ROLLUP_SUFFIX, AnalysisC
 from electrotag.reliability.data import AgreementDataset, RecordingGroup
 from electrotag.reliability.intervals import (
     Interval,
-    binarise,
-    coverage_per_bin,
     intersection_length,
+    positive_bins,
     total_length,
     union,
 )
@@ -181,7 +180,7 @@ def recording_tables(
     # unmarked, or marked only by whole-montage annotations), added for each unit in unit order so
     # that the sums are exactly those of a channel-by-channel computation.
     contributions: dict[tuple[tuple[Interval, ...], ...], _Contribution] = {}
-    vectors: dict[tuple[Interval, ...], np.ndarray] = {}
+    vectors: dict[tuple[Interval, ...], tuple[int, np.ndarray]] = {}
     for i in range(len(units)):
         key = tuple(per_rater[r][i] for r in raters)
         part = contributions.get(key)
@@ -226,23 +225,29 @@ def _exact_contribution(
 
 def _binned_contribution(
     ints: dict[str, tuple[Interval, ...]], raters: list[str], pairs: list[tuple[str, str]], m: int, timing: Any,
-    res: float, min_coverage: float, vectors: dict[tuple[Interval, ...], np.ndarray],
+    res: float, min_coverage: float, vectors: dict[tuple[Interval, ...], tuple[int, np.ndarray]],
 ) -> _Contribution:
-    vec: dict[str, np.ndarray] = {}
+    # Each rater's positive bins as sorted indices (most bins of a channel are empty); the counts are
+    # integers, so they are exactly those of whole vectors of bins.
+    pos: dict[str, np.ndarray] = {}
+    n_bins = 0
     for r, v in ints.items():
         if v not in vectors:  # the same intervals give the same bins, whoever drew them
-            vectors[v] = binarise(coverage_per_bin(list(v), timing.sfreq, res, timing.duration_s), min_coverage)
-        vec[r] = vectors[v]
+            vectors[v] = positive_bins(list(v), timing.sfreq, res, timing.duration_s, min_coverage)
+        n_bins, pos[r] = vectors[v]
     tables = []
     for a, b in pairs:
-        va, vb = vec[a], vec[b]
+        pa, pb = pos[a], pos[b]
+        both = len(np.intersect1d(pa, pb, assume_unique=True))
         tables.append(((a, b), PairTable(
-            float(np.sum(va & vb)), float(np.sum(va & ~vb)), float(np.sum(~va & vb)), float(np.sum(~va & ~vb))
+            float(both), float(len(pa) - both), float(len(pb) - both), float(n_bins - len(pa) - len(pb) + both)
         )))
     counts: list[tuple[tuple[int, int], float]] = []
     if raters:
-        per_bin = np.sum(np.vstack([vec[r] for r in raters]), axis=0)
-        counts = [((m, k), float(w)) for k, w in enumerate(np.bincount(per_bin, minlength=m + 1)) if w]
+        _, per_bin = np.unique(np.concatenate([pos[r] for r in raters]), return_counts=True)
+        hist = np.bincount(per_bin, minlength=m + 1)
+        hist[0] = n_bins - len(per_bin)
+        counts = [((m, k), float(w)) for k, w in enumerate(hist) if w]
     return tables, counts
 
 

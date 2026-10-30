@@ -129,9 +129,52 @@ def test_bins_are_computed_once_per_distinct_set_of_intervals(monkeypatch):
     ds = _dataset(3, config)
     group = ds.groups[sorted(ds.groups)[0]]
     calls = []
-    real = tr.coverage_per_bin
-    monkeypatch.setattr(tr, "coverage_per_bin", lambda *a: calls.append(1) or real(*a))
+    real = tr.positive_bins
+    monkeypatch.setattr(tr, "positive_bins", lambda *a: calls.append(1) or real(*a))
     tr.recording_tables(group, "EMG-artifact", "time_and_channel", "bins_0.1s", config,
                         tr.category_label_set("EMG-artifact", ds.catalogue, config))
     channel_by_channel = len(CHANNELS) * len(group.annotators)
     assert 0 < len(calls) < channel_by_channel / 4
+
+
+def _dense_coverage(intervals, sfreq, bin_s, duration_s):
+    """coverage_per_bin as it was first written, over every bin (the reference for the sparse one)."""
+    n_bins = int(np.ceil(duration_s / bin_s - 1e-9))
+    edges = np.minimum(np.arange(n_bins + 1) * bin_s, duration_s)
+    widths = np.diff(edges)
+    if not intervals:
+        return np.zeros(n_bins)
+    xs, ys, covered = [0.0], [0.0], 0.0
+    for a, b in intervals:
+        ta, tb = a / sfreq, b / sfreq
+        xs.extend([ta, tb])
+        ys.extend([covered, covered + (tb - ta)])
+        covered += tb - ta
+    xs.append(max(duration_s, xs[-1]))
+    ys.append(covered)
+    cum = np.interp(edges, np.asarray(xs), np.asarray(ys))
+    with np.errstate(invalid="ignore", divide="ignore"):
+        frac = np.where(widths > 0, np.diff(cum) / widths, 0.0)
+    return np.clip(frac, 0.0, 1.0)
+
+
+def test_coverage_of_the_bins_near_the_marks_is_that_of_every_bin_to_the_last_bit():
+    from electrotag.reliability.intervals import positive_bins, union
+
+    rng = np.random.default_rng(256)
+    for _ in range(1500):
+        sfreq = float(rng.choice([100, 128, 160, 250, 256, 500, 512, 1000, 1024, 2048, 16384]))
+        n = int(rng.integers(1, int(sfreq * rng.choice([1, 10, 600, 3600]))))
+        marks = []
+        for _k in range(int(rng.integers(0, 40))):
+            a = int(rng.integers(0, n))
+            marks.append((a, min(n, a + int(rng.integers(1, max(2, n // int(rng.choice([2, 10, 1000]))))))))
+        marks = list(union(marks))
+        res = float(rng.choice([0.007, 0.01, 0.05, 0.1, 0.25, 0.3, 1.0]))
+        want = _dense_coverage(marks, sfreq, res, n / sfreq)
+        got = coverage_per_bin(marks, sfreq, res, n / sfreq)
+        assert got.shape == want.shape and np.array_equal(got, want)
+        for min_coverage in (0.0, 1e-13, 0.5, 1.0):
+            n_bins, pos = positive_bins(marks, sfreq, res, n / sfreq, min_coverage)
+            assert n_bins == len(want)
+            assert np.array_equal(pos, np.flatnonzero(binarise(want, min_coverage)))
