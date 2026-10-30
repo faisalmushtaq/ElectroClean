@@ -55,6 +55,25 @@ systematic-review screening tool, and keep a library of the conflicts; recording
 as tasks, k annotators each; and trainees follow a five-stage path from a tour of the platform to a
 blind assessment that opens study work (item 6e below).
 
+Later on 30 October the study team gained a library of datasets and a sign-up questionnaire. Source
+datasets and collections of recordings are handed out to people and to groups, all of them or k per
+recording, with due dates, overdue flags and a target number of ratings per recording, and a tracking
+grid shows who has rated what and when (item 6f covers the email notices still to come). Annotators
+and experts answer a short questionnaire before any work opens: their experience of EEG (datasets
+analysed on a roughly logarithmic scale, years, hours of annotation, training, systems), career stage
+and field, and, where the study keeps them, demographics; answers are kept with their history and
+seen by annotator ID, and the study team sees names and contact details, with the contacts list
+leaving the study only when an administrator asks for it, which is audited. Experts and
+administrators can also put everyone's marks on one recording over the same EEG: up to eight people
+in lanes of their own, each with a colour, pattern and ID, and everyone else as a crowd band shaded
+by the share of people marking each moment, filtered by type, role, date, group and experience, which
+stays quick with hundreds of people. Then a member of the team's feedback brought the scales into the
+toolbar (the wheel for amplitude, Shift+wheel for time), channels chosen by dragging down their
+names, channels marked bad for the whole recording (saved in a sixth file, `_channels.tsv`, and
+compared between annotators), an Uncertain / needs review type, marks joined only where they truly
+overlap, an artifact reference guide, a recording that reopens after a reload, and a download of
+one's own saved files (items 6g and 6h below list what is left).
+
 The desktop application has been removed from the branch, with its stand-alone applications, the
 launchers, the self-test and Qt. The Python core stays: it loads recordings with MNE-Python, writes
 and verifies the result files, and runs the agreement, training and activity analyses, and the
@@ -366,6 +385,24 @@ function with the password in Secret Manager); each notice reserved under its `n
 body or any address. Its open questions (the Firebase scheduler's parameters in the pinned
 firebase-functions version, outbound SMTP from Cloud Functions, the provider's sending details) must
 be checked against the official documentation before it is built.
+
+**6g. The sign-up questionnaire and contact details (30 October).** The demographic questions (age
+band, gender, first language) are switched on by default with a note to check them against the
+study's ethics approval; a study whose approval does not cover them switches them off in Study
+settings. Names and contact details live in their own records (`contacts`), apart from the answers,
+and never reach the interaction log or the audit log; `contacts.csv` leaves the study only in a
+results zip made with Include names and contact details ticked. The demonstration's accounts start
+with example answers so that visitors are not stopped by the questionnaire.
+
+**6h. Left from the feedback round (30 October).** Replays show a channel being marked bad in their
+event list but do not yet grey the channel on the EEG; adjudicated versions are saved without bad
+channels; a correction keeps the original's bad channels, which `corrections.py` does but no test
+checks on its own. The uncertain type is HED's `Data-artifact` (code 130), the parent of every
+artifact term, since HED-SCORE 2.2.0 has no modifier for an uncertain artifact; the agreement tables
+count it like any other type, with its own table `uncertain_by_annotator.tsv`, and bad channels stay
+inside the artifact agreement tables, a choice the project lead may want to revisit. The sign-in
+page's JavaScript is within 1 kB of its budget (`v_loading`), so the next addition to what it loads
+needs something moved behind `js/lazy.js` first.
 
 **7. Housekeeping.** The project's `ruff` settings give only the line length, so a recent `ruff`
 applies many style rules the code was never written to; `ruff check --select E,F,W,B` is the useful
