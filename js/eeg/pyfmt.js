@@ -225,6 +225,25 @@ export function pyJsonList(items) {
 }
 
 // ------------------------------------------------------------------------ reading numbers
+const NON_ASCII_RE = /[^\x00-\x7f]/;
+const ND_RE = /\p{Nd}/u;
+
+/**
+ * The digits of other scripts as ASCII digits, as Python reads a number: int() and float() take any
+ * Unicode decimal digit (category Nd, such as "\u0663" or "\u1b56") as its value. Unicode keeps
+ * each script's digits in runs of ten from zero, so a digit's value is its place in its run.
+ * @param {string} t
+ */
+function asciiDecimal(t) {
+  if (!NON_ASCII_RE.test(t)) return t;
+  return t.replace(/\p{Nd}/gu, (c) => {
+    const cp = c.codePointAt(0);
+    let k = 0;
+    while (ND_RE.test(String.fromCodePoint(cp - k - 1))) k++;
+    return String(k % 10);
+  });
+}
+
 const FLOAT_RE = /^[+-]?(?:(?:\d(?:_?\d)*)?\.\d(?:_?\d)*|\d(?:_?\d)*\.?)(?:[eE][+-]?\d(?:_?\d)*)?$/;
 const SPECIAL_RE = /^([+-]?)(inf|infinity|nan)$/i;
 
@@ -236,7 +255,7 @@ const SPECIAL_RE = /^([+-]?)(inf|infinity|nan)$/i;
  */
 export function pyFloat(text) {
   if (typeof text !== "string") return null;
-  const t = pyStrip(text);
+  const t = asciiDecimal(pyStrip(text));
   const sp = SPECIAL_RE.exec(t);
   if (sp) {
     if (sp[2].toLowerCase() === "nan") return NaN;
@@ -256,7 +275,7 @@ const INT_RE = /^[+-]?\d(?:_?\d)*$/;
  */
 export function pyIntText(text) {
   if (typeof text !== "string") return null;
-  const t = pyStrip(text);
+  const t = asciiDecimal(pyStrip(text));
   if (!INT_RE.test(t)) return null;
   return BigInt(t.replace(/_/g, "").replace(/^\+/, "")).toString();
 }

@@ -6,6 +6,7 @@
 import { inferChannelType } from "./channels.js";
 import { RecordingError, decodeAsciiIgnore, decodeBrainVisionText, isoUtc, daysInMonth } from "./util.js";
 import { describeRecording } from "./edf.js";
+import { pyStrRepr } from "./pyfmt.js";
 
 /** MNE's _unit_dict: factors to SI units. */
 const UNIT_FACTORS = {
@@ -101,6 +102,39 @@ function pyInt(text, what) {
 }
 
 /**
+ * Names given to more than one channel, with the channels' numbers (from 1), in the order of
+ * their first channel (VhdrHeader.duplicate_names in electrotag/app/io/discovery.py).
+ * @param {string[]} names
+ * @returns {[string, number[]][]}
+ */
+export function duplicateNames(names) {
+  const seen = new Map();
+  names.forEach((name, i) => {
+    if (!name) return;
+    if (!seen.has(name)) seen.set(name, []);
+    seen.get(name).push(i + 1);
+  });
+  return [...seen].filter(([, idx]) => idx.length > 1);
+}
+
+/**
+ * Plain words for names shared by several channels, as duplicate_names_problem words them in
+ * electrotag/app/eeg/loading.py.
+ * @param {[string, number[]][]} duplicates
+ */
+export function duplicateNamesProblem(duplicates) {
+  const numbers = (idx) => `${idx.slice(0, -1).join(", ")} and ${idx[idx.length - 1]}`;
+  const parts = duplicates.slice(0, 5).map(([name, idx]) => `${pyStrRepr(name)} to channels ${numbers(idx)}`);
+  if (duplicates.length > 5) parts.push(`${duplicates.length - 5} more name(s) to several channels`);
+  const listed = parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+  return (
+    `its header gives the name ${listed}. MNE-Python, which ElectroTag uses to read recordings, cannot ` +
+    "read a BrainVision recording whose channels share a name: give each channel a name of its own in a " +
+    "copy of the header (the .vhdr file, which is text) and open the copy"
+  );
+}
+
+/**
  * The header of a BrainVision recording.
  * @param {Uint8Array} bytes the .vhdr file
  * @param {string} fileName
@@ -153,7 +187,11 @@ export function parseVhdr(bytes, fileName) {
   const units = new Array(nChannels).fill("");
   const keyToName = new Map();
   const misc = new Set();
-  const chInfos = cfg.get("Channel Infos") || new Map();
+  if (!cfg.has("Channel Infos")) {
+    // configparser's NoSectionError, which MNE-Python raises
+    throw new RecordingError(`${fileName} could not be read as a BrainVision recording: No section: 'Channel Infos'`, "corrupt_recording");
+  }
+  const chInfos = cfg.get("Channel Infos");
   for (const [key, value] of chInfos) {
     const m = /ch(\d+)/.exec(key);
     if (!m) continue;
@@ -175,6 +213,11 @@ export function parseVhdr(bytes, fileName) {
     if (!VOLTAGE_UNITS.includes(unit)) misc.add(name);
   }
   const missing = cals.map((c, i) => (Number.isNaN(c) ? i : -1)).filter((i) => i >= 0);
+  const duplicates = duplicateNames(names);
+  if (duplicates.length) {
+    // MNE-Python renames duplicates and then fails ("Channel Cz-0 has no associated original unit")
+    throw new RecordingError(`${fileName} could not be read as a BrainVision recording: ${duplicateNamesProblem(duplicates)}`, "corrupt_recording");
+  }
   if (missing.length) {
     throw new RecordingError(`${fileName}: incomplete [Channel Infos]: missing entries at indices [${missing.join(", ")}]`, "corrupt_recording");
   }

@@ -5,6 +5,7 @@
 
 import { inferChannelType, isMneEdfStim, uniqueChannelNames } from "./channels.js";
 import { RecordingError, decodeLatin1, isoUtc, daysInMonth, timeToSample } from "./util.js";
+import { pyFloat as pyFloatValue, pyIntText, pyStrRepr } from "./pyfmt.js";
 
 const TAL_LABELS = ["EDF Annotations", "BDF Annotations"];
 const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
@@ -34,20 +35,18 @@ function edfStr(bytes) {
   return nul >= 0 ? s.slice(0, nul) : s;
 }
 
-/** Python's int() of a header field (surrounding whitespace allowed). */
+/** Python's int() of a header field (surrounding whitespace allowed), with Python's message. */
 function pyInt(text) {
-  const t = text.trim();
-  if (!/^[+-]?\d+$/.test(t.replace(/_/g, ""))) throw new Error(`invalid literal for int(): '${text}'`);
-  return parseInt(t.replace(/_/g, ""), 10);
+  const t = pyIntText(text);
+  if (t === null) throw new Error(`invalid literal for int() with base 10: ${pyStrRepr(text)}`);
+  return Number(t);
 }
 
-/** Python's float() of a header field. */
+/** Python's float() of a header field, with Python's message. */
 function pyFloat(text) {
-  const t = text.trim();
-  if (!/^[+-]?(\d+\.?\d*([eE][+-]?\d+)?|\.\d+([eE][+-]?\d+)?|inf|infinity|nan)$/i.test(t)) {
-    throw new Error(`could not convert string to float: '${text}'`);
-  }
-  return Number(t.replace(/^([+-]?)inf(inity)?$/i, "$1Infinity"));
+  const v = pyFloatValue(text);
+  if (v === null) throw new Error(`could not convert string to float: ${pyStrRepr(text)}`);
+  return v;
 }
 
 /** The desktop's _field: latin-1, Unicode whitespace stripped. */

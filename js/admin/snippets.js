@@ -11,14 +11,16 @@
 import { h, clear } from '../ui/dom.js';
 import { clockText } from '../viewer/bounds.js';
 import { loadPart } from '../lazy.js';
-import { acceptFiles } from '../util.js';
+import { acceptFiles, channelList } from '../util.js';
 import { DEFAULT_SCALINGS } from '../api/demo_catalogue.js';
 import {
   actionButton, card, confirmInline, dataTable, field, loading, messageArea, numberInput, recordingName, select, textArea, textInput,
 } from './ui.js';
 
 const time = (s) => `${Number(s.start_s).toFixed(2)}–${Number(s.end_s).toFixed(2)} s`;
-const chans = (s) => (s.channels && s.channels.length ? s.channels.join(', ') : 'Every channel');
+/** A few channels as a plain list (F7, T7); many as runs in the montage's order ("180 channels: A1–F20"). */
+const chanText = (list, order = null) => (list.length <= 8 ? list.join(', ') : channelList(list, order));
+const chans = (s) => (s.channels && s.channels.length ? chanText(s.channels) : 'Every channel');
 
 /** The next free ID of the study team's snippets (s01, s02, …), as the study would choose it. */
 export function nextSnippetId(snippets) {
@@ -265,7 +267,7 @@ function snippetPreview(area, recs, current) {
     viewer.setView({ startS: 0, durationS: seg.durationS, nChannels: o.channels.length, firstChannel: 0 }, 'snippet');
     viewer.setGhost({ label: c.label, onset_sample: h0, duration_samples: h1 - h0, channels: outlined });
     status.textContent = `As trainees see it: ${(seg.durationS).toFixed(2)} s from ${(s0 / rec.sfreq).toFixed(2)} s of ${m.file_name}, `
-      + `the artifact outlined ${outlined.length ? `on ${outlined.join(', ')}` : 'on every channel'}.`;
+      + `the artifact outlined ${outlined.length ? `on ${chanText(outlined, o.channels.map((c) => c.name))}` : 'on every channel'}.`;
   }
   let timer = 0;
   const redraw = () => { clearTimeout(timer); timer = setTimeout(() => { draw(); }, 250); };

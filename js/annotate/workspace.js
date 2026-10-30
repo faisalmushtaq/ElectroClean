@@ -30,7 +30,7 @@ import { helpHtml, KEY_HINT, REVIEW_HINT, TOUCH_HINT, TOUCH_REVIEW_HINT, TOUCH_V
 import { edgeHalfWidthS } from '../eeg/synthetic.js';
 import { logger, keyName } from '../log/logger.js';
 import { annotationEvents, snapshotEvents } from '../log/annotation_events.js';
-import { channelsText, clamp, formatHms, friendlyDuration, local, plural, readableTextColour, UNDO_HINT, CTRL, debounce, touchFirst } from '../util.js';
+import { channelList, channelsText, clamp, formatHms, friendlyDuration, local, plural, readableTextColour, UNDO_HINT, CTRL, debounce, touchFirst } from '../util.js';
 import { isTyping } from '../ui/dom.js';
 import { displayCode } from '../catalogue.js';
 import { icon } from '../views/common.js';
@@ -492,11 +492,12 @@ export class Workspace {
     const legend = h('ul.channel-legend', { 'aria-label': 'What the colours mean' });
     const show = () => {
       clear(legend);
-      const items = legendOf(s.channels, this.channelColourMode);
+      const items = legendOf(s.channels, this.channelColourMode, undefined, this._positions());
       legend.hidden = !items.length;
       legend.append(...items.map((it) => h('li', {}, h('span.legend-line', { style: { background: it.colour } }),
         h('span', {}, it.group), h('span.caption', {}, String(it.count)))));
     };
+    this._showColourLegend = show;
     select.addEventListener('change', () => {
       this.channelColourMode = normaliseMode(select.value);
       local.set(key, this.channelColourMode);
@@ -510,8 +511,11 @@ export class Workspace {
   }
 
   _applyChannelColours() {
-    if (this.viewer) this.viewer.setChannelColours(channelColours(this.s.channels, this.channelColourMode));
+    if (this.viewer) this.viewer.setChannelColours(channelColours(this.s.channels, this.channelColourMode, this._positions()));
   }
+
+  /** The recording's own electrode positions on the map (a Map name -> {x, y}), or null. */
+  _positions() { return this.electrodes ? this.electrodes.positions : null; }
 
   _coverageBlock() {
     this.coverageText = h('p.heading.coverage-text');
@@ -1428,7 +1432,7 @@ export class Workspace {
     if (!this._checkEditable()) return;
     try {
       const a = this.store.setChannels(id, channels);
-      this.say(a.channels.length ? `${a.label}: channels ${a.channels.join(', ')}` : `${a.label}: now applies to the whole montage`);
+      this.say(a.channels.length ? `${a.label}: ${a.channels.length === 1 ? 'channel ' : a.channels.length <= 8 ? 'channels ' : ''}${channelList(a.channels, this.s.channels.map((c) => c.name))}` : `${a.label}: now applies to the whole montage`);
     } catch (exc) {
       inform('Channels not changed', exc.message);
     }
@@ -2474,7 +2478,12 @@ export class Workspace {
     const files = await sidecarsOf(src);
     const got = files.length ? await readElectrodes(files, this.s.recording.fileName) : null;
     if (this._destroyed) return;
-    if (got) this.electrodes = { positions: projectPositions(got.positions, got.system), fileName: got.fileName, system: got.system };
+    if (got) {
+      this.electrodes = { positions: projectPositions(got.positions, got.system), fileName: got.fileName, system: got.system };
+      // A cap named by numbers can now be coloured by region and side.
+      this._applyChannelColours();
+      if (this._showColourLegend) this._showColourLegend();
+    }
     const layout = mapLayout(this.s.channels, this.electrodes ? this.electrodes.positions : null);
     logger.event('electrode_positions', { source: layout.source, opened_from: (src && src.kind) || 'other',
       ...(layout.source === 'file' ? { n_placed: layout.points.filter((p) => !p.extra).length, coordinate_system: String(got.system || '').slice(0, 40) } : {}) });
@@ -2485,7 +2494,7 @@ export class Workspace {
     return {
       layout: mapLayout(this.s.channels, this.electrodes ? this.electrodes.positions : null),
       fileName: this.electrodes ? this.electrodes.fileName : null,
-      colours: channelColours(this.s.channels, this.channelColourMode),
+      colours: channelColours(this.s.channels, this.channelColourMode, this._positions()),
       storageKey: this._toolKey('channel_view'),
     };
   }
