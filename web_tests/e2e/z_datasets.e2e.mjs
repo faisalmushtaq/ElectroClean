@@ -156,7 +156,10 @@ async function flow(t, page, { people, folder, collide, study }) {
     await until(page, /Made the dataset No prefix/);
     await page.waitForFunction(() => /have the ID of a recording in another dataset/.test(document.querySelector('.admin-review')?.innerText || ''));
     assert.match(await text(page, '.admin-review'), /in the dataset Study recordings/);
-    assert.equal(await page.textContent('[data-log="register"]'), 'Nothing to add');
+    // (an earlier spec on the shared study server may have removed one of the study's recordings: then it is new here)
+    const n = await page.locator('.admin-review [data-elsewhere]').count();
+    assert.ok(n >= 1, 'IDs that belong to the built-in dataset are marked');
+    assert.equal(await page.textContent('[data-log="register"]'), n === 3 ? 'Nothing to add' : `Add ${3 - n} recording${3 - n === 1 ? '' : 's'}`);
     await shots(t, page, 'register_collision');
     await add.locator('.admin-field', { hasText: 'Dataset' }).locator('select').selectOption(datasetId);
   }
