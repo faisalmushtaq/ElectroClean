@@ -336,7 +336,14 @@ adjudication and analysis parts, which find them with `corrections.corrections_o
 the experts' sessions they may watch through "Watch an expert at work" (`js/replay/watch.js`), for now
 on the home page's training card. A trainee needs the recording's file on their own computer to
 watch, as for any replay: a study that wants to teach with replays should give trainees the files of
-the recordings the experts' sessions were on.
+the recordings the experts' sessions were on. Since the expert review of 30 October, trainees see an
+expert only on teaching recordings (`replay.teaching_recording`): the guided recordings of a
+training set with its own recordings, never a study recording, nor a practice or assessment
+recording, so that watching never touches the independence of anyone's annotations. A study that
+wants teaching replays therefore has an expert who consents annotate those guided recordings as
+training work on the set. The annotator of a version two experts corrected sees neither correction
+until the adjudication of their disagreements is finished, then the adjudicated version
+(`corrections.standing_of`).
 
 **7. Housekeeping.** The project's `ruff` settings give only the line length, so a recent `ruff`
 applies many style rules the code was never written to; `ruff check --select E,F,W,B` is the useful

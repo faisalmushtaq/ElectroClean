@@ -307,3 +307,72 @@ def test_the_annotator_sees_the_changes_when_the_study_shows_them(client: TestCl
     admin.admin_ok("settings_update", {"settings": {"review": {"show_corrections_to_annotators": True}}})
     saved.ok("post", "/submissions", {**submission(recordings, SUB1, [BLINK]), "revises": 1})
     assert saved.ok("get", "/me/feedback")["corrections"]["items"][0]["of_latest"] is False
+
+
+def test_a_reason_must_suit_its_change(client: TestClient, saved: Api, recordings: Path) -> None:
+    e01 = Api(client, "E01")
+    added = correction(recordings, 20, [BLINK, EMG, NEW], {NEW["annotation_id"]: "not_artifact"})
+    err = expert_error(e01, "correction_save", added, 400, "bad_request")
+    assert err["message"].startswith('"Not an artifact" is not a reason for an added mark')
+    removed = correction(recordings, 21, [BLINK], {EMG["annotation_id"]: "missed"})
+    assert "a removed mark" in expert_error(e01, "correction_save", removed, 400, "bad_request")["message"]
+    changed = correction(recordings, 22, [{**BLINK, "label": "EMG-artifact"}, EMG], {BLINK["annotation_id"]: "missed"})
+    expert_error(e01, "correction_save", changed, 400, "bad_request")
+    assert sorted(corrections.REASONS_FOR) == sorted(corrections.CHANGES)
+    assert all(set(v) <= set(corrections.REASONS) for v in corrections.REASONS_FOR.values())
+
+
+def test_two_experts_disagree_the_annotator_sees_neither_version_until_it_is_settled(
+        client: TestClient, saved: Api, admin: Api, recordings: Path) -> None:
+    """Finding 3 of the expert review: never one expert's version where experts disagree; the adjudicated corrected
+    version and its decisions once the adjudication is finished."""
+    from tests.web_helpers import DEMO_PASSWORD
+
+    admin.admin_ok("user_add", {"annotator_id": "E03", "display_name": "Expert three", "password": DEMO_PASSWORD,
+                                "roles": ["expert"]})
+    e01, e03 = Api(client, "E01"), Api(client, "E03")
+    move = "Eye-movement-artifact"
+    expert_ok(e01, "correction_save", correction(recordings, 30, [{**BLINK, "label": move}, EMG],
+                                                 {BLINK["annotation_id"]: "wrong_type"}, note="Look at F7"))
+    single = saved.ok("get", "/me/feedback")["corrections"]["items"]
+    assert [(i["standing"], i["counts"]["changed"]) for i in single] == [("single", 1)]
+    expert_ok(admin, "correction_save", correction(recordings, 31, [{**BLINK, "label": "EMG-artifact"}, EMG],
+                                                   {BLINK["annotation_id"]: "wrong_type"}))
+    # pending: who corrected it, and nothing of what either changed
+    items = saved.ok("get", "/me/feedback")["corrections"]["items"]
+    assert len(items) == 1, "one item for the version corrected"
+    item = items[0]
+    assert item["standing"] == "pending" and item["changes"] == [] and item["overall_note"] == ""
+    assert [c["corrector_id"] for c in item["correctors"]] == ["E01", "ADMIN"]
+    err = expert_error(saved, "my_correction_get", {"correction_id": cid(30)}, 409, "pending_adjudication")
+    assert "disagree in places" in err["message"]
+    expert_error(saved, "my_correction_get", {"correction_id": cid(31)}, 409, "pending_adjudication")
+    # E03 adjudicates and keeps E01's version of the blink
+    from electrotag.web.adjudication import unit_id_for
+
+    uid = unit_id_for("corrections", "A01", SUB1, "1")
+    got = expert_ok(e03, "adjudication_start", {"unit_id": uid})
+    assert len(got["conflicts"]) == 1
+    c = got["conflicts"][0]
+    letter = next(m["letter"] for m in c["marks"] if m["annotator_id"] == "E01")
+    expert_ok(e03, "adjudication_decide", {"unit_id": uid, "conflict_id": c["conflict_id"], "choice": letter,
+                                           "reason_code": "type_evidence", "reason": "the eyes move sideways"})
+    expert_ok(e03, "adjudication_finish", {"unit_id": uid})
+    item = saved.ok("get", "/me/feedback")["corrections"]["items"][0]
+    assert item["standing"] == "adjudicated" and item["counts"] == {"added": 0, "removed": 0, "changed": 1}
+    assert item["adjudication"]["adjudicator_id"] == "E03" and item["adjudication"]["n_conflicts"] == 1
+    change = item["changes"][0]
+    assert change["annotation_id"] == BLINK["annotation_id"] and change["after"]["label"] == move
+    assert change["decision"]["kept"] == ["E01"] and change["decision"]["reason"] == "the eyes move sideways"
+    assert change["reason_text"] == "Settled by the adjudicator"
+    assert {r["corrector_id"] for r in change["reasons"]} == {"E01", "ADMIN"}
+    row = item["adjudication"]["conflicts"][0]
+    assert [v["corrector_id"] for v in row["versions"]] == sorted(["E01", "ADMIN"], key=lambda p: next(
+        m["letter"] for m in c["marks"] if m["annotator_id"] == p))
+    assert row["yours"][0]["label"] == "Eye-blink-artifact" and row["decision"]["marks"][0]["label"] == move
+    shown = expert_ok(saved, "my_correction_get", {"correction_id": cid(31)})
+    assert shown["standing"] == "adjudicated"
+    assert sorted((a["annotation_id"], a["label"]) for a in shown["annotations"]) == sorted(
+        [(BLINK["annotation_id"], move), (EMG["annotation_id"], "EMG-artifact")]), "the adjudicated corrected version"
+    assert [a["label"] for a in shown["original"]] == ["Eye-blink-artifact", "EMG-artifact"]
+    assert len(shown["changes"]) == 1 and shown["overall_note"].endswith("Look at F7")

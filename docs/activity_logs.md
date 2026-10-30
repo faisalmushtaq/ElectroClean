@@ -189,8 +189,12 @@ the note's text, and `via`) records each reason given; `correction_submitted` (`
 `correction_id`, `n_corrections_of_version`) and `correction_left` (`n_changes`, `kept`, whether the
 work stays in the browser) end it, and `state` with `original_layer` records the original shown or
 hidden. The annotator's view of a correction (docs/web/using.md, "Corrections of your work") gives
-`correction_feedback_shown` (`correction_id`, `recording_id`, `attempt`, `n_changes`) and
-`correction_feedback_item_jumped` (`correction_id`, `change`, `reason`, `item`). A replay of a
+`correction_feedback_shown` (`correction_id`, `recording_id`, `attempt`, `n_changes`, and
+`standing`: `single`, or `adjudicated` once several experts' corrections were settled) and
+`correction_feedback_item_jumped` (`correction_id`, `change`, `reason`, `item`); opening Where the
+experts disagreed logs `correction_outcome_opened` (`places`, and `via` from the history). The ? key
+of the correction view, the annotator's view of a correction and the replay logs `key_sheet_shown`
+(`view`: `correction`, `correction_feedback` or `replay`). A replay of a
 session (docs/web/admin.md, "Replaying a session") is logged in the watcher's log as
 `replay_opened` (`annotator_id`, `recording_id`, `n_segments`, `n_events`, `attempt`),
 `replay_control` (`action`: `play`, `pause`, `speed`, `skip_pauses`, `follow`, `seek`, `start`,

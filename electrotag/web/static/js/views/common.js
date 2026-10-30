@@ -51,7 +51,9 @@ export function appHeader(app, { title = '', admin = false, expert = false, tool
   const me = app.me;
   const study = me && me.study ? me.study.name : app.backend && app.backend.health ? app.backend.health.study : '';
   const switcher = admin || expert
-    ? h('button.btn.quiet.admin-switch', { type: 'button', 'data-log': admin ? 'leave-admin' : 'leave-expert', onclick: () => app.showHome() }, 'My recordings')
+    ? [h('button.btn.quiet.admin-switch', { type: 'button', 'data-log': admin ? 'leave-admin' : 'leave-expert', onclick: () => app.showHome() }, 'My recordings'),
+      // an administrator in the expert area goes back to the admin area in one press
+      expert && app.isAdmin ? h('button.btn.quiet.admin-switch', { type: 'button', 'data-log': 'expert-to-admin', onclick: () => app.showAdmin('admin') }, 'Admin') : null]
     : app.isAdmin
       ? h('button.btn.quiet.admin-switch', { type: 'button', 'data-log': 'admin', onclick: () => app.showAdmin('admin') }, 'Admin')
       : app.isExpert

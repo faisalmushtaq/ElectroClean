@@ -1320,14 +1320,19 @@ button.review-line { text-align: left; font: var(--t-14); }
 .correction-progress { margin: 0; }
 .correction-row .review-item-head { flex: 1 1 100%; flex-wrap: wrap; }
 .correction-text { flex: 1 1 160px; min-width: 0; }
-.correction-kind { height: 20px; padding: 0 8px; font: var(--t-12); }
-.correction-row[data-change="added"] .correction-kind::before { background: var(--accent); }
-.correction-row[data-change="removed"] .correction-kind::before { background: var(--text-secondary); }
 .correction-row.needs-reason { outline: 2px solid var(--warning-bar); outline-offset: -2px; background: var(--warning-bg); }
 .reason-chips { display: flex; flex: 1 1 100%; flex-wrap: wrap; gap: 4px; padding: 0; background: transparent; }
-.reason-chips .seg { background: var(--fill); }
-@media (hover: hover) { .reason-chips .seg:hover:not(:disabled):not([aria-pressed="true"]) { background: var(--fill-hover); } }
-.reason-chips .seg[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+.reason-chips .seg { display: inline-flex; align-items: center; gap: 6px; background: var(--fill); }
+@media (hover: hover) { .reason-chips .seg:hover:not(:disabled):not([aria-checked="true"]) { background: var(--fill-hover); } }
+.reason-chips .seg[aria-checked="true"] { background: var(--accent-soft); color: var(--accent); }
+/* A reason's key on its chip (its number), and the keys named in the replay's labels: left out on a touch screen. */
+.key-hint { color: var(--text-secondary); font-variant-numeric: tabular-nums lining-nums; }
+.reason-chips .seg[aria-checked="true"] .key-hint { color: inherit; }
+@media (pointer: coarse) {
+  .key-hint, .review-keys:empty { display: none; }
+  .reason-chips .seg, .replay-speeds .seg { height: 40px; min-width: 40px; }
+  .correction-feedback-row { min-height: 40px; }
+}
 .correction-others { margin: 8px 0; }
 .correction-feedback .feedback-chip { border-color: var(--accent); color: var(--accent); }
 .replay-bar { display: flex; flex-direction: column; gap: 8px; padding: 8px 8px 0 0; }
@@ -1349,10 +1354,26 @@ button.review-line { text-align: left; font: var(--t-14); }
 .replay-recent li { padding: 4px 0; border-bottom: 1px solid var(--hairline); font: var(--t-14); }
 .replay-recent li.change { color: var(--accent); }
 .replay-at { color: var(--text-secondary); font-variant-numeric: tabular-nums lining-nums; }
-.replay-end { margin-top: 12px; }
+.replay-end { margin: 8px 0; }
+.replay-times { color: var(--text-secondary); font-variant-numeric: tabular-nums lining-nums; }
 .watch-list { list-style: none; margin: 8px 0 0; padding: 0; }
 .watch-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--hairline); }
 .corrected-line { text-align: left; }
+/* The experts' disagreements over a correction, as they were settled (js/expert/settled.js): on the home page's
+   history and in the annotator's view of the correction, in calm blue. */
+.settled-card { margin: 4px 0 0; font: var(--t-14); }
+.settled-card summary { align-items: flex-start; color: var(--accent); }
+.settled-card summary .caption { color: var(--text-secondary); }
+.settled-list { margin: 8px 0 0; padding-left: 24px; }
+.settled-open { text-align: left; }
+.settled-row { padding: 4px 0; }
+.settled-row .block { display: block; }
+.settled-row .outcome-head b { color: var(--accent); }
+.key-sheet table.keys { border-collapse: collapse; }
+.key-sheet table.keys td { padding: 4px 16px 4px 0; vertical-align: top; font: var(--t-14); }
+.key-sheet table.keys td:first-child { width: 1%; white-space: nowrap; }
+.key-sheet table.keys th { padding: 16px 0 4px; text-align: left; font: var(--t-16); font-weight: 600; }
+.key-sheet table.keys tr:first-child th { padding-top: 0; }
 @media (pointer: coarse) { .replay-scrub { height: 40px; } .replay-track { top: 18px; } }
 
 /* Correct the marks (js/training/correct.js, js/admin/planted.js, js/expert/planted.js) */

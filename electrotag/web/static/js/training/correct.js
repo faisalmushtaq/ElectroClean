@@ -13,7 +13,7 @@
 // planted_reference_layer {shown}, planted_item_jumped {kind, fixed}, planted_restarted, planted_result_shown
 // {fixed, n_errors, new_mistakes}.
 
-import { h, clear } from '../ui/dom.js';
+import { h, append, clear } from '../ui/dom.js';
 import { showDialog } from '../ui/dialog.js';
 import { logger } from '../log/logger.js';
 import { icon } from '../views/common.js';
@@ -32,7 +32,7 @@ export function resultList(score, onJump = null) {
       icon(fixed ? 'check' : 'close'),
       h('span.planted-text', {}, h('b', {}, `${KIND_WORDS[it.kind] || it.kind}${fixed ? ': fixed' : ''}`), ' ', it.detail || ''));
     if (onJump) {
-      li.append(h('button.btn.quiet.small', { type: 'button', 'data-log': 'planted-jump', onclick: () => onJump(it, fixed) }, 'Show'));
+      append(li, [h('button.btn.quiet.small', { type: 'button', 'data-log': 'planted-jump', onclick: () => onJump(it, fixed) }, 'Show')]);
     }
     return li;
   };
@@ -117,7 +117,7 @@ export class CorrectPanel {
     this.score = score;
     this._feedback(score.message, score.fixed === score.n_errors && !score.new_mistakes ? 'success' : 'banner');
     clear(this.resultHost);
-    this.resultHost.append(resultList(score, (it, fixed) => this.jump(it, fixed)));
+    append(this.resultHost, [resultList(score, (it, fixed) => this.jump(it, fixed))]);
     logger.event('planted_checked', { fixed: score.fixed, n_errors: score.n_errors, new_mistakes: score.new_mistakes });
     return score;
   }

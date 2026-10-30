@@ -264,3 +264,57 @@ test('a sandbox kept by an earlier version gets roles, the expert and the newer 
   up.users = up.users.filter((u) => u.annotator_id !== 'E01');
   assert.equal(upgradeAdminState(up).users.some((u) => u.annotator_id === 'E01'), false);
 });
+
+test('the sandbox, as the study: a trainee never watches an expert on a recording that can be study work', async () => {
+  // Finding 4 of the expert review (independence of annotations). The sandbox's training recordings are its study
+  // recordings too, so none of its recordings is a teaching recording: E01's sessions are listed for nobody.
+  const storage = memory();
+  const b = new DemoBackend({ storage, tokens: memory() });
+  await b.login('E01', 'demo');
+  await b.expert('replay_consent_set', { teaching: true });
+  const rid = TRAINING_SET.guided[0].rid;
+  const v = (await b.openVisit({ client: {}, programme: false, mode: 'guided', context_id: 'example' })).visit_id;
+  await b.sendEvents(v, [{ t: 1, type: 'recording_opened', recording: rid, window_no: 1, mode: 'guided', session_id: '1'.repeat(32) },
+    { t: 2, type: 'recording_finished', recording: rid, window_no: 1 }]);
+  for (const who of ['T01', 'A01']) {
+    await b.login(who, 'demo');
+    assert.deepEqual(await b.expert('teaching_list', {}), { shown: true, sessions: [] });
+    for (const body of [{ annotator_id: 'E01', recording_id: rid }, { annotator_id: 'E01', recording_id: rid, mode: 'guided', context_id: 'example' }]) {
+      await assert.rejects(() => b.expert('replay_index_get', body), (x) => x.status === 403 && /your own judgement/.test(x.message));
+    }
+    for (const body of [{ visit_id: v, window_no: 1 }, { visit_id: v }]) {
+      await assert.rejects(() => b.expert('replay_events_get', body), (x) => x.status === 403 && x.code === 'forbidden');
+    }
+  }
+  await b.login('ADMIN', 'demo'); // the study team replays every session
+  assert.equal((await b.expert('replay_index_get', { annotator_id: 'E01', recording_id: rid, mode: 'guided', context_id: 'example' })).segments.length, 1);
+});
+
+test('the sandbox, as the study: two experts\' corrections of one version are shown to the annotator as pending', async () => {
+  const storage = memory();
+  const b = new DemoBackend({ storage, tokens: memory() });
+  await b.login('A01', 'demo');
+  const body = await matchBody(TRAINING_SET.guided[0].rid);
+  const m = await b.match(body);
+  const mark = { annotation_id: 'a'.repeat(32), label: 'Eye-blink-artifact', onset_sample: 500, duration_samples: 100, channels: [], created_at: '', modified_at: '' };
+  await b.submit({ recording_id: m.recording_id, mode: 'standard', context_id: '', annotations: [mark], session: {}, sha256: body.sha256 });
+  const fix = (n, label) => ({ correction_id: n.repeat(32), annotator_id: 'A01', recording_id: m.recording_id, attempt: 1, sha256: body.sha256, session: { elapsed_s: 3 },
+    annotations: [{ ...mark, label }], changes: [{ annotation_id: mark.annotation_id, reason: 'wrong_type' }] });
+  await b.login('E01', 'demo');
+  await assert.rejects(() => b.expert('correction_save', { ...fix('c', 'EMG-artifact'), changes: [{ annotation_id: mark.annotation_id, reason: 'missed' }] }),
+    (x) => x.status === 400 && /is not a reason for a changed mark/.test(x.message));
+  await b.expert('correction_save', fix('c', 'EMG-artifact'));
+  await b.login('A01', 'demo');
+  let items = (await b.myFeedback()).corrections.items;
+  assert.deepEqual(items.map((i) => [i.standing, i.changes.length]), [['single', 1]]);
+  assert.equal((await b.expert('my_correction_get', { correction_id: 'c'.repeat(32) })).standing, 'single');
+  await b.login('ADMIN', 'demo');
+  await b.expert('correction_save', fix('d', 'Eye-movement-artifact'));
+  await b.login('A01', 'demo');
+  items = (await b.myFeedback()).corrections.items;
+  assert.equal(items.length, 1, 'one item for the version');
+  assert.equal(items[0].standing, 'pending');
+  assert.deepEqual(items[0].changes, []);
+  assert.deepEqual(items[0].correctors.map((p) => p.corrector_id), ['E01', 'ADMIN']);
+  await assert.rejects(() => b.expert('my_correction_get', { correction_id: 'c'.repeat(32) }), (x) => x.status === 409 && x.code === 'pending_adjudication');
+});

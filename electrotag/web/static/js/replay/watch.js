@@ -1,7 +1,8 @@
 // "Watch an expert": the way in for trainees to replays of experts' sessions (docs/web/using.md,
 // "Watching an expert at work"). Only the sessions of experts who agreed to their sessions being used
-// for teaching are listed (teaching_list), and only while the study shows them to trainees; the study
-// checks both again for every replay. The entry is one small button (watchExpertEntry), for the
+// for teaching are listed (teaching_list), only on the training recordings for learning with the
+// experts (never a recording that can be study work, so annotations stay independent), and only while
+// the study shows them to trainees; the study checks all of this again for every replay. The entry is one small button (watchExpertEntry), for the
 // training path or the home page; it lists the sessions in a dialog, and Watch opens the recording
 // from this computer, as every replay does.
 
@@ -33,7 +34,7 @@ export async function openWatchList(app) {
   }
   if (!got.shown || !got.sessions.length) {
     await inform('Watch an expert', got.shown
-      ? 'No expert has a session to show yet. Sessions appear here once an expert agrees to their work being used for teaching.'
+      ? 'No expert has a session to show yet. Sessions appear here once an expert who agrees to their work being used for teaching has worked on a training recording for learning with the experts.'
       : 'This study does not show experts\' sessions to trainees at the moment.');
     return null;
   }
@@ -48,7 +49,7 @@ export async function openWatchList(app) {
   if (chosen === null || chosen === undefined) return null;
   const s = got.sessions[chosen];
   const { startReplay } = await import('../expert/work.js');
-  return startReplay(app, { annotator_id: s.annotator_id, recording_id: s.recording_id, attempt: s.attempt }, null);
+  return startReplay(app, { annotator_id: s.annotator_id, recording_id: s.recording_id, attempt: s.attempt, mode: s.mode, context_id: s.context_id }, null);
 }
 
 /** The small entry: "Watch an expert at work", or null when the study shows trainees no experts' sessions. */

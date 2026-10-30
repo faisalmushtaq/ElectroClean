@@ -17,7 +17,8 @@ pytest.importorskip("httpx")
 from fastapi.testclient import TestClient  # noqa: E402
 
 from electrotag.web.app import create_app  # noqa: E402
-from tests.web_helpers import SUB1, SUB2, Api, ann, copy_demo, make_template, submission  # noqa: E402
+from tests.web_helpers import (  # noqa: E402
+    GUIDED1, PRACTICE1, SUB1, SUB2, Api, ann, copy_demo, make_template, submission)
 
 BLINK = ann("b" * 32, "Eye-blink-artifact", 500, 100, ["Fp1", "Fp2"])
 EMG = ann("c" * 32, "EMG-artifact", 3000, 250, [])
@@ -70,11 +71,13 @@ def expert_error(api: Api, op: str, body: dict, status: int, code: str) -> dict:
 
 
 def session(api: Api, rid: str, window: int, session_id: str, *, snapshot: list | None = None,
-            created: list | None = None, finish: bool = True, pointers: int = 3) -> str:
+            created: list | None = None, finish: bool = True, pointers: int = 3, mode: str = "standard",
+            context_id: str = "") -> str:
     """A visit in which ``rid`` is opened in window ``window``, marks are made and the recording finished."""
-    v = api.ok("post", "/visits", {"client": {"user_agent": "pytest"}})["visit_id"]
+    v = api.ok("post", "/visits", {"client": {"user_agent": "pytest"}, "mode": mode,
+                                   "context_id": context_id})["visit_id"]
     ctx = {"recording": rid, "window_no": window}
-    ev = [{"t": 1.0, "type": "recording_opened", **ctx, "session_id": session_id, "mode": "standard",
+    ev = [{"t": 1.0, "type": "recording_opened", **ctx, "session_id": session_id, "mode": mode,
            "annotations_restored": len(snapshot or [])}]
     if snapshot is not None:
         ev.append({"t": 1.0, "type": "annotations_snapshot", **ctx, "part": 1, "n_parts": 1,
@@ -95,8 +98,9 @@ def session(api: Api, rid: str, window: int, session_id: str, *, snapshot: list 
     return v
 
 
-def save(api: Api, recordings: Path, rid: str, annotations: list, session_id: str | None, revises: int | None = None):
-    body = submission(recordings, rid, annotations)
+def save(api: Api, recordings: Path, rid: str, annotations: list, session_id: str | None, revises: int | None = None,
+         mode: str = "standard", context_id: str = ""):
+    body = submission(recordings, rid, annotations, mode, context_id)
     if session_id:
         body["session"]["session_id"] = session_id
     if revises:
@@ -170,6 +174,7 @@ def test_who_may_watch(client: TestClient, admin: Api, recordings: Path) -> None
     admin.admin_ok("assign", {"annotator_ids": ["E01"], "recording_ids": [SUB1]})
     ve = session(e01, SUB1, 1, S2, created=[BLINK])
     save(e01, recordings, SUB1, [BLINK], S2)
+    assert expert_ok(e01, "replay_events_get", {"visit_id": ve, "window_no": 1})["events"]
     # experts and administrators replay anyone
     assert expert_ok(admin, "replay_index_get", {"annotator_id": "A01", "recording_id": SUB1})["segments"]
     expert_ok(e01, "replay_events_get", {"visit_id": va, "window_no": 1})
@@ -180,15 +185,22 @@ def test_who_may_watch(client: TestClient, admin: Api, recordings: Path) -> None
     assert expert_ok(t01, "teaching_list") == {"shown": True, "sessions": []}
     # once the expert agrees, trainees may watch the expert's sessions, and only those
     expert_ok(e01, "replay_consent_set", {"teaching": True})
+    teaching_sessions(client, admin, recordings, e01)
     listed = expert_ok(t01, "teaching_list")["sessions"]
-    assert [(s["annotator_id"], s["recording_id"], s["attempt"]) for s in listed] == [("E01", SUB1, 1)]
-    seg = expert_ok(t01, "replay_index_get", {"annotator_id": "E01", "recording_id": SUB1})["segments"]
-    assert [(s["visit_id"], s["attempt"]) for s in seg] == [(ve, 1)]
-    assert expert_ok(t01, "replay_events_get", {"visit_id": ve, "window_no": 1})["events"]
+    assert [(s["annotator_id"], s["recording_id"], s["mode"], s["context_id"], s["attempt"]) for s in listed] == [
+        ("E01", GUIDED1, "practice", "example", 1)], "the guided training recording only: never a study recording"
+    seg = expert_ok(t01, "replay_index_get", {"annotator_id": "E01", "recording_id": GUIDED1, "mode": "practice",
+                                              "context_id": "example"})
+    assert [s["attempt"] for s in seg["segments"]] == [1] and seg["saved"]["attempt"] == 1
+    assert [a["label"] for a in seg["saved"]["annotations"]] == ["Eye-blink-artifact"]
+    vt = seg["segments"][0]["visit_id"]
+    assert expert_ok(t01, "replay_events_get", {"visit_id": vt, "window_no": 1})["events"]
+    expert_error(t01, "replay_events_get", {"visit_id": vt}, 403, "forbidden")  # one segment at a time
     expert_error(t01, "replay_events_get", {"visit_id": va, "window_no": 1}, 403, "forbidden")
     # the study's settings: trainees no longer, then nobody
     admin.admin_ok("settings_update", {"settings": {"replay": {"trainees_watch_experts": False}}})
-    expert_error(t01, "replay_index_get", {"annotator_id": "E01", "recording_id": SUB1}, 403, "forbidden")
+    expert_error(t01, "replay_index_get", {"annotator_id": "E01", "recording_id": GUIDED1, "mode": "practice",
+                                           "context_id": "example"}, 403, "forbidden")
     assert expert_ok(t01, "teaching_list") == {"shown": False, "sessions": []}
     assert expert_ok(e01, "replay_index_get", {"annotator_id": "A01", "recording_id": SUB1})["segments"]
     admin.admin_ok("settings_update", {"settings": {"replay": {"enabled": False}}})
@@ -196,3 +208,45 @@ def test_who_may_watch(client: TestClient, admin: Api, recordings: Path) -> None
     # the operations that are open to everyone still check what they are given
     expert_error(t01, "replay_index_get", {"annotator_id": "A01"}, 400, "bad_request")
     expert_error(t01, "replay_consent_get", {}, 403, "forbidden")
+
+
+def teaching_sessions(client: TestClient, admin: Api, recordings: Path, e01: Api) -> None:
+    """E01 annotates the example set's guided recording and its practice recording, in practice mode."""
+    admin.admin_ok("assign", {"annotator_ids": ["E01"], "recording_ids": [GUIDED1, PRACTICE1], "mode": "practice",
+                              "context_id": "example"})
+    session(e01, GUIDED1, 1, "4" * 32, created=[BLINK], mode="practice", context_id="example")
+    save(e01, recordings, GUIDED1, [BLINK], "4" * 32, mode="practice", context_id="example")
+    session(e01, PRACTICE1, 1, "5" * 32, created=[EMG], mode="practice", context_id="example")
+    save(e01, recordings, PRACTICE1, [EMG], "5" * 32, mode="practice", context_id="example")
+
+
+def test_trainees_never_watch_an_expert_on_study_work(client: TestClient, admin: Api, recordings: Path) -> None:
+    """Independence of annotations: a trainee or annotator never watches, nor reads the events of, an expert's
+    session on a recording they hold or may be given as study work, nor on a practice or assessment recording."""
+    from electrotag.web.manifest import SCOPE_STUDY, set_scope
+
+    e01, a02, t01 = Api(client, "E01"), Api(client, "A02"), Api(client, "T01")
+    admin.admin_ok("assign", {"annotator_ids": ["E01"], "recording_ids": [SUB2]})
+    ve = session(e01, SUB2, 1, S2, created=[BLINK])
+    save(e01, recordings, SUB2, [BLINK], S2)
+    expert_ok(e01, "replay_consent_set", {"teaching": True})
+    teaching_sessions(client, admin, recordings, e01)
+    for who in (a02, t01):  # A02 holds SUB2 as study work; T01 may be given it once trained
+        assert [s["recording_id"] for s in expert_ok(who, "teaching_list")["sessions"]] == [GUIDED1]
+        r = expert_error(who, "replay_index_get", {"annotator_id": "E01", "recording_id": SUB2}, 403, "forbidden")
+        assert "your own judgement" in r["message"]
+        expert_error(who, "replay_events_get", {"visit_id": ve, "window_no": 1}, 403, "forbidden")
+        expert_error(who, "replay_events_get", {"visit_id": ve}, 403, "forbidden")
+        # the practice recording would give the practice's answers away
+        expert_error(who, "replay_index_get", {"annotator_id": "E01", "recording_id": PRACTICE1, "mode": "practice",
+                                               "context_id": "example"}, 403, "forbidden")
+    # the same file registered in the study under another name: never shown for teaching
+    store = client.app.state.store
+    m = dict(store.manifest(set_scope("example"), GUIDED1))
+    store.add_manifest({**m, "scope": SCOPE_STUDY, "recording_id": "sub-copy/eeg/sub-copy_task-example_eeg.vhdr"})
+    assert expert_ok(t01, "teaching_list")["sessions"] == []
+    expert_error(t01, "replay_index_get", {"annotator_id": "E01", "recording_id": GUIDED1, "mode": "practice",
+                                           "context_id": "example"}, 403, "forbidden")
+    # experts and administrators still replay every session
+    assert expert_ok(admin, "replay_index_get", {"annotator_id": "E01", "recording_id": SUB2})["segments"]
+    assert expert_ok(admin, "replay_events_get", {"visit_id": ve})["events"]

@@ -143,11 +143,20 @@ under the recording's name.
 To see the correction, choose that line and open the same file from your computer. The corrected
 version opens to read, with your own marks drawn as dashed outlines where they differ from it, and
 the side panel lists each change with the expert's reason and note, in the order of the recording,
-in calm blue. N and P, or a click on a change, go from one change to the next. When the study takes
-revisions and the correction is of your latest version, Open to revise starts a revision of your
-work; it is for you to judge what to change. When two experts corrected the same version, the panel
-says so: the study compares their corrections and decides where they disagree. Some studies keep
-corrections from the annotators, and then none of this appears.
+in calm blue. N and P, or a click on a change, go from one change to the next, and ? lists the keys.
+When the study takes revisions and the correction is of your latest version, Open to revise starts a
+revision of your work; it is for you to judge what to change. Some studies keep corrections from the
+annotators, and then none of this appears.
+
+Sometimes two experts correct the same version and disagree in places. Until the study has settled
+where they disagree, your history says "Corrected by Expert one and Expert two, who disagree in
+places: the study is settling it", and shows neither expert's version, so that you never learn from a
+change the study may not keep. Once an expert has decided each place, the line reads "Corrected by
+Expert one and Expert two, settled by Expert three: 2 changes", and the corrected version you open is
+the settled one: each change gives the experts' reason where they agreed, and the decision and its
+reason where they did not. Below the line, Where the experts disagreed shows each of those places
+without opening the recording: what you had marked, what each expert made of it, what was kept and
+why. Your own files stay exactly as you saved them.
 
 ## Decisions on your disagreements
 
@@ -775,17 +784,19 @@ recordings of your training are counted on the training path, apart from the stu
 ### Watching an expert at work
 
 When the study shows experts' sessions to trainees, Watch an expert at work, on the Learn with the
-experts stage of your training path, lists the recordings you may watch: those of experts who agreed to
-their sessions being used for teaching. Watch, then open the recording's file from your computer as
+experts stage of your training path, lists the recordings you may watch: training recordings for
+learning with the experts, on which experts who agreed to their sessions being used for teaching have
+worked. You never see an expert at work on a recording of the study itself, which you may be given to
+annotate on your own. Watch, then open the recording's file from your computer as
 you would to annotate it (your study team gives you the files for this), and the expert's session
 plays back on the EEG: the view moves as theirs did, a small blue ring shows their pointer, their
 annotations appear as they made them, and a line under the EEG says what they did ("Pressed M: Mark
 start, then end", "Created Eye-blink-artifact by dragging on the EEG"). Space plays and pauses, - and
-= change the speed, the , and . keys step from one event to the next, < and > from one change of the
-annotations to the next, and Home goes back to the start; Skip pauses (I) shortens the moments
+= change the speed, the , and . keys step from one event to the next, < and > (or N and P) from one
+change of the annotations to the next, and Home goes back to the start; Skip pauses (I) shortens the moments
 when nothing happened, and when you move through the EEG yourself, Follow again (F) goes back to
-the expert's view. Notes and anything the expert typed are never recorded, so a note shows only its
-length. Back returns to your home page.
+the expert's view; ? lists these keys. Notes and anything the expert typed are never recorded, so a
+note shows only its length. Back returns to your home page.
 
 ## The short-segment quiz
 

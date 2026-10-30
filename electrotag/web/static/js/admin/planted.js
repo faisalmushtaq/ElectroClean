@@ -6,7 +6,7 @@
 // the expert channel, which administrators use too: planted_get, set_planted_make, set_planted_from and
 // set_planted_remove. Used by the expert area's Correct the marks and by Training's Manage.
 
-import { h, clear } from '../ui/dom.js';
+import { h, append, clear } from '../ui/dom.js';
 import { logger } from '../log/logger.js';
 import { actionButton, card, chip, confirmInline, dataTable, field, loading, messageArea, numberInput } from './ui.js';
 
@@ -77,7 +77,7 @@ export function plantedPanel({ api, setId, recordingId, onTry, onChanged = null 
       const out = await api.write('set_planted_make', { set_id: setId, recording_id: recordingId,
         ...makeBody(seed.value, Object.fromEntries(KINDS.map((k) => [k, counts[k].value]))) });
       logger.event('planted_made', { set_id: setId, n_errors: out.planted.n_errors, capped: out.planted.capped });
-      await load(['success', `Made: ${madeText(out.planted)}${(out.warnings || []).length ? ` ${out.warnings.join(' ')}` : ''}`]);
+      await load(['success', `The exercise is made.${(out.warnings || []).length ? ` ${out.warnings.join(' ')}` : ''}`]);
       if (onChanged) onChanged();
     } });
     const file = h('input', { type: 'file', accept: '.json,application/json', 'aria-label': 'An annotation file with deliberate mistakes' });
@@ -88,10 +88,10 @@ export function plantedPanel({ api, setId, recordingId, onTry, onChanged = null 
       try { doc = JSON.parse(await f.text()); } catch { throw new Error(`${f.name} is not an annotation file (it is not JSON).`); }
       const out = await api.write('set_planted_from', { set_id: setId, recording_id: recordingId, source: { kind: 'document', document: doc } });
       logger.event('planted_made', { set_id: setId, n_errors: out.planted.n_errors, from: 'document' });
-      await load(['success', `Made from ${f.name}: ${madeText(out.planted)}`]);
+      await load(['success', `The exercise is made from ${f.name}.`]);
       if (onChanged) onChanged();
     } });
-    body.append(
+    append(body, [ // append() leaves out the parts this state has not got (body.append would write "null")
       h('p', {}, madeText(p)),
       p && p.stale ? h('div.banner', {}, 'The reference of this recording was replaced after the exercise was made, so trainees are not given it. Make it again.') : null,
       ...(p && p.capped ? (p.notes || []).map((n) => h('p.caption', {}, n)) : []),
@@ -109,7 +109,7 @@ export function plantedPanel({ api, setId, recordingId, onTry, onChanged = null 
         h('p.caption', {}, 'An expert can make the exercise themselves: annotate the recording with the mistakes they want trainees to find, save the '
           + '_annotations.json, and give it here. The study finds the mistakes by comparing it with the reference.'),
         h('div.row.wrap', {}, file, fromFile)),
-      removeHost);
+      removeHost]);
   };
   const load = async (note = null) => {
     msg.clear();

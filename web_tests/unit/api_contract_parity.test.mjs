@@ -319,6 +319,7 @@ async function script(call) {
     changes: [{ annotation_id: B1.annotation_id, reason: 'wrong_type', note: 'a slow roll' }, { annotation_id: C1.annotation_id, reason: 'missed' }], overall_note: 'Look at F7', ...extra });
   await call('expert correction_save (a reason missing)', (s) => s.b.expert('correction_save', correction(s, { changes: [{ annotation_id: C1.annotation_id, reason: 'missed' }] })));
   await call('expert correction_save (not a reason)', (s) => s.b.expert('correction_save', correction(s, { changes: [{ annotation_id: C1.annotation_id, reason: 'lunch' }] })));
+  await call('expert correction_save (a reason that does not suit the change)', (s) => s.b.expert('correction_save', correction(s, { changes: [{ annotation_id: B1.annotation_id, reason: 'wrong_type' }, { annotation_id: C1.annotation_id, reason: 'not_artifact' }] })));
   await call('expert correction_save (unchanged)', (s) => s.b.expert('correction_save', correction(s, { annotations: [B1] })));
   await call('expert correction_save (an older version)', (s) => s.b.expert('correction_save', correction(s, { attempt: 1 })));
   await call('expert correction_save (a mark outside the recording)', (s) => s.b.expert('correction_save', correction(s, { annotations: [{ ...C1, onset_sample: 10 ** 7 }] })));
@@ -333,6 +334,10 @@ async function script(call) {
   await call('expert replay_events_get (no such part)', (s) => s.b.expert('replay_events_get', { visit_id: s.mem.visit, window_no: 4 }));
   await call('expert teaching_list', (s) => s.b.expert('teaching_list', {}));
   await call('admin as an expert', (s) => s.b.admin('overview', {}));
+  await call('logout', (s) => s.b.logout());
+  await call('login', (s) => s.b.login('A01', s.password));
+  await call('my feedback (one correction)', (s) => s.b.myFeedback());
+  await call('my_correction_get (one expert)', (s) => s.b.expert('my_correction_get', { correction_id: hex(0xc0) }));
   await call('logout', (s) => s.b.logout());
 
   // ------------------------------------------------------------ the administrator (ADMIN)
@@ -367,6 +372,9 @@ async function script(call) {
   await call('admin user_update (same roles)', (s) => s.b.admin('user_update', { annotator_id: 'A02', roles: ['annotator', 'expert'] }));
   await call('admin user_update (one role)', (s) => s.b.admin('user_update', { annotator_id: 'A02', role: 'annotator' }));
   await call('admin expert operations', (s) => s.b.expert('replay_consent_get', {}));
+  // a second expert's correction of the same version: A01 then sees that the experts disagree, and neither version
+  await call('admin correction_save (a second expert)', (s) => s.b.expert('correction_save', correction(s, { correction_id: hex(0xc2), annotations: [{ ...B1, label: 'EMG-artifact' }],
+    changes: [{ annotation_id: B1.annotation_id, reason: 'wrong_type' }], overall_note: '' })));
   await call('admin recording_update', (s) => s.b.admin('recording_update', { scope: 'study', recording_id: r2, notes: 'T7 is noisy' }));
   await call('admin problem_resolve', (s) => s.b.admin('problem_resolve', { problem_id: hex(0xa1), note: 'Known; carry on' }));
   await call('admin problem_resolve (again)', (s) => s.b.admin('problem_resolve', { problem_id: hex(0xa1) }));
@@ -383,7 +391,7 @@ async function script(call) {
   await call('login', (s) => s.b.login('A01', s.password));
   await call('reviews', (s) => s.b.myReviews());
   await call('my feedback (corrected)', (s) => s.b.myFeedback());
-  await call('my_correction_get', (s) => s.b.expert('my_correction_get', { correction_id: hex(0xc0) }));
+  await call('my_correction_get (two experts disagree)', (s) => s.b.expert('my_correction_get', { correction_id: hex(0xc0) }));
   await call('assignments (returned)', (s) => s.b.assignments());
   await call('me (the quiz is for T01)', (s) => s.b.me());
   await call('quiz (for T01)', (s) => s.b.quiz(QUIZ.set_id, { action: 'get' }));

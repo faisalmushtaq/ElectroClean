@@ -979,13 +979,13 @@ interaction log. The operations are in `electrotag/web/corrections.py` and
 | --- | --- | --- | --- |
 | `work_list` | `{"annotator_id"?, "recording_id"?, "corrected"?: bool, "limit"?: 200}` (at most 1000) | `{"items": [{"annotator_id", "display_name", "recording_id", "file_name", "attempt", "saved_at", "n_annotations", "corrections", "task_id": null, "own": bool}], "total", "corrections_on": bool}`: the latest saved attempt of each person and study recording, newest first; `corrections` counts the corrections of that attempt, and `own` marks the caller's own work | read |
 | `saved_attempt_get` | `{"annotator_id", "recording_id", "attempt"?}` | `{"annotator_id", "display_name", "recording_id", "file_name", "mode", "context_id", "attempt", "latest", "attempts": [1, 2], "saved_at", "manifest", "annotations": [Annotation], "reviews": [Review], "corrections": [Correction], "own", "corrections_on", "reason_required", "reasons": {code: words}}`: one saved attempt (the latest by default) with what the correction view needs. 404 `no_saved_annotations`, `unknown_recording`; 409 `not_for_training` | read |
-| `correction_save` | `{"correction_id": "<32 hex>", "annotator_id", "recording_id", "attempt", "annotations": [Annotation], "changes": [{"annotation_id", "reason", "note"?}], "overall_note"?, "session": Submission.session, "sha256"}` | `{"correction": Correction, "already": bool, "files": ["…_annotations.json", …]}`. Errors: 409 `corrections_off`, `own_work`, `not_latest`, `busy`, `conflict`; 422 `no_changes`, `reason_missing` (with `annotation_ids`), `invalid_annotation`, `invalid_session`; 400 `bad_request` (an unknown reason, a note over 300 characters, an overall note over 1000). Audited (`correction_save`) | **save** |
+| `correction_save` | `{"correction_id": "<32 hex>", "annotator_id", "recording_id", "attempt", "annotations": [Annotation], "changes": [{"annotation_id", "reason", "note"?}], "overall_note"?, "session": Submission.session, "sha256"}` | `{"correction": Correction, "already": bool, "files": ["…_annotations.json", …]}`. Errors: 409 `corrections_off`, `own_work`, `not_latest`, `busy`, `conflict`; 422 `no_changes`, `reason_missing` (with `annotation_ids`), `invalid_annotation`, `invalid_session`; 400 `bad_request` (an unknown reason, a reason that does not suit its change, a note over 300 characters, an overall note over 1000). Audited (`correction_save`) | **save** |
 | `corrections_list` | `{"annotator_id"?, "recording_id"?, "corrector_id"?}` | `{"corrections": [Correction]}`, newest first | read |
 | `correction_get` | `{"correction_id"}` | Correction with `"annotations"` (the corrected version), `"original"` (the attempt corrected), `"manifest"`, and each change's `reason_text`. 404 `not_found` | read |
-| `my_correction_get` | `{"correction_id"}` | as `correction_get`, for the annotator whose work was corrected (anyone may ask; another person's correction is 404 `not_found`, and 403 `forbidden` when the study keeps corrections from its annotators); without `output_basename`, `session_id`, `state` and `elapsed_s` | read |
-| `replay_index_get` | `{"annotator_id", "recording_id", "mode"?: "standard", "context_id"?, "attempt"?}` | `{"logging": bool, "annotator_id", "display_name", "recording_id", "mode", "context_id", "file_name", "manifest", "segments": [Segment], "saved": {"attempt", "saved_at", "annotations"} \| null}`: the person's sessions on the recording, oldest first, and the saved version to compare the end of the replay with (the latest, or `attempt`) | read |
-| `replay_events_get` | `{"visit_id", "window_no"?, "from_seq"?: 0, "limit"?: 4000 (at most 10000), "pointer"?: true}` | `{"header": {"started_at", "logging", "screens"}, "events": [event with seq], "next_seq": int \| null}`: one page of a segment's events (of the whole visit without `window_no`), in order; `pointer: false` leaves the pointer's positions out. 404 `unknown_visit`, `unknown_segment` | read |
-| `teaching_list` | `{}` | `{"shown": bool, "sessions": [{"annotator_id", "display_name", "recording_id", "file_name", "attempt", "saved_at", "n_annotations"}]}`: what a trainee may watch, the saved study recordings of the experts who agree to it with a session in the log; `shown` false (and no sessions) when the study shows trainees no experts' sessions | read |
+| `my_correction_get` | `{"correction_id"}` | as `correction_get`, for the annotator whose work was corrected (anyone may ask; another person's correction is 404 `not_found`, and 403 `forbidden` when the study keeps corrections from its annotators); without `output_basename`, `session_id`, `state` and `elapsed_s`, and with `standing`, `correctors` and `adjudication` (below). Where several experts corrected the version: 409 `pending_adjudication` until their adjudication is finished, then the adjudicated corrected version | read |
+| `replay_index_get` | `{"annotator_id", "recording_id", "mode"?: "standard", "context_id"?, "attempt"?}` | `{"logging": bool, "annotator_id", "display_name", "recording_id", "mode", "context_id", "file_name", "manifest", "segments": [Segment], "saved": {"attempt", "saved_at", "annotations"} \| null}`: the person's sessions on the recording (in that mode and training set), oldest first, and the saved version to compare the end of the replay with (the latest, or `attempt`) | read |
+| `replay_events_get` | `{"visit_id", "window_no"?, "from_seq"?: 0, "limit"?: 4000 (at most 10000), "pointer"?: true}` | `{"header": {"started_at", "logging", "screens"}, "events": [event with seq], "next_seq": int \| null}`: one page of a segment's events (of the whole visit without `window_no`, for experts and administrators only), in order; `pointer: false` leaves the pointer's positions out. 404 `unknown_visit`, `unknown_segment` | read |
+| `teaching_list` | `{}` | `{"shown": bool, "sessions": [{"annotator_id", "display_name", "recording_id", "file_name", "mode", "context_id", "attempt", "saved_at", "n_annotations"}]}`: what a trainee may watch, the experts' sessions on teaching recordings (below), the latest saved version of each, for the experts who agree to it with a session in the log; `shown` false (and no sessions) when the study shows trainees no experts' sessions | read |
 
 ```jsonc
 Correction = {"correction_id", "state": "saved", "annotator_id", "recording_id", "file_name", "mode": "standard", "context_id": "",
@@ -1007,7 +1007,10 @@ from the saved attempt and the annotations sent, matched by `annotation_id`: a
 correction keeps the IDs of the marks it changes, a mark with a new ID is
 added, and one left out is removed (channels in another order are the same
 channels). `changes` gives the reason and an optional note for each change the
-server finds; reasons for anything else are ignored. The study's
+server finds; reasons for anything else are ignored. A reason must suit its
+change (`corrections.REASONS_FOR`, and `REASONS_FOR` in `js/expert/diff.js`):
+an added mark is never `not_artifact`, a removed mark never `missed`, and a
+changed mark neither (400 `bad_request` in plain words). The study's
 `review.reason_required` says which changes need one: `always` every change,
 `edited_or_none` the changed and removed marks, `never` none (422
 `reason_missing` lists the changes still without one). The browser's
@@ -1040,10 +1043,32 @@ where their disagreements are decided. In the service layer
 gives those records, oldest first.
 
 **Feedback.** `GET /me/feedback`'s `corrections.items` are the corrections of
-the caller's saved work, newest first, as Correction without
-`output_basename`, `session_id`, `state` and `elapsed_s` and with
-`corrected_from` reduced to `{"attempt"}`, each change with its `reason_text`,
-and `of_latest` true when the correction is of the caller's latest attempt.
+the caller's saved work, one item for each version corrected (the latest
+correction of it), newest first, as Correction without `output_basename`,
+`session_id`, `state` and `elapsed_s` and with `corrected_from` reduced to
+`{"attempt"}`, each change with its `reason_text`, and `of_latest` true when
+the correction is of the caller's latest attempt. Each item also says how the
+version stands, so that nobody is taught one expert's version where experts
+disagree: `"standing": "single" | "pending" | "adjudicated"`, `"correctors":
+[{"corrector_id", "corrector_name"}]` and `"adjudication"`. `single` is one
+expert's correction, as above. `pending` means several experts corrected the
+version and the adjudication of their disagreements is not finished: the item
+has no changes, counts or note, and `my_correction_get` answers 409
+`pending_adjudication`. `adjudicated` means it is finished (read from the
+adjudication record whose `corrected` names the version): the changes are those
+from the caller's version to the adjudicated corrected version, the
+adjudicated marks that come from one of the caller's marks keeping its ID, each
+with `reasons` (the experts' reasons, `[{"corrector_id", "corrector_name",
+"reason", "reason_text", "note"}]`) and `decision` (`null` where the experts
+agreed; otherwise `{"conflict_id", "choice", "kept": [person], "kept_names",
+"reason_code", "reason_text", "reason"}`), and `adjudication` is
+`{"unit_id", "adjudicator_id", "adjudicator_name", "finished_at", "version",
+"n_conflicts", "conflicts": [{"conflict_id", "kinds", "onset_s", "offset_s",
+"yours": [Mark], "versions": [{"corrector_id", "corrector_name", "marks":
+[Mark]}], "decision": {…as above, "marks": [Mark]}}]}`, the annotator's outcome
+card, where Mark is `{"label", "onset_s", "offset_s", "channels"}`.
+`my_correction_get` then gives the adjudicated version in `annotations`, the
+caller's in `original`, and the same `changes` and `adjudication`.
 
 **Replays.** A segment is one recording opened in one window of a visit, from
 its `recording_opened` to its `recording_finished` or `closed_without_saving`
@@ -1060,8 +1085,16 @@ anyone signed in to the study (`expert.OPEN_OPS`); each checks the rest itself.
 Experts and administrators replay anyone while `replay.enabled` is on (409
 `replays_off` otherwise). Anyone else may watch only the sessions of a person
 who holds the expert role and agrees to teaching with their sessions
-(`replay_consent_set`), and only while `replay.enabled` and
-`replay.trainees_watch_experts` are both on; otherwise 403 `forbidden`.
+(`replay_consent_set`), only while `replay.enabled` and
+`replay.trainees_watch_experts` are both on, and only on a **teaching
+recording** (`replay.teaching_recording`): a recording of a self-contained
+training set, used there for learning with the experts (`guided`), whose ID
+and fingerprint the study's own register does not hold, in a training mode on
+that set. Annotations stay independent: nobody watches an expert's session on a
+recording they hold, or may be given, as study work, nor on a practice or
+assessment recording. Such a watcher is given one segment at a time
+(`replay_events_get` with `window_no`); otherwise 403 `forbidden`, in plain
+words.
 
 ### Tasks, windows and known answers
 
