@@ -1179,7 +1179,14 @@ def test_adjudication_and_the_library_on_firestore(service: StudyService, record
     assert [e["recording_id"] for e in store.derived_entries("adjudications", ADJUDICATED)] == [SUB1]
     assert ok(service, "expert", E01, {"op": "adjudication_finish", "unit_id": uid})["already"] is True
     outcomes = ok(service, "my_feedback", A01)["adjudications"]["items"][0]["conflicts"]
-    assert [c["decision"]["outcome"] for c in outcomes] == ["other_kept", "none_kept", "all_kept"]
+    # from what was kept: at the third place A01 had no mark and A02's was kept
+    assert [c["decision"]["outcome"] for c in outcomes] == ["other_kept", "none_kept", "other_kept"]
+    # reopened and finished again: a second adjudicated version beside the first, the history kept
+    again = ok(service, "expert", E01, {"op": "adjudication_reopen", "unit_id": uid, "reason": "a second look"})
+    assert again["adjudication"]["state"] == "in_progress" and len(again["adjudication"]["history"]) == 1
+    assert ok(service, "my_feedback", A01)["adjudications"]["items"][0]["reopened"] is True
+    fin2 = ok(service, "expert", E01, {"op": "adjudication_finish", "unit_id": uid})
+    assert fin2["version"]["attempt"] == 2 and len(store.derived_entries("adjudications", ADJUDICATED)) == 2
     lib = ok(service, "expert", E01, {"op": "library_list", "pair": ["Eye-blink-artifact", "Eye-movement-artifact"]})
     assert lib["total"] == 1 and lib["facets"]["status"] == {"decided": 3}
     out = ok(service, "expert", E01, {"op": "library_promote", "promote_id": "9" * 32, "to": "snippet",
@@ -1190,7 +1197,8 @@ def test_adjudication_and_the_library_on_firestore(service: StudyService, record
     dest = tmp_path / "export"
     assert cli(["export", "--firebase-project", PROJECT, "--study", store.study_id, "--to", str(dest)]) == 0
     root = dest / "Annotated_Events"
-    assert len(list((root / "derived" / "adjudications" / "annotator-ADJUDICATED").rglob("*_annotations.json"))) == 1
+    # both adjudicated versions (the one finished before the reopening is kept)
+    assert len(list((root / "derived" / "adjudications" / "annotator-ADJUDICATED").rglob("*_annotations.json"))) == 2
     assert (root / "adjudications" / f"{uid}.json").is_file()
     assert len((root / "adjudications" / "decisions.tsv").read_text("utf-8").splitlines()) == 4
     assert len((root / "library" / "library.tsv").read_text("utf-8").splitlines()) == 4
