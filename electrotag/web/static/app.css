@@ -1413,3 +1413,33 @@ button.review-line { text-align: left; font: var(--t-14); }
 .planted-row > span:first-child { flex: 1 1 auto; min-width: 0; }
 .planted-row:last-child { border-bottom: 0; }
 .planted-dialog .planted-items { max-height: 50vh; overflow-y: auto; }
+
+/* the sign-up questionnaire (js/views/questionnaire.js): a narrow column of cards, one per group, each question
+   a fieldset with its options in two columns where they fit, and "Prefer not to say" set apart under them */
+.page.q-page { max-width: 760px; }
+.q-page .q-privacy { margin: -16px 0 32px; }
+.q-form .q-group + .q-group { margin-top: 16px; }
+.q-question { border: 0; margin: 0; padding: 20px 0; border-top: 1px solid var(--hairline); min-width: 0; }
+.q-group > h2 + .q-question, .q-group > h2 + .caption + .q-question { border-top: 0; padding-top: 4px; }
+.q-question:last-child { padding-bottom: 0; }
+/* a floated legend leaves the fieldset's top line whole; what follows it starts below it */
+.q-text { float: left; width: 100%; padding: 0; margin: 0 0 8px; font: var(--t-16); color: var(--ink); }
+.q-text + * { clear: both; }
+.q-optional { font: var(--t-14); }
+.q-help { margin: -4px 0 8px; }
+.q-choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0 24px; }
+label.check.q-choice { margin: 0; padding: 4px 0; align-items: flex-start; }
+.q-choice > span { min-width: 0; }
+.q-choice input { margin-top: 4px; }
+.q-choices label.q-prefer { grid-column: 1 / -1; margin-top: 4px; color: var(--text-secondary); }
+.q-question > label.q-prefer { margin: 8px 0 0; color: var(--text-secondary); }
+.q-question .q-answer, .q-question .q-other { max-width: 420px; }
+.q-question .q-other { margin-top: 8px; }
+.q-contacts .field { max-width: 420px; }
+.q-contacts .form-label:first-child { margin-top: 8px; }
+.q-form .q-problem { margin: 24px 0 0; }
+.q-form .q-actions { margin-top: 24px; }
+.q-form .q-status { margin-top: 8px; }
+.view.home .page > .q-home { margin: 8px 0 0; }
+.view.home .page > .banner.q-home { margin: 16px 0 0; }
+@media (max-width: 480px) { .q-choices { grid-template-columns: minmax(0, 1fr); } }

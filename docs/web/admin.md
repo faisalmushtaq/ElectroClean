@@ -117,8 +117,13 @@ annotation, which is the default, or all work with the training programme includ
 
 The Annotators section has three tabs. Accounts lists every account of the study with its roles,
 whether it is active, where its invitation stands, how much of its work is done and when the person
-last signed in. Search by ID, name or email, or show only one role or status, and sort by any
-column.
+last signed in. The full name a person gave in the sign-up questionnaire is shown under their
+account where it differs from the name you gave it, and Questionnaire to answer marks someone who
+has not answered yet. Search by ID, name or email, or show only one role or status, and sort by any
+column. A person's page (Manage) ends with Questionnaire and contact details: their full name,
+email, phone and institution as they gave them, and their current answers to the sign-up
+questionnaire with the date and the version of the questions, with Earlier answers opening each
+earlier set and its date.
 
 To add someone, use Add an account below the list: give their annotator ID (up to 32 letters, digits,
 hyphens or underscores, as the study's records name them; it cannot be changed later), their name if
@@ -233,6 +238,27 @@ happened to the stages and in the new competency report. Each asks first, and bo
 the audit log. Either way the round that ended stays listed under Earlier rounds of the assessment,
 with its result and its competency report (See the report, and Download the report), as it was when
 the round ended.
+
+## Questionnaire
+
+Annotators and experts answer the sign-up questionnaire at their first sign-in, before any recording,
+training or expert work opens, and can change their answers later from their home page; an
+administrator who does not annotate is never asked. The Questionnaire section, under People, shows
+what they said. Answers lists each person's current answers by annotator ID, with when they answered,
+the first questions of the questionnaire and how many times they changed their answers; Open goes to
+their page in Annotators, which has every answer, the earlier versions and their contact details. The
+line under the table names the people who have not answered yet, whose work stays closed until they
+do. Download the answers (CSV) saves the table, a row for each person and a column for each question
+(with the words given with Other beside it). Answers by question counts how often each answer was
+given; Prefer not to say counts as an answer, and a question answered in the person's own words
+counts as answered. The answers are research data kept under annotator IDs, as the results zip keeps
+them.
+
+Contact details gives Download the contacts list (CSV): each person's annotator ID, full name, email,
+phone and institution, when they last changed them and whether their account is active. The file
+identifies people, so the page says so and asks before downloading it; keep it apart from the research
+data, share it only with the study team, and delete it when it is no longer needed. Each download is
+noted in the audit log. The questions themselves are edited in Study settings.
 
 ## Recordings
 
@@ -589,7 +615,11 @@ ElectroTag's usual folders (an `_annotations.json`, `_events.tsv`, `_events.json
 reports, the problem reports and the reviews, under `Annotated_Events/`; the study's settings
 (`study/electrotag_study.json`), its audit log (`study/audit_log.jsonl`, one change a line, oldest
 first) and its recordings' manifests (`study/manifests.json`); and a `README.txt` that says what is
-where and how to analyse it. When the results are too large to send through the page, the
+where and how to analyse it. The answers to the sign-up questionnaire are in
+`Annotated_Events/questionnaire/` by annotator ID, with every earlier set of answers and the version
+of the questions each was given to. Names and contact details go into the zip only when you tick
+Include names and contact details, as `contacts.csv` at its top; the page then warns that the file
+identifies people, and the download is noted in the audit log. When the results are too large to send through the page, the
 page gives the command to use instead: on a study server the results are already in the study
 folder's `Annotated_Events`, and on Firebase `electrotag-web export` writes them into the same
 folders (docs/web/firebase.md).
@@ -756,6 +786,22 @@ study work waits for (a passed assessment, by default, a finished one, or nothin
 administrators never wait), whether the path begins with a tour of the platform, and whether the
 snippets stage needs its recognition check finished. Every skip is noted in the trainee's progress
 and listed in their competency report. A change applies at once.
+
+**Sign-up questionnaire** (the `questionnaire` block) chooses whether annotators and experts answer
+it before their first recording, training or expert work (on by default), whether it includes the
+demographic questions (age, gender and first language), which contact details it asks for, and the
+questions. Include the demographic questions only if the study's ethics approval covers collecting
+them, as the card says; switch them off otherwise. Full name, email, phone and institution can each
+be Required, Optional or Not asked (the name and email are required by default); the email address is
+filled in from the account where it has one. Each question opens on its fields: the question, its
+group (experience of EEG, career stage and field, or about you), whether it takes one answer, several
+or a short answer in the person's own words, its options one per line, the option that asks for the
+person's own words (Other, say), a line of help, and whether an answer is needed. Every question offers
+Prefer not to say by itself, so leave it out of the options. Move up, Move down and Remove arrange
+them, Add a question adds one, and Put back the default questions restores ElectroTag's own. Changing
+the wording or the options starts a new version of the questionnaire: answers already given keep the
+version they were given to, and the results name it. Someone who answered before a required question
+was added is not stopped; their home page offers the new questions.
 
 **Interaction log** chooses whether the study records
 how annotators use ElectroTag (clicks, keys and what is on the screen, never what they type), how

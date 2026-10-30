@@ -14,8 +14,11 @@ import { signIn, waitForRoute, openExample } from './helpers.mjs';
  * brought the demonstration to 457 KB; its stage actions, snippets and admin operations load when used.
  * Carrying stages over to a new assessment set and the earlier rounds (the same rules, also needed at
  * every call) brought it to 464 KB.
+ * The sign-up questionnaire (the default questions in the sandbox's copy of the settings, and the app's way to
+ * the questionnaire before the first view) brought it to 473 KB; the page, its rules and the sandbox's
+ * stand-in load when used.
  */
-const SIGNIN_BUDGET_KB = { server: 140, demo: 468 };
+const SIGNIN_BUDGET_KB = { server: 140, demo: 476 };
 
 /**
  * Modules that belong to later views and must not load with the sign-in page (the demonstration's

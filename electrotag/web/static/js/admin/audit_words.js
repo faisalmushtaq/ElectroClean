@@ -56,6 +56,10 @@ export const AUDIT_OPS = Object.freeze({
   adjudication_finish: 'Adjudication finished',
   adjudication_reopen: 'Adjudication reopened',
   library_promote: 'Library entry made into training material',
+  // the sign-up questionnaire (questionnaire.py): never what was changed, only that it was
+  contacts_changed: 'Contact details changed',
+  contacts_download: 'Contacts list downloaded',
+  results_zip_contacts: 'Results downloaded with names and contact details',
 });
 
 /**

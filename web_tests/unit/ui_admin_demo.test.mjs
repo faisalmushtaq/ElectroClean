@@ -7,6 +7,10 @@ import assert from 'node:assert/strict';
 
 import { DemoBackend, exampleRecording, TRAINING_SET } from '../../electrotag/web/static/js/api/demo.js';
 import { manifestProblem, publicManifest } from '../../electrotag/web/static/js/api/demo_admin.js';
+import { EXAMPLE_ANSWERS } from '../../electrotag/web/static/js/api/demo_questionnaire.js';
+/** A visitor's new account answers the sign-up questionnaire first (demo_questionnaire.js), as in a study. */
+const answerQuestionnaire = (b) => b.saveQuestionnaire({ answers: EXAMPLE_ANSWERS, contacts: { full_name: 'Test person', email: 'test@example.org' } });
+
 
 const memory = () => {
   const m = new Map();
@@ -150,6 +154,7 @@ test('recordings added as manifests are registered, matched by fingerprint and s
   await b.admin('assign', { annotator_ids: ['A02'], recording_ids: [rec.recording_id], mode: 'standard', context_id: '' });
 
   const a = await as(b, 'A02', 'long enough');
+  await answerQuestionnaire(a);
   const items = (await a.assignments()).items;
   assert.deepEqual(items.map((i) => [i.recording_id, i.file_name, i.duration_s, i.n_channels]), [[rec.recording_id, 'sub-new_task-rest_eeg.edf', 60, 4]]);
   const m = await a.match({ file_name: 'sub-new_task-rest_eeg.edf', size_bytes: 48256, sha256: SHA, sfreq: 100, n_samples: 6000, ch_names: ['Fp1', 'Fp2', 'Cz', 'HEOG'] });
@@ -201,8 +206,8 @@ test('study settings: checked, changed block by block, and used by the demonstra
   const before = await b.admin('settings_get');
   // The demonstration's own notice says plainly that typed text is never recorded.
   assert.match(before.logging_notice, /never records what you type/);
-  assert.deepEqual(Object.keys(before.settings).sort(), ['annotation', 'channels', 'discovery', 'display', 'filters', 'gamification', 'loading', 'logging', 'replay', 'review',
-    'selection', 'training']);
+  assert.deepEqual(Object.keys(before.settings).sort(), ['annotation', 'channels', 'discovery', 'display', 'filters', 'gamification', 'loading', 'logging', 'questionnaire',
+    'replay', 'review', 'selection', 'training']);
   await assert.rejects(() => b.admin('settings_update', { settings: { filters: { notch_hz: 55 } } }), (e) => e.status === 400 && e.code === 'invalid_settings');
   await assert.rejects(() => b.admin('settings_update', { settings: { output: { directory: '/' } } }), (e) => e.code === 'invalid_settings');
   const quick = ['EMG-artifact', 'Eye-blink-artifact', 'Chewing-artifact'];
@@ -273,6 +278,7 @@ test('the demonstration training set: its guided notes, pass mark and guidance r
   await b.admin('user_add', { annotator_id: 'T02', password: 'trainee two' });
   await b.admin('programme_set', { annotator_id: 'T02', set_id: 'example' });
   await as(b, 'T02', 'trainee two');
+  await answerQuestionnaire(b);
   assert.equal((await b.me()).programme.set_id, 'example');
   assert.equal((await b.assignments()).items.length, 0); // the tour comes first
   await b.trainingStage({ stage: 'tour', action: 'done' });

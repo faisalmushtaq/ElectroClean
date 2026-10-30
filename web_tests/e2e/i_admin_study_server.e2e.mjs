@@ -7,7 +7,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SkipTest, signIn, waitForRoute } from './helpers.mjs';
+import { SkipTest, signIn, waitForRoute, answerQuestionnaire } from './helpers.mjs';
 
 const PASSWORD = 'electrotag';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -119,6 +119,7 @@ export const tests = [
       await page.waitForSelector('tr[data-key="A07"]');
       const other = await t.newPage({ url: t.study.base });
       await signIn(other, 'A07', password);
+      await answerQuestionnaire(other); // a new account answers the sign-up questionnaire first
       await waitForRoute(other, 'home');
       assert.equal(await other.locator('[data-log="admin"]').count(), 0);
       // The change is in the audit log.

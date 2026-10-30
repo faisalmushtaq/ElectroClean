@@ -18,6 +18,7 @@ import {
 } from './model.js';
 import { REASON_RULES, SKIPPABLE_STAGES, TRAINING_GATES, expertSettingsProblems } from './settings_checks.js';
 import { actionButton, card, checkbox, confirmInline, field, loading, messageArea, numberInput, radios, sectionHead, select, textArea, textInput } from './ui.js';
+import { questionnaireEditor } from './questionnaire.js';
 
 /** A number from a field, or an error that names the field and knows which control to focus. */
 function numberOf(control, what, limits) {
@@ -216,6 +217,8 @@ export class SettingsSection {
     const pointer = numberInput({ value: lg.pointer_hz ?? 5, min: 0, max: 60, step: 1 });
     const idle = numberInput({ value: lg.idle_after_s ?? 30, min: 5, max: 3600, step: 5 });
     const notice = textArea({ value: this.data.logging_notice || '', rows: 4, placeholder: 'Shown to each annotator once after signing in, when interactions are recorded' });
+    // the sign-up questionnaire (questionnaire.js)
+    const questions = questionnaireEditor(st.questionnaire, () => this._setDirty(true));
 
     const msg = messageArea();
     const read = () => {
@@ -256,6 +259,7 @@ export class SettingsSection {
           tour: tour.input.checked, snippets_quiz_required: snippetsQuiz.input.checked },
         logging: { interactions: interactions.input.checked, pointer_hz: numberOf(pointer, 'Pointer samples per second', { min: 0, max: 60 }),
           idle_after_s: numberOf(idle, 'Idle after', { min: 5, max: 3600 }) },
+        questionnaire: questions.read(),
       };
       const merged = mergeSettings(st, wanted);
       const problems = [...settingsProblems(merged, labels.map((l) => l.label)), ...expertSettingsProblems(merged)];
@@ -354,6 +358,7 @@ export class SettingsSection {
         tour, snippetsQuiz,
         h('p.caption', {}, 'While study work waits, a trainee\'s study recordings are listed as locked, with the reason. After an '
           + 'assessment that does not meet the criteria, reopen the training or give a new assessment on the trainee\'s page in People.')),
+      questions.el,
       card('Interaction log',
         interactions,
         h('div.form-grid', {}, field('Pointer samples per second over the EEG', pointer, { hint: '0 records none.' }), field('Idle after (seconds without input)', idle)),
