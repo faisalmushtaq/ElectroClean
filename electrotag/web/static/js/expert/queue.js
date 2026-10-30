@@ -72,6 +72,13 @@ export class QueueSection {
       out.push(h('button.btn.small', { type: 'button', 'data-log': `adjudication-${a.op}`, 'data-unit': u.unit_id,
         onclick: () => startAdjudication(this.area.app, { unitId: u.unit_id, mode: a.op === 'view' ? 'view' : 'decide', msg: this.msg }) }, a.label));
     }
+    if (u.recording_id) {
+      out.push(h('button.btn.small.quiet', { type: 'button', 'data-log': 'adjudication-overlay', 'data-unit': u.unit_id,
+        title: 'Everyone\'s marks on this recording, with these annotators in lanes',
+        onclick: async () => (await import('./overlay.js')).startOverlay(this.area.app, { recording_id: u.recording_id,
+          focus: (u.annotators || []).map((a) => a.annotator_id), include: u.status === 'adjudicated' ? ['adjudicated'] : [] },
+        { route: 'expert-queue', params: null }) }, 'Everyone\'s marks'));
+    }
     if (canBecomeReference(u)) {
       out.push(h('button.btn.small.quiet', { type: 'button', 'data-log': 'adjudication-make-reference', 'data-unit': u.unit_id,
         onclick: () => this.makeReference(u) }, 'Make it a training reference…'));

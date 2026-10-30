@@ -141,3 +141,42 @@
 .outcome-row[data-yours="kept"] .outcome-head b { color: var(--accent); }
 .outcome-row .block, .outcome summary .caption { display: block; }
 .outcome-reason { margin-top: 2px; }
+
+/* everyone's marks on one recording (js/expert/overlay.js): lanes of up to eight people, each in its own colour and
+   pattern with their ID on every mark, the crowd's whole-montage lane, and the side panel */
+.ov-strip { position: relative; }
+.lanes.ov-lanes .lane { height: 22px; }
+.lanes.ov-lanes .lane-track { height: 18px; }
+.lanes.ov-lanes .lane-mark { top: 0; height: 18px; opacity: 1; padding: 0 4px; overflow: hidden; white-space: nowrap; text-align: left; font: var(--t-12); font-weight: 600; }
+.lanes.ov-lanes .lane-name { display: flex; align-items: center; gap: 4px; }
+.lanes.ov-lanes .lane-words { padding: 0 2px; background-color: inherit; }
+.ov-swatch { display: inline-block; flex: none; width: 16px; height: 12px; border: 1px solid rgba(0, 0, 0, 0.55); vertical-align: -1px; }
+.ov-crowd-lane { border-top: 1px solid var(--hairline); padding-top: 2px; }
+.ov-crowd-track { height: 14px; cursor: pointer; }
+.ov-crowd-canvas { display: block; }
+.ov-tip { position: absolute; z-index: 5; max-width: 300px; padding: 8px; background: var(--surface); border: 1px solid var(--ink); font: var(--t-12); pointer-events: none; }
+.ov-tip b { font-weight: 600; }
+.overlay-panel h3 { margin-top: 16px; }
+.ov-legend, .ov-people { list-style: none; margin: 0; padding: 0; }
+.ov-legend li, .ov-people li { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--hairline); }
+.ov-legend li.caption, .ov-people li.caption { border-bottom: none; }
+.ov-who { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.ov-people { max-height: 320px; overflow-y: auto; }
+.ov-scale { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+.ov-scale-bar { display: inline-flex; flex: none; border: 1px solid var(--hairline); }
+.ov-scale-bar span { display: block; width: 14px; height: 10px; }
+.ov-filters { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.ov-filter { display: flex; flex-direction: column; gap: 2px; }
+.ov-filter .field { height: 32px; font: var(--t-14); }
+.ov-derived { margin-top: 8px; }
+.ov-search { width: 100%; height: 32px; margin-bottom: 4px; font: var(--t-14); }
+.ov-dis { margin: 4px 0; }
+.ov-msg { min-height: 20px; margin: 8px 0 0; color: var(--text-secondary); font: var(--t-14); }
+@media (pointer: coarse) {
+  .lanes.ov-lanes .lane { height: 28px; }
+  .lanes.ov-lanes .lane-track, .lanes.ov-lanes .lane-mark { height: 24px; }
+}
+.overlay-panel { overflow-y: auto; min-height: 0; }
+.view.annotate.overlaying .ws-side > .review-host { flex: 1 1 auto; max-height: none; min-height: 0; }
+.view.annotate.overlaying .ws-side > .side-tabs { flex: 0 1 30%; min-height: 160px; }
+.view.annotate.overlaying .ws-side > .side-tabs.folded { flex: none; min-height: 0; }

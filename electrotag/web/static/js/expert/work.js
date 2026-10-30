@@ -1,7 +1,8 @@
 // Saved work, a section of the expert area (docs/web/admin.md, "Saved work"): every saved study
 // attempt, the latest of each person and recording, filtered by person, recording and whether it was
 // corrected. Each row offers Correct (js/expert/correction_pass.js) and Replay (js/replay/player.js),
-// with the number of corrections it has, and says when a correction of that version is in progress in
+// with the number of corrections it has, and Everyone (js/expert/overlay.js: everyone's marks on the
+// recording, this person in a lane), and says when a correction of that version is in progress in
 // this browser (kept there by the correction view's Back). Both open the EEG file from this computer,
 // checked against the study's copy, because the EEG never reaches the study.
 
@@ -145,7 +146,10 @@ export class SavedWork {
             : kept(r) ? `Carry on with your correction of ${r.annotator_id}'s version ${r.attempt}, kept in this browser` : `Correct ${r.annotator_id}'s version ${r.attempt}`,
           onclick: () => startCorrection(app, r, back) }, kept(r) && !r.own ? 'Carry on' : 'Correct'),
         h('button.btn.small', { type: 'button', 'data-log': 'work-replay', 'data-work': `${r.annotator_id}|${r.recording_id}`,
-          title: `Replay how ${r.annotator_id} worked on this recording`, onclick: () => startReplay(app, r, back) }, 'Replay')) },
+          title: `Replay how ${r.annotator_id} worked on this recording`, onclick: () => startReplay(app, r, back) }, 'Replay'),
+        h('button.btn.small', { type: 'button', 'data-log': 'work-overlay', 'data-work': `${r.annotator_id}|${r.recording_id}`,
+          title: `Everyone's marks on this recording, with ${r.annotator_id} in a lane`,
+          onclick: async () => (await import('./overlay.js')).startOverlay(app, { recording_id: r.recording_id, focus: [r.annotator_id] }, back) }, 'Everyone')) },
     ];
     const rows = this._rows();
     this.host.append(card(null,

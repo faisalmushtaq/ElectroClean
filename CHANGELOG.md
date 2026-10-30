@@ -5,6 +5,21 @@ Each section below describes the changes in one version of ElectroTag;
 
 ## Unreleased
 
+Experts and administrators can put everyone's saved marks on one recording over the same EEG, from
+Saved work, the adjudication queue, the library, a replay and a recording's page in the admin area.
+Up to eight people have lanes of their own, each with a colour that stays distinct for colour-blind
+readers, a pattern as a second cue and their ID on every mark, and their marks outlined on the EEG
+in the same colour and line pattern; everyone else is a crowd, a band under each channel (and a lane
+for whole-montage marks) shaded by the share of people marking each moment. Hovering a band gives the
+share, the types and who; a click lists everyone there, to give one of them a lane. The view filters
+by type, role and saved date (and by the study's groups or experience bands, where it has them),
+steps through the disagreements with N and P, offers the corrected and adjudicated versions as lanes,
+and downloads its summary as TSV. It opens in under a second with 200 people, from one compact
+answer of the new expert operation `overlay_get` (about 350 kB for 300 people of 50 marks on 256
+channels, 120 kB as the study server now compresses large expert answers). A new study setting,
+off by default, lets trainees see the crowd of the training recordings for learning with the
+experts, with nobody named; everywhere else trainees and annotators are refused.
+
 Recordings of every channel count up to 256 (and 257, EGI's nets with their reference) have been
 checked in the browser against MNE-Python, through registration, saving, the agreement analysis and
 adjudication, on a new synthetic set (`scripts/make_channel_matrix.py`, 32 recordings in every

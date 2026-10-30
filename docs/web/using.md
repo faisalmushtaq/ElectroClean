@@ -840,6 +840,20 @@ when nothing happened, and when you move through the EEG yourself, Follow again 
 the expert's view; ? lists these keys. Notes and anything the expert typed are never recorded, so a
 note shows only its length. Back returns to your home page.
 
+### How everyone marked a training recording
+
+Some studies also let trainees see how everyone who worked on a training recording for learning
+with the experts marked it. Then How everyone marked it appears on the Learn with the experts stage
+once someone has saved one of those recordings. It lists them, with how many people saved each and
+whether you are among them; See opens the recording's file from your computer, as for watching an
+expert. A thin band under each channel is shaded by the share of people who marked each moment on
+that channel, the darker the more of them, and the Crowd lane above the EEG does the same for marks
+on the whole montage. Rest the pointer on a band to read the share and the types people chose there.
+Nobody is named, and you only ever see this on those training recordings, never on a recording of
+the study itself, so that your own study work stays your own judgement. N and P go to the next and
+previous moment where people disagree, the filters show one type at a time, and Download the summary
+(TSV) saves the view as a table.
+
 ## The short-segment quiz
 
 Some studies also offer a quiz, listed on your first page (and on the training path for trainees)

@@ -205,6 +205,15 @@ replayed annotations are only shown, never logged as the watcher's. The browser 
 Bring it back, the work set aside in a tab returning, as `annotations_reset` (`added`, `removed`,
 `changed`).
 
+The view of everyone's marks on one recording (docs/web/admin.md, "Everyone's marks on one
+recording") is logged in the viewer's log as `overlay_opened` (`recording_id`, `people`, `lanes`,
+`anonymous`, `load_ms`), `overlay_lane` (`action`: `add` or `remove`, `annotator_id`, `lanes`, and
+`via`: `list`, `band` or `button`), `overlay_filter` (`filter`: `label`, `role`, `from`, `to` or
+`facets`, whether one is `on`, and the number left in the `crowd`), `overlay_disagreement` (`index`,
+`of`, `t`, `via`), `overlay_downloaded` (`people`, `lanes`) and `overlay_closed` (`recording_id`,
+`lanes`, `s`); its ? key logs `key_sheet_shown` with `view` `overlay`. Nothing typed in its search is
+logged, and it logs no `recording_opened`, so it never counts as an annotation session.
+
 **Milestones and goals (browser).** When the game elements are on
 (docs/web/admin.md, "Study settings"), `milestone_reached` (`milestone`, such
 as `recordings-10`, `streak-3`, `thorough-5` or `team-50`, its `kind`, `name`

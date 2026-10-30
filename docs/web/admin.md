@@ -745,7 +745,10 @@ other choices about tasks). These choices apply to the expert area's
 corrections, tasks and adjudication as the study offers them. Under **Replays** it chooses whether
 experts and administrators may replay annotators' sessions step by step from the interaction log,
 and whether trainees may watch the sessions of experts who have agreed to it; each expert gives or
-withdraws that agreement in the expert area. Replays use the interaction log for teaching and for
+withdraws that agreement in the expert area. Let trainees see everyone's marks as a crowd (off
+until the team ticks it) shows trainees, on the training recordings for learning with the experts
+only, how everyone who worked on them marked them, with nobody named ("Everyone's marks on one
+recording" below). Replays use the interaction log for teaching and for
 checking work, so say so in the study's information for participants and check that the ethics
 approval covers it.
 
@@ -794,7 +797,8 @@ session" below says how to give them sessions to watch.
 Saved work lists every saved study recording, the latest version of each person's work, newest
 first, with its version, when it was saved, its number of annotations and how many corrections that
 version has. Choose a person, a recording, or whether it was corrected, to narrow the list. Each row
-has Correct and Replay; your own work has no Correct, because you revise it from your history on the
+has Correct, Replay and Everyone (everyone's marks on that recording, with this person in a lane:
+"Everyone's marks on one recording" below); your own work has no Correct, because you revise it from your history on the
 home page, and Correct is off while the study takes no corrections (Study settings, Corrections and
 adjudication). A correction you kept in this browser when you left it shows as "Yours in progress, in
 this browser" in its row, whose Correct button then reads Carry on.
@@ -870,6 +874,55 @@ for teaching. To give trainees sessions to watch, have an expert who agrees to i
 guided recordings of such a set as training work on that set (the admin channel's `assign` with the
 set and the mode `practice`). The study checks all of this for every request, and gives a trainee
 one session at a time. Replays are logged in the watcher's own record.
+
+### Everyone's marks on one recording
+
+Everyone's marks puts the saved marks of everyone who annotated a recording over the same EEG,
+the latest version of each person's work. It opens from Everyone in Saved work, Everyone's marks
+in the adjudication queue and the library (with the annotators compared in lanes, at the moment of
+a library entry), Everyone's marks on this recording in a replay's side panel, and Everyone's
+marks on a study recording's page in the admin area (Recordings, Manage). As with a correction,
+the recording opens from this computer and its fingerprint is checked against the study's copy.
+
+Up to eight people have **lanes** of their own above the EEG. Each person has a colour and a
+pattern (plain, striped, dotted and so on), chosen so that the colours stay apart for readers
+with red-green colour blindness and the pattern tells them apart when the colours do not; their
+ID is written on every mark wide enough to hold it, and their marks are outlined on the EEG in the
+same colour and line pattern, with their ID at the top of the outline. The person whose row you
+started from has the first lane; when eight people or fewer saved the recording, everyone does.
+The legend in the side panel names each lane, with its number of marks, its pattern and its
+version, and Remove puts a person back in the crowd.
+
+Everyone else is **the crowd**. A thin band under each channel is shaded by the share of the crowd
+that marked each moment on that channel, the darker the larger the share, and the Crowd lane above
+the EEG does the same for marks on the whole montage. Rest the pointer on a band to read the
+channel, the time, the share of the crowd ("75% of the crowd (150 of 200)"), the types they chose
+with how many chose each, and who; a click lists everyone who marked that moment, each with Show
+in a lane, which gives them a lane of their own. The crowd's list in the side panel finds anyone by
+ID or name, with the same button.
+
+The **filters** narrow what is shown: a type (the lanes and the crowd show only marks of that
+type), a role (annotators, experts or administrators in the crowd), and when the work was saved.
+When the study describes people further, for example by group or by experience, a filter for each
+appears beside these. Offer the corrected versions and Offer the adjudicated version add those
+derived versions to the list, to be shown in lanes; the crowd always holds people's own work only.
+
+**Disagreements** are the stretches where some of the people shown marked an artifact and others
+did not: with two or three people, any split; with more, between a fifth and four fifths of them.
+N and P, or Next and Previous, go to the next and previous one, and the panel says how many of the
+people shown marked it and with which types. ? lists the keys. Download the summary (TSV) saves the
+view as a table: a row for each stretch in which the number of people marking stays the same, with
+the share, whether it is a disagreement, the types chosen and which people in lanes marked it, for
+the people and filters shown.
+
+The view reads everyone's marks in one compact answer and counts the crowd in the browser, so it
+opens in a few seconds and moves through the EEG as quickly with hundreds of people as with three.
+Experts and administrators see everyone by ID and name. A trainee sees a crowd only, with nobody
+named, and only when the study allows it (Study settings, Replays: Let trainees see everyone's
+marks as a crowd), on the training recordings for learning with the experts, as for replays: never
+on a study recording, nor a practice or assessment recording. The view is logged as
+`overlay_opened`, `overlay_lane`, `overlay_filter`, `overlay_disagreement`, `overlay_downloaded`
+and `overlay_closed`, with IDs and counts only.
 
 ## Adjudication
 
