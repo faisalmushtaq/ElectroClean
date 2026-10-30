@@ -18,6 +18,7 @@ import {
 } from './model.js';
 import { REASON_RULES, SKIPPABLE_STAGES, TRAINING_GATES, expertSettingsProblems } from './settings_checks.js';
 import { actionButton, card, checkbox, confirmInline, field, loading, messageArea, numberInput, radios, sectionHead, select, textArea, textInput } from './ui.js';
+import { questionnaireEditor } from './questionnaire.js';
 
 /** A number from a field, or an error that names the field and knows which control to focus. */
 function numberOf(control, what, limits) {
@@ -174,6 +175,8 @@ export class SettingsSection {
     idlePause.name = 'idle_pause_minutes';
     const coverage = checkbox('Before Save and Finish, list the parts of the recording that have not been on the screen', (an.coverage_check ?? 'warn') !== 'off');
     const revisions = checkbox('Let annotators revise recordings they have finished', an.allow_revisions !== false);
+    const mergeOverlapping = checkbox('Join a mark that overlaps another of the same type on the same channels into one (marks with a gap between them always stay separate)', an.merge_overlapping !== false);
+    mergeOverlapping.input.name = 'merge_overlapping';
     const confidence = confidenceChoice(an.confidence);
     const reviews = checkbox('Let administrators review saved recordings (Agree, Caveat or Comment on each annotation)', an.allow_reviews !== false);
     const showReviews = checkbox('Show reviews to the annotators whose work was reviewed (off: blind reviews)', an.show_reviews_to_annotators !== false);
@@ -200,6 +203,7 @@ export class SettingsSection {
     const goldMin = numberInput({ value: rv.gold_min_items ?? 3, min: 1, max: 100, step: 1 });
     const replays = checkbox('Let experts and administrators replay annotators\' sessions step by step, from the interaction log', rp.enabled !== false);
     const traineesWatch = checkbox('Let trainees watch the sessions of experts who have agreed to it', rp.trainees_watch_experts !== false);
+    const traineesCrowd = checkbox('Let trainees see everyone\'s marks as a crowd, with nobody named, on the training recordings for learning with the experts', rp.trainees_see_crowd === true);
     // the training path
     const skippable = new Set(Array.isArray(tr.skippable) ? tr.skippable : Object.keys(SKIPPABLE_STAGES));
     const skipBoxes = Object.entries(SKIPPABLE_STAGES).map(([stage, text]) => {
@@ -216,6 +220,8 @@ export class SettingsSection {
     const pointer = numberInput({ value: lg.pointer_hz ?? 5, min: 0, max: 60, step: 1 });
     const idle = numberInput({ value: lg.idle_after_s ?? 30, min: 5, max: 3600, step: 5 });
     const notice = textArea({ value: this.data.logging_notice || '', rows: 4, placeholder: 'Shown to each annotator once after signing in, when interactions are recorded' });
+    // the sign-up questionnaire (questionnaire.js)
+    const questions = questionnaireEditor(st.questionnaire, () => this._setDirty(true));
 
     const msg = messageArea();
     const read = () => {
@@ -241,6 +247,7 @@ export class SettingsSection {
           idle_pause_minutes: numberOf(idlePause, 'Pause after', { min: 0, max: 60 }),
           coverage_check: coverage.input.checked ? 'warn' : 'off', allow_revisions: revisions.input.checked,
           allow_reviews: reviews.input.checked, show_reviews_to_annotators: showReviews.input.checked,
+          merge_overlapping: mergeOverlapping.input.checked,
           confidence: confidence.value() },
         gamification: { enabled: games.input.checked, leaderboard: board.input.checked, leaderboard_viewed_only: boardFull.input.checked },
         review: { corrections: corrections.input.checked, show_corrections_to_annotators: showCorrections.input.checked,
@@ -251,11 +258,12 @@ export class SettingsSection {
             onset_tolerance_s: numberOf(onsetTol, 'Start tolerance', { min: 0, max: 60 }), offset_tolerance_s: numberOf(offsetTol, 'End tolerance', { min: 0, max: 60 }),
             channel_jaccard: numberOf(channelShare, 'Share of channels in common', { min: 0, max: 1 }) },
           gold_min_items: numberOf(goldMin, 'Known-answer recordings before accuracy counts', { min: 1, max: 100, integer: true }) },
-        replay: { enabled: replays.input.checked, trainees_watch_experts: traineesWatch.input.checked },
+        replay: { enabled: replays.input.checked, trainees_watch_experts: traineesWatch.input.checked, trainees_see_crowd: traineesCrowd.input.checked },
         training: { skippable: skipBoxes.filter((b) => b.input.checked).map((b) => b.input.dataset.stage), gate: gate.value,
           tour: tour.input.checked, snippets_quiz_required: snippetsQuiz.input.checked },
         logging: { interactions: interactions.input.checked, pointer_hz: numberOf(pointer, 'Pointer samples per second', { min: 0, max: 60 }),
           idle_after_s: numberOf(idle, 'Idle after', { min: 5, max: 3600 }) },
+        questionnaire: questions.read(),
       };
       const merged = mergeSettings(st, wanted);
       const problems = [...settingsProblems(merged, labels.map((l) => l.label)), ...expertSettingsProblems(merged)];
@@ -310,6 +318,8 @@ export class SettingsSection {
         h('p.caption', {}, 'The artifact types on the number keys 1 to 9 (the toolbar shows them in this order).'),
         h('div.key-grid', {}, keys.map((k, i) => h('label.key-row', {}, h('kbd', {}, String(i + 1)), k))),
         field('Shortest annotation (samples)', shortest),
+        mergeOverlapping,
+        h('p.caption', {}, 'When a join happens the annotator is told, and Undo takes it back. Off, overlapping marks of one type stay as drawn, and Merge in the Annotations list still joins marks on request.'),
         revisions,
         h('p.caption', {}, 'A revision is saved as a new version beside the earlier ones, which are kept unchanged; analyses use the latest version.'),
         reviews, showReviews,
@@ -343,7 +353,7 @@ export class SettingsSection {
           field('Start tolerance (s)', onsetTol), field('End tolerance (s)', offsetTol),
           field('Share of channels in common', channelShare, { hint: 'Below it, two marks differ in their channels. From 0 to 1.' })),
         h('h3', {}, 'Replays'),
-        replays, traineesWatch,
+        replays, traineesWatch, traineesCrowd,
         h('p.caption', {}, 'Each expert decides for their own sessions in the expert area, and every change is in the audit log. Replays use the interaction log for teaching and checking work: say so in the study\'s information for participants, and check that the ethics approval covers it.')),
       card('Training policy',
         h('p.caption', {}, 'The training path has five stages: a tour of the platform, examples of each artifact type, learning with '
@@ -354,6 +364,7 @@ export class SettingsSection {
         tour, snippetsQuiz,
         h('p.caption', {}, 'While study work waits, a trainee\'s study recordings are listed as locked, with the reason. After an '
           + 'assessment that does not meet the criteria, reopen the training or give a new assessment on the trainee\'s page in People.')),
+      questions.el,
       card('Interaction log',
         interactions,
         h('div.form-grid', {}, field('Pointer samples per second over the EEG', pointer, { hint: '0 records none.' }), field('Idle after (seconds without input)', idle)),

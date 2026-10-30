@@ -20,6 +20,7 @@ const PARTS = Object.freeze({
   reviewPass: './annotate/review_pass.js',
   homeList: './views/home_list.js',
   homeFeedback: './views/home_feedback.js',
+  homeDue: './views/home_due.js',
   games: './views/home_games.js',
   milestones: './games/milestones.js',
   training: './training/path.js',
@@ -34,13 +35,20 @@ const PARTS = Object.freeze({
   purposes: './views/purposes.js',
   settingsChecks: './admin/settings_checks.js',
   demoExpert: './api/demo_expert.js',
+  demoLibrary: './api/demo_library.js',
   corrections: './expert/correction_pass.js',
   correctionFeedback: './expert/correction_feedback.js',
   replay: './replay/player.js',
+  overlay: './expert/overlay.js',
   demoTraining: './api/demo_training_stages.js',
   tour: './training/tour.js',
   snippets: './training/snippets.js',
   viewer: './viewer/viewer.js',
+  questionnaire: './views/questionnaire.js',
+  demoQuestionnaire: './api/demo_questionnaire.js',
+  reopen: './annotate/reopen.js',
+  myFiles: './views/my_files.js',
+  guide: './guide/guide.js',
 });
 
 const pending = new Map(); // name -> the promise of its module

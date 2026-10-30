@@ -9,7 +9,7 @@ const arrow = (dir) => `<kbd aria-label="${ARROW_NAMES[dir]}"><span class="ico i
 const HOME_END = IS_MAC ? `<kbd>fn</kbd>+${arrow('left')} / <kbd>fn</kbd>+${arrow('right')}` : '<kbd>Home</kbd> / <kbd>End</kbd>';
 const PAGE = IS_MAC ? `<kbd>fn</kbd>+${arrow('up')} / <kbd>fn</kbd>+${arrow('down')}` : '<kbd>Page Up</kbd> / <kbd>Page Down</kbd>';
 
-export const KEY_HINT = 'Drag to mark  ·  1–9 type  ·  M start, M end  ·  D, 1–5 confidence  ·  N / P next, previous  ·  B pause  ·  ? help';
+export const KEY_HINT = 'Drag to mark  ·  1–9 type, 0 uncertain  ·  M start, M end  ·  wheel amplitude, Shift+wheel time  ·  N / P next, previous  ·  B pause  ·  ? help';
 export const REVIEW_HINT = 'N / P  next, previous item to look at  ·  arrow keys scroll  ·  ? help';
 /** The same hints for a touch screen (an iPad without a keyboard). */
 export const TOUCH_HINT = 'Drag to mark  ·  tap a numbered type  ·  two fingers move, pinch for more or less time  ·  press and hold an annotation for its menu';
@@ -24,10 +24,12 @@ export const TOUCH_HELP_HTML = `
 artifact, tap an annotation to select it, drag its edge to resize it, and tap a channel's name or
 trace to choose that channel.</li>
 <li><b>Two fingers</b> move the EEG: sideways through time and up and down through the channels.
-<b>Pinch</b> sideways to show more or less time.</li>
+<b>Pinch</b> sideways to show more or less time. The time and amplitude buttons in the toolbar
+change the scales too.</li>
 <li><b>Press and hold</b> an annotation for its menu (the common types, Other type, Edit times…,
 Edit channels…, Confidence, Add a note…, Apply to whole montage, Delete), and <b>double-tap</b> it
-to choose its type from the list. With a channel-specific annotation selected, tap a channel's name
+to choose its type from the list. Press and hold a channel's name for its menu: mark it bad for the
+whole recording, or add it to the channel selection; drag down the names to select several. With a channel-specific annotation selected, tap a channel's name
 to add that channel to it or take it out. The numbers 1 to 5 under the Annotations list rate the selected annotation with one
 tap.</li>
 <li>The buttons under the EEG move through time and the channels and change how much is shown,
@@ -48,7 +50,10 @@ export const HELP_HTML = `
 <tr><td>${HOME_END}</td><td>show less / more time</td></tr>
 <tr><td>${PAGE}</td><td>show fewer / more channels</td></tr>
 <tr><td><kbd>−</kbd> / <kbd>+</kbd></td><td>decrease / increase amplitude</td></tr>
-<tr><td>Wheel or trackpad</td><td>scroll through time (Shift+wheel: through the channels)</td></tr>
+<tr><td>Wheel</td><td>increase / decrease amplitude (each channel keeps its place)</td></tr>
+<tr><td>Shift+wheel, or two fingers sideways on a trackpad</td><td>move along time</td></tr>
+<tr><td>${CTRL}+wheel, or a pinch on a trackpad</td><td>show more / less time around the pointer</td></tr>
+<tr><td>${IS_MAC ? 'Option' : 'Alt'}+wheel</td><td>scroll through the channels</td></tr>
 <tr><td>Click empty EEG</td><td>place the time cursor, which shows the exact time (with Selected channels, a click on a trace also chooses its channel)</td></tr>
 <tr><td><kbd>,</kbd> / <kbd>.</kbd></td><td>move the time cursor back / forward a little (Shift: ten times as far)</td></tr>
 <tr><td>Overview bar</td><td>(bottom) shows where you are; click it to jump</td></tr>
@@ -65,6 +70,9 @@ to see that channel on top, or click it (or press <kbd>I</kbd>) to see it alone.
 marks apply to the whole montage; for channel-specific marks, go back to the normal view
 (<kbd>O</kbd>). Show all is for finding your way: the parts it shows do not count as viewed. On a long
 recording the EEG is drawn as it is read, with how much has been read so far shown over it.</p>
+<p>The <b>Time</b> and <b>Amplitude</b> controls in the toolbar show the scales and change them:
+choose 1, 2, 5, 10, 20, 30 or 60 seconds on the screen, or press − and + beside each. The amplitude
+is the height of one row of EEG, as the scale bar at the right of the EEG shows.</p>
 <p>When the rows are too short for every channel's name, every second or third channel is named;
 point at a row to see its name, or show fewer channels (${PAGE}).</p>
 <p>On the overview bar, the parts of the recording that have not been on the screen yet are white
@@ -82,7 +90,9 @@ numbered buttons after <i>Draw as</i>, or choose from the menu next to them. Pre
 <i>blink</i> or <i>103</i>) and Enter.</li>
 <li>Choose whether it affects the <b>whole montage</b> or only <b>selected channels</b>
 (the switch in the toolbar, or the key <kbd>C</kbd>). For selected channels,
-click channel names or traces to select them (they turn magenta), or use
+click channel names or traces to select them (they turn magenta), <b>drag down the channel
+names</b> to select a range (${CTRL}+drag adds a range, Shift+click selects from the last name
+clicked), and press <kbd>X</kbd> or <b>Clear channel selection</b> to start again; or use
 <b>Channels…</b>, which lists the channels or, with <b>Map</b>, shows them on the head: click an
 electrode to choose it, drag a box to choose several, or move between electrodes with the arrow
 keys and choose with Space.</li>
@@ -94,6 +104,11 @@ the mark waiting for its end. <kbd>[</kbd> and <kbd>]</kbd> mark the start and t
 and <kbd>Esc</kbd> cancels a started mark. Without a mouse, these keys mark at the time cursor:
 place it with <kbd>G</kbd> and move it with <kbd>,</kbd> and <kbd>.</kbd>.</li>
 </ol>
+<p>When you can see an artifact but cannot tell its type, mark it <b>Uncertain / needs review</b>:
+press <kbd>0</kbd> or click <b>0 Uncertain</b> at the end of the numbered types. It is saved as
+<i>Data-artifact</i>, the HED-SCORE term for an artifact of unknown type, and an expert is asked to
+review each such mark. For an artifact whose family you know but not its exact type, choose a group
+term from the menu instead, such as <i>Eye-artifact</i>.</p>
 <p>You can also draw first and choose the type afterwards: click the new
 annotation and press a number, or double-click it to choose any type.</p>
 <p><b>Draw/edit</b>, at the top, is on while you annotate. Press it to switch to view only, in
@@ -113,7 +128,10 @@ Confidence, Add a note…, Apply to whole montage (for a channel-specific annota
 with nothing selected, <kbd>N</kbd> starts from the first annotation on the screen. After the
 last, they come round to the first.</li>
 <li><b>Drag an edge</b> to resize; <b>Shift+drag</b> the middle to move it. The line at the bottom
-gives the new times.</li>
+gives the new times. For a precise start or end, select the annotation and press
+<kbd>${IS_MAC ? 'Option' : 'Alt'}</kbd>+${arrow('left')} / ${arrow('right')} to move its start by 10 ms
+(at least one sample), and <kbd>${IS_MAC ? 'Option' : 'Alt'}</kbd>+<kbd>Shift</kbd>+${arrow('left')} /
+${arrow('right')} to move its end.</li>
 <li>To change the <b>channels</b> of an annotation, select it, then <b>Shift+click</b> a channel
 anywhere within its time to add that channel or take it out; with a channel-specific annotation
 selected, a click on a channel's name does the same. Taking a channel out of a whole-montage
@@ -125,10 +143,21 @@ from a list or the map.</li>
 out when there is nothing for them to do.</li>
 <li><b>Edit times…</b>, under the Annotations list, takes the start and end as seconds (12.5),
 m:ss (1:05.25) or h:mm:ss.</li>
-<li>Overlapping annotations of the same type on the same channels are merged
-automatically. To merge others of one type, select them in the list and press
-<b>Merge</b>.</li>
+<li>An annotation that overlaps another of the same type on the same channels is joined to it,
+and the line at the bottom says so (<kbd>${CTRL}+Z</kbd> takes the join back). Annotations with a
+gap between them, however brief, and annotations that only touch always stay separate, so separate
+occurrences stay separate. A drag that starts just outside an annotation draws a new one; to
+stretch an annotation, grab its edge line. Your study may switch joining off. To merge annotations
+of one type yourself, select them in the list and press <b>Merge</b>.</li>
 </ul>
+
+<h3>Bad channels</h3>
+<p>When a channel is unusable for the whole recording, <b>right-click its name</b> (press and hold on
+a touch screen) and choose <b>Mark as bad for the whole recording</b>, or choose it in
+<b>Channels…</b> and press <b>Mark chosen as bad</b>. Its row is hatched, its trace grey and its
+name struck through; the Annotations tab counts it, and it is saved with your annotations.
+<kbd>${CTRL}+Z</kbd> takes it back, and the same menu marks it good again. Channels the study
+already lists as bad are greyed and named <i>(bad)</i>; they stay as the study set them.</p>
 
 <h3>Confidence and notes</h3>
 <p>You can rate how confident you are that a mark is right, from <b>1</b> (not at all confident)
@@ -150,11 +179,14 @@ annotations for the study's researchers.</p>
 <h3>Keys for annotating</h3>
 <table class="keys">
 <tr><td><kbd>1</kbd> to <kbd>9</kbd></td><td>type of the next annotation, or of the selected ones</td></tr>
+<tr><td><kbd>0</kbd></td><td>Uncertain / needs review (Data-artifact)</td></tr>
 <tr><td><kbd>/</kbd></td><td>find any type by name or code</td></tr>
 <tr><td><kbd>M</kbd></td><td>mark the start, then the end, at the pointer (or the time cursor)</td></tr>
 <tr><td><kbd>[</kbd> / <kbd>]</kbd></td><td>mark the start / the end at the pointer (or the time cursor)</td></tr>
 <tr><td><kbd>,</kbd> / <kbd>.</kbd></td><td>move the time cursor</td></tr>
 <tr><td><kbd>C</kbd></td><td>whole montage or selected channels</td></tr>
+<tr><td><kbd>X</kbd></td><td>clear channel selection</td></tr>
+<tr><td><kbd>${IS_MAC ? 'Option' : 'Alt'}</kbd>+${arrow('left')} / ${arrow('right')}</td><td>move the selected annotation's start by 10 ms (with Shift: its end)</td></tr>
 <tr><td><kbd>D</kbd>, then <kbd>1</kbd> to <kbd>5</kbd></td><td>rate your confidence in the selected (or newest) annotation; <kbd>0</kbd> clears it</td></tr>
 <tr><td><kbd>N</kbd> / <kbd>P</kbd></td><td>next / previous annotation</td></tr>
 <tr><td><kbd>Esc</kbd></td><td>cancel a started mark, or end the selection</td></tr>

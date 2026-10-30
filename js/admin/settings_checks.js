@@ -3,6 +3,7 @@
 // section, and by the sandbox when its settings are changed, so the sign-in page never needs them.
 
 import { MATCH_CRITERIA } from './model.js';
+import { questionnaireProblems } from '../views/questionnaire_model.js';
 
 /** When an adjudicator gives a reason (review.reason_required). */
 export const REASON_RULES = Object.freeze({
@@ -58,7 +59,7 @@ export function trainingProblems(t) {
 /** Problems with the replay block, in plain words. */
 export function replayProblems(rp) {
   const out = [];
-  for (const k of ['enabled', 'trainees_watch_experts']) {
+  for (const k of ['enabled', 'trainees_watch_experts', 'trainees_see_crowd']) {
     if (k in rp && typeof rp[k] !== 'boolean') out.push(`replay.${k} is on or off (true or false).`);
   }
   return out;
@@ -66,5 +67,6 @@ export function replayProblems(rp) {
 
 /** Problems with the review, training and replay blocks of a study's settings (settingsProblems has the others). */
 export function expertSettingsProblems(s) {
-  return [...reviewProblems(s.review || {}), ...trainingProblems(s.training || {}), ...replayProblems(s.replay || {})];
+  return [...reviewProblems(s.review || {}), ...trainingProblems(s.training || {}), ...replayProblems(s.replay || {}),
+    ...questionnaireProblems(s.questionnaire)]; // the sign-up questionnaire (questionnaire_model.js)
 }

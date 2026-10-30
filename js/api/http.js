@@ -159,12 +159,24 @@ export class HttpBackend {
   /** Sets the personal goal ({goal_per_week}) or whether to appear on the leaderboard ({leaderboard_hidden}). */
   setAchievements(body) { return this._request('POST', '/me/achievements', body || {}); }
 
+  /** GET /me/questionnaire: the sign-up questionnaire's questions, the annotator's answers and contact details. */
+  questionnaire() { return this._request('GET', '/me/questionnaire'); }
+
+  /** POST /me/questionnaire {answers, other, contacts}: saves them (never repeated by itself after a failure). */
+  saveQuestionnaire(body) { return this._request('POST', '/me/questionnaire', body || {}); }
+
   // ------------------------------------------- problem reports and reviews
   /** POST /problems: a problem with a recording; `problem_id` makes a second sending of the same report harmless. */
   reportProblem(body) { return this._request('POST', '/problems', body); }
 
   /** GET /me/reviews: the reviews of the annotator's saved work ({shown, reviews}). */
   myReviews() { return this._request('GET', '/me/reviews'); }
+
+  /** One's own saved files of a recording (the latest version, or `version`), as the study keeps them. */
+  myResults(recordingId, mode = 'standard', contextId = '', version = null) {
+    const q = `?mode=${encodeURIComponent(mode || 'standard')}&context=${encodeURIComponent(contextId || '')}${version ? `&version=${encodeURIComponent(version)}` : ''}`;
+    return this._request('GET', `/me/results/${idPath(recordingId)}${q}`);
+  }
 
   /** GET /me/feedback: the corrections of the annotator's saved work and the outcomes of its conflicts. */
   myFeedback() { return this._request('GET', '/me/feedback'); }

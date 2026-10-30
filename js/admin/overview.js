@@ -1,15 +1,17 @@
-// Overview: the study in numbers, the latest changes from the audit log and the latest saved work.
+// Overview: the study in numbers, the hand-outs open and the people with overdue work, the latest changes
+// from the audit log and the latest saved work.
 
 import { h, clear } from '../ui/dom.js';
 import { MODES, routeForSection, whenText } from './model.js';
 import { auditSummary, opText } from './audit_words.js';
-import { card, dataTable, loading, messageArea, recordingName, sectionHead } from './ui.js';
+import { card, chip, dataTable, loading, messageArea, recordingName, sectionHead } from './ui.js';
 
 export class OverviewSection {
   constructor(area) {
     this.area = area;
     this.msg = messageArea();
     this.tiles = h('div.stat-tiles');
+    this.due = h('div.overview-due');
     this.recent = dataTable([
       { title: 'When', render: (e) => whenText(e.at) },
       { title: 'Who', render: (e) => e.by },
@@ -24,9 +26,9 @@ export class OverviewSection {
     const go = (key, text) => h('button.btn', { type: 'button', onclick: () => area.go(key) }, text);
     this.el = h('section.admin-section', { 'data-section': 'overview' },
       sectionHead('Overview', 'The study at a glance. Choose a section to change something.'),
-      this.msg, this.tiles,
+      this.msg, this.tiles, this.due,
       h('div.btn-row.quick-links', {}, go('recordings', 'Add recordings'), go('annotators', 'Add an annotator'),
-        go('assignments', 'Assign recordings'), go('progress', 'See progress')),
+        go('assignments', 'Assign recordings'), go('handouts', 'Hand out recordings'), go('progress', 'See progress')),
       h('div.admin-grid', {},
         card('Recent changes', this.recent, h('div.btn-row', {}, h('button.btn.quiet', { type: 'button', onclick: () => area.go('records') }, 'All records…'))),
         card('Recently saved work', this.saved)));
@@ -58,6 +60,13 @@ export class OverviewSection {
       tile(c.todo, 'To do', '', 'progress'),
       tile(c.problems_open, 'Open problems', c.unusable ? `${c.unusable} cannot be annotated` : 'reported by annotators', 'problems'),
       tile(c.reviewed, 'Reviewed', 'saved recordings with a review', 'results'));
+    clear(this.due);
+    if (c.overdue || c.handouts_open) {
+      const late = c.overdue ? `${c.overdue} ${c.overdue === 1 ? 'person has' : 'people have'} overdue work` : 'Nobody has overdue work';
+      this.due.append(h(c.overdue ? 'div.banner.overview-late' : 'p.caption.overview-late', { role: 'status' },
+        h('span', {}, c.overdue ? chip('Overdue', 'warning') : null, ` ${late}, across ${c.handouts_open} open hand-out${c.handouts_open === 1 ? '' : 's'}. `),
+        h('a', { href: `#${routeForSection('handouts')}`, 'data-to': 'handouts' }, 'See the hand-outs')));
+    }
     this.recentEntries = o.recent || [];
     this.recent.update(this.recentEntries);
     this.saved.update(o.last_saved || []);

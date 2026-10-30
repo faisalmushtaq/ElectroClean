@@ -635,6 +635,9 @@ ol.stages.path .stage {
 @media (hover: hover) { .chip-btn:hover:not(:disabled) { background: var(--fill-hover); } }
 .chip-btn .chip-key { font-variant-numeric: tabular-nums lining-nums; color: var(--text-secondary); margin-left: 2px; }
 .chip-btn .chip-code { letter-spacing: 0; }
+/* Uncertain / needs review (key 0): set apart from the numbered types by a dashed edge. */
+.chip-btn.uncertain-chip { border: 1px dashed var(--border); margin-left: 4px; }
+.chip-btn.uncertain-chip[aria-pressed="true"] { border-color: transparent; }
 .chip-btn[aria-pressed="true"] { background: var(--chip-colour); color: var(--chip-text); }
 .chip-btn[aria-pressed="true"] .chip-key { color: inherit; }
 .chip-btn[aria-pressed="true"] .swatch { outline: 1px solid rgba(255, 255, 255, 0.85); }
@@ -649,6 +652,16 @@ ol.stages.path .stage {
 @media (hover: hover) { .seg:hover:not(:disabled):not([aria-pressed="true"]) { background: var(--fill-hover); } }
 .seg[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
 .seg:disabled, .chip-btn:disabled { color: var(--text-disabled); cursor: default; }
+/* The scope of the next mark with its channels: one unit when the toolbar wraps. */
+.ws-scope { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+/* The scales (workspace.js _scaleTools): the time shown and the amplitude, each with a smaller and a larger step. */
+.ws-scales { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+.ws-scales .scale-caption { min-width: 0; margin: 0 2px 0 6px; }
+.ws-scales .scale-caption:first-child { margin-left: 0; }
+.ws-scales select.field.scale-select { width: auto; height: 32px; padding: 0 28px 0 8px; background-position: right 6px center; font: var(--t-14); }
+.ws-scales .scale-value { min-width: 56px; text-align: center; color: var(--ink); font: var(--t-14); font-variant-numeric: tabular-nums lining-nums; }
+.ws-actions .ws-scales .btn.icon.small { width: 32px; padding: 0; }
+@media (pointer: coarse) { .ws-scales select.field.scale-select { height: 40px; font: var(--t-16); } }
 .ws-chansummary { color: var(--text-secondary); font: var(--t-14); overflow: hidden; text-overflow: ellipsis; min-width: 96px; max-width: 180px; }
 .ws-chansummary.warning { color: var(--destructive); font-weight: 600; }
 .ws-chansummary.selected { color: var(--selection-channel); font-weight: 600; }
@@ -790,6 +803,8 @@ ul.unviewed-list { font-variant-numeric: tabular-nums lining-nums; margin-bottom
 }
 .ann-table .ann-details .chans { min-width: 0; overflow-wrap: anywhere; }
 .ann-table .ann-time { margin-left: auto; white-space: nowrap; }
+/* A mark of the uncertain type: "needs review", in the accent so that it reads as something to come back to. */
+.ann-table .review-mark { color: var(--accent); font-weight: 600; }
 /* Confidence and notes: quiet, in the secondary text colour (never the warning or bad-channel greys). */
 .ann-table .note-mark .ico { width: 12px; height: 12px; display: block; }
 .ann-table .note-mark { display: inline-flex; align-self: center; }
@@ -914,6 +929,11 @@ ul.warnings { font: var(--t-14); }
   font: var(--t-14); background: var(--surface);
 }
 .channel-chip:has(input:checked) { background: #FBEAF1; border-color: #E9A7C3; color: var(--selection-channel); font-weight: 600; }
+/* A channel marked bad for the whole recording: struck through (the study's own bad channels are greyed). */
+.channel-chip.marked-bad .channel-name { text-decoration: line-through; color: var(--text-secondary); }
+.channel-chip.study-bad .channel-name { color: var(--text-secondary); }
+.channel-bad-row { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--hairline); }
+.channel-bad-row .caption { margin: 0 0 8px; }
 .form { min-width: 300px; }
 .form .caption.error { color: var(--destructive); }
 
@@ -1135,6 +1155,15 @@ table.history .when { display: block; white-space: nowrap; overflow: hidden; tex
 @media (max-width: 899px) {
   table.list .opt { display: none; }
 }
+/* Grouped under the study team's hand-outs (their titles), with a heading row for each and the Due card above. */
+table.list tr.group-row th { padding: 24px 0 8px; color: var(--ink); border-bottom-color: var(--rule); }
+table.list tbody tr.group-row:first-child th { padding-top: 8px; }
+.row-badges { display: block; margin-top: 8px; }
+.rec-filter { margin: 12px 0 0; }
+.due-list { list-style: none; margin: 0 0 12px; padding: 0; }
+.due-line { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 0; border-bottom: 1px solid var(--hairline); }
+.due-line .due-text { flex: 1 1 240px; min-width: 0; }
+.due-line .btn { margin-left: auto; }
 /* ---------------------------------------------- end of the list of recordings' styles */
 
 /* ------------------------------------------------- the game elements of the home page
@@ -1413,3 +1442,91 @@ button.review-line { text-align: left; font: var(--t-14); }
 .planted-row > span:first-child { flex: 1 1 auto; min-width: 0; }
 .planted-row:last-child { border-bottom: 0; }
 .planted-dialog .planted-items { max-height: 50vh; overflow-y: auto; }
+
+/* the sign-up questionnaire (js/views/questionnaire.js): a narrow column of cards, one per group, each question
+   a fieldset with its options in two columns where they fit, and "Prefer not to say" set apart under them */
+.page.q-page { max-width: 760px; }
+.q-page .q-privacy { margin: -16px 0 32px; }
+.q-form .q-group + .q-group { margin-top: 16px; }
+.q-question { border: 0; margin: 0; padding: 20px 0; border-top: 1px solid var(--hairline); min-width: 0; }
+.q-group > h2 + .q-question, .q-group > h2 + .caption + .q-question { border-top: 0; padding-top: 4px; }
+.q-question:last-child { padding-bottom: 0; }
+/* a floated legend leaves the fieldset's top line whole; what follows it starts below it */
+.q-text { float: left; width: 100%; padding: 0; margin: 0 0 8px; font: var(--t-16); color: var(--ink); }
+.q-text + * { clear: both; }
+.q-optional { font: var(--t-14); }
+.q-help { margin: -4px 0 8px; }
+.q-choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0 24px; }
+label.check.q-choice { margin: 0; padding: 4px 0; align-items: flex-start; }
+.q-choice > span { min-width: 0; }
+.q-choice input { margin-top: 4px; }
+.q-choices label.q-prefer { grid-column: 1 / -1; margin-top: 4px; color: var(--text-secondary); }
+.q-question > label.q-prefer { margin: 8px 0 0; color: var(--text-secondary); }
+.q-question .q-answer, .q-question .q-other { max-width: 420px; }
+.q-question .q-other { margin-top: 8px; }
+.q-contacts .field { max-width: 420px; }
+.q-contacts .form-label:first-child { margin-top: 8px; }
+.q-form .q-problem { margin: 24px 0 0; }
+.q-form .q-actions { margin-top: 24px; }
+.q-form .q-status { margin-top: 8px; }
+.view.home .page > .q-home { margin: 8px 0 0; }
+.view.home .page > .banner.q-home { margin: 16px 0 0; }
+@media (max-width: 480px) { .q-choices { grid-template-columns: minmax(0, 1fr); } }
+
+.saved-download { border-top: 1px solid var(--hairline); margin-top: 16px; padding-top: 12px; }
+.saved-download .dialog-text { margin-top: 0; }
+
+/* The artifact reference guide (js/guide/guide.js): a page of its own, or the annotation view's Guide tab. */
+.guide-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 0 0 8px; }
+.guide-search { flex: 1 1 240px; max-width: 480px; }
+.guide-count { margin: 0 0 16px; }
+.guide-intro { max-width: 760px; }
+.guide-family { margin: 0 0 32px; }
+.guide-family > h2 { padding-bottom: 8px; border-bottom: 1px solid var(--rule); }
+.guide-type { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); grid-template-areas: "head eg" "text eg"; column-gap: 32px;
+  align-items: start; padding: 24px 0; border-bottom: 1px solid var(--hairline); scroll-margin-top: 16px; }
+.guide-type > * { grid-column: 1; }
+.guide-type > .guide-type-head { grid-area: head; }
+.guide-type > .guide-example { grid-area: eg; grid-row: 1 / span 6; margin: 0; }
+.guide-type:focus { outline: none; }
+.guide-type.focused { border-left: 3px solid var(--accent); padding-left: 16px; }
+.guide-type-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.guide-type-head h3 { margin: 0; }
+.guide-type.group h3 { font-style: italic; }
+.guide-codes { display: inline-flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.guide-hed { margin: 8px 0; }
+.guide-term { font-weight: 600; color: var(--ink); margin: 8px 0 4px; }
+.guide-looks { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 8px 0; }
+.guide-looks dt { color: var(--text-secondary); }
+.guide-looks dd { margin: 0; }
+.guide-apart ul { margin: 0; padding-left: 20px; }
+.guide-apart li { margin: 2px 0; }
+.guide-eeg { display: flex; flex-direction: column; height: 400px; }
+.guide-eeg .viewer-overview { display: none; }
+.guide-example figcaption { margin-top: 4px; }
+/* beside the EEG: one column */
+.guide-panel .guide-type { display: block; padding: 16px 0; }
+.guide-panel .guide-family > h2 { font: var(--t-20); }
+.guide-panel .guide-type-head h3 { font: var(--t-16); font-weight: 600; }
+.guide-panel .guide-example { margin-top: 8px; }
+.guide-panel .guide-eeg { height: 320px; }
+.guide-panel .guide-search { max-width: none; }
+.guide-line { margin-top: 16px; }
+.help-guide { padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--hairline); }
+.help-guide p { margin: 0 0 8px; }
+.picker-foot { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+@media (max-width: 860px) {
+  .guide-type { display: block; }
+  .guide-example { margin-top: 12px; }
+  .guide-eeg { height: 240px; }
+}
+@media print {
+  .app-header, .guide-tools, .guide-count, .guide-page .back, .guide-page .caption a, .notice, .small-screen-notice { display: none !important; }
+  .page.guide { padding: 0; max-width: none; }
+  .guide-type { break-inside: avoid; page-break-inside: avoid; }
+  .guide-family > h2 { break-after: avoid; }
+  .guide-type[hidden], .guide-family[hidden] { display: none !important; }
+  .guide-eeg { height: 220px; }
+}
+.picker-about { flex: none; white-space: nowrap; }
+table.history .row-actions { flex-wrap: wrap; row-gap: 4px; }

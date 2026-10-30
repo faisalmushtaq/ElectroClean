@@ -15,3 +15,9 @@ export function localDraft(backend, annotatorId, recordingId, mode, contextId) {
   const d = local.get(localDraftKey(backend, annotatorId, recordingId, mode, contextId), null);
   return d && Array.isArray(d.annotations) ? d : null;
 }
+
+/** The moment a draft was kept, in milliseconds (drafts written in different time zones compare as instants), or -Infinity. */
+export function draftTime(d) {
+  const t = Date.parse(String((d && d.saved_at) || ''));
+  return Number.isFinite(t) ? t : -Infinity;
+}

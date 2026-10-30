@@ -18,9 +18,13 @@ export const SECTIONS = Object.freeze([
   { key: 'analyses', route: 'admin-analyses', title: 'Analyses', group: 'study' },
   { key: 'records', route: 'admin-records', title: 'Records', group: 'study' },
   { key: 'annotators', route: 'admin-annotators', title: 'Annotators', group: 'people' },
+  { key: 'groups', route: 'admin-groups', title: 'Groups', group: 'people' },
   { key: 'assignments', route: 'admin-assignments', title: 'Assignments', group: 'people' },
+  { key: 'handouts', route: 'admin-handouts', title: 'Hand-outs', group: 'people' },
   { key: 'tasks', route: 'admin-tasks', title: 'Tasks', group: 'people' },
   { key: 'training', route: 'admin-training', title: 'Training', group: 'people' },
+  { key: 'questionnaire', route: 'admin-questionnaire', title: 'Questionnaire', group: 'people' },
+  { key: 'datasets', route: 'admin-datasets', title: 'Datasets', group: 'data' },
   { key: 'recordings', route: 'admin-recordings', title: 'Recordings', group: 'data' },
   { key: 'problems', route: 'admin-problems', title: 'Problems', group: 'data' },
   { key: 'settings', route: 'admin-settings', title: 'Study settings', group: 'config' },
@@ -395,6 +399,7 @@ export function settingsProblems(s, labels = null) {
   if (labels) for (const l of q) if (!labels.includes(l)) out.push(`${l} is not one of the artifact types.`);
   if ('allow_revisions' in a && typeof a.allow_revisions !== 'boolean') out.push('Whether finished recordings may be revised is on or off.');
   if ('allow_reviews' in a && typeof a.allow_reviews !== 'boolean') out.push('Whether saved recordings may be reviewed is on or off.');
+  if ('merge_overlapping' in a && typeof a.merge_overlapping !== 'boolean') out.push('Joining overlapping marks is on or off.');
   if ('show_reviews_to_annotators' in a && typeof a.show_reviews_to_annotators !== 'boolean') out.push('Whether annotators see the reviews of their work is on or off.');
   const g = s.gamification || {};
   for (const k of ['enabled', 'leaderboard', 'leaderboard_viewed_only']) {

@@ -12,6 +12,7 @@
 // and WATCH_EXPERT take functions (app, stage, data) => a node, a line of text or null, drawn on
 // the stage's card (WATCH_EXPERT on "Learn with the experts", for watching an expert's session).
 
+import { noteForGuideTab } from '../guide/artifacts.js';
 import { h } from '../ui/dom.js';
 import { ask } from '../ui/dialog.js';
 import { logger } from '../log/logger.js';
@@ -20,6 +21,7 @@ import { minutesText } from './coach.js';
 import { quizCard } from './quiz_card.js';
 import { STAGE_TEXT as TEXTS, STAGE_TITLES as TITLES } from './stages.js';
 import { watchExpertEntry } from '../replay/watch.js';
+import { crowdEntry } from '../expert/crowd_entry.js';
 
 export const STAGE_TEXT = TEXTS;
 export const STAGE_TITLES = TITLES;
@@ -32,7 +34,8 @@ export const STAGE_LINES = { tour: [], snippets: [], guided: [], practice: [], a
  * The slot for watching an expert's session, on "Learn with the experts": the replay part's way in (js/replay/watch.js).
  * It is shown on an open stage only, and only once the study has a session to watch (teaching_list).
  */
-export const WATCH_EXPERT = [(app) => (app ? watchExpertEntry(app) : null)];
+export const WATCH_EXPERT = [(app) => (app ? watchExpertEntry(app) : null),
+  (app) => (app ? crowdEntry(app) : null)]; // how everyone marked a training recording (js/expert/crowd_entry.js)
 
 const CHIPS = {
   locked: ['Locked', ''], available: ['Ready', 'active'], in_progress: ['In progress', 'active'],
@@ -117,9 +120,14 @@ function watchSlot(app, s, data) {
   const nodes = lines(WATCH_EXPERT, app, s, data);
   if (!nodes.length || !app.backend || typeof app.backend.expert !== 'function') return null;
   const host = h('div.watch-slot', { hidden: true });
-  Promise.resolve().then(() => app.backend.expert('teaching_list', {})).then((got) => {
-    if (got && got.shown && (got.sessions || []).length) { host.append(...nodes); host.hidden = false; }
-  }, () => { /* nothing to watch: the stage reads as it is */ });
+  // the crowd of a training recording (crowd_entry.js) is offered once one has been saved, the experts' sessions once there is one
+  const crowd = nodes.filter((n) => n.dataset && n.dataset.log === 'crowd-entry');
+  const watch = nodes.filter((n) => !crowd.includes(n));
+  const offer = (list, ask, has) => (list.length ? Promise.resolve().then(ask).then((got) => {
+    if (got && got.shown && has(got)) { host.append(...list); host.hidden = false; }
+  }, () => { /* nothing to show: the stage reads as it is */ }) : null);
+  offer(watch, () => app.backend.expert('teaching_list', {}), (got) => (got.sessions || []).length);
+  offer(crowd, () => app.backend.expert('overlay_teaching_list', {}), (got) => (got.recordings || []).length);
   return host;
 }
 
@@ -254,5 +262,9 @@ export function trainingPath(data, { app = null, annotatorId, message = '', onCo
         waiting && data.gate.message ? h('p.caption.gate-line', { 'data-log': 'training-gate' }, icon('lock'), h('span', {}, data.gate.message)) : null),
       h('div.btn-row', {}, back, cont)),
     h('ol.stages.path', { 'aria-label': 'The stages of your training' }, cards.map((c) => h('li', {}, c))),
+    h('p.caption.guide-line', {}, 'Every artifact type, with its definition, what it looks like and an example, is in the ',
+      h('a', { href: './#guide', target: '_blank', rel: 'noopener', 'data-log': 'training-guide',
+        onclick: () => noteForGuideTab(app && app.catalogue && app.me && app.me.study ? app.catalogue.quickLabels((app.me.study.annotation || {}).quick_labels) : null) },
+      'artifact reference guide'), ' (it opens in a new tab).'),
     quizzes && quizzes.length && onQuiz ? quizCard({ me: { quizzes } }, { onOpen: onQuiz }) : null);
 }

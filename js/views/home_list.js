@@ -5,13 +5,17 @@
 // study recordings can be opened again to revise them when the study allows it
 // (docs/web/using.md, "History and revisions").
 //
+// When the study team has handed recordings out with titles (GET /assignments `handout`), the To do and All
+// tabs group the rows under each hand-out's title, earliest due first, then "Other recordings"; a row of an
+// overdue hand-out carries an Overdue badge. The title is all an annotator sees of a hand-out.
+//
 // The choices (tab, sort, search, page) are kept on the application for the visit and the tab and
 // sort in this browser, as a convenience; nothing depends on them being there.
 
 import { h, clear } from '../ui/dom.js';
 import { formatHms, local } from '../util.js';
 import { spanText } from './progress.js';
-import { feedbackCaption, moreButton, returnedLine } from './home_feedback.js';
+import { downloadSaved, feedbackCaption, moreButton, returnedLine } from './home_feedback.js';
 import { inform } from '../ui/dialog.js';
 
 export const PAGE_SIZE = 25;
@@ -165,12 +169,45 @@ function time(it) {
   return Number.isFinite(t) ? t : -Infinity;
 }
 
+/** The hand-out title a row is grouped under ('' for a recording given without one). */
+export function groupOf(it) {
+  const t = it && it.handout && typeof it.handout.title === 'string' ? it.handout.title.trim() : '';
+  return t;
+}
+
+/** The heading of the rows without a hand-out, once some rows have one. */
+export const OTHER_GROUP = 'Other recordings';
+
+/**
+ * The order of the groups: the titles of hand-outs with a due date, earliest first, then the titles
+ * without one in the order their first row comes, then the rows without a hand-out ('').
+ */
+export function groupOrder(items) {
+  const seen = new Map(); // title -> [earliest due date or '', first index]
+  items.forEach((it, i) => {
+    const g = groupOf(it);
+    if (!g) return;
+    const due = (it.handout && it.handout.due_at) || '';
+    const was = seen.get(g);
+    if (!was) seen.set(g, [due, i]);
+    else if (due && (!was[0] || due < was[0])) was[0] = due;
+  });
+  const titles = [...seen.entries()].sort(([, a], [, b]) => (a[0] && b[0] ? (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] - b[1]) : a[0] ? -1 : b[0] ? 1 : a[1] - b[1]))
+    .map(([t]) => t);
+  return [...titles, ''];
+}
+
+/** True when the tab's rows are grouped under hand-out titles. */
+export function grouped(items, tab) {
+  return (tab === 'todo' || tab === 'all') && items.some((it) => groupOf(it));
+}
+
 /**
  * The rows of one tab, searched and sorted: `items` from GET /assignments. "Recently worked on"
  * puts recordings in progress (and revisions under way) first, then the most recently saved, then
  * the rest in the order they were assigned. The history is newest first unless sorted otherwise.
  */
-export function visibleItems(items, { tab = 'todo', query = '', sort = 'recent' } = {}) {
+export function visibleItems(items, { tab = 'todo', query = '', sort = 'recent', group = false, handout = '' } = {}) {
   const q = String(query || '').trim().toLowerCase();
   let list = items.map((it, i) => ({ it, i }));
   if (tab === 'history') list = list.filter(({ it }) => it.status === 'done' || (it.saved && typeof it.saved === 'object'));
@@ -180,13 +217,17 @@ export function visibleItems(items, { tab = 'todo', query = '', sort = 'recent' 
   else if (tab === 'done') list = list.filter(({ it }) => it.status === 'done' || it.status === 'unusable');
   else if (tab !== 'all') list = list.filter(({ it }) => it.status === tab);
   if (q) list = list.filter(({ it }) => String(it.file_name || '').toLowerCase().includes(q) || String(it.recording_id || '').toLowerCase().includes(q));
+  if (handout) list = list.filter(({ it }) => groupOf(it) === handout);
   const busy = ({ it }) => (it.status === 'in_progress' || it.revising ? 0 : 1);
   const cmp = {
     recent: (a, b) => busy(a) - busy(b) || time(b.it) - time(a.it) || a.i - b.i,
     name: (a, b) => String(a.it.file_name).localeCompare(String(b.it.file_name), 'en-GB', { numeric: true }) || a.i - b.i,
     length: (a, b) => (Number(a.it.duration_s) || 0) - (Number(b.it.duration_s) || 0) || a.i - b.i,
   }[sort] || (() => 0);
-  return list.sort(cmp).map(({ it }) => it);
+  // grouped: the hand-outs' titles in their order, and inside each the chosen sorting
+  const rank = group ? new Map(groupOrder(items).map((g, n) => [g, n])) : null;
+  const byGroup = rank ? (a, b) => rank.get(groupOf(a.it)) - rank.get(groupOf(b.it)) : () => 0;
+  return list.sort((a, b) => byGroup(a, b) || cmp(a, b)).map(({ it }) => it);
 }
 
 /** The rows of page `page` (from 0), with the page actually shown and the number of pages. */
@@ -206,7 +247,7 @@ function savedText(iso) {
 function listState(app) {
   if (!app.homeList) {
     const kept = local.get(PREFS_KEY, null) || {};
-    app.homeList = { tab: TABS.some(([k]) => k === kept.tab) ? kept.tab : null, sort: SORTS.some(([k]) => k === kept.sort) ? kept.sort : 'recent', query: '', page: 0 };
+    app.homeList = { tab: TABS.some(([k]) => k === kept.tab) ? kept.tab : null, sort: SORTS.some(([k]) => k === kept.sort) ? kept.sort : 'recent', query: '', page: 0, handout: '' };
   }
   return app.homeList;
 }
@@ -255,13 +296,19 @@ export function recordingsCard(app) {
     const [text, cls] = it.revising ? ['Being revised', 'active'] : STATUS[it.status] || [it.status, ''];
     return h('tr', { 'data-id': it.recording_id, 'data-log-text': it.file_name },
       h('td', {}, h('span.file', { title: it.recording_id }, it.file_name), feedbackCaption(app, it), correctedCaption(app, it), adjudicatedCaption(app, it),
-        it.status === 'locked' ? h('span.caption.locked-why', {}, lockedWhy(app.me && app.me.training_gate)) : null),
+        it.status === 'locked' ? h('span.caption.locked-why', {}, lockedWhy(app.me && app.me.training_gate)) : null,
+        it.handout && it.handout.overdue ? h('span.row-badges', {}, h('span.chip.warning', { title: 'The due date of this recording has passed' }, 'Overdue')) : null),
       showMode ? h('td.opt', {}, MODES[it.mode] || it.mode) : null,
       h('td.num', {}, formatHms(it.duration_s)),
       h('td.num.opt', {}, String(it.n_channels)),
       h('td', {}, h(`span.chip${cls ? `.${cls}` : ''}`, {}, text)),
       h('td.actions', {}, h('span.row-actions', {}, action(it), moreButton(app, it))));
   };
+
+  // One's own saved files of the latest version (views/my_files.js); the button waits while they are fetched.
+  const downloadButton = (it) => h('button.btn.small.quiet', { type: 'button', 'data-log': 'download-mine', title: 'Download the files the study keeps of your saved annotations',
+    'aria-label': `Download my annotations of ${it.file_name}`,
+    onclick: async (e) => { const b = e.currentTarget; b.disabled = true; try { await downloadSaved(app, it); } finally { b.disabled = false; } } }, 'Download');
 
   const historyRow = (it) => {
     const s = savedOf(it) || {};
@@ -272,7 +319,7 @@ export function recordingsCard(app) {
       h('td.num', {}, String(s.version || 1)),
       h('td.num.opt', {}, s.n_annotations === null || s.n_annotations === undefined ? 'n/a' : String(s.n_annotations)),
       h('td.num.opt', {}, s.elapsed_s === null || s.elapsed_s === undefined ? 'n/a' : spanText(s.elapsed_s)),
-      h('td.actions', {}, h('span.row-actions', {}, action(it), moreButton(app, it))));
+      h('td.actions', {}, h('span.row-actions', {}, action(it), downloadButton(it), moreButton(app, it))));
   };
 
   const pager = (pg, total) => {
@@ -286,11 +333,21 @@ export function recordingsCard(app) {
         h('button.btn.small', { type: 'button', 'data-log': 'recordings-next', disabled: pg.page >= pg.pages - 1, onclick: () => go(pg.page + 1) }, 'Next')));
   };
 
+  // the row that heads a group of a hand-out's recordings (or the others), across the table
+  const groupRow = (title, cols) => h('tr.group-row', { 'data-group': title || 'other' },
+    h('th', { colspan: String(cols), scope: 'colgroup' }, title || OTHER_GROUP));
+
   const draw = () => {
     clear(body);
-    const rows = visibleItems(items, st);
+    if (st.handout && !items.some((it) => groupOf(it) === st.handout)) st.handout = '';
+    const group = grouped(items, st.tab);
+    const rows = visibleItems(items, { ...st, group, handout: st.handout || '' });
     const pg = pageOf(rows, st.page);
     st.page = pg.page;
+    if (st.handout) {
+      body.append(h('p.caption.rec-filter', { 'data-filter': st.handout }, `Showing ${st.handout} only. `,
+        h('button.link', { type: 'button', 'data-log': 'recordings-show-all', onclick: () => { st.handout = ''; st.page = 0; drawTabs(); draw(); } }, 'Show every recording')));
+    }
     if (!rows.length) {
       const why = st.query ? `No recording's file name contains "${st.query}".`
         : { todo: 'Nothing left to start.', in_progress: 'Nothing in progress.', done: 'Nothing finished yet.', all: 'No recordings yet.',
@@ -303,7 +360,14 @@ export function recordingsCard(app) {
       ? h('tr', {}, h('th.name', {}, 'File and when it was saved'), h('th.num.version', {}, 'Version'), h('th.num.opt.count', {}, 'Annotations'),
         h('th.num.opt.time', {}, 'Time worked'), h('th.act', {}))
       : h('tr', {}, h('th', {}, 'File'), showMode ? h('th.opt', {}, 'Mode') : null, h('th.num', {}, 'Length'), h('th.num.opt', {}, 'Channels'), h('th', {}, 'Status'), h('th', {}, h('span.sr-only', {}, 'Actions')));
-    body.append(h(`table.list${history ? '.history' : ''}`, { 'data-tab': st.tab }, h('thead', {}, head), h('tbody', {}, pg.rows.map(history ? historyRow : listRow))));
+    const cols = showMode ? 6 : 5;
+    const trs = [];
+    let last = null;
+    for (const it of pg.rows) {
+      if (group && !history && !st.handout && groupOf(it) !== last) { last = groupOf(it); trs.push(groupRow(last, cols)); }
+      trs.push(history ? historyRow(it) : listRow(it));
+    }
+    body.append(h(`table.list${history ? '.history' : ''}${group && !history ? '.grouped' : ''}`, { 'data-tab': st.tab }, h('thead', {}, head), h('tbody', {}, trs)));
     const pages = pager(pg, rows.length);
     if (pages) body.append(pages);
   };

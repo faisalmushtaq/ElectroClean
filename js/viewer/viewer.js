@@ -24,6 +24,8 @@ import { nameEvery, namePx, traceWidths } from '../ui/comfort.js';
 import { icon } from '../views/common.js';
 import { confidenceFill, confidenceTagText } from '../annotate/confidence.js';
 import { layerMarks, normaliseLayers, pointerSpot } from './layers.js';
+import { UNCERTAIN_LABEL } from '../catalogue.js';
+import { edgeAt, wheelAction, zoomAround } from './scales.js';
 
 const GUTTER = 92;
 const TAG_ROW_H = 20;
@@ -120,11 +122,13 @@ export class EegViewer {
     this.ghost = null;
     this.layers = []; // read-only marks beside the annotations, such as a correction's original (setLayers)
     this.replayPointer = null; // where a replayed session's pointer is (setReplayPointer)
+    this.crowd = null; // what is drawn under the layers, such as the crowd's share of people marking (setCrowd)
     this.flash = null;
     this.markStart = null;
     this.dragPreview = null;
     this.selectedChannels = new Set();
     this.channelsActive = false;
+    this.markedBad = new Set(); // channels the annotator marked bad for the whole recording (setMarkedBad)
     this.prefix = {};
     this.labelColours = {};
     this.cursorT = null;
@@ -184,6 +188,7 @@ export class EegViewer {
       if (!e.touches.length) this._swallowTouchEnd = false;
     }, { passive: false });
     this.over.addEventListener('wheel', (e) => this._wheel(e), { passive: false });
+    for (const t of ['gesturestart', 'gesturechange', 'gestureend']) this.over.addEventListener(t, (e) => this._gesture(t, e), { passive: false });
     let dragging = false;
     const ov = (e) => {
       const r = this.overviewCanvas.getBoundingClientRect();
@@ -273,6 +278,12 @@ export class EegViewer {
     return row >= this.view.firstChannel && row < Math.min(this.channels.length, this.view.firstChannel + this.view.nChannels) ? row : null;
   }
 
+  /** The row nearest y (CSS pixels in the plot), within the rows on screen: for a drag down the channel names. */
+  rowNear(y) {
+    const last = Math.min(this.channels.length, this.view.firstChannel + this.view.nChannels) - 1;
+    return clamp(Math.floor((y - this.rowsTop) / this.rowH) + this.view.firstChannel, this.view.firstChannel, Math.max(this.view.firstChannel, last));
+  }
+
   /** Channels on screen: [{row, ch}] */
   visibleRows() {
     const out = [];
@@ -347,6 +358,12 @@ export class EegViewer {
   /** Read-only layers of marks drawn as outlines beside the annotations (layers.js): [{id, annotations, style, prefix, visible}]. */
   setLayers(layers) { this.layers = normaliseLayers(layers); this.invalidate(['over']); }
 
+  /**
+   * Something drawn over the EEG under the layers, such as the crowd's share of people marking each moment in the
+   * overlay of everyone's marks (js/expert/overlay.js): an object with paint(ctx, viewer), or null.
+   */
+  setCrowd(painter) { this.crowd = painter && typeof painter.paint === 'function' ? painter : null; this.invalidate(['over']); }
+
   /** Show or hide one layer (true when it is now shown). */
   toggleLayer(id, on = null) {
     const l = this.layers.find((x) => x.id === id);
@@ -389,8 +406,20 @@ export class EegViewer {
 
   /** A channel's group colour, or null (bad channels never take one). */
   groupColour(ch) {
-    return this.channelColours && !ch.bad ? this.channelColours.get(ch.name) || null : null;
+    return this.channelColours && !ch.bad && !this.markedBad.has(ch.name) ? this.channelColours.get(ch.name) || null : null;
   }
+
+  /**
+   * The channels the annotator marked bad for the whole recording: their rows are hatched, their traces
+   * grey and their names struck through, beside the study's own bad channels (ch.bad, named "(bad)").
+   */
+  setMarkedBad(names) {
+    this.markedBad = new Set(names || []);
+    this.invalidate(['under', 'traces']);
+  }
+
+  /** Bad in the study's channels.tsv, or marked bad by the annotator. */
+  _isBad(ch) { return Boolean(ch.bad) || this.markedBad.has(ch.name); }
 
   setSelectedChannels(names, active) {
     this.selectedChannels = new Set(names || []);
@@ -665,6 +694,16 @@ export class EegViewer {
         if (this.selectedChannels.has(ch.name)) ctx.fillRect(x0, this.rowCentre(row) - this.rowH / 2, x1 - x0, this.rowH);
       }
     }
+    // the rows of the channels marked bad by the annotator: hatched, so that they read as set aside
+    if (this.markedBad.size && !this.overlay) {
+      for (const { row, ch } of this.visibleRows()) {
+        if (!this.markedBad.has(ch.name)) continue;
+        const top = this.rowCentre(row) - this.rowH / 2;
+        ctx.fillStyle = rgba('#6E6E73', 0.06);
+        ctx.fillRect(x0, top, x1 - x0, this.rowH);
+        hatch(ctx, x0, top, x1 - x0, this.rowH, rgba('#6E6E73', 0.28), 12);
+      }
+    }
     // grid
     const step = niceStep(this.view.durationS, this.plotW);
     ctx.strokeStyle = COLOURS.grid;
@@ -774,8 +813,11 @@ export class EegViewer {
       if (!onGrid(row)) { if (selected) boxed.push({ row, ch }); continue; }
       const hover = this.hover && this.hover.area === 'channel_names' && this.hover.row === row;
       ctx.font = `${selected ? '600 ' : ''}${fontPx}px ${FONT}`;
-      ctx.fillStyle = selected ? (this.overlay ? COLOURS.accent : COLOURS.selection_channel) : ch.bad ? COLOURS.text_disabled : hover ? COLOURS.accent : this.groupColour(ch) || COLOURS.text;
+      // (a channel the annotator marked bad stays legible, struck through; the study's own bad ones are greyed)
+      ctx.fillStyle = selected ? (this.overlay ? COLOURS.accent : COLOURS.selection_channel) : this.markedBad.has(ch.name) ? COLOURS.text_secondary
+        : ch.bad ? COLOURS.text_disabled : hover ? COLOURS.accent : this.groupColour(ch) || COLOURS.text;
       ctx.fillText(this._nameText(ch), x0 - 8, this.rowCentre(row));
+      if (this.markedBad.has(ch.name)) this._strikeName(ctx, ch, this.rowCentre(row));
       if (selected) taken.push(this.rowCentre(row));
     }
     const room = fontPx + 4; // a boxed name's white ground
@@ -814,6 +856,19 @@ export class EegViewer {
 
   _nameText(ch) { return ch.bad ? `${ch.name} (bad)` : ch.name; }
 
+  /** A line through the name of a channel the annotator marked bad (drawn just after its name, right-aligned at x0 - 8). */
+  _strikeName(ctx, ch, y) {
+    const w = ctx.measureText(this._nameText(ch)).width;
+    ctx.save();
+    ctx.strokeStyle = ctx.fillStyle;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(this.x0 - 10 - w, Math.round(y) + 0.5);
+    ctx.lineTo(this.x0 - 6, Math.round(y) + 0.5);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   /** A channel's name on a white ground over the names around it (a selected channel, the row under the pointer). */
   _boxedName(ctx, row, ch, colour) {
     const px = this._names.px;
@@ -827,6 +882,7 @@ export class EegViewer {
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
     ctx.fillText(text, this.x0 - 8, y);
+    if (this.markedBad.has(ch.name)) this._strikeName(ctx, ch, y);
     ctx.textBaseline = 'alphabetic';
   }
 
@@ -909,7 +965,7 @@ export class EegViewer {
       const k = (half / scaling) * this.view.scaleFactor;
       const yc = this.rowCentre(row);
       const colour = this.channelsActive && this.selectedChannels.has(ch.name) ? COLOURS.selection_channel
-        : ch.bad ? COLOURS.trace_bad : this.groupColour(ch) || (ch.type === 'ecg' ? COLOURS.trace_ecg : COLOURS.trace);
+        : this._isBad(ch) ? COLOURS.trace_bad : this.groupColour(ch) || (ch.type === 'ecg' ? COLOURS.trace_ecg : COLOURS.trace);
       if (!dense) {
         const a = Math.floor(sStart) - c.startSample;
         const offset = meanOf(data, a, a + Math.ceil(span));
@@ -1035,7 +1091,8 @@ export class EegViewer {
     // tags above the traces
     ctx.font = `12px ${FONT}`;
     const tags = anns.map((a) => {
-      const text = `${this.prefix[a.annotation_id] || ''}${a.label}${a.channels.length ? ' [ch]' : ''}${confidenceTagText(a)}`;
+      // a mark of the uncertain type reads "Uncertain" (Data-artifact, for an expert to review)
+      const text = `${this.prefix[a.annotation_id] || ''}${a.label === UNCERTAIN_LABEL ? 'Uncertain' : a.label}${a.channels.length ? ' [ch]' : ''}${confidenceTagText(a)}`;
       const w = ctx.measureText(text).width + 12 + (a.note ? NOTE_W : 0);
       const xa = clamp(this.sampleToX(a.onset_sample), x0, x1);
       const xb = clamp(this.sampleToX(end(a)), x0, x1);
@@ -1062,6 +1119,11 @@ export class EegViewer {
       this._tags.push({ id: tg.a.annotation_id, x: tg.x - tg.w / 2, y, w: tg.w, h: TAG_ROW_H - 3 });
     });
     this._drawMarkers(ctx, x0, x1, y0, y1);
+    if (this.crowd) {
+      const t0 = performance.now();
+      this.crowd.paint(ctx, this);
+      this.stats.crowd = performance.now() - t0;
+    }
     this._drawLayers(ctx);
     // the drag in progress
     if (this.dragPreview) {
@@ -1177,23 +1239,41 @@ export class EegViewer {
     const s1 = (this.view.startS + this.view.durationS) * this.sfreq;
     ctx.font = `11px ${FONT}`;
     for (const { layer, a } of layerMarks(this.layers, this.annotations, s0, s1)) {
-      const colour = this.catalogue.colourFor(a.label);
+      const colour = layer.colour || this.catalogue.colourFor(a.label);
       const xa = clamp(this.sampleToX(a.onset_sample), x0, x1);
       const xb = clamp(this.sampleToX(end(a)), x0, x1);
+      const spans = this._rowSpans(a.channels);
+      if (layer.colour) { // a person's own colour: on a dark edge, so that the light ones show on the white EEG
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
+        ctx.lineWidth = 3.5;
+        for (const [ya, yb] of spans) ctx.strokeRect(xa + 1, ya + 2, Math.max(1, xb - xa - 2), yb - ya - 4);
+      }
       ctx.strokeStyle = colour;
-      ctx.lineWidth = 1.5;
-      if (layer.style === 'dashed') ctx.setLineDash([5, 4]);
-      for (const [ya, yb] of this._rowSpans(a.channels)) ctx.strokeRect(xa + 0.5, ya + 1.5, Math.max(1, xb - xa - 1), yb - ya - 3);
+      ctx.lineWidth = layer.colour ? 2 : 1.5;
+      if (layer.dash) ctx.setLineDash(layer.dash); else if (layer.style === 'dashed') ctx.setLineDash([5, 4]);
+      for (const [ya, yb] of spans) ctx.strokeRect(xa + (layer.colour ? 1 : 0.5), ya + (layer.colour ? 2 : 1.5), Math.max(1, xb - xa - (layer.colour ? 2 : 1)), yb - ya - (layer.colour ? 4 : 3));
       ctx.setLineDash([]);
-      // its name at the foot of the outline, as much of it as fits: "Original: Eye-blink-artifact", "Original", or nothing
-      const text = [`${layer.prefix}${a.label}`, layer.prefix.replace(/[:\s]+$/, '')].find((x) => x && ctx.measureText(x).width + 12 <= xb - xa);
+      // its name at the foot of the outline, as much of it as fits: "Original: Eye-blink-artifact", "Original", or nothing;
+      // a person's own layer names them inside the outline's top, a line lower for each layer before it
+      const name = a.label === UNCERTAIN_LABEL ? 'Uncertain' : a.label;
+      const text = [`${layer.prefix}${name}`, layer.prefix.replace(/[:\s]+$/, '')].find((x) => x && ctx.measureText(x).width + 12 <= xb - xa);
       if (text) {
         const w = ctx.measureText(text).width + 8;
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-        ctx.fillRect(xa + 2, y1 - 20, w, 16);
-        ctx.fillStyle = legibleOnWhite(colour);
-        ctx.textAlign = 'left';
-        ctx.fillText(text, xa + 6, y1 - 8);
+        const k = layer.colour ? Math.max(0, this.layers.findIndex((l) => l.id === layer.id)) : 0;
+        const top = layer.colour && spans.length ? spans[0][0] + 4 + 15 * k : y1 - 20;
+        if (!layer.colour) {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+          ctx.fillRect(xa + 2, y1 - 20, w, 16);
+          ctx.fillStyle = legibleOnWhite(colour);
+          ctx.textAlign = 'left';
+          ctx.fillText(text, xa + 6, y1 - 8);
+        } else if (top + 16 <= (spans.length ? spans[0][1] - 2 : y1)) {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+          ctx.fillRect(xa + 3, top, w, 15);
+          ctx.fillStyle = '#000000';
+          ctx.textAlign = 'left';
+          ctx.fillText(text, xa + 7, top + 11);
+        }
       }
     }
     const spot = pointerSpot(this.replayPointer, this.visibleRows(), this);
@@ -1291,7 +1371,7 @@ export class EegViewer {
     }
   }
 
-  hit(clientX, clientY, { edge = EDGE_PX, trace = 5 } = {}) {
+  hit(clientX, clientY, { edge = EDGE_PX, trace = 5, outside = null } = {}) {
     const r = this.over.getBoundingClientRect();
     const x = clientX - r.left;
     const y = clientY - r.top;
@@ -1326,8 +1406,10 @@ export class EegViewer {
     for (const a of at) {
       const xa = this.sampleToX(a.onset_sample);
       const xb = this.sampleToX(end(a));
-      if (Math.abs(x - xa) <= edge && xa >= this.x0 - 1) { info.annotation = a.annotation_id; info.edge = 'start'; return info; }
-      if (Math.abs(x - xb) <= edge && xb <= this.x1 + 1) { info.annotation = a.annotation_id; info.edge = 'end'; return info; }
+      // (an edge reaches only a little way outside its mark, so that a mark begun just after it is a new one)
+      const which = edgeAt(x, xa, xb, edge, outside);
+      if (which === 'start' && xa >= this.x0 - 1) { info.annotation = a.annotation_id; info.edge = 'start'; return info; }
+      if (which === 'end' && xb <= this.x1 + 1) { info.annotation = a.annotation_id; info.edge = 'end'; return info; }
     }
     const inside = at.find((a) => x >= this.sampleToX(a.onset_sample) && x <= this.sampleToX(end(a)));
     if (inside) info.annotation = inside.annotation_id;
@@ -1377,7 +1459,8 @@ export class EegViewer {
     if (e.pointerType === 'touch' && this._fingers(type, e)) return;
     const coarse = e.pointerType === 'touch' || e.pointerType === 'pen';
     const info = type === 'pointerleave' ? null
-      : this.hit(e.clientX, e.clientY, { edge: edgePx(e.pointerType, EDGE_PX), trace: coarse ? 12 : 5 });
+      : this.hit(e.clientX, e.clientY, { edge: edgePx(e.pointerType, EDGE_PX), trace: coarse ? 12 : 5,
+        outside: coarse ? Math.round(edgePx(e.pointerType, EDGE_PX) * 0.75) : null });
     const prev = this.hover;
     this.hover = info;
     if (type === 'pointermove' || type === 'pointerleave') {
@@ -1469,20 +1552,50 @@ export class EegViewer {
     this._press = null;
   }
 
+  /**
+   * The wheel and the trackpad (scales.js wheelAction): the wheel alone changes the amplitude, Shift+wheel
+   * and a sideways two-finger movement move along time, Ctrl (or Cmd) with the wheel and a trackpad's pinch
+   * show more or less time around the pointer, and Alt+wheel moves through the channels.
+   */
   _wheel(e) {
     e.preventDefault();
-    const dx = e.deltaX;
-    const dy = e.deltaY;
-    const unit = e.deltaMode === 1 ? 30 : e.deltaMode === 2 ? this.plotW : 1;
-    if (e.shiftKey && Math.abs(dy) > Math.abs(dx)) {
-      // Shift+wheel: through the channels
-      this._wheelRows = (this._wheelRows || 0) + (dy * unit) / 40;
+    const act = wheelAction(e, { plotW: this.plotW, durationS: this.view.durationS });
+    if (!act) return;
+    if (act.kind === 'time') this.scrollBy(act.seconds, 'wheel');
+    else if (act.kind === 'amplitude') this.scaleBy(act.factor, 'wheel');
+    else if (act.kind === 'zoom') this.zoomAt(act.factor, this._localX(e.clientX), 'wheel');
+    else {
+      this._wheelRows = (this._wheelRows || 0) + act.rows;
       const n = Math.trunc(this._wheelRows);
       if (n) { this._wheelRows -= n; this.scrollChannels(n, 'wheel'); }
+    }
+  }
+
+  _localX(clientX) {
+    const r = this.over.getBoundingClientRect();
+    return Number.isFinite(clientX) ? clientX - r.left : this.x0 + this.plotW / 2;
+  }
+
+  /** Show `factor` times as much time, keeping the moment at plot pixel x where it is. */
+  zoomAt(factor, x, cause) {
+    return this.setView(zoomAround(this.view, factor, x, { x0: this.x0, plotW: this.plotW, durationTotal: this.spanS }), cause);
+  }
+
+  /**
+   * Safari's pinch on a Mac trackpad arrives as gesture events rather than as Ctrl+wheel: the time shown
+   * follows the pinch. On an iPad the fingers' own pointer events move the view (_fingers), so the
+   * gesture events that come with them are only kept from scrolling the page.
+   */
+  _gesture(type, e) {
+    if (e.cancelable) e.preventDefault();
+    if (this._touches.size) { this._gestureFrom = null; return; }
+    if (type === 'gesturestart') { this._gestureFrom = { durationS: this.view.durationS, x: this._localX(e.clientX) }; return; }
+    if (type === 'gesturechange' && this._gestureFrom && e.scale > 0) {
+      const g = this._gestureFrom;
+      this.zoomAt((g.durationS / e.scale) / this.view.durationS, g.x, 'pinch');
       return;
     }
-    const d = Math.abs(dx) > Math.abs(dy) ? dx : dy;
-    this.scrollBy(((d * unit) / this.plotW) * this.view.durationS, 'wheel');
+    if (type === 'gestureend') this._gestureFrom = null;
   }
 
   // ------------------------------------------------- the overlay, isolate and the value readout
@@ -1527,7 +1640,7 @@ export class EegViewer {
   }
 
   _overlayColour(ch) {
-    return ch.bad ? COLOURS.trace_bad : this.groupColour(ch) || (ch.type === 'ecg' ? COLOURS.trace_ecg : COLOURS.trace);
+    return this._isBad(ch) ? COLOURS.trace_bad : this.groupColour(ch) || (ch.type === 'ecg' ? COLOURS.trace_ecg : COLOURS.trace);
   }
 
   _renderOverlayTraces(ctx, c) {

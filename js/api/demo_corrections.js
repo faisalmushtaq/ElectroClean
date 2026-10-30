@@ -188,7 +188,9 @@ class Corrections {
       const info = this.b._recordingInfo(s.recording_id);
       if (!info) continue;
       items.push({ annotator_id: s.annotator_id, display_name: this.displayName(s.annotator_id), recording_id: s.recording_id, file_name: info.file_name,
-        attempt: s.attempt, saved_at: s.saved_at || null, n_annotations: s.annotations.length, corrections: n, task_id: null, own: s.annotator_id === me.aid });
+        attempt: s.attempt, saved_at: s.saved_at || null, n_annotations: s.annotations.length,
+        n_needs_review: s.annotations.filter((a) => a.label === 'Data-artifact').length, n_bad_channels: (s.bad_channels || []).length,
+        corrections: n, task_id: null, own: s.annotator_id === me.aid });
     }
     items.sort((x, y) => String(y.saved_at || '').localeCompare(String(x.saved_at || '')) || y.annotator_id.localeCompare(x.annotator_id) || y.recording_id.localeCompare(x.recording_id));
     return { items: items.slice(0, limit), total: items.length, corrections_on: this.review.corrections !== false };

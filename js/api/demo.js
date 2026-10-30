@@ -35,6 +35,11 @@ import { isConfidence, noteProblem } from '../annotate/confidence.js';
 
 const STATE_KEY = 'electrotag.demo.v2';
 /** The admin operations of the training path, which come with demo_training_stages.js. */
+/** The sandbox's calls that wait for the sign-up questionnaire (questionnaire.py GATED_OPERATIONS), and the admin
+ *  operations that come with its part (demo_questionnaire.js, loaded at its first use). */
+const QUESTIONNAIRE_GATED = ['match', 'putDraft', 'submit', 'training', 'guided', 'guidedCheck', 'guidedContinue', 'guidedShowMe',
+  'trainingStage', 'trainingSnippets', 'quiz', 'expert'];
+const QUESTIONNAIRE_ADMIN_OPS = ['questionnaire_get', 'questionnaire_summary', 'contacts_download', 'users_list'];
 const TRAINING_ADMIN_OPS = ['snippets_list', 'snippet_add', 'snippet_remove', 'training_gate_get', 'training_reopen', 'training_assessment_set'];
 const TOKEN_KEY = 'electrotag.demo.token';
 export const DEMO_PASSWORD = 'demo';
@@ -213,6 +218,12 @@ export class DemoBackend {
     this._admin = new DemoAdmin(this);
     this.feedback = new DemoFeedback(this); // problem reports and reviews (demo_feedback.js)
     this.experts = null; // the expert area's operations (demo_expert.js), loaded at the first expert call
+    // The sign-up questionnaire (demo_questionnaire.js): work waits until it is answered, as on a study server.
+    this.questionnaires = null;
+    for (const name of QUESTIONNAIRE_GATED) {
+      const call = this[name].bind(this);
+      this[name] = async (...args) => { (await this._questionnairePart()).require(); return call(...args); };
+    }
     const saved = tokens.get(TOKEN_KEY, null);
     const user = saved ? this._admin.user(saved.annotator_id) : null;
     this.annotatorId = user && user.status === 'active' ? user.annotator_id : null;
@@ -293,6 +304,7 @@ export class DemoBackend {
       catalogue: CATALOGUE,
       programme: this._inProgramme(aid) ? { set_id: TRAINING_SET.set_id, name: this._exampleSet().name, complete: !this._nextStep(aid).stage } : null,
       training_gate: this._gate(),
+      questionnaire: (await this._questionnairePart()).status(aid),
       quizzes: this._quizAllowed(aid) ? [{ set_id: QUIZ.set_id, name: this._exampleSet().name, n_items: QUIZ.items.length,
         n_answered: Object.keys(quiz.answers).length, finished: Boolean(quiz.finished), feedback: QUIZ.feedback }] : [],
     };
@@ -480,7 +492,7 @@ export class DemoBackend {
     const aid = this._aid();
     const items = this._workItems(aid);
     const nxt = this._nextItem(aid, items);
-    return {
+    const out = {
       items: items.map((i) => {
         // As the completion register says of a finished recording: its time and annotations (the latest save).
         const last = i.status === 'done' ? this._attempts(i.key).pop() : null;
@@ -495,11 +507,15 @@ export class DemoBackend {
           saved: i.saved ? { version: i.saved.version, first_saved_at: i.saved.first_saved_at, total_elapsed_s: i.saved.total_elapsed_s } : null,
           revising: i.revising,
           problem: this.feedback.problemOf(aid, i),
+          handout: null,
         };
       }),
+      due: [],
       next: nxt ? nxt.rid : null,
       next_item: nxt ? { recording_id: nxt.rid, mode: nxt.mode, context_id: nxt.context_id } : null,
     };
+    const ho = (this._admin.s.library || {}).handouts; // hand-outs' titles and due dates (demo_library.js)
+    return ho && Object.keys(ho).length ? (await this._admin._library()).decorate(aid, items, out) : out;
   }
 
   /** service.py find_item: one of the person's work items, or the error the server gives. */
@@ -615,7 +631,8 @@ export class DemoBackend {
           : this._metadataMessage(revisable.rid), {
           ...where(revisable), manifest: await this._publicManifest(revisable.rid), differences,
           draft: draft && draft.revises === version ? draft : null,
-          revision: { version: version + 1, revises: version, saved_at: last.saved_at, annotations: last.annotations.map(annotationOut) } });
+          revision: { version: version + 1, revises: version, saved_at: last.saved_at, annotations: last.annotations.map(annotationOut),
+            bad_channels: [...(last.bad_channels || [])] } });
       }
       const hint = revisable ? ' To change your annotations, open it from your history with Open to revise.' : '';
       return DemoBackend._answer('done', `You have already completed ${rid}.${hint} Choose another recording from your list.`, where(mine[0]));
@@ -656,8 +673,10 @@ export class DemoBackend {
     if (!Array.isArray(viewed) || viewed.length > 5000 || viewed.some((p) => !Array.isArray(p) || p.length !== 2 || p.some((x) => typeof x !== 'number' || !Number.isFinite(x)) || !(p[0] >= 0 && p[0] <= p[1]))) {
       throw new ApiError(422, 'invalid_draft', 'draft.viewed must be a list of [start_s, end_s] pairs of seconds');
     }
+    const bad = draft.bad_channels === undefined ? [] : draft.bad_channels;
+    if (!Array.isArray(bad) || bad.length > 4096 || bad.some((c) => typeof c !== 'string' || c.length > 200)) throw new ApiError(422, 'invalid_draft', 'draft.bad_channels must be a list of channel names');
     const saved_at = nowLocalIso();
-    this.state.drafts[item.key] = { annotations: anns, view: draft.view || {}, elapsed_s: Math.min(elapsed, MAX_ELAPSED_S), viewed, saved_at,
+    this.state.drafts[item.key] = { annotations: anns, view: draft.view || {}, elapsed_s: Math.min(elapsed, MAX_ELAPSED_S), viewed, saved_at, bad_channels: [...new Set(bad)],
       ...(revises !== null ? { revises } : {}) };
     this._save();
     return { saved_at };
@@ -710,6 +729,16 @@ export class DemoBackend {
     return annotations.map((a) => ({ ...a, channels: info.ch_names.filter((c) => (a.channels || []).includes(c)), confidence: a.confidence ?? null, note: (a.note || '').trim() }));
   }
 
+  /** As service.py parse_bad_channels. */
+  _badChannels(list, info) {
+    if (list === undefined || list === null) return [];
+    if (!Array.isArray(list) || list.some((c) => typeof c !== 'string')) throw new ApiError(422, 'invalid_annotation', 'bad_channels must be a list of channel names');
+    if (new Set(list).size !== list.length) throw new ApiError(422, 'invalid_annotation', 'bad_channels lists a channel more than once');
+    const unknown = [...new Set(list)].filter((c) => !info.ch_names.includes(c)).sort();
+    if (unknown.length) throw new ApiError(422, 'invalid_annotation', `bad_channels names channels that are not shown: ${unknown.slice(0, 5).join(', ')}`);
+    return info.ch_names.filter((c) => list.includes(c));
+  }
+
   /** As service.py confidence_and_note: a confidence is a whole number from 1 to 5 or none, and a note one line of at most 200 characters. */
   _checkConfidenceAndNote(a, where, code) {
     if (a.confidence !== undefined && a.confidence !== null && !isConfidence(a.confidence)) {
@@ -743,6 +772,7 @@ export class DemoBackend {
     if (typeof elapsed !== 'number' || !Number.isFinite(elapsed)) throw new ApiError(422, 'invalid_session', 'session.elapsed_s must be a number');
     if (elapsed < 0) throw new ApiError(422, 'invalid_session', 'session.elapsed_s must be at least 0');
     const annotations = this._validate(body.annotations, info);
+    const badChannels = this._badChannels(body.bad_channels, info);
     const guidedSummary = item.mode === 'guided' ? this._verifyGuided(aid, rid, annotations) : null;
     const sid = sessionInfo.session_id;
     if (sid !== undefined && sid !== null && (typeof sid !== 'string' || !/^[0-9a-f]{32}$/i.test(sid))) {
@@ -769,7 +799,7 @@ export class DemoBackend {
     }
     this.state.submissions.push({
       key, annotator_id: aid, recording_id: rid, mode: item.mode, context_id: item.context_id, attempt, saved_at,
-      annotations, session: { ...sessionInfo, elapsed_s: Math.min(elapsed, MAX_ELAPSED_S) }, sha256: String(body.sha256).toLowerCase(),
+      annotations, bad_channels: badChannels, session: { ...sessionInfo, elapsed_s: Math.min(elapsed, MAX_ELAPSED_S) }, sha256: String(body.sha256).toLowerCase(),
       confidence_setting: this._admin.studyBlock().annotation.confidence,
       recording: { file_name: info.file_name, sfreq: info.sfreq, n_samples: info.n_samples, ch_names: info.ch_names, size_bytes: info.size_bytes },
       guided: guidedSummary, feedback: out.feedback ? { passed: out.feedback.passed, metrics: out.feedback.metrics } : null,
@@ -780,7 +810,7 @@ export class DemoBackend {
     this._save();
     // the output files, named as the server's OutputLayout names them
     const base = this._outputBasename(info, aid, attempt);
-    out.files = ['annotations.json', 'events.json', 'events.tsv', 'session.json', 'time_viewed.txt'].map((f) => `${base}_${f}`);
+    out.files = ['annotations.json', ...(badChannels.length ? ['channels.tsv'] : []), 'events.json', 'events.tsv', 'session.json', 'time_viewed.txt'].map((f) => `${base}_${f}`);
     out.next = (await this.assignments()).next;
     return out;
   }
@@ -803,8 +833,30 @@ export class DemoBackend {
   /** GET /me/reviews: the reviews of this annotator's saved work, when the study shows them. */
   async myReviews() { return this.feedback.mine(); }
 
+  /** GET /me/results (demo_export.js). */
+  async myResults(recordingId, mode, contextId, version) { return (await import('./demo_export.js')).myResults(this, recordingId, mode, contextId, version); }
+
   // ------------------------------------------------------------ achievements
   /** GET /me/achievements (docs/web/api.md, "Achievements"), from the sandbox's own state. */
+  /** GET /me/questionnaire: the sign-up questionnaire, the answers and contact details (demo_questionnaire.js). */
+  async questionnaire() { this._aid(); return JSON.parse(JSON.stringify((await this._questionnairePart()).view())); }
+
+  /** The sign-up questionnaire's part of the sandbox, loaded at its first use (js/lazy.js, part demoQuestionnaire). */
+  async _questionnairePart() {
+    if (!this.questionnaires) {
+      const { DemoQuestionnaire } = await loadPart('demoQuestionnaire');
+      this.questionnaires = this.questionnaires || new DemoQuestionnaire(this);
+    }
+    return this.questionnaires;
+  }
+
+  /** POST /me/questionnaire: saves the answers and contact details. */
+  async saveQuestionnaire(body) {
+    this._aid();
+    const sent = JSON.parse(JSON.stringify({ answers: null, ...(body || {}) })); // as it would travel
+    return JSON.parse(JSON.stringify((await this._questionnairePart()).save(sent)));
+  }
+
   async achievements() { return this._achievements({}); }
 
   /** POST /me/achievements: the personal goal ({goal_per_week}) or being hidden from the leaderboard. */
@@ -1369,6 +1421,7 @@ export class DemoBackend {
           scope: a.channels.length ? 'channels' : 'whole_montage', created_at: a.created_at, modified_at: a.modified_at,
           confidence: a.confidence ?? null, note: a.note || '',
         })),
+        bad_channels: [...(s.bad_channels || [])],
       };
     });
     return {
@@ -1402,6 +1455,7 @@ export class DemoBackend {
   /** The admin area's operations (docs/web/api.md, "Administration"), in this browser: demo_admin.js. */
   async admin(op, body = {}) {
     if (TRAINING_ADMIN_OPS.includes(op)) await this._trainingPart(); // its operations come with it (demo_training_stages.js)
+    if (QUESTIONNAIRE_ADMIN_OPS.includes(op)) await this._questionnairePart(); // and these with demo_questionnaire.js
     return this._admin.run(op, body || {});
   }
 
