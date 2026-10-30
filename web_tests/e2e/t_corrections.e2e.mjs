@@ -245,11 +245,11 @@ export const tests = [
       await clickDialogButton(page, 'Save and Finish');
       await page.waitForSelector('.dialog .dialog-title', { timeout: 15000 });
       await page.locator('.dialog-buttons button', { hasText: /Back to my recordings|^OK$/ }).first().click();
-      // T01 sees nothing to watch until E01 agrees
+      // T01 sees nothing to watch until E01 agrees: Watch an expert at work is on Learn with the experts, on the training path
       await switchTo(page, 'T01');
-      await page.evaluate(() => globalThis.ElectroTag.showHome());
-      await waitForRoute(page, 'home');
-      await page.click('.watch-entry');
+      await page.evaluate(() => globalThis.ElectroTag.showTraining());
+      await waitForRoute(page, 'training');
+      await page.click('[data-stage="guided"] .watch-entry');
       await page.waitForSelector('.dialog .dialog-title:text("Watch an expert")');
       assert.match(await page.textContent('.dialog'), /No expert has a session to show yet/);
       await clickDialogButton(page, 'OK');
@@ -257,10 +257,10 @@ export const tests = [
       await switchTo(page, 'E01');
       await page.evaluate(() => globalThis.ElectroTag.backend.expert('replay_consent_set', { teaching: true }));
       await switchTo(page, 'T01');
-      await page.evaluate(() => globalThis.ElectroTag.showHome());
-      await waitForRoute(page, 'home');
+      await page.evaluate(() => globalThis.ElectroTag.showTraining());
+      await waitForRoute(page, 'training');
       await t.screenshot(page, 'watch_entry');
-      await page.click('.watch-entry');
+      await page.click('[data-stage="guided"] .watch-entry');
       await page.waitForSelector('.dialog.watch-dialog .watch-list li');
       assert.match(await page.textContent('.watch-list'), /E01\): sub-demo02_task-rest_eeg\.edf, 1 annotation/);
       await t.screenshot(page, 'watch_dialog');
@@ -280,10 +280,10 @@ export const tests = [
       const { assert } = t;
       // an annotator of its own, whose recordings no other test has touched
       const admin = (await api(t, null, 'POST', '/login', { annotator_id: 'ADMIN', password: PASSWORD })).token;
-      await api(t, admin, 'POST', '/admin/user_add', { annotator_id: 'C01', display_name: 'Corrected annotator', password: PASSWORD });
-      await api(t, admin, 'POST', '/admin/assign', { annotator_ids: ['C01'], all: true });
+      await api(t, admin, 'POST', '/admin/user_add', { annotator_id: 'K01', display_name: 'Corrected annotator', password: PASSWORD });
+      await api(t, admin, 'POST', '/admin/assign', { annotator_ids: ['K01'], all: true });
       const page = await t.newPage({ url: t.study.base, width: 1440, height: 900 });
-      await signIn(page, 'C01', PASSWORD);
+      await signIn(page, 'K01', PASSWORD);
       await waitForRoute(page, 'home');
       const file = 'sub-003_task-rest_eeg.edf';
       // the study may hold many recordings by now (other tests register them): the list's search finds it
@@ -301,13 +301,13 @@ export const tests = [
       await page.waitForSelector('.dialog .dialog-title', { timeout: 30000 });
       await page.locator('.dialog-buttons button', { hasText: /Back to my recordings|^OK$/ }).first().click();
       await page.evaluate(() => globalThis.ElectroTag.flushLog());
-      const folder = path.join(t.study.dir, 'study', 'Annotated_Events', 'annotator-C01', 'sub-003', 'eeg');
+      const folder = path.join(t.study.dir, 'study', 'Annotated_Events', 'annotator-K01', 'sub-003', 'eeg');
       const before = checksums(folder);
       assert.equal(Object.keys(before).length, 5);
 
       const expert = await t.newPage({ url: t.study.base, width: 1440, height: 900 });
       await signIn(expert, 'E01', PASSWORD);
-      await fromSavedWork(expert, 'C01', 'correct');
+      await fromSavedWork(expert, 'K01', 'correct');
       await waitForRoute(expert, 'expert-correct');
       await expert.setInputFiles('input[data-log="file-input"]', filesFor(t.study.dir, file));
       await expert.waitForSelector('.correction-pass', { timeout: 30000 });
@@ -320,20 +320,20 @@ export const tests = [
       await clickDialogButton(expert, 'OK');
       await waitForRoute(expert, 'expert-work');
       assert.deepEqual(checksums(folder), before, 'the original files are never changed');
-      const derived = path.join(t.study.dir, 'study', 'Annotated_Events', 'derived', 'corrections', 'annotator-C01', 'sub-003', 'eeg');
+      const derived = path.join(t.study.dir, 'study', 'Annotated_Events', 'derived', 'corrections', 'annotator-K01', 'sub-003', 'eeg');
       const files = fs.readdirSync(derived).sort();
       assert.equal(files.length, 5);
       const doc = JSON.parse(fs.readFileSync(path.join(derived, files.find((f) => f.endsWith('_annotations.json'))), 'utf8'));
       assert.equal(doc.session.context.derived.corrector_id, 'E01');
       assert.equal(doc.annotations.length, 2);
 
-      // the replay of C01's session, from the server's log
-      await fromSavedWork(expert, 'C01', 'replay');
+      // the replay of K01's session, from the server's log
+      await fromSavedWork(expert, 'K01', 'replay');
       await waitForRoute(expert, 'expert-replay');
       await expert.setInputFiles('input[data-log="file-input"]', filesFor(t.study.dir, file));
       assert.match(await playToTheEnd(expert), /The replay matches the saved version 1/);
 
-      // C01 reads the correction beside their own version
+      // K01 reads the correction beside their own version
       await page.evaluate(() => globalThis.ElectroTag.reloadHome());
       await page.click('.rec-tabs [data-tab="history"]');
       await page.waitForSelector('.corrected-line');

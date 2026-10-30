@@ -207,10 +207,11 @@ export class Workspace {
       this.closeBtn = h('button.btn.quiet.back', { type: 'button', 'data-log': 'close', onclick: () => this.close() },
         icon('arrow-left'), this.kind === 'review' ? 'Training path' : this.kind === 'reviewing' || PART_KINDS.includes(this.kind) ? 'Back' : 'Close'),
       h('div.ws-name', {}, h('h1', { title: s.recordingId }, s.recording.fileName),
-        h('span.chip', { class: this.kind === 'tryout' ? 'warning' : 'active' }, MODE_TEXT[this.kind === 'annotate' ? s.mode : this.kind] || s.mode),
+        h('span.chip', { class: this.kind === 'tryout' || this.kind === 'tour' ? 'warning' : 'active' }, MODE_TEXT[this.kind === 'annotate' ? s.mode : this.kind] || s.mode),
         this.bounds ? h('span.chip.ws-part', { 'data-log': 'task-part', title: 'This task gives you this part of the recording: the rest is hatched and is not annotated.' },
           `Your part: ${this.bounds.text}`) : null),
-      this.kind === 'tryout' ? h('span.ws-banner', {}, 'This file is not part of the study, so nothing you mark is saved.') : null);
+      this.kind === 'tryout' ? h('span.ws-banner', {}, 'This file is not part of the study, so nothing you mark is saved.')
+        : this.kind === 'tour' ? h('span.ws-banner', {}, 'A practice recording for the tour: nothing you mark is kept.') : null);
     const actions = h('div.ws-actions');
     this.actionsEl = actions; // a review pass, the feedback view, a correction and a replay add their own forward action
     if (!this.readOnly) {
