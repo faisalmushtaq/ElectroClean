@@ -30,8 +30,19 @@ their own earlier correction for that purpose (the latest of each expert counts)
 
 **Feedback.** When the study shows corrections to its annotators
 (``review.show_corrections_to_annotators``), ``GET /me/feedback`` lists the corrections of the
-caller's work with each change and its reason, and the open operation ``my_correction_get`` gives the
-annotations to show one beside the original.
+caller's work, one item for each version corrected, and the open operation ``my_correction_get``
+gives the annotations to show beside the original. How the version stands (``standing``) decides
+what the annotator sees, so that nobody is taught one expert's version where experts disagree:
+``single`` (one expert's correction: its changes and reasons), ``pending`` (several experts corrected
+it and the adjudication of their disagreements is not finished: who corrected it and nothing of what
+they changed; ``my_correction_get`` answers 409 ``pending_adjudication``) and ``adjudicated`` (the
+adjudicated corrected version, read through H4's adjudication record, whose ``corrected`` names the
+version: each change with the experts' reasons where they agreed and the adjudicator's decision and
+reason where they did not, and the decisions as an outcome card).
+
+**Reasons that fit the change.** A reason must suit the change it is given for
+(:data:`REASONS_FOR`): an added mark is never "Not an artifact", a removed mark never "Missed
+artifact", and a changed mark, which is still marked, neither.
 """
 
 from __future__ import annotations
@@ -64,6 +75,14 @@ REASONS = {
     "split_merge": "Should be split or merged",
     "other": "Other",
 }
+#: The reasons that suit each kind of change (the others are refused with 400 ``bad_request``).
+REASONS_FOR = {
+    "added": ("missed", "wrong_type", "boundaries", "channels", "split_merge", "other"),
+    "removed": ("not_artifact", "wrong_type", "boundaries", "channels", "split_merge", "other"),
+    "changed": ("wrong_type", "boundaries", "channels", "split_merge", "other"),
+}
+#: The words for a reason that does not suit a kind of change.
+CHANGE_WORDS = {"added": "an added mark", "removed": "a removed mark", "changed": "a changed mark"}
 #: What can differ between an original mark and its corrected version.
 FIELDS = ("label", "onset", "end", "channels", "confidence", "note")
 CHANGES = ("added", "removed", "changed")
@@ -450,6 +469,9 @@ def correction_save(service: StudyService, user: User, body: dict[str, Any]) -> 
                        f"{'change has' if len(missing) == 1 else 'changes have'} none yet.", annotation_ids=missing)
     for c in changes:
         g = given.get(c["annotation_id"], {})
+        if g.get("reason") and g["reason"] not in REASONS_FOR[c["change"]]:
+            raise _bad(f'"{REASONS[g["reason"]]}" is not a reason for {CHANGE_WORDS[c["change"]]}: choose one of '
+                       + ", ".join(REASONS[k] for k in REASONS_FOR[c["change"]]) + ".")
         c["reason"] = g.get("reason", "")
         c["note"] = g.get("note", "")
     overall = body.get("overall_note") or ""
@@ -571,18 +593,211 @@ def correction_get(service: StudyService, user: User, body: dict[str, Any]) -> d
 
 @expert_op("my_correction_get", open_to_all=True)
 def my_correction_get(service: StudyService, user: User, body: dict[str, Any]) -> dict[str, Any]:
-    """An annotator's view of a correction of their own work (when the study shows corrections to annotators)."""
+    """An annotator's view of a correction of their own work (when the study shows corrections to annotators): one
+    expert's correction, or the adjudicated corrected version once experts' disagreements are settled; while they
+    are not, 409 ``pending_adjudication`` (see the module docstring)."""
     if not service.settings.review.show_corrections_to_annotators:
         raise ApiError(403, "forbidden", "This study does not show corrections to its annotators.")
     rec = _one(service, body.get("correction_id"))
     if rec.get("annotator_id") != user.annotator_id:
         raise ApiError(404, "not_found", "This correction was not found in the study.")
-    return _with_versions(service, rec, for_annotator=True)
+    st = standing_of(service, rec)
+    if st["standing"] == "pending":
+        raise ApiError(409, "pending_adjudication", pending_words(st["correctors"]))
+    if st["standing"] == "adjudicated":
+        return settled_answer(service, rec, st)
+    return {**_with_versions(service, rec, for_annotator=True), "standing": "single", "correctors": st["correctors"],
+            "adjudication": None}
+
+
+def _who(c: dict[str, Any]) -> str:
+    return str(c.get("corrector_name") or c.get("corrector_id") or "")
+
+
+def _names(people: list[dict[str, Any]]) -> str:
+    names = [str(p.get("corrector_name") or p.get("corrector_id")) for p in people]
+    return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
+
+
+def pending_words(correctors: list[dict[str, Any]]) -> str:
+    """What the annotator reads while experts' corrections of their version are being adjudicated."""
+    return (f"{_names(correctors)} corrected this version, and they disagree in places. The study is settling where "
+            "they disagree; you will see the corrected version and the decisions here once that is done.")
+
+
+def _adjudication_of(service: StudyService, aid: str, rid: str, attempt: int) -> dict[str, Any] | None:
+    """The adjudication record (H4's, kind ``adjudications``) of the corrections of one saved attempt, or None."""
+    for r in service.store.records("adjudications"):
+        c = r.get("corrected") or {}
+        if (r.get("unit_kind") == "corrections" and r.get("recording_id") == rid and c.get("annotator_id") == aid
+                and int(c.get("attempt") or 0) == int(attempt)):
+            return r
+    return None
+
+
+def standing_of(service: StudyService, rec: dict[str, Any]) -> dict[str, Any]:
+    """How the version a correction corrects stands: ``{"standing": "single" | "pending" | "adjudicated",
+    "correctors": [{"corrector_id", "corrector_name"}], "group": [records], "adjudication": record | None}``."""
+    aid, rid = str(rec.get("annotator_id")), str(rec.get("recording_id"))
+    attempt = int((rec.get("corrected_from") or {}).get("attempt") or 0)
+    group = corrections_of(service, aid, rid, attempt)
+    people = [{"corrector_id": r.get("corrector_id"), "corrector_name": r.get("corrector_name") or ""} for r in group]
+    if len(group) < 2:
+        return {"standing": "single", "correctors": people, "group": group, "adjudication": None}
+    adj = _adjudication_of(service, aid, rid, attempt)
+    if adj is not None and adj.get("state") == "finished":
+        frozen = dict(adj.get("inputs") or {})
+        ids = {str(d.get("correction_id")) for d in frozen.values()}
+        kept = [r for r in corrections_of(service, aid, rid, attempt, latest_per_corrector=False)
+                if str(r.get("correction_id")) in ids] or group
+        people = [{"corrector_id": r.get("corrector_id"), "corrector_name": r.get("corrector_name") or ""}
+                  for r in kept]
+        return {"standing": "adjudicated", "correctors": people, "group": kept, "adjudication": adj}
+    return {"standing": "pending", "correctors": people, "group": group, "adjudication": None}
+
+
+def _short(a: dict[str, Any], sfreq: float) -> dict[str, Any]:
+    on, dur = int(a.get("onset_sample") or 0), int(a.get("duration_samples") or 0)
+    return {"label": a.get("label"), "onset_s": round(on / sfreq, 6), "offset_s": round((on + dur) / sfreq, 6),
+            "channels": list(a.get("channels") or [])}
+
+
+def settled(service: StudyService, rec: dict[str, Any], st: dict[str, Any]) -> dict[str, Any]:
+    """The adjudicated corrected version as the annotator sees it: ``{"annotations", "original", "changes",
+    "conflicts", "manifest"}``. The adjudicated marks that come from one of the annotator's own marks keep its ID
+    (and its confidence and note, which an adjudicated version does not carry), so that the difference from their
+    version reads as changes of their marks; each change carries the experts' reasons where they agreed and the
+    adjudicator's decision where they did not."""
+    from electrotag.reliability.conflicts import agreed_mark
+    from electrotag.web import adjudication as h4
+    from electrotag.web.service import annotation_dict
+
+    adj = st["adjudication"]
+    aid, rid = str(rec["annotator_id"]), str(rec["recording_id"])
+    attempt = int((rec.get("corrected_from") or {}).get("attempt") or 0)
+    uid = str(adj.get("unit_id") or adj.get("task_id"))
+    frozen = dict(adj.get("inputs") or {})
+    unit = h4.Unit(uid, "corrections", rid, sorted(frozen), {p: h4.Input.from_frozen(p, d) for p, d in frozen.items()},
+                   None, {p: str(d.get("letter")) for p, d in frozen.items()}, adj.get("corrected"))
+    cmp = h4.compare(service, unit, adj)
+    sf = float(cmp.manifest["timing"]["sfreq"])
+    ch = tuple(cmp.manifest["ch_names"])
+    decisions = dict(adj.get("decisions") or {})
+    _entry, original, _raw = saved_attempt(service, aid, rid, attempt)
+    orig = {a["annotation_id"]: a for a in original}
+    by_id = {str(r.get("correction_id")): r for r in st["group"]}
+    names = {p: _who(by_id.get(str(d.get("correction_id")), {})) or p for p, d in frozen.items()}
+    reasons_of: dict[str, list[dict[str, Any]]] = {}
+    for p, d in sorted(frozen.items()):
+        for c in (by_id.get(str(d.get("correction_id"))) or {}).get("changes") or []:
+            reasons_of.setdefault(str(c.get("annotation_id")), []).append({
+                "corrector_id": p, "corrector_name": names[p], "reason": c.get("reason") or "",
+                "reason_text": REASONS.get(str(c.get("reason") or ""), ""), "note": c.get("note") or ""})
+    current: list[dict[str, Any]] = []
+    cluster_of: dict[str, Any] = {}
+    member: dict[str, Any] = {}
+    used: set[str] = set()
+    for c in cmp.clusters:
+        for mk in c.marks:
+            member.setdefault(mk.annotation_id, c)
+        if c.is_conflict:
+            d = decisions.get(c.cluster_id) or {}
+            kept = h4.decision_out(c, d, ch, sf)["result"] if d else []
+            choice = d.get("choice")
+            if choice in c.letters:
+                sources = [[mk.annotation_id] for mk in c.marks_of(str(choice))]
+            elif choice == "all":
+                sources = [[mk.annotation_id for mk in c.marks if mk.label == k["label"]] for k in kept]
+            else:
+                sources = [[mk.annotation_id for mk in c.marks]] * len(kept)
+        else:
+            kept = [annotation_dict(agreed_mark(c, ch))]
+            sources = [[mk.annotation_id for mk in c.marks]]
+        for k, src in zip(kept, sources, strict=False):
+            a = {key: k.get(key) for key in ANN_KEYS}
+            a["channels"] = list(a.get("channels") or [])
+            ids = sorted({i for i in src if i in orig} - used)
+            if len(ids) == 1:
+                used.add(ids[0])
+                a.update(annotation_id=ids[0], confidence=orig[ids[0]].get("confidence"), note=orig[ids[0]].get("note"))
+            else:
+                a.update(confidence=None, note="")
+            current.append(a)
+            cluster_of[str(a["annotation_id"])] = c
+    person_of = cmp.person_of
+
+    def decision(c: Any) -> dict[str, Any] | None:
+        if c is None or not c.is_conflict:
+            return None
+        d = decisions.get(c.cluster_id) or {}
+        choice = d.get("choice")
+        kept_by = ([person_of.get(str(choice), str(choice))] if choice in c.letters else
+                   sorted(person_of.get(x, x) for x in c.letters) if choice == "all" else [])
+        return {"conflict_id": c.cluster_id, "choice": choice, "kept": kept_by,
+                "kept_names": [names.get(p, p) for p in kept_by], "reason_code": d.get("reason_code"),
+                "reason_text": h4.REASON_WORDS.get(str(d.get("reason_code")), ""), "reason": d.get("reason") or ""}
+
+    changes = diff_annotations(original, current)
+    for chg in changes:
+        c = cluster_of.get(chg["annotation_id"]) or member.get(chg["annotation_id"])
+        ids = {chg["annotation_id"]} | ({mk.annotation_id for mk in c.marks} if c is not None else set())
+        seen: set[tuple[str, str, str]] = set()
+        given = []
+        for i in sorted(ids):
+            for r in reasons_of.get(i, []):
+                key = (r["corrector_id"], r["reason"], r["note"])
+                if key not in seen:
+                    seen.add(key)
+                    given.append(r)
+        dec = decision(c)
+        chg["reasons"] = given
+        chg["decision"] = dec
+        chg["reason"] = given[0]["reason"] if given and dec is None else ""
+        texts = list(dict.fromkeys(r["reason_text"] for r in given if r["reason_text"]))
+        chg["reason_text"] = ("Settled by the adjudicator" if dec is not None else ", ".join(texts))
+        chg["note"] = " ".join(f'{r["corrector_name"]}: {r["note"]}' for r in given if r["note"]) if dec is None else ""
+    conflicts = []
+    for c in cmp.conflicts:
+        d = decisions.get(c.cluster_id) or {}
+        kept = h4.decision_out(c, d, ch, sf)["result"] if d else []
+        mine = [orig[i] for i in dict.fromkeys(mk.annotation_id for mk in c.marks) if i in orig]
+        conflicts.append({
+            "conflict_id": c.cluster_id, "kinds": list(c.kinds), "onset_s": round(c.start / sf, 6),
+            "offset_s": round(c.stop / sf, 6), "yours": [_short(a, sf) for a in mine],
+            "versions": [{"corrector_id": person_of.get(x, x), "corrector_name": names.get(person_of.get(x, x), x),
+                          "marks": [_short({"label": mk.label, "onset_sample": mk.start,
+                                            "duration_samples": mk.stop - mk.start, "channels": list(mk.channels)}, sf)
+                                    for mk in c.marks_of(x)]} for x in sorted(c.letters)],
+            "decision": {**(decision(c) or {}), "marks": [_short(k, sf) for k in kept]}})
+    return {"annotations": current, "original": original, "changes": changes, "conflicts": conflicts,
+            "manifest": service.public_manifest(cmp.manifest)}
+
+
+def _adjudication_head(service: StudyService, adj: dict[str, Any]) -> dict[str, Any]:
+    version = adj.get("version") or {}
+    return {"unit_id": adj.get("unit_id") or adj.get("task_id"), "adjudicator_id": adj.get("adjudicator_id"),
+            "adjudicator_name": adj.get("adjudicator_name") or _display_name(service, str(adj.get("adjudicator_id"))),
+            "finished_at": adj.get("finished_at"), "version": version.get("attempt"),
+            "n_conflicts": int((adj.get("counts") or {}).get("conflicts") or 0)}
+
+
+def settled_answer(service: StudyService, rec: dict[str, Any], st: dict[str, Any]) -> dict[str, Any]:
+    """``my_correction_get``'s answer for a version whose experts' corrections are adjudicated."""
+    got = settled(service, rec, st)
+    out = correction_out(service, rec, for_annotator=True)
+    counts = change_counts(got["changes"])
+    notes = [f"{_who(r)}: {r.get('overall_note')}" for r in st["group"] if r.get("overall_note")]
+    out.update({"changes": got["changes"], "counts": counts, "summary": counts_text(counts),
+                "overall_note": "\n".join(notes), "annotations": got["annotations"], "original": got["original"],
+                "manifest": got["manifest"], "standing": "adjudicated", "correctors": st["correctors"],
+                "adjudication": {**_adjudication_head(service, st["adjudication"]), "conflicts": got["conflicts"]}})
+    return out
 
 
 @feedback_part("corrections")
 def mine(service: StudyService, user: User) -> list[dict[str, Any]]:
-    """``GET /me/feedback``'s corrections: of the caller's saved work, newest first, with the changes and reasons."""
+    """``GET /me/feedback``'s corrections: one item for each version of the caller's work that experts corrected,
+    newest first, with how it stands (see the module docstring)."""
     latest: dict[str, int] = {}
     for e in service.store.completion_entries(user.annotator_id):
         if e.get("mode", "standard") == "standard" and e.get("status") == "completed":
@@ -590,9 +805,31 @@ def mine(service: StudyService, user: User) -> list[dict[str, Any]]:
             latest[rid] = max(latest.get(rid, 0), attempt_of(e))
     rows = sorted(_saved(service, user.annotator_id), key=lambda r: str(r.get("corrected_at") or ""), reverse=True)
     out = []
+    seen: set[tuple[str, int]] = set()
     for r in rows:
+        key = (str(r.get("recording_id")), int((r.get("corrected_from") or {}).get("attempt") or 0))
+        if key in seen:
+            continue
+        seen.add(key)
+        st = standing_of(service, r)
         item = correction_out(service, r, for_annotator=True)
-        item["changes"] = _changes_text(list(r.get("changes") or []))
+        item["standing"] = st["standing"]
+        item["correctors"] = st["correctors"]
+        item["adjudication"] = None
+        if st["standing"] == "single":
+            item["changes"] = _changes_text(list(r.get("changes") or []))
+        elif st["standing"] == "pending":
+            item.update(changes=[], counts={k: 0 for k in CHANGES}, summary="", overall_note="")
+        else:
+            try:
+                got = settled(service, r, st)
+            except ApiError:  # the versions compared can no longer be read: shown as still being settled
+                item.update(standing="pending", changes=[], counts={k: 0 for k in CHANGES}, summary="", overall_note="")
+            else:
+                counts = change_counts(got["changes"])
+                item.update(changes=got["changes"], counts=counts, summary=counts_text(counts), overall_note="",
+                            adjudication={**_adjudication_head(service, st["adjudication"]),
+                                          "conflicts": got["conflicts"]})
         item["of_latest"] = item["attempt"] == latest.get(str(r.get("recording_id")), 0)
         out.append(item)
     return out
@@ -641,5 +878,6 @@ def correction_files(store: Any) -> dict[str, bytes]:
                                                        ensure_ascii=False).encode("utf-8")}
 
 
-__all__ = ["CHANGES", "FIELDS", "REASONS", "REASON_RULES", "change_counts", "changed_fields", "correction_files",
-           "correction_out", "corrections_of", "counts_text", "diff_annotations", "mark", "needs_reason"]
+__all__ = ["CHANGES", "FIELDS", "REASONS", "REASONS_FOR", "REASON_RULES", "change_counts", "changed_fields",
+           "correction_files", "correction_out", "corrections_of", "counts_text", "diff_annotations", "mark",
+           "needs_reason", "standing_of"]

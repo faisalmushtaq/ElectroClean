@@ -7,7 +7,7 @@
 import { ApiError } from './http.js';
 import { rolesOf } from '../admin/model.js';
 import { nowLocalIso } from '../util.js';
-import { REASONS, changeCounts, countsText, diffAnnotations, needsReason } from '../expert/diff.js';
+import { CHANGES, CHANGE_WORDS, REASONS, REASONS_FOR, changeCounts, countsText, diffAnnotations, needsReason } from '../expert/diff.js';
 
 const ID_RE = /^[0-9a-f]{32}$/;
 const SHA_RE = /^[0-9a-f]{64}$/;
@@ -17,6 +17,16 @@ const MAX_OVERALL_NOTE = 1000;
 const MAX_ELAPSED_S = 7 * 24 * 3600;
 const MAX_PAGE = 10000;
 const OUTCOMES = { finished: 'finished', closed_without_saving: 'closed_without_saving', '': 'not_finished' };
+/** Why a trainee may not watch an expert's session on a recording (replay.py NOT_FOR_TEACHING). */
+const NOT_FOR_TEACHING = 'Trainees watch experts only on the training recordings for learning with the experts, so that what you '
+  + 'annotate for the study stays your own judgement. This session is not on one of them.';
+
+/** What the annotator reads while experts' corrections of their version are adjudicated (corrections.py pending_words). */
+export function pendingWords(correctors) {
+  const names = correctors.map((p) => p.corrector_name || p.corrector_id);
+  const who = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+  return `${who} corrected this version, and they disagree in places. The study is settling where they disagree; you will see the corrected version and the decisions here once that is done.`;
+}
 
 const bad = (message, code = 'bad_request', status = 400, body = null) => new ApiError(status, code, message, body ? { error: code, message, ...body } : null);
 const copy = (v) => JSON.parse(JSON.stringify(v));
@@ -244,6 +254,12 @@ class Corrections {
     if (missing.length) {
       throw bad(`Give a reason for each change: ${missing.length} ${missing.length === 1 ? 'change has' : 'changes have'} none yet.`, 'reason_missing', 422, { annotation_ids: missing });
     }
+    for (const c of changes) {
+      const g = given[c.annotation_id] || {};
+      if (g.reason && !REASONS_FOR[c.change].includes(g.reason)) {
+        throw bad(`"${REASONS[g.reason]}" is not a reason for ${CHANGE_WORDS[c.change]}: choose one of ${REASONS_FOR[c.change].map((k) => REASONS[k]).join(', ')}.`);
+      }
+    }
     for (const c of changes) Object.assign(c, { reason: (given[c.annotation_id] || {}).reason || '', note: (given[c.annotation_id] || {}).note || '' });
     const overall = body.overall_note === undefined || body.overall_note === null ? '' : body.overall_note;
     if (typeof overall !== 'string' || overall.length > MAX_OVERALL_NOTE) throw bad(`overall_note must be text of at most ${MAX_OVERALL_NOTE} characters`);
@@ -283,25 +299,46 @@ class Corrections {
 
   async correction_get(body) { return this.withVersions(this.one(body.correction_id), false); }
 
+  /**
+   * corrections.py standing_of: how the version a correction corrects stands. The sandbox adjudicates nothing (that
+   * needs a study server), so two experts' corrections of one version stay pending there.
+   */
+  standingOf(rec) {
+    const group = this.correctionsOf(rec.annotator_id, rec.recording_id, rec.corrected_from.attempt);
+    const correctors = group.map((r) => ({ corrector_id: r.corrector_id, corrector_name: r.corrector_name || '' }));
+    return { standing: group.length < 2 ? 'single' : 'pending', correctors, group };
+  }
+
   async my_correction_get(body) {
     const me = this.user();
     if (this.review.show_corrections_to_annotators === false) throw bad('This study does not show corrections to its annotators.', 'forbidden', 403);
     const rec = this.one(body.correction_id);
     if (rec.annotator_id !== me.aid) throw bad('This correction was not found in the study.', 'not_found', 404);
-    return this.withVersions(rec, true);
+    const st = this.standingOf(rec);
+    if (st.standing === 'pending') throw bad(pendingWords(st.correctors), 'pending_adjudication', 409);
+    return { ...(await this.withVersions(rec, true)), standing: 'single', correctors: st.correctors, adjudication: null };
   }
 
-  /** GET /me/feedback's corrections (corrections.py mine). */
+  /** GET /me/feedback's corrections (corrections.py mine): one item for each version corrected, newest first. */
   mine() {
     const aid = this.b._aid();
     const latest = new Map();
     for (const s of this.b.state.submissions) if (s.annotator_id === aid && s.mode === 'standard') latest.set(s.recording_id, Math.max(latest.get(s.recording_id) || 0, s.attempt));
-    return this.saved(aid).sort((x, y) => String(y.corrected_at).localeCompare(String(x.corrected_at))).map((r) => {
+    const seen = new Set();
+    const out = [];
+    for (const r of this.saved(aid).sort((x, y) => String(y.corrected_at).localeCompare(String(x.corrected_at)))) {
+      const key = `${r.recording_id}|${r.corrected_from.attempt}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const st = this.standingOf(r);
       const item = this.out(r, { forAnnotator: true });
-      item.changes = this.withText(r.changes);
+      Object.assign(item, { standing: st.standing, correctors: st.correctors, adjudication: null });
+      if (st.standing === 'single') item.changes = this.withText(r.changes);
+      else Object.assign(item, { changes: [], counts: Object.fromEntries(CHANGES.map((k) => [k, 0])), summary: '', overall_note: '' });
       item.of_latest = item.attempt === (latest.get(r.recording_id) || 0);
-      return item;
-    });
+      out.push(item);
+    }
+    return out;
   }
 
   // ------------------------------------------------------------------ replays
@@ -326,6 +363,35 @@ class Corrections {
     if (!this.isExpertAccount(aid) || !this.consents(aid)) {
       throw bad('You can watch the sessions of experts who have agreed to it for teaching; this one is not among them.', 'forbidden', 403);
     }
+  }
+
+  /**
+   * replay.py teaching_recording: true when an expert's session on this recording may be shown to trainees, a
+   * guided recording of a self-contained training set that the study's register holds neither by ID nor by file.
+   * The sandbox's training recordings are its study recordings too, so none of them is ever one.
+   */
+  teachingRecording(rid, mode, ctx) {
+    if (mode === 'standard' || !ctx) return false;
+    const a = this.b._admin;
+    const set = a._setOrNull(ctx);
+    const entry = set && set.recordings.find((r) => r.recording_id === rid);
+    if (!entry || entry.use !== 'guided') return false;
+    const own = a.record(`set:${ctx}`, rid);
+    if (!own || a.record('study', rid)) return false;
+    return !(own.sha256 && a.s.recordings.some((r) => r.scope === 'study' && r.sha256 === own.sha256));
+  }
+
+  /** replay.py may_watch: may_replay, and a trainee only on a teaching recording. */
+  mayWatch(aid, rid, mode, ctx) {
+    this.mayReplay(aid);
+    if (!this.user().expert && !this.teachingRecording(rid, mode, ctx)) throw bad(NOT_FOR_TEACHING, 'forbidden', 403);
+  }
+
+  /** The saved version of a training recording to end a replay with (replay.py _saved_training). */
+  savedTraining(aid, rid, mode, ctx, attempt) {
+    const list = this.b._attempts(this.b._key(aid, rid, mode, ctx));
+    const entry = attempt !== undefined && attempt !== null ? list.find((s) => s.attempt === attempt) : list[list.length - 1];
+    return entry ? { attempt: entry.attempt, saved_at: entry.saved_at || null, annotations: this.wire(entry.annotations) } : null;
   }
 
   visitsOf(aid) {
@@ -361,7 +427,7 @@ class Corrections {
     const mode = body.mode || 'standard';
     if (!['standard', 'guided', 'practice', 'assessment'].includes(mode)) throw bad('mode must be one of standard, guided, practice, assessment');
     const ctx = mode !== 'standard' ? String(body.context_id || '') : '';
-    this.mayReplay(aid);
+    this.mayWatch(aid, rid, mode, ctx);
     const info = this.b._recordingInfo(rid);
     if (!info) throw bad(`${rid} is not a registered recording of this study`, 'unknown_recording', 404);
     const segs = this.segments(aid, rid, mode, ctx);
@@ -371,7 +437,7 @@ class Corrections {
       const list = this.entries(aid, rid);
       const entry = body.attempt !== undefined && body.attempt !== null ? list.find((s) => s.attempt === body.attempt) : list[list.length - 1];
       if (entry) saved = { attempt: entry.attempt, saved_at: entry.saved_at || null, annotations: this.wire(entry.annotations) };
-    }
+    } else saved = this.savedTraining(aid, rid, mode, ctx, body.attempt);
     return { logging: this.settings.logging.interactions !== false, annotator_id: aid, display_name: this.displayName(aid), recording_id: rid, mode, context_id: ctx,
       file_name: info.file_name, manifest: await this.b._publicManifest(rid), segments: segs, saved };
   }
@@ -392,6 +458,10 @@ class Corrections {
     let first = 0;
     let last = null;
     const hasWin = win !== undefined && win !== null;
+    if (!this.user().expert) { // a trainee: one segment, on a teaching recording (replay.py)
+      const row = hasWin ? indexRows(v.events, v.header.context_id || '').find((r) => r.window_no === win) : null;
+      if (!row || !this.teachingRecording(row.recording_id, row.mode || 'standard', row.context_id || '')) throw bad(NOT_FOR_TEACHING, 'forbidden', 403);
+    }
     if (hasWin) {
       const row = indexRows(v.events, v.header.context_id || '').find((r) => r.window_no === win);
       if (!row) throw bad('This part of the visit\'s log was not found', 'unknown_segment', 404);
@@ -422,22 +492,24 @@ class Corrections {
       for (const u of this.b._admin.s.users) {
         const aid = u.annotator_id;
         if (aid === me.aid || !this.isExpertAccount(aid) || !this.consents(aid)) continue;
-        const finished = new Set();
-        for (const [, v] of this.visitsOf(aid)) for (const row of indexRows(v.events, v.header.context_id || '')) if (row.mode === 'standard' && row.outcome === 'finished') finished.add(row.recording_id);
-        const latest = new Map();
-        for (const s of this.b.state.submissions) {
-          if (s.annotator_id !== aid || s.mode !== 'standard' || !finished.has(s.recording_id)) continue;
-          if (!latest.has(s.recording_id) || latest.get(s.recording_id).attempt < s.attempt) latest.set(s.recording_id, s);
+        const finished = new Map();
+        for (const [, v] of this.visitsOf(aid)) {
+          for (const row of indexRows(v.events, v.header.context_id || '')) {
+            const key = `${row.recording_id}|${row.mode || 'standard'}|${row.context_id || ''}`;
+            if (row.outcome === 'finished' && this.teachingRecording(row.recording_id, row.mode || 'standard', row.context_id || '')) finished.set(key, row);
+          }
         }
-        for (const s of latest.values()) {
-          const info = this.b._recordingInfo(s.recording_id);
-          if (!info) continue;
-          out.push({ annotator_id: aid, display_name: u.display_name || '', recording_id: s.recording_id, file_name: info.file_name, attempt: s.attempt,
-            saved_at: s.saved_at || null, n_annotations: s.annotations.length });
+        for (const row of [...finished.values()].sort((x, y) => x.recording_id.localeCompare(y.recording_id))) {
+          const list = this.b._attempts(this.b._key(aid, row.recording_id, row.mode, row.context_id));
+          const s = list[list.length - 1];
+          const rec = this.b._admin.record(`set:${row.context_id}`, row.recording_id);
+          if (!s || !rec) continue;
+          out.push({ annotator_id: aid, display_name: u.display_name || '', recording_id: row.recording_id, file_name: rec.file_name, mode: row.mode,
+            context_id: row.context_id, attempt: s.attempt, saved_at: s.saved_at || null, n_annotations: s.annotations.length });
         }
       }
     }
-    out.sort((x, y) => x.annotator_id.localeCompare(y.annotator_id) || x.file_name.localeCompare(y.file_name));
+    out.sort((x, y) => x.annotator_id.localeCompare(y.annotator_id) || x.file_name.localeCompare(y.file_name) || x.mode.localeCompare(y.mode));
     return { shown, sessions: out };
   }
 }

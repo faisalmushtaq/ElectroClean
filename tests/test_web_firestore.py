@@ -1114,9 +1114,22 @@ def test_corrections_and_replays_on_firestore(service: StudyService, recordings:
     assert [e["type"] for e in page["events"]] == ["recording_opened", "annotation_created", "recording_finished"]
     assert err(service, "expert", A01, {"op": "replay_index_get", "annotator_id": "A01",
                                         "recording_id": SUB1}).code == "forbidden"
+    # an expert's session on a study recording is never shown to an annotator, even with the expert's consent
+    ok(service, "expert", E01, {"op": "replay_consent_set", "teaching": True})
+    assert ok(service, "expert", A01, {"op": "teaching_list"})["sessions"] == []
+    assert err(service, "expert", A01, {"op": "replay_events_get", "visit_id": v}).code == "forbidden"
+    # a second expert's correction of the same version: A01 is told the experts disagree, and shown neither
+    store.put_user("E02", display_name="Expert two", roles=["expert"])
+    e02 = User("E02", "Expert two", roles=("expert",))
+    ok(service, "expert", e02, {"op": "correction_save", **_correction(
+        recordings, "7" * 32, [BLINK], {EMG["annotation_id"]: "not_artifact"})})
+    fb = ok(service, "my_feedback", A01)["corrections"]["items"]
+    assert [(c["standing"], c["changes"]) for c in fb] == [("pending", [])]
+    assert err(service, "expert", A01, {"op": "my_correction_get",
+                                        "correction_id": "6" * 32}).code == "pending_adjudication"
     # the export writes the correction's tree
     root = store.results_tree(tmp_path / "tree")
-    assert len(CompletionRegister(OutputLayout(root / "derived" / "corrections")).entries()) == 1
+    assert len(CompletionRegister(OutputLayout(root / "derived" / "corrections")).entries()) == 2
 
 
 @pytest.mark.skipif(not (AUTH and FUNCTIONS), reason="needs the Auth and Functions emulators")
