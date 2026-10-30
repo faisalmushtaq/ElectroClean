@@ -627,11 +627,18 @@ export class DemoBackend {
     const saved_at = nowLocalIso();
     const key = this._key(aid, recordingId, mode, contextId);
     this._refuseUnusable(key, recordingId);
+    if (draft.session_id !== undefined && (typeof draft.session_id !== 'string' || draft.session_id.length > 64)) {
+      throw new ApiError(422, 'invalid_draft', 'draft.session_id must be a short string');
+    }
+    if (draft.session_id && ((this.state.closedSessions || {})[key] || []).includes(draft.session_id)) {
+      throw new ApiError(409, 'draft_discarded', 'This draft belongs to work that was discarded when it was closed, so it is not kept.');
+    }
     (draft.annotations || []).forEach((a, i) => this._checkConfidenceAndNote(a, (why) => {
       throw new ApiError(422, 'invalid_draft', `draft annotation ${i + 1}: ${why}`);
     }));
     const record = { ...draft, saved_at };
     delete record.revises;
+    delete record.session_id;
     if (this.state.done[key] && !(mode === 'practice' && !this._practicePassed(aid))) {
       const saved = this._revisable(aid, recordingId, mode, contextId);
       if (!saved) throw new ApiError(409, 'already_done', `${recordingId} has already been completed`);
@@ -642,9 +649,14 @@ export class DemoBackend {
     return { saved_at };
   }
 
-  async deleteDraft(recordingId, mode, contextId) {
+  async deleteDraft(recordingId, mode, contextId, { sessionId = '' } = {}) {
     const aid = this._aid();
-    delete this.state.drafts[this._key(aid, recordingId, mode, contextId)];
+    const key = this._key(aid, recordingId, mode, contextId);
+    delete this.state.drafts[key];
+    if (sessionId) { // a session that discarded its work and closed: its drafts arriving late are refused
+      const closed = (this.state.closedSessions ||= {});
+      closed[key] = [...(closed[key] || []).filter((x) => x !== sessionId), String(sessionId)].slice(-20);
+    }
     if (mode === 'guided') delete this.state.guided[`${aid}|${recordingId}`]; // starting afresh
     this._save();
     return {};

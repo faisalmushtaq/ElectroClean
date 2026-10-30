@@ -225,6 +225,27 @@ def test_drafts_are_kept_and_offered_again(client: TestClient, recordings: Path)
     assert api.put(f"/drafts/{GUIDED1}?mode=guided&context=example", draft).status_code == 403  # not A01's
 
 
+def test_a_late_draft_of_a_session_that_discarded_its_work_and_closed_is_refused(client: TestClient,
+                                                                                 recordings: Path) -> None:
+    api = Api(client, "A01")
+    draft = {"annotations": [BLINK], "elapsed_s": 3.0, "session_id": "s-closed"}
+    api.ok("put", f"/drafts/{SUB2}?mode=standard", draft)
+    api.ok("delete", f"/drafts/{SUB2}?mode=standard&session=s-closed")  # Discard and close
+    late = api.put(f"/drafts/{SUB2}?mode=standard", draft)  # sent before the delete, arriving after it
+    assert late.status_code == 409 and late.json()["error"] == "draft_discarded"
+    assert api.ok("post", "/match", match_body(recordings, SUB2))["draft"] is None
+    items = api.ok("get", "/assignments")["items"]
+    assert next(i for i in items if i["recording_id"] == SUB2)["status"] != "in_progress"  # the record is no draft
+    # The recording opened again is another session, whose drafts are kept; Start afresh names no session.
+    api.ok("put", f"/drafts/{SUB2}?mode=standard", {**draft, "session_id": "s-next"})
+    api.ok("delete", f"/drafts/{SUB2}?mode=standard")
+    api.ok("put", f"/drafts/{SUB2}?mode=standard", {**draft, "session_id": "s-next"})
+    kept = api.ok("post", "/match", match_body(recordings, SUB2))["draft"]
+    assert kept["annotations"] == [BLINK] and "session_id" not in kept
+    assert api.put(f"/drafts/{SUB2}?mode=standard", {**draft, "session_id": 5}).status_code == 422
+    assert api.delete(f"/drafts/{SUB2}?mode=standard&session={'x' * 65}").status_code == 400
+
+
 def test_assignments_tell_the_home_page_the_time_worked_and_what_a_draft_holds(client: TestClient,
                                                                               recordings: Path) -> None:
     api = Api(client, "A01")

@@ -24,6 +24,7 @@ from electrotag.app.session.register import CompletionRegister, RegisterError
 from electrotag.config.settings import Settings
 from electrotag.web.accounts import AccountError, AccountExists, Accounts, InvitationProblem
 from electrotag.web.store import (
+    CLOSED_SESSIONS_KEPT,
     RECORD_ID_RE,
     RECORD_KINDS,
     AccountProblem,
@@ -342,8 +343,24 @@ class FilesStore(Store):
     def put_draft(self, annotator_id: str, key: str, record: dict[str, Any]) -> None:
         atomic_write_json(self._draft_path(annotator_id, key), record)
 
-    def delete_draft(self, annotator_id: str, key: str) -> None:
-        self._draft_path(annotator_id, key).unlink(missing_ok=True)
+    def delete_draft(self, annotator_id: str, key: str, closed_session: str | None = None) -> None:
+        path = self._draft_path(annotator_id, key)
+        if closed_session:  # beside the drafts (not *.json, so never taken for one), removed with the account
+            closed = path.with_suffix(".closed")
+            sessions = [s for s in self._closed_sessions(closed) if s != closed_session] + [closed_session]
+            atomic_write_json(closed, {"sessions": sessions[-CLOSED_SESSIONS_KEPT:]})
+        path.unlink(missing_ok=True)
+
+    @staticmethod
+    def _closed_sessions(path: Path) -> list[str]:
+        try:
+            sessions = json.loads(path.read_text(encoding="utf-8")).get("sessions", [])
+        except (OSError, ValueError, AttributeError):
+            return []
+        return [s for s in sessions if isinstance(s, str)] if isinstance(sessions, list) else []
+
+    def draft_session_closed(self, annotator_id: str, key: str, session_id: str) -> bool:
+        return session_id in self._closed_sessions(self._draft_path(annotator_id, key).with_suffix(".closed"))
 
     # ---------------------------------------------------------- guided state
     def guided_state(self, annotator_id: str, set_id: str, recording_id: str) -> dict[str, Any] | None:

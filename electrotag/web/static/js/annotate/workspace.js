@@ -300,7 +300,7 @@ export class Workspace {
     if (s.changedSinceSaved && !(await ask('Leave without changes?',
       `Your changes in this revision are discarded. Version ${s.revision.revises} stays as it was saved.`,
       { yes: 'Leave without changes', no: 'Keep revising', defaultYes: false, destructive: true }))) return false;
-    await s.discardDrafts();
+    await s.discardDrafts({ close: true });
     logger.event('revision_left', { session_id: s.sessionId, revises: s.revision.revises, changed: s.changedSinceSaved,
       elapsed_s: Math.round(s.elapsedS * 1000) / 1000 });
     s.finished = true;
@@ -694,6 +694,9 @@ export class Workspace {
       this._tally(true);
       this.app.sinceBreak = { s: this.clock.sinceBreakS, at: Date.now() };
     }
+    // Closed: a save still waiting (a change just before Close) must not write a draft after the view has
+    // gone, where it would bring back work discarded since, or overwrite a newer draft of the recording.
+    this.s.close();
     this.s.onSaved = null;
     this._listeners.forEach((f) => f());
     this.store.removeListener(this._storeListener);
@@ -2652,7 +2655,7 @@ export class Workspace {
       logger.event('closed_without_saving', { n_annotations: n, kept: true });
       this.app.leaveRecording(this, 'closed to finish later');
     } else {
-      await s.discardDrafts();
+      await s.discardDrafts({ close: true });
       logger.event('closed_without_saving', { n_annotations: n, kept: false });
       this.app.leaveRecording(this, 'viewer closed without Save and Finish');
     }
@@ -2672,7 +2675,7 @@ export class Workspace {
       `${leave}: your changes in this revision are discarded.`, [later, leave, stay], 0);
     if (choice === stay) return false;
     if (choice === leave) {
-      await s.discardDrafts();
+      await s.discardDrafts({ close: true });
       logger.event('revision_left', { session_id: s.sessionId, revises: s.revision.revises, changed: true, elapsed_s: Math.round(s.elapsedS * 1000) / 1000 });
       this.app.leaveRecording(this, 'revision left without changes');
       return true;

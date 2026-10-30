@@ -202,6 +202,10 @@ told to try again.
   against MNE in `web_tests/unit/` (web/architecture.md).
 * **Drafts and autosave.** The browser keeps drafts of unfinished work
   (`js/annotate/session.js`) and the study stores them (`PUT /drafts/{recording_id}`).
+  A session writes no draft once its view has closed or its work was discarded,
+  sends drafts one at a time, and lets the one on its way arrive before a
+  discard or Save and Finish; a session that discards its work and closes is
+  named in the delete, and the study refuses a draft of it that arrives late.
   `session.autosave` is the core's own form of the same idea, used when an
   `AnnotationSession` is driven with autosave on: it writes the canonical
   document, the elapsed time and the source fingerprint atomically and accepts

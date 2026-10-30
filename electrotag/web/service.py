@@ -634,6 +634,13 @@ class StudyService:
         draft = body.get("draft")
         if not isinstance(draft, dict):
             raise ApiError(400, "bad_request", "A draft must be an object")
+        session_id = draft.get("session_id")
+        if session_id is not None and (not isinstance(session_id, str) or len(session_id) > 64):
+            raise ApiError(422, "invalid_draft", "draft.session_id must be a short string")
+        if session_id and self.store.draft_session_closed(user.annotator_id, item.key, session_id):
+            # Sent before its work was discarded and closed, but arriving after: keeping it would bring the work back.
+            raise ApiError(409, "draft_discarded", "This draft belongs to work that was discarded when it was closed, "
+                           "so it is not kept.")
         anns = draft.get("annotations", [])
         if not isinstance(anns, list) or len(anns) > MAX_ANNOTATIONS or not all(isinstance(a, dict) for a in anns):
             raise ApiError(422, "invalid_draft", "draft.annotations must be a list of annotations")
@@ -666,7 +673,10 @@ class StudyService:
         if not isinstance(rid, str) or mode not in MODES:
             raise ApiError(400, "bad_request", "recording_id and mode are needed")
         ctx = str(body.get("context_id") or "") if mode != "standard" else ""
-        self.store.delete_draft(user.annotator_id, item_key(rid, mode, ctx))
+        session_id = body.get("session_id")
+        if session_id is not None and (not isinstance(session_id, str) or len(session_id) > 64):
+            raise ApiError(400, "bad_request", "session_id must be a short string")
+        self.store.delete_draft(user.annotator_id, item_key(rid, mode, ctx), closed_session=session_id or None)
         return {}
 
     # ---------------------------------------------------------------- saving
