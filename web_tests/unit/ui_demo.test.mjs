@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { DemoBackend, exampleRecording, TRAINING_SET } from '../../electrotag/web/static/js/api/demo.js';
-import { truthAnnotations, demoSpecs } from '../../electrotag/web/static/js/data/synthetic.js';
+import { truthAnnotations, demoSpecs } from '../../electrotag/web/static/js/eeg/synthetic.js';
 import { stageChip } from '../../electrotag/web/static/js/training/path.js';
 
 const memory = () => {

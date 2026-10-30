@@ -217,7 +217,7 @@ export const tests = [
       await page.evaluate(async () => {
         const b = globalThis.ElectroTag.backend;
         const { TRAINING_SET } = await import('./js/api/demo.js');
-        const { truthAnnotations, demoSpecs } = await import('./js/data/synthetic.js');
+        const { truthAnnotations, demoSpecs } = await import('./js/eeg/synthetic.js');
         for (const g of TRAINING_SET.guided) {
           const anns = [];
           for (let s = 1; ; s++) {

@@ -1,5 +1,5 @@
 // The arithmetic of the viewer's newer tools: where electrodes go on the channel chooser's map
-// (js/viewer/head_map.js, js/data/electrodes.js), reading a typed time for Go to time
+// (js/viewer/head_map.js, js/eeg/electrodes.js), reading a typed time for Go to time
 // (js/annotate/goto.js), and the overlay's shared axis and the value readout (js/viewer/geometry.js).
 // The views themselves are tried in web_tests/e2e/s_viewer_more.e2e.mjs.
 import { test } from 'node:test';
@@ -7,10 +7,10 @@ import assert from 'node:assert/strict';
 
 import { electrodeCore, extentOf, fitSphere, mapLayout, mapScale, mapScales, MAP_ZOOMS, minSpacing, targetSize, nearestInDirection, pointsInBox, projectPositions,
   ringLayout, standardPosition } from '../../electrotag/web/static/js/viewer/head_map.js';
-import { coordinateSystemOf, electrodeFilesToKeep, electrodeSidecars, parseElectrodesTsv, pickElectrodeFiles, readElectrodes, sidecarsOf } from '../../electrotag/web/static/js/data/electrodes.js';
+import { coordinateSystemOf, electrodeFilesToKeep, electrodeSidecars, parseElectrodesTsv, pickElectrodeFiles, readElectrodes, sidecarsOf } from '../../electrotag/web/static/js/eeg/electrodes.js';
 import { centredStart, clampTime, parseTimeText } from '../../electrotag/web/static/js/annotate/goto.js';
 import { OVERLAY_SPAN, microvoltText, overlayAlpha, overlayGain } from '../../electrotag/web/static/js/viewer/geometry.js';
-import { DEMO_CHANNELS, channelType } from '../../electrotag/web/static/js/data/synthetic.js';
+import { DEMO_CHANNELS, channelType } from '../../electrotag/web/static/js/eeg/synthetic.js';
 
 const near = (a, b, tol = 1e-3) => Math.abs(a - b) <= tol;
 const at = (name) => { const p = standardPosition(name); assert.ok(p, `${name} has a position`); return p; };

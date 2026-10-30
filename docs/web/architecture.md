@@ -93,6 +93,7 @@ electrotag/web/static/          the browser application (plain ES modules, no bu
     admin.css                     the admin area's own layout, loaded when it is first opened
     js/main.js, js/app.js         start-up; the backend, signing in and the moves between views
     js/catalogue.js, js/util.js   the label catalogue; small helpers
+    js/lazy.js                    the parts of the application loaded at their first use
     js/views/                     sign in (with its illustration, eegart.js and montage.js), the
                                   annotator's recordings (home.js, with their progress in
                                   progress.js, the list, its tabs and history in home_list.js and
@@ -102,13 +103,17 @@ electrotag/web/static/          the browser application (plain ES modules, no bu
                                   study on Firebase), demo.js and demo_admin.js (the demonstration,
                                   in the browser), choose.js (which of them), demo_catalogue.js,
                                   notice.js
-    js/data/                      reading recordings: recording.js, worker.js, engine.js, files.js,
-                                  edf.js, brainvision.js, channels.js, filters.js, fft.js, pool.js,
-                                  filterworker.js, sha256.js, hashworker.js, amplitude.js, util.js,
-                                  synthetic.js; links.js and fetch_links.js (recordings opened from
-                                  a link), device_store.js (copies kept on the device), electrodes.js (a
-                                  BIDS electrodes.tsv picked, kept or fetched with a recording); registering them: register.js, bids.js, events.js,
-                                  mnewarn.js, pyfmt.js, pyjson.js
+    js/eeg/                       the EEG library, which never imports the application (its own
+                                  README.md): reading recordings (recording.js, worker.js,
+                                  engine.js, files.js, edf.js, brainvision.js, channels.js,
+                                  electrodes.js, events.js, util.js), the display filters
+                                  (filters.js, fft.js, pool.js, filterworker.js), the amplitude
+                                  check (amplitude.js), fingerprints (sha256.js, hashworker.js),
+                                  registering recordings (register.js, bids.js, mnewarn.js,
+                                  pyfmt.js, pyjson.js) and synthetic recordings (synthetic.js)
+    js/data/                      the application's own handling of recordings: links.js and
+                                  fetch_links.js (recordings opened from a link), device_store.js
+                                  (copies kept on the device)
     js/viewer/                    drawing the EEG, axes, overview, navigation; touch.js for two
                                   fingers, long presses and double taps on a touch screen;
                                   coverage.js for the parts of a recording viewed so far;
@@ -141,11 +146,70 @@ web_tests/e2e/                    Playwright end-to-end tests
 docs/web/api.md                   the HTTP API (the contract between browser and server)
 ```
 
+## Loading on demand
+
+The application has no build step, so every module is a file of its own that
+the browser fetches when something imports it. The sign-in page loads only
+`main.js`, `app.js`, the sign-in view with what it draws, the dialogs, the
+logger, `lazy.js` and the chosen back end's client (`js/api/http.js` for a
+study server, `firebase.js` with the Firebase SDK for a study on Firebase, or
+the demonstration's own back end). Every other view is a part that `js/lazy.js`
+loads at its first use with a dynamic `import()`: the home page, the open view,
+the annotation view with the EEG viewer, training, the quiz, the practice
+review, the admin area, the game elements and the EEG readers with their
+workers. `lazy.js` keeps each part's promise, so a part is fetched once however
+many callers ask for it, and `app.js` shows a "Loading…" page while a view's
+part is on its way. A part that cannot be loaded (most often because the
+connection was lost) gives a plain message with Try again, which asks for the
+module again under another address (`home.js?attempt=1`), because Chromium
+remembers a module that failed to load for the life of the page. On the way
+from the open view to the annotation view the same message appears among the
+open view's steps, and a reader that cannot be loaded gives the message about
+the connection that the open view already had.
+
+Right after signing in, the first view's part is fetched while the visit and
+the assignments are asked for (the admin area for an administrator, the
+training path for a trainee, the home page otherwise). Once the first view is
+on screen, the readers (for a study; the demonstration's examples need none),
+the open view and the annotation view are fetched in idle time, so that opening
+a recording does not wait for them. The home page leaves the quiz, the
+annotation store and the game elements to their own parts: its quiz card is in
+`training/quiz_card.js`, the drafts it shows are read with
+`annotate/local_drafts.js`, and the game elements' cards come from
+`views/home_games.js`, which is loaded with GET /me/achievements when the study
+has them on.
+
+The table gives what the browser fetched before and after this change, measured
+with Playwright in Chromium on the demonstration served as static files and on
+`electrotag web demo` (KB of uncompressed JavaScript, 1024 bytes each; "after
+idle" includes what is fetched in idle time). The time is until the sign-in
+form can be used, from a cold cache, with the network emulated as slow 4G
+(1.6 Mbit/s, 150 ms round trip).
+
+| Stage | Demonstration, before | Demonstration, after | Study server, before | Study server, after |
+| --- | --- | --- | --- | --- |
+| Sign-in page | 67 modules, 1046 KB | 28 modules, 430 KB | 61 modules, 807 KB | 16 modules, 130 KB |
+| Home page, as it appears | 67 modules, 1046 KB | 47 modules, 588 KB | 61 modules, 807 KB | 35 modules, 280 KB |
+| Home page, after idle | 67 modules, 1046 KB | 64 modules, 966 KB | 72 modules, 969 KB | 67 modules, 866 KB |
+| A recording file read | 80 modules, 1174 KB | 77 modules, 1094 KB | 75 modules, 973 KB | 70 modules, 869 KB |
+| Admin area | 82 modules, 1280 KB | 73 modules, 1159 KB | 88 modules, 1249 KB | 77 modules, 1105 KB |
+| Sign-in usable at slow 4G | 7.7 s | 4.5 s | 6.4 s | 2.8 s |
+
+Opening one of the demonstration's examples fetches nothing more once the home
+page has had its idle moment. Of the demonstration's 430 KB at sign-in, about
+300 KB is its own back end (`js/api/demo.js`, `demo_admin.js`,
+`demo_feedback.js`, `admin/model.js` and `eeg/sha256.js`), which a real study
+never loads.
+
+`web_tests/e2e/v_loading.e2e.mjs` keeps the sign-in page within a budget of
+JavaScript set just above these figures, and checks that no later view's
+module loads with it; a view that creeps back into the sign-in page fails it.
+
 ## The Recording interface (browser)
 
-`js/data/recording.js` exports `openRecording(files: File[]) -> Promise<Recording>`
+`js/eeg/recording.js` exports `openRecording(files: File[]) -> Promise<Recording>`
 (one file for EDF and BDF; the .vhdr, .vmrk and .eeg for BrainVision, picked
-together or as a folder). `js/data/synthetic.js` exports
+together or as a folder). `js/eeg/synthetic.js` exports
 `makeSyntheticRecording(spec) -> Recording` with the same interface, for the
 demonstration and for tests.
 
@@ -220,9 +284,11 @@ recordings among picked files (for a folder holding several), and errors are
 
 ## Reading recordings in the browser
 
-The modules in `js/data/` read EDF, EDF+, BDF and BrainVision recordings
+The modules in `js/eeg/` read EDF, EDF+, BDF and BrainVision recordings
 without any library or build step. Each is a plain ES module that imports only
-its neighbours in the folder, so the same files run from GitHub Pages, from the
+its neighbours in the folder (a unit test, `web_tests/unit/eeg_imports.test.mjs`,
+keeps it that way, and `js/eeg/README.md` describes each module and how its
+parity with MNE-Python is checked), so the same files run from GitHub Pages, from the
 study server and inside a claude.ai Artifact. `recording.js` holds
 `openRecording` and the `Recording` object and decides where the reading
 happens; `worker.js` is the reading worker and `engine.js` does the work
@@ -234,7 +300,7 @@ channels; `filters.js` and `fft.js` are the display filters, `pool.js` and
 `hashworker.js` compute fingerprints; `amplitude.js` is the plausibility check
 of the amplitude; `util.js` holds small helpers.
 
-`links.js` turns a share link into the address its file is fetched from
+In `js/data/`, `links.js` turns a share link into the address its file is fetched from
 (Dropbox's `www.dropbox.com/scl/fi/…` and `/s/…` links become
 `dl.dropboxusercontent.com/…?dl=1`, which answers any web page with
 `Access-Control-Allow-Origin: *`; a OneDrive link becomes
@@ -419,8 +485,8 @@ code and MNE-Python.
 
 `node --test "web_tests/unit/*.test.mjs"` runs the unit tests (Node.js 22, no
 packages to install; the quotes let Node expand the pattern itself). The
-`data_*.test.mjs` files compare the readers, the filters, the amplitude check
-and the fingerprints with MNE-Python and `hashlib` on recordings written by
+`data_*.test.mjs` files compare the modules of `js/eeg/` (the readers, the
+filters, the amplitude check and the fingerprints) with MNE-Python and `hashlib` on recordings written by
 `python scripts/make_web_fixtures.py` into `web_tests/fixtures/` (not
 committed); the tests run the script themselves when the recordings are
 missing or out of date, with the repository's `.venv` (or the interpreter
@@ -497,7 +563,7 @@ it always was.
 
 ## Registering recordings in the browser
 
-The admin area adds recordings without uploading them: `js/data/register.js`
+The admin area adds recordings without uploading them: `js/eeg/register.js`
 builds, in the browser, the same internal manifest that
 `electrotag.web.manifest.build_manifest` builds from MNE-Python's reading of
 the files, and only the manifests go to the study (`recordings_register`).
@@ -548,11 +614,11 @@ Everything else is computed as `register_recording` computes it, with the
 Python loader's wording for every message. The companions a BrainVision header
 names must be among the picked files. The BIDS sidecars come from the dataset
 root down to the recording's folder with the inheritance principle
-(`js/data/bids.js`, a port of `electrotag/app/io/bids.py`), TSV files are
+(`js/eeg/bids.js`, a port of `electrotag/app/io/bids.py`), TSV files are
 read exactly as strings, and JSON sidecars are read as Python reads them
-(`js/data/pyjson.js`): NaN and Infinity become null and are reported, and a
+(`js/eeg/pyjson.js`): NaN and Infinity become null and are reported, and a
 file that cannot be read is reported with Python's own error message. The
-original events (`js/data/events.js`) come from `events.tsv` when there is one
+original events (`js/eeg/events.js`) come from `events.tsv` when there is one
 (compared with the file's markers), otherwise from the EDF+ and BDF+
 annotations or the BrainVision markers with the codes MNE gives them, otherwise
 from the trigger channels, including channels that only channels.tsv or the
@@ -564,12 +630,12 @@ hidden and marked bad, the notes, the gaps, the discontinuities, the filters
 skipped and the amplitude check (on the display copy with the study's filters,
 through `Recording.checkAmplitude` with the manifest's types) follow. The
 warnings MNE gives while reading, which the Python loader keeps as "MNE: ...",
-are worked out from the headers (`js/data/mnewarn.js`): duplicate channel
+are worked out from the headers (`js/eeg/mnewarn.js`): duplicate channel
 names, empty ranges, differing or contradictory filter settings, unreadable
 patient fields and dates, a record length of 0, unrecognised BrainVision header
 lines (twice, as MNE reads the line twice), missing `DataPoints`, channels at
 the origin of the coordinates, the amplifier's filter table and the montage,
-and annotations clipped at the end. `js/data/pyfmt.js` writes numbers and text
+and annotations clipped at the end. `js/eeg/pyfmt.js` writes numbers and text
 as Python does (`repr` of floats, formats rounded half to even, `repr` of
 strings and lists).
 

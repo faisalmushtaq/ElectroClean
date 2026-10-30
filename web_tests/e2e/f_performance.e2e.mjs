@@ -6,7 +6,7 @@ async function measure(t, scale) {
   await signIn(page, 'A01');
   await waitForRoute(page, 'home');
   await page.evaluate(async () => {
-    const { makeSyntheticRecording } = await import(new URL('js/data/synthetic.js', location.href).href);
+    const { makeSyntheticRecording } = await import(new URL('js/eeg/synthetic.js', location.href).href);
     const channels = Array.from({ length: 128 }, (_, i) => `E${i + 1}`);
     const recording = makeSyntheticRecording({ id: 'perf', stem: 'sub-perf_task-rest', sfreq: 1024, durationS: 30, seed: 5, channels, artifacts: [] });
     await globalThis.ElectroTag.openWorkspace({ recording, match: { status: 'unknown' }, sha: '', tryOut: true });

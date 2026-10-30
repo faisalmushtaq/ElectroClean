@@ -7,8 +7,8 @@
 // and the standard positions when it does not. Plain ES module; `fetch` can be passed in, so that
 // Node can test it.
 
-import { parseBidsName } from './bids.js';
-import { coordinateSystemOf, parseElectrodesTsv } from './electrodes.js';
+import { parseBidsName } from '../eeg/bids.js';
+import { coordinateSystemOf, parseElectrodesTsv } from '../eeg/electrodes.js';
 import { directLink, fileNameFromDisposition, formatBytes, LinkProblem, SERVICE_NAMES } from './links.js';
 
 /** The largest file fetched from a link: it is held in the browser's memory until it is opened. */

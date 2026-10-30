@@ -1,6 +1,6 @@
 """Write the test recordings of the browser data layer and what MNE-Python reads from them.
 
-The browser reads EDF, EDF+, BDF and BrainVision files itself (electrotag/web/static/js/data/).
+The browser reads EDF, EDF+, BDF and BrainVision files itself (electrotag/web/static/js/eeg/).
 Its unit tests (web_tests/unit/, run with ``node --test web_tests/unit``) open the recordings
 written here and compare everything with the values in the ``*.expected.json`` files: what MNE
 reads (in volts), the SHA-256 that hashlib computes, the markers, gaps and triggers the desktop
@@ -112,7 +112,7 @@ def write_vhdr(path: Path, text: str, encoding: str) -> None:
 
 # ----------------------------------------------------------------------------- MNE side
 def browser_type(name: str, mne_type: str) -> str:
-    """The channel type the browser infers from a name (js/data/channels.js)."""
+    """The channel type the browser infers from a name (js/eeg/channels.js)."""
     import fnmatch
     import re
 
@@ -590,7 +590,7 @@ def _read_tsv_rows(path: Path) -> tuple[list[str], list[list[str]]]:
 
 
 def make_datasets(out: Path) -> dict:
-    """Small datasets for the browser's registration (js/data/register.js), whose manifests
+    """Small datasets for the browser's registration (js/eeg/register.js), whose manifests
     web_tests/register_parity.py computes with the desktop's loader for the comparison.
 
     * bids_bv: a BIDS dataset of BrainVision recordings with channels.tsv (types, a bad channel,

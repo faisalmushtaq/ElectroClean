@@ -309,7 +309,7 @@ def describe_target(target: ArtifactAnnotation, sfreq: float) -> str:
 
 
 #: What the example set's simulated artifacts look like and why the experts marked them where they did
-#: (true by construction of electrotag/synthetic.py and js/data/synthetic.js). ``{where}`` is the
+#: (true by construction of electrotag/synthetic.py and js/eeg/synthetic.js). ``{where}`` is the
 #: channels marked, ``{duration}`` the length.
 EXAMPLE_NOTES = {
     "Eye-blink-artifact": (

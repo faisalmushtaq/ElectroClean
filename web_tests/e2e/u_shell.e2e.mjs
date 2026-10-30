@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { signIn, waitForRoute, waitForTraces, openExample, eegPoint, drag, clickDialogButton } from './helpers.mjs';
 import { profilePage, kept, waitKept } from './l_device.e2e.mjs';
-import { demoSpecs, syntheticEdfBytes } from '../../electrotag/web/static/js/data/synthetic.js';
+import { demoSpecs, syntheticEdfBytes } from '../../electrotag/web/static/js/eeg/synthetic.js';
 
 const PASSWORD = 'electrotag';
 const GUIDE = 'https://github.com/faisalmushtaq/ElectroTag/blob/main/docs/web/using.md';
@@ -213,7 +213,7 @@ export const tests = [
         await waitForRoute(page, 'home');
 
         // The page is loaded again, and the part that reads recordings cannot be fetched.
-        await page.route('**/js/data/recording.js', (r) => r.abort('internetdisconnected'));
+        await page.route('**/js/eeg/recording.js', (r) => r.abort('internetdisconnected'));
         await page.reload();
         await page.waitForFunction(() => (globalThis.ElectroTag && globalThis.ElectroTag.route === 'home') || document.querySelector('#signin-id'));
         if (await page.evaluate(() => globalThis.ElectroTag.route !== 'home')) await signIn(page, 'A01');
@@ -226,7 +226,7 @@ export const tests = [
         assert.equal((await kept(page)).list.length, 1, 'the kept copy is not removed for a lost connection');
 
         // The connection is back: Try again reads the same copy.
-        await page.unroute('**/js/data/recording.js');
+        await page.unroute('**/js/eeg/recording.js');
         await page.click('[data-log="read-again"]');
         await waitForRoute(page, 'annotate', 30000);
         await waitForTraces(page);

@@ -30,9 +30,11 @@ bash scripts/test_web_firebase.sh                         # the application with
 ```
 
 The unit tests compare the browser's readers, filters, amplitude check and
-fingerprints with MNE-Python and `hashlib` on recordings that
+fingerprints (the EEG library in `js/eeg/`, whose README says which test checks
+which module) with MNE-Python and `hashlib` on recordings that
 `scripts/make_web_fixtures.py` writes into `web_tests/fixtures/` (not
-committed). `run_e2e.mjs` drives the application in Chromium against the
+committed), and `eeg_imports.test.mjs` keeps that library free of imports from
+the rest of the application. `run_e2e.mjs` drives the application in Chromium against the
 demonstration, a stand-in server and the real `electrotag web demo`, with
 recordings opened from disk and the results checked in the study folder; it
 needs Playwright with Chromium (`npm install --no-save playwright@1.63.0` and
@@ -44,6 +46,8 @@ upright and on its side, a phone's notice and the file pickers. `t_annotation_li
 that the Annotations list shows every label in full at the common screen sizes, and `g_layout.e2e.mjs`
 that the annotation view keeps its type buttons whole, its instructions whole and every part clear
 of the others at the common laptop sizes and with the browser's zoom at 150% and 200%.
+`v_loading.e2e.mjs` keeps the sign-in page within a budget of JavaScript and checks that the later
+views load at their first use, with Try again when one cannot be fetched.
 `ui_type_colours.test.mjs` keeps the colours of the nine numbered types apart under simulated
 red-green colour blindness. `o_landmarks.e2e.mjs` keeps
 the structure that screen readers navigate by: one main landmark on every page, all text inside a

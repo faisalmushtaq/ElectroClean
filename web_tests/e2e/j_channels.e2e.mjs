@@ -4,13 +4,13 @@
 // becoming the selection; a 10-20 montage with its regions and sides; a BioSemi montage with its
 // banks; and a small montage keeping the plain list it always had.
 import { signIn, waitForRoute, waitForTraces, clickDialogButton } from './helpers.mjs';
-import { DEMO_CHANNELS } from '../../electrotag/web/static/js/data/synthetic.js';
+import { DEMO_CHANNELS } from '../../electrotag/web/static/js/eeg/synthetic.js';
 
 const range = (prefix, from, to) => Array.from({ length: to - from + 1 }, (_, i) => `${prefix}${from + i}`);
 
 async function openSynthetic(page, channels, id) {
   await page.evaluate(async ([channels, id]) => {
-    const { makeSyntheticRecording } = await import(new URL('js/data/synthetic.js', location.href).href);
+    const { makeSyntheticRecording } = await import(new URL('js/eeg/synthetic.js', location.href).href);
     const recording = makeSyntheticRecording({ id, stem: `sub-${id}_task-rest`, sfreq: 256, durationS: 20, seed: 3, channels, artifacts: [] });
     await globalThis.ElectroTag.openWorkspace({ recording, match: { status: 'unknown' }, sha: '', tryOut: true });
   }, [channels, id]);

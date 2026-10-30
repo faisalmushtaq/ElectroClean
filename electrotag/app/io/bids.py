@@ -146,7 +146,7 @@ def loads_json(text: str, **kwargs: Any) -> Any:
     """``json.loads``, with the error messages of Python 3.13 on every supported version.
 
     A sidecar's error is recorded word for word in a recording's manifest, and the browser builds
-    the same manifest with Python 3.13's words (``js/data/pyjson.js``). Python 3.13 reports a comma
+    the same manifest with Python 3.13's words (``js/eeg/pyjson.js``). Python 3.13 reports a comma
     before a closing bracket as "Illegal trailing comma before end of object" (or array) at the
     comma, where Python 3.12 reports a missing property name or value at the bracket; this gives
     3.12 the newer message, so the manifest is the same whichever supported Python builds it.

@@ -7,9 +7,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { Engine } from "../../electrotag/web/static/js/data/engine.js";
-import { planFilters } from "../../electrotag/web/static/js/data/filters.js";
-import { openRecording } from "../../electrotag/web/static/js/data/recording.js";
+import { Engine } from "../../electrotag/web/static/js/eeg/engine.js";
+import { planFilters } from "../../electrotag/web/static/js/eeg/filters.js";
+import { openRecording } from "../../electrotag/web/static/js/eeg/recording.js";
 import { ensureFixtures, expected, fixtureFiles } from "./_fixtures.mjs";
 
 const manifest = ensureFixtures();

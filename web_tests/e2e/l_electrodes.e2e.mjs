@@ -9,7 +9,7 @@
 import { clickDialogButton, signIn, waitForRoute, waitForTraces } from './helpers.mjs';
 import { cloudService, recordEvents, sentEvents, NAME } from './l_links.e2e.mjs';
 import { profilePage, kept, waitKept } from './l_device.e2e.mjs';
-import { demoSpecs, syntheticEdfBytes } from '../../electrotag/web/static/js/data/synthetic.js';
+import { demoSpecs, syntheticEdfBytes } from '../../electrotag/web/static/js/eeg/synthetic.js';
 
 /** Positions in CapTrak (x to the right, y to the nose, z up), with the front and back swapped. */
 export const SWAPPED_TSV = [

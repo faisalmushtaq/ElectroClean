@@ -1,11 +1,12 @@
-// Registering recordings in Chromium (js/data/register.js), with the folder chosen in a folder
+// Registering recordings in Chromium (js/eeg/register.js), with the folder chosen in a folder
 // picker and every recording read in the reading worker: the manifests must be those Node builds
 // from the same files (which web_tests/unit/data_register.test.mjs compares with the desktop's), and
 // the page must keep answering while the recordings are read.
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { buildManifests } from '../../electrotag/web/static/js/data/register.js';
+import { buildManifests } from '../../electrotag/web/static/js/eeg/register.js';
+import { CATALOGUE } from '../../electrotag/web/static/js/api/demo_catalogue.js';
 import { ensureFixtures, FIXTURES } from '../unit/_fixtures.mjs';
 
 async function nodeFiles(dir, name) {
@@ -41,7 +42,7 @@ export const tests = [
       const manifest = ensureFixtures();
       for (const name of ['edf_mix', 'bids_bv']) {
         const dir = path.join(FIXTURES, manifest.datasets[name].root);
-        const expected = await buildManifests(await nodeFiles(dir, name), { worker: false });
+        const expected = await buildManifests(await nodeFiles(dir, name), { catalogue: CATALOGUE, worker: false });
         const page = await t.newPage();
         await page.evaluate(() => {
           const input = document.createElement('input');
@@ -53,7 +54,8 @@ export const tests = [
         });
         await page.setInputFiles('#register-input', dir);
         const got = await page.evaluate(async () => {
-          const { buildManifests } = await import(new URL('js/data/register.js', location.href).href);
+          const { buildManifests } = await import(new URL('js/eeg/register.js', location.href).href);
+          const { CATALOGUE } = await import(new URL('js/api/demo_catalogue.js', location.href).href);
           const files = document.getElementById('register-input').files;
           const stages = new Set();
           let overall = 0;
@@ -66,6 +68,7 @@ export const tests = [
           }, 20);
           const t0 = performance.now();
           const out = await buildManifests(files, {
+            catalogue: CATALOGUE,
             worker: true, // every recording in the reading worker (fails without one)
             onProgress: (p) => {
               stages.add(p.stage);

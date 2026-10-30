@@ -1,7 +1,7 @@
 """Checking a manifest that a browser built (``recordings_register``) before it is stored.
 
 The administrator's browser reads each recording on their own computer and builds its manifest
-(``js/data/register.js``) in the internal shape of :func:`electrotag.web.manifest.build_manifest`.
+(``js/eeg/register.js``) in the internal shape of :func:`electrotag.web.manifest.build_manifest`.
 That manifest is untrusted input: it decides what annotators are shown and what the result files
 say about the recording. :func:`check_manifest` therefore checks its shape, sizes and consistency
 field by field and returns a clean copy holding only the fields ElectroTag knows, or raises

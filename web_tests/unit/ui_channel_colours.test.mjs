@@ -17,7 +17,7 @@ const { CHANNEL_COLOUR_MODES, GROUP_COLOURS, GROUPS, REGION_NEIGHBOURS, channelC
   await import('../../electrotag/web/static/js/viewer/channel_colours.js');
 const { COLOURS } = await import('../../electrotag/web/static/js/ui/theme.js');
 const { contrast, hexToRgb } = await import('../../electrotag/web/static/js/util.js');
-const { DEMO_CHANNELS, channelType } = await import('../../electrotag/web/static/js/data/synthetic.js');
+const { DEMO_CHANNELS, channelType } = await import('../../electrotag/web/static/js/eeg/synthetic.js');
 
 // ---------------------------------------------------------------- colour science
 const { cvd, normal, oklab } = await import('./_colour_science.mjs');

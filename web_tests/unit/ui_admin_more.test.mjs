@@ -8,7 +8,7 @@ import * as m from '../../electrotag/web/static/js/admin/model.js';
 import { niceTicks } from '../../electrotag/web/static/js/admin/chart.js';
 import { DemoBackend } from '../../electrotag/web/static/js/api/demo.js';
 import { inviteToken } from '../../electrotag/web/static/js/api/demo_admin.js';
-import { sha256Hex } from '../../electrotag/web/static/js/data/sha256.js';
+import { sha256Hex } from '../../electrotag/web/static/js/eeg/sha256.js';
 
 const memory = () => {
   const s = new Map();

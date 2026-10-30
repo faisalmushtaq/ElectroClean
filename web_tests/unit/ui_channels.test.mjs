@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 
 const { searchTerms, findChannels, tenTwentyPosition, channelGroups, toggleGroup, typeSuffixes, MANY_CHANNELS, BANK_BLOCK } =
   await import('../../electrotag/web/static/js/annotate/dialogs.js');
-const { DEMO_CHANNELS, channelType } = await import('../../electrotag/web/static/js/data/synthetic.js');
+const { DEMO_CHANNELS, channelType } = await import('../../electrotag/web/static/js/eeg/synthetic.js');
 
 const typed = (names, type = 'eeg') => names.map((name) => ({ name, type: typeof type === 'function' ? type(name) : type }));
 const range = (prefix, from, to) => Array.from({ length: to - from + 1 }, (_, i) => `${prefix}${from + i}`);

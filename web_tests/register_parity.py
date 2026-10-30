@@ -9,13 +9,13 @@ dataset is registered as ``electrotag-web register`` registers it (discovery as
 ``electrotag.web.manifest.build_manifest``), with the study settings made from the defaults
 and the job's blocks, and the default label catalogue. The answer gives, per job, the manifests
 and the recordings that could not be registered with the reason, so that
-web_tests/unit/data_register.test.mjs can compare js/data/register.js with them field by field.
+web_tests/unit/data_register.test.mjs can compare js/eeg/register.js with them field by field.
 
 Run it with ``-I`` (the folders are test data, never imported from) and the repository's Python.
 
     python -I web_tests/register_parity.py --python-text < cases.json
 
-answers how Python writes and reads the values that js/data/pyfmt.js and pyjson.js imitate
+answers how Python writes and reads the values that js/eeg/pyfmt.js and pyjson.js imitate
 (repr of floats, format specifications, repr of strings, the JSON errors that
 ``electrotag.app.io.bids.loads_json`` reports for a sidecar, UTF-8 errors, the desktop's
 parse_float and parse_int_code, timedelta's rounding), for web_tests/unit/data_register_py.test.mjs.
@@ -61,7 +61,7 @@ def register(job: dict) -> dict:
 
 
 def python_text(cases: dict) -> dict:
-    """How Python writes and reads the values of js/data/pyfmt.js and pyjson.js (--python-text)."""
+    """How Python writes and reads the values of js/eeg/pyfmt.js and pyjson.js (--python-text)."""
     import datetime
     import math
 

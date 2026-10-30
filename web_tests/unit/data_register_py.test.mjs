@@ -1,4 +1,4 @@
-// The small imitations of Python behind the manifests the browser builds (js/data/pyfmt.js and
+// The small imitations of Python behind the manifests the browser builds (js/eeg/pyfmt.js and
 // pyjson.js), checked against Python itself on a corpus of values: repr of floats, format
 // specifications with their rounding of ties, repr of strings, the messages of json and UTF-8
 // errors, the desktop's parse_float and parse_int_code, and datetime.timedelta's rounding.
@@ -9,10 +9,10 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
-import { pyCompare, pyFixed, pyFloatRepr, pyFormatG, pyIntText, pyListRepr, pySetRepr, pyStrip, pyStrRepr, timedeltaMicros } from "../../electrotag/web/static/js/data/pyfmt.js";
-import { decodeUtf8Python, parsePythonJson, pyValueText } from "../../electrotag/web/static/js/data/pyjson.js";
-import { parseFloatPy, parseIntCode } from "../../electrotag/web/static/js/data/events.js";
-import { parseBidsName, parseTsvText, TsvError } from "../../electrotag/web/static/js/data/bids.js";
+import { pyCompare, pyFixed, pyFloatRepr, pyFormatG, pyIntText, pyListRepr, pySetRepr, pyStrip, pyStrRepr, timedeltaMicros } from "../../electrotag/web/static/js/eeg/pyfmt.js";
+import { decodeUtf8Python, parsePythonJson, pyValueText } from "../../electrotag/web/static/js/eeg/pyjson.js";
+import { parseFloatPy, parseIntCode } from "../../electrotag/web/static/js/eeg/events.js";
+import { parseBidsName, parseTsvText, TsvError } from "../../electrotag/web/static/js/eeg/bids.js";
 import { ROOT } from "./_fixtures.mjs";
 
 function python() {

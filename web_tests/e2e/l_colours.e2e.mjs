@@ -2,11 +2,11 @@
 // with its legend, the choice remembered for the annotator, the study's default, bad channels kept
 // grey, and a 128-channel 10-10 montage. Screenshots of each mode are saved with --screenshots.
 import { signIn, waitForRoute, waitForTraces } from './helpers.mjs';
-import { DEMO_CHANNELS } from '../../electrotag/web/static/js/data/synthetic.js';
+import { DEMO_CHANNELS } from '../../electrotag/web/static/js/eeg/synthetic.js';
 
 async function openSynthetic(page, channels, id, durationS = 20) {
   await page.evaluate(async ([channels, id, durationS]) => {
-    const { makeSyntheticRecording } = await import(new URL('js/data/synthetic.js', location.href).href);
+    const { makeSyntheticRecording } = await import(new URL('js/eeg/synthetic.js', location.href).href);
     const recording = makeSyntheticRecording({ id, stem: `sub-${id}_task-rest`, sfreq: 256, durationS, seed: 3, channels, artifacts: [] });
     await globalThis.ElectroTag.openWorkspace({ recording, match: { status: 'unknown' }, sha: '', tryOut: true });
   }, [channels, id, durationS]);

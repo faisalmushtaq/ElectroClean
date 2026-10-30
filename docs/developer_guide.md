@@ -198,7 +198,7 @@ told to try again.
   `eeg.loading._read_raw`; supporting another MNE reader means adding its
   extension there and in `config.settings.RECORDING_EXTENSIONS`, a header or
   size check, and a source for its markers in `eeg.events`. The browser needs
-  a reader of its own in `js/data/` that gives the same values, with tests
+  a reader of its own in `js/eeg/` that gives the same values, with tests
   against MNE in `web_tests/unit/` (web/architecture.md).
 * **Drafts and autosave.** The browser keeps drafts of unfinished work
   (`js/annotate/session.js`) and the study stores them (`PUT /drafts/{recording_id}`).

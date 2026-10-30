@@ -4,8 +4,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { findRecordings, openRecording, Recording } from "../../electrotag/web/static/js/data/recording.js";
-import { inferChannelType, uniqueChannelNames, HOUSEKEEPING_PATTERNS, isHousekeeping } from "../../electrotag/web/static/js/data/channels.js";
+import { findRecordings, openRecording, Recording } from "../../electrotag/web/static/js/eeg/recording.js";
+import { inferChannelType, uniqueChannelNames, HOUSEKEEPING_PATTERNS, isHousekeeping } from "../../electrotag/web/static/js/eeg/channels.js";
 import {
   decodeBrainVisionText,
   decodeLatin1,
@@ -15,7 +15,7 @@ import {
   pyRound,
   recordingStem,
   timeToSample,
-} from "../../electrotag/web/static/js/data/util.js";
+} from "../../electrotag/web/static/js/eeg/util.js";
 import { ensureFixtures, fixtureFiles } from "./_fixtures.mjs";
 
 const manifest = ensureFixtures();

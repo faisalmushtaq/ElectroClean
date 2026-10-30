@@ -80,7 +80,7 @@ jobs:
 
   python-312:
     # Python 3.12 is the oldest version ElectroTag supports. The browser builds a recording's
-    # manifest as Python does (js/data/register.js and pyjson.js), so the modules are checked
+    # manifest as Python does (js/eeg/register.js and pyjson.js), so the modules are checked
     # against 3.12 as well; Python 3.12 words some errors differently from 3.13.
     name: Browser modules against Python 3.12
     runs-on: ubuntu-24.04

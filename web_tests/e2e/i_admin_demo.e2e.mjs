@@ -1,6 +1,6 @@
 // The admin area in the demonstration: the demo administrator adds an annotator and assigns
 // recordings, changes the study settings and reads the audit log; recordings are added from
-// "this computer" (with a stand-in for js/data/register.js that reads the files with the real
+// "this computer" (with a stand-in for js/eeg/register.js that reads the files with the real
 // readers) and then opened and saved by an annotator; the analyses say they need a study server;
 // and the area works at 1280 × 720 and in a window 400 pixels wide.
 import fs from 'node:fs';
@@ -13,7 +13,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const STATIC = path.resolve(HERE, '..', '..', 'electrotag', 'web', 'static');
 
 /**
- * A stand-in for js/data/register.js with the interface of docs/web/architecture.md: it reads each
+ * A stand-in for js/eeg/register.js with the interface of docs/web/architecture.md: it reads each
  * EDF file with the application's own reader (./recording.js beside it) for the fingerprint, timing
  * and channels, reports progress, lists other files as failures, and can be held until released.
  */
@@ -55,12 +55,12 @@ export async function buildManifests(files, { settings, scope, onProgress } = {}
 `;
 
 async function stubBuilder(page) {
-  await page.route('**/js/data/register.js', (route) => route.fulfill({ status: 200, contentType: 'text/javascript', body: STUB_BUILDER }));
+  await page.route('**/js/eeg/register.js', (route) => route.fulfill({ status: 200, contentType: 'text/javascript', body: STUB_BUILDER }));
 }
 
 /** A dataset folder with one new simulated EDF recording and a file that is not a recording. */
 async function dataset() {
-  const { syntheticEdfBytes } = await import(pathToFileURL(path.join(STATIC, 'js', 'data', 'synthetic.js')).href);
+  const { syntheticEdfBytes } = await import(pathToFileURL(path.join(STATIC, 'js', 'eeg', 'synthetic.js')).href);
   const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'et-admin-'));
   const dir = path.join(root, 'dataset', 'sub-new01', 'eeg');
   fs.mkdirSync(dir, { recursive: true });

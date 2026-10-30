@@ -11,7 +11,7 @@ import { SkipTest, signIn, waitForRoute } from './helpers.mjs';
 
 const PASSWORD = 'electrotag';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const REGISTER_JS = path.resolve(HERE, '..', '..', 'electrotag', 'web', 'static', 'js', 'data', 'register.js');
+const REGISTER_JS = path.resolve(HERE, '..', '..', 'electrotag', 'web', 'static', 'js', 'eeg', 'register.js');
 const NO_ADMIN = 'the study server has no admin operations yet (POST /api/v1/admin/overview answers 404)';
 
 async function api(t, method, p, body, token) {
@@ -184,7 +184,7 @@ export const tests = [
     async run(t) {
       const { assert } = t;
       await needsAdminOperations(t);
-      if (!fs.existsSync(REGISTER_JS)) throw new SkipTest('js/data/register.js, which reads recordings for the register, is not in this copy yet');
+      if (!fs.existsSync(REGISTER_JS)) throw new SkipTest('js/eeg/register.js, which reads recordings for the register, is not in this copy yet');
       const page = await adminPage(t);
       await goSection(page, 'Recordings', 'admin-recordings');
       await page.setInputFiles('input[data-log="register-folder"]', path.join(t.study.dir, 'recordings', 'study'));

@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { hungarianMax, matchEvents, practiceFeedback, describePassRule, scoreSentence, practiceVerdict, practiceDetail, retryRecording } from '../../electrotag/web/static/js/training/scoring.js';
-import { demoSpecs, truthAnnotations } from '../../electrotag/web/static/js/data/synthetic.js';
+import { demoSpecs, truthAnnotations } from '../../electrotag/web/static/js/eeg/synthetic.js';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const ann = (id, label, on, dur, channels = []) => ({ annotation_id: id, label, onset_sample: on, duration_samples: dur, channels });

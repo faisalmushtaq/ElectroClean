@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { signIn, waitForRoute, waitForTraces, state, annotations, eegPoint, drag, clickDialogButton } from './helpers.mjs';
-import { demoSpecs, syntheticEdfBytes } from '../../electrotag/web/static/js/data/synthetic.js';
+import { demoSpecs, syntheticEdfBytes } from '../../electrotag/web/static/js/eeg/synthetic.js';
 
 function writeFiles() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'et-e2e-'));

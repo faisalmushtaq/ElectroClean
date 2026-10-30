@@ -14,7 +14,7 @@ import {
 } from './demo_catalogue.js';
 import {
   channelType, demoSpecs, exampleNote, makeSyntheticRecording, syntheticEdfBytes, truthAnnotations,
-} from '../data/synthetic.js';
+} from '../eeg/synthetic.js';
 import { ApiError } from './http.js';
 import { DEMO_NOTICE } from './notice.js';
 import { DemoAdmin } from './demo_admin.js';
@@ -24,7 +24,7 @@ export { DEMO_NOTICE };
 import * as rules from '../training/rules.js';
 import { DEFAULT_PASS, practiceDetail, practiceFeedback, practiceVerdict, retryRecording, scoreSentence } from '../training/scoring.js';
 import { local, newId, nowLocalIso, session } from '../util.js';
-import { sha256Hex } from '../data/sha256.js';
+import { sha256Hex } from '../eeg/sha256.js';
 import { coveredS, fromDraft } from '../viewer/coverage.js';
 import { ADJECTIVES, ANIMALS } from '../games/words.js';
 import { isConfidence, noteProblem } from '../annotate/confidence.js';

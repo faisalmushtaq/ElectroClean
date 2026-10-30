@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { signIn, waitForRoute, waitForTraces, clickDialogButton } from './helpers.mjs';
-import { demoSpecs, syntheticEdfBytes } from '../../electrotag/web/static/js/data/synthetic.js';
+import { demoSpecs, syntheticEdfBytes } from '../../electrotag/web/static/js/eeg/synthetic.js';
 
 export const NAME = 'sub-demo01_task-rest_eeg.edf';
 

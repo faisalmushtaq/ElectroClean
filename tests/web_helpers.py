@@ -131,7 +131,7 @@ def as_wire(a: Any, aid: str | None = None) -> dict[str, Any]:
 
 def build_manifests(folder: Path, scope: str = "study") -> list[dict[str, Any]]:
     """The manifests of every recording in a folder, as the desktop's registration makes them (MNE-Python),
-    which is what the browser's registration (js/data/register.js) builds too."""
+    which is what the browser's registration (js/eeg/register.js) builds too."""
     from electrotag.app.annotations.labels import default_catalogue
     from electrotag.config.settings import load_settings
     from electrotag.web.registration import collect

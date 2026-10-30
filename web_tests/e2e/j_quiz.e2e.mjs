@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { signIn, waitForRoute, clickDialogButton } from './helpers.mjs';
 import { QUIZ } from '../../electrotag/web/static/js/api/demo.js';
-import { demoSpecs, syntheticEdfBytes } from '../../electrotag/web/static/js/data/synthetic.js';
+import { demoSpecs, syntheticEdfBytes } from '../../electrotag/web/static/js/eeg/synthetic.js';
 
 const TRUTH = new Map(QUIZ.items.map((i) => [i.item_id, i]));
 
