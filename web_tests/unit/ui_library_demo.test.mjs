@@ -90,27 +90,27 @@ test('registering into a dataset applies its prefix, and another dataset\'s IDs 
 test('a later member of a group gets what its following hand-outs hold; withdrawing keeps started work', async () => {
   const { b, rids } = await admin();
   await b.admin('user_add', { annotator_id: 'A02', password: 'long enough' });
-  const g = await b.admin('group_create', { request_id: hex(1), name: 'RAs', members: ['A02'] });
+  const g = await b.admin('group_create', { request_id: hex(1), name: 'RAs', members: ['E01'] });
   const gid = g.group.group_id;
   const h = await b.admin('handout_create', { request_id: hex(2), target: { kind: 'dataset', id: 'study-recordings' }, groups: [gid], follow_groups: true });
   assert.equal(h.added, 3);
-  const joined = await b.admin('group_update', { group_id: gid, add: ['E01'] });
-  assert.deepEqual(joined.given, [{ handout_id: h.handout.handout_id, annotator_id: 'E01', added: 3 }]);
+  const joined = await b.admin('group_update', { group_id: gid, add: ['A02'] });
+  assert.deepEqual(joined.given, [{ handout_id: h.handout.handout_id, annotator_id: 'A02', added: 3 }]);
   const quiet = await b.admin('group_update', { group_id: gid, add: ['T01'], give_existing: false });
   assert.deepEqual(quiet.given, []);
-  // A02 starts one recording (a draft) and saves nothing; E01 starts nothing
-  await as(b, 'A02', 'long enough');
+  // E01 (whose example account has answered the sign-up questionnaire) starts one recording and saves nothing
+  await as(b, 'E01');
   await b.putDraft(rids[0], 'standard', '', { annotations: [], elapsed_s: 5 });
   await as(b, 'ADMIN');
   const track = await b.admin('tracking_recordings_get', { kind: 'handout', id: h.handout.handout_id });
   assert.deepEqual(track.people.map((p) => p.annotator_id), ['A02', 'E01']);
-  assert.equal(track.rows[0].cells.A02.status, 'in_progress');
-  assert.equal(track.rows[1].cells.A02.status, 'given');
-  assert.equal(track.rows[0].cells.E01.assigned_by, 'ADMIN');
+  assert.equal(track.rows[0].cells.E01.status, 'in_progress');
+  assert.equal(track.rows[1].cells.E01.status, 'given');
+  assert.equal(track.rows[0].cells.A02.assigned_by, 'ADMIN');
   const w = await b.admin('handout_withdraw', { handout_id: h.handout.handout_id });
   assert.deepEqual([w.removed, w.kept], [5, 1]);
-  const left = (await b.admin('assignments_list', { annotator_id: 'A02' })).items.map((i) => i.recording_id);
-  assert.deepEqual(left, [rids[0]], 'the recording A02 started stays theirs');
+  const left = (await b.admin('assignments_list', { annotator_id: 'E01' })).items.map((i) => i.recording_id);
+  assert.deepEqual(left, [rids[0]], 'the recording E01 started stays theirs');
   await assert.rejects(() => b.admin('group_remove', { group_id: 'nothing' }), (e) => e.code === 'unknown_group');
   await b.admin('group_remove', { group_id: gid });
   assert.deepEqual((await b.admin('groups_list', {})).groups, []);
