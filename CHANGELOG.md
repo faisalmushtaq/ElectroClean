@@ -45,6 +45,24 @@ unchanged. The public sandbox now does all of this in the browser too: datasets,
 hand-outs in which everyone gets all of it, the tracking grids and the list of what would be notified,
 while a share-out k per recording still needs a study server or Firebase.
 
+Annotators and experts now answer a short sign-up questionnaire at their first sign-in, before any
+recording, training or expert work opens, and the study refuses that work until they have: their
+experience of EEG (datasets analysed in the bands 0, 1–2, 3–10, 11–30, 31–100 and over 100, years with
+EEG, hours of artifact annotation, training, the systems used, clinical or research EEG and their
+confidence), their career stage, discipline and country, and, where the study keeps them, their age
+band, gender and first language, with their full name and contact details. Every question offers
+Prefer not to say. People change their answers later from their home page, and every version is kept
+with its date. The study team edits the questions, the contact details asked and whether the
+demographic questions are included in Study settings, sees everyone's answers by annotator ID in the
+new Questionnaire section and each person's answers, name and contact details on their page in
+Annotators, and downloads the contacts list, which is noted in the audit log. The results zip holds
+the answers by annotator ID in `questionnaire/answers.tsv` and `.json`, and names and contact details
+only as `contacts.csv` when Include names and contact details is ticked. The agreement and activity
+analyses add the answers current at each piece of work, and the agreement by the annotators' bands of
+datasets analysed. Administrators who do not annotate are not asked. The interaction log records only
+that the questionnaire was answered and how many questions were. The sandbox's own accounts start with
+example answers.
+
 Recordings of every channel count up to 256 (and 257, EGI's nets with their reference) have been
 checked in the browser against MNE-Python, through registration, saving, the agreement analysis and
 adjudication, on a new synthetic set (`scripts/make_channel_matrix.py`, 32 recordings in every

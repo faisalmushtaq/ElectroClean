@@ -64,6 +64,7 @@ testpaths = ["tests"]
 addopts = "-ra"
 markers = [
   "slow: longer end-to-end tests",
+  "questionnaire: the sign-up questionnaire's gate applies (other tests treat everyone as having answered)",
 ]
 
 [tool.ruff]

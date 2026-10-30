@@ -88,6 +88,11 @@ async function save(s, id, annotations, password = PASSWORD) {
   const eeg = filesFor(s.dir, FILE).find((f) => f.endsWith('.eeg'));
   const sha256 = crypto.createHash('sha256').update(fs.readFileSync(eeg)).digest('hex');
   const token = (await api(s, null, '/login', { annotator_id: id, password })).token;
+  const q = await api(s, token, '/me/questionnaire');
+  if (q.asked && !q.answered_at) { // a new account answers the sign-up questionnaire before saving work
+    const answers = Object.fromEntries(q.questions.map((x) => [x.id, x.type === 'multi' ? [q.prefer_not.value] : q.prefer_not.value]));
+    await api(s, token, '/me/questionnaire', { answers, contacts: { full_name: `Person ${id}`, email: `${id.toLowerCase()}@example.org` } });
+  }
   await api(s, token, '/submissions', { recording_id: SUB1, mode: 'standard', context_id: '', annotations, sha256,
     session: { started_at: '2026-10-30T10:00:00.000+00:00', elapsed_s: 60 } });
 }

@@ -6,7 +6,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { signIn, waitForRoute } from './helpers.mjs';
+import { answerQuestionnaire, signIn, waitForRoute } from './helpers.mjs';
 
 const PASSWORD = 'electrotag';
 
@@ -37,6 +37,9 @@ async function acceptInvite(page, { id, study, password }) {
     || (globalThis.ElectroTag && globalThis.ElectroTag.route !== 'signin'), null, { timeout: 30000 });
   const notice = page.locator('.dialog.logging-notice button', { hasText: 'Continue' });
   if (await notice.count()) await notice.click();
+  // a person who has just chosen their password answers the sign-up questionnaire before anything else
+  await waitForRoute(page, 'questionnaire', 30000);
+  await answerQuestionnaire(page);
   await waitForRoute(page, 'home');
 }
 

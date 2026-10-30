@@ -43,6 +43,8 @@ const PARTS = Object.freeze({
   tour: './training/tour.js',
   snippets: './training/snippets.js',
   viewer: './viewer/viewer.js',
+  questionnaire: './views/questionnaire.js',
+  demoQuestionnaire: './api/demo_questionnaire.js',
 });
 
 const pending = new Map(); // name -> the promise of its module

@@ -276,6 +276,9 @@ class StudyService:
 
         self.datasets = Datasets(self)
         self.tracking = Tracking(self)
+        from electrotag.web.questionnaire import Questionnaire
+
+        self.questionnaire = Questionnaire(self)
 
     # ----------------------------------------------------------------- basics
     @property
@@ -355,7 +358,7 @@ class StudyService:
         return {"annotator_id": user.annotator_id, "display_name": user.display_name, "role": user.role,
                 "roles": list(user.roles), "study": self.study_info(), "catalogue": self.catalogue_info(),
                 "programme": prog, "training_gate": self.training_path.gate(user),
-                "quizzes": self.quizzes.available(user)}
+                "quizzes": self.quizzes.available(user), "questionnaire": self.questionnaire.status(user)}
 
     # ---------------------------------------------------------- what to do
     def work_items(self, user: User) -> list[WorkItem]:
@@ -906,6 +909,11 @@ class StudyService:
         in it, each when the study shows them (electrotag/web/expert.py, ``FEEDBACK_PARTS``)."""
         return self.expert.my_feedback(user)
 
+    # ------------------------------------------------- the sign-up questionnaire
+    def questionnaire_op(self, user: User, body: dict[str, Any] | None = None) -> dict[str, Any]:
+        """``GET /me/questionnaire`` and ``POST /me/questionnaire`` (electrotag/web/questionnaire.py)."""
+        return self.questionnaire.run(user, body or {})
+
     # ---------------------------------------------------------- achievements
     def achievements(self, user: User, body: dict[str, Any] | None = None) -> dict[str, Any]:
         """``GET /me/achievements`` (and ``POST`` with ``goal_per_week`` or ``leaderboard_hidden``)."""
@@ -1022,7 +1030,7 @@ class StudyService:
     OPERATIONS = ("me", "assignments", "match", "put_draft", "delete_draft", "submit", "training", "guided_get",
                   "guided_check", "guided_continue", "guided_show_me", "visit_open", "visit_events", "visit_close",
                   "admin_progress", "admin", "quiz", "achievements", "problem_report", "my_reviews", "expert",
-                  "my_feedback", "training_stage", "training_snippets")
+                  "my_feedback", "training_stage", "training_snippets", "questionnaire")
 
     def call(self, operation: str, user: User, body: dict[str, Any] | None) -> dict[str, Any]:
         if operation not in self.OPERATIONS:
@@ -1030,12 +1038,18 @@ class StudyService:
         if body is not None and not isinstance(body, dict):
             raise ApiError(400, "bad_request", "The request must be a JSON object")
         body = body or {}
+        from electrotag.web.questionnaire import GATED_OPERATIONS
+
+        if operation in GATED_OPERATIONS:  # work waits for the sign-up questionnaire (electrotag/web/questionnaire.py)
+            self.questionnaire.require_answered(user)
         if operation == "admin":
             return self.admin(body.get("op"), user, {k: v for k, v in body.items() if k != "op"})
         if operation == "expert":
             return self.expert_op(body.get("op"), user, {k: v for k, v in body.items() if k != "op"})
         if operation == "quiz":
             return self.quiz(user, body.get("set_id"), {k: v for k, v in body.items() if k != "set_id"})
+        if operation == "questionnaire":
+            return self.questionnaire_op(user, body)
         return getattr(self, operation)(user, body)
 
 

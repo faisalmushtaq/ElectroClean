@@ -36,7 +36,7 @@ file (the format is in [file_formats.md](file_formats.md)):
 
 The admin area's settings change the blocks `filters`, `display`, `channels`,
 `selection`, `logging`, `annotation`, `loading`, `gamification`, `review`,
-`training` and `replay`, and the study keeps them
+`training`, `replay` and `questionnaire`, and the study keeps them
 with its records: in Firestore for a study on Firebase, and in the study
 folder's `electrotag_study.json` on an ElectroTag server. The settings that
 decide what a recording consists of (the channels to hide, the channel types,
@@ -742,6 +742,68 @@ area, and every change is written to the audit log. Replays use the
 interaction logs for teaching and for checking work, a purpose of their own:
 say so in the study's information for participants, and check whether the
 study's ethics approval covers it.
+
+## The sign-up questionnaire
+
+Annotators and experts answer a short questionnaire once, at their first
+sign-in, before any recording, training or expert work opens: the study
+refuses that work until they have answered. Administrators who do not annotate
+are not asked. The `questionnaire` block decides what is asked:
+
+```json
+{"settings": {"questionnaire": {"enabled": true, "demographics": true, "questions": [...],
+              "contacts": {"full_name": "required", "email": "required",
+                           "phone": "optional", "institution": "optional"}}}}
+```
+
+`enabled` switches the questionnaire, and the refusal of work, on or off.
+`questions` is the list of questions, which `default_settings.json` holds as
+ElectroTag's default questionnaire (null means the same): the person's
+experience of EEG (EEG datasets analysed, in the log-like bands 0, 1–2, 3–10,
+11–30, 31–100 and over 100; years working with EEG; hours of artifact
+annotation; formal training in recognising artifacts; the EEG systems used;
+clinical or research EEG; and confidence on a scale from 1 to 5), their career
+stage (undergraduate, master's, PhD, postdoc, faculty, clinician, EEG
+technologist, industry or other), discipline and country of work, and, in the
+group `demographics`, their age band, gender (with room to describe it in
+their own words) and first language. Each question has an `id` (lower-case
+letters, digits and `_`, the column's name in the results), a `group`
+(`experience`, `career` or `demographics`), its `text`, a `type` (`choice` for
+one answer, `multi` for several, `text` for a short answer on one line), its
+`options` (2 to 30, for `choice` and `multi`), optionally the `other_option`
+that asks for the person's own words and a line of `help`, and whether an
+answer is `required` (true by default). Every question offers "Prefer not to
+say", which ElectroTag adds itself and which counts as an answer, so a
+definition never lists it. `demographics` false leaves out the demographic
+group: these are personal data of a more sensitive kind, so include them only
+if the study's ethics approval covers collecting them. `contacts` says
+whether each contact detail is `required`, `optional` or `off`; the email
+address is filled in from the account where it has one. The admin area edits
+all of this under Study settings, Sign-up questionnaire.
+
+People can change their answers later from their home page. Each set of
+answers is kept with its date and the version of the questions it was given to
+(`q-` and ten hexadecimal digits of the SHA-256 of the questions' wording and
+options), as a history: changing the wording or the options starts a new
+version, and the analyses use the answers current at the time of each piece of
+work. Someone who answered before the study team added a required question is
+not stopped, and their home page offers the new questions.
+
+The answers are research data kept by annotator ID; the full name and contact
+details are kept apart, for the study team only. Administrators see both on a
+person's page in Annotators, everyone's answers by ID in the Questionnaire
+section, and the names in the lists of people. The results zip holds the
+answers in `questionnaire/answers.tsv` and `.json` under `Annotated_Events/`
+([file formats](file_formats.md)), with no name or contact detail; names and
+contact details go into a separate `contacts.csv` only when the administrator
+asks for it, which is written to the audit log, as is each download of the
+contacts list. The audit log otherwise says only that someone's details
+changed, and the interaction log only that the questionnaire was answered and
+how many questions were. The agreement analysis adds the answers current when
+each recording was annotated (`questionnaire_at_annotation.tsv`) and the
+pairwise agreement by the two annotators' bands of datasets analysed
+(`agreement_by_experience.tsv`); the activity analysis adds the answers current
+at each visit (`questionnaire_at_visit.tsv`).
 
 ## Interaction logs (research data)
 

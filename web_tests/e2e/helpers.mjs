@@ -8,7 +8,12 @@ export class SkipTest extends Error {
   }
 }
 
-export async function signIn(page, id = 'A01', password = 'demo') {
+/**
+ * Sign in. A new account's first sign-in shows the sign-up questionnaire, which is answered here (with
+ * answerQuestionnaire) so that the test goes on where the person starts; `{ questionnaire: 'stay' }`
+ * leaves it on the screen, for the tests of the questionnaire itself.
+ */
+export async function signIn(page, id = 'A01', password = 'demo', { questionnaire = 'answer' } = {}) {
   await page.waitForSelector('#signin-id');
   await page.fill('#signin-id', id);
   await page.fill('#signin-password', password);
@@ -21,6 +26,26 @@ export async function signIn(page, id = 'A01', password = 'demo') {
     || document.querySelector('form.signin-form .error:not([hidden])') !== null, null, { timeout: 60000 });
   const notice = page.locator('.dialog.logging-notice button', { hasText: 'Continue' });
   if (await notice.count()) await notice.click();
+  if (questionnaire === 'answer') await answerQuestionnaire(page);
+}
+
+/**
+ * A new account's first sign-in shows the sign-up questionnaire before anything else
+ * (js/views/questionnaire.js): answer every question with Prefer not to say, give a name and an email
+ * address, and save, which goes on to where the person starts. Nothing happens when it is not shown.
+ */
+export async function answerQuestionnaire(page, { name = 'Test person', email = 'test@example.org' } = {}) {
+  // signed in (the first view is shown) or refused (an error on the sign-in view)
+  await page.waitForFunction(() => (globalThis.ElectroTag && globalThis.ElectroTag.route && globalThis.ElectroTag.route !== 'signin')
+    || document.querySelector('form.signin-form .error:not([hidden])') !== null, null, { timeout: 30000 });
+  if (await page.evaluate(() => globalThis.ElectroTag && globalThis.ElectroTag.route) !== 'questionnaire') return;
+  await page.waitForSelector('form.q-form');
+  const prefer = page.locator('fieldset.q-question label.q-prefer');
+  for (let i = 0; i < await prefer.count(); i++) await prefer.nth(i).click();
+  await page.fill('input[name="full_name"]', name);
+  await page.fill('input[name="email"]', email);
+  await page.click('[data-log="questionnaire-save"]');
+  await page.waitForFunction(() => globalThis.ElectroTag.route !== 'questionnaire', null, { timeout: 30000 });
 }
 
 export async function state(page) {

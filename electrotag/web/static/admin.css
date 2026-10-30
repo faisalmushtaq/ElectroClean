@@ -431,3 +431,12 @@ th.num .th-sort { flex-direction: row-reverse; }
 .snippet-preview { margin: 0 0 16px; }
 .admin-snippet-eeg { height: 440px; padding: 8px; border: 1px solid var(--hairline); background: var(--page); }
 @media (max-width: 640px) { .admin-snippet-eeg { height: 360px; padding: 4px; } }
+
+/* the sign-up questionnaire (js/admin/questionnaire.js): the questions in Study settings, one line each that
+   opens on its fields, and the earlier answers on a person's page */
+.q-edit-list { margin-top: 8px; border-bottom: 1px solid var(--hairline); }
+.q-edit { border-top: 1px solid var(--hairline); padding: 12px 0; }
+.q-edit-title .caption { margin-left: 4px; }
+.q-edit-body { padding: 4px 0 8px 24px; }
+.q-history { margin-top: 16px; }
+.q-earlier { margin-top: 12px; }

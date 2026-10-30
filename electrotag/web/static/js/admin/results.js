@@ -4,7 +4,7 @@
 
 import { h, clear } from '../ui/dom.js';
 import { MODES, STATUS, bytesText, csvText, programmeText, progressCounts, whenText } from './model.js';
-import { actionButton, card, chip, dataTable, downloadBase64, downloadText, messageArea, recordingName, sectionHead } from './ui.js';
+import { actionButton, card, checkbox, chip, dataTable, downloadBase64, downloadText, messageArea, recordingName, sectionHead } from './ui.js';
 import { allReviewsCard, reviewButton, reviewCount } from './reviews.js';
 
 export class ResultsSection {
@@ -28,13 +28,19 @@ export class ResultsSection {
     this.reviews = allReviewsCard();
     this.zipMsg = messageArea();
     const zip = actionButton('Download all results (zip)', { kind: 'primary', working: 'Preparing the zip…', msg: this.zipMsg, log: 'results-zip', onClick: () => this._zip() });
+    // Names and contact details go into the zip only when asked for, as contacts.csv (docs/web/admin.md, "Results").
+    this.contacts = checkbox('Include names and contact details (contacts.csv)', false);
+    this.contacts.input.dataset.log = 'results-contacts';
+    const contactsWarning = h('p.banner.contacts-warning', { hidden: true }, 'contacts.csv identifies people: keep it apart from the research data and share it only with the study team. The download is noted in the audit log.');
+    this.contacts.input.addEventListener('change', () => { contactsWarning.hidden = !this.contacts.input.checked; });
     this.el = h('section.admin-section', { 'data-section': 'results' },
       sectionHead('Results', 'Who has done what, and every saved result of the study.'),
       this.msg,
       card('Each person\'s work', h('p.caption', {}, 'Each person\'s recordings and training, with Work to see them one by one and review what was saved. Progress has the figures, times and the pace.'),
         this.note, this.table, h('div.btn-row', {}, csv)), this.work, this.reviews,
       card('All results',
-          h('p', {}, 'The annotations (in ElectroTag\'s usual folders: _annotations.json, _events.tsv, _session.json for each recording and annotator), the interaction logs, the training progress and the reports, as one zip file.'),
+          h('p', {}, 'The annotations (in ElectroTag\'s usual folders: _annotations.json, _events.tsv, _session.json for each recording and annotator), the interaction logs, the training progress and the reports, and the answers to the sign-up questionnaire by annotator ID, as one zip file.'),
+          this.contacts, contactsWarning,
           h('div.btn-row', {}, zip), this.zipMsg));
   }
 
@@ -82,7 +88,7 @@ export class ResultsSection {
     this.zipMsg.clear();
     let r;
     try {
-      r = await this.area.backend.admin('results_zip', {});
+      r = await this.area.backend.admin('results_zip', this.contacts.input.checked ? { include_contacts: true } : {});
     } catch (exc) {
       if (exc.code === 'too_large' || exc.status === 413) { this.zipMsg.show('note', 'The results are too large to send through the page.', this._exportHelp()); return; }
       if (exc.code === 'needs_server' && this.area.isDemo) {

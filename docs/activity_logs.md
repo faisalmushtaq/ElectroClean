@@ -54,6 +54,13 @@ goes to the study team.
 The text of a note on an annotation is research content, saved with the
 annotation in the result files and never in the log: the log says only that a
 note was added, changed or removed, and how many characters it has.
+The sign-up questionnaire's page is never logged at all, as the admin area is
+not: no click, choice or field on it reaches the log. Once the answers are
+saved the log gains `questionnaire_answered` with `n_answered`, the number of
+questions answered ("Prefer not to say" counts), and nothing else: no answer,
+no words typed beside Other, no name and no contact detail. The answers
+themselves are research data kept by annotator ID with the study's records
+([file formats](file_formats.md), "The sign-up questionnaire").
 
 ## Where the logs are
 
@@ -106,7 +113,11 @@ the desktop application have the same header with the desktop's own
 ### Event kinds
 
 **The visit.** `visit_started` (mode, whether the annotator chose the
-recording, reference set, and `client`: `web` in the browser); `log_closed`
+recording, reference set, and `client`: `web` in the browser);
+`questionnaire_answered` (in the browser, since 30 October 2026: the sign-up
+questionnaire was saved, at the first sign-in or when the answers were changed
+from the home page; `n_answered`, the number of questions answered, and nothing
+of the answers); `log_closed`
 (`reason`: `sign_out` or `page_closed` in the browser; `back_to_start`, `quit`,
 `exit`, `new_visit` or `quiz_not_started` in logs of the desktop application);
 `error` (an unexpected error, with its details); `log_problem` (something the

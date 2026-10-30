@@ -41,6 +41,33 @@ used already leads to the sign-in. One that has expired, or was replaced by a ne
 asks you to contact the study team who invited you for a new link, for example by replying to the
 email that brought it.
 
+## Before your first recording
+
+The first time you sign in, ElectroTag asks a few questions before anything else: about your
+experience of EEG (how many EEG datasets you have analysed, how long you have worked with EEG, how
+many hours you have spent marking artifacts, any training in recognising them, the EEG systems you
+have used, whether your experience is clinical or research, and how confident you feel), your career
+stage, discipline and country of work, and, in studies whose ethics approval covers it, your age,
+gender and first language. It also asks for your full name and how the study team can reach you: your
+email address (filled in from your account), and a phone number and institution where the study asks
+for them. It takes about three minutes. Every question has Prefer not to say, which counts as an
+answer, and where an option such as Other asks for your own words you can add them. Press Save and
+continue when you have answered; if a question still needs an answer, the page says which. Your
+recordings, training and expert work open once you have answered, and the study refuses them until
+then.
+
+Your answers are research data, kept under your annotator ID and seen only by the study team; other
+annotators and experts never see them. Your name and contact details are kept apart from your
+answers and used only by the study team to reach you; the research files use your annotator ID. The
+record of how you use ElectroTag notes only that you answered the questions and how many, never your
+answers or anything you typed.
+
+You can change your answers later: the line under the greeting on your home page says when you
+answered, with See or change my answers. Change anything that is different now and press Save my
+answers, or Back to my recordings to leave them as they were. The study keeps each version of your
+answers with its date, so that the analyses use what was true when you did each piece of work. If
+the study team adds a question later, the same line offers Answer the new questions.
+
 ## Your recordings
 
 The first page has one black button, Open next recording, for the recording to do next. When you

@@ -110,6 +110,10 @@ def build_study(folder: Path) -> Path:
             store.assign(aid, rids)
         for aid, set_id in spec["programmes"].items():
             store.enrol(aid, set_id)
+        from electrotag.web.questionnaire import prefill_example
+
+        for p in spec.get("questionnaire", []):  # the sandbox's own accounts start with the example answers
+            prefill_example(store, p["annotator_id"], p["display_name"])
     finally:
         store.close()
     return study_dir

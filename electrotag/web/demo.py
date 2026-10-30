@@ -79,6 +79,11 @@ def build_demo(directory: Path | str, *, fresh: bool = False, say: Any = print, 
         study_recordings = sorted(m["recording_id"] for m in reg.manifests)
         for aid, name, roles in DEMO_USERS:
             store.db.add_user(aid, DEMO_PASSWORD, display_name=name, roles=roles.split(","), replace=True)
+        from electrotag.web.questionnaire import prefill_example
+
+        for aid, name, roles in DEMO_USERS:  # the sign-up questionnaire answered already, so visitors start at once
+            if roles != "admin":
+                prefill_example(store, aid, name)
         for aid in ("A01", "A02"):
             store.assign(aid, study_recordings)
         store.enrol("T01", EXAMPLE_SET_ID)

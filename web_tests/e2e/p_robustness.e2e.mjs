@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { clickDialogButton, drag, eegPoint, openExample, pressSave, signIn, state, waitForRoute, waitForTraces } from './helpers.mjs';
+import { clickDialogButton, drag, eegPoint, openExample, pressSave, signIn, state, waitForRoute, waitForTraces, answerQuestionnaire } from './helpers.mjs';
 import { demoSpecs, syntheticEdfBytes } from '../../electrotag/web/static/js/eeg/synthetic.js';
 import { cloudService } from './l_links.e2e.mjs';
 
@@ -824,6 +824,7 @@ export const tests = [
         || (globalThis.ElectroTag && globalThis.ElectroTag.route !== 'signin'), null, { timeout: 30000 });
       const notice = page.locator('.dialog.logging-notice button', { hasText: 'Continue' });
       if (await notice.count()) await notice.click();
+      await answerQuestionnaire(page); // the person's first sign-in: the sign-up questionnaire comes first
       await waitForRoute(page, 'home', 20000);
       assert.equal(seen.accept, 1, 'the password was set with one request');
       assert.equal(seen.check, 2);

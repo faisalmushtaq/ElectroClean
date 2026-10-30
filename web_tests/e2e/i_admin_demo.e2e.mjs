@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { signIn, state, waitForRoute, waitForTraces, eegPoint, drag, clickDialogButton, pressSave } from './helpers.mjs';
+import { signIn, state, waitForRoute, waitForTraces, eegPoint, drag, clickDialogButton, pressSave, answerQuestionnaire } from './helpers.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const STATIC = path.resolve(HERE, '..', '..', 'electrotag', 'web', 'static');
@@ -181,6 +181,7 @@ export const tests = [
       // A05 signs in with the temporary password and finds the recordings and the study's keys.
       await page.click('[data-log="sign-out"]');
       await signIn(page, 'A05', password);
+      await answerQuestionnaire(page); // a new account answers the sign-up questionnaire first
       await waitForRoute(page, 'home');
       assert.match(await page.textContent('main'), /0 of 3\s*recordings done/);
       assert.equal(await page.locator('[data-log="admin"]').count(), 0);

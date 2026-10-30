@@ -17,7 +17,7 @@ import path from 'node:path';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
-import { signIn, waitForRoute, waitForTraces, annotations, eegPoint, drag, clickDialogButton, pressSave, skipFirstStages } from './e2e/helpers.mjs';
+import { signIn, waitForRoute, waitForTraces, annotations, eegPoint, drag, clickDialogButton, pressSave, skipFirstStages, answerQuestionnaire } from './e2e/helpers.mjs';
 
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
@@ -142,8 +142,16 @@ async function main() {
       await shot(page, 'signin');
       await signIn(page, 'a01@example.org', 'wrong password');
       await page.waitForFunction(() => /not right/.test(document.querySelector('form.signin-form')?.textContent || ''));
-      await signIn(page, 'a01@example.org', PASSWORD);
+      await signIn(page, 'a01@example.org', PASSWORD, { questionnaire: 'stay' });
+      // the sign-up questionnaire first: the functions refuse work until it is answered (et_questionnaire)
+      await waitForRoute(page, 'questionnaire', 30000);
+      const refused = await page.evaluate(() => globalThis.ElectroTag.backend.assignments().then(() => globalThis.ElectroTag.backend.match({ sha256: '0'.repeat(64), size_bytes: 1 })).then(() => null, (e) => e.code));
+      assert.equal(refused, 'questionnaire_required');
+      assert.equal(await page.inputValue('input[name="email"]'), 'a01@example.org');
+      await shot(page, 'questionnaire');
+      await answerQuestionnaire(page, { name: 'Annotator one', email: 'a01@example.org' });
       await waitForRoute(page, 'home', 30000);
+      assert.match(await page.textContent('.q-home'), /You answered the sign-up questionnaire/);
       assert.match(await page.textContent('main'), /0 of 3\s*recordings done/);
       await page.click('[data-log="open-next"]');
       await waitForRoute(page, 'open');
@@ -169,6 +177,7 @@ async function main() {
     ['a trainee is guided by the functions and a practice recording is scored', async () => {
       const page = await newPage();
       await signIn(page, 't01@example.org', PASSWORD);
+      await answerQuestionnaire(page, { name: 'Trainee one', email: 't01@example.org' });
       await waitForRoute(page, 'training', 30000);
       // the tour and the snippets skipped, each sent once to the functions (et_training_stage)
       await skipFirstStages(page, 60000);

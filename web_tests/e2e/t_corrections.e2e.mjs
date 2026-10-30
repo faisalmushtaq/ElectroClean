@@ -479,6 +479,11 @@ export const tests = [
       // E03 adjudicates the two corrections and keeps E01's; K01 then sees the settled version and the decision
       await api(t, admin, 'POST', '/admin/user_add', { annotator_id: 'E03', display_name: 'Expert three', password: PASSWORD, roles: ['expert'] });
       const e03 = (await api(t, null, 'POST', '/login', { annotator_id: 'E03', password: PASSWORD })).token;
+      { // a new expert answers the sign-up questionnaire before expert work opens
+        const q = await api(t, e03, 'GET', '/me/questionnaire');
+        const answers = Object.fromEntries(q.questions.map((x) => [x.id, x.type === 'multi' ? [q.prefer_not.value] : q.prefer_not.value]));
+        await api(t, e03, 'POST', '/me/questionnaire', { answers, contacts: { full_name: 'Expert three', email: 'e03@example.org' } });
+      }
       const unit = (await api(t, e03, 'POST', '/expert/adjudication_list', {})).units.find((u) => u.kind === 'corrections' && u.corrected && u.corrected.annotator_id === 'K01');
       const got = await api(t, e03, 'POST', '/expert/adjudication_start', { unit_id: unit.unit_id });
       for (const c of got.conflicts) {

@@ -4,7 +4,7 @@
 // study server the competency gate: a study recording stays locked until the assessment is met.
 import fs from 'node:fs';
 import path from 'node:path';
-import { pressSave, signIn, waitForRoute, waitForTraces, state, eegPoint, drag, annotations, clickDialogButton, skipFirstStages } from './helpers.mjs';
+import { pressSave, signIn, waitForRoute, waitForTraces, state, eegPoint, drag, annotations, clickDialogButton, skipFirstStages, answerQuestionnaire } from './helpers.mjs';
 
 async function coachText(page) { return page.textContent('.coach'); }
 
@@ -484,6 +484,7 @@ export const tests = [
 
       const page = await t.newPage({ url: t.study.base });
       await signIn(page, 'T05', 'trainee five');
+      await answerQuestionnaire(page); // a new account answers the sign-up questionnaire first
       await waitForRoute(page, 'training');
       assert.match(await page.textContent('main.training .gate-card'), /^Your study recordings open once you pass the competency assessment at the end of your training path\.$/);
       // T05 skips the tour; the set has nothing else before its assessment
@@ -570,6 +571,7 @@ export const tests = [
 
       const page = await t.newPage({ url: t.study.base, width: 1440, height: 900 });
       await signIn(page, 'T07', 'trainee seven');
+      await answerQuestionnaire(page); // a new account answers the sign-up questionnaire first
       await waitForRoute(page, 'training');
       await page.click('main.training [data-log="skip-tour"]');
       await clickDialogButton(page, 'Skip this stage');
