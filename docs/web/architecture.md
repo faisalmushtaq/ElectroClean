@@ -229,7 +229,8 @@ annotation store and the game elements to their own parts: its quiz card is in
 `training/quiz_card.js`, the drafts it shows are read with
 `annotate/local_drafts.js`, and the game elements' cards come from
 `views/home_games.js`, which is loaded with GET /me/achievements when the study
-has them on.
+has them on. The Due card comes from `views/home_due.js`, loaded only when
+GET /assignments lists something due.
 
 The table gives what the browser fetched before and after this change, measured
 with Playwright in Chromium on the demonstration served as static files and on

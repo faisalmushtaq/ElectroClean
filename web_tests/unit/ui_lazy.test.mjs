@@ -48,3 +48,17 @@ test("the sign-in page's modules import no later view", () => {
     assert.deepEqual(imports.filter((l) => later.test(l.replace("'../", "'./"))), [], f);
   }
 });
+
+test("the sandbox's datasets and hand-outs and the home page's Due card are parts of their own", async () => {
+  assert.equal(lazy.partAddress("demoLibrary"), "./api/demo_library.js");
+  assert.equal(lazy.partAddress("homeDue"), "./views/home_due.js");
+  // the sign-in page loads demo.js and demo_admin.js; they reach demo_library.js only through lazy.js
+  for (const [f, part] of [["api/demo.js", "demo_library"], ["api/demo_admin.js", "demo_library"], ["views/home.js", "home_due"], ["views/home_list.js", "home_due"]]) {
+    const imports = readFileSync(join(JS, f), "utf8").split("\n").filter((l) => /^import /.test(l));
+    assert.deepEqual(imports.filter((l) => l.includes(part)), [], f);
+  }
+  const lib = await lazy.loadPart("demoLibrary");
+  assert.equal(typeof lib.DemoLibrary, "function");
+  const due = await lazy.loadPart("homeDue");
+  assert.equal(typeof due.dueCard, "function");
+});

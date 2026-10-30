@@ -20,6 +20,7 @@ const PARTS = Object.freeze({
   reviewPass: './annotate/review_pass.js',
   homeList: './views/home_list.js',
   homeFeedback: './views/home_feedback.js',
+  homeDue: './views/home_due.js',
   games: './views/home_games.js',
   milestones: './games/milestones.js',
   training: './training/path.js',
