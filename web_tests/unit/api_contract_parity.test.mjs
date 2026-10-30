@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 
 import { DemoBackend, exampleRecording, QUIZ, recordingIdOf, TRAINING_SET } from '../../electrotag/web/static/js/api/demo.js';
 import { HttpBackend } from '../../electrotag/web/static/js/api/http.js';
-import { channelType, demoSpecs, exampleNote, syntheticEdfBytes, truthAnnotations } from '../../electrotag/web/static/js/data/synthetic.js';
+import { channelType, demoSpecs, exampleNote, syntheticEdfBytes, truthAnnotations } from '../../electrotag/web/static/js/eeg/synthetic.js';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -59,7 +59,6 @@ export const ALLOWED = [
   ['.*practice submit.*', 'feedback\\.metrics\\.(time_kappa|time_positive_agreement|channel_positive_agreement|mean_iou|mean_channel_jaccard|false_positives_per_min)',
     'any', 'agreement figures the sandbox does not compute; the review shows only the score, the share found and the share of the right type'],
   ['.*practice submit.*', 'feedback\\.per_category', 'any', 'the scores by type, which the review does not show'],
-  ['match a changed copy', '.*', 'any', 'the server counts the study\'s copy and the training set\'s copy of one recording as two and cannot tell them apart (reported to the project lead); the sandbox matches the file by its name and shape'],
   ['.*', 'manifest\\.gaps|recordings\\..*\\.gaps', 'any', "the sandbox's third example has a stretch without data at its end, which its EDF file cannot hold"],
 ];
 

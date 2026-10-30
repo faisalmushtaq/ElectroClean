@@ -474,10 +474,13 @@ class StudyService:
         if exact:
             return self._match_answer(user, items, exact, "matched", [], nxt, revise=revise, view_saved=view_saved)
         candidates = self._metadata_matches(body)
-        if len(candidates) == 1:
-            m, differences = candidates[0]
-            return self._match_answer(user, items, [m], "matched_metadata", differences, nxt, revise=revise,
-                                      view_saved=view_saved)
+        # The study's copy of a recording and a reference set's copy of it (recording_scope "study") are one
+        # recording: the same ID and fingerprint in two scopes. They are matched together, as by fingerprint.
+        recordings = {(m["recording_id"], fingerprint_of(m)) for m, _d in candidates}
+        if len(recordings) == 1:
+            differences = candidates[0][1]
+            return self._match_answer(user, items, [m for m, _d in candidates], "matched_metadata", differences, nxt,
+                                      revise=revise, view_saved=view_saved)
         if len(candidates) > 1:
             return self._answer("unknown", "This file looks like several recordings of the study and cannot be told "
                                 "apart from them. Open the exact file you were given, or ask your study administrator.")

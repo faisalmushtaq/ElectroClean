@@ -3,7 +3,7 @@
     python web_tests/contract_parity.py <folder>
 
 The folder holds the sandbox's own recordings (``recordings/<recording ID>``, the EDF files that
-js/data/synthetic.js writes and a visitor downloads) and ``sandbox.json``, which describes the
+js/eeg/synthetic.js writes and a visitor downloads) and ``sandbox.json``, which describes the
 sandbox as js/api/demo.js has it: its accounts, assignments, training set (the simulation's
 artifacts as the experts' annotations, how much help each guided recording gives, the pass mark),
 quiz and study name. From these this makes a fresh study as ``electrotag-web demo`` does

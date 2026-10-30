@@ -5,6 +5,11 @@ Each section below describes the changes in one version of ElectroTag;
 
 ## Unreleased
 
+A changed copy of a recording that is also in a training set (a set made from the study's own
+recordings) is now matched by its name and shape, as any other changed copy is; the study's copy and
+the set's copy were counted as two recordings, so the file was refused as looking like several.
+The sandbox's comparison with the real service found this, and now checks it.
+
 The browser's EEG library has a folder of its own, `js/eeg/`: the readers of
 EDF, BDF and BrainVision recordings, the display filters, the fingerprints,
 registration and the synthetic recordings moved there from `js/data/`, which
