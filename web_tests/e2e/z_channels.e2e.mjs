@@ -142,6 +142,18 @@ export const tests = [
           console.log(`     ${n} channels: opened in ${ms} ms; rows of ${all.rowH.toFixed(1)} px, names of ${all.px} px every ${all.every}; a whole redraw ${redraw.toFixed(1)} ms`);
           assert.ok(redraw < REDRAW_BUDGET_MS, `a redraw of ${n} channels took ${redraw.toFixed(1)} ms`);
           if (n <= 2) assert.ok(all.top > all.y0 + 50, 'one channel sits in the middle of the plot');
+          if (n === 256) {
+            // Page Up and Page Down step through the numbers of channels shown, from one to all of them
+            await page.evaluate(() => globalThis.ElectroTag.ws.viewer.over.focus());
+            const shown = async () => ws(page, (w) => w.viewer.view.nChannels);
+            const ups = [];
+            for (let i = 0; i < 20 && (await shown()) > 1; i++) { await page.keyboard.press('PageUp'); ups.push(await shown()); }
+            assert.equal(ups[ups.length - 1], 1);
+            assert.ok(ups.length <= 15, `${ups.length} steps from all to one: ${ups.join(', ')}`);
+            const downs = [];
+            for (let i = 0; i < 20 && (await shown()) < n; i++) { await page.keyboard.press('PageDown'); downs.push(await shown()); }
+            assert.deepEqual(downs, [...ups].reverse().slice(1).concat([n]), 'the same steps back');
+          }
           await t.screenshot(page, `channels_${n}`);
         }
       } finally {
