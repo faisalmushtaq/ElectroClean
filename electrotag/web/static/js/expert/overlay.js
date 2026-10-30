@@ -25,6 +25,7 @@ import { rgba, touchFirst } from '../util.js';
 import { downloadText, select } from '../admin/ui.js';
 import { isHelpKey, showKeySheet } from './key_sheet.js';
 import { Lanes } from './lanes.js';
+import { UNCERTAIN_LABEL, UNCERTAIN_TEXT, needsReview } from '../catalogue.js';
 import {
   CrowdBands, LANE_COLOURS, LANE_DASHES, LANE_PATTERNS, MAX_LANES, NO_FILTERS, PATTERN_WORDS, asAnnotation, crowdOf, decode, disagreements,
   laneInk, markPasses, patternCss, personName, shortName, stepDisagreement, summaryTsv, typeCounts, whoAt,
@@ -257,6 +258,7 @@ export class OverlayView {
         : `The saved marks of everyone who annotated ${d.file_name}, the latest version of each. Up to eight people have lanes of their own; everyone else is the crowd, a band under each channel shaded by the share of them marking each moment.`),
       this.countEl,
       d.anonymous ? null : h('h3', {}, 'Lanes'), d.anonymous ? null : this.legend, this.scale,
+      this._reviewBlock(),
       h('h3', {}, 'Disagreements'), this.disEl, h('div.btn-row', {}, this.prevBtn, this.nextBtn),
       h('h3', {}, 'Filters'), this.filters, derived,
       d.anonymous ? null : h('h3', {}, 'The crowd'), d.anonymous ? null : this.searchBox, d.anonymous ? null : this.crowdList,
@@ -283,6 +285,27 @@ export class OverlayView {
     }
   }
 
+  /**
+   * Marks of the uncertain type (Uncertain / needs review): how many there are and whose, with a button that
+   * shows only them (the type filter). Nothing when there are none.
+   */
+  _reviewBlock() {
+    const d = this.data;
+    const who = new Map();
+    for (const p of d.people) {
+      const n = p.marks.filter((m) => needsReview(asAnnotation(d, m))).length;
+      if (n) who.set(p, n);
+    }
+    const total = [...who.values()].reduce((a, b) => a + b, 0);
+    if (!total) return null;
+    const names = d.anonymous ? `${who.size} ${who.size === 1 ? 'person' : 'people'}` : [...who.keys()].map((p) => shortName(p)).join(', ');
+    const show = h('button.btn.small', { type: 'button', 'data-log': 'overlay-needs-review', title: `Show only the marks of type ${UNCERTAIN_LABEL}`,
+      onclick: () => { if (this.typeSelect) this.typeSelect.value = UNCERTAIN_LABEL; this.setFilter({ label: UNCERTAIN_LABEL }); } }, 'Show only these');
+    return h('div.ov-review', { 'data-log': 'overlay-review' }, h('h3', {}, 'Needs review'),
+      h('p.caption', {}, `${total} ${total === 1 ? 'mark is' : 'marks are'} of the uncertain type (${UNCERTAIN_LABEL}): an artifact whose type the annotator could not tell. By ${names}.`),
+      h('div.btn-row', {}, show));
+  }
+
   _filterControls() {
     const d = this.data;
     const out = h('div.ov-filters');
@@ -292,8 +315,9 @@ export class OverlayView {
       out.append(h('label.ov-filter', {}, h('span.caption', {}, label), el));
       return el;
     };
-    const type = add('Type', select([['', 'Every type'], ...d.labels.map((l) => [l, l])], ''), 'type');
+    const type = add('Type', select([['', 'Every type'], ...d.labels.map((l) => [l, l === UNCERTAIN_LABEL ? `${l} (${UNCERTAIN_TEXT.toLowerCase()})` : l])], ''), 'type');
     type.addEventListener('change', () => this.setFilter({ label: type.value }));
+    this.typeSelect = type;
     if (!d.anonymous) {
       const roles = [...new Set(d.people.flatMap((p) => p.roles || []))].filter((r) => ROLE_WORDS[r]).sort();
       if (roles.length > 1) {

@@ -36,6 +36,8 @@ REGISTER_COLUMNS = [
     "output_dir",
     "output_basename",
     "app_version",
+    "n_needs_review",  # marks of the uncertain type (labels.needs_review), for the experts' lists
+    "n_bad_channels",  # channels the annotator marked bad for the whole recording
 ]
 
 STATUS_COMPLETED = "completed"

@@ -12,6 +12,7 @@ import { whenText } from '../admin/model.js';
 import { local } from '../util.js';
 import { card, chip, dataTable, loading, messageArea, recordingName, sectionHead, select } from '../admin/ui.js';
 import { correctionKey } from './diff.js';
+import { reviewText } from './model.js';
 
 /** The correction of a saved version kept in this browser by `me` (correction_pass.js CorrectionSession), or null. */
 export function keptCorrection(backend, me, row) {
@@ -69,7 +70,7 @@ export class SavedWork {
   constructor(area) {
     this.area = area;
     this.msg = messageArea();
-    this.filters = { annotator_id: '', recording_id: '', corrected: '' };
+    this.filters = { annotator_id: '', recording_id: '', corrected: '', review: '' };
     this.filterRow = h('div.row.filters.work-filters');
     this.host = h('div.admin-stack');
     this.el = h('section.admin-section', { 'data-section': 'work' },
@@ -105,18 +106,19 @@ export class SavedWork {
     const person = select([['', 'Everyone'], ...people.map(([a, n]) => [a, n ? `${a} (${n})` : a])], this.filters.annotator_id);
     const rec = select([['', 'Every recording'], ...recordings.map(([r, f]) => [r, f || r])], this.filters.recording_id);
     const corrected = select([['', 'Corrected or not'], ['no', 'Not corrected yet'], ['yes', 'Corrected']], this.filters.corrected);
-    for (const [el, key, label] of [[person, 'annotator_id', 'Person'], [rec, 'recording_id', 'Recording'], [corrected, 'corrected', 'Corrections']]) {
+    const review = select([['', 'With or without uncertain marks'], ['yes', 'Marks need review']], this.filters.review);
+    for (const [el, key, label] of [[person, 'annotator_id', 'Person'], [rec, 'recording_id', 'Recording'], [corrected, 'corrected', 'Corrections'], [review, 'review', 'Needs review']]) {
       el.setAttribute('aria-label', label);
       el.dataset.log = `work-filter-${key}`;
       el.addEventListener('change', () => { this.filters[key] = el.value; this._draw(); });
     }
-    this.filterRow.append(person, rec, corrected);
+    this.filterRow.append(person, rec, corrected, review);
   }
 
   _rows() {
     const f = this.filters;
     return this.all.filter((i) => (!f.annotator_id || i.annotator_id === f.annotator_id) && (!f.recording_id || i.recording_id === f.recording_id)
-      && (!f.corrected || (f.corrected === 'yes') === (i.corrections > 0)));
+      && (!f.corrected || (f.corrected === 'yes') === (i.corrections > 0)) && (!f.review || i.n_needs_review > 0));
   }
 
   _draw(answer = null) {
@@ -136,7 +138,9 @@ export class SavedWork {
       { title: 'Recording', sort: (r) => r.file_name, render: (r) => recordingName(r.recording_id, r.file_name) },
       { title: 'Version', num: true, sort: (r) => r.attempt, render: (r) => String(r.attempt) },
       { title: 'Saved', sort: (r) => r.saved_at || '', render: (r) => whenText(r.saved_at) },
-      { title: 'Annotations', num: true, sort: (r) => r.n_annotations ?? -1, render: (r) => (r.n_annotations ?? 'n/a').toString() },
+      { title: 'Annotations', num: true, sort: (r) => r.n_annotations ?? -1, render: (r) => h('span', {}, (r.n_annotations ?? 'n/a').toString(),
+        r.n_needs_review > 0 ? h('span.block', {}, chip(reviewText(r.n_needs_review), 'active')) : null,
+        r.n_bad_channels > 0 ? h('span.caption.block', {}, `${r.n_bad_channels} channel${r.n_bad_channels === 1 ? '' : 's'} marked bad`) : null) },
       { title: 'Corrections', sort: (r) => r.corrections, render: (r) => h('span.work-corrections', {},
         r.corrections ? chip(`${r.corrections} correction${r.corrections === 1 ? '' : 's'}`, r.corrections > 1 ? 'warning' : 'done') : (kept(r) ? null : '–'),
         kept(r) ? chip('Yours in progress, in this browser', 'active') : null) },

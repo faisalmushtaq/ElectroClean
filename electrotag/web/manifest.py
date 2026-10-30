@@ -371,6 +371,9 @@ class ManifestRecording:
         self.discontinuity_samples = list(m.get("discontinuity_samples", []))
         self.trigger_channels = list(m.get("trigger_channels", []))
         self.hidden_channels = list(m.get("hidden_channels", []))
+        # for the _channels.tsv of an annotator's bad channels, and the session file's note of the study's own
+        self.channel_types = {str(k): str(v) for k, v in (m.get("channel_types") or {}).items()}
+        self.study_bad_channels = [str(c) for c in (m.get("bad_channels") or [])]
         self.warnings = list(m.get("warnings", []))
         self.notes = list(m.get("notes", []))
         self.view_raw = None

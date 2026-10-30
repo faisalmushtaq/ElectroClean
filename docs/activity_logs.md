@@ -245,8 +245,11 @@ the `row`, `column` and the `item`'s text). On the EEG they also have `area`
 (`eeg`, `channel_names` or `axes`), `eeg_t` (the time under the pointer, in
 seconds) and `eeg_channel` (the channel under it); a release on the EEG has
 `drag_px`, the distance from the press. On the overview bar they have
-`overview_t`. `wheel` (`dx`, `dy` and, on the EEG, the time and channel under
-the pointer). `key` (`key`, `modifiers`, `widget`, `auto_repeat` for repeats
+`overview_t`. `wheel` (`dx`, `dy`, the `modifiers` held and, on the EEG, the time and channel under
+the pointer). Since 30 October 2026 the wheel alone changes the amplitude, Shift with the wheel and a
+sideways trackpad movement (`dx`) move along time, Ctrl or ⌘ with it (a trackpad's pinch) shows more
+or less time and Alt scrolls through the channels; before then the wheel moved along time and
+Shift+wheel through the channels. The `view` event that follows says what changed. `key` (`key`, `modifiers`, `widget`, `auto_repeat` for repeats
 while a key is held down; keys pressed on their own such as Shift are not
 counted). `shortcut` (`key` and the `action` it triggered, for example
 `Type 3: EMG-artifact`, `Mark start, then end`, `Next annotation`, `Undo`).
@@ -324,7 +327,16 @@ electrode files were kept with it.
 **The annotation view's state.** `state` (only what changed:
 `current_label`, `scope`, `selected_channels`, `drawing_enabled`,
 `mark_start_s`) and `selection` (`annotation_id`, `label`). Both carry `via`
-(below).
+(below). A drag down the channel names gives one `state` event with the channels selected when the
+drag ends (its input is `channel_names_drag`), and `channel_selection_cleared` (`n_cleared`, `via`:
+`key` for X, `button`, or `menu`) records Clear channel selection. The toolbar's time scale and
+amplitude buttons change the view as the keys do, and the `view` event follows.
+
+**Channels marked bad.** `channel_bad` records each channel the annotator marks bad for the whole
+recording, or good again: `channel`, `bad` (true or false), `n_bad`, the number marked bad
+afterwards, and `via` (the menu or chooser input, or `undo` and `redo` when Undo or Redo changed it).
+It carries channel names only: nothing is typed. The channels marked bad when the recording is saved
+are in its annotations file (see the file formats guide).
 
 **Annotations.** `annotation_created`, `annotation_deleted`,
 `annotation_edited` (start or end), `annotation_channels_changed` and

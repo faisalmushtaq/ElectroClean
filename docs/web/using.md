@@ -391,10 +391,12 @@ draft was last kept (for example "Draft saved 14:02"), Pause, Help and Save and 
 and Redo are greyed out when they have nothing to act on: Delete until an annotation is selected,
 Undo and Redo when there is no change to take back or make again. Draw/edit is on while you
 annotate; pressed, it switches to view only, in which nothing can be drawn or changed by accident,
-and the second row reads "View only" until you press it again. The second chooses what you mark next: the numbered type buttons and the menu of all
-types after "Draw as", then Whole montage or Selected channels, and Overlay. Each type button shows
-its number and a short name (1 Blink, 2 HEM, 3 EMG and so on); when the window is too narrow for one
-line, the toolbar continues on a second. On the right, the Annotations tab
+and the second row reads "View only" until you press it again. The second chooses what you mark next: the numbered type buttons, 0 Uncertain and the menu of all
+types after "Draw as", then Whole montage or Selected channels with Channels… and Clear channel
+selection, Overlay, and the scales: Time, the seconds on the screen, and Amplitude, the height of a
+row of EEG, each with − and + beside it. Each type button shows its number and a short name (1
+Blink, 2 HEM, 3 EMG and so on); when the window is too narrow for one line, the toolbar continues on
+a second. On the right, the Annotations tab
 lists everything you have marked, the Recording tab shows the time you have worked, how much of the
 recording you have viewed, the viewing options, your comfort choices and details of the recording,
 and the Help tab lists every key. The line at the bottom reminds you of the main keys and shows what
@@ -408,8 +410,15 @@ First choose the type: press a number key from 1 to 9, click one of the numbered
 from the menu next to them. Press / to search all 29 types by part of their name or by their code
 (for example "blink" or "103") and press Enter. Then choose whether the artifact affects the whole
 montage or only some channels, with the switch in the second row or the key C. For selected
-channels, click their names (or their traces); they turn magenta. Channels… opens a list to choose
-from instead.
+channels, click their names (or their traces); they turn magenta. To select several neighbouring
+channels at once, drag down (or up) their names at the left of the EEG, as you would select files
+on a computer: the channels from the first name to the last are selected, and the drag switches to
+Selected channels by itself. Past the first or last row on the screen the channels scroll on, so a
+drag can reach channels below the screen of a 256-channel montage. Hold Ctrl (⌘ on a Mac) while you
+drag to add a range to the channels already selected, and Shift+click a name to select every
+channel from the name you clicked last. Clear channel selection, beside the channels in the toolbar,
+or the key X, deselects them all before you choose a new set. Channels… opens a list to choose from
+instead.
 
 The list is built for montages of any size. Type in its search field to find channels by name:
 names or their beginnings, separated by commas, so that b1 finds B1 and B10 to B19, and a term
@@ -457,6 +466,16 @@ it is saved. The keys [ and ] mark the start and the end separately, and Esc can
 You can also draw first and choose the type afterwards: click the new annotation and press a number,
 or double-click it to choose any type.
 
+When you can see an artifact but cannot tell what kind it is, mark it Uncertain: press 0, or click
+0 Uncertain after the numbered types (with annotations selected, 0 changes them to it). It is saved
+as Data-artifact, the HED-SCORE term for an artifact whose type is unknown, and it is treated as
+needing review: the Annotations list says "needs review" under it, its label on the EEG reads
+Uncertain, and the study's experts find it listed in their Saved work and adjudication queue so
+that they can look at it again. When you know the family of an artifact but not its exact type,
+choose the group term instead, such as Eye-artifact or Electrical-artifact, from the menu of all
+types, where group terms are in italics. Uncertain always has the key 0; it is never among the
+numbered types.
+
 Without a mouse, M, [ and ] mark at the time cursor, the thin line a click on empty EEG places. Press
 G and type a time to put the cursor there, and move it with the , and . keys (with Shift, ten times
 as far). The EEG has a place in the Tab order, with a ring round it when it has the keyboard. When
@@ -479,7 +498,12 @@ starts from the first annotation that reaches into the screen; after the last an
 round to the first, and P after the first to the last.
 
 Drag an edge of an annotation to make it longer or shorter, and hold Shift while dragging its middle
-to move it; the line at the bottom gives its new times. To change the channels of an annotation,
+to move it; the line at the bottom gives its new times. To grab an edge, point at its line: a drag
+that starts just outside an annotation draws a new annotation instead, so that a second occurrence
+just after the first is marked on its own. For a precise start or end, select the annotation and
+press Alt (Option on a Mac) with ← or → to move its start 10 milliseconds earlier or later (at
+least one sample), and Alt+Shift with ← or → to move its end; each press is one step that Undo
+takes back, and the line at the bottom gives the new time to the thousandth of a second. To change the channels of an annotation,
 select it and Shift+click a channel anywhere within its time, on the row of a channel it does not
 have yet as well as on its own: that channel is added or taken out. With a channel-specific
 annotation selected, a click on a channel's name does the same. Taking a channel out of a
@@ -490,11 +514,33 @@ leaves the channels for your next annotation as they were; Esc ends the selectio
 annotation for its menu: the common types, Other type for any of the 29, Edit times…, Edit
 channels…, Confidence, Add a note…, Apply to whole montage (for a channel-specific annotation) and
 Delete. Delete or Backspace removes the selected annotation, Ctrl+Z undoes and Ctrl+Y redoes (⌘
-instead of Ctrl on a Mac). When two annotations of the same type on the same channels overlap, they
-become one automatically. In the Annotations list you can also edit the start and end times exactly
+instead of Ctrl on a Mac). When you draw or change an annotation so that it overlaps another of the
+same type on the same channels, the two are joined into one, and the line at the bottom says so
+("Merged with 1 overlapping EMG-artifact annotation …"); Ctrl+Z takes the join back with the change
+that caused it. Only a true overlap joins: annotations with a gap between them, however brief, and
+annotations that only touch stay separate, so separate occurrences of one type keep their own
+annotations. Your study can switch joining off, and then overlapping annotations stay as you drew
+them. In the Annotations list you can also edit the start and end times exactly
 (as seconds, 12.5, or as m:ss, 1:05.25, or h:mm:ss, the forms Go to time takes), change the type of
 several annotations at once, and merge annotations of one type. The buttons for these appear once an
 annotation is selected.
+
+## Bad channels
+
+A channel can be unusable for the whole of a recording, for example when its electrode lost contact
+from the start. Mark it bad for the whole recording: right-click its name at the left of the EEG (on
+an iPad, press and hold the name) and choose Mark as bad for the whole recording, or choose it in
+Channels… and press Mark chosen as bad. Its row is hatched, its trace drawn in grey and its name
+struck through; the Annotations tab counts the channels marked bad, and the list in Channels…
+strikes them through. The same menu, or Mark chosen as good in Channels…, takes the mark off again,
+and Ctrl+Z undoes it like any other change. Channels marked bad are kept in your draft and saved
+with your annotations, in the BIDS way: the saved files list every channel with status good or bad
+(see the file formats guide). A channel marked bad stays on the screen and can still be annotated,
+which the study's analyses report apart.
+
+Your study may already list some channels as bad in the recording's own channels.tsv. Those are
+greyed and named "(bad)", as before, and stay as the study set them: they cannot be marked or
+unmarked here, and your marks never change the study's list.
 
 ## Confidence and notes
 
@@ -537,9 +583,23 @@ was added, changed or removed and how long it is, never what it says.
 
 The arrow keys ← and → scroll back and forward through time (with Shift, a whole screen), and ↑
 and ↓ scroll through the channels. Home and End show less or more time, Page Up and Page Down show
-fewer or more channels, and − and + make the traces smaller or larger. The mouse wheel or a
-trackpad scrolls through time, and with Shift through the channels. On a Mac keyboard without
+fewer or more channels, and − and + make the traces smaller or larger. On a Mac keyboard without
 Home, End and Page keys, use fn with the arrow keys.
+
+The mouse wheel changes the amplitude: up makes the traces larger and down smaller, one notch as much
+as one press of + or −, and each channel keeps its place, so the trace under the pointer stays where
+it is. Shift with the wheel moves along time, as in many programs for viewing signals, and so does
+moving two fingers sideways on a trackpad. Ctrl (⌘ on a Mac) with the wheel, or a pinch on a
+trackpad, shows more or less time, keeping the moment under the pointer where it is. Alt (Option)
+with the wheel scrolls through the channels. Until 30 October 2026 the wheel scrolled through time
+and Shift+wheel through the channels; the change follows the annotators' requests.
+
+The scales are also in the toolbar. Time shows the seconds on the screen: choose 1, 2, 5, 10, 20, 30
+or 60 seconds, or press − or + beside it to step through the same choices as Home and End; the
+middle of the screen stays where it is. After a pinch the time shown may be another, which the
+choice then lists. Amplitude shows the height of one row of EEG, as the scale bar at the right of
+the EEG gives it (for example 100 µV), with − and + beside it. Both follow every way of changing
+them, the keys, the wheel and the touch buttons.
 
 To go to a particular time, press G and type it: seconds (12.5), minutes and seconds (1:05) or
 hours, minutes and seconds (1:02:05), then Enter. The time comes to the middle of the screen, with
@@ -668,7 +728,9 @@ channel's name or its trace to choose that channel. Two fingers move the EEG: si
 time and up and down through the channels; pinch sideways to show more or less time. Press and
 hold an annotation for its menu, the one a right-click opens on a computer, which also offers Edit
 times… to move it, Confidence and Add a note…; double-tap it to choose its type from the list
-of all types. The numbers 1 to 5 below the Annotations list rate the selected annotation with one
+of all types. Press and hold a channel's name for its menu, to mark the channel bad for the whole
+recording or to add it to the channel selection, and drag a finger down the names to select a range
+of channels. The numbers 1 to 5 below the Annotations list rate the selected annotation with one
 tap, and in a study that asks for a rating on every annotation a bar of numbers appears beside each
 new one. A second finger
 that touches the screen while you are marking cancels the mark, so a move never leaves an
@@ -679,8 +741,8 @@ little, more or less time, earlier and later channels, more or fewer of them, an
 traces, and one shows the next part not yet viewed. The View buttons switch the overlay on and off,
 show one channel alone (with buttons for the previous and next channel), open Go to time and Show
 all. Pause is at the top, as on a
-computer. The numbered type buttons, Whole montage and Selected channels, Delete, Undo and Redo are in
-the toolbars as on a computer, and a keyboard attached to the iPad works with every key described
+computer. The numbered type buttons, 0 Uncertain, Whole montage and Selected channels, the Time and
+Amplitude scales, Delete, Undo and Redo are in the toolbars as on a computer, and a keyboard attached to the iPad works with every key described
 here. In Channels…, Map works by touch: tap an electrode to choose it, drag with the Pencil to
 choose several in a box, and drag with a finger to move a map larger than its frame; on an iPad the
 electrodes are large enough for a finger, so a dense montage opens as a larger map, centred on the

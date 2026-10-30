@@ -49,6 +49,7 @@ Annotated_Events/
             sub-001_task-rest_eeg_annotator-A01_annotations.json
             sub-001_task-rest_eeg_annotator-A01_time_viewed.txt
             sub-001_task-rest_eeg_annotator-A01_session.json
+            sub-001_task-rest_eeg_annotator-A01_channels.tsv   (only when channels were marked bad)
     training/<reference set>/practice/annotator-A01/...
     training/<reference set>/assessment/annotator-A01/...
     training/<reference set>/reports/annotator-A01_competency_report.{json,html}
@@ -205,7 +206,7 @@ The original `events.json` (with BIDS inheritance applied), plus:
 ```json
 {
   "schema": "electrotag.annotations",
-  "schema_version": "1.1.0",
+  "schema_version": "1.2.0",
   "recording": {
     "recording_id": "sub-001/eeg/sub-001_task-rest_eeg.vhdr",
     "relative_path": "sub-001/eeg/sub-001_task-rest_eeg.vhdr",
@@ -231,7 +232,9 @@ The original `events.json` (with BIDS inheritance applied), plus:
      "onset": 2.996, "duration": 0.428, "onset_sample": 749, "duration_samples": 107, "end_sample": 856,
      "channels": ["Fp1", "Fp2", "VEOG"], "scope": "channels",
      "created_at": "...", "modified_at": "...", "confidence": 3, "note": "could be an eye movement"}
-  ]
+  ],
+  "bad_channel_convention": {"meaning": "Channels this annotator marked as bad (unusable) for the whole recording ...", "...": "..."},
+  "bad_channels": ["T7"]
 }
 ```
 
@@ -241,6 +244,14 @@ trigger channels, they are listed in `recording.hidden_channels` (the key is
 absent otherwise). `fingerprint` has
 the roles `vhdr`, `eeg` and `vmrk` for BrainVision and `eeg` alone for EDF and
 BDF, followed by the BIDS sidecars.
+
+`bad_channels` lists the channels the annotator marked bad for the whole
+recording, in recording order (`[]` when none), with `bad_channel_convention`
+saying what they mean. They are the annotator's own judgement, made while
+annotating, and are kept apart from the study's own bad channels in the
+dataset's `channels.tsv`, which are input and are recorded in the session file
+(`bad_channels.in_study_channels_tsv`). Files of schema versions 1.0.0 and
+1.1.0 have no `bad_channels` and are read as having none.
 
 Each annotation's `confidence` is an integer from 1 to 5 or `null` (not
 rated), and its `note` is the annotator's note or `""`;
@@ -256,6 +267,28 @@ list, otherwise the file is rejected. `fingerprint` records the size,
 modification time and SHA-256 of every source file at the time of
 annotation. Reference annotations use the same format with annotator
 `REFERENCE`, mode `reference` and the provenance in `session.context`.
+
+## `…_channels.tsv` (channels marked bad)
+
+Written beside the other files only when the annotator marked at least one
+channel bad for the whole recording, in the form of a BIDS `channels.tsv`, so
+that BIDS tools read the annotator's judgement as they read a dataset's. Every
+shown channel has one row, in recording order:
+
+| Column | Contents |
+|---|---|
+| `name` | The channel's name, as in `recording.ch_names` |
+| `type` | Its BIDS type (`EEG`, `EOG`, `ECG`, `EMG`, `MISC` and so on) |
+| `units` | `n/a`: the dataset's own `channels.tsv` gives the units |
+| `status` | `bad` for a channel the annotator marked bad, `good` for the others |
+| `status_description` | `Marked bad for the whole recording by annotator A01` for a bad channel, `n/a` for the others |
+
+The file describes the annotator's view only: a channel the study's own
+`channels.tsv` lists as bad, and the annotator did not mark, is `good` here.
+Before the recording is marked complete, the save reads the file back and
+checks that its columns, its channels and their order are as above and that
+its bad channels are exactly those of `bad_channels` in the annotations file;
+a save without bad channels must have no `_channels.tsv`.
 
 ## `…_time_viewed.txt`
 
@@ -273,6 +306,7 @@ A single number: seconds spent annotating, to the nearest millisecond, e.g.
 | `application` | ElectroTag version, platform, versions of Python, MNE, NumPy, SciPy, pandas and matplotlib; for work saved from the browser also `client` (`web`), the study's back end (`server`), the annotator's browser (`browser`: its user agent and screen) and a `note` saying that the recording never left the annotator's computer. Files written by the desktop application (version 1.1.0 and earlier) also list the versions of its display libraries. |
 | `display` | `scalings` used (the study's, or for a type with an implausible amplitude the scale chosen for this recording), `amplitude_check` (the measured amplitude per channel type and any scale set automatically), and the amplitude factor, seconds and channels on screen at Save and Finish |
 | `filters` | Selected settings, whether fixed by the administrator, and `design`. For work saved from the browser, `design` names the filters the browser applied for display (`applied_in`, `settings`); in files written by MNE-based loading (the desktop application, and scripts), it holds the exact MNE calls and parameters, filter lengths, MNE's own description of each filter, edge-transient duration, discontinuities filtered separately, channels filtered, the number of blocks of channels they were filtered in, and how the display data were stored |
+| `bad_channels` | `marked_by_annotator` (as in the annotations file) and its count, `in_study_channels_tsv` (the dataset's own bad channels among those shown, which the annotator saw greyed) and a `note` saying which is which |
 | `annotations` | Counts in total, by label, whole-montage and channel-specific; `confidence` (the study's `setting`, `optional` or `every_mark`, what it means, the `scale` with its anchors, `n_given`, `n_not_given` and the counts `by_level`, `"1"` to `"5"`) and `n_with_note` |
 | `label_catalogue` | As in the annotations file |
 | `original_events` | Source, the trigger channels read (when the events come from them), count, whether `sample` was computed, comparison of `events.tsv` with the marker file, the code check (original codes equal to artifact codes, artifact names used as `trial_type`, codes with several meanings) |
@@ -506,8 +540,10 @@ library downloads the same columns for the entries it shows.
 | `context` | Reference set ID for training modes, empty otherwise |
 | `status` | `completed` |
 | `session_id`, `completed_at`, `elapsed_s`, `n_annotations` | Session details |
-| `output_dir`, `output_basename` | Where the five files are |
+| `output_dir`, `output_basename` | Where the five files (six with `_channels.tsv`) are |
 | `app_version` | ElectroTag version |
+| `n_needs_review` | Annotations of the uncertain type (`Data-artifact`), which the experts' lists show as needing review; empty in rows written before 30 October 2026 |
+| `n_bad_channels` | Channels the annotator marked bad for the whole recording; empty in rows written before 30 October 2026 |
 
 Rows are only added after the outputs are verified. Updates hold a lock and
 replace the file atomically. `annotator-<ID>/completed_datasets.txt` lists the
@@ -584,6 +620,13 @@ schema's description. Codes are never changed or reused: 100-115 are the 16
 types of catalogue 1.0.0, 116-121 the further specific types and 130-136 the
 group terms. The order of the list is the order annotators see, with each
 group term after its members.
+
+`Data-artifact` (130), the parent of every artifact term, is offered to
+annotators as Uncertain / needs review, on the key 0, for an artifact whose
+type cannot be told; no entry or code was added for it. A mark of it needs an
+expert's review (`electrotag.app.annotations.labels.needs_review`): the
+completion register counts such marks (`n_needs_review`) and the agreement
+analysis counts them apart (`uncertain_by_annotator.tsv`).
 
 The catalogue digest recorded in every output covers its identifier, version
 and the (code, label) pairs only, so changing a colour does not make files
@@ -690,3 +733,7 @@ skipped in the new one.
 | `confusion_time_weighted.tsv` | Time where one annotator used one label and the other another |
 | `questionnaire_at_annotation.tsv` | In the admin area, once anyone has answered the sign-up questionnaire: for each recording and annotator, the answers current when their version was saved (`recording_id`, `rater`, `mode`, `annotated_at`, `questionnaire_version`, `answered_at`, `answered_after`, then the questions as in `questionnaire/answers.tsv`); `answered_after` is `true` when the person first answered only after the work, whose earliest answers are then given |
 | `agreement_by_experience.tsv` | In the admin area: the pairwise Cohen's kappa and positive agreement of each recording (exact, time only, from `timeresolved_pairwise.tsv`), averaged by the two annotators' answers to "How many EEG datasets have you analysed?" at the time (`datasets_analysed_bands`, `category`, `n_comparisons`, `mean_cohen_kappa`, `mean_positive_agreement`) |
+
+| `bad_channels_by_channel.tsv` | Each channel someone marked bad for the whole recording: the recording's annotators, how many marked it and who |
+| `bad_channels_pairwise.tsv` | Per recording and pair of annotators, their agreement on bad channels over the recording's channels (each channel one unit): the 2×2 counts, proportion and positive agreement and Cohen's kappa |
+| `uncertain_by_annotator.tsv` | Per recording and annotator, the marks of the uncertain type (`Data-artifact`): how many, their share of the annotator's marks, their time and the share of the recording they cover |

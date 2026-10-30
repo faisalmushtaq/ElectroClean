@@ -17,9 +17,11 @@ from electrotag.app.annotations.model import AnnotationDocument
 from electrotag.app.eeg.events import SOURCE_NONE, OriginalEvents, parse_float
 from electrotag.app.io.canonical import document_from_dict
 from electrotag.app.io.export import (
+    CHANNELS_COLUMNS,
     ELECTROTAG_COLUMNS,
     REQUIRED_COLUMNS,
     annotations_from_events_tsv,
+    bad_channels_from_channels_tsv,
     original_rows_from_events_tsv,
 )
 from electrotag.app.io.tsv import parse_tsv_text
@@ -94,6 +96,25 @@ def validate_annotations_json(data: bytes, doc: AnnotationDocument) -> None:
         raise ValidationError("annotations.json list of hidden channels differs")
     if parsed.confidence_mode != doc.confidence_mode:
         raise ValidationError("annotations.json records a different confidence setting")
+    if tuple(parsed.bad_channels) != tuple(doc.bad_channels):
+        raise ValidationError("annotations.json does not reproduce the bad channels")
+
+
+def validate_channels_tsv(data: bytes, doc: AnnotationDocument) -> None:
+    """The ``_channels.tsv`` lists every shown channel once, in order, and its bad ones are exactly those marked."""
+    try:
+        columns, rows = parse_tsv_text(data.decode("utf-8"), "channels.tsv")
+        bad = bad_channels_from_channels_tsv(data)
+    except Exception as exc:
+        raise ValidationError(f"channels.tsv cannot be read back: {exc}") from exc
+    if columns != CHANNELS_COLUMNS:
+        raise ValidationError("channels.tsv does not have the columns name, type, units, status, status_description")
+    if tuple(r[0] for r in rows) != tuple(doc.recording.ch_names):
+        raise ValidationError("channels.tsv does not list the recording's channels in order")
+    if any(r[3] not in ("good", "bad") for r in rows):
+        raise ValidationError("channels.tsv has a status other than good or bad")
+    if bad != tuple(doc.bad_channels):
+        raise ValidationError("channels.tsv does not reproduce the bad channels")
 
 
 def validate_time_file(data: bytes, elapsed_s: float) -> None:
@@ -145,5 +166,14 @@ def make_bundle_validator(
             files["session_json"], "session.json", ("schema", "session_id", "recording", "annotator", "timing")
         )
         validate_session_confidence(session, doc)
+        if doc.bad_channels:
+            if "channels_tsv" not in files:
+                raise ValidationError("The channels marked bad were not written to channels.tsv")
+            validate_channels_tsv(files["channels_tsv"], doc)
+        elif "channels_tsv" in files:
+            raise ValidationError("channels.tsv was written although no channel was marked bad")
+        block = session.get("bad_channels")
+        if not isinstance(block, dict) or list(block.get("marked_by_annotator") or []) != list(doc.bad_channels):
+            raise ValidationError("session.json does not record the channels marked bad")
 
     return validate

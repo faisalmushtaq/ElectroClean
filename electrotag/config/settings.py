@@ -362,6 +362,9 @@ class Settings:
     # annotation); annotation.show_reviews_to_annotators: the annotator sees that feedback (off: blind reviews).
     allow_reviews: bool = True
     show_reviews_to_annotators: bool = True
+    # annotation.merge_overlapping: a mark drawn or changed so that it overlaps another of the same type on the
+    # same channels joins it (marks that only touch, or are apart, always stay separate); off keeps every mark as drawn.
+    merge_overlapping: bool = True
     # gamification: the counters, milestones, personal goal and team progress on the home page, and the
     # anonymised leaderboard (ranked by recordings completed, or only those viewed in full).
     gamification_enabled: bool = True
@@ -439,6 +442,7 @@ class Settings:
                 allow_revisions=_flag(ann, "annotation", "allow_revisions", True),
                 allow_reviews=_flag(ann, "annotation", "allow_reviews", True),
                 show_reviews_to_annotators=_flag(ann, "annotation", "show_reviews_to_annotators", True),
+                merge_overlapping=_flag(ann, "annotation", "merge_overlapping", True),
                 gamification_enabled=_flag(games, "gamification", "enabled", True),
                 gamification_leaderboard=_flag(games, "gamification", "leaderboard", True),
                 gamification_leaderboard_viewed_only=_flag(games, "gamification", "leaderboard_viewed_only", False),

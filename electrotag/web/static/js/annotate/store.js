@@ -8,12 +8,19 @@
 // (a rating from 1 to 5) and `note` (one line of at most 200 characters) are there only when given;
 // no mark starts with a rating (confidence.js).
 //
+// Bad channels: the annotator may mark a channel as bad for the whole recording (setChannelBad). The
+// list (badChannels, in recording order) is part of the same undo history as the annotations, so that
+// Undo takes a change back whichever it was. It is the annotator's own judgement and never changes the
+// study's own bad channels (channels.tsv), which come with the recording.
+//
 // Automatic merging: when an annotation is created or changed so that it overlaps in time another
 // annotation of the same type with the same channels (both whole montage, or exactly the same
 // channels), the two become one annotation spanning both. The older one keeps its identifier, and
 // the merge is part of the same undo step. Annotations that only touch, or cover different
-// channels, stay separate. The merged annotation keeps the lowest rating and the notes of
-// both, joined with "; " (confidence.js).
+// channels, stay separate: marks with a gap between them are never joined, however brief the gap.
+// The merged annotation keeps the lowest rating and the notes of both, joined with "; "
+// (confidence.js). The study can switch automatic merging off (annotation.merge_overlapping, the
+// store's autoMerge); Merge (merge) then still joins marks when asked.
 
 import { newId, nowLocalIso } from '../util.js';
 import { cleanNote, isConfidence, joinNotes, lowerConfidence, noteProblem } from './confidence.js';
@@ -43,7 +50,8 @@ function sortKey(a, b) {
 export class AnnotationStore {
   /**
    * @param {{chNames: string[], nSamples: number, sfreq: number, labels: string[] | Set<string>,
-   *          minDurationSamples?: number, initial?: object[], autoMerge?: boolean, maxHistory?: number}} opts
+   *          minDurationSamples?: number, initial?: object[], initialBadChannels?: string[], autoMerge?: boolean,
+   *          maxHistory?: number}} opts
    */
   constructor(opts) {
     this.chNames = [...opts.chNames];
@@ -67,7 +75,13 @@ export class AnnotationStore {
       if (this._items.has(ann.annotation_id)) throw new AnnotationError(`Duplicate annotation id ${ann.annotation_id}`);
       this._items.set(ann.annotation_id, ann);
     }
+    this._bad = this.normaliseChannels(opts.initialBadChannels || []);
   }
+
+  /** The channels the annotator marked bad for the whole recording, in recording order. */
+  get badChannels() { return [...this._bad]; }
+
+  isBad(name) { return this._bad.includes(name); }
 
   // ------------------------------------------------------------------ access
   get size() { return this._items.size; }
@@ -209,60 +223,88 @@ export class AnnotationStore {
         ids = [...new Set(this.lastSurvivors.values())];
       }
     }
-    this._undo.push([description, this.snapshot()]);
-    if (this._undo.length > this.maxHistory) this._undo.shift();
-    this._redo = [];
+    this._push(description);
     this._items = newItems;
     this._notify({ action, description, ids: [...ids] });
   }
 
+  /** A step of the history: its description, the annotations and the bad channels before it. */
+  _push(description) {
+    this._undo.push([description, this.snapshot(), [...this._bad]]);
+    if (this._undo.length > this.maxHistory) this._undo.shift();
+    this._redo = [];
+  }
+
   undo() {
     if (!this._undo.length) return null;
-    const [description, previous] = this._undo.pop();
-    this._redo.push([description, this.snapshot()]);
+    const [description, previous, bad] = this._undo.pop();
+    this._redo.push([description, this.snapshot(), [...this._bad]]);
     this._items = new Map(previous.map((a) => [a.annotation_id, a]));
+    this._bad = [...bad];
+    this.lastAutoMerged = 0;
     this._notify({ action: 'undo', description: `Undo ${description}`, ids: [] });
     return description;
   }
 
   redo() {
     if (!this._redo.length) return null;
-    const [description, following] = this._redo.pop();
-    this._undo.push([description, this.snapshot()]);
+    const [description, following, bad] = this._redo.pop();
+    this._undo.push([description, this.snapshot(), [...this._bad]]);
     this._items = new Map(following.map((a) => [a.annotation_id, a]));
+    this._bad = [...bad];
+    this.lastAutoMerged = 0;
     this._notify({ action: 'redo', description: `Redo ${description}`, ids: [] });
     return description;
   }
 
-  /** Replace everything (a restored draft); clears the history. */
-  reset(annotations) {
+  /** Replace everything (a restored draft), with the bad channels given (none when left out); clears the history. */
+  reset(annotations, badChannels = []) {
     const items = new Map();
     for (const a of annotations) {
       const ann = this._check(freeze({ ...a, channels: this.normaliseChannels(a.channels || []) }));
       items.set(ann.annotation_id, ann);
     }
     this._items = items;
+    this._bad = this.normaliseChannels(badChannels || []);
     this._undo = [];
     this._redo = [];
     this._notify({ action: 'reset', description: 'restore', ids: [] });
   }
 
   /**
+   * Mark a channel as bad for the whole recording (bad true) or take the mark back (false), as one step
+   * of the history. Returns false when nothing changed.
+   */
+  setChannelBad(name, bad = true) {
+    const [ch] = this.normaliseChannels([name]);
+    if (bad === this._bad.includes(ch)) return false;
+    const chosen = new Set(this._bad);
+    if (bad) chosen.add(ch); else chosen.delete(ch);
+    const description = bad ? `mark ${ch} bad` : `mark ${ch} good again`;
+    this.lastAutoMerged = 0;
+    this.lastSurvivors = new Map();
+    this._push(description);
+    this._bad = this.chNames.filter((c) => chosen.has(c));
+    this._notify({ action: 'bad_channels', description, ids: [], channel: ch, bad: Boolean(bad) });
+    return true;
+  }
+
+  /**
    * Replace every annotation as one undoable step (work set aside earlier, brought back). Unlike
    * reset, the history is kept, so Undo takes it back again.
    */
-  replaceAll(annotations, description = 'bring back earlier work') {
+  replaceAll(annotations, description = 'bring back earlier work', badChannels = null) {
     const items = new Map();
     for (const a of annotations) {
       const ann = this._check(freeze({ ...a, channels: this.normaliseChannels(a.channels || []) }));
       items.set(ann.annotation_id, ann);
     }
+    const bad = badChannels === null ? this._bad : this.normaliseChannels(badChannels);
     this.lastAutoMerged = 0;
     this.lastSurvivors = new Map();
-    this._undo.push([description, this.snapshot()]);
-    if (this._undo.length > this.maxHistory) this._undo.shift();
-    this._redo = [];
+    this._push(description);
     this._items = items;
+    this._bad = bad;
     this._notify({ action: 'replace', description, ids: [...items.keys()] });
   }
 

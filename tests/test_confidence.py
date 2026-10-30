@@ -87,7 +87,7 @@ def test_annotation_file_keeps_rating_note_and_setting():
             ArtifactAnnotation("y", "Eye-blink-artifact", 100, 20)]
     doc = AnnotationDocument(rec, "A", anns, CAT, confidence_mode="every_mark")
     data = json.loads(json.dumps(document_to_dict(doc)))
-    assert data["schema_version"] == "1.1.0" and data["session"]["confidence"] == "every_mark"
+    assert data["schema_version"] == "1.2.0" and data["session"]["confidence"] == "every_mark"
     assert [(a["confidence"], a["note"]) for a in data["annotations"]] == [(2, "near the chin"), (None, "")]
     assert data["confidence_convention"]["levels"]["1"] == "Not at all confident"
     back = document_from_dict(data)

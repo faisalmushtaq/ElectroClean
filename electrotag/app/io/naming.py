@@ -15,6 +15,7 @@ Layout below the output root (``Annotated_Events`` by default)::
                 sub-001_task-rest_eeg_annotator-A01_annotations.json
                 sub-001_task-rest_eeg_annotator-A01_time_viewed.txt
                 sub-001_task-rest_eeg_annotator-A01_session.json
+                sub-001_task-rest_eeg_annotator-A01_channels.tsv   (only with channels marked bad)
         training/<reference_set_id>/<practice|assessment>/annotator-A01/...
         .electrotag/                   locks and export staging (internal)
 
@@ -38,7 +39,11 @@ OUTPUT_SUFFIXES: dict[str, str] = {
     "annotations_json": "_annotations.json",
     "time_viewed": "_time_viewed.txt",
     "session_json": "_session.json",
+    # written only when the annotator marked channels bad for the whole recording (docs/file_formats.md)
+    "channels_tsv": "_channels.tsv",
 }
+#: The output files every save writes; the others are written when they have something to say.
+ALWAYS_WRITTEN = ("events_tsv", "events_json", "annotations_json", "time_viewed", "session_json")
 
 INTERNAL_DIR = ".electrotag"
 

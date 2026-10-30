@@ -19,6 +19,14 @@ different channels, stay separate. The merged annotation takes the lowest
 confidence rating of those merged (one without a rating adds none) and their
 notes, each different note once, oldest first,
 joined with "; " (and shortened to 200 characters, ending with "…", if longer).
+Marks with a gap between them are never joined, however brief the gap. A study can switch
+automatic merging off (``annotation.merge_overlapping``, ``auto_merge`` here); :meth:`merge`
+still joins marks when asked.
+
+**Bad channels.** The annotator may mark a channel as bad for the whole recording
+(:meth:`set_channel_bad`). The list (:attr:`bad_channels`, in recording order) is part of the same
+undo history as the annotations. It is the annotator's own judgement, kept apart from the study's
+own bad channels (``channels.tsv``), which come with the recording.
 """
 
 from __future__ import annotations
@@ -42,13 +50,15 @@ from electrotag.app.annotations.timing import TimingError
 from electrotag.app.common import new_annotation_id, now_local_iso
 
 Snapshot = tuple[ArtifactAnnotation, ...]
+#: A step of the history: its description, the annotations and the bad channels before it.
+Step = tuple[str, Snapshot, tuple[str, ...]]
 
 
 @dataclass(frozen=True)
 class StoreChange:
     """Notification sent to listeners after every change."""
 
-    action: str  # "add", "update", "delete", "merge", "undo", "redo", "reset"
+    action: str  # "add", "update", "delete", "merge", "undo", "redo", "reset", "bad_channels"
     description: str
     annotation_ids: tuple[str, ...]
 
@@ -65,6 +75,7 @@ class AnnotationStore:
         max_history: int = 2000,
         initial: Iterable[ArtifactAnnotation] = (),
         auto_merge: bool = True,
+        initial_bad_channels: Iterable[str] = (),
     ) -> None:
         self.recording = recording
         self.catalogue = catalogue
@@ -76,8 +87,8 @@ class AnnotationStore:
         self.last_survivors: dict[str, str] = {}
         self.max_history = int(max_history)
         self._items: dict[str, ArtifactAnnotation] = {}
-        self._undo: list[tuple[str, Snapshot]] = []
-        self._redo: list[tuple[str, Snapshot]] = []
+        self._undo: list[Step] = []
+        self._redo: list[Step] = []
         self._listeners: list[Callable[[StoreChange], None]] = []
         self.revision = 0
         for ann in initial:
@@ -85,8 +96,16 @@ class AnnotationStore:
             if ann.annotation_id in self._items:
                 raise AnnotationError(f"Duplicate annotation id {ann.annotation_id}")
             self._items[ann.annotation_id] = ann
+        self._bad: tuple[str, ...] = self._channels(initial_bad_channels)
 
     # ----------------------------------------------------------------- access
+    @property
+    def bad_channels(self) -> tuple[str, ...]:
+        """The channels the annotator marked bad for the whole recording, in recording order."""
+        return self._bad
+
+    def is_bad(self, ch_name: str) -> bool:
+        return ch_name in self._bad
     def __len__(self) -> int:
         return len(self._items)
 
@@ -207,30 +226,57 @@ class AnnotationStore:
             if self.last_auto_merged:
                 description += f" (merged with {self.last_auto_merged} overlapping annotation(s) of the same type)"
                 ids = tuple(dict.fromkeys(self.last_survivors.values()))
-        self._undo.append((description, self.snapshot()))
+        self._push(description)
+        self._items = new_items
+        self._notify(StoreChange(action, description, ids))
+
+    def _push(self, description: str) -> None:
+        self._undo.append((description, self.snapshot(), self._bad))
         if len(self._undo) > self.max_history:
             del self._undo[0]
         self._redo.clear()
-        self._items = new_items
-        self._notify(StoreChange(action, description, ids))
 
     def undo(self) -> str | None:
         if not self._undo:
             return None
-        description, previous = self._undo.pop()
-        self._redo.append((description, self.snapshot()))
+        description, previous, bad = self._undo.pop()
+        self._redo.append((description, self.snapshot(), self._bad))
         self._items = {a.annotation_id: a for a in previous}
+        self._bad = bad
+        self.last_auto_merged = 0
         self._notify(StoreChange("undo", f"Undo {description}", ()))
         return description
 
     def redo(self) -> str | None:
         if not self._redo:
             return None
-        description, following = self._redo.pop()
-        self._undo.append((description, self.snapshot()))
+        description, following, bad = self._redo.pop()
+        self._undo.append((description, self.snapshot(), self._bad))
         self._items = {a.annotation_id: a for a in following}
+        self._bad = bad
+        self.last_auto_merged = 0
         self._notify(StoreChange("redo", f"Redo {description}", ()))
         return description
+
+    def set_channel_bad(self, ch_name: str, bad: bool = True) -> bool:
+        """Mark a channel as bad for the whole recording (or take the mark back) as one step of the history.
+
+        Returns False when nothing changed."""
+        (ch,) = self._channels([ch_name])
+        if bool(bad) == (ch in self._bad):
+            return False
+        chosen = set(self._bad)
+        if bad:
+            chosen.add(ch)
+        else:
+            chosen.discard(ch)
+        description = f"mark {ch} bad" if bad else f"mark {ch} good again"
+        self.last_auto_merged = 0
+        self.last_survivors = {}
+        self._push(description)
+        self._bad = tuple(c for c in self.recording.ch_names if c in chosen)
+        self._notify(StoreChange("bad_channels", description, ()))
+        return True
 
     # ------------------------------------------------------------ validation
     def _check(self, ann: ArtifactAnnotation) -> ArtifactAnnotation:

@@ -39,9 +39,10 @@ from electrotag.app.common import new_session_id, normalise_annotator_id, now_lo
 from electrotag.app.eeg.loading import LoadedRecording, changed_since
 from electrotag.app.io.atomic import json_bytes
 from electrotag.app.io.canonical import annotations_json_bytes, read_annotations_json
-from electrotag.app.io.export import ExportError, build_events_sidecar, events_tsv_bytes
+from electrotag.app.annotations.labels import needs_review
+from electrotag.app.io.export import ExportError, build_events_sidecar, channels_tsv_bytes, events_tsv_bytes
 from electrotag.app.io.locking import FileLock, LockError
-from electrotag.app.io.naming import OutputLayout, next_free_attempt, output_basename, output_filenames
+from electrotag.app.io.naming import ALWAYS_WRITTEN, OutputLayout, next_free_attempt, output_basename, output_filenames
 from electrotag.app.session.autosave import AutosaveRecord, autosave_path, delete_autosave, write_autosave
 from electrotag.app.session.register import RegisterError
 from electrotag.app.session.failures import SessionLog
@@ -111,6 +112,7 @@ class AnnotationSession:
         mode: str = "standard",
         context: dict[str, Any] | None = None,
         initial_annotations: list[ArtifactAnnotation] | None = None,
+        initial_bad_channels: tuple[str, ...] | list[str] = (),
         allow_repeat: bool = False,
         resume: AutosaveRecord | None = None,
         autosave_enabled: bool = True,
@@ -137,6 +139,7 @@ class AnnotationSession:
         self.previous_sessions: list[dict[str, Any]] = []
         if resume is not None:
             initial_annotations = list(resume.document.annotations)
+            initial_bad_channels = tuple(resume.document.bad_channels)
             self.previous_sessions = list(resume.previous_sessions) + [
                 {"session_id": resume.session_id, "autosaved_at": resume.saved_at, "elapsed_s": resume.elapsed_s}
             ]
@@ -145,6 +148,8 @@ class AnnotationSession:
             catalogue,
             min_duration_samples=settings.min_duration_samples,
             initial=initial_annotations or (),
+            auto_merge=settings.merge_overlapping,
+            initial_bad_channels=initial_bad_channels,
         )
         self.autosave_enabled = autosave_enabled
         self.autosave_path = autosave_path(
@@ -264,7 +269,7 @@ class AnnotationSession:
         """Register entry for a complete, self-consistent set of outputs, else None."""
         names = output_filenames(basename)
         paths = {k: final_dir / n for k, n in names.items()}
-        if not all(p.is_file() for p in paths.values()):
+        if not all(paths[k].is_file() for k in ALWAYS_WRITTEN):
             return None
         try:
             doc = read_annotations_json(paths["annotations_json"])
@@ -273,6 +278,8 @@ class AnnotationSession:
             if paths["events_tsv"].stat().st_size == 0:
                 return None
             json.loads(paths["events_json"].read_text(encoding="utf-8"))
+            if doc.bad_channels and not paths["channels_tsv"].is_file():
+                return None
         except Exception:
             return None
         if (
@@ -293,6 +300,8 @@ class AnnotationSession:
             "completed_at": (meta.get("timing") or {}).get("finish_timestamp") or doc.created_at,
             "elapsed_s": f"{elapsed:.3f}",
             "n_annotations": str(len(doc.annotations)),
+            "n_needs_review": str(sum(1 for a in doc.annotations if needs_review(a.label))),
+            "n_bad_channels": str(len(doc.bad_channels)),
             "output_dir": final_dir.relative_to(self.layout.root).as_posix(),
             "output_basename": basename,
             "app_version": (meta.get("application") or {}).get("version", ""),
@@ -410,6 +419,7 @@ class AnnotationSession:
             app_version=__version__,
             context=self.context,
             confidence_mode=self.settings.confidence,
+            bad_channels=tuple(self.store.bad_channels),
         )
 
     def build_session_metadata(self, doc: AnnotationDocument, elapsed: float, basename: str, names: dict[str, str]) -> dict[str, Any]:
@@ -474,6 +484,14 @@ class AnnotationSession:
                 "time_conventions": TIME_CONVENTIONS,
                 "confidence": confidence_summary(doc),
                 "n_with_note": sum(1 for a in doc.annotations if a.note),
+            },
+            "bad_channels": {
+                "marked_by_annotator": list(doc.bad_channels),
+                "n_marked_by_annotator": len(doc.bad_channels),
+                "in_study_channels_tsv": [c for c in getattr(lr, "study_bad_channels", ()) if c in lr.info.ch_names],
+                "note": "marked_by_annotator: the annotator's judgement for the whole recording (also in the "
+                "annotations file and, when not empty, in the _channels.tsv beside it); in_study_channels_tsv: the "
+                "dataset's own bad channels, input that the annotator saw greyed out.",
             },
             "label_catalogue": self.catalogue.to_metadata(),
             "original_events": {
@@ -543,7 +561,8 @@ class AnnotationSession:
                     "They will not be overwritten."
                 )
             basename = output_basename(self.loaded.files.stem, self.annotator_id, attempt)
-            names = output_filenames(basename)
+            names = {k: v for k, v in output_filenames(basename).items()
+                     if k in ALWAYS_WRITTEN or (k == "channels_tsv" and doc.bad_channels)}
             sidecar, _notes = build_events_sidecar(
                 self.loaded.events_sidecar, self.loaded.original_events, doc, self.loaded.event_report.to_dict()
             )
@@ -555,6 +574,9 @@ class AnnotationSession:
                 "time_viewed": (names["time_viewed"], f"{elapsed:.3f}\n".encode("utf-8")),
                 "session_json": (names["session_json"], json_bytes(session_meta)),
             }
+            if "channels_tsv" in names:
+                files["channels_tsv"] = (names["channels_tsv"],
+                                         channels_tsv_bytes(doc, getattr(self.loaded, "channel_types", None)))
             validator = make_bundle_validator(self.loaded.original_events, doc, elapsed)
             entry = {
                 "recording_id": self.recording_id,
@@ -566,6 +588,8 @@ class AnnotationSession:
                 "completed_at": self.finished_at,
                 "elapsed_s": f"{elapsed:.3f}",
                 "n_annotations": str(len(doc.annotations)),
+                "n_needs_review": str(sum(1 for a in doc.annotations if needs_review(a.label))),
+                "n_bad_channels": str(len(doc.bad_channels)),
                 "output_dir": final_dir.relative_to(self.layout.root).as_posix(),
                 "output_basename": basename,
                 "app_version": __version__,

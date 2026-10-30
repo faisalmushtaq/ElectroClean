@@ -106,6 +106,18 @@ def test_the_queue_lists_recordings_given_to_two_people(service: StudyService, r
     assert ex_err(service, a02x, "adjudication_start", {"unit_id": U1}).code == "own_task"
 
 
+def test_the_queue_counts_the_marks_that_need_review(service: StudyService, recordings: Path) -> None:
+    unsure = ann("9" * 32, "Data-artifact", 12000, 500, [])
+    service.call("submit", A01, submission(recordings, SUB1, [*MINE, unsure]))
+    assert unit_row(service)["needs_review"] is None  # counted once everyone has saved
+    service.call("submit", A02, submission(recordings, SUB1, THEIRS))
+    row = unit_row(service)
+    assert row["needs_review"] == 1 and row["status"] == "ready"
+    started = ex(service, E01, "adjudication_start", {"unit_id": U1})
+    assert started["adjudication"]["counts"]["needs_review"] == 1
+    assert unit_row(service)["needs_review"] == 1
+
+
 def test_conflicts_are_listed_with_who_made_each_mark(service: StudyService, recordings: Path) -> None:
     two_saved(service, recordings)
     got = ex(service, E01, "adjudication_get", {"unit_id": U1})
@@ -133,7 +145,8 @@ def test_start_freezes_the_inputs_and_the_rules(service: StudyService, recording
     assert rec["state"] == "in_progress" and rec["adjudicator_id"] == "E01" and rec["blinded"] is False
     assert set(rec["inputs"]) == {"A01", "A02"} and rec["inputs"]["A01"]["attempt"] == 1
     assert len(rec["inputs"]["A01"]["annotations_sha256"]) == 64
-    assert rec["rules"]["iou_threshold"] == 0.2 and rec["counts"] == {"conflicts": 3, "decided": 0, "agreed": 1}
+    assert rec["rules"]["iou_threshold"] == 0.2
+    assert rec["counts"] == {"conflicts": 3, "decided": 0, "agreed": 1, "needs_review": 0}
     ids = [c["conflict_id"] for c in started["conflicts"]]
     # A01 revises the recording, and the study changes its matching rules: the adjudication keeps what it started with
     service.call("submit", A01, {**submission(recordings, SUB1, [MINE[1]]), "revises": 1})

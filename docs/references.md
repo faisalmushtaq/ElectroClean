@@ -46,6 +46,26 @@ Coordinate systems. https://bids-specification.readthedocs.io/en/stable/appendic
 (CapTrak is right-anterior-superior; EEGLAB, EEGLAB-HJ, CTF, 4DBti and
 KitYokogawa are anterior-left-superior; checked 29 October 2026)
 
+BIDS contributors. Brain Imaging Data Structure specification,
+Electroencephalography, Channels description (`*_channels.tsv`).
+https://bids-specification.readthedocs.io/en/stable/modality-specific-files/electroencephalography.html
+(`name`, `type` and `units` are required; the optional `status` is `good` or
+`bad`, with a free-text `status_description` explaining why a channel was
+declared bad; checked 30 October 2026). ElectroTag writes an annotator's bad
+channels in this form (docs/file_formats.md, `…_channels.tsv`).
+
+HED Working Group. HED SCORE library schema 2.2.0, with the HED standard
+schema 8.5.0.
+https://raw.githubusercontent.com/hed-standard/hed-schemas/main/library_schemas/score/hedxml/HED_score_2.2.0.xml
+(SHA-256 db6fc134…e70e72, the file of `hed_score_2.2.0_validation.json`;
+checked 30 October 2026). `Data-artifact` (`Property/Data-property/Data-artifact`,
+HED_0012493, "An anomalous, interfering, or distorting signal originating from
+a source other than the item being studied") is the parent of every artifact
+term, and ElectroTag offers it as Uncertain / needs review. The schema has no
+modifier for an uncertain artifact type: its `Property-not-possible-to-determine`
+(HED_0042396) belongs to the feature properties of findings, and its
+`Uncertain-significant-pattern` to EEG patterns, so neither is used.
+
 ## EEG recordings used to test the readers
 
 The public recordings below were used on 30 October 2026 to check that the browser reads recordings

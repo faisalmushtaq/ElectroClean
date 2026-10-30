@@ -79,6 +79,29 @@ would read it, and a weekly summary the team can copy). The results zip and `ele
 gain a `datasets/` folder with the datasets, collections, groups with their membership history,
 hand-outs and the tracking at that moment (docs/file_formats.md).
 
+Following a team member's feedback of 30 October, the annotation view has adjustable scales and new
+ways to choose and judge channels. The mouse wheel now changes the amplitude (each channel keeps its
+place), Shift with the wheel and a sideways trackpad movement move along time, Ctrl or ⌘ with the
+wheel and a trackpad's pinch show more or less time around the pointer, and Alt with the wheel moves
+through the channels; until now the wheel moved along time and Shift+wheel through the channels. The
+toolbar shows the time on the screen (1, 2, 5, 10, 20, 30 or 60 s, the steps Home and End now take)
+and the amplitude, each with − and +, and Alt (Option) with the arrow keys moves the selected mark's
+start, with Shift its end, by 10 ms. Dragging down the channel names selects a range of channels
+(Ctrl or ⌘ adds one, Shift+click selects from the last name clicked), and Clear channel selection, or
+X, deselects them. A channel can be marked bad for the whole recording from its name's menu or the
+channel chooser: its row is hatched, its trace grey and its name struck through, Undo takes it back,
+and it is saved in the annotations file (schema 1.2.0, `bad_channels`) and in a BIDS-style
+`_channels.tsv` with `status` and `status_description`, both checked before the recording is
+complete, apart from the study's own bad channels. The agreement analysis reports agreement on bad
+channels and the marks of the uncertain type in tables of their own. Uncertain / needs review, key
+0 and its own toolbar button, marks an artifact whose type cannot be told as HED's Data-artifact; the
+experts' Saved work, the adjudication queue (a Needs review tab) and everyone's marks list such marks
+for review. Marks with a gap between them were already never joined, but a drag begun just after a
+mark could grab its edge and stretch it over the gap; an edge now reaches only two pixels outside its
+mark (three quarters of a finger's reach on a touch screen), the study setting
+`annotation.merge_overlapping` can switch the joining of overlapping marks off, and the browser's and
+the study's annotation stores are checked to behave identically, edit by edit.
+
 Experts and administrators can put everyone's saved marks on one recording over the same EEG, from
 Saved work, the adjudication queue, the library, a replay and a recording's page in the admin area.
 Up to eight people have lanes of their own, each with a colour that stays distinct for colour-blind

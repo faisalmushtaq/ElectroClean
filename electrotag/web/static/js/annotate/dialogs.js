@@ -301,7 +301,12 @@ export function typeSuffixes(channels) {
  * annotation view) adds the head map (channel_map.js) beside the list, with the person's last choice
  * of the two kept under storageKey.
  */
-export function chooseChannels({ title, channels, chosen = [], allowWholeMontage = false, wholeMontage = false, map = null }) {
+export function chooseChannels({ title, channels, chosen = [], allowWholeMontage = false, wholeMontage = false, map = null, bad = null }) {
+  // `bad` ({marked: names}): the channels the annotator marked bad for the whole recording, shown struck
+  // through, with buttons that mark the chosen channels bad or good again (the answer is then
+  // {action: 'bad' | 'good', channels}). The study's own bad channels (channels[].bad) cannot be changed.
+  const marked = new Set(bad ? bad.marked || [] : []);
+  channels = channels.map((c) => (marked.has(c.name) ? { ...c, bad: true, markedBad: true } : c));
   const names = channels.map((c) => c.name);
   const known = new Set(names);
   const picked = new Set(chosen.filter((n) => known.has(n)));
@@ -332,6 +337,11 @@ export function chooseChannels({ title, channels, chosen = [], allowWholeMontage
     none.textContent = narrowed ? 'Clear shown' : 'Clear all';
     count.textContent = whole ? 'The annotation applies to every channel. Choose a channel to apply it to only some.'
       : `${picked.size} of ${channels.length} channels chosen` + (narrowed ? ` · ${shown} shown` : '');
+    if (badRow) {
+      const chosenNow = names.filter((n) => picked.has(n));
+      markBad.disabled = whole || !chosenNow.some((n) => !marked.has(n) && !studyBad.has(n));
+      markGood.disabled = whole || !chosenNow.some((n) => marked.has(n));
+    }
   };
   const toSome = () => { if (isWhole()) someRadio.checked = true; };
   // Which channels are listed: those the search finds and, with "Show chosen only", those ticked.
@@ -350,7 +360,9 @@ export function chooseChannels({ title, channels, chosen = [], allowWholeMontage
     const box = h('input', { type: 'checkbox', checked: picked.has(c.name), 'data-name': c.name,
       onchange: () => { toSome(); if (box.checked) picked.add(c.name); else picked.delete(c.name); update(); } });
     boxes.set(c.name, box);
-    grid.appendChild(h('label.channel-chip', { title: `${c.name} (${c.type})` }, box, h('span', {}, c.name),
+    grid.appendChild(h(`label.channel-chip${c.markedBad ? '.marked-bad' : c.bad ? '.study-bad' : ''}`, {
+      title: `${c.name} (${c.type})${c.markedBad ? ' · you marked it bad for the whole recording' : c.bad ? ' · bad in the study\'s channel list' : ''}` },
+    box, h('span.channel-name', {}, c.name),
       suffixes.has(c.name) ? h('span.chip-type', {}, `· ${suffixes.get(c.name)}`) : null));
   }
   const setShown = (on) => {
@@ -393,18 +405,30 @@ export function chooseChannels({ title, channels, chosen = [], allowWholeMontage
   const { mapPart, viewRow, showView } = channelViews({ map, channels, picked, grid, listOnly: [all, none, help],
     isShown: (n) => !boxes.get(n).parentElement.hidden, beforeChange: toSome,
     onChange: () => { for (const [n, b] of boxes) b.checked = picked.has(n); apply(); } });
+  const studyBad = new Set(channels.filter((c) => c.bad && !c.markedBad).map((c) => c.name));
+  let closeWith = null;
+  const markBad = h('button.btn.small', { type: 'button', 'data-log': 'channels-mark-bad',
+    title: 'Mark the chosen channels as bad for the whole recording: they are hatched on the EEG and saved with your work', onclick: () => closeWith && closeWith('bad') }, 'Mark chosen as bad');
+  const markGood = h('button.btn.small', { type: 'button', 'data-log': 'channels-mark-good',
+    title: 'Take the bad mark off the chosen channels', onclick: () => closeWith && closeWith('good') }, 'Mark chosen as good');
+  const badRow = bad ? h('div.channel-bad-row', {},
+    h('p.caption', {}, marked.size ? `Marked bad for the whole recording: ${names.filter((n) => marked.has(n)).join(', ')}.`
+      : 'A channel that is unusable throughout can be marked bad for the whole recording.'
+      + (studyBad.size ? ` The study's own bad channels (${[...studyBad].slice(0, 6).join(', ')}${studyBad.size > 6 ? ', …' : ''}) are marked already.` : '')),
+    h('div.btn-row', {}, markBad, markGood)) : null;
   const body = h(`div.channel-chooser${many ? '.many' : ''}`, {},
     allowWholeMontage ? h('div.radio-row', {},
       h('label', {}, wholeRadio, ' Whole montage'), h('label', {}, someRadio, ' Only these channels:')) : null,
-    viewRow, h('div.row', {}, filter, all, none), help, groupsBlock, grid, mapPart ? mapPart.el : null, foot);
+    viewRow, h('div.row', {}, filter, all, none), help, groupsBlock, grid, mapPart ? mapPart.el : null, foot, badRow);
   update();
   return showDialog({
     title, body, wide: true,
     buttons: [{ label: 'Cancel', value: null }, { label: 'OK', value: 'ok', kind: 'primary' }],
     cancelValue: null,
     // In a large montage, typing finds channels straight away.
-    onOpen: () => { showView(); if (many) filter.focus({ preventScroll: true }); },
+    onOpen: ({ close }) => { closeWith = close; showView(); if (many) filter.focus({ preventScroll: true }); },
   }).then((v) => {
+    if (v === 'bad' || v === 'good') return { action: v, channels: names.filter((n) => picked.has(n)) };
     if (v !== 'ok') return null;
     if (isWhole()) return { wholeMontage: true, channels: [] };
     return { wholeMontage: false, channels: names.filter((n) => picked.has(n)) };

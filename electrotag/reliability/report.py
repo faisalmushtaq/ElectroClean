@@ -914,9 +914,23 @@ def build_html_report(result: Any) -> str:
         if img:
             add(_img(img, f"Annotations in {rid}"))
 
+    # Bad channels and uncertain marks (reliability/bad_channels.py)
+    add("<h2>Channels marked bad and uncertain marks</h2>")
+    add("<p>Annotators can mark a channel as bad for the whole recording. Their agreement is shown here, apart "
+        "from the artifact tables above, which are unchanged by it: each channel of a recording is one unit, bad "
+        "or not. Marks of the uncertain type (Data-artifact, shown to annotators as Uncertain / needs review) are "
+        "counted apart below; in the tables above they are a category of their own.</p>")
+    add(_table(tables.get("bad_channels_by_channel"), caption="Each channel someone marked bad, with how many of "
+               "the recording's annotators did."))
+    add(_table(tables.get("bad_channels_pairwise"), caption="Agreement on bad channels for each pair of annotators "
+               "of a recording, over its channels."))
+    add(_table(tables.get("uncertain_by_annotator"), caption="Marks of the uncertain type by each annotator: how many, "
+               "their share of the annotator's marks, and their time."))
+
     # Extra measures
     extra = [n for n in tables
-             if not n.startswith(("descriptives_", "timeresolved_", "events_", "confusion_", "confidence_"))
+             if not n.startswith(("descriptives_", "timeresolved_", "events_", "confusion_", "confidence_",
+                                  "bad_channels_", "uncertain_"))
              and n not in VERSION_TABLES]
     if extra:
         add("<h2>Additional measures</h2>")

@@ -133,7 +133,7 @@ test('the queue: its tabs, its actions, its search and its honest summary', () =
     { unit_id: 'r-6', recording_id: 'sub-006/eeg/a.vhdr', status: 'ready', own: true, conflicts: 7, decided: 0, annotators: [] },
     { unit_id: 't-1', recording_id: 'sub-001/eeg/a.vhdr', status: 'ready', conflicts: 3, decided: 0, window: { start_s: 0, end_s: 45 }, annotators: [], kind: 'task' },
   ];
-  assert.deepEqual(m.tabCounts(units), { ready: 3, progress: 2, finished: 1, waiting: 1, all: 7 });
+  assert.deepEqual(m.tabCounts(units), { ready: 3, progress: 2, finished: 1, waiting: 1, review: 0, all: 7 });
   assert.deepEqual(m.tabRows(units, 'progress').map((u) => u.unit_id), ['r-2', 'r-3']);
   assert.deepEqual(units.map((u) => (m.queueAction(u) || {}).label || null), ['Start', 'Continue', null, 'Open', null, null, 'Start']);
   // three ready on two recordings (sub-001 whole and a part of it, and sub-006), one of them the person's own; the conflicts left

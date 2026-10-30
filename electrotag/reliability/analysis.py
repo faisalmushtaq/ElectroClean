@@ -30,6 +30,13 @@ from electrotag.reliability.confidence import (
     dataset_setting,
 )
 from electrotag.reliability.confidence import explanation as confidence_explanation
+from electrotag.reliability.bad_channels import (
+    BY_CHANNEL_COLUMNS,
+    PAIRWISE_COLUMNS,
+    UNCERTAIN_COLUMNS,
+    bad_channel_measure,
+    uncertain_measure,
+)
 from electrotag.reliability.config import AnalysisConfig
 from electrotag.reliability.data import AgreementDataset, load_dataset
 from electrotag.reliability.intervals import total_length, union
@@ -77,6 +84,9 @@ TABLE_COLUMNS: dict[str, list[str]] = {
     "confidence_by_annotator": BY_ANNOTATOR_COLUMNS,
     "confidence_sensitivity": SENSITIVITY_COLUMNS,
     "confidence_calibration": CALIBRATION_COLUMNS,
+    "bad_channels_by_channel": BY_CHANNEL_COLUMNS,
+    "bad_channels_pairwise": PAIRWISE_COLUMNS,
+    "uncertain_by_annotator": UNCERTAIN_COLUMNS,
 }
 
 RESULT_FILES = ("analysis_settings.json", "agreement_report.html")
@@ -142,6 +152,8 @@ register_measure("timeresolved", _time_resolved)
 register_measure("events", _events)
 register_measure("confusion", _confusion)
 register_measure("confidence", confidence_measure)
+register_measure("bad_channels", bad_channel_measure)
+register_measure("uncertain", uncertain_measure)
 
 
 @dataclass
@@ -248,9 +260,11 @@ def run_analysis(
         )
     titles = {"descriptives": "Counting the annotations", "timeresolved": "Time-resolved agreement",
               "events": "Matching events", "confusion": "Category disagreements",
-              "confidence": "Confidence of the annotations"}
+              "confidence": "Confidence of the annotations", "bad_channels": "Channels marked bad",
+              "uncertain": "Marks of the uncertain type"}
     tables: dict[str, pd.DataFrame] = {}
-    names = ["descriptives", "timeresolved", "events", "confusion", "confidence", *cfg.extra_measures]
+    names = ["descriptives", "timeresolved", "events", "confusion", "confidence", "bad_channels", "uncertain",
+             *[m for m in cfg.extra_measures if m not in ("bad_channels", "uncertain")]]
     for name in names:
         if name not in MEASURES:
             raise ValueError(f"Unknown measure {name!r}; registered: {sorted(MEASURES)}")
