@@ -782,6 +782,35 @@ def _picks(raw: Any, cluster: Cluster) -> list[dict[str, str]]:
     return [{"letter": m.letter, "annotation_id": m.annotation_id} for m in found]
 
 
+def _version_words(v: dict[str, Any]) -> str:
+    """"A01's version (A)" or "E02's correction of A01's work (B)"."""
+    if v["source"] == "correction":
+        return f"{v['person']}'s correction of {v['annotator_id']}'s work ({v['letter']})"
+    return f"{v['person']}'s version ({v['letter']})"
+
+
+def _kept_versions(rec: dict[str, Any], cluster: Cluster, decision: dict[str, Any]) -> tuple[list[dict[str, Any]], str]:
+    """Whose versions a decision kept marks of, for the audit log: [{"person", "annotator_id", "source", "letter"}]
+    (the frozen inputs, by letter), and the decision in words ("kept A01's version (A)")."""
+    from electrotag.reliability.conflicts import kept_marks
+
+    by_letter = {str(d.get("letter")): {"person": p, "annotator_id": str(d.get("annotator_id") or p),
+                                        "source": str(d.get("source") or "original"), "letter": str(d.get("letter"))}
+                 for p, d in (rec.get("inputs") or {}).items()}
+    choice = decision.get("choice")
+    letters = sorted({x for x, _id in kept_marks(cluster, decision)}) if choice in ("all", "pick") else (
+        [str(choice)] if choice in by_letter else [])
+    kept = [by_letter[x] for x in letters if x in by_letter]
+    if choice == "none":
+        return kept, "kept no mark"
+    if choice == "edited":
+        return kept, f"replaced by {audit.count(len(decision.get('marks') or []), 'mark')} of the adjudicator's own"
+    said = " and ".join(_version_words(v) for v in kept)
+    if choice == "pick":
+        return kept, f"kept {audit.count(len(decision.get('picks') or []), 'mark')} chosen from {said}"
+    return kept, f"kept {'every version: ' if choice == 'all' else ''}{said}"
+
+
 @expert_op("adjudication_decide")
 def adjudication_decide(service: StudyService, user: User, body: dict[str, Any]) -> dict[str, Any]:
     """Decide one conflict: a letter (that person's marks), ``all``, ``none`` or ``edited`` (with ``marks``), with a
@@ -825,9 +854,11 @@ def adjudication_decide(service: StudyService, user: User, body: dict[str, Any])
     if kept.get("state") == "finished":
         raise ApiError(409, "finished", "This adjudication is finished; its decisions are kept as they are.")
     if not same["yes"]:
+        kept_list, words = _kept_versions(rec, cluster, decision)
         audit.record(service.store, user.annotator_id, "adjudication_decide",
-                     f"Decided a {'/'.join(cluster.kinds)} conflict of {unit.recording_id}: {choice}",
+                     f"Decided a {'/'.join(cluster.kinds)} conflict of {unit.recording_id}: {words}",
                      {"unit_id": uid, "conflict_id": cid, "kinds": list(cluster.kinds), "choice": choice,
+                      "kept": kept_list[0] if choice in letters else None, "kept_versions": kept_list,
                       "reason_code": code, "reason_length": len(text), "n_marks": len(marks) or len(picks)})
     decisions = dict(kept.get("decisions") or {})
     return {"conflict": conflict_out(service, cluster, decisions.get(cid), cmp),

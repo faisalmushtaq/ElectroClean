@@ -197,6 +197,13 @@ def test_decisions_are_checked_and_kept_once(service: StudyService, recordings: 
         == "reason_missing"
     audit = [x for x in service.store.audit_page(None, 50)[0] if x["op"] == "adjudication_decide"]
     assert audit and all("reason" not in x["details"] for x in audit)
+    # whose version was kept, so that the log reads on its own
+    first = next(x for x in audit if x["details"]["choice"] == "B")
+    assert first["details"]["kept"] == {"person": "A02", "annotator_id": "A02", "source": "original", "letter": "B"}
+    assert first["summary"].endswith(": kept A02's version (B)")
+    both = next(x for x in audit if x["details"]["choice"] == "all")
+    assert both["details"]["kept"] is None and [v["person"] for v in both["details"]["kept_versions"]] == ["A01", "A02"]
+    assert both["summary"].endswith("kept every version: A01's version (A) and A02's version (B)")
     assert {x["details"]["reason_length"] for x in audit} >= {len("the eyes move sideways"), 0}
 
 
@@ -368,6 +375,9 @@ def test_two_corrections_of_the_same_work_are_adjudicated(service: StudyService,
     for c, choice in zip(got["conflicts"], ("A", "B"), strict=True):
         ex(service, E03, "adjudication_decide", {"unit_id": uid, "conflict_id": c["conflict_id"], "choice": choice,
                                                  "reason_code": "clear_artifact"})
+    said = next(x for x in service.store.audit_page(None, 50)[0] if x["op"] == "adjudication_decide")
+    assert said["details"]["kept"]["source"] == "correction" and said["summary"].endswith("'s work (B)")
+    assert "E02's correction of A01's work (B)" in said["summary"]
     fin = ex(service, E03, "adjudication_finish", {"unit_id": uid})
     assert fin["version"]["n_annotations"] == 2  # the eye movement and the EMG
     # reopened, the corrected version settled before still stands for A01 until it is finished again
