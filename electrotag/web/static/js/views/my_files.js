@@ -47,6 +47,12 @@ export async function downloadMine(app, item, { separate = false, version = null
   return separate ? `${answer.files.length} files offered to save, version ${answer.version}.` : `${answer.file_name} offered to save.`;
 }
 
+/** The Saved dialog's offer of the files of session `s` (annotate/session.js) just saved with `result` (POST /submissions). */
+export function savedFor(app, s, result) {
+  const version = (result.revision && result.revision.version) || result.attempt || null;
+  return savedDownload(app, { recording_id: s.recordingId, mode: s.mode, context_id: s.contextId }, version);
+}
+
 /** The part of the Saved dialog that offers the files just saved. */
 export function savedDownload(app, item, version) {
   const status = h('p.caption.saved-download-status', { 'aria-live': 'polite' });

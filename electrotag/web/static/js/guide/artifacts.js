@@ -9,6 +9,7 @@
 // that each look-alike named is a type of the catalogue, and that each example draws its artifact.
 
 import { local } from '../util.js';
+import './shapes.js'; // the simulation of the types only the guide's examples draw
 
 /** This browser's note of the keys 1 to 9 of the person's study, and of the type to show first, for the guide in a new tab. */
 export const GUIDE_KEYS = 'electrotag.guide.keys';

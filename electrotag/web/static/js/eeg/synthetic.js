@@ -121,6 +121,11 @@ function hann(x) { // x in [0, 1]
   return x <= 0 || x >= 1 ? 0 : 0.5 - 0.5 * Math.cos(2 * Math.PI * x);
 }
 
+const MORE_SHAPES = new Map();
+
+/** A further type's drawing (js/guide/shapes.js). */
+export function registerArtifactShape(label, fn) { MORE_SHAPES.set(label, fn); }
+
 /** Artifact contribution (volts) for channel `name` at time t (s). */
 function artifactValue(art, name, t, ci, s, seed, sfreq) {
   const x = (t - art.onsetS) / art.durationS; // 0..1 inside
@@ -155,35 +160,11 @@ function artifactValue(art, name, t, ci, s, seed, sfreq) {
       return on ? 0.06 * ecgShape(t) : 0;
     case 'Line-noise-artifact':
       return 30 * UV * Math.sin(2 * Math.PI * 50 * t + ci);
-    // The types below appear only in the artifact reference guide's examples (js/guide/artifacts.js).
-    case 'Vertical-eye-movement-artifact': {
-      const gain = { VEOG: 170, Fp1: 95, Fp2: 95, F3: 30, Fz: 35, F4: 30, F7: 25, F8: 25 }[name] || 0;
-      return gain * UV * Math.min(1, x * 8, (1 - x) * 8);
-    }
-    case 'Nystagmus-artifact': { // jerk nystagmus: a slow drift and a quick return, three beats a second
-      const gain = (EYE_MOVEMENT_GAINS_UV[name] || 0) * 0.6;
-      const p = ((t - art.onsetS) * 3) % 1;
-      return gain * UV * (p < 0.8 ? p / 0.8 : (1 - p) / 0.2) * Math.min(1, x * 10, (1 - x) * 10);
-    }
-    case 'Tongue-movement-artifact': { // broad, frontal and inferior, in the delta range
-      const w = /^Fp/.test(name) ? 1 : /^F/.test(name) ? 0.8 : /^T/.test(name) ? 0.7 : /^C/.test(name) ? 0.5 : /^P/.test(name) ? 0.35 : /^O/.test(name) ? 0.25 : 0;
-      return w * 45 * UV * (Math.sin(2 * Math.PI * 2.2 * t) + 0.6 * Math.sin(2 * Math.PI * 3.1 * t + 1)) * Math.min(1, x * 6, (1 - x) * 6);
-    }
-    case 'Pulse-artifact': { // a slow wave a fraction of a second after each heartbeat (ecgShape's QRS at 0.20 of its period)
-      if (!on) return 0;
-      const period = 0.83;
-      const ph = (((t - 0.2) % period) + period) % period; // the time since the last QRS
-      return 45 * UV * Math.exp(-(((ph - 0.25) / 0.07) ** 2)) * Math.min(1, x * 20, (1 - x) * 20);
-    }
-    case 'Respiration-artifact': // slow and regular, with each breath (15 a minute)
-      return on ? 45 * UV * Math.sin(2 * Math.PI * 0.25 * (t - art.onsetS)) * Math.min(1, x * 8, (1 - x) * 8) : 0;
-    case 'Sweat-artifact': // a low, irregular, very slow undulation of the baseline
-      return on ? 30 * UV * (Math.sin(2 * Math.PI * 0.17 * (t - art.onsetS)) + 0.5 * Math.sin(2 * Math.PI * 0.29 * (t - art.onsetS) + 2)) * Math.min(1, x * 6, (1 - x) * 6) : 0;
-    case 'Electrode-movement-artifact': // irregular shifts of the baseline on the electrode that moved
-      return on ? UV * (110 * Math.sin(2 * Math.PI * 0.8 * (t - art.onsetS)) + 50 * Math.sin(2 * Math.PI * 2.3 * (t - art.onsetS) + 1)
-        + 25 * noise(seed + 404, ci, s)) * Math.min(1, x * 12, (1 - x) * 12) : 0;
-    default:
+    default: {
+      const more = MORE_SHAPES.get(art.label);
+      if (more) return more({ art, name, t, x, on, ci, s, seed, noise });
       return on ? 50 * UV * Math.sin(Math.PI * x) : 0;
+    }
   }
 }
 

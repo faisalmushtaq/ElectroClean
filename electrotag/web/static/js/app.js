@@ -124,10 +124,10 @@ export class App {
     // A bookmarked section of the admin area opens again once its administrator has signed in.
     const asked = (location.hash || '').replace(/^#/, '');
     if (ADMIN_ROUTE.test(asked) || EXPERT_ROUTE.test(asked)) this._adminReturn = asked;
-    this._reloadedIn = asked; // the page's view before a reload (a recording opens again: annotate/reopen.js)
+    this._reloadedIn = asked; // annotate/reopen.js
     const invite = takeInvite();
     this._render(h('main.page.loading', {}, h('p.subtitle', {}, 'Starting ElectroTag…')), 'signin');
-    if (asked === 'guide') { await this.showGuide(); return; } // the artifact reference guide, in a tab of its own: no sign-in
+    if (asked === 'guide') { await this.showGuide(); return; } // no sign-in
     let where;
     try { where = await findBackend(); } catch { where = { kind: 'demo', source: 'none' }; }
     this.where = where;
@@ -260,7 +260,7 @@ export class App {
     // tried again when it is needed.
     preloadParts([...(this.backend.isDemo ? [] : ['readers']), ...(this.isAdmin ? [] : ['home']), ...PRELOAD, ...(this.me.programme ? ['coach', 'practice'] : [])]);
     const want = (location.hash || '').replace(/^#/, '');
-    // A reload while a recording was open: it opens again where it was (annotate/reopen.js).
+    // a reload while a recording was open: it opens again
     const reloadedIn = this._reloadedIn;
     this._reloadedIn = null;
     if (want === 'annotate' || reloadedIn === 'annotate') {
@@ -407,7 +407,7 @@ export class App {
       this.quizView = null;
     }
     if (this.guideView && this.guideView.el !== el) {
-      this.guideView.destroy(); // the artifact reference guide's example viewers
+      this.guideView.destroy();
       this.guideView = null;
     }
     if (this.snippetsView && this.snippetsView.el !== el) {
@@ -971,7 +971,7 @@ export class App {
       return;
     }
     {
-      // A try-out's work is kept only in this browser (session.js), so it has no draft with the study.
+      // a try-out's work is only in this browser
       const draft = session.pickDraft(tryOut ? null : match.draft);
       if (draft) {
         const resume = Boolean(this.openView && this.openView.resume);
@@ -1073,10 +1073,7 @@ export class App {
     }
     const next = result.next ? (this.assignments.items || []).find((i) => i.recording_id === result.next) : null;
     const demo = this.backend.isDemo ? `\n\n${DEMO_NOTICE}` : '';
-    // The files just saved, offered to keep (views/my_files.js); the dialog says nothing of them if the part cannot load.
-    const files = await loadPart('myFiles').catch(() => null);
-    const version = (result.revision && result.revision.version) || result.attempt || null;
-    const extra = files ? files.savedDownload(this, { recording_id: s.recordingId, mode: s.mode, context_id: s.contextId }, version) : null;
+    const extra = await loadPart('myFiles').then((m) => m.savedFor(this, s, result), () => null); // the files just saved, to keep
     const milestone = reached.length ? `\n\nMilestone reached: ${reached.map((m) => m.name).join(', ')}.` : '';
     this.celebrate = reached;
     this.showHome();
