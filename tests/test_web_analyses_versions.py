@@ -18,7 +18,7 @@ from electrotag.web.errors import ApiError  # noqa: E402
 from electrotag.web.service import StudyService  # noqa: E402
 from electrotag.web.store import User  # noqa: E402
 from electrotag.web.store_files import FilesStore  # noqa: E402
-from tests.web_helpers import SUB1, ann, copy_demo, make_template, submission  # noqa: E402
+from tests.web_helpers import SUB1, SUB2, ann, copy_demo, make_template, submission  # noqa: E402
 
 A01, A02 = User("A01", "Annotator one"), User("A02", "Annotator two")
 E01 = User("E01", "Expert one", roles=("annotator", "expert"))
@@ -116,6 +116,17 @@ def test_the_agreement_compares_the_version_asked_for(service: StudyService, rec
     assert "f1_before" in head and row["n_conflicts"] == "2" and row["kept_one"] == "2" and row["adjudicator"] == "E03"
     assert "adjudication_pairs.tsv" in adj["tables"] and "adjudication_survival.tsv" in adj["tables"]
     assert "Before and after adjudication." in adj["report_html"]
+    # a known-answer recording is never adjudicated: left out without a warning that asks for an adjudication
+    service.call("submit", A01, submission(recordings, SUB2, MINE))
+    service.call("submit", A02, submission(recordings, SUB2, THEIRS))
+    warned = agreement(service, versions="adjudicated", annotator_ids=["A01", "A02"])
+    assert any("no finished adjudication" in w and SUB2 in w for w in warned["warnings"])
+    gold = {"schema": "electrotag.task", "schema_version": 1, "task_id": "t-00000000000f", "recording_id": SUB2,
+            "annotators": ["A01", "A02"], "k": 2, "gold": {"set_id": "example"}, "state": "open", "window": None}
+    service.store.update_record("tasks", gold["task_id"], "", lambda old: gold)
+    known = agreement(service, versions="adjudicated", annotator_ids=["A01", "A02"])
+    assert not any("no finished adjudication" in w for w in known["warnings"])
+    assert SUB2 in known["summary"]["versions"]["left_out"]
     # contradictory settings are refused in plain words
     for bad in ({"versions": "newest"}, {"versions": "adjudicated", "config": {"resolutions_s": [1.0],
                                                                                 "reference_annotator": "A01"}},

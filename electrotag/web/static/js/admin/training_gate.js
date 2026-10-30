@@ -49,14 +49,34 @@ function roundsList(u, rounds) {
     })));
 }
 
+/**
+ * Whether a trainee's study recordings are open, written for the study team (the trainee's own page says
+ * "your"): from the gate, the assessment stage and the study's policy (training.gate: met, completed, off).
+ */
+export function gateText(aid, gate, prog, policy = 'met') {
+  if (!gate || gate.open) return `${aid}'s study recordings are open.`;
+  const a = ((prog && prog.stages) || []).find((s) => s.key === 'assessment') || {};
+  if (a.status === 'completed' && a.result === 'not_met') {
+    return `${aid}'s assessment did not meet the competency criteria, so their study recordings stay locked until the study team `
+      + 'reopens the training or gives them a new assessment (below).';
+  }
+  if (a.status === 'completed') {
+    return `${aid} has finished the competency assessment, and its result is not settled yet: their study recordings stay locked `
+      + 'until it meets the criteria. The competency report shows where it stands.';
+  }
+  return `${aid}'s study recordings stay locked until they ${policy === 'completed' ? 'finish' : 'pass'} the competency assessment `
+    + 'at the end of their training path.';
+}
+
 /** The card, or null for someone outside a training programme. */
 export function trainingGateCard(area, u, reload) {
   if (!u.programme) return null;
   const body = h('div.admin-stack', {}, loading());
   const box = card('Training path', body);
-  area.read('training_gate_get', { annotator_id: u.annotator_id }).then((g) => {
+  Promise.all([area.read('training_gate_get', { annotator_id: u.annotator_id }), area.read('settings_get').catch(() => null)]).then(([g, st]) => {
     clear(body);
-    body.append(...content(area, u, g, reload));
+    const policy = st && st.settings && st.settings.training ? st.settings.training.gate : 'met';
+    body.append(...content(area, u, g, reload, policy));
   }, (exc) => {
     clear(body);
     const msg = messageArea();
@@ -66,19 +86,25 @@ export function trainingGateCard(area, u, reload) {
   return box;
 }
 
-function content(area, u, g, reload) {
+function content(area, u, g, reload, policy) {
   const msg = messageArea();
   const out = [];
   const gate = g.training_gate || { open: true };
-  out.push(h('p', {}, gate.open ? chip('Study recordings open', 'done') : chip('Study recordings locked', 'warning'),
-    gate.open ? '' : h('span.caption.block', {}, gate.message)));
   const prog = g.programme;
+  out.push(h('p', {}, gate.open ? chip('Study recordings open', 'done') : chip('Study recordings locked', 'warning'),
+    gate.open ? '' : h('span.caption.block.gate-text', {}, gateText(u.annotator_id, gate, prog, policy))));
   if (prog && prog.stages) {
     out.push(h('ol.gate-stages', {}, prog.stages.map((s) => h('li', {}, h('b', {}, s.title || STAGE_TITLES[s.key]), `: ${STATUS_WORDS[s.status] || s.status}`,
       s.carried_from ? ` in ${s.carried_from}` : '',
       s.key === 'assessment' && s.result ? ` (${s.result.replace('_', ' ')})` : ''))));
   }
   if ((g.rounds || []).length) out.push(roundsList(u, g.rounds));
+  const assessment = prog && prog.stages ? prog.stages.find((s) => s.key === 'assessment') : null;
+  if (assessment && assessment.status === 'completed') {
+    const setId = (prog && prog.set_id) || u.programme;
+    out.push(h('div.btn-row', {}, h('button.btn.small', { type: 'button', 'data-log': 'gate-competency-report',
+      onclick: () => area.go('analyses', { competency: setId, annotator: u.annotator_id }) }, `Write ${u.annotator_id}'s competency report`)));
+  }
   const events = g.events || [];
   if (events.length) {
     out.push(h('details.admin-details', {}, h('summary', {}, `What happened to the stages (${events.length})`),
@@ -106,6 +132,7 @@ function content(area, u, g, reload) {
         out.push(h('p.caption', {}, 'To give a new assessment, make another reference set with assessment recordings in Training.'));
       } else {
         const which = select(sets.map((s) => [s.set_id, `${s.name} (${s.n_assessment} assessment recording${s.n_assessment === 1 ? '' : 's'})`]));
+        const nameOf = (id) => { const x = sets.find((s) => s.set_id === id); return x && x.name ? x.name : id; };
         const host = h('div.btn-row');
         const nameOf = (id) => (sets.find((s) => s.set_id === id) || {}).name || id;
         const go = actionButton('Give this assessment', { working: 'Saving…', msg, log: 'training-assessment-set', onClick: async () => {

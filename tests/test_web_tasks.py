@@ -135,7 +135,11 @@ def test_200_recordings_among_10_annotators_balanced_and_the_same_every_time(app
     assert per == {aid: 40 for aid in pool}, "each person gets the same share"
     assert all(len(set(t["annotators"])) == 2 for t in preview["tasks"])
     pairs = {tuple(t["annotators"]) for t in preview["tasks"]}
-    assert len(pairs) > 20, "the pairs are mixed, not the same few people together"
+    assert len(pairs) == 45, "every pair of the ten people shares recordings"
+    assert preview["pairs"] == {"n_pairs": 45, "least": 4, "most": 5, "counts": {"4": 25, "5": 20}}, \
+        "each pair shares 4 or 5 recordings (200 tasks over 45 pairs), for pairwise agreement"
+    assert all(p["annotates"] and not p["study_locked"] for p in preview["per_annotator"])
+    assert preview["warnings"] == []
     assert admin.admin_ok("tasks_preview_get", body) == preview, "the same request gives the same share-out"
     assert admin.admin_ok("tasks_list")["tasks"] == [], "a preview makes nothing"
     made = create(admin, 1, **body)
@@ -154,6 +158,76 @@ def test_200_recordings_among_10_annotators_balanced_and_the_same_every_time(app
     # those recordings have open tasks now: asked again, every one is skipped
     third = admin.admin_ok("tasks_preview_get", body)
     assert third["created"] == 0 and {s["reason"] for s in third["skipped"]} == {"has_task"}
+
+
+@pytest.mark.parametrize("k, least, most", [(2, 4, 5), (3, 13, 14)])
+def test_the_share_out_evens_out_both_each_persons_share_and_each_pairs(k: int, least: int, most: int) -> None:
+    """10 annotators, 200 recordings: everyone gets the same number, and every pair shares as nearly the same
+    number as can be (200 * C(k, 2) / 45 on average), the same every time."""
+    import itertools
+
+    pool = [f"A{i:02d}" for i in range(1, 11)]
+
+    def share_out() -> list[list[str]]:
+        load: dict[str, int] = {}
+        pairs: dict[tuple[str, str], int] = {}
+        out = []
+        for r in range(200):
+            group = tasks_mod.choose_group(f"sub-{r:03d}/eeg/x.edf", None, list(pool), k, load, pairs)
+            assert len(set(group)) == k
+            for a in group:
+                load[a] = load.get(a, 0) + 1
+            for a, b in itertools.combinations(sorted(group), 2):
+                pairs[(a, b)] = pairs.get((a, b), 0) + 1
+            # at every step, nobody has more than one task more than anyone else
+            assert max(load.get(a, 0) for a in pool) - min(load.get(a, 0) for a in pool) <= 1
+            out.append(group)
+        return out
+
+    tasks = share_out()
+    per = {a: sum(1 for t in tasks if a in t) for a in pool}
+    assert set(per.values()) == {200 * k // 10}
+    spread = tasks_mod.pair_spread(pool, tasks)
+    assert (spread["n_pairs"], spread["least"], spread["most"]) == (45, least, most)
+    assert share_out() == tasks, "deterministic"
+    # people who hold the recording already come first, whatever their pairs
+    group = tasks_mod.choose_group("r", None, pool, k, {}, {("A01", "A02"): 50}, {"A01", "A02"})
+    assert {"A01", "A02"} <= set(group)
+    assert tasks_mod.pair_spread(["A01"], tasks) is None
+    # a pool too large to weigh every group is shared out one by one, still evenly
+    big = [f"B{i:03d}" for i in range(300)]
+    load: dict[str, int] = {}
+    for r in range(100):
+        for a in tasks_mod.choose_group(f"r{r}", None, big, 6, load, {}):
+            load[a] = load.get(a, 0) + 1
+    assert max(load.values()) == 2 and sum(load.values()) == 600
+
+
+def test_the_preview_warns_about_locked_trainees_and_people_without_the_annotator_role(app: Any, admin: Api) -> None:
+    from electrotag.training.reference import ReferenceSet
+    from tests.web_helpers import PRACTICE1
+
+    # the example set gets an assessment, so the trainee T01's study work waits for it
+    store = app.state.store
+    rs = ReferenceSet.load(store.reference_set("example").directory)
+    rs.set_use(PRACTICE1, "assessment")
+    rs.save()
+    admin.admin_ok("user_add", {"annotator_id": "E09", "password": PASSWORD, "roles": ["expert"]})
+    users = {u["annotator_id"]: u for u in admin.admin_ok("users_list")["users"]}
+    assert users["T01"]["study_locked"] is True and users["A01"]["study_locked"] is False
+    assert users["E09"]["study_locked"] is False, "experts are never gated"
+    p = admin.admin_ok("tasks_preview_get", {"recording_ids": [SUB1, SUB2, SUB3],
+                                             "annotator_ids": ["A03", "T01", "E09"], "k": 3})
+    per = {r["annotator_id"]: r for r in p["per_annotator"]}
+    assert (per["T01"]["study_locked"], per["T01"]["annotates"]) == (True, True)
+    assert (per["E09"]["study_locked"], per["E09"]["annotates"]) == (False, False)
+    assert (per["A03"]["study_locked"], per["A03"]["annotates"]) == (False, True)
+    assert len(p["warnings"]) == 2
+    assert p["warnings"][0].startswith("T01 is a trainee whose study work is locked")
+    assert p["warnings"][1].startswith("E09 has no annotator role")
+    # two people make one pair
+    assert admin.admin_ok("tasks_preview_get", {"recording_ids": [SUB1], "annotator_ids": ["A03", "A04"]})["pairs"] \
+        == {"n_pairs": 1, "least": 1, "most": 1, "counts": {"1": 1}}
 
 
 def test_people_given_a_recording_already_come_first_and_are_linked(admin: Api, client: TestClient) -> None:

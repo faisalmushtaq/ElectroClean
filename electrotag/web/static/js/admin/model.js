@@ -136,46 +136,6 @@ export const SCALING_TYPES = Object.freeze(['eeg', 'eog', 'ecg', 'emg', 'misc'])
 /** The study's starting choice of channel colours (display.channel_colours; js/viewer/channel_colours.js). */
 export const CHANNEL_COLOUR_CHOICES = Object.freeze([['off', 'None: every trace in ink'], ['region', 'By region of the head'], ['side', 'By side of the head'], ['type', 'By channel type']]);
 
-/** What each audited operation did, for the records' filter and table. */
-export const AUDIT_OPS = Object.freeze({
-  settings_update: 'Study settings changed',
-  user_add: 'Account added',
-  user_update: 'Account changed',
-  user_reset_password: 'Password reset',
-  user_invite: 'Invitation link made',
-  user_invite_revoke: 'Invitation link withdrawn',
-  user_remove: 'Account removed',
-  assign: 'Recordings assigned',
-  unassign: 'Assignment removed',
-  programme_set: 'Training programme changed',
-  recordings_register: 'Recordings added',
-  recording_update: 'Recording changed',
-  recording_remove: 'Recording removed',
-  set_create: 'Reference set created',
-  set_update: 'Reference set changed',
-  set_delete: 'Reference set deleted',
-  set_add_reference: 'Reference added',
-  set_recording_update: 'Use or guidance changed',
-  set_remove_recording: 'Recording removed from a set',
-  set_guided_note: 'Guided note changed',
-  set_example_create: 'Example set created',
-  quiz_item_add: 'Quiz item added',
-  quiz_item_remove: 'Quiz item removed',
-  register: 'Recordings registered (command)',
-  init: 'Study created (command)',
-  problem_report: 'Problem reported',
-  problem_resolve: 'Problem resolved',
-  problem_return: 'Recording returned to its annotator',
-  problem_reassign: 'Recording given to someone else',
-  review_save: 'Review saved',
-  replay_consent_set: 'Replay consent changed',
-});
-
-export function opText(op) {
-  const t = AUDIT_OPS[op] || String(op || '').replace(/_/g, ' ');
-  return t.charAt(0).toUpperCase() + t.slice(1);
-}
-
 function settingValueText(v) {
   if (typeof v === 'boolean') return v ? 'on' : 'off';
   if (v === null || v === undefined || v === '' || (Array.isArray(v) && !v.length) || (typeof v === 'object' && !Object.keys(v).length)) return 'nothing';

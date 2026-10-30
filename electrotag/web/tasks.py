@@ -22,12 +22,16 @@ conflicts), ``agreed`` (all saved, none), ``adjudicating``, ``adjudicated`` and 
 part of the expert work registers the function that counts a task's conflicts with
 :func:`register_conflict_counter`.
 
-**Sharing out** is deterministic: each task goes to the k members of the chosen pool with the fewest open
-tasks, ties broken by an order fixed by the recording, the window and the annotator (a SHA-256), and
-people who already hold the recording without a task come first (their assignment is linked to the
-task). Nobody holds two tasks of one recording, because an assignment is one per person, recording, mode
-and context. ``tasks_preview_get`` gives the share-out without making anything; ``tasks_create`` makes it,
-once per ``request_id``.
+**Sharing out** is deterministic (:func:`choose_group`): each task goes to k members of the chosen pool with
+the fewest open tasks, so that each person's share is even; among people as free as each other, to those
+whose pairs have shared the fewest tasks, so that every pair of annotators shares about as many recordings
+(pairwise agreement needs that); the last ties are broken by an order fixed by the recording, the window and
+the annotator (a SHA-256). People who already hold the recording without a task come first (their
+assignment is linked to the task). The preview gives the pairs' spread (:func:`pair_spread`) and warns about
+chosen people whose study work is locked by the training gate, or who have no annotator role. Nobody holds
+two tasks of one recording, because an assignment is one per person, recording, mode and context.
+``tasks_preview_get`` gives the share-out without making anything; ``tasks_create`` makes it, once per
+``request_id``.
 
 **Windows** are enforced by the service: ``submit`` and ``put_draft`` refuse an annotation outside the
 window (422 ``outside_window``), and the browser hatches the rest of the recording and keeps the view and
@@ -46,6 +50,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import itertools
 import math
 import re
 import string
@@ -150,6 +155,84 @@ def task_id_for(request_id: str, recording_id: str, start_sample: int | None) ->
 def tie_break(recording_id: str, start_sample: int | None, annotator_id: str) -> str:
     """The fixed order among annotators with as many open tasks: the same answer for the same choice."""
     return hashlib.sha256(f"{recording_id}|{start_sample}|{annotator_id}".encode()).hexdigest()
+
+
+Pair = tuple[str, str]
+#: Above this many groups to weigh, a task's people are chosen one by one (a large pool: k=2 from 55 people
+#: equally free, k=3 from 22 are still weighed whole).
+GROUP_BUDGET = 1500
+
+
+def pair_of(a: str, b: str) -> Pair:
+    return (a, b) if a < b else (b, a)
+
+
+def choose_group(recording_id: str, start_sample: int | None, free: list[str], k: int, load: dict[str, int],
+                 pairs: dict[Pair, int], first: set[str] | frozenset[str] = frozenset()) -> list[str]:
+    """The k people of one task, from ``free``: people in ``first`` (who hold the recording already) before
+    the rest, then those with the fewest open tasks, so that each person's share stays even; among people
+    as free as each other, the group whose pairs have shared the fewest tasks so far (``pairs``), so that
+    every pair of annotators shares about as many recordings, which pairwise agreement needs. Looking one
+    step ahead, a group that leaves the others a pair that has shared few tasks is preferred, and the last
+    ties are broken by :func:`tie_break`. The same choice gives the same answer."""
+    tie = {a: tie_break(recording_id, start_sample, a) for a in free}
+    rank = {a: (a not in first, load.get(a, 0)) for a in free}
+    order = sorted(free, key=lambda a: (rank[a], tie[a]))
+    level = rank[order[k - 1]]
+    must = [a for a in order if rank[a] < level]
+    cand = [a for a in order if rank[a] == level]
+    need = k - len(must)
+
+    def shared(a: str, b: str) -> int:
+        return pairs.get(pair_of(a, b), 0)
+
+    if math.comb(len(cand), need) <= GROUP_BUDGET:
+        # the pairs of the candidates, fewest shared first: the first one outside a group is what it leaves
+        cand_pairs = sorted((shared(a, b), a, b) for a, b in itertools.combinations(cand, 2))
+        best: tuple[Any, list[str]] | None = None
+        for combo in itertools.combinations(cand, need):
+            group = must + list(combo)
+            counts = [shared(a, b) for a, b in itertools.combinations(group, 2)]
+            ahead = next((n for n, a, b in cand_pairs if a not in combo and b not in combo), 0)
+            key = (sum(counts), ahead, max(counts, default=0), sorted(tie[a] for a in group))
+            if best is None or key < best[0]:
+                best = (key, group)
+        assert best is not None
+        return best[1]
+    group = list(must)
+    left = list(cand)
+    for _ in range(need):  # a large pool: one by one, each the person who has shared least with those chosen
+        best_n, pick = -1, left[0]
+        for a in left:  # in the order of tie_break, so the first one who has shared nothing will do
+            n = sum(shared(a, b) for b in group)
+            if best_n < 0 or n < best_n:
+                best_n, pick = n, a
+                if n == 0:
+                    break
+        group.append(pick)
+        left.remove(pick)
+    return group
+
+
+def pair_spread(pool: list[str], tasks: list[list[str]]) -> dict[str, Any] | None:
+    """How many of ``tasks`` each pair of the pool shares: ``{"n_pairs", "least", "most", "counts": {shared:
+    pairs}}`` (pairs that share none counted too), or None with fewer than two people."""
+    if len(pool) < 2:
+        return None
+    members = set(pool)
+    shared: dict[Pair, int] = {}
+    for people in tasks:
+        inside = sorted(a for a in set(people) if a in members)
+        for a, b in itertools.combinations(inside, 2):
+            shared[(a, b)] = shared.get((a, b), 0) + 1
+    n_pairs = math.comb(len(members), 2)
+    counts: dict[int, int] = {}
+    for n in shared.values():
+        counts[n] = counts.get(n, 0) + 1
+    if n_pairs > len(shared):
+        counts[0] = n_pairs - len(shared)
+    return {"n_pairs": n_pairs, "least": min(counts), "most": max(counts),
+            "counts": {str(n): counts[n] for n in sorted(counts)}}
 
 
 def letters_for(secret: str, task_id: str, annotators: list[str]) -> dict[str, str]:
@@ -644,6 +727,12 @@ class Tasks:
         holdings = self._holdings()
         load = self._load(existing, seen)
         load_before = {aid: load.get(aid, 0) for aid in pool}
+        # how many tasks each pair of people shares already: the share-out evens the pairs out as well
+        pairs: dict[Pair, int] = {}
+        for t in existing:
+            if not t.get("gold"):
+                for a, b in itertools.combinations(sorted(set(t.get("annotators") or [])), 2):
+                    pairs[(a, b)] = pairs.get((a, b), 0) + 1
         planned: list[_Planned] = []
         for m in manifests:
             rid = m["recording_id"]
@@ -671,6 +760,8 @@ class Tasks:
                     planned.append(_Planned(rid, m["file_name"], None, have, have, sfreq))
                     for aid in have:
                         load[aid] = load.get(aid, 0) + 1
+                    for a, b in itertools.combinations(sorted(have), 2):
+                        pairs[(a, b)] = pairs.get((a, b), 0) + 1
                 continue
             taken: set[str] = set()
             for w in windows_of(n, sfreq, spec):
@@ -699,9 +790,9 @@ class Tasks:
                         skipped.append({"recording_id": rid, "reason": "too_few_annotators",
                                         **({"start_s": start / sfreq} if start is not None else {})})
                         continue
-                    order = sorted(free, key=lambda aid: (aid not in relinkable, load.get(aid, 0),
-                                                          tie_break(rid, start, aid)))
-                    chosen = order[:k]
+                    chosen = choose_group(rid, start, free, k, load, pairs, relinkable)
+                    for a, b in itertools.combinations(sorted(chosen), 2):
+                        pairs[(a, b)] = pairs.get((a, b), 0) + 1
                 taken.update(chosen)
                 for aid in chosen:
                     load[aid] = load.get(aid, 0) + 1
@@ -711,11 +802,48 @@ class Tasks:
             raise _bad(f"This would make {len(planned)} tasks; at most {MAX_TASKS} are made at once. Choose fewer "
                        "recordings, or longer windows.", "too_many")
         new_assignments = sum(len(p.annotators) - len(p.holders) for p in planned)
+        standing = self._standing(pool)
         per = [{"annotator_id": aid, "open_before": load_before[aid],
                 "new": sum(1 for p in planned if aid in p.annotators),
-                "linked": sum(1 for p in planned if aid in p.holders)} for aid in pool]
+                "linked": sum(1 for p in planned if aid in p.holders), **standing[aid]} for aid in pool]
         return {"planned": planned, "skipped": skipped, "per_annotator": per, "assigned": new_assignments,
-                "k": None if (rs is not None or adopt) else k, "gold": rs, "adopt": adopt}
+                "k": None if (rs is not None or adopt) else k, "gold": rs, "adopt": adopt,
+                # after the share-out: the study's earlier tasks (not known answers) and the new ones
+                "pairs": None if rs is not None else pair_spread(
+                    pool, [list(t.get("annotators") or []) for t in existing if not t.get("gold")]
+                    + [p.annotators for p in planned]),
+                "warnings": self._warnings(per)}
+
+    def _standing(self, pool: list[str]) -> dict[str, dict[str, bool]]:
+        """For each person of a pool: whether they have the annotator role (``annotates``) and whether their
+        study work waits for the competency assessment (``study_locked``, the training gate)."""
+        from electrotag.web.store import parse_roles
+
+        out: dict[str, dict[str, bool]] = {}
+        for aid in pool:
+            rec = self.store.user_record(aid) or {}
+            person = User(aid, rec.get("display_name", ""), roles=parse_roles(rec.get("roles") or rec.get("role")))
+            out[aid] = {"annotates": person.has_role("annotator"),
+                        "study_locked": not self.service.training_path.gate(person)["open"]}
+        return out
+
+    @staticmethod
+    def _warnings(per: list[dict[str, Any]]) -> list[str]:
+        """What the study team should know before making the share-out, in plain words."""
+        def names(ids: list[str]) -> str:
+            return ", ".join(ids[:10]) + (f" and {len(ids) - 10} more" if len(ids) > 10 else "")
+
+        out = []
+        locked = [r["annotator_id"] for r in per if r["study_locked"] and r["new"]]
+        if locked:
+            out.append(f"{names(locked)} {'is a trainee' if len(locked) == 1 else 'are trainees'} whose study work is "
+                       "locked until the competency assessment is passed, so their tasks wait in Collecting until "
+                       "then.")
+        others = [r["annotator_id"] for r in per if not r["annotates"] and r["new"]]
+        if others:
+            out.append(f"{names(others)} {'has' if len(others) == 1 else 'have'} no annotator role. Nobody adjudicates "
+                       "a task they annotated, so an expert given tasks here cannot adjudicate them.")
+        return out
 
     def _gold_problem(self, rs: Any, m: dict[str, Any]) -> str:
         rid = m["recording_id"]
@@ -743,7 +871,7 @@ class Tasks:
         p = self.plan(body)
         return {"tasks": [self._planned_out(x) for x in p["planned"]], "skipped": p["skipped"],
                 "per_annotator": p["per_annotator"], "created": len(p["planned"]), "assigned": p["assigned"],
-                "k": p["k"]}
+                "k": p["k"], "pairs": p["pairs"], "warnings": p["warnings"]}
 
     def op_create(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
         """``tasks_create``: make the tasks and their assignments, once per ``request_id``."""

@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { CONTEXT_S, boundsOf, clampView, clockText, insideBounds, itemWindow, outsideStretches, outsideText, viewSpan } from '../../electrotag/web/static/js/viewer/bounds.js';
 import { AnnotationStore, AnnotationError } from '../../electrotag/web/static/js/annotate/store.js';
 import { CATALOGUE } from '../../electrotag/web/static/js/api/demo_catalogue.js';
-import { changeChoices, filterTasks, partText, previewSummary, requestBody, savedText, skippedPart, statusKind, statusText, SKIPPED } from '../../electrotag/web/static/js/admin/tasks_model.js';
+import { changeChoices, filterTasks, pairsText, partText, personNote, poolEntry, previewSummary, requestBody, savedText, skippedPart, statusKind, statusText, SKIPPED } from '../../electrotag/web/static/js/admin/tasks_model.js';
 
 const SF = 128;
 const N = 7680; // 60 s
@@ -130,4 +130,40 @@ test('the list of tasks: statuses, filters, the people a task can change', () =>
   assert.equal(savedText(tasks[0]), '1 of 2 saved');
   const users = [{ annotator_id: 'A01', status: 'active' }, { annotator_id: 'A03', status: 'active' }, { annotator_id: 'A04', status: 'disabled' }];
   assert.deepEqual(changeChoices(tasks[0], users), { out: ['A02'], in: ['A03'] }, 'nobody who saved is taken out; switched-off accounts are not put in');
+});
+
+test('All leaves out locked trainees and accounts without the annotator role, and marks them', () => {
+  const entry = (u) => poolEntry({ status: 'active', ...u });
+  assert.deepEqual(entry({ annotator_id: 'A01', display_name: 'Ann', roles: ['annotator'] }),
+    { value: 'A01', text: 'A01', notInAll: false, extra: 'Ann' });
+  assert.deepEqual(entry({ annotator_id: 'T02', roles: ['annotator'], study_locked: true }),
+    { value: 'T02', text: 'T02', notInAll: true, extra: 'trainee, study work locked' });
+  assert.deepEqual(entry({ annotator_id: 'E02', roles: ['expert'] }),
+    { value: 'E02', text: 'E02', notInAll: true, extra: 'expert only, no annotator role' });
+  assert.equal(entry({ annotator_id: 'E01', roles: ['annotator', 'expert'] }).notInAll, false, 'an expert who annotates is in All');
+  assert.equal(entry({ annotator_id: 'ADMIN', roles: ['admin'] }).extra, 'no annotator role');
+  assert.equal(entry({ annotator_id: 'ADMIN', roles: ['admin'] }).notInAll, true);
+  assert.deepEqual(entry({ annotator_id: 'A09', roles: ['annotator'], status: 'disabled' }).notInAll, true);
+  assert.equal(entry({ annotator_id: 'A02', role: 'annotator' }).notInAll, false, 'an older answer with role only');
+  assert.equal(personNote({ study_locked: true, annotates: true }), 'Trainee: study work locked until the assessment is passed');
+  assert.equal(personNote({ study_locked: false, annotates: false }), 'No annotator role');
+  assert.equal(personNote({ annotator_id: 'A01' }), '');
+});
+
+test('the preview says how evenly the pairs of annotators share the tasks, and passes the warnings on', () => {
+  assert.equal(pairsText({ n_pairs: 45, least: 4, most: 5, counts: { 4: 25, 5: 20 } }),
+    'After this share-out, each of the 45 pairs of annotators shares 4 or 5 tasks (25 share 4, 20 share 5): pairwise agreement compares each pair on what they share.');
+  assert.equal(pairsText({ n_pairs: 1, least: 3, most: 3, counts: { 3: 1 } }),
+    'After this share-out, the pair of annotators shares 3 tasks: pairwise agreement compares each pair on what they share.');
+  assert.match(pairsText({ n_pairs: 1, least: 1, most: 1, counts: { 1: 1 } }), /shares 1 task:/);
+  assert.match(pairsText({ n_pairs: 435, least: 0, most: 2, counts: { 0: 100, 1: 300, 2: 35 } }), /shares 0 to 2 tasks \(100 share 0, 300 share 1, 35 share 2\)/);
+  assert.equal(pairsText(null), '');
+  const p = { created: 2, assigned: 4, k: 2, tasks: [{ recording_id: 'a' }, { recording_id: 'b' }], skipped: [],
+    per_annotator: [{ annotator_id: 'A01', new: 2, study_locked: true }, { annotator_id: 'A02', new: 2 }],
+    pairs: { n_pairs: 1, least: 2, most: 2, counts: { 2: 1 } }, warnings: ['A01 is a trainee whose study work is locked…'] };
+  const s = previewSummary(p);
+  assert.match(s.pairs, /^After this share-out, the pair of annotators shares 2 tasks/);
+  assert.deepEqual(s.warnings, ['A01 is a trainee whose study work is locked…']);
+  assert.equal(previewSummary({ ...p, pairs: undefined, warnings: undefined }).pairs, '', 'an older server sends neither');
+  assert.deepEqual(previewSummary({ ...p, warnings: undefined }).warnings, []);
 });

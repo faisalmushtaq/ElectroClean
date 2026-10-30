@@ -527,6 +527,8 @@ class Admin:
                 "last_seen": rec.get("last_seen") or None, "notes": rec.get("notes", ""),
                 "assigned": len(items), "done": sum(1 for i in items if i.status == "done"),
                 "programme": self.store.programme(rec["annotator_id"]),
+                # a trainee whose study work waits for the competency assessment (training_path.py gate)
+                "study_locked": not self.service.training_path.gate(person)["open"],
                 "invitation": invitation_out(invitations.get(rec["annotator_id"]))}
 
     # ------------------------------------------------------------ overview

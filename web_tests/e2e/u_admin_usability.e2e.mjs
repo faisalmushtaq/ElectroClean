@@ -164,6 +164,14 @@ export const tests = [
         await page.waitForSelector(`${sel} [data-made="${id}"] .secret-value`);
       }
       assert.equal(await page.locator(`${sel} .made-one .secret-value`).count(), 2);
+      // An Expert ticked for one person never carries over to the next: after the add, the roles are Annotator again.
+      await form.locator('input').nth(0).fill('N03');
+      await form.locator('input[data-role="expert"]').check();
+      await page.click('[data-log="user-add"]');
+      await page.waitForSelector(`${sel} [data-made="N03"] .secret-value`);
+      const ticked = await form.locator('input[data-role]').evaluateAll((els) => els.filter((e) => e.checked).map((e) => e.dataset.role));
+      assert.deepEqual(ticked, ['annotator'], `ticked after adding N03: ${ticked}`);
+      assert.equal(await form.locator('input').nth(0).inputValue(), '');
       // The invitation link is not offered for an administrator.
       await form.locator('input[data-role="admin"]').check();
       assert.equal(await form.locator('select').first().locator('option[value="invite"]').getAttribute('disabled'), '');

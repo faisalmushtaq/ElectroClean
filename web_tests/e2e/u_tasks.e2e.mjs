@@ -42,6 +42,7 @@ export const tests = [
       const { assert } = t;
       const admin = await login(t, 'ADMIN');
       for (const id of ['Q31', 'Q32']) await api(t, admin, 'POST', '/admin/user_add', { annotator_id: id, display_name: `Task annotator ${id}`, password: PASSWORD });
+      await api(t, admin, 'POST', '/admin/user_add', { annotator_id: 'Q39', display_name: 'Adjudicator only', password: PASSWORD, roles: ['expert'] });
 
       // ---------------------------------------------- the share-out, previewed first
       const page = await t.newPage({ url: `${t.study.base}#admin-tasks` });
@@ -49,7 +50,14 @@ export const tests = [
       await waitForRoute(page, 'admin-tasks');
       await page.waitForSelector('[data-section="tasks"] [data-log="tasks-preview"]');
       const form = page.locator('.admin-section[data-section="tasks"] .admin-card').first();
-      await form.locator('fieldset', { hasText: 'Annotators to share among' }).locator('button', { hasText: 'None' }).click();
+      // All leaves out an account without the annotator role, and the list says why
+      const people = form.locator('fieldset', { hasText: 'Annotators to share among' });
+      await people.locator('button', { hasText: 'All' }).click();
+      assert.equal(await people.locator('input[value="Q39"]').isChecked(), false, 'an expert who does not annotate is left out of All');
+      assert.equal(await people.locator('input[value="Q31"]').isChecked(), true);
+      assert.match(await people.locator('.check-item', { hasText: 'Q39' }).innerText(), /expert only, no annotator role/);
+      assert.match(await people.innerText(), /All leaves out switched-off accounts, accounts without the annotator role and trainees whose study work is locked/);
+      await people.locator('button', { hasText: 'None' }).click();
       for (const id of ['Q31', 'Q32']) await form.locator(`input[data-name="task-people"][value="${id}"]`).check();
       await form.locator('label.check', { hasText: 'Every recording of the study' }).locator('input').uncheck();
       await form.locator('.check-item', { hasText: FILE }).locator('input').check();

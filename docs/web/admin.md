@@ -22,9 +22,11 @@ Expert work button in the header (see "The expert area" below); an administrator
 set up (docs/web/firebase.md and docs/web/server.md), and from then on you can make more in the
 admin area itself.
 
-The admin area has eleven sections, listed on the left (at the top on a narrow screen) in four groups:
-Study (Overview, Progress, Results, Analyses and Records), People (Annotators, Assignments and
-Training), Data (Recordings and Problems) and Settings (Study settings). Help, beside each section's
+The admin area has twelve sections, listed on the left (at the top on a narrow screen) in four groups:
+Study (Overview, Progress, Results, Analyses and Records), People (Annotators, Assignments, Tasks and
+Training), Data (Recordings and Problems) and Settings (Study settings). Under Study, Adjudication
+(marked with an arrow) opens the adjudication queue in the expert area, which administrators may
+use too (see "Adjudication" below). Help, beside each section's
 heading, opens that section of this guide in a new tab, and the analyses' settings link to the
 parts of the [reliability guide](../reliability_guide.md) that explain them; the guides are read on
 GitHub, wherever the application is served from. The first press of Tab offers Skip to the section,
@@ -131,7 +133,9 @@ password, so the invitation link is not offered for one. The link or the passwor
 a Copy button: pass it on in a separate message from the study's address, or in person. Each one made
 stays listed under the form, the newest first, until you leave the page, so adding the next person
 (or a mistake in the next form) never hides it. Assign recordings to the new person straight away
-from the same place.
+from the same place. After each account is added the form starts afresh with Annotator alone ticked,
+so an Expert or Administrator role chosen for one person is never carried over to the next; tick it
+again for each person who needs it.
 
 ### Inviting people
 
@@ -212,8 +216,11 @@ study recording waiting for the trainee's competency assessment is listed as Loc
 assessment is passed. From the same page you can make a private invitation link for the person.
 
 For a trainee, Training path shows each stage as they see it, whether their study recordings are open
-and, under What happened to the stages, every stage they skipped, took up again or finished, with
-when. After an assessment that did not meet the criteria it offers the two ways on. Reopen the
+(in words for the study team, such as "T03's study recordings stay locked until they pass the
+competency assessment at the end of their training path") and, under What happened to the stages,
+every stage they skipped, took up again or finished, with when. Once the assessment is finished,
+Write T03's competency report opens Analyses with the trainee and their set chosen. After an
+assessment that did not meet the criteria it offers the two ways on. Reopen the
 training sends the trainee back to learning with the experts or to practice: they work through the
 stages from there again and retake the assessment, and only what they save from then on counts
 (everything saved before is kept). The reopened stages cannot be skipped until they are done again,
@@ -318,20 +325,32 @@ dual screening of a systematic review: each recording, or each part of one, goes
 differences between their versions are the task's conflicts, which experts adjudicate. Known-answer
 recordings can be mixed in to measure each person's accuracy. The section is under People.
 
-**Sharing out.** Choose the annotators to share among (All ticks the active annotators; switched-off
-accounts and administrators who do not annotate are ticked one by one), the recordings (every
+**Sharing out.** Choose the annotators to share among. All ticks the active accounts with the
+annotator role whose study work is open. It leaves out switched-off accounts, accounts without the
+annotator role (an expert who only adjudicates, or an administrator who does not annotate) and
+trainees whose study work is locked until they pass the competency assessment, and the list marks
+each of them (for example "trainee, study work locked" or "expert only, no annotator role"). Tick any
+of them by hand if you mean to: the preview then warns that a locked trainee's tasks wait in Collecting
+until they pass, and that someone given tasks cannot adjudicate them. Then choose the recordings (every
 recording of the study, or those you tick), how many annotators each recording goes to (Study
 settings, Corrections and adjudication, sets the starting number), and the part of each recording: the
 whole recording, one stretch of each (from and to, in seconds), or consecutive parts of a length you
 choose, which may overlap. A share-out can have a name, such as Pilot round, to find its tasks by
 later. Preview the share-out works out what would be made without making anything: a sentence such
-as "200 tasks, each to 2 people: 400 new assignments. Everyone gets 40.", each person's open tasks
-now, their new ones and their total after it, the tasks themselves, and what is left out and why.
-Make the tasks is ready once the preview is shown, and any change to the choices asks for the
+as "200 tasks, each to 2 people: 400 new assignments. Everyone gets 40.", how evenly the pairs of
+annotators would share tasks (for example "After this share-out, each of the 45 pairs of annotators
+shares 4 or 5 tasks", counting the study's earlier tasks too), any warnings about the people
+chosen, each person's open tasks now, their new ones and their total after it, the tasks
+themselves, and what is left out and why. Make the tasks is ready once the preview is shown, and any change to the choices asks for the
 preview again. The tasks are made once, however often the button is pressed or the answer is late.
 
-Each task goes to the people with the fewest open tasks, so the work is shared evenly, and ties are
-settled by a fixed order, so the same choices give the same share-out. Someone who already has the
+Each task goes to the people with the fewest open tasks, so the work is shared evenly. Among people
+equally free, it goes to those who have shared the fewest tasks with each other so far, counting the
+study's earlier tasks too, so that every pair of annotators shares about as many recordings: pairwise
+agreement compares each pair on the recordings they share, and a pair with few in common gives a
+less certain figure. With 10 annotators and 200 recordings, each person gets 40 and each of the 45
+pairs shares 4 or 5 when every recording goes to two people (13 or 14 when it goes to three). The
+last ties are settled by a fixed order, so the same choices give the same share-out. Someone who already has the
 whole recording comes first for a task of the whole recording, and their assignment joins the task;
 they are left out of a task for a part of it, which would shut them out of the rest. Nobody holds two
 parts of one recording, so a recording cut into many parts needs at least k people for each part. A
@@ -465,10 +484,15 @@ one for each of the experts' annotations there, with its guided note as the expl
 notes with Edit the guided notes under Recordings and references). Add a snippet takes a recording
 of the set, the type, where the artifact starts and ends, how much EEG to show on each side (2 s
 unless you choose up to 10 s), the channels it is on (none for the whole montage) and an
-explanation of up to 1000 characters. A snippet is at most 60 s long. Practice and assessment
-recordings are never offered, because a snippet of one would show trainees its answers, and the same
-holds for a recording that another set uses for practice or assessment; snippets of such a
-recording, including those made from a guided reference, are left out of the gallery. Remove takes
+explanation of up to 1000 characters. A snippet is at most 60 s long. As you type the times, a line
+under them says how long the recording is, how long the snippet lasts and which stretch trainees see
+with the EEG on each side. Look at it on the EEG opens your copy of the recording (read in your
+browser and never uploaded; the demonstration offers its built-in copy) and draws the stretch as
+trainees will see it, with the artifact outlined on the channels you named, drawn again as you change
+the times or the channels. Practice and assessment recordings are never offered, because a snippet of
+one would show trainees its answers, and the same holds for a recording that another set uses for
+practice or assessment; snippets of such a recording, including those made from a guided reference,
+are left out of the gallery. Remove takes
 a snippet out after asking. Experts add and remove snippets with the same operations in the expert
 channel (`snippet_add` and `snippet_remove` in [the API](api.md), "Training stages").
 
@@ -504,7 +528,10 @@ explains it.
 originals, as the annotators saved them (the default, which leaves every correction and adjudicated
 version out); the versions as the experts corrected them, where a recording whose corrections are
 still waiting for adjudication is left out and named in the warnings; or each annotator against the
-adjudicated versions, which are then the reference (the Reference annotator field is hidden).
+adjudicated versions, which are then the reference (the Reference annotator field is hidden). Against
+the adjudicated versions, a recording without a finished adjudication is left out and named in the
+warnings; known-answer recordings are left out too, without a warning, since they are scored against
+their references and never adjudicated.
 **Compare** can take each task's part of a recording on its own rather than whole recordings. With
 another version than the originals, Compare with the original versions (ticked at first) runs the
 analysis of the originals too, with the same choices, and shows above the report a table of the key
@@ -613,7 +640,12 @@ deleted.
 The audit log records every change made to the study, in the admin area and with the
 `electrotag-web` commands: when, by whom, what was done, and the details. It shows the newest
 first; Show older entries goes further back, and the filters show one person's changes or one kind
-of change among the entries shown, problem reports and reviews included. A change of the study
+of change among the entries shown, problem reports and reviews included. Every kind of change has a
+title in words, such as Recordings shared out as tasks, Snippet added, Training reopened, Correction
+saved or Conflict decided, and the kinds are listed in alphabetical order in the filter. A decision on
+a conflict names whose version it kept, for example "kept A01's version (A)" or "kept E02's correction
+of A01's work (B)", from the start of the same adjudication among the entries shown (until that entry
+is shown, the letter alone is named). A change of the study
 settings is written in words with the value before and after, for example "allow reviews
 (annotation) from on to off", and a change that changes nothing (switching off an account that is
 off already) is not recorded.
@@ -698,8 +730,9 @@ work, whether annotators see the corrections of their work with the reasons, and
 decisions on the conflicts in their work (all on by default). It also sets how many annotators each
 task goes to (2 by default), when an adjudicator gives a reason for a decision, the rules by which two
 marks count as the same (matched by overlap, by start and end within tolerances, or both; the overlap
-needed; the tolerances; and the share of channels in common), and how many known-answer items a
-person's accuracy needs before it weighs their marks. These choices apply to the expert area's
+needed; the tolerances; and the share of channels in common), and how many known-answer recordings a
+person must have saved before their accuracy weighs their marks (beside Annotators per task, with the
+other choices about tasks). These choices apply to the expert area's
 corrections, tasks and adjudication as the study offers them. Under **Replays** it chooses whether
 experts and administrators may replay annotators' sessions step by step from the interaction log,
 and whether trainees may watch the sessions of experts who have agreed to it; each expert gives or
@@ -707,8 +740,9 @@ withdraws that agreement in the expert area. Replays use the interaction log for
 checking work, so say so in the study's information for participants and check that the ethics
 approval covers it.
 
-**Training policy** (the `training` block) chooses the stages a trainee may skip (the tour, the
-snippets, learning with the experts and practice; the blind competency assessment never), what real
+**Training policy** (the `training` block) chooses, under Trainees may skip, the stages a trainee may
+skip (the tour, the snippets, learning with the experts and practice; the blind competency assessment
+never); an unticked stage stays on the path and must be done. It also chooses what real
 study work waits for (a passed assessment, by default, a finished one, or nothing; experts and
 administrators never wait), whether the path begins with a tour of the platform, and whether the
 snippets stage needs its recognition check finished. Every skip is noted in the trainee's progress

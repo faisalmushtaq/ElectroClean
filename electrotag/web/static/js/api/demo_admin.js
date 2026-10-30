@@ -477,7 +477,9 @@ export class DemoAdmin {
     const mine = items.filter((i) => i.annotator_id === u.annotator_id);
     return { annotator_id: u.annotator_id, display_name: u.display_name || '', email: u.email || null, role: primaryRole(rolesOf(u)), roles: rolesOf(u), status: u.status,
       created_at: u.created_at, last_seen: u.last_seen || null, notes: u.notes || '', assigned: mine.length,
-      done: mine.filter((i) => i.status === 'done').length, programme: u.programme || null, invitation: this._invitationOut(u.annotator_id) };
+      done: mine.filter((i) => i.status === 'done').length, programme: u.programme || null,
+      study_locked: false, // the sandbox's training set has no assessment, so nobody's study work waits for one
+      invitation: this._invitationOut(u.annotator_id) };
   }
 
   // ------------------------------------------------------------- invitations
