@@ -769,6 +769,23 @@ When the demonstration itself cannot be started, the sign-in page says so and
 suggests reloading, instead of reporting that "the study server at undefined"
 does not answer.
 
+The public sandbox now answers as a study server does. A new test sends the
+same calls, what a visitor does from signing in to the admin area, to the
+study server's own code and to the sandbox's stand-in in the browser, and
+compares every answer; the stand-in was brought into line wherever they
+differed. In the sandbox, the messages after choosing a file, the refusals of
+an annotation that cannot be saved, the coach's feedback ("Press Continue
+(Enter) for the next one", "Ctrl+Z (⌘Z on a Mac) to undo") and the admin
+area's records now use the server's words; a trainee's list holds only the
+recordings of the stages unlocked so far; a practice recording to try again is
+offered as such; the quiz carries the training set's name and is offered only
+to the annotators the set allows; a guided recording stays where the trainee
+left it when its draft is discarded; and the practice review flags a wrong
+type on the trainee's own annotation. Reference sets of one's own and their
+quizzes need a study server or Firebase, which the sandbox now says, since
+only its own training set can run as a programme there. The sandbox keeps its
+work under a new name in the browser, so it starts afresh once.
+
 ## 1.1.0
 
 The first public release, with stand-alone applications for Windows (64-bit),

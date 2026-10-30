@@ -315,9 +315,12 @@ take no keyboard focus from a mouse click. `web_tests/e2e/u_interaction.e2e.mjs`
 response touches the service layer (`electrotag/web/service.py` and the modules it calls, such as
 `admin.py`, `quiz.py`, `coach.py` and `visits.py`), the HTTP route in `electrotag/web/app.py`, the
 Firebase function in `electrotag/web/firebase/functions/main.py`, the browser's `js/api/http.js`,
-`js/api/firebase.js` and the in-browser demonstration (`js/api/demo.js` and `demo_admin.js`), and
-the contract itself. The end-to-end tests against the real server and the emulators are what catch
-a mismatch.
+`js/api/firebase.js` and the in-browser demonstration (`js/api/demo.js`, `demo_admin.js` and
+`demo_feedback.js`), and the contract itself. The end-to-end tests against the real server and the
+emulators are what catch a mismatch, and `web_tests/unit/api_contract_parity.test.mjs` sends the
+same calls to the real service and to the demonstration's stand-in and compares the answers, so a
+change that the stand-in does not follow fails there first (docs/web/architecture.md, "The
+sandbox's stand-in for the server").
 
 **Registration happens in two places.** The browser's `js/eeg/register.js` must build the same
 manifest as Python's `electrotag.web.manifest.build_manifest` for the same files and settings, and

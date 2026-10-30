@@ -65,7 +65,7 @@ export const tests = [
       await signIn(page, 'A01');
       await waitForRoute(page, 'home');
       const card = page.locator('.quiz-card');
-      assert.match(await card.textContent(), /Demonstration quiz/);
+      assert.match(await card.textContent(), /Demonstration training set/);
       await page.click('[data-log="quiz-example"]');
       await waitForRoute(page, 'quiz');
       await page.waitForSelector('[data-log="quiz-use-examples"]');
@@ -239,7 +239,7 @@ export const tests = [
       const page = await t.newPage();
       await signIn(page, 'T01');
       await waitForRoute(page, 'training');
-      t.assert.match(await page.textContent('main.training .quiz-card'), /Demonstration quiz/);
+      t.assert.match(await page.textContent('main.training .quiz-card'), /Demonstration training set/);
       await page.click('main.training [data-log="quiz-example"]');
       await waitForRoute(page, 'quiz');
       await page.waitForSelector('[data-log="quiz-use-examples"]');

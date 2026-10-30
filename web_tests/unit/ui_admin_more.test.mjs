@@ -136,7 +136,7 @@ test('demonstration: an invitation is a private link used once, kept only as a f
   assert.ok(!kept.includes(r.invite_token));
   assert.ok(kept.includes(sha256Hex(new TextEncoder().encode(r.invite_token))));
   const audit = await b.admin('audit', { limit: 10 });
-  assert.match(audit.entries[0].summary, /Added A11 \(Alex\) with an invitation link/);
+  assert.match(audit.entries[0].summary, /Added A11 \(Alex\) as an annotator with an invitation link/);
   assert.ok(!JSON.stringify(audit).includes(r.invite_token));
 
   // The person's own browser: check, choose a password, signed in.

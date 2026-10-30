@@ -1,6 +1,7 @@
-// The demonstration's admin area (js/api/demo_admin.js): what it runs in the browser on the
-// demonstration's own state (accounts, assignments, recordings added as manifests, settings,
-// reference sets, the audit log and visits), and the operations it leaves to a study server.
+// The sandbox's admin area (js/api/demo_admin.js): what it runs in the browser on the sandbox's
+// own state (accounts, assignments, recordings added as manifests, settings, the training set, the
+// audit log and visits), and the operations it leaves to a study server. What the server answers
+// to the same calls is checked by api_contract_parity.test.mjs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -50,8 +51,9 @@ test('only administrators can use the admin area; ADMIN is a built-in account', 
   const b = await demo('ADMIN');
   assert.equal((await b.me()).role, 'admin');
   const o = await b.admin('overview');
-  assert.deepEqual(o.counts, { recordings: 3, annotators: 2, admins: 1, assignments: 6, done: 0, in_progress: 0, todo: 6, unusable: 0, problems_open: 0, reviewed: 0 });
-  assert.equal(o.recent[0].op, 'init');
+  // T01's practice recording is not counted while its stage is locked, as on the server
+  assert.deepEqual(o.counts, { recordings: 3, annotators: 2, admins: 1, assignments: 5, done: 0, in_progress: 0, todo: 5, unusable: 0, problems_open: 0, reviewed: 0 });
+  assert.deepEqual(o.recent, []);
   await assert.rejects(() => b.admin('no_such_operation'), (e) => e.status === 404);
 });
 
@@ -64,8 +66,8 @@ test('an account added in the admin area signs in with its temporary password an
   await assert.rejects(() => b.admin('user_add', { annotator_id: 'A03' }), (e) => e.status === 409 && e.code === 'user_exists');
   await assert.rejects(() => b.admin('user_add', { annotator_id: 'A 04' }), (e) => e.status === 400);
   const rids = (await b.admin('recordings_list', { scope: 'study' })).recordings.map((x) => x.recording_id);
-  assert.deepEqual(await b.admin('assign', { annotator_ids: ['A03'], recording_ids: rids.slice(0, 2), mode: 'standard', context_id: '' }), { added: 2, already: 0 });
-  assert.deepEqual(await b.admin('assign', { annotator_ids: ['A03'], all: true, mode: 'standard', context_id: '' }), { added: 1, already: 2 });
+  assert.deepEqual(await b.admin('assign', { annotator_ids: ['A03'], recording_ids: rids.slice(0, 2), mode: 'standard', context_id: '' }), { added: 2, already: 0, retired: 0 });
+  assert.deepEqual(await b.admin('assign', { annotator_ids: ['A03'], all: true, mode: 'standard', context_id: '' }), { added: 1, already: 2, retired: 0 });
   await assert.rejects(() => b.admin('assign', { annotator_ids: ['A03'], all: true, mode: 'practice', context_id: 'example' }), (e) => e.code === 'demo_limit');
 
   // The new account signs in with its temporary password and sees its recordings.
@@ -108,12 +110,13 @@ test('assignments: listing, unassigning, and finished work stays', async () => {
   assert.equal(a01.length, 3);
   assert.ok(a01.every((i) => i.mode === 'standard' && i.status === 'todo' && i.attempts === 0));
   const t01 = (await b.admin('assignments_list', { annotator_id: 'T01' })).items;
-  assert.deepEqual(t01.map((i) => [i.mode, i.context_id]), [['guided', 'example'], ['guided', 'example'], ['practice', 'example']]);
+  // the recordings of the programme's unlocked stages
+  assert.deepEqual(t01.map((i) => [i.mode, i.context_id]), [['guided', 'example'], ['guided', 'example']]);
   await assert.rejects(() => b.admin('unassign', { annotator_id: 'T01', recording_id: t01[0].recording_id, mode: 'guided', context_id: 'example' }),
-    (e) => e.code === 'programme');
+    (e) => e.status === 404 && e.code === 'not_assigned'); // it comes with the programme
   // A01 finishes the first recording; it cannot be taken away, the others can.
   await as(b, 'A01');
-  await b.submit({ recording_id: a01[0].recording_id, mode: 'standard', context_id: '', annotations: [], session: {}, sha256: '' });
+  await b.submit({ recording_id: a01[0].recording_id, mode: 'standard', context_id: '', annotations: [], session: {}, sha256: 'f'.repeat(64) });
   await as(b, 'ADMIN');
   await assert.rejects(() => b.admin('unassign', { annotator_id: 'A01', recording_id: a01[0].recording_id, mode: 'standard', context_id: '' }),
     (e) => e.status === 409 && e.code === 'done');
@@ -152,10 +155,10 @@ test('recordings added as manifests are registered, matched by fingerprint and s
   assert.deepEqual(m.manifest.display.warnings, ['One warning', 'A note']);
   const changed = await a.match({ file_name: 'sub-new_task-rest_eeg.edf', size_bytes: 48257, sha256: 'd'.repeat(64), sfreq: 100, n_samples: 6000, ch_names: ['Fp1', 'Fp2', 'Cz', 'HEOG'] });
   assert.equal(changed.status, 'matched_metadata');
-  await assert.rejects(() => a.submit({ recording_id: m.recording_id, mode: 'standard', context_id: '', annotations: [ann('a', 'Eye-blink-artifact', 5990, 20)] }),
+  await assert.rejects(() => a.submit({ recording_id: m.recording_id, mode: 'standard', context_id: '', annotations: [ann('a', 'Eye-blink-artifact', 5990, 20)], sha256: SHA }),
     (e) => e.status === 422);
   const saved = await a.submit({ recording_id: m.recording_id, mode: 'standard', context_id: '', annotations: [ann('a', 'Eye-blink-artifact', 300, 40, ['Fp1'])], session: {}, sha256: SHA });
-  assert.deepEqual(saved.files, ['sub-new_task-rest_annotator-A02_annotations.json', 'sub-new_task-rest_annotator-A02_events.tsv', 'sub-new_task-rest_annotator-A02_session.json']);
+  assert.deepEqual(saved.files, ['annotations.json', 'events.json', 'events.tsv', 'session.json', 'time_viewed.txt'].map((f) => `sub-new_task-rest_eeg_annotator-A02_${f}`));
   const doc = a.resultsDocument().annotation_documents.find((d) => d.recording.recording_id === m.recording_id);
   assert.equal(doc.recording.sfreq, 100);
   assert.equal(doc.annotations[0].onset, 3);
@@ -163,7 +166,7 @@ test('recordings added as manifests are registered, matched by fingerprint and s
   // Retired: no new assignments; removed: only without results.
   const admin = await as(b, 'ADMIN');
   await admin.admin('recording_update', { scope: 'study', recording_id: rec.recording_id, retired: true, notes: 'Copied from the lab drive' });
-  assert.deepEqual(await admin.admin('assign', { annotator_ids: ['A01'], all: true, mode: 'standard', context_id: '' }), { added: 0, already: 3 });
+  assert.deepEqual(await admin.admin('assign', { annotator_ids: ['A01'], all: true, mode: 'standard', context_id: '' }), { added: 0, already: 3, retired: 1 });
   await assert.rejects(() => admin.admin('recording_remove', { scope: 'study', recording_id: rec.recording_id }), (e) => e.code === 'has_results');
   // The same file as sub-new under another ID: skipped as a copy unless the administrator confirms it.
   const copy = await admin.admin('recordings_register', { scope: 'study', manifests: [manifest('sub-tmp/eeg/tmp.edf')] });
@@ -193,7 +196,7 @@ test('study settings: checked, changed block by block, and used by the demonstra
   const before = await b.admin('settings_get');
   // The demonstration's own notice says plainly that typed text is never recorded.
   assert.match(before.logging_notice, /never records what you type/);
-  assert.deepEqual(Object.keys(before.settings).sort(), ['annotation', 'channels', 'display', 'filters', 'gamification', 'loading', 'logging', 'selection']);
+  assert.deepEqual(Object.keys(before.settings).sort(), ['annotation', 'channels', 'discovery', 'display', 'filters', 'gamification', 'loading', 'logging', 'selection']);
   await assert.rejects(() => b.admin('settings_update', { settings: { filters: { notch_hz: 55 } } }), (e) => e.status === 400 && e.code === 'invalid_settings');
   await assert.rejects(() => b.admin('settings_update', { settings: { output: { directory: '/' } } }), (e) => e.code === 'invalid_settings');
   const quick = ['EMG-artifact', 'Eye-blink-artifact', 'Chewing-artifact'];
@@ -210,7 +213,7 @@ test('study settings: checked, changed block by block, and used by the demonstra
   // The shortest annotation applies when work is saved.
   await as(b, 'A01');
   const rid = (await b.assignments()).items[0].recording_id;
-  await assert.rejects(() => b.submit({ recording_id: rid, mode: 'standard', context_id: '', annotations: [ann('s', 'EMG-artifact', 10, 3)] }), (e) => /shortest annotation/.test(e.message));
+  await assert.rejects(() => b.submit({ recording_id: rid, mode: 'standard', context_id: '', annotations: [ann('s', 'EMG-artifact', 10, 3)], sha256: SHA }), (e) => /Annotation must last at least 5 sample\(s\); got 3$/.test(e.message));
   await as(b, 'ADMIN');
   // Interactions not recorded: no notice to show.
   await b.admin('settings_update', { settings: { logging: { interactions: false } } });
@@ -220,63 +223,25 @@ test('study settings: checked, changed block by block, and used by the demonstra
   assert.match(audit[1].summary, /name/);
 });
 
-test('reference sets: created, given references from saved annotations or a file, and their settings', async () => {
+test("the training set: its settings and criteria change; reference sets of one's own need a study server", async () => {
   const b = await demo();
-  await assert.rejects(() => b.admin('set_create', { set_id: 'example' }), (e) => e.code === 'set_exists');
-  const created = await b.admin('set_create', { set_id: 'pilot', name: 'Pilot set', description: 'For the pilot' });
-  assert.deepEqual([created.set.set_id, created.set.recordings.length, created.set.practice_review, created.set.quiz_items], ['pilot', 0, true, 0]);
-  // A01 annotates a recording; their saved work becomes the practice reference.
-  await as(b, 'A01');
-  const [rid, rid2] = (await b.assignments()).items.map((i) => i.recording_id);
-  const mine = [ann('e1', 'Eye-blink-artifact', 750, 100, ['Fp1', 'Fp2']), ann('e2', 'EMG-artifact', 2300, 400)];
-  await b.submit({ recording_id: rid, mode: 'standard', context_id: '', annotations: mine, session: {}, sha256: '' });
-  await as(b, 'ADMIN');
-  await assert.rejects(() => b.admin('set_add_reference', { set_id: 'pilot', recording_id: rid, recording_scope: 'study', use: 'practice',
-    source: { kind: 'annotator', annotator_id: 'T01', mode: 'standard', context_id: '' } }), (e) => e.status === 404);
-  await assert.rejects(() => b.admin('set_add_reference', { set_id: 'pilot', recording_id: rid, recording_scope: 'study', use: 'later',
-    source: { kind: 'annotator', annotator_id: 'A01' } }), (e) => e.status === 400);
-  const added = await b.admin('set_add_reference', { set_id: 'pilot', recording_id: rid, recording_scope: 'study', use: 'practice',
-    source: { kind: 'annotator', annotator_id: 'A01', mode: 'standard', context_id: '' }, provenance: { notes: 'A01 is our expert' } });
-  assert.equal(added.disagreements, null);
-  const entry = added.set.recordings[0];
-  assert.deepEqual([entry.recording_id, entry.use, entry.n_reference_events, entry.registered, entry.provenance.method, entry.provenance.experts, entry.provenance.notes],
-    [rid, 'practice', 2, true, 'single_expert', ['A01'], 'A01 is our expert']);
-  // The recording is copied into the set's scope.
-  assert.ok((await b.admin('recordings_list', { scope: 'set:pilot' })).recordings.some((r) => r.recording_id === rid));
-  // A file from the desktop application; it must fit the recording.
-  const spec = exampleRecording(rid2);
-  const docOk = { schema: 'electrotag.annotations', recording: { recording_id: rid2, sfreq: spec.sfreq, n_samples: spec.nSamples },
-    annotator: { annotator_id: 'E1' }, annotations: [{ label: 'Movement-artifact', onset: 24, duration: 2, channels: [] }] };
-  await assert.rejects(() => b.admin('set_add_reference', { set_id: 'pilot', recording_id: rid2, recording_scope: 'study', use: 'assessment',
-    source: { kind: 'document', document: { ...docOk, recording: { n_samples: 5 } } } }), (e) => e.status === 422);
-  const withDoc = await b.admin('set_add_reference', { set_id: 'pilot', recording_id: rid2, recording_scope: 'study', use: 'guided', source: { kind: 'document', document: docOk } });
-  const guided = withDoc.set.recordings.find((r) => r.recording_id === rid2);
-  assert.deepEqual([guided.use, guided.guidance, guided.effective_guidance, guided.n_reference_events, guided.provenance.experts], ['guided', 'auto', 'show', 1, ['E1']]);
-  // Consensus and adjudication need the server.
-  await assert.rejects(() => b.admin('set_add_reference', { set_id: 'pilot', recording_id: rid, use: 'practice', source: { kind: 'consensus', annotator_ids: ['A01', 'T01'] } }),
-    (e) => e.status === 501 && e.code === 'needs_server' && /electrotag-web demo/.test(e.message));
-  // Use and guidance; a warning when a training recording becomes an assessment one.
-  b.state.submissions.push({ key: 'x', annotator_id: 'T01', recording_id: rid, mode: 'practice', context_id: 'pilot', attempt: 1, saved_at: 'now', annotations: [], session: {} });
-  const changed = await b.admin('set_recording_update', { set_id: 'pilot', recording_id: rid, use: 'assessment' });
-  assert.match(changed.warnings[0], /T01 already annotated this recording/);
-  const g2 = await b.admin('set_recording_update', { set_id: 'pilot', recording_id: rid2, guidance: 'find_unnamed' });
-  assert.equal(g2.set.recordings.find((r) => r.recording_id === rid2).effective_guidance, 'find_unnamed');
-  // Settings and criteria.
-  const upd = await b.admin('set_update', { set_id: 'pilot', practice_review: false, allowed_annotators: ['a01', 'T01'],
+  const upd = await b.admin('set_update', { set_id: 'example', practice_review: false, allowed_annotators: ['a01', 'T01'],
     practice_pass: { event_f1: 0.7, label_accuracy: 0.6 }, guided_tolerance: { seconds: 0.3, fraction: 0.25, channel_jaccard: 0.5 },
     criteria: { criteria: [{ metric: 'event_f1', threshold: 0.75, scope: 'overall' }], min_reference_events: 2, categories: null } });
   assert.deepEqual([upd.set.practice_review, upd.set.allowed_annotators, upd.set.practice_pass.event_f1, upd.set.guided_tolerance.seconds],
     [false, ['A01', 'T01'], 0.7, 0.3]);
   assert.deepEqual(upd.set.criteria, { criteria: [{ metric: 'event_f1', threshold: 0.75, scope: 'overall' }], min_reference_events: 2, categories: null });
-  await assert.rejects(() => b.admin('set_update', { set_id: 'pilot', criteria: { criteria: [{ metric: 'speed', threshold: 1 }] } }), (e) => e.status === 400);
-  await assert.rejects(() => b.admin('set_update', { set_id: 'pilot', practice_pass: { event_f1: 2, label_accuracy: 0.5 } }), (e) => e.status === 400);
-  // Removing; a set with saved work stays.
-  await b.admin('set_remove_recording', { set_id: 'pilot', recording_id: rid2 });
-  await assert.rejects(() => b.admin('set_delete', { set_id: 'pilot' }), (e) => e.code === 'in_use');
-  await assert.rejects(() => b.admin('set_delete', { set_id: 'example' }), (e) => e.code === 'in_use' && /T01/.test(e.message));
-  await b.admin('set_create', { set_id: 'empty' });
-  await b.admin('set_delete', { set_id: 'empty' });
-  assert.deepEqual((await b.admin('sets_list')).sets.map((s) => s.set_id), ['example', 'pilot']);
+  await assert.rejects(() => b.admin('set_update', { set_id: 'example', criteria: { criteria: [{ metric: 'speed', threshold: 1 }] } }), (e) => e.status === 400);
+  await assert.rejects(() => b.admin('set_update', { set_id: 'example', practice_pass: { event_f1: 2, label_accuracy: 0.5 } }), (e) => e.status === 400);
+  // its guidance can change; how its recordings are used stays (two to learn with, one to practise on)
+  const rid = TRAINING_SET.guided[1].rid;
+  const g2 = await b.admin('set_recording_update', { set_id: 'example', recording_id: rid, guidance: 'find_unnamed' });
+  assert.equal(g2.set.recordings.find((r) => r.recording_id === rid).effective_guidance, 'find_unnamed');
+  await assert.rejects(() => b.admin('set_recording_update', { set_id: 'example', recording_id: rid, use: 'assessment' }), (e) => e.status === 422 && e.code === 'demo_limit');
+  for (const op of ['set_create', 'set_delete', 'set_add_reference', 'set_remove_recording', 'quiz_item_add', 'quiz_item_remove']) {
+    await assert.rejects(() => b.admin(op, { set_id: 'pilot' }), (e) => e.status === 501 && e.code === 'needs_server' && /electrotag-web demo/.test(e.message), op);
+  }
+  assert.deepEqual((await b.admin('sets_list')).sets.map((s) => s.set_id), ['example']);
 });
 
 test('the demonstration training set: its guided notes, pass mark and guidance reach the trainee', async () => {
@@ -302,10 +267,9 @@ test('the demonstration training set: its guided notes, pass mark and guidance r
   await b.admin('programme_set', { annotator_id: 'T02', set_id: 'example' });
   await as(b, 'T02', 'trainee two');
   assert.equal((await b.me()).programme.set_id, 'example');
-  assert.equal((await b.assignments()).items.length, 3);
+  assert.equal((await b.assignments()).items.length, 2);
   await as(b, 'ADMIN');
-  await b.admin('set_create', { set_id: 'other' });
-  await assert.rejects(() => b.admin('programme_set', { annotator_id: 'T02', set_id: 'other' }), (e) => e.code === 'demo_limit');
+  await assert.rejects(() => b.admin('programme_set', { annotator_id: 'T02', set_id: 'other' }), (e) => e.status === 404);
   await b.admin('programme_set', { annotator_id: 'T02', set_id: null });
   await as(b, 'T02', 'trainee two');
   assert.equal((await b.me()).programme, null);
@@ -313,41 +277,32 @@ test('the demonstration training set: its guided notes, pass mark and guidance r
   const progress = await b.admin('progress');
   const t01 = progress.annotators.find((x) => x.annotator_id === 'T01');
   assert.equal(t01.programme.set_id, 'example');
-  assert.equal(t01.items.length, 3);
+  assert.equal(t01.items.length, 2); // the practice recording comes with its stage
   assert.equal(progress.annotators.find((x) => x.annotator_id === 'A01').programme, null);
 });
 
-test('quiz items are kept with the set', async () => {
+test('the training set\'s quiz is the sandbox\'s own', async () => {
   const b = await demo();
-  const rid = TRAINING_SET.practice[0];
-  await assert.rejects(() => b.admin('quiz_item_add', { set_id: 'example', recording_id: rid, start_s: 5, end_s: 4, correct_label: 'EMG-artifact' }), (e) => e.status === 400);
-  await assert.rejects(() => b.admin('quiz_item_add', { set_id: 'example', recording_id: rid, start_s: 1, end_s: 2, correct_label: 'Nothing' }), (e) => e.status === 400);
-  const one = await b.admin('quiz_item_add', { set_id: 'example', recording_id: rid, start_s: 11, end_s: 13, correct_label: 'EMG-artifact',
-    accepted_labels: ['Biological-artifact', 'EMG-artifact'], explanation: 'Fast, spiky activity over the temporal channels.' });
-  assert.deepEqual(one.item, { item_id: 'q01', recording_id: rid, start_s: 11, end_s: 13, correct_label: 'EMG-artifact',
-    accepted_labels: ['Biological-artifact'], explanation: 'Fast, spiky activity over the temporal channels.', context_s: 2 });
-  const two = await b.admin('quiz_item_add', { set_id: 'example', recording_id: rid, start_s: 4, end_s: 4.6, correct_label: 'Eye-blink-artifact', item_id: 'blink', context_s: 3 });
-  assert.equal(two.item.item_id, 'blink');
-  assert.deepEqual((await b.admin('quiz_items', { set_id: 'example' })).items.map((q) => q.item_id), ['q01', 'blink']);
-  assert.equal((await b.admin('sets_list')).sets[0].quiz_items, 2);
-  await b.admin('quiz_item_remove', { set_id: 'example', item_id: 'q01' });
-  await assert.rejects(() => b.admin('quiz_item_remove', { set_id: 'example', item_id: 'q01' }), (e) => e.status === 404);
-  assert.deepEqual((await b.admin('quiz_items', { set_id: 'example' })).items.map((q) => q.item_id), ['blink']);
+  const items = (await b.admin('quiz_items', { set_id: 'example' })).items;
+  assert.deepEqual(items.map((q) => q.item_id), ['q01', 'q02', 'q03', 'q04', 'q05', 'q06', 'q07']);
+  assert.deepEqual(Object.keys(items[0]).sort(), ['accepted_labels', 'context_s', 'correct_label', 'end_s', 'explanation', 'item_id', 'recording_id', 'start_s']);
+  assert.equal((await b.admin('sets_list')).sets[0].quiz_items, 7);
 });
 
 test('the audit log pages newest first; visits are listed', async () => {
   const b = await demo();
-  for (let i = 0; i < 7; i++) await b.admin('set_create', { set_id: `s${i}` });
+  for (let i = 0; i < 7; i++) await b.admin('user_add', { annotator_id: `S0${i}` });
   const first = await b.admin('audit', { limit: 5 });
-  assert.deepEqual(first.entries.map((e) => e.details.set_id), ['s6', 's5', 's4', 's3', 's2']);
-  assert.ok(first.entries.every((e) => e.by === 'ADMIN' && e.op === 'set_create' && e.at));
+  assert.deepEqual(first.entries.map((e) => e.details.annotator_id), ['S06', 'S05', 'S04', 'S03', 'S02']);
+  assert.ok(first.entries.every((e) => e.by === 'ADMIN' && e.op === 'user_add' && e.at));
   const second = await b.admin('audit', { limit: 5, before: first.next });
-  assert.deepEqual(second.entries.map((e) => e.op), ['set_create', 'set_create', 'init']);
+  assert.deepEqual(second.entries.map((e) => e.details.annotator_id), ['S01', 'S00']);
   assert.equal(second.next, null);
   const v = await b.openVisit({ client: {}, programme: false });
   await b.sendEvents(v.visit_id, [{ t: 1, type: 'key' }, { t: 2, type: 'key' }]);
   let visits = (await b.admin('visits', {})).visits;
-  assert.deepEqual([visits[0].visit_id, visits[0].annotator_id, visits[0].n_events, visits[0].closed_at], [v.visit_id, 'ADMIN', 2, null]);
+  // the visit_started event the server writes itself, and the two sent
+  assert.deepEqual([visits[0].visit_id, visits[0].annotator_id, visits[0].n_events, visits[0].closed_at], [v.visit_id, 'ADMIN', 3, null]);
   await b.closeVisit(v.visit_id, 'test');
   visits = (await b.admin('visits', { annotator_id: 'ADMIN' })).visits;
   assert.ok(visits[0].closed_at);

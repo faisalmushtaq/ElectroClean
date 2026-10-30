@@ -100,9 +100,9 @@ electrotag/web/static/          the browser application (plain ES modules, no bu
                                   the game elements in home_games.js), opening a recording
     js/games/                     the milestones' rules (milestones.js) and the pseudonyms' words
     js/api/                       the Backend interface: http.js (a study server), firebase.js (a
-                                  study on Firebase), demo.js and demo_admin.js (the demonstration,
-                                  in the browser), choose.js (which of them), demo_catalogue.js,
-                                  notice.js
+                                  study on Firebase), demo.js, demo_admin.js and demo_feedback.js
+                                  (the sandbox's stand-in for the server, in the browser), choose.js
+                                  (which of them), demo_catalogue.js, notice.js
     js/eeg/                       the EEG library, which never imports the application (its own
                                   README.md): reading recordings (recording.js, worker.js,
                                   engine.js, files.js, edf.js, brainvision.js, channels.js,
@@ -517,10 +517,53 @@ Two methods carry the administrator's and the quiz's operations, so that every
 backend implements them the same way: `admin(op, body)` (`POST /admin/{op}`,
 or `et_admin` with `{op, ...body}` on Firebase) and `quiz(setId, body)`
 (`POST /quiz/{set_id}`, or `et_quiz`). The demonstration implements the admin
-operations it can run in the browser (accounts, assignments, recordings,
-settings, reference sets from saved annotations or files, the audit log) and
-answers the analyses (agreement, activity, competency, consensus) with an
-error that says they need a study server or Firebase.
+operations a visitor can try in the browser (accounts with their passwords and
+invitation links, assignments, recordings added from the computer, settings,
+the training set's pass mark, matching, guidance and notes, problem reports,
+reviews, progress and the records) and answers the rest (reference sets of
+one's own and their quizzes, the agreement, activity and competency analyses,
+consensus references and the results zip) with an error that says they need a
+study server or Firebase.
+
+### The sandbox's stand-in for the server
+
+The public sandbox on GitHub Pages has no server, so `js/api/demo.js`,
+`demo_admin.js` and `demo_feedback.js` stand in for the study server's service
+layer (`electrotag/web/service.py`, `admin.py`, `feedback.py`, `coach.py`,
+`quiz.py` and `games.py`). They are a second implementation of the contract,
+and a second implementation can drift from the first, so they are kept small
+and close to it. Each part follows its Python counterpart in structure as well
+as in its answers: the recordings a person may open now are worked out as
+`work_items` works them out, the training path as `programme_state` and
+`next_step` in `electrotag/training/programme.py`, and the coach as
+`electrotag/web/coach.py`. Where the browser already has a port of the Python
+rules, the stand-in calls it rather than repeating it: the guided rules of
+`js/training/rules.js`, the practice score and its review of
+`js/training/scoring.js`, and the label catalogue and default settings of
+`demo_catalogue.js`, which `web_tests/make_demo_catalogue.py` writes from the
+Python configuration. What a visitor cannot use in a sandbox, and what needs
+Python, is left out, and the stand-in answers it with an error that says a
+study server or Firebase is needed.
+
+The stand-in has limits that a visitor may notice. Its three recordings are
+simulated, its accounts and their work live in this browser only, its quiz
+puts the segments in an order of its own, its practice review gives the score,
+the share found and the share of the right type but none of the agreement
+figures that the server's analysis adds, and only its own training set runs as
+a programme. `web_tests/unit/api_contract_parity.test.mjs` keeps it honest. The
+test writes the sandbox's recordings as EDF files, and `web_tests/contract_parity.py`
+makes a fresh study from them as `electrotag-web demo` makes its study, with the
+sandbox's accounts, assignments, training set and quiz, and serves the FastAPI
+application in-process. The test then sends one scripted series of calls, what
+a visitor does in the sandbox from signing in to the admin area's main reads
+and writes, through `js/api/http.js` to that server and through `js/api/demo.js`
+to the stand-in, and compares every answer: the shapes everywhere, and the
+values, error codes and texts shown to the person. The few differences it
+allows are listed in the test with the reason for each (times, IDs and
+pseudonyms each side makes for itself, the sandbox's own notices, and the
+limits above). A change to an answer of the service layer therefore fails this
+test until the stand-in gives the same answer, or the difference is added to
+the list with its reason.
 
 The short-segment quiz (`js/training/quiz.js`, the route `#quiz`) uses
 `quiz(setId, body)` only: `get` once, then `answer` for each segment and

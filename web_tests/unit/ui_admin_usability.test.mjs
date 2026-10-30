@@ -178,7 +178,7 @@ test('demonstration: the pace of a study in its first days is that of the days s
   await b.admin('assign', { annotator_ids: ['A02'], all: true }); // work still to do
   await as(b, 'A01');
   const items = (await b.assignments()).items;
-  for (const it of items.slice(0, 3)) await b.submit({ recording_id: it.recording_id, mode: 'standard', context_id: '', annotations: [], session: {}, sha256: '' });
+  for (const it of items.slice(0, 3)) await b.submit({ recording_id: it.recording_id, mode: 'standard', context_id: '', annotations: [], session: {}, sha256: 'f'.repeat(64) });
   await as(b, 'ADMIN');
   const t = (await b.admin('stats', {})).totals;
   assert.equal(t.pace_days, 1);

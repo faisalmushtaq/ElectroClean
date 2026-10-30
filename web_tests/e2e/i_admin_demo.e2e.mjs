@@ -159,7 +159,7 @@ export const tests = [
       await goSection(page, 'Records', 'admin-records');
       await page.waitForSelector('.admin-section[data-section="records"] td');
       const log = await sectionText(page);
-      for (const re of [/Added A05 \(Annotator five\)/, /Assigned 3 recordings to A05/, /Changed quick labels \(annotation\) from .* to Nystagmus-artifact, Horizontal-eye-movement-artifact.*; the study's name/, /Study created/]) assert.match(log, re);
+      for (const re of [/Added A05 \(Annotator five\)/, /Assigned 3 recordings to A05/, /Changed quick labels \(annotation\) from .* to Nystagmus-artifact, Horizontal-eye-movement-artifact.*; the study's name/]) assert.match(log, re);
       await page.selectOption('select[aria-label="Kind of change"]', 'assign');
       assert.match(await page.textContent('.admin-section[data-section="records"] .admin-card'), /1 of \d+ entries shown/);
       await t.screenshot(page, 'admin_records');
@@ -298,14 +298,9 @@ export const tests = [
         assert.ok(await noSideways(page), `${title} scrolls sideways`);
         await t.screenshot(page, `admin_narrow_${route}`);
       }
-      // Reference sets: a new set, its tabs and the criteria editor.
+      // The training set: its tabs and the criteria editor (a set of one's own needs a study server).
       await goSection(page, 'Training', 'admin-training');
-      await page.locator('summary', { hasText: 'New reference set' }).click();
-      const form = page.locator('details.admin-details[open] form');
-      await form.locator('input').first().fill('pilot');
-      await form.locator('input').nth(1).fill('Pilot set');
-      await page.click('[data-log="set-create"]');
-      await page.waitForFunction(() => /Pilot set/.test(document.querySelector('h2.set-title')?.textContent || ''));
+      await page.waitForFunction(() => /Demonstration training set/.test(document.querySelector('h2.set-title')?.textContent || ''));
       await page.click('.admin-tabs [data-tab="criteria"]');
       await page.locator('.criterion', { hasText: 'Event F1' }).locator('input[type="checkbox"]').check();
       await page.locator('.criterion', { hasText: 'Event F1' }).locator('input[type="number"]').fill('0.8');

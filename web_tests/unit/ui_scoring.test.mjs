@@ -103,7 +103,7 @@ test('the same scores and flags as the desktop application (Python)', { skip: !P
     const flags = (kind) => fb.flags.filter((f) => f.kind === kind);
     const mine = {
       event_f1: r3(fb.metrics.event_f1),
-      label_accuracy: fb.metrics.found ? r3(fb.metrics.label_accuracy) : null,
+      label_accuracy: fb.counts.found ? r3(fb.metrics.label_accuracy) : null,
       passed: fb.passed,
       missed: flags('MISSED').map((f) => [f.label, Math.round((f.onset_sample / sf) * 1000) / 1000]).sort(),
       extra: flags('EXTRA').map((f) => [f.label, Math.round((f.onset_sample / sf) * 1000) / 1000]).sort(),

@@ -51,7 +51,16 @@ views load at their first use, with Try again when one cannot be fetched.
 `ui_type_colours.test.mjs` keeps the colours of the nine numbered types apart under simulated
 red-green colour blindness. `o_landmarks.e2e.mjs` keeps
 the structure that screen readers navigate by: one main landmark on every page, all text inside a
-landmark or a dialog, and a heading for every table column. The two Firebase scripts run the functions
+landmark or a dialog, and a heading for every table column. `api_contract_parity.test.mjs` sends
+one scripted series of calls, what a visitor does in the public sandbox, to the real service layer
+(served in-process by `web_tests/contract_parity.py`, with a fresh study made from the sandbox's own
+recordings, accounts, training set and quiz) and to the sandbox's stand-in for the server
+(`js/api/demo.js`), and compares every answer, shapes and values, error codes and the texts a person
+reads, apart from a short list of differences that it gives with their reasons. It needs a Python with
+FastAPI and MNE-Python, as CI's **Browser version tests** has, and is skipped without one. When it
+fails, it names each call and field that differs; change the stand-in to answer as the server does,
+or, where the server is wrong, tell the project lead rather than adding the difference to the list.
+The two Firebase scripts run the functions
 and the application on Google's Firebase Emulator Suite, with a project ID that
 starts with `demo-` and so never reaches a real Firebase project.
 

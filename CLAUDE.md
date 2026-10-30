@@ -82,12 +82,14 @@ service layer (`electrotag/web/service.py` and the modules it calls), the HTTP r
 (`electrotag/web/app.py`), the Firebase function (`electrotag/web/firebase/functions/main.py`),
 the browser's `js/api/http.js`, `js/api/firebase.js` and the in-browser demonstration
 `js/api/demo.js`, and the contract itself; then run the end-to-end tests against the real server and
-the emulators, which are what catch mismatches. Firebase functions can answer slowly after a quiet
+the emulators, which are what catch mismatches, and the unit tests, whose
+`api_contract_parity.test.mjs` sends the same calls to the demonstration and to the real service
+(`web_tests/contract_parity.py`) and compares the answers. Firebase functions can answer slowly after a quiet
 period or fail once, so browser code must stay correct when an answer arrives late or a person
 presses a key again while waiting; only calls that read may be retried automatically, never calls
 that save, score, register or count an attempt.
 
-Registration in the browser (`js/data/register.js`) must build the same manifest as the Python
+Registration in the browser (`js/eeg/register.js`) must build the same manifest as the Python
 `electrotag.web.manifest.build_manifest` for the same files and settings; the parity tests compare
 them field by field, so change both together.
 

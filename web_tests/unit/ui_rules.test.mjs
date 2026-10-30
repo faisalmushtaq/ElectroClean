@@ -103,7 +103,7 @@ test('extra annotations and their messages', () => {
   const ex = rules.extras(steps, anns, {}, current, 0);
   assert.deepEqual(ex.map((a) => a.annotation_id), ['b', 'c']);
   assert.match(rules.extraMessage(ex[0], steps, SF), /^You have marked this artifact twice \(Eye-blink-artifact, 3\.04–3\.36 s\): delete the extra one/);
-  assert.match(rules.extraMessage(ex[1], steps, SF), /^Nothing is marked at 0\.00–0\.20 s in the experts' annotations: delete this EMG-artifact \(it is selected; press Delete\) or press (Ctrl|⌘)\+Z to undo\.$/);
+  assert.match(rules.extraMessage(ex[1], steps, SF), /^Nothing is marked at 0\.00–0\.20 s in the experts' annotations: delete this EMG-artifact \(it is selected; press Delete\) or press Ctrl\+Z \(⌘Z on a Mac\) to undo\.$/);
 });
 
 test('stars, instructions and step text', () => {
