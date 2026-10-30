@@ -55,8 +55,8 @@ own computer and a study on a server of your own. Developers start with the
 The browser application is published at
 <https://faisalmushtaq.github.io/ElectroTag/>. Opened without a study, it is
 a demonstration that needs no server and keeps everything in the browser: sign
-in as A01 to annotate or as T01 for the training programme, with the password
-`demo`. Three example recordings with simulated artifacts are built in, and
+in as A01 to annotate, as T01 for the training programme or as E01 for the
+expert area, with the password `demo`. Three example recordings with simulated artifacts are built in, and
 can also be downloaded as EDF files and opened from your computer, as
 annotators open real recordings.
 

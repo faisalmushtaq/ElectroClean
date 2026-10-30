@@ -7,9 +7,11 @@ import { signIn, waitForRoute, openExample } from './helpers.mjs';
 /**
  * At most this much JavaScript (uncompressed, in KB of 1024 bytes) on the sign-in page. Measured on
  * 29 October 2026: 130 KB with a study server, 430 KB in the demonstration, which also loads its
- * own back end (js/api/demo*.js and what they use).
+ * own back end (js/api/demo*.js and what they use). On 30 October the roles and the expert account
+ * brought them to 132 KB and 447 KB (the sandbox's expert operations and the newer settings' checks
+ * load only when used); loading the sandbox's admin half only for its administrator is the way down.
  */
-const SIGNIN_BUDGET_KB = { server: 140, demo: 440 };
+const SIGNIN_BUDGET_KB = { server: 140, demo: 455 };
 
 /**
  * Modules that belong to later views and must not load with the sign-in page (the demonstration's

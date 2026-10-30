@@ -82,11 +82,11 @@ details, and [docs/design_decisions.md](docs/design_decisions.md) the reasons.
 
 **Trying it.** The application at <https://faisalmushtaq.github.io/ElectroTag/>, opened without a
 study, is a demonstration that needs no server and keeps everything in the browser: sign in as A01 to annotate,
-T01 for the training programme or ADMIN for the admin area, with the password `demo`. The home page
+T01 for the training programme, E01 for the expert area or ADMIN for the admin area, with the password `demo`. The home page
 offers the example recordings as EDF files to open "from your computer", which is what annotators
 do with real recordings. The demonstration cannot run what needs Python (the analyses, consensus
 references, the results zip file); for those, run the whole system on one computer with
-`electrotag-web demo` and open <http://localhost:8000/>, signing in as A01, A02, T01 or ADMIN with
+`electrotag-web demo` and open <http://localhost:8000/>, signing in as A01, A02, T01, E01 or ADMIN with
 the password `electrotag` ([docs/web/server.md](docs/web/server.md) says where the recordings to
 open and the results are).
 
@@ -286,6 +286,25 @@ visits are still logged in the mode Annotation (Records marks them as an adminis
 admin area itself is never logged; give them a mode of their own if the activity analysis should
 tell them apart.
 
+**6e. Experts, corrections, replays, adjudication and staged training (30 October).** The project
+lead's request of 29 October (experts who view and correct others' work, replays of sessions,
+screening-style adjudication with a library of conflicts, and a five-stage training path) is being
+built in parts. The foundation is in place: accounts hold a set of roles (annotator, expert,
+admin; participant reserved for a later crowd study), the expert channel (`POST /expert/{op}`,
+`et_expert`, `electrotag/web/expert.py` with its registry `EXPERT_OPS`), the expert area's shell
+(`js/expert/area.js`, sections in `js/expert/sections.js`) and the purposes a recording is opened for
+(`js/views/purposes.js`), the study settings `review`, `training` and `replay`, and the storage the
+later parts need (derived versions in `Annotated_Events/derived/`, saved attempts by number, the
+competency status, each visit's index of recordings and its log in pages, and the task of an
+assignment). Corrections and replays, tasks, adjudication and the library, the staged training
+path and the analyses of derived versions follow, each adding its own modules and one line to the
+registries; `docs/web/api.md` has a section waiting for each. The project lead decided that experts
+and administrators may replay any annotator's session and that trainees may watch an expert's
+session only with that expert's consent (a flag each expert sets in the expert area, audited). This
+uses the interaction logs for a new purpose: the study's ethics approval may need an amendment
+before replays are used, and the logging notice should then say that sessions can be replayed by the
+study team and experts' sessions shown to trainees with their consent.
+
 **7. Housekeeping.** The project's `ruff` settings give only the line length, so a recent `ruff`
 applies many style rules the code was never written to; `ruff check --select E,F,W,B` is the useful
 subset. A shared linting configuration and a lint step in CI would help. Many code comments still
@@ -347,9 +366,10 @@ sign-in view and the back end's client; every later view is a part that `js/lazy
 first use, and `app.js` shows Loading… or a message with Try again around it. A new view should be
 added to the parts in `lazy.js` and reached through `_withParts` in `app.js`, never imported by
 `app.js` directly; `web_tests/e2e/v_loading.e2e.mjs` keeps the sign-in page within a budget of
-JavaScript and will fail otherwise. The demonstration's back end (about 300 KB, with
-`demo_admin.js` and `admin/model.js`) still loads whole at its sign-in; loading its admin half only
-for the administrator would bring the demonstration's sign-in page down to about 315 KB.
+JavaScript and will fail otherwise. The demonstration's back end (about 315 KB, with
+`demo_admin.js` and `admin/model.js`) still loads whole at its sign-in, which is now 447 KB against
+a budget of 455 KB in `v_loading.e2e.mjs`; loading its admin half only for the administrator would
+bring the demonstration's sign-in page down to about 330 KB.
 
 **Writing.** The interface text and the documentation are in UK English, with the HED spelling
 *artifact* kept in label names. The documentation is written as prose, in the voice of the existing

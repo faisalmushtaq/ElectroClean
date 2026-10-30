@@ -398,3 +398,5 @@ th.num .th-sort { flex-direction: row-reverse; }
 
 /* Add an account, under the list: its fields side by side, three to a row on a wide screen. */
 .form-grid.add-account { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+/* An account's roles: three boxes side by side, in a row of their own (never cut short). */
+.role-boxes .check-list { max-height: none; overflow: visible; }

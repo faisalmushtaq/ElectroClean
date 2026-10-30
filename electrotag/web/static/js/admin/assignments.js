@@ -2,7 +2,7 @@
 // them) in a mode and context, see the status of every assignment, and take one away.
 
 import { h, clear } from '../ui/dom.js';
-import { MODES, STATUS, fileParts, plural, setLabel, unassignQuestion, whenText } from './model.js';
+import { MODES, STATUS, fileParts, plural, rolesOf, setLabel, unassignQuestion, whenText } from './model.js';
 import {
   actionButton, card, checkbox, checkList, chip, confirmInline, dataTable, field, messageArea, recordingName, sectionHead, select, textInput,
 } from './ui.js';
@@ -66,8 +66,8 @@ export class AssignmentsSection {
   _buildAssign() {
     clear(this.assignHost);
     // All ticks the active annotators: switched-off accounts and administrators are ticked one by one.
-    const people = checkList(this.users.map((u) => ({ value: u.annotator_id, text: u.annotator_id, notInAll: u.status === 'disabled' || u.role === 'admin',
-      extra: [u.display_name, u.status === 'disabled' ? 'switched off' : '', u.role === 'admin' ? 'administrator' : ''].filter(Boolean).join(' · ') })),
+    const people = checkList(this.users.map((u) => ({ value: u.annotator_id, text: u.annotator_id, notInAll: u.status === 'disabled' || rolesOf(u).includes('admin'),
+      extra: [u.display_name, u.status === 'disabled' ? 'switched off' : '', rolesOf(u).includes('admin') ? 'administrator' : ''].filter(Boolean).join(' · ') })),
     { selected: this.preselect, legend: 'Annotators', name: 'annotators', empty: 'Add accounts on the Annotators page first.' });
     this.preselect = [];
     const mode = select(MODES, 'standard');

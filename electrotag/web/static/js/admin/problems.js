@@ -4,7 +4,7 @@
 // "cannot be annotated"), or give it to someone else. Reports are never deleted.
 
 import { h, clear } from '../ui/dom.js';
-import { MODES, STATUS, whenText } from './model.js';
+import { MODES, STATUS, rolesOf, whenText } from './model.js';
 import { actionButton, card, chip, dataTable, downloadText, field, messageArea, recordingName, sectionHead, select, textInput } from './ui.js';
 
 export const REASON_TEXT = Object.freeze({
@@ -114,7 +114,7 @@ export class ProblemsSection {
     // Those who have the recording already are shown, and cannot be chosen: giving it to them changes nothing.
     Promise.all([this.area.read('users_list'), this.area.read('assignments_list').catch(() => ({ items: [] }))]).then(([u, a]) => {
       const have = new Set((a.items || []).filter((i) => i.recording_id === r.recording_id && (i.mode || 'standard') === 'standard').map((i) => i.annotator_id));
-      for (const x of (u.users || []).filter((p) => p.status === 'active' && p.role === 'annotator' && p.annotator_id !== r.annotator_id)) {
+      for (const x of (u.users || []).filter((p) => p.status === 'active' && rolesOf(p).includes('annotator') && p.annotator_id !== r.annotator_id)) {
         const has = have.has(x.annotator_id);
         people.append(h('option', { value: x.annotator_id, disabled: has, 'data-has': has ? '' : null }, `${x.annotator_id}${x.display_name ? ` (${x.display_name})` : ''}${has ? ': has it already' : ''}`));
       }

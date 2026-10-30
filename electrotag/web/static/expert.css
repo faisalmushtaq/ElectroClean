@@ -1,0 +1,6 @@
+/* The expert area (js/expert/), loaded when an expert first opens it, beside the admin area's layout
+   (admin.css), whose menu, grid and cards it shares. It uses the tokens and components of app.css. */
+
+.expert-nav ul { margin-top: 0; }
+.expert-chip { margin-left: 2px; }
+.expert-card .btn-row { margin-top: 8px; }

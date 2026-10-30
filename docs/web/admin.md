@@ -17,8 +17,8 @@ another way, for example on an encrypted drive, and open them in their own brows
 Accounts with the role of administrator see the admin area. Sign in as usual: an administrator goes
 straight to the admin area, and the header offers My recordings to annotate (an administrator can
 annotate too) and Admin to come back. A person can hold several roles: annotator, expert and
-administrator. Experts open the expert area from the Expert work card on their home page (described
-in the expert section of this guide as its parts arrive); an administrator may use it too. The study's administrator accounts are made when the study is
+administrator. Experts open the expert area from the Expert work card on their home page or the
+Expert work button in the header (see "The expert area" below); an administrator may use it too. The study's administrator accounts are made when the study is
 set up (docs/web/firebase.md and docs/web/server.md), and from then on you can make more in the
 admin area itself.
 
@@ -54,6 +54,9 @@ in with the temporary password shown, recordings you assign appear in their list
 you choose apply when they next open a recording. Invitation links work too, in the same browser:
 open one in another tab to see the welcome a new annotator sees. Reset the demonstration, on the
 home page, forgets it all.
+
+The demonstration also has a demo expert who annotates too, E01 (password demo), whose home page
+has the Expert work card.
 
 The demonstration has one reference set, its Demonstration training set, which runs as T01's
 training programme: you can change its pass mark, its guided matching, how much help each guided
@@ -574,6 +577,27 @@ see. Game elements may still change how people work, so a study that uses them s
 its methods, with the settings it used; switch them off, or the leaderboard alone, when the study
 needs annotators who are not nudged at all.
 
+**Corrections and adjudication** (the `review` block) chooses whether experts may correct saved
+work, whether annotators see the corrections of their work with the reasons, and whether they see the
+decisions on the conflicts in their work (all on by default). It also sets how many annotators each
+task goes to (2 by default), when an adjudicator gives a reason for a decision, the rules by which two
+marks count as the same (matched by overlap, by start and end within tolerances, or both; the overlap
+needed; the tolerances; and the share of channels in common), and how many known-answer items a
+person's accuracy needs before it weighs their marks. These choices apply to the expert area's
+corrections, tasks and adjudication as the study offers them. Under **Replays** it chooses whether
+experts and administrators may replay annotators' sessions step by step from the interaction log,
+and whether trainees may watch the sessions of experts who have agreed to it; each expert gives or
+withdraws that agreement in the expert area. Replays use the interaction log for teaching and for
+checking work, so say so in the study's information for participants and check that the ethics
+approval covers it.
+
+**The training path** (the `training` block) chooses the stages a trainee may skip (the tour, the
+snippets, learning with the experts and practice; the blind competency assessment never), what real
+study work waits for (a passed assessment, by default, a finished one, or nothing; experts and
+administrators never wait), whether the path begins with a tour of the platform, and whether the
+snippets stage needs its recognition check finished. The study keeps these choices now, and the
+five-stage training path follows them once it is in place.
+
 **Interaction log** chooses whether the study records
 how annotators use ElectroTag (clicks, keys and what is on the screen, never what they type), how
 often the pointer is sampled over the EEG, after how many seconds without input an annotator counts
@@ -585,6 +609,21 @@ plain words, in that bar, what to correct (for example a type given to two numbe
 field concerned marked and focused. The bar says Unsaved changes while there are any; leaving the
 section with unsaved changes asks first (Leave without saving, or Stay here), and so does closing or
 reloading the page.
+
+## The expert area
+
+Experts, and administrators, open the expert area from the Expert work card on their home page
+(My recordings, for an administrator); an expert also finds Expert work in the header. My
+recordings in the expert area's header leads back.
+Its menu lists the parts of the expert work the study offers, and its Overview says what the area is
+for. Expert work is logged like annotation work, while the admin area is not.
+
+**Your sessions for teaching.** The study team can replay any annotator's session, step by step,
+from the record of how they worked. Trainees may watch an expert's sessions only when that expert
+agrees: tick Let trainees watch replays of my sessions and press Save my choice, and untick it to
+withdraw. Each expert decides for their own sessions only; the study's audit log keeps every change,
+and a save that changes nothing writes nothing. When the study's settings do not show experts'
+sessions to trainees (Study settings, Replays), the choice is kept for when they do.
 
 ## When something goes wrong
 

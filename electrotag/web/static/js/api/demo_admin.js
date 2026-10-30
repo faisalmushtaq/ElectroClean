@@ -14,6 +14,7 @@ import { CATALOGUE, DEFAULT_ANNOTATION, DEFAULT_SETTINGS } from './demo_catalogu
 import { ApiError } from './http.js';
 import { sha256Hex } from '../eeg/sha256.js';
 import { newId, nowLocalIso } from '../util.js';
+import { loadPart } from '../lazy.js';
 import {
   checkAnnotatorId, checkEmail, criteriaFromRows, criteriaRows, deepCopy, mergeSettings,
   METRICS, parseRoles, plural, primaryRole, rolesOf, rolesText, settingChangeText, settingsProblems,
@@ -619,7 +620,7 @@ export class DemoAdmin {
       logging_notice_is_default: this.s.logging_notice === DEMO_LOGGING_NOTICE };
   }
 
-  op_settings_update(body) {
+  async op_settings_update(body) {
     const changed = [];
     if (body.settings !== undefined) {
       if (!body.settings || typeof body.settings !== 'object') throw bad('The settings must be given by block (filters, display, ...).', 'invalid_settings');
@@ -627,7 +628,8 @@ export class DemoAdmin {
       const unknown = Object.keys(body.settings).find((k) => !known.includes(k));
       if (unknown) throw bad(`The settings block '${unknown}' cannot be changed here; these can: ${known.join(', ')}`, 'invalid_settings');
       const next = mergeSettings(this.s.settings, body.settings);
-      const problems = settingsProblems(next, LABEL_NAMES);
+      const { expertSettingsProblems } = await loadPart('settingsChecks');
+      const problems = [...settingsProblems(next, LABEL_NAMES), ...expertSettingsProblems(next)];
       if (problems.length) throw bad(problems[0], 'invalid_settings');
       for (const [block, values] of Object.entries(body.settings)) {
         for (const [key, value] of Object.entries(values || {})) {

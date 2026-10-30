@@ -265,7 +265,7 @@ export const tests = [
       const form = page.locator('[data-panel="accounts"] form.admin-form');
       await form.locator('input').nth(0).fill('L31');
       await form.locator('input').nth(1).fill('Lane');
-      await form.locator('select').nth(1).selectOption('invite');
+      await form.locator('select').first().selectOption('invite'); // First sign-in (the roles are boxes)
       await page.click('[data-log="user-add"]');
       await page.waitForSelector('[data-panel="accounts"] .secret-value');
       const link = (await page.textContent('[data-panel="accounts"] .secret-value')).trim();

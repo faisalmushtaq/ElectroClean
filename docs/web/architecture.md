@@ -113,13 +113,15 @@ electrotag/web/static/          the browser application (plain ES modules, no bu
     fonts/                        Newsreader, the one typeface (woff2, with its licence; made by
                                   scripts/make_web_fonts.py)
     admin.css                     the admin area's own layout, loaded when it is first opened
+    expert.css                    the expert area's few styles of its own (it shares admin.css's layout)
     js/main.js, js/app.js         start-up; the backend, signing in and the moves between views
     js/catalogue.js, js/util.js   the label catalogue; small helpers
     js/lazy.js                    the parts of the application loaded at their first use
     js/views/                     sign in (with its illustration, eegart.js and montage.js), the
                                   annotator's recordings (home.js, with their progress in
                                   progress.js, the list, its tabs and history in home_list.js and
-                                  the game elements in home_games.js), opening a recording
+                                  the game elements in home_games.js), opening a recording, and
+                                  what someone's saved work is opened for (purposes.js)
     js/games/                     the milestones' rules (milestones.js) and the pseudonyms' words
     js/api/                       the Backend interface: http.js (a study server), firebase.js (a
                                   study on Firebase), demo.js, demo_admin.js and demo_feedback.js
@@ -148,6 +150,8 @@ electrotag/web/static/          the browser application (plain ES modules, no bu
     js/training/                  the training path, the coach, the practice review, the
                                   demonstration's guided rules and practice scoring, and the
                                   short-segment quiz (quiz.js)
+    js/expert/                    the expert area (area.js: its menu and overview; sections.js, its
+                                  sections and routes, to which each part of the expert work adds a line)
     js/admin/                     the admin area (area.js: the grouped menu and Find) and its
                                   sections: overview, progress (with chart.js, its SVG chart),
                                   recordings, annotators (with invitations), assignments, training,
@@ -178,8 +182,9 @@ study server, `firebase.js` with the Firebase SDK for a study on Firebase, or
 the demonstration's own back end). Every other view is a part that `js/lazy.js`
 loads at its first use with a dynamic `import()`: the home page, the open view,
 the annotation view with the EEG viewer, training, the quiz, the practice
-review, the admin area, the game elements and the EEG readers with their
-workers. `lazy.js` keeps each part's promise, so a part is fetched once however
+review, the admin area, the expert area, the purposes someone's saved work is
+opened for (`views/purposes.js`), the game elements and the EEG readers with
+their workers. `lazy.js` keeps each part's promise, so a part is fetched once however
 many callers ask for it, and `app.js` shows a "Loading…" page while a view's
 part is on its way. A part that cannot be loaded (most often because the
 connection was lost) gives a plain message with Try again, which asks for the
@@ -226,6 +231,22 @@ never loads.
 `web_tests/e2e/v_loading.e2e.mjs` keeps the sign-in page within a budget of
 JavaScript set just above these figures, and checks that no later view's
 module loads with it; a view that creeps back into the sign-in page fails it.
+
+### Purposes and the expert area
+
+A recording can be opened as someone's saved work rather than as one's own
+assignment: an administrator's review, and the expert area's corrections,
+replays, adjudications, library entries and an annotator's view of a corrected
+version. The open view reads and fingerprints the file as usual; when its
+`purpose` carries a `target` (the work to show, from the study), `app.js` hands
+the file to `js/views/purposes.js`, whose `checkStudyCopy` compares it with the
+target's manifest (the same fingerprint, or the same name, sampling rate and
+length with the person's confirmation) and whose `PURPOSES[kind]` opens it.
+Each purpose is one line there, loading its own module when it is used. The
+expert area (`#expert`, `#expert-<section>`, for experts and administrators)
+is a part of its own (`js/expert/area.js`), with the sections listed in
+`js/expert/sections.js`, one line each; its routes are not the admin area's, so
+expert work is logged like annotation work.
 
 ## The Recording interface (browser)
 

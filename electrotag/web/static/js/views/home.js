@@ -135,7 +135,7 @@ export function homeView(app) {
       h('h1', {}, `Hello${app.me && app.me.display_name ? `, ${app.me.display_name}` : ''}`),
       guideLine(),
       h('div.home-grid', {},
-        h('div.col', {}, nextCard, !training && items.length ? progressCard(p) : null, programme && !training ? trainingDoneCard(app) : null,
+        h('div.col', {}, nextCard, expertCard(app), !training && items.length ? progressCard(p) : null, programme && !training ? trainingDoneCard(app) : null,
           list, quizCard(app)),
         sideColumn([...games(app), demo]))));
 }
@@ -150,6 +150,24 @@ function games(app) {
 export function guideLine() {
   return h('p.caption.guide-link', {}, 'How each step works, from opening a recording to saving it, is in the ',
     h('a', { href: docsUrl('web/using.md'), target: '_blank', rel: 'noopener', 'data-log': 'guide' }, 'annotators\' guide'), ' (it opens in a new tab).');
+}
+
+/**
+ * For experts (and administrators): the way into the expert area, where they correct saved work, replay
+ * sessions, adjudicate and supply training material. The later parts of the expert work add a line each to
+ * EXPERT_CARD_LINES, from what GET /me tells them (a count of work waiting, say); empty lines are left out.
+ */
+export const EXPERT_CARD_LINES = [];
+
+export function expertCard(app) {
+  if (!app.isExpert) return null;
+  const lines = EXPERT_CARD_LINES.map((fn) => { try { return fn(app); } catch { return null; } }).filter(Boolean);
+  return h('section.card.expert-card', { 'aria-label': 'Expert work' },
+    h('h2', {}, 'Expert work'),
+    h('p.caption', {}, 'Correct and add to saved work, replay how sessions went, adjudicate disagreements and supply training material. '
+      + 'The originals are never changed: a correction is a new version, credited to you.'),
+    lines.map((l) => h('p.caption', {}, l)),
+    h('div.btn-row', {}, h('button.btn', { type: 'button', 'data-log': 'open-expert', onclick: () => app.showExpert('expert') }, 'Open the expert area')));
 }
 
 /** After training: a line that it is complete, with the way back to the training path. */

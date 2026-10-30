@@ -2,7 +2,7 @@
 // work and invitation, and acts on several people at once (assign recordings, switch accounts
 // off or on, new invitation links); Invitations shows where each person's private link stands
 // (copy it, email it, make a new one, withdraw it); Add several makes accounts from pasted lines,
-// each with an invitation. A page per person changes their name, role and notes, switches the
+// each with an invitation. A page per person changes their name, roles and notes, switches the
 // account off or on, resets the password, removes it, chooses their training programme and lists
 // their work recording by recording.
 //
@@ -15,14 +15,50 @@ import { setAsideButton } from './assignments.js';
 import { icon } from '../views/common.js';
 import {
   INVITE_STATES, MODES, ROLES, STATUS, checkAnnotatorId, checkEmail, csvText, dateText, invitationText, inviteLink, inviteMessage, mailtoHref,
-  minutesText, parseBulkPeople, plural, setLabel, unassignQuestion, whenText,
+  minutesText, parseBulkPeople, plural, roleWords, rolesOf, setLabel, unassignQuestion, whenText,
 } from './model.js';
 import {
   actionButton, put, card, chip, confirmInline, copyButton, copyText, dataTable, eachInTurn, oneAtATime, field, infoTable, loading, messageArea, nextId, progressLine,
   recordingName, resultsTable, secretBox, sectionHead, select, tabBar, textArea, textInput,
 } from './ui.js';
 
+/** What each role lets a person do, beside its box in the admin area. */
+const ROLE_HINTS = Object.freeze({
+  annotator: 'Annotates the recordings given to them.',
+  expert: 'Corrects saved work, replays sessions, adjudicates conflicts and supplies training material.',
+  admin: 'Runs the study in this admin area, and may do everything an expert does.',
+});
 const DAYS = [['7', '7 days'], ['14', '14 days'], ['30', '30 days'], ['90', '90 days']];
+
+/**
+ * A person's roles as three boxes (Annotator, Expert, Administrator), as many as apply. value() gives the
+ * roles ticked, in the study's order; `locked` keeps a role ticked and its box disabled (one's own
+ * administrator role, which only another administrator can take away).
+ */
+export function roleBoxes(selected = ['annotator'], { locked = [] } = {}) {
+  const boxes = Object.entries(ROLES).map(([role, text]) => {
+    const input = h('input', { type: 'checkbox', value: role, 'data-role': role });
+    input.checked = selected.includes(role) || locked.includes(role);
+    input.disabled = locked.includes(role);
+    return h('label.check-item', { title: ROLE_HINTS[role] }, input, h('span.check-text', {}, h('span', {}, text), h('span.caption.block', {}, ROLE_HINTS[role])));
+  });
+  const el = h('fieldset.admin-checks.role-boxes', { 'data-roles': '' }, h('legend', {}, 'Roles'), h('div.check-list', { role: 'group', 'aria-label': 'Roles' }, boxes));
+  el.value = () => ['admin', 'expert', 'annotator'].filter((r) => el.querySelector(`input[data-role="${r}"]`).checked);
+  el.box = (role) => el.querySelector(`input[data-role="${role}"]`);
+  return el;
+}
+
+/** The roles of a form, checked: at least one. */
+function chosenRoles(boxes) {
+  const roles = boxes.value();
+  if (!roles.length) throw new Error('Choose at least one role: Annotator, Expert or Administrator.');
+  return roles;
+}
+
+/** What the study is sent for the roles: the older `role` for an annotator only (as before), `roles` otherwise. */
+function rolesBody(roles) {
+  return roles.length === 1 && roles[0] === 'annotator' ? { role: 'annotator' } : { roles };
+}
 const STATE_KIND = { invited: 'active', accepted: 'done', expired: 'warning', revoked: '' };
 
 export class AnnotatorsSection {
@@ -103,7 +139,7 @@ export class AnnotatorsSection {
   _accountsPanel() {
     const search = textInput({ placeholder: 'Search by ID, name or email', type: 'search' });
     search.setAttribute('aria-label', 'Search the accounts');
-    const role = select([['', 'Every role'], ['annotator', 'Annotators'], ['admin', 'Administrators']]);
+    const role = select([['', 'Every role'], ['annotator', 'Annotators'], ['expert', 'Experts'], ['admin', 'Administrators']]);
     role.setAttribute('aria-label', 'Role');
     const status = select([['', 'Active and switched off'], ['active', 'Active'], ['disabled', 'Switched off']]);
     status.setAttribute('aria-label', 'Status');
@@ -116,7 +152,8 @@ export class AnnotatorsSection {
     this.table = dataTable([
       { title: 'Account', sort: (u) => u.annotator_id, render: (u) => h('span', {}, h('b', {}, u.annotator_id), u.display_name ? ` · ${u.display_name}` : '',
         u.email ? h('span.caption.block', {}, u.email) : null) },
-      { title: 'Role', sort: (u) => `${u.role} ${u.status}`, render: (u) => h('span.chips-inline', {}, u.role === 'admin' ? chip('Administrator', 'active') : chip('Annotator'),
+      { title: 'Roles', sort: (u) => `${rolesOf(u).join(',')} ${u.status}`, render: (u) => h('span.chips-inline', {}, ['admin', 'expert', 'annotator'].filter((r) => rolesOf(u).includes(r))
+        .map((r) => chip(ROLES[r], r === 'annotator' ? '' : 'active')),
         u.status === 'disabled' ? chip('Switched off', 'warning') : null, u.programme ? h('span.caption.block', {}, `Programme: ${u.programme}`) : null) },
       { title: 'Invitation', sort: (u) => (u.invitation && u.invitation.state) || 'none', render: (u) => this._stateChip(u) },
       { title: 'Done', num: true, sort: (u) => u.done ?? 0, render: (u) => `${u.done ?? 0} of ${u.assigned ?? 0}` },
@@ -140,7 +177,7 @@ export class AnnotatorsSection {
     const q = this.filters.search.value.trim().toLowerCase();
     const role = this.filters.role.value;
     const status = this.filters.status.value;
-    this.table.update(this.users.filter((u) => (!role || u.role === role) && (!status || u.status === status) &&
+    this.table.update(this.users.filter((u) => (!role || rolesOf(u).includes(role)) && (!status || u.status === status) &&
       (!q || `${u.annotator_id} ${u.display_name || ''} ${u.email || ''}`.toLowerCase().includes(q))), { keepPage: true });
   }
 
@@ -227,7 +264,7 @@ export class AnnotatorsSection {
     id.setAttribute('autocapitalize', 'characters');
     const name = textInput({ placeholder: 'optional' });
     const email = textInput({ type: 'email', placeholder: fb ? 'needed to sign in' : 'optional' });
-    const role = select(ROLES, 'annotator');
+    const role = roleBoxes(['annotator']);
     const how = select([['temporary', 'A temporary password to pass on'], ['invite', 'A private invitation link'], ['chosen', 'A password I choose']], 'temporary');
     const password = textInput({ type: 'password', placeholder: 'at least 8 characters', autocomplete: 'new-password' });
     const passwordField = field('Password', password);
@@ -242,10 +279,11 @@ export class AnnotatorsSection {
     // An administrator is given a password: an invitation link travels by email and must not open the admin area.
     const syncHow = () => {
       const invite = [...how.options].find((o) => o.value === 'invite');
-      invite.disabled = role.value === 'admin';
+      const admin = role.box('admin').checked;
+      invite.disabled = admin;
       if (invite.disabled && how.value === 'invite') how.value = 'temporary';
       passwordField.hidden = how.value !== 'chosen';
-      howHint.textContent = HOW_HINT[how.value] + (role.value === 'admin' ? ' Administrators are given a password rather than an invitation link.' : '');
+      howHint.textContent = HOW_HINT[how.value] + (admin ? ' Administrators are given a password rather than an invitation link.' : '');
     };
     how.addEventListener('change', syncHow);
     role.addEventListener('change', syncHow);
@@ -257,7 +295,7 @@ export class AnnotatorsSection {
       kind: 'primary', working: 'Adding…', msg, log: 'user-add',
       onClick: async () => {
         msg.clear();
-        const body = { annotator_id: checkAnnotatorId(id.value), display_name: name.value.trim(), email: checkEmail(email.value, { required: fb }), role: role.value };
+        const body = { annotator_id: checkAnnotatorId(id.value), display_name: name.value.trim(), email: checkEmail(email.value, { required: fb }), ...rolesBody(chosenRoles(role)) };
         if (!fb && how.value === 'chosen') {
           if (password.value.length < 8) throw new Error('A password has at least 8 characters, or choose a temporary password or an invitation link.');
           body.password = password.value;
@@ -277,9 +315,9 @@ export class AnnotatorsSection {
       field('Annotator ID', id, { hint: 'Up to 32 letters, digits, hyphens or underscores, as in the study\'s records. It cannot be changed later.' }),
       field('Name', name),
       field('Email address', email, { hint: fb ? 'They sign in with it, and the invitation link lets them choose a password.' : 'Needed to email them their invitation link.' }),
-      field('Role', role, { hint: 'Administrators see this admin area; they can annotate too.' }),
       fb ? null : howField,
       fb ? null : passwordField),
+      role, h('p.caption', {}, 'As many roles as apply: an expert who also annotates has both. Administrators see this admin area and can annotate too.'),
       h('div.btn-row', {}, submit), msg, result);
     return card('Add an account', form);
   }
@@ -507,14 +545,15 @@ export class AnnotatorsSection {
     const fb = this.area.isFirebase;
     const msg = messageArea();
     const name = textInput({ value: u.display_name || '' });
-    const role = select(ROLES, u.role);
-    role.disabled = self;
+    // One's own administrator role stays: only another administrator can take it away.
+    const role = roleBoxes(rolesOf(u), { locked: self && rolesOf(u).includes('admin') ? ['admin'] : [] });
     const notes = textArea({ value: u.notes || '', rows: 3, placeholder: 'For the study team only' });
     const save = actionButton('Save changes', {
       kind: 'primary', working: 'Saving…', msg, log: 'user-save',
       onClick: async () => {
         const body = { annotator_id: u.annotator_id, display_name: name.value.trim(), notes: notes.value };
-        if (!self && role.value !== u.role) body.role = role.value;
+        const roles = chosenRoles(role);
+        if (roles.join(',') !== rolesOf(u).join(',')) body.roles = roles;
         await this.area.write('user_update', body);
         await this.reload(['success', 'Saved.']);
       },
@@ -596,7 +635,7 @@ export class AnnotatorsSection {
     const inv = u.invitation || { state: 'none' };
     this.detailView.append(back,
       h('div.admin-head', {}, h('h2.person-title', {}, `${u.annotator_id}${u.display_name ? ` · ${u.display_name}` : ''}`),
-        h('p.subtitle', {}, u.role === 'admin' ? 'Administrator' : 'Annotator', ' · ', u.status === 'disabled' ? 'switched off' : 'active',
+        h('p.subtitle', {}, roleWords(rolesOf(u)), ' · ', u.status === 'disabled' ? 'switched off' : 'active',
           self ? ' · this is your own account' : '')),
       msg,
       h('div.admin-grid', {},
@@ -604,7 +643,7 @@ export class AnnotatorsSection {
           infoTable([['Email', u.email || '–'], ['Added', whenText(u.created_at)], ['Last seen', whenText(u.last_seen)],
             ['Invitation', invitationText(inv)], ['Work', `${u.done ?? 0} of ${u.assigned ?? 0} done`]]),
           h('form.admin-form', { onsubmit: (e) => { e.preventDefault(); save.click(); } },
-            field('Name', name), field('Role', role, { hint: self ? 'You cannot change your own role; another administrator can.' : '' }),
+            field('Name', name), role, self ? h('p.caption', {}, 'You cannot take away your own administrator role; another administrator can.') : null,
             field('Notes', notes), h('div.btn-row', {}, save))),
         card('Account',
           h('p.caption', {}, fb ? 'Resetting makes a new link that lets the person choose a new password.'

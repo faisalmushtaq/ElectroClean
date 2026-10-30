@@ -3,7 +3,7 @@
 // visits (each time someone used the application, with the number of interaction events logged).
 
 import { h, clear } from '../ui/dom.js';
-import { AUDIT_OPS, MODES, filterAudit, opText, whenText } from './model.js';
+import { AUDIT_OPS, MODES, filterAudit, opText, rolesOf, whenText } from './model.js';
 import { actionButton, card, dataTable, messageArea, sectionHead, select } from './ui.js';
 
 const PAGE = 50;
@@ -56,7 +56,7 @@ export class RecordsSection {
     this.msg.clear();
     try {
       const u = await this.area.read('users_list');
-      this.admins = new Set((u.users || []).filter((x) => x.role === 'admin').map((x) => x.annotator_id));
+      this.admins = new Set((u.users || []).filter((x) => rolesOf(x).includes('admin')).map((x) => x.annotator_id));
       const keep = this.visitWho.value;
       clear(this.visitWho);
       this.visitWho.append(h('option', { value: '' }, 'Everyone'), ...(u.users || []).map((x) => h('option', { value: x.annotator_id }, x.annotator_id)));

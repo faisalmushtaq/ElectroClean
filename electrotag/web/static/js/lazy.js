@@ -1,7 +1,7 @@
 // The parts of the application that are loaded when they are first needed (docs/web/architecture.md,
 // "Loading on demand"). The sign-in page loads only what it shows and the chosen back end's client;
-// the home page, the annotation view, training, the quiz, the admin area, the games and the EEG
-// readers each come with the first view that uses them, and the readers and the annotation view are
+// the home page, the annotation view, training, the quiz, the admin area, the expert area, the games
+// and the EEG readers each come with the first view that uses them, and the readers and the annotation view are
 // fetched in idle time after signing in, so that opening a recording does not wait for them.
 //
 // Each part is a module of this folder, imported once: its promise is kept, so every caller shares
@@ -29,6 +29,11 @@ const PARTS = Object.freeze({
   readers: './eeg/recording.js',
   admin: './admin/area.js',
   adminModel: './admin/model.js',
+  expert: './expert/area.js',
+  expertSections: './expert/sections.js',
+  purposes: './views/purposes.js',
+  settingsChecks: './admin/settings_checks.js',
+  demoExpert: './api/demo_expert.js',
 });
 
 const pending = new Map(); // name -> the promise of its module

@@ -23,6 +23,15 @@ and the analyses leave them out. Each visit now keeps an index of
 the recordings it opened, and its log can be read in pages. The demonstration has an expert account,
 E01, with the password `demo` (`electrotag` on `electrotag-web demo`).
 
+In the admin area, Annotators gives each account its roles with three boxes (Annotator, Expert,
+Administrator), shows them in the list and filters by them; an administrator cannot untick their own
+administrator role. Study settings has two new cards, Corrections and adjudication (with the rules
+for matching two marks and who may watch replays) and The training path. Experts and administrators
+reach a new expert area from an Expert work card on the home page or the header's Expert work
+button. Its first page explains the area and lets each expert agree, or no longer agree, to trainees
+watching replays of their sessions; the corrections, replays, adjudication, library and training
+material of the next parts appear in its menu as they are added.
+
 A changed copy of a recording that is also in a training set (a set made from the study's own
 recordings) is now matched by its name and shape, as any other changed copy is; the study's copy and
 the set's copy were counted as two recordings, so the file was refused as looking like several.

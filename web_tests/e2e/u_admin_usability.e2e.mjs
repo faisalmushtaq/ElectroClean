@@ -165,8 +165,8 @@ export const tests = [
       }
       assert.equal(await page.locator(`${sel} .made-one .secret-value`).count(), 2);
       // The invitation link is not offered for an administrator.
-      await form.locator('select').nth(0).selectOption('admin');
-      assert.equal(await form.locator('select').nth(1).locator('option[value="invite"]').getAttribute('disabled'), '');
+      await form.locator('input[data-role="admin"]').check();
+      assert.equal(await form.locator('select').first().locator('option[value="invite"]').getAttribute('disabled'), '');
       assert.match(await form.innerText(), /Administrators are given a password rather than an invitation link/);
       // Switch on for people already on: nothing changed, and no "null" written after the table.
       await page.check(`${sel} input[data-select="N01"]`);

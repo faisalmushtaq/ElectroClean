@@ -1,4 +1,4 @@
-// The design system (app.css, admin.css and js/ui/theme.js): the colours drawn on canvas are those of
+// The design system (app.css, admin.css, expert.css and js/ui/theme.js): the colours drawn on canvas are those of
 // the style sheet, text meets WCAG 2.1 AA, and the rules that keep the pages crisp and consistent
 // hold: one typeface, sizes from one scale of whole pixels on whole-pixel lines, flat controls (no
 // shadows, no gradients), square panels with pill-shaped buttons and badges, nothing in capitals,
@@ -14,7 +14,8 @@ import { COLOURS, FONT } from '../../electrotag/web/static/js/ui/theme.js';
 const STATIC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'electrotag', 'web', 'static');
 const APP_CSS = fs.readFileSync(path.join(STATIC, 'app.css'), 'utf8');
 const ADMIN_CSS = fs.readFileSync(path.join(STATIC, 'admin.css'), 'utf8');
-const SHEETS = [['app.css', APP_CSS], ['admin.css', ADMIN_CSS]];
+const EXPERT_CSS = fs.readFileSync(path.join(STATIC, 'expert.css'), 'utf8');
+const SHEETS = [['app.css', APP_CSS], ['admin.css', ADMIN_CSS], ['expert.css', EXPERT_CSS]];
 const uncommented = (css) => css.replace(/\/\*[\s\S]*?\*\//g, '');
 
 /** The custom properties of :root, with var() references resolved. */

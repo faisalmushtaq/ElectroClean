@@ -50,7 +50,7 @@ export class OverviewSection {
     clear(this.tiles);
     this.tiles.append(
       tile(c.recordings, 'Recordings', 'registered for the study', 'recordings'),
-      tile(c.annotators, 'Annotators', `and ${c.admins ?? 0} administrator${c.admins === 1 ? '' : 's'}`, 'annotators'),
+      tile(c.annotators, 'Annotators', `${c.experts ? `${c.experts} expert${c.experts === 1 ? '' : 's'} ` : ''}and ${c.admins ?? 0} administrator${c.admins === 1 ? '' : 's'}`, 'annotators'),
       tile(c.assignments, 'Assigned', 'of every kind, training included (Progress counts each kind apart)', 'assignments'),
       tile(c.done, 'Done', c.assignments ? `${Math.round((100 * (c.done || 0)) / c.assignments)}% of the assigned` : '', 'progress'),
       tile(c.in_progress, 'In progress', '', 'progress'),

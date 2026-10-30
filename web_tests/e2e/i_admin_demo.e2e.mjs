@@ -98,7 +98,7 @@ export const tests = [
       await signIn(page, 'ADMIN');
       await waitForRoute(page, 'admin');
       await page.waitForSelector('.stat-tile');
-      assert.match(await sectionText(page), /3 Recordings registered for the study 2 Annotators and 1 administrator/i); // labels shown in capitals
+      assert.match(await sectionText(page), /3 Recordings registered for the study 3 Annotators 1 expert and 1 administrator/i); // labels shown in capitals; E01 annotates too
       assert.ok(await noSideways(page));
       await t.screenshot(page, 'admin_overview');
       // From the keyboard: a section's link, then the focus is on that section's heading; Back returns.

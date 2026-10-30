@@ -20,7 +20,7 @@ import { ApiError } from './http.js';
 import { DEMO_NOTICE } from './notice.js';
 import { DemoAdmin } from './demo_admin.js';
 import { DemoFeedback } from './demo_feedback.js';
-import { DemoExpert } from './demo_expert.js';
+import { loadPart } from '../lazy.js';
 import { primaryRole, rolesOf } from '../admin/model.js';
 
 export { DEMO_NOTICE };
@@ -215,7 +215,7 @@ export class DemoBackend {
     this.state = { ...emptyState(), ...(storage.get(STATE_KEY, null) || {}) };
     this._admin = new DemoAdmin(this);
     this.feedback = new DemoFeedback(this); // problem reports and reviews (demo_feedback.js)
-    this.experts = new DemoExpert(this); // the expert area's operations (demo_expert.js)
+    this.experts = null; // the expert area's operations (demo_expert.js), loaded at the first expert call
     const saved = tokens.get(TOKEN_KEY, null);
     const user = saved ? this._admin.user(saved.annotator_id) : null;
     this.annotatorId = user && user.status === 'active' ? user.annotator_id : null;
@@ -1374,7 +1374,13 @@ export class DemoBackend {
 
   // ---------------------------------------------------------------- experts
   /** The expert area's operations (docs/web/api.md, "Experts"), in this browser: demo_expert.js. */
-  async expert(op, body = {}) { return this.experts.run(op, body || {}); }
+  async expert(op, body = {}) {
+    if (!this.experts) {
+      const { DemoExpert } = await loadPart('demoExpert');
+      this.experts = this.experts || new DemoExpert(this);
+    }
+    return this.experts.run(op, body || {});
+  }
 
   /** GET /me/feedback: the corrections of the annotator's work and the outcomes of its conflicts, when shown. */
   async myFeedback() {
