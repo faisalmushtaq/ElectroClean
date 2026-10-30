@@ -1,7 +1,8 @@
 // Correct the marks (docs/web/admin.md "Correct the marks", docs/web/using.md "Learn with the experts"):
 // an expert opens the sandbox's ready-made exercise in the expert area, tries it and checks the
 // corrections in the browser; on a study server, the study team makes an exercise for a guided
-// recording and a trainee corrects the marks on the training path and reads how they did.
+// recording and a trainee corrects the marks on the training path, goes through the result on the EEG
+// (N and P) and finds it again on the training path's card.
 import fs from 'node:fs';
 import path from 'node:path';
 import { clickDialogButton, pressSave, signIn, skipFirstStages, waitForRoute, waitForTraces } from './helpers.mjs';
@@ -104,12 +105,26 @@ export const tests = [
         reference.annotations.map((a) => ({ label: a.label, onset_sample: a.onset_sample, duration_samples: a.duration_samples, channels: a.channels })));
       await pressSave(page);
       await clickDialogButton(page, 'Save and Finish');
-      await page.waitForSelector('.dialog.planted-dialog', { timeout: 30000 });
-      assert.match(await page.textContent('.dialog.planted-dialog'), new RegExp(`You fixed ${made.planted.n_errors} of ${made.planted.n_errors} planted mistakes`));
+      // the review: the saved marks on the EEG, read only, with each planted mistake, fixed or not, to go to
+      await page.waitForSelector('.corrections-review', { timeout: 30000 });
+      await waitForTraces(page);
+      const n = made.planted.n_errors;
+      assert.match(await page.textContent('.corrections-review'), new RegExp(`You fixed ${n} of ${n} planted mistakes`));
+      assert.equal(await page.locator('.corrections-review .planted-item').count(), n);
+      assert.match(await page.locator('.corrections-review .planted-item b').first().textContent(), /: fixed$/);
+      assert.equal(await page.evaluate(() => globalThis.ElectroTag.ws.readOnly), true);
+      await page.keyboard.press('n');
+      await page.waitForSelector('.corrections-review .planted-item.current[data-row="0"]');
+      await page.keyboard.press('n');
+      await page.waitForSelector('.corrections-review .planted-item.current[data-row="1"]');
+      const shown = await page.evaluate(() => globalThis.ElectroTag.ws.viewer.view.startS);
+      assert.ok(Number.isFinite(shown));
       await t.screenshot(page, 'planted_trainee_result');
-      await clickDialogButton(page, 'Back to my training path');
+      await page.click('.ws-header button:has-text("Back to my training path")');
       await waitForRoute(page, 'training', 30000);
-      assert.match(await page.textContent('main.training'), /You fixed/);
+      assert.match(await page.textContent('main.training .success'), /You fixed/);
+      // the guided card keeps the result
+      assert.match(await page.textContent('[data-stage="guided"]'), new RegExp(`Correct the marks: you fixed ${n} of ${n} planted mistakes\\.`));
       const prog = JSON.parse(fs.readFileSync(path.join(t.study.dir, 'study', 'Annotated_Events', 'training_progress', 'correct-check', 'annotator-T06.json'), 'utf8'));
       assert.equal(prog.guided[GUIDED].kind, 'correct');
       assert.equal(prog.guided[GUIDED].fixed, made.planted.n_errors);

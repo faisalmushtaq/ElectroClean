@@ -320,7 +320,7 @@ export const tests = [
       const key = /^1\. Press (\d) \(or click \1 next to Draw as\) to choose Eye-blink-artifact\.$/m.exec(body2);
       assert.ok(key, body2);
       await page.keyboard.press(key[1]);
-      await drag(page, await eegPoint(page, 3.0), await eegPoint(page, 3.4));
+      await drag(page, await eegPoint(page, 6.5), await eegPoint(page, 6.9));
       await waitDone();
       assert.match(await tourText(), /Done\. Press Next step \(Enter\) to go on\./);
       await t.screenshot(page, 'tour_marked');
@@ -336,25 +336,28 @@ export const tests = [
         const p = await eegPoint(page, 0, ch);
         await page.mouse.click(p.x - 40, p.y);
       }
-      await drag(page, await eegPoint(page, 6.55, 'T7'), await eegPoint(page, 7.95, 'T7'));
+      await drag(page, await eegPoint(page, 8.05, 'T7'), await eegPoint(page, 9.45, 'T7'));
       await waitDone();
       await page.keyboard.press('Enter');
-      // 4. undo
+      // 4. undo, then redo: the muscle mark goes and comes back
       await page.waitForFunction(() => /Step 4 of 6/.test(document.querySelector('.coach.tour').textContent));
       const before = (await annotations(page)).length;
       await page.keyboard.press('Control+z');
-      await waitDone();
+      await page.waitForFunction(() => /bring it back with Redo/.test(document.querySelector('.coach.tour').textContent));
       assert.equal((await annotations(page)).length, before - 1);
+      await page.keyboard.press('Control+y');
+      await waitDone();
+      assert.equal((await annotations(page)).length, before);
       await page.keyboard.press('Enter');
       // 5. confidence: select the blink, D, a number
       await page.waitForFunction(() => /Step 5 of 6/.test(document.querySelector('.coach.tour').textContent));
       await page.keyboard.press('c'); // back to the whole montage
-      const mid = await eegPoint(page, 3.2);
+      const mid = await eegPoint(page, 6.7);
       await page.mouse.click(mid.x, mid.y);
       await page.keyboard.press('d');
       await page.keyboard.press('4');
       await waitDone();
-      assert.equal((await annotations(page))[0].confidence, 4);
+      assert.equal((await annotations(page)).find((a) => a.label === 'Eye-blink-artifact').confidence, 4);
       await page.keyboard.press('Enter');
       // 6. Save and Finish: here it ends the tour, and the study is told
       await page.waitForFunction(() => /Step 6 of 6/.test(document.querySelector('.coach.tour').textContent));
@@ -394,18 +397,56 @@ export const tests = [
         && globalThis.ElectroTag.snippetsView.viewer.stats.traceMs > 0, null, { timeout: 15000 });
       assert.match(await page.textContent('.snippet-position'), /Example 1 of 12/);
       assert.match(await page.textContent('.snippet-note'), /^The experts' note: Simulated example\./);
+      // the stretch at its place in the recording, without the filters' edge zones
+      const shown = await page.evaluate(() => {
+        const v = globalThis.ElectroTag.snippetsView;
+        const s = v.data.snippets[v.current];
+        return { startS: v.viewer.view.startS, want: Math.max(0, s.start_s - s.context_s), edges: v.viewer.showEdgeZones, onset: v.viewer.ghost.onset_sample,
+          sample: Math.round(s.start_s * v.viewer.sfreq) };
+      });
+      assert.ok(Math.abs(shown.startS - shown.want) < 0.01, JSON.stringify(shown));
+      assert.equal(shown.edges, false);
+      assert.ok(Math.abs(shown.onset - shown.sample) <= 1, JSON.stringify(shown));
       await t.screenshot(page, 'snippets_gallery');
+      // the arrow keys go from example to example
+      await page.keyboard.press('ArrowRight');
+      assert.match(await page.textContent('.snippet-position'), /Example 2 of 12/);
+      await page.keyboard.press('ArrowLeft');
+      assert.match(await page.textContent('.snippet-position'), /Example 1 of 12/);
       await page.click('[data-log="snippet-next"]');
       assert.match(await page.textContent('.snippet-position'), /Example 2 of 12/);
       await page.locator('.snippet-type', { hasText: 'EMG-artifact' }).locator('.snippet-dot').first().click();
       assert.match(await page.textContent('.snippet-label'), /EMG-artifact/);
       assert.match(await page.textContent('.snippet-where'), /on F7, T7, F8 and T8|on F7, F8, T7 and T8/);
       assert.equal(await page.locator('.snippet-dot.seen').count(), 3);
+      // the recognition check uses the recordings already open, and comes back to the gallery with its result
+      const before = await page.textContent('.snippet-position');
+      await page.click('[data-log="snippets-quiz"]');
+      await waitForRoute(page, 'quiz');
+      await page.waitForSelector('input[name="quiz-answer"]', { timeout: 15000 });
+      assert.equal(await page.locator('[data-log="quiz-use-examples"]').count(), 0, 'no file to open again');
+      await page.locator('input[name="quiz-answer"]').first().check();
+      await page.click('[data-log="quiz-submit"]');
+      await page.click('[data-log="quiz-stop"]');
+      await clickDialogButton(page, 'End the quiz now');
+      await page.waitForSelector('[data-log="quiz-done"]');
+      assert.equal(await page.textContent('[data-log="quiz-done"]'), 'Back to the examples');
+      await page.click('[data-log="quiz-done"]');
+      await waitForRoute(page, 'training');
+      await page.waitForSelector('.snippet-quiz-result');
+      assert.match(await page.textContent('.snippet-quiz-result'), /^Recognition check: [01] of 7 right$/);
+      assert.equal(await page.textContent('.snippet-position'), before);
+      assert.equal(await page.locator('.snippet-dot.seen').count(), 3);
+      await t.screenshot(page, 'snippets_after_check');
       await page.click('[data-log="snippets-done"]');
       await waitForRoute(page, 'training');
       assert.match(await page.textContent('main.training .success'), /Meet the artifacts is done/);
       assert.equal(await page.locator('[data-stage="snippets"]').getAttribute('data-status'), 'completed');
       assert.match(await page.textContent('main.training .btn.primary'), /Start recording 1 of 2/);
+      assert.match(await page.textContent('[data-stage="snippets"]'), /You have taken the recognition check\./);
+      // a finished stage can be looked at again
+      assert.equal(await page.locator('[data-stage="snippets"] [data-log="look-again-snippets"]').count(), 1);
+      assert.equal(await page.locator('[data-stage="tour"] [data-log="look-again-tour"]').count(), 0, 'skipped, not done');
       await page.evaluate(() => globalThis.ElectroTag.flushLog());
       const kinds = await page.evaluate(() => globalThis.ElectroTag.backend.resultsDocument().interaction_logs[0].events.map((e) => e.type));
       assert.equal(kinds.filter((k) => k === 'snippet_viewed').length, 3);
@@ -454,6 +495,9 @@ export const tests = [
       // the home page: the study recording is locked, and says why
       await page.click('[data-log="training-back"]');
       await waitForRoute(page, 'home');
+      // a locked recording is not one to do yet: it waits under Locked (To do holds the assessment recording)
+      assert.match(await page.textContent('.rec-tabs [data-tab="todo"]'), /To do\s*1/);
+      await page.click('.rec-tabs [data-tab="locked"]');
       const row = page.locator('.recordings-card tr', { hasText: 'sub-001_task-rest_eeg.vhdr' });
       assert.match(await row.textContent(), /Locked/);
       assert.match(await row.textContent(), /Opens once you pass the competency assessment\./);
@@ -484,12 +528,94 @@ export const tests = [
       await waitForRoute(page, 'training', 30000);
       assert.match(await page.locator('[data-stage="assessment"]').textContent(), /Criteria met/);
       assert.equal(await page.locator('main.training .gate-card').count(), 0);
+      // a clear moment: passed, the study recordings open, and the next one a press away
+      assert.equal(await page.textContent('main.training .next-outcome'), 'You passed: your study recordings are now open.');
+      assert.equal(await page.textContent('main.training .btn.primary'), 'Open next recording');
+      assert.match(await page.textContent('main.training .success'), /Your last assessment recording is saved\./);
+      await t.screenshot(page, 'training_passed');
       await page.click('[data-log="training-back"]');
       await waitForRoute(page, 'home');
       assert.equal(await page.locator('.recordings-card tr', { hasText: 'sub-001_task-rest_eeg.vhdr' }).locator('button', { hasText: /^Open/ }).count(), 1);
       // the skip is in T05's progress, kept by the study
       const prog = JSON.parse(fs.readFileSync(path.join(t.study.dir, 'study', 'Annotated_Events', 'training_progress', 'gate-check', 'annotator-T05.json'), 'utf8'));
       assert.deepEqual(prog.events.map((e) => [e.event, e.stage]), [['stage_skipped', 'tour']]);
+    },
+  },
+  {
+    name: 'on a study server, an assessment not met: waiting for the study team, who reopen the training; the round is kept with its report',
+    needs: 'study',
+    async run(t) {
+      const { assert } = t;
+      const call = async (token, method, p, body) => {
+        const r = await fetch(`${t.study.base}api/v1${p}`, { method, body: body ? JSON.stringify(body) : undefined,
+          headers: { 'Content-Type': 'application/json', 'X-ElectroTag': '1', ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+        const j = await r.json();
+        if (!r.ok) throw new Error(`${method} ${p}: ${r.status} ${JSON.stringify(j)}`);
+        return j;
+      };
+      const login = async (id, password) => (await call(null, 'POST', '/login', { annotator_id: id, password })).token;
+      const SUB2 = 'sub-002/eeg/sub-002_task-rest_eeg.vhdr';
+      const PRACTICE = 'sub-example03/eeg/sub-example03_task-example_eeg.vhdr';
+      const refs = path.join(t.study.dir, 'study', 'derivatives', 'electrotag_reference_sets', 'example', 'references');
+      const reference = JSON.parse(fs.readFileSync(path.join(refs, fs.readdirSync(refs).find((f) => f.includes('example03'))), 'utf8'));
+      const admin = await login('ADMIN', 'electrotag');
+      const op = (name, body) => call(admin, 'POST', `/admin/${name}`, body);
+      await op('set_create', { set_id: 'notmet-check', name: 'Not met check' });
+      await op('set_add_reference', { set_id: 'notmet-check', recording_id: PRACTICE, recording_scope: 'set:example', use: 'assessment',
+        source: { kind: 'document', document: reference } });
+      await op('set_update', { set_id: 'notmet-check', criteria: { criteria: [{ metric: 'event_f1', threshold: 0.9, scope: 'overall' }], min_reference_events: 1, categories: null } });
+      await op('user_add', { annotator_id: 'T07', display_name: 'Trainee seven', password: 'trainee seven' });
+      await op('programme_set', { annotator_id: 'T07', set_id: 'notmet-check' });
+      await op('assign', { annotator_ids: ['T07'], recording_ids: [SUB2] });
+
+      const page = await t.newPage({ url: t.study.base, width: 1440, height: 900 });
+      await signIn(page, 'T07', 'trainee seven');
+      await waitForRoute(page, 'training');
+      await page.click('main.training [data-log="skip-tour"]');
+      await clickDialogButton(page, 'Skip this stage');
+      await page.waitForSelector('main.training [data-stage="tour"][data-status="skipped"]');
+      await page.click('main.training [data-log="training-continue"]');
+      await waitForRoute(page, 'open');
+      const training = path.join(t.study.dir, 'recordings', 'training', 'sub-example03', 'eeg');
+      await page.setInputFiles('input[data-log="file-input"]', fs.readdirSync(training).filter((f) => /\.(vhdr|vmrk|eeg)$/.test(f)).map((f) => path.join(training, f)));
+      await waitForRoute(page, 'annotate', 30000);
+      await waitForTraces(page);
+      // one mark where the experts have none: far from the criteria
+      await page.evaluate(() => globalThis.ElectroTag.ws.store.add('EMG-artifact', 100, 50, []));
+      await pressSave(page);
+      await clickDialogButton(page, 'Save and Finish');
+      await waitForRoute(page, 'training', 30000);
+      // one clear line: not met, waiting for the study team; no button points at the locked recordings
+      assert.equal(await page.textContent('main.training .next-outcome'), 'Assessment not met: waiting for your study team.');
+      assert.equal(await page.locator('main.training .gate-card').count(), 0);
+      assert.equal(await page.locator('main.training .next-step .btn.primary').count(), 0);
+      assert.match(await page.textContent('main.training .next-step .gate-line'), /did not meet the competency criteria yet/);
+      await t.screenshot(page, 'training_not_met');
+      await page.click('[data-log="training-back"]');
+      await waitForRoute(page, 'home');
+      assert.equal(await page.textContent('.next-card h2'), 'Assessment not met: waiting for your study team');
+      assert.equal(await page.locator('.training-done').count(), 0, 'not "Training complete"');
+      assert.match(await page.locator('.recordings-card tr', { hasText: 'sub-002_task-rest_eeg.vhdr' }).textContent(), /Assessment not met: waiting for your study team\./);
+      await t.screenshot(page, 'training_not_met_home');
+      await page.click('[data-log="sign-out"]');
+      // the study team reopens the training on T07's page; the round that ended stays, with its report
+      await signIn(page, 'ADMIN', 'electrotag');
+      await waitForRoute(page, 'admin');
+      await page.evaluate(() => globalThis.ElectroTag.showAdmin('admin-annotators', { annotator: 'T07' }));
+      await page.waitForSelector('.gate-stages');
+      await page.click('[data-log="training-reopen"]');
+      await page.click('.inline-confirm button:has-text("Reopen it"), button:has-text("Reopen it")');
+      await page.waitForSelector('.gate-round-list li');
+      assert.match(await page.textContent('.gate-round-list li'), /^Round 1, Not met check: not met, /);
+      await page.click('[data-log="training-round-report"]');
+      await page.waitForSelector('.gate-round-report .report-frame');
+      await t.screenshot(page, 'admin_trainee_rounds');
+      await page.click('[data-log="sign-out"]');
+      await signIn(page, 'T07', 'trainee seven');
+      await waitForRoute(page, 'training');
+      assert.match(await page.textContent('[data-stage="assessment"] .stage-rounds'), /^Round 1, Not met check: /);
+      assert.equal(await page.textContent('main.training .btn.primary'), 'Start the assessment');
+      assert.match(await page.textContent('[data-stage="assessment"]'), /reopened your training/);
     },
   },
   {

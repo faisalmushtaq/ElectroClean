@@ -25,6 +25,20 @@ const TABS = [
 ];
 const DISAGREEMENT_COLUMNS = ['kind', 'label', 'onset_s', 'offset_s', 'experts_marking', 'experts_not_marking', 'note'];
 
+/**
+ * Why a quiz is held back (quiz_items' withheld): some of its segments come from a recording that is now a
+ * practice or assessment recording, so trainees are not offered it and it is no recognition check.
+ */
+export function quizWithheldNote(withheld) {
+  if (!withheld.length) return [];
+  const ids = withheld.map((w) => w.item_id);
+  return [h('div.banner', { role: 'note', 'data-log': 'quiz-withheld' },
+    h('p', {}, h('b', {}, 'Trainees are not offered this quiz, and it is left out of the recognition check of Meet the artifacts. '),
+      `${ids.length === 1 ? `Item ${ids[0]} comes` : `Items ${ids.join(', ')} come`} from a recording that is now a practice or assessment recording, `
+      + 'so they would show trainees the answers they are scored against. Remove them to offer the quiz again.'),
+    h('ul', {}, withheld.map((w) => h('li.caption', {}, `${w.item_id}: ${w.message}`))))];
+}
+
 export class TrainingSection {
   constructor(area) {
     this.area = area;
@@ -452,7 +466,12 @@ export class TrainingSection {
       } },
     ], [], { empty: 'No quiz items yet.', pageSize: 20, caption: 'Quiz items' });
     const note = loading();
-    this.area.read('quiz_items', { set_id: s.set_id }).then((r) => { note.remove(); table.update(r.items || []); }).catch((exc) => { note.remove(); msg.problem(exc); });
+    const withheldHost = h('div.quiz-withheld');
+    this.area.read('quiz_items', { set_id: s.set_id }).then((r) => {
+      note.remove();
+      table.update(r.items || []);
+      withheldHost.replaceChildren(...quizWithheldNote(r.withheld || []));
+    }).catch((exc) => { note.remove(); msg.problem(exc); });
     // a new item
     const recs = this.recordings.filter((r) => r.scope === `set:${s.set_id}` || r.scope === 'study');
     const recording = select(recs.map((r) => [r.recording_id, `${r.recording_id} (${scopeText(r.scope, this.sets)})`]));
@@ -494,8 +513,11 @@ export class TrainingSection {
       await this.reload(['success', `Added the quiz item ${(r.item && r.item.item_id) || ''}.`]);
     } });
     return h('div.admin-stack', {},
-      card('Quiz items', h('p.caption', {}, 'Short segments that annotators allowed to use the set classify: which artifact type is the main one in the shaded segment?'), note, table, msg),
+      card('Quiz items', h('p.caption', {}, 'Short segments that annotators allowed to use the set classify: which artifact type is the main one in the shaded segment? '
+        + 'Trainees take the quiz as the recognition check of Meet the artifacts.'), withheldHost, note, table, msg),
       card('Add a quiz item',
+        h('p.caption', {}, 'A segment comes from a guided recording, or another recording that no set uses for practice or assessment: '
+          + 'the experts\' annotations of those are the answers trainees are scored against, so a segment of one is refused.'),
         h('div.row.wrap', {}, field('Recording', recording), field('Item ID', itemId)),
         h('div.row.wrap', {}, field('Start (s)', start), field('End (s)', end), field('Context shown (s)', context, { hint: 'EEG shown before and after the segment.' })),
         field('Correct answer', correct), acceptGroup, others, field('Explanation', explanation),

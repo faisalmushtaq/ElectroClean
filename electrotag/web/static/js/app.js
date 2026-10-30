@@ -401,6 +401,13 @@ export class App {
       this.snippetsView.destroy(); // the training path's snippets (js/training/snippets.js): their recordings are closed
       this.snippetsView = null;
     }
+    // the snippets wait, with their recordings open, while the recognition check is taken from them; anything
+    // else shown (a Loading… page aside) closes them
+    const waiting = this.suspendedSnippets;
+    if (waiting && route !== null && waiting.el !== el && !(this.quizView && this.quizView.el === el)) {
+      waiting.destroy();
+      this.suspendedSnippets = null;
+    }
     clear(this.content);
     this.content.appendChild(el);
     if (route !== null) this._setRoute(route);
@@ -574,12 +581,15 @@ export class App {
     this.showHome();
   }
 
-  /** The short-segment quiz of a reference set (one of me.quizzes). */
-  showQuiz(setId, { fromTraining = false } = {}) {
+  /**
+   * The short-segment quiz of a reference set (one of me.quizzes). From the snippets (the recognition check),
+   * `shared` lends it the recordings already open there and `onLeave` goes back to them.
+   */
+  showQuiz(setId, { fromTraining = false, shared = null, onLeave = null } = {}) {
     this._fromTraining = Boolean(fromTraining);
     this.quizSetId = setId;
     return this._withParts(['quiz'], 'quiz', ({ QuizView }) => {
-      const view = new QuizView(this, setId);
+      const view = new QuizView(this, setId, { shared, onLeave });
       if (this.quizView) this.quizView.destroy();
       this.quizView = view;
       this._render(view.el, 'quiz');
@@ -1034,7 +1044,13 @@ export class App {
       await this.showTraining();
       return;
     }
-    if (this.me.programme && s.contextId === this.me.programme.set_id) { this.pathMessage = 'Recording saved.'; await this.showTraining(); return; }
+    if (this.me.programme && s.contextId === this.me.programme.set_id) {
+      // the last assessment recording: the training path says how it went (passed, or waiting for the study team)
+      const a = s.mode === 'assessment' ? result.assessment : null;
+      this.pathMessage = a && a.complete ? 'Your last assessment recording is saved.' : 'Recording saved.';
+      await this.showTraining();
+      return;
+    }
     const next = result.next ? (this.assignments.items || []).find((i) => i.recording_id === result.next) : null;
     const demo = this.backend.isDemo ? `\n\n${DEMO_NOTICE}` : '';
     const milestone = reached.length ? `\n\nMilestone reached: ${reached.map((m) => m.name).join(', ')}.` : '';

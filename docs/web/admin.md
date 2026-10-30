@@ -216,9 +216,16 @@ and, under What happened to the stages, every stage they skipped, took up again 
 when. After an assessment that did not meet the criteria it offers the two ways on. Reopen the
 training sends the trainee back to learning with the experts or to practice: they work through the
 stages from there again and retake the assessment, and only what they save from then on counts
-(everything saved before is kept). Give this assessment enrols them in another reference set with
-assessment recordings, its learning stages counted as done. Each asks first, and both are written to
-the audit log.
+(everything saved before is kept). The reopened stages cannot be skipped until they are done again,
+whatever the study's skipping policy: reopening is the study team's decision that the trainee
+practises before the next attempt, so the trainee cannot undo it with one press. Give this assessment
+enrols them in another reference set with assessment recordings. Each learning stage is carried over
+as it was in the earlier set, done there or skipped there ("Skipped in Pilot training set"), so a
+skip is never turned into a completed stage, and the earlier set's skips are listed under What
+happened to the stages and in the new competency report. Each asks first, and both are written to
+the audit log. Either way the round that ended stays listed under Earlier rounds of the assessment,
+with its result and its competency report (See the report, and Download the report), as it was when
+the round ended.
 
 ## Recordings
 
@@ -442,7 +449,13 @@ Each item names its recording, the start and end of the segment, how much EEG to
 the correct answer and any other answers to accept (where the study's catalogue gives the type's
 group term, such as Eye-artifact for an eye blink, one tick accepts that too), and an explanation
 shown after each answer when the quiz gives feedback. Annotators allowed to use the set are offered
-its quiz.
+its quiz, and trainees take it as the recognition check of Meet the artifacts. A segment never comes
+from a practice or assessment recording, of this set or of another set that holds the same file:
+the experts' annotations of those are the answers trainees are scored against, so such an item is
+refused. A quiz with an item of that kind from before (or from a recording given such a use later)
+is held back: the tab says so and names the items, trainees are not offered the quiz and it is left
+out of the recognition check, until those items are removed. The library's Promote follows the same
+rule.
 
 ### Snippets
 
@@ -453,7 +466,9 @@ notes with Edit the guided notes under Recordings and references). Add a snippet
 of the set, the type, where the artifact starts and ends, how much EEG to show on each side (2 s
 unless you choose up to 10 s), the channels it is on (none for the whole montage) and an
 explanation of up to 1000 characters. A snippet is at most 60 s long. Practice and assessment
-recordings are never offered, because a snippet of one would show trainees its answers. Remove takes
+recordings are never offered, because a snippet of one would show trainees its answers, and the same
+holds for a recording that another set uses for practice or assessment; snippets of such a
+recording, including those made from a guided reference, are left out of the gallery. Remove takes
 a snippet out after asking. Experts add and remove snippets with the same operations in the expert
 channel (`snippet_add` and `snippet_remove` in [the API](api.md), "Training stages").
 

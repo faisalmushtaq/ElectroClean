@@ -3,9 +3,11 @@
 // assessment that did not meet the criteria, the study team's two ways on: reopen the training (the
 // trainee practises again and retakes the assessment) or give them a new assessment set. Both ask
 // first, are sent once and are kept in the audit log (training_reopen, training_assessment_set).
+// The earlier rounds of the assessment stay listed, each with its competency report, and stages carried
+// over from an earlier set name the set they were done or skipped in.
 
 import { h, clear } from '../ui/dom.js';
-import { actionButton, card, chip, confirmInline, loading, messageArea, select } from './ui.js';
+import { actionButton, card, chip, confirmInline, downloadText, loading, messageArea, reportFrame, select } from './ui.js';
 import { whenText } from './model.js';
 import { STAGE_TITLES } from '../training/stages.js';
 
@@ -19,9 +21,32 @@ const EVENT_WORDS = {
 export function eventText(e) {
   const what = e.stage ? `${STAGE_TITLES[e.stage] || e.stage} ${EVENT_WORDS[e.event] || e.event}` : (EVENT_WORDS[e.event] || e.event);
   const extra = e.event === 'training_reopened' && e.from ? ` (from ${STAGE_TITLES[e.from] || e.from})`
-    : e.event === 'assessment_set_assigned' && e.from_set ? ` (after ${e.from_set})` : '';
+    : e.event === 'assessment_set_assigned' && e.from_set ? ` (after ${e.from_set})`
+      : e.set_name ? ` in ${e.set_name}` : '';
   const by = e.by ? ` by ${e.by}` : '';
   return `${what.charAt(0).toUpperCase()}${what.slice(1)}${extra}${by}, ${whenText(e.at)}`;
+}
+
+/** An earlier round of the assessment, for the study team: "Round 1, Pilot training set: not met, 30 October at 10:15". */
+export function roundLine(r) {
+  const result = { met: 'met', not_met: 'not met', not_determined: 'no decision' }[r.status] || 'no result';
+  return `Round ${r.round}${r.set_name ? `, ${r.set_name}` : ''}: ${result}, ${whenText(r.at)}`;
+}
+
+/** The earlier rounds, each with its competency report shown on demand (in a sandboxed frame) and to download. */
+function roundsList(u, rounds) {
+  return h('div.gate-rounds', {}, h('h3', {}, 'Earlier rounds of the assessment'),
+    h('ul.gate-round-list', {}, rounds.map((r) => {
+      const host = h('div.gate-round-report');
+      const show = h('button.btn.small', { type: 'button', 'data-log': 'training-round-report', disabled: !r.html, onclick: () => {
+        if (host.firstChild) { host.replaceChildren(); show.textContent = 'See the report'; return; }
+        const base = `competency_${r.set_id}_${u.annotator_id}_round${r.round}`;
+        host.append(h('div.btn-row', {}, h('button.btn.small.quiet', { type: 'button', onclick: () => downloadText(`${base}.html`, r.html, 'text/html') }, 'Download the report')),
+          reportFrame(r.html, `Competency report, round ${r.round}`));
+        show.textContent = 'Hide the report';
+      } }, 'See the report');
+      return h('li', {}, h('div.gate-round-head', {}, h('span', {}, roundLine(r)), show), host);
+    })));
 }
 
 /** The card, or null for someone outside a training programme. */
@@ -50,8 +75,10 @@ function content(area, u, g, reload) {
   const prog = g.programme;
   if (prog && prog.stages) {
     out.push(h('ol.gate-stages', {}, prog.stages.map((s) => h('li', {}, h('b', {}, s.title || STAGE_TITLES[s.key]), `: ${STATUS_WORDS[s.status] || s.status}`,
+      s.carried_from ? ` in ${s.carried_from}` : '',
       s.key === 'assessment' && s.result ? ` (${s.result.replace('_', ' ')})` : ''))));
   }
+  if ((g.rounds || []).length) out.push(roundsList(u, g.rounds));
   const events = g.events || [];
   if (events.length) {
     out.push(h('details.admin-details', {}, h('summary', {}, `What happened to the stages (${events.length})`),
@@ -80,10 +107,11 @@ function content(area, u, g, reload) {
       } else {
         const which = select(sets.map((s) => [s.set_id, `${s.name} (${s.n_assessment} assessment recording${s.n_assessment === 1 ? '' : 's'})`]));
         const host = h('div.btn-row');
+        const nameOf = (id) => (sets.find((s) => s.set_id === id) || {}).name || id;
         const go = actionButton('Give this assessment', { working: 'Saving…', msg, log: 'training-assessment-set', onClick: async () => {
-          if (!(await confirmInline(host, { text: `Give ${u.annotator_id} the assessment of ${which.value}? Their learning stages count as done there.`, yes: 'Give it', destructive: false }))) return;
+          if (!(await confirmInline(host, { text: `Give ${u.annotator_id} the assessment of ${nameOf(which.value)}? Their learning stages are carried over as they are: done, or skipped.`, yes: 'Give it', destructive: false }))) return;
           await area.write('training_assessment_set', { annotator_id: u.annotator_id, set_id: which.value });
-          await reload(['success', `${u.annotator_id} now takes the assessment of ${which.value}.`]);
+          await reload(['success', `${u.annotator_id} now takes the assessment of ${nameOf(which.value)}.`]);
         } });
         host.append(which, go);
         out.push(host);
