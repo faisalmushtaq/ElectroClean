@@ -53,9 +53,11 @@ function setUpStudy() {
   py('register', path.join(demo, 'recordings', 'study'), ...store);
   py('register', path.join(demo, 'training-source'), ...store);
   py('add-user', 'A01', ...store, '--email', 'a01@example.org', '--password', PASSWORD, '--name', 'Annotator one');
+  py('add-user', 'A02', ...store, '--email', 'a02@example.org', '--password', PASSWORD, '--name', 'Annotator two');
   py('add-user', 'T01', ...store, '--email', 't01@example.org', '--password', PASSWORD, '--name', 'Trainee one');
   py('add-user', 'ADMIN', ...store, '--email', 'admin@example.org', '--password', PASSWORD, '--name', 'Study lead', '--admin');
   py('assign', 'A01', '--all', ...store);
+  py('assign', 'A02', '--all', ...store);
   py('assign', 'T01', '--programme', 'example', ...store);
   return demo;
 }
@@ -170,7 +172,7 @@ async function main() {
       // The functions keep a draft's time in UTC and this browser in New York's time: the newer is
       // chosen by the moment, so the mark made just before the reload is there (docs/web/using.md).
       const page = await newPage({ timezoneId: 'America/New_York' });
-      await signIn(page, 'a01@example.org', PASSWORD);
+      await signIn(page, 'a02@example.org', PASSWORD);
       await waitForRoute(page, 'home', 30000);
       await page.click('[data-log="open-next"]');
       await waitForRoute(page, 'open');
