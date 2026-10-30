@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { SkipTest, signIn, waitForRoute } from './helpers.mjs';
+import { SkipTest, signIn, waitForRoute, chooseFolder } from './helpers.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const STATIC = path.resolve(HERE, '..', '..', 'electrotag', 'web', 'static');
@@ -145,7 +145,7 @@ async function flow(t, page, { people, folder, collide, study }) {
   // the section has read the datasets and chosen the one it was opened for
   await page.waitForFunction((id) => [...document.querySelectorAll('.admin-section[data-section="recordings"] select')].some((x) => x.value === id), datasetId);
   assert.equal(await add.locator('.admin-field', { hasText: 'Dataset' }).locator('select').inputValue(), datasetId, 'the dataset is chosen for adding');
-  await page.setInputFiles('input[data-log="register-folder"]', folder);
+  await chooseFolder(page, 'input[data-log="register-folder"]', folder);
   await page.waitForSelector('[data-log="register"]', { timeout: 120000 });
   assert.match(await text(page, '.admin-review'), /Into the dataset Youth low-density 2026, with their IDs starting youth\//);
   if (collide) {

@@ -4,6 +4,7 @@
 // the page must keep answering while the recordings are read.
 import fs from 'node:fs';
 import path from 'node:path';
+import { chooseFolder } from './helpers.mjs';
 
 import { buildManifests } from '../../electrotag/web/static/js/eeg/register.js';
 import { CATALOGUE } from '../../electrotag/web/static/js/api/demo_catalogue.js';
@@ -52,7 +53,7 @@ export const tests = [
           input.multiple = true;
           document.body.append(input);
         });
-        await page.setInputFiles('#register-input', dir);
+        await chooseFolder(page, '#register-input', dir);
         const got = await page.evaluate(async () => {
           const { buildManifests } = await import(new URL('js/eeg/register.js', location.href).href);
           const { CATALOGUE } = await import(new URL('js/api/demo_catalogue.js', location.href).href);

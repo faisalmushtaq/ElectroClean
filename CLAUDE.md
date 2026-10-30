@@ -132,7 +132,8 @@ standard or web page, check it against the original source online, and add it to
 
 iPads run Safari's engine, WebKit, which reports pointer positions in whole pixels, refuses some
 ports and leaves out a lazily loaded frame until it is scrolled to; run the end-to-end tests with
-`--browser webkit` after a change to the views. On a touch screen: hover styles go inside
+`--browser webkit` after a change to the views. In those tests, give a folder input its folder with `chooseFolder` from
+`web_tests/e2e/helpers.mjs`: Playwright's WebKit hangs when one browser is given the same folder twice. On a touch screen: hover styles go inside
 `@media (hover: hover)` (they would stay on a tapped control), fields are 16 pixels under
 `(pointer: coarse)` (Safari zooms into smaller ones), file inputs take `accept` from `acceptFiles()`
 (iPadOS greys out unknown extensions such as .edf) and folder buttons hide where `CAN_CHOOSE_FOLDER`

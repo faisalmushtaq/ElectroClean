@@ -5,7 +5,7 @@
 // as the desktop saves it. Until the server offers POST /quiz/{set_id}, the test says so and stops.
 import fs from 'node:fs';
 import path from 'node:path';
-import { signIn, waitForRoute } from './helpers.mjs';
+import { signIn, waitForRoute, chooseFolder } from './helpers.mjs';
 
 const PASSWORD = 'electrotag';
 
@@ -93,7 +93,7 @@ export const tests = [
       await page.click(`[data-log="quiz-${set.set_id}"]`);
       await waitForRoute(page, 'quiz');
       await page.waitForSelector('[data-log="quiz-folder-input"]', { state: 'attached' });
-      await page.setInputFiles('[data-log="quiz-folder-input"]', path.join(t.study.dir, 'recordings'));
+      await chooseFolder(page, '[data-log="quiz-folder-input"]', path.join(t.study.dir, 'recordings'));
       let n = 0;
       for (let guard = 0; guard < 200; guard++) {
         await page.waitForFunction(() => {

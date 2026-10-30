@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { signIn, state, waitForRoute, waitForTraces, eegPoint, drag, clickDialogButton, pressSave, answerQuestionnaire } from './helpers.mjs';
+import { signIn, state, waitForRoute, waitForTraces, eegPoint, drag, clickDialogButton, pressSave, answerQuestionnaire, chooseFolder } from './helpers.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const STATIC = path.resolve(HERE, '..', '..', 'electrotag', 'web', 'static');
@@ -208,7 +208,7 @@ export const tests = [
         await goSection(page, 'Recordings', 'admin-recordings');
         // While the files are read, they cannot be chosen again.
         await page.evaluate(() => { globalThis.__holdBuilder = true; });
-        await page.setInputFiles('input[data-log="register-folder"]', data.folder);
+        await chooseFolder(page, 'input[data-log="register-folder"]', data.folder);
         await page.waitForFunction(() => typeof globalThis.__releaseBuilder === 'function');
         assert.equal(await page.isDisabled('.admin-section[data-section="recordings"] .btn.primary >> text=Choose a folder…'), true);
         assert.equal(await page.isDisabled('text=Choose files…'), true);
@@ -235,7 +235,7 @@ export const tests = [
         await detail.waitFor();
         assert.match((await detail.innerText()).replace(/\s+/g, ' '), /by ADMIN, from a browser/);
         // Adding the same folder again changes nothing.
-        await page.setInputFiles('input[data-log="register-folder"]', data.folder);
+        await chooseFolder(page, 'input[data-log="register-folder"]', data.folder);
         await page.waitForSelector('[data-log="register"]');
         assert.match(await page.textContent('.admin-review'), /registered already/);
         await page.click('[data-log="register"]');

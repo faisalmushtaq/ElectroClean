@@ -1,5 +1,9 @@
 // Helpers shared by the end-to-end tests.
 
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
 /** Thrown by a test that cannot run here yet (the runner reports it as skipped, with the reason). */
 export class SkipTest extends Error {
   constructor(reason) {
@@ -131,4 +135,15 @@ export async function skipFirstStages(page, timeout = 30000) {
     await clickDialogButton(page, 'Skip this stage');
     await page.waitForSelector(`main.training [data-stage="${stage}"][data-status="skipped"]`, { timeout });
   }
+}
+
+/**
+ * Give a folder to a folder input (`webkitdirectory`). In WebKit, Playwright hangs until its timeout when one
+ * browser is given the same folder a second time (the runner keeps one browser for every test), so each call
+ * gives a fresh copy of the folder, under its own name and with its dates, so that what the page reads stays the same.
+ */
+export async function chooseFolder(page, selector, folder, options = {}) {
+  const copy = path.join(fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'et-folder-')), path.basename(folder));
+  fs.cpSync(folder, copy, { recursive: true, preserveTimestamps: true }); // the pages compare files' dates
+  await page.setInputFiles(selector, copy, options);
 }

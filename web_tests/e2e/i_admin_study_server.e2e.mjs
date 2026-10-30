@@ -7,7 +7,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SkipTest, signIn, waitForRoute, answerQuestionnaire } from './helpers.mjs';
+import { SkipTest, signIn, waitForRoute, answerQuestionnaire, chooseFolder } from './helpers.mjs';
 
 const PASSWORD = 'electrotag';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -259,7 +259,7 @@ export const tests = [
       if (!fs.existsSync(REGISTER_JS)) throw new SkipTest('js/eeg/register.js, which reads recordings for the register, is not in this copy yet');
       const page = await adminPage(t);
       await goSection(page, 'Recordings', 'admin-recordings');
-      await page.setInputFiles('input[data-log="register-folder"]', path.join(t.study.dir, 'recordings', 'study'));
+      await chooseFolder(page, 'input[data-log="register-folder"]', path.join(t.study.dir, 'recordings', 'study'));
       await page.waitForSelector('[data-log="register"]', { timeout: 120000 });
       assert.match(await page.innerText('.admin-review'), /Found 3 recordings/);
       await page.click('[data-log="register"]');
