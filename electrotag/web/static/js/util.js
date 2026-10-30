@@ -162,6 +162,28 @@ export function secs(t, digits = 3) {
   return `${Number(t).toFixed(digits)} s`;
 }
 
+/**
+ * Channels in a sentence, short however many there are: up to `max` names as they are ("Fp1, F7
+ * and F3"); more as runs in the montage's order (`order`, its channel names), a run of three or more
+ * neighbours written as its ends: "180 channels: A1–F20", "40 channels: E1–E12, E20, E31–E57". Past
+ * `max` runs the rest are counted ("…, E90 and 12 more"). Without `order`, the order given.
+ */
+export function channelList(channels, order = null, max = 8) {
+  const list = [...(channels || [])];
+  if (list.length <= max) return listWords(list);
+  const at = new Map((order || list).map((n, i) => [n, i]));
+  const known = list.filter((n) => at.has(n)).sort((a, b) => at.get(a) - at.get(b));
+  const runs = [];
+  for (const n of known) {
+    const last = runs[runs.length - 1];
+    if (last && at.get(n) === at.get(last[last.length - 1]) + 1) last.push(n); else runs.push([n]);
+  }
+  const parts = runs.flatMap((r) => (r.length >= 3 ? [`${r[0]}–${r[r.length - 1]}`] : r));
+  for (const n of list) if (!at.has(n)) parts.push(n);
+  const shown = parts.length <= max ? parts.join(', ') : `${parts.slice(0, max).join(', ')} and ${parts.length - max} more`;
+  return `${list.length} channels: ${shown}`;
+}
+
 /** The channels of an annotation as shown in lists: "Whole montage", "C3", "40 ch: A5, A12, …". */
 export function channelsText(channels, maxShown = 3) {
   if (!channels || channels.length === 0) return 'Whole montage';

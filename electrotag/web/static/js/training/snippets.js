@@ -19,7 +19,7 @@ import { displayChannels } from '../annotate/session.js';
 import { logger } from '../log/logger.js';
 import { dialogOpen } from '../ui/dialog.js';
 import { DEFAULT_SCALINGS } from '../api/demo_catalogue.js';
-import { CAN_CHOOSE_FOLDER, acceptFiles, listWords, plural } from '../util.js';
+import { CAN_CHOOSE_FOLDER, acceptFiles, channelList, plural } from '../util.js';
 import { loadPart } from '../lazy.js';
 import { segmentBounds } from './quiz.js';
 
@@ -58,7 +58,7 @@ export function galleryOrder(groups) {
  * channel"). The EEG shown is that stretch of the recording, so its time axis gives the same times.
  */
 export function whereText(s) {
-  const chans = s.channels && s.channels.length ? `on ${listWords(s.channels)}` : 'on every channel';
+  const chans = s.channels && s.channels.length ? `on ${channelList(s.channels)}` : 'on every channel';
   const len = Number(s.end_s) - Number(s.start_s);
   return `${len.toFixed(2)} s ${chans}, at ${Number(s.start_s).toFixed(2)} s in the recording`;
 }

@@ -34,7 +34,7 @@ import { logger, keyName } from '../log/logger.js';
 import { checkStudyCopy } from '../views/purposes.js';
 import { COLOURS } from '../ui/theme.js';
 import { icon } from '../views/common.js';
-import { touchFirst } from '../util.js';
+import { channelList, touchFirst } from '../util.js';
 import { Lanes } from './lanes.js';
 import { REASONS as CORRECTION_REASONS } from './diff.js';
 import { isHelpKey, showKeySheet } from './key_sheet.js';
@@ -107,6 +107,9 @@ export class AdjudicationPass {
   }
 
   _decided() { return this.conflicts.filter((c) => c.decision).length; }
+
+  /** The montage's channel names in order, for writing channels as runs (channelList). */
+  _montage() { return this.ws.s.channels.map((c) => c.name); }
 
   _colourOf(letter) { return LETTER_COLOURS[Math.max(0, this.letters.indexOf(letter)) % LETTER_COLOURS.length]; }
 
@@ -715,7 +718,7 @@ export class AdjudicationPass {
     const rows = this.versions.map((v) => {
       const marks = (c.marks || []).filter((m) => m.letter === v.letter);
       const what = marks.length ? marks.map((m) => {
-        const extra = [m.channels.length ? m.channels.join(', ') : 'whole montage'];
+        const extra = [m.channels.length ? channelList(m.channels, this._montage()) : 'whole montage'];
         if (Number.isInteger(m.confidence)) extra.push(`confidence ${m.confidence} of 5`);
         return h('span.adj-mark', {}, h('span.swatch', { style: { background: this.ws.cat.get(m.label)?.colour || null } }), ` ${m.label}, ${spanText(m.onset_s, m.offset_s)} (${extra.join(', ')})`,
           m.note ? h('span.caption', {}, ` “${m.note}”`) : null);

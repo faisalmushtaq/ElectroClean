@@ -11,8 +11,10 @@
 // neighbouring regions, of the two sides and of the types stay apart for people with red-green
 // colour blindness (checked in web_tests/unit/ui_channel_colours.test.mjs). Channels outside the
 // groups (the midline, EEG in the type view, names that are not 10-20 or 10-10) keep the ink colour.
+// A cap named by numbers (BioSemi, EGI) is coloured by region and side when the recording's own
+// electrodes.tsv places it: each channel takes the group of the nearest 10-10 site.
 
-import { tenTwentyPosition } from '../annotate/dialogs.js';
+import { regionsFromPositions, tenTwentyPosition } from '../annotate/dialogs.js';
 import { COLOURS } from '../ui/theme.js';
 
 /** The ways of colouring, as the study setting display.channel_colours names them. */
@@ -63,14 +65,29 @@ export function normaliseMode(mode) {
 }
 
 /**
- * The group of a channel in a mode, or the ink group's name.
+ * Where each EEG channel is, for the region and side modes: from the names when the montage is named
+ * by the 10-20 or 10-10 system, otherwise from the recording's own positions (a Map name -> {x, y},
+ * or null) when they place 60% or more of its EEG channels; null when neither does.
+ */
+function placesOf(channels, positions) {
+  if (namedByTenTwenty(channels)) return (name) => tenTwentyPosition(name);
+  if (!positions || !positions.size) return null;
+  const placed = regionsFromPositions(positions);
+  const eeg = channels.filter((c) => ['eeg', ''].includes(String(c.type || '').toLowerCase()));
+  const n = eeg.filter((c) => placed.has(c.name)).length;
+  return eeg.length > 0 && n >= 0.6 * eeg.length ? (name) => placed.get(name) || null : null;
+}
+
+/**
+ * The group of a channel in a mode, or the ink group's name. `placeOf` (name -> {region, side} or
+ * null) says where a channel is; by default from its 10-20 or 10-10 name.
  * @param {{name: string, type?: string}} ch
  */
-export function groupOf(ch, mode) {
+export function groupOf(ch, mode, placeOf = tenTwentyPosition) {
   if (mode === 'type') return TYPE_GROUP[String(ch.type || '').toLowerCase()] || 'EEG';
   const type = String(ch.type || 'eeg').toLowerCase();
   if (type !== 'eeg') return 'Other';
-  const pos = tenTwentyPosition(ch.name);
+  const pos = placeOf(ch.name);
   if (!pos) return 'Other';
   return mode === 'region' ? pos.region : mode === 'side' ? pos.side : 'Other';
 }
@@ -83,15 +100,15 @@ function colourOfGroup(mode, group) {
 /**
  * The colour of each coloured channel: Map name -> colour (channels in the ink colour are left
  * out, and so is everything when the mode is 'off'). The viewer draws bad and selected channels
- * as before, whatever this says.
+ * as before, whatever this says. `positions`: the recording's own map positions, or null.
  * @param {{name: string, type?: string}[]} channels
  */
-export function channelColours(channels, mode) {
+export function channelColours(channels, mode, positions = null) {
   const out = new Map();
   if (normaliseMode(mode) === 'off') return out;
-  const placed = mode === 'type' || namedByTenTwenty(channels);
+  const placeOf = mode === 'type' ? tenTwentyPosition : placesOf(channels, positions);
   for (const ch of channels) {
-    const c = placed ? colourOfGroup(mode, groupOf(ch, mode)) : null;
+    const c = placeOf ? colourOfGroup(mode, groupOf(ch, mode, placeOf)) : null;
     if (c) out.set(ch.name, c);
   }
   return out;
@@ -101,12 +118,12 @@ export function channelColours(channels, mode) {
  * The legend of a mode for these channels: the coloured groups present, in a fixed order, then the
  * channels left in ink. [{group, colour, count, ink}]
  */
-export function legendOf(channels, mode, ink = COLOURS.trace) {
+export function legendOf(channels, mode, ink = COLOURS.trace, positions = null) {
   if (normaliseMode(mode) === 'off') return [];
-  const placed = mode === 'type' || namedByTenTwenty(channels);
+  const placeOf = mode === 'type' ? tenTwentyPosition : placesOf(channels, positions);
   const counts = new Map();
   for (const ch of channels) {
-    const g = placed ? groupOf(ch, mode) : 'Other';
+    const g = placeOf ? groupOf(ch, mode, placeOf) : 'Other';
     counts.set(g, (counts.get(g) || 0) + 1);
   }
   const out = [];
