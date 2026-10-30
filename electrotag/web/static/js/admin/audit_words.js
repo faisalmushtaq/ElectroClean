@@ -56,6 +56,20 @@ export const AUDIT_OPS = Object.freeze({
   adjudication_finish: 'Adjudication finished',
   adjudication_reopen: 'Adjudication reopened',
   library_promote: 'Library entry made into training material',
+  // datasets, collections, groups and hand-outs (datasets.py)
+  dataset_create: 'Dataset made',
+  dataset_update: 'Dataset changed',
+  dataset_remove: 'Dataset removed',
+  recordings_move: 'Recordings moved to another dataset',
+  collection_create: 'Collection made',
+  collection_update: 'Collection changed',
+  collection_remove: 'Collection removed',
+  group_create: 'Group made',
+  group_update: 'Group changed',
+  group_remove: 'Group removed',
+  handout_create: 'Recordings handed out',
+  handout_update: 'Hand-out changed',
+  handout_withdraw: 'Hand-out withdrawn',
 });
 
 /**
