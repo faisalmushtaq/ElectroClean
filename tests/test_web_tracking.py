@@ -408,7 +408,7 @@ def test_a_5000_by_10_grid_is_quick(app: Any, admin: Api) -> None:
              "n_annotations": "1", "output_dir": "x", "output_basename": f"b{j}", "app_version": "t"}
             for j in range(20000)]
     layout = store.layout
-    layout.register.write_bytes(tsv_bytes(REGISTER_COLUMNS, [[r[c] for c in REGISTER_COLUMNS]
+    layout.register.write_bytes(tsv_bytes(REGISTER_COLUMNS, [[r.get(c, "") for c in REGISTER_COLUMNS]
                                                                         for r in rows]))
     assert len(store.completion_entries()) == 20000
     store.refresh()
