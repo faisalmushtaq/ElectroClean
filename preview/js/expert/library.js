@@ -69,6 +69,9 @@ export class LibrarySection {
       } },
       { title: '', render: (e) => h('span.btn-row.tight', {},
         h('button.btn.small', { type: 'button', 'data-log': 'library-open', 'data-entry': e.entry_id, onclick: () => this._open(e) }, 'Open at this moment'),
+        h('button.btn.small.quiet', { type: 'button', 'data-log': 'library-overlay', 'data-entry': e.entry_id, title: 'Everyone\'s marks at this moment, with these annotators in lanes',
+          onclick: async () => (await import('./overlay.js')).startOverlay(this.area.app, { recording_id: e.recording_id, focus: Object.keys(e.letters || {}),
+            include: e.decision ? ['adjudicated'] : [], at: e.onset_s }, { route: 'expert-library', params: null }) }, 'Everyone\'s marks'),
         h('button.btn.small', { type: 'button', 'data-log': 'library-promote', 'data-entry': e.entry_id, disabled: !e.decision,
           title: e.decision ? null : 'Decide it first: only a decided conflict can teach', onclick: () => this.promote(e) }, 'Promote…')) },
     ];

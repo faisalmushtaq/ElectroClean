@@ -15,7 +15,7 @@ import { logger } from '../log/logger.js';
 import { card, chip, dataTable, field, loading, messageArea, recordingName, sectionHead, select, shareBar, tabBar, textInput } from '../admin/ui.js';
 import { whenText } from '../admin/model.js';
 import {
-  QUEUE_TABS, STATUS_TEXT, blockedText, canBecomeReference, defaultTab, peopleText, queueAction, queueOrder, queueSummary, searchUnits, tabRows,
+  QUEUE_TABS, STATUS_TEXT, blockedText, canBecomeReference, defaultTab, peopleText, queueAction, queueOrder, queueSummary, reviewText, searchUnits, tabRows,
   unitWhat,
 } from './model.js';
 import { startAdjudication } from './adjudicate.js';
@@ -54,7 +54,8 @@ export class QueueSection {
         h('span.caption.block', {}, unitWhat(u)), u.notes ? h('span.caption.block', {}, u.notes) : null) },
       { title: 'Annotators', sort: (u) => peopleText(u), render: (u) => h('span', {}, peopleText(u),
         u.saved < u.k ? h('span.caption.block', {}, `${u.saved} of ${u.k} saved`) : null) },
-      { title: 'Conflicts', num: true, sort: (u) => u.conflicts ?? -1, render: (u) => (u.conflicts === null || u.conflicts === undefined ? '–' : String(u.conflicts)) },
+      { title: 'Conflicts', num: true, sort: (u) => u.conflicts ?? -1, render: (u) => h('span', {}, u.conflicts === null || u.conflicts === undefined ? '–' : String(u.conflicts),
+        u.needs_review > 0 ? h('span.block', {}, chip(reviewText(u.needs_review), 'active')) : null) },
       { title: 'Decided', sort: (u) => (u.conflicts ? u.decided / u.conflicts : -1), render: (u) => (u.conflicts
         ? h('span', {}, shareBar(u.decided / u.conflicts), h('span.caption.block', {}, `${u.decided} of ${u.conflicts}`)) : h('span.caption', {}, '–')) },
       { title: 'Adjudicator', sort: (u) => u.adjudicator_id || '', render: (u) => (u.adjudicator_id ? h('span', {}, u.adjudicator_id, u.yours ? h('span.caption', {}, ' (you)') : null) : '–') },
@@ -71,6 +72,13 @@ export class QueueSection {
     if (a) {
       out.push(h('button.btn.small', { type: 'button', 'data-log': `adjudication-${a.op}`, 'data-unit': u.unit_id,
         onclick: () => startAdjudication(this.area.app, { unitId: u.unit_id, mode: a.op === 'view' ? 'view' : 'decide', msg: this.msg }) }, a.label));
+    }
+    if (u.recording_id) {
+      out.push(h('button.btn.small.quiet', { type: 'button', 'data-log': 'adjudication-overlay', 'data-unit': u.unit_id,
+        title: 'Everyone\'s marks on this recording, with these annotators in lanes',
+        onclick: async () => (await import('./overlay.js')).startOverlay(this.area.app, { recording_id: u.recording_id,
+          focus: (u.annotators || []).map((a) => a.annotator_id), include: u.status === 'adjudicated' ? ['adjudicated'] : [] },
+        { route: 'expert-queue', params: null }) }, 'Everyone\'s marks'));
     }
     if (canBecomeReference(u)) {
       out.push(h('button.btn.small.quiet', { type: 'button', 'data-log': 'adjudication-make-reference', 'data-unit': u.unit_id,
@@ -95,7 +103,8 @@ export class QueueSection {
     this.tab = key;
     this.table.setEmpty({ ready: 'Nothing is ready for adjudication. A recording is ready once everyone given it has saved it and their versions disagree.',
       progress: 'No adjudication is in progress.', finished: 'No adjudication has been finished yet.',
-      waiting: 'Nothing is waiting: every recording given to two or more people has been saved by all of them.', all: 'No recording has been given to two or more people yet.' }[key] || '');
+      waiting: 'Nothing is waiting: every recording given to two or more people has been saved by all of them.', all: 'No recording has been given to two or more people yet.',
+      review: 'No mark needs review. Annotators mark an artifact whose type they cannot tell as Uncertain (key 0), and it is listed here and in Saved work.' }[key] || '');
     this._filter();
   }
 

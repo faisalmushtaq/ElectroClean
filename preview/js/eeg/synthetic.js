@@ -121,6 +121,11 @@ function hann(x) { // x in [0, 1]
   return x <= 0 || x >= 1 ? 0 : 0.5 - 0.5 * Math.cos(2 * Math.PI * x);
 }
 
+const MORE_SHAPES = new Map();
+
+/** A further type's drawing (js/guide/shapes.js). */
+export function registerArtifactShape(label, fn) { MORE_SHAPES.set(label, fn); }
+
 /** Artifact contribution (volts) for channel `name` at time t (s). */
 function artifactValue(art, name, t, ci, s, seed, sfreq) {
   const x = (t - art.onsetS) / art.durationS; // 0..1 inside
@@ -155,8 +160,11 @@ function artifactValue(art, name, t, ci, s, seed, sfreq) {
       return on ? 0.06 * ecgShape(t) : 0;
     case 'Line-noise-artifact':
       return 30 * UV * Math.sin(2 * Math.PI * 50 * t + ci);
-    default:
+    default: {
+      const more = MORE_SHAPES.get(art.label);
+      if (more) return more({ art, name, t, x, on, ci, s, seed, noise });
       return on ? 50 * UV * Math.sin(Math.PI * x) : 0;
+    }
   }
 }
 

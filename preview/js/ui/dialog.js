@@ -69,17 +69,17 @@ export function showDialog({ title, body, buttons = [{ label: 'OK', value: true,
   });
 }
 
-/** Ask a yes/no question; resolves true for the first button. */
-export async function ask(title, text, { yes = 'Yes', no = 'No', defaultYes = true, destructive = false } = {}) {
-  const body = h('div', {}, String(text).split('\n\n').map((p) => h('p.dialog-text', {}, p)));
+/** Ask a yes/no question; resolves true for the first button. `extra`: an element shown under the text. */
+export async function ask(title, text, { yes = 'Yes', no = 'No', defaultYes = true, destructive = false, extra = null } = {}) {
+  const body = h('div', {}, String(text).split('\n\n').map((p) => h('p.dialog-text', {}, p)), extra);
   const buttons = defaultYes
     ? [{ label: no, value: false }, { label: yes, value: true, kind: destructive ? 'destructive' : 'primary' }]
     : [{ label: yes, value: true, kind: destructive ? 'destructive' : '' }, { label: no, value: false, kind: 'primary' }];
   return Boolean(await showDialog({ title, body, buttons, cancelValue: false, logText: String(text) }));
 }
 
-export function inform(title, text) {
-  const body = h('div', {}, String(text).split('\n\n').map((p) => h('p.dialog-text', {}, p)));
+export function inform(title, text, { extra = null } = {}) {
+  const body = h('div', {}, String(text).split('\n\n').map((p) => h('p.dialog-text', {}, p)), extra);
   return showDialog({ title, body, buttons: [{ label: 'OK', value: true, kind: 'primary' }], cancelValue: true, logText: String(text) });
 }
 

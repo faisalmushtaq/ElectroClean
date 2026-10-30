@@ -66,6 +66,9 @@ const SERVER_ONLY = {
 };
 
 const bad = (message, code = 'bad_request', status = 400) => new ApiError(status, code, message);
+// datasets, collections, groups, hand-outs, tracking (demo_library.js, loaded when used), and what they change
+const LIBRARY_OP = /^(datasets?|collections?|groups?|handouts?|tracking)_|^(recordings_move|notify_preview_get)$/;
+const LIBRARY_HOOK = /^(overview|recordings_(list|register)|recording_remove|user_remove)$/;
 // How long an invitation link lasts unless the administrator chooses otherwise, and the longest allowed.
 const INVITE_DAYS = 14;
 const INVITE_MAX_DAYS = 90;
@@ -395,7 +398,8 @@ export class DemoAdmin {
       review: { show_corrections_to_annotators: (st.review || {}).show_corrections_to_annotators !== false,
         show_outcomes_to_annotators: (st.review || {}).show_outcomes_to_annotators !== false },
       training: { skippable: [...((st.training || {}).skippable || [])], gate: (st.training || {}).gate || 'met' },
-      replay: { enabled: (st.replay || {}).enabled !== false, trainees_watch_experts: (st.replay || {}).trainees_watch_experts !== false },
+      replay: { enabled: (st.replay || {}).enabled !== false, trainees_watch_experts: (st.replay || {}).trainees_watch_experts !== false,
+        trainees_see_crowd: (st.replay || {}).trainees_see_crowd === true },
       logging,
       logging_notice: logging.interactions ? this.s.logging_notice : '',
     };
@@ -567,12 +571,12 @@ export class DemoAdmin {
     const { manifest, builtin, ...rest } = r; // eslint-disable-line no-unused-vars
     if (r.scope === 'study') {
       const mine = items.filter((i) => i.recording_id === r.recording_id && i.mode === 'standard');
-      return { ...rest, assigned: mine.length, done: mine.filter((i) => i.status === 'done').length };
+      return { ...rest, dataset_id: r.dataset_id || 'study-recordings', assigned: mine.length, done: mine.filter((i) => i.status === 'done').length };
     }
     // a training set's recording: given to everyone in its programme, at whatever stage (admin.py _counts)
     const ctx = r.scope.slice(4);
     const saved = new Set(this.b.state.submissions.filter((x) => x.recording_id === r.recording_id && x.context_id === ctx).map((x) => `${x.annotator_id}|${x.mode}`));
-    return { ...rest, assigned: this.s.users.filter((u) => u.programme === ctx).length, done: saved.size };
+    return { ...rest, dataset_id: null, assigned: this.s.users.filter((u) => u.programme === ctx).length, done: saved.size };
   }
 
   _setRecord(set) {
@@ -601,10 +605,16 @@ export class DemoAdmin {
     const b = body && typeof body === 'object' ? body : {};
     if (SERVER_ONLY[op]) throw needsServer(SERVER_ONLY[op]);
     const fn = this[`op_${op}`];
-    if (typeof fn !== 'function') throw notFound(`This server does not offer the administrative operation '${op}'`);
-    const out = await fn.call(this, b);
+    const lib = LIBRARY_OP.test(op) || (LIBRARY_HOOK.test(op) && (this.s.library || b.dataset_id != null));
+    if (!lib && typeof fn !== 'function') throw notFound(`This server does not offer the administrative operation '${op}'`);
+    const out = lib ? await (await this._library()).run(op, b) : await fn.call(this, b);
     this.b._save();
     return deepCopy(out);
+  }
+
+  async _library() {
+    if (!this.library) this.library = new (await loadPart('demoLibrary')).DemoLibrary(this);
+    return this.library;
   }
 
   // ------------------------------------------------------------------ overview
@@ -625,6 +635,8 @@ export class DemoAdmin {
         todo: items.filter((i) => i.status === 'todo').length,
         unusable: items.filter((i) => i.status === 'unusable').length,
         ...this.b.feedback.counts(),
+        overdue: 0,
+        handouts_open: 0,
       },
       recent: [...this.s.audit].reverse().slice(0, 10),
       last_saved: [...subs].reverse().slice(0, 10).map((s) => ({ annotator_id: s.annotator_id, recording_id: s.recording_id, mode: s.mode,

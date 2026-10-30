@@ -32,29 +32,36 @@ import { logger, keyName } from '../log/logger.js';
 import { annotationEvents, snapshotEvents } from '../log/annotation_events.js';
 import { channelList, channelsText, clamp, formatHms, friendlyDuration, local, plural, readableTextColour, UNDO_HINT, CTRL, debounce, touchFirst } from '../util.js';
 import { isTyping } from '../ui/dom.js';
-import { displayCode } from '../catalogue.js';
+import { displayCode, needsReview, UNCERTAIN_LABEL, UNCERTAIN_TEXT } from '../catalogue.js';
 import { icon } from '../views/common.js';
 import { CHANNEL_COLOUR_MODES, MODE_TEXT as COLOUR_MODE_TEXT, channelColours, legendOf, normaliseMode } from '../viewer/channel_colours.js';
 import { BREAK_MIN_S, HIDDEN_PAUSE_MS, SNOOZE_S, idleDue, todayKey } from './clock.js';
 import * as cov from '../viewer/coverage.js';
 import { NAME_SIZES, PANEL_TEXT, TRACE_WIDTHS, loadComfort, saveComfort } from '../ui/comfort.js';
-import { microvoltText } from '../viewer/geometry.js';
+import { microvoltText, voltsText } from '../viewer/geometry.js';
+import { timeScaleChoices, timeScaleText, nudgeSamples } from '../viewer/scales.js';
 import { mapLayout, projectPositions } from '../viewer/head_map.js';
 import { readElectrodes, sidecarsOf } from '../eeg/electrodes.js';
 import { centredStart, clampTime, parseTimeText } from './goto.js';
+import { forgetOpen, noteOpen } from './reopen.js';
+import { loadPart } from '../lazy.js';
+import { noteForGuideTab } from '../guide/artifacts.js';
 import { CONTEXT_S, boundsOf, itemWindow, outsideStretches } from '../viewer/bounds.js';
 
 export { friendlyDuration, plural };
 
+/** The kinds of view that open again after a reload of the page (reopen.js). */
+const REOPENS = ['annotate', 'tryout'];
 const MODE_TEXT = { standard: 'Annotation', guided: 'Guided training', practice: 'Practice', assessment: 'Assessment', tryout: 'Try-out', tour: 'Platform tour', review: 'Practice review',
-  reviewing: 'Review', feedback: 'Feedback', correcting: 'Correction', replay: 'Replay', corrected: 'Corrected version' };
+  reviewing: 'Review', feedback: 'Feedback', correcting: 'Correction', replay: 'Replay', corrected: 'Corrected version', overlay: 'Everyone\'s marks' };
 /**
  * Views that only show annotations (no toolbar): a practice review, an administrator's review pass, the feedback on saved work,
- * a replay of a session and an annotator's view of a correction of their work (js/expert/, js/replay/).
+ * a replay of a session, an annotator's view of a correction of their work and the overlay of everyone's marks
+ * (js/expert/, js/replay/).
  */
-const VIEW_ONLY_KINDS = ['review', 'reviewing', 'feedback', 'replay', 'corrected'];
+const VIEW_ONLY_KINDS = ['review', 'reviewing', 'feedback', 'replay', 'corrected', 'overlay'];
 /** Views of someone's work opened from the expert area or for its feedback, which their own part closes (opts.onLeave). */
-const PART_KINDS = ['correcting', 'replay', 'corrected'];
+const PART_KINDS = ['correcting', 'replay', 'corrected', 'overlay'];
 const DRAG_PX = 3;
 const DRAW_ON_TITLE = 'Draw/edit is on: drag across the EEG to mark artifacts and change annotations. Press it to switch to view only, where nothing can change.';
 const DRAWING_OFF = 'View only: annotations cannot be drawn or changed. Press Draw/edit to mark artifacts.';
@@ -174,11 +181,14 @@ export class Workspace {
       this.viewer.setView({ startS: s.view.start_s || 0, durationS: s.view.duration_s || 10, firstChannel: s.view.first_channel || 0,
         nChannels: s.view.n_channels || 32, scaleFactor: s.view.scale_factor || 1 }, 'restore');
     }
+    if (!this.scaleEl) this.actionsEl.prepend(this._scaleTools(), h('span.sep')); // a view without the toolbar: in the header
     this._applyChannelColours();
     this._syncViewState();
     this._buildViewTools();
+    this._refreshScaleTools();
     this.viewer.onView = (v, cause) => {
       this._viewToolsOnView(cause);
+      this._refreshScaleTools();
       this._syncViewState(); this._logView();
       this._placeConfidenceBar();
       if (this.timed && !this._overviewView) this._noteViewDwell();
@@ -196,6 +206,8 @@ export class Workspace {
     }
     this.viewer.nextUnviewedGroup.hidden = !this.timed; // only where what has been viewed is kept track of
     this.viewer.setAnnotations(this.store.annotations());
+    this._badBefore = this.store.badChannels;
+    this.viewer.setMarkedBad(this._badBefore);
     this._storeListener = (change) => this._onStore(change);
     this.store.addListener(this._storeListener);
     this._refreshAll();
@@ -210,7 +222,7 @@ export class Workspace {
         h('span.chip', { class: this.kind === 'tryout' || this.kind === 'tour' ? 'warning' : 'active' }, MODE_TEXT[this.kind === 'annotate' ? s.mode : this.kind] || s.mode),
         this.bounds ? h('span.chip.ws-part', { 'data-log': 'task-part', title: 'This task gives you this part of the recording: the rest is hatched and is not annotated.' },
           `Your part: ${this.bounds.text}`) : null),
-      this.kind === 'tryout' ? h('span.ws-banner', {}, 'This file is not part of the study, so nothing you mark is saved.')
+      this.kind === 'tryout' ? h('span.ws-banner', {}, 'This file is not part of the study: your marks are kept only in this browser. Download them to keep them.')
         : this.kind === 'tour' ? h('span.ws-banner', {}, 'A practice recording for the tour: nothing you mark is kept.') : null);
     const actions = h('div.ws-actions');
     this.actionsEl = actions; // a review pass, the feedback view, a correction and a replay add their own forward action
@@ -328,6 +340,21 @@ export class Workspace {
       b.addEventListener('mousedown', (e) => e.preventDefault()); // a click leaves the keyboard focus with the EEG
       return b;
     });
+    const u = this.cat.uncertain;
+    if (u) {
+      // Uncertain / needs review: an artifact that is visible but whose type cannot be told, always on key 0.
+      const b = h('button.chip-btn.uncertain-chip', {
+        type: 'button', 'aria-pressed': 'false', 'data-label': u.label, 'data-log': 'uncertain', 'data-log-text': '0 Uncertain',
+        title: `${UNCERTAIN_TEXT} · key 0\nFor an artifact you can see but whose type you cannot tell: ${u.label} (${u.value}), the HED-SCORE term for an artifact of unknown type. `
+          + 'An expert is asked to review each of these marks.\n\nClick (or press 0) to draw this type next; with annotations selected, to change them to it.',
+        onclick: () => { logger.noteInput('button:0 Uncertain'); this.applyType(u.label); },
+        style: { '--chip-colour': u.colour, '--chip-text': readableTextColour(u.colour) },
+      }, h('span.swatch', { style: { background: u.colour } }), h('span.chip-key', {}, '0'), ' ', h('span.chip-code', {}, 'Uncertain'),
+      h('span.sr-only', {}, `, ${UNCERTAIN_TEXT}, ${u.label}`));
+      b.tabIndex = -1;
+      b.addEventListener('mousedown', (e) => e.preventDefault());
+      this.chips.push(b);
+    }
     this.typeMenuBtn = h('button.btn.type-menu', { type: 'button', 'aria-haspopup': 'menu',
       title: `All ${this.cat.labels.length} HED-SCORE artifact types (press / to search them by name or code). Group terms, in italics, are for artifacts whose exact type is unclear.`,
       onclick: (e) => this.openTypeMenu(e.currentTarget) });
@@ -337,12 +364,65 @@ export class Workspace {
     for (const b of [this.scopeWhole, this.scopeSome]) { b.tabIndex = -1; b.addEventListener('mousedown', (e) => e.preventDefault()); }
     this.chooseBtn = h('button.btn.quiet', { type: 'button', title: 'Choose the channels from a list', onclick: () => this.chooseChannelsForNew() }, 'Channels…');
     this.chanSummary = h('span.ws-chansummary');
+    this.clearChBtn = h('button.btn.quiet.ws-clear-channels', { type: 'button', 'data-log': 'clear-channels', title: 'Clear channel selection (X)',
+      onclick: () => this.clearChannelSelection('button') }, 'Clear channel selection');
+    this.clearChBtn.addEventListener('mousedown', (e) => e.preventDefault());
     this.toolbar = h('div.ws-toolbar', { role: 'toolbar', 'aria-label': 'Artifact annotation' },
       this.typeCaption, h('div.chips', {}, this.chips), this.typeMenuBtn, h('span.sep'),
-      h('div.segmented', { role: 'group', 'aria-label': 'Applies to' }, this.scopeWhole, this.scopeSome), this.chooseBtn, this.chanSummary,
-      h('span.ws-overlay-tool', {}, h('span.sep'), this._overlayButton()));
+      // (the scope, its channels and their Clear stay together when the toolbar wraps)
+      h('span.ws-scope', {}, h('div.segmented', { role: 'group', 'aria-label': 'Applies to' }, this.scopeWhole, this.scopeSome), this.chooseBtn, this.chanSummary, this.clearChBtn),
+      h('span.ws-overlay-tool', {}, h('span.sep'), this._overlayButton()), h('span.sep'), this._scaleTools());
     // Every type button shows its number and code; the toolbar wraps onto a second line when it needs one (app.css).
     return this.toolbar;
+  }
+
+  /**
+   * The scales in the toolbar: the time shown (1 to 60 s, as Home and End step) and the amplitude (the
+   * height of a row, as − and + and the mouse wheel change it), each with a smaller and a larger step.
+   */
+  _scaleTools() {
+    const step = (name, label, log, fn) => keepFocusOnClick(h('button.btn.icon.small.quiet', { type: 'button', 'aria-label': label, title: label,
+      'data-log': log, onclick: fn }, icon(name)));
+    this.timeSelect = h('select.field.scale-select', { 'aria-label': 'Time shown', 'data-log': 'time-scale',
+      title: 'How many seconds the screen shows (Home and End step through them; Ctrl+wheel or a pinch shows more or less)' });
+    this.timeSelect.addEventListener('change', () => {
+      const s = Number(this.timeSelect.value);
+      if (!Number.isFinite(s)) return;
+      const v = this.viewer;
+      const mid = v.view.startS + v.view.durationS / 2; // the middle of the screen stays where it is
+      v.setView({ startS: mid - s / 2, durationS: s }, 'toolbar');
+      logger.noteInput('toolbar:time-scale');
+      this.viewer.over.focus({ preventScroll: true });
+    });
+    this.ampText = h('span.scale-value', { 'data-log': 'amplitude-value', title: 'The height of a row of EEG (the scale bar at the right of the EEG): the mouse wheel, − and + change it' });
+    this.scaleEl = h('span.ws-scales', { role: 'group', 'aria-label': 'Scales' },
+      h('span.ws-caption.scale-caption', {}, 'Time'),
+      step('minus', 'Show less time (Home)', 'time-less', () => this.viewer.stepDuration(-1, 'toolbar')), this.timeSelect,
+      step('plus', 'Show more time (End)', 'time-more', () => this.viewer.stepDuration(1, 'toolbar')),
+      h('span.ws-caption.scale-caption', {}, 'Amplitude'),
+      step('minus', 'Smaller traces (−, or the wheel down)', 'amplitude-less', () => this.viewer.scaleBy(1 / 1.25, 'toolbar')), this.ampText,
+      step('plus', 'Larger traces (+, or the wheel up)', 'amplitude-more', () => this.viewer.scaleBy(1.25, 'toolbar')));
+    return this.scaleEl;
+  }
+
+  /** The toolbar's scales follow the view (keys, wheel, pinch and the touch buttons move it too). */
+  _refreshScaleTools() {
+    if (!this.timeSelect || !this.viewer) return;
+    const v = this.viewer;
+    const now = Math.round(v.view.durationS * 1000) / 1000;
+    const choices = timeScaleChoices(now, v.spanS);
+    const key = choices.join(',');
+    if (this._timeChoices !== key) {
+      this._timeChoices = key;
+      clear(this.timeSelect);
+      this.timeSelect.append(...choices.map((c) => h('option', { value: String(c) }, timeScaleText(c))));
+    }
+    this.timeSelect.value = String(now);
+    const types = new Set(v.visibleRows().map((r) => r.ch.type));
+    const type = types.has('eeg') || !types.size ? 'eeg' : [...types][0];
+    const scaling = this.s.scalings[type] || this.s.scalings.misc || 1e-3;
+    const text = voltsText((2 * scaling) / v.view.scaleFactor);
+    if (this.ampText.textContent !== text) this.ampText.textContent = text;
   }
 
   _statusBar() {
@@ -365,7 +445,7 @@ export class Workspace {
     clear(this.side);
     this.coachHost = h('div.coach-host');
     this.reviewHost = h('div.review-host');
-    const tabs = [['annotations', 'Annotations'], ['recording', 'Recording'], ['help', 'Help']];
+    const tabs = [['annotations', 'Annotations'], ['recording', 'Recording'], ['guide', 'Guide'], ['help', 'Help']];
     this.tabButtons = {};
     this.tabPanels = {};
     const bar = h('div.tabs', { role: 'tablist' });
@@ -377,6 +457,13 @@ export class Workspace {
     }
     this._annotationsPanel();
     this._recordingPanel();
+    // The artifact reference guide (js/guide/guide.js): beside the EEG in the Guide tab, or in a tab of its own.
+    this.tabPanels.help.appendChild(h('div.help-guide', {},
+      h('p', {}, h('b', {}, 'Artifact reference guide. '), 'Every artifact type with its definition, what it looks like, how to tell it from look-alikes and an example.'),
+      h('div.btn-row', {},
+        h('button.btn.small', { type: 'button', 'data-log': 'help-guide', onclick: () => this.showGuide() }, 'Open beside the EEG'),
+        h('a.btn.small.quiet', { href: './#guide', target: '_blank', rel: 'noopener', 'data-log': 'help-guide-tab',
+          onclick: () => { noteForGuideTab(this.quick); logger.event('guide_opened', { where: 'tab', label: null }); } }, 'Open in a new tab'))));
     this.tabPanels.help.appendChild(h('div.help-text', { html: helpHtml(touchFirst(), { training: ['guided', 'practice'].includes(this.s.mode) && this.kind === 'annotate' }) }));
     this.side.append(this.coachHost, this.reviewHost, h('div.side-tabs', {}, bar, ...Object.values(this.tabPanels)));
     this.showTab('annotations');
@@ -387,9 +474,28 @@ export class Workspace {
       b.setAttribute('aria-selected', String(k === key));
       this.tabPanels[k].hidden = k !== key;
     }
+    if (key === 'guide' && !this.guideView && !this._guideLoad) void this.showGuide();
   }
 
   showHelp() { this.showTab('help'); this.tabPanels.help.scrollTop = 0; }
+
+  /** The Guide tab, at a type if given; the guide loads with its first showing (a failed load is tried again next time). */
+  async showGuide(label = null) {
+    if (!this.guideView && !this._guideLoad) {
+      this._guideLoad = loadPart('guide').then(({ mountGuidePanel }) => {
+        if (this._destroyed || this.guideView) return;
+        this.guideView = mountGuidePanel(this, this.tabPanels.guide);
+        logger.event('guide_opened', { where: 'panel', label });
+        this.onDestroy(() => this.guideView && this.guideView.destroy());
+      }, () => { this.say('The guide could not be loaded. Check the connection, then choose Guide again.'); })
+        .finally(() => { this._guideLoad = null; });
+    }
+    const loading = this._guideLoad;
+    this.showTab('guide');
+    if (loading) await loading;
+    if (label && this.guideView) this.guideView.show(label);
+  }
+
 
   _annotationsPanel() {
     const p = this.tabPanels.annotations;
@@ -608,6 +714,14 @@ export class Workspace {
     const visibility = () => this._visibility();
     document.addEventListener('visibilitychange', visibility);
     this._listeners.push(() => document.removeEventListener('visibilitychange', visibility));
+    // A reload or a closing page: this browser's copy is written at once, before the page goes (the
+    // write is synchronous). visibilitychange comes too, in most browsers, and sends the draft to the study.
+    const leaving = () => { if (this.s.mayKeepLocal) this.s.saveLocal(); };
+    for (const type of ['pagehide', 'beforeunload']) {
+      window.addEventListener(type, leaving);
+      this._listeners.push(() => window.removeEventListener(type, leaving));
+    }
+    if (REOPENS.includes(this.kind)) noteOpen(this.s); // opened again after a reload (reopen.js)
     if (this.s.resumed && this.timed) this._welcomeBack();
     if (this.kind === 'annotate') this._offerDiscarded();
   }
@@ -645,7 +759,8 @@ export class Workspace {
   _visibility() {
     const s = this.s;
     if (document.visibilityState === 'hidden') {
-      if (s.canSave) { s.saveLocal(); s.saveRemote({ force: true, keepalive: true }); }
+      if (s.mayKeepLocal) s.saveLocal();
+      if (s.canSave) s.saveRemote({ force: true, keepalive: true });
       if (this.clock && this.clock.paused) this._hiddenWhilePaused = true;
       // Out of sight for more than a few seconds (another tab or app, the iPad locked): a pause
       // from the moment the page was hidden.
@@ -718,6 +833,7 @@ export class Workspace {
     // gone, where it would bring back work discarded since, or overwrite a newer draft of the recording.
     this.s.close();
     this.s.onSaved = null;
+    if (REOPENS.includes(this.kind)) forgetOpen(); // left on purpose: a reload now shows the page it went to
     this._listeners.forEach((f) => f());
     this.store.removeListener(this._storeListener);
     if (this.coach) this.coach.destroy();
@@ -1176,6 +1292,7 @@ export class Workspace {
         this.chanSummary.classList.add('selected');
       }
       for (const b of [...this.chips, this.typeMenuBtn, this.scopeWhole, this.scopeSome, this.chooseBtn]) b.disabled = this.readOnly;
+      this.clearChBtn.hidden = !ch.length;
     }
     this.viewer.setSelectedChannels(this.selectedChannels, this.scope === 'channels');
     if (this.drawBtn) {
@@ -1238,6 +1355,7 @@ export class Workspace {
         h('div.ann-name', {}, h('span.swatch', { style: { background: l.colour } }),
           h('span.label-text', { style: { color: this.labelColours?.[a.annotation_id] || null } }, prefix + a.label)),
         h('div.ann-details', {}, h('span.chans', { title: a.channels.length ? a.channels.join(', ') : 'Whole montage' }, channelsText(a.channels)),
+          needsReview(a) ? h('span.review-mark', { title: 'Uncertain: an expert is asked to review this mark' }, 'needs review') : null,
           ...this._confidenceMarks(a),
           h('span.ann-time', { title: `${start} to ${end} s, duration ${(a.duration_samples / this.sf).toFixed(3)} s` },
             `${start}–${end}`))));
@@ -1247,7 +1365,10 @@ export class Workspace {
     this.tableWrap.scrollTop = scroll;
     const n = anns.length;
     const nCh = anns.filter((a) => a.channels.length).length;
-    this.countLabel.textContent = `${plural(n, 'annotation')}: ${n - nCh} whole montage, ${nCh} channel-specific`;
+    const bad = this.store.badChannels;
+    this.countLabel.textContent = `${plural(n, 'annotation')}: ${n - nCh} whole montage, ${nCh} channel-specific`
+      + (bad.length ? ` · ${bad.length === 1 ? `${bad[0]} marked bad` : `${bad.length} channels marked bad`}` : '');
+    this.countLabel.title = bad.length ? `Marked bad for the whole recording: ${bad.join(', ')}. Right-click a channel's name to change it.` : '';
     this.countEl.textContent = `Annotations: ${n}`;
   }
 
@@ -1310,6 +1431,7 @@ export class Workspace {
       logger.event(type, fields);
     }
     const act = change.action;
+    this._noteBadChannels(change);
     this.selection = this.selection.map((i) => (this.store.has(i) ? i : this.store.lastSurvivors.get(i))).filter((i) => i && this.store.has(i));
     this.viewer.setAnnotations(this.store.annotations());
     this.viewer.setSelection(this.selection);
@@ -1318,6 +1440,18 @@ export class Workspace {
     if (this.welcomeEl && act !== 'reset') { this.welcomeEl.remove(); this.welcomeEl = null; }
     this._refreshPrompt();
     if (this.coach) this.coach.scheduleCheck();
+  }
+
+  /** The channels marked bad, after any change of the store: on the EEG, and in the log when they changed (never any typed text). */
+  _noteBadChannels(change) {
+    const now = this.store.badChannels;
+    const before = this._badBefore || [];
+    this._badBefore = now;
+    this.viewer.setMarkedBad(now);
+    if (change.action === 'reset') return;
+    const via = change.action === 'undo' || change.action === 'redo' ? change.action : logger.via();
+    for (const ch of now.filter((c) => !before.includes(c))) logger.event('channel_bad', { channel: ch, bad: true, n_bad: now.length, via });
+    for (const ch of before.filter((c) => !now.includes(c))) logger.event('channel_bad', { channel: ch, bad: false, n_bad: now.length, via });
   }
 
   createAnnotation(t0, t1) {
@@ -1342,7 +1476,7 @@ export class Workspace {
     if (this.store.lastAutoMerged) {
       this.say(`Merged with ${plural(this.store.lastAutoMerged, `overlapping ${ann.label} annotation`)} on the same channels: now ${span} (${where}). ${undoHint()}.`);
     } else {
-      this.say(`Added ${ann.label} ${span} (${where})`);
+      this.say(`Added ${ann.label} ${span} (${where})${needsReview(ann) ? ': uncertain, so an expert is asked to review it' : ''}`);
     }
     this._afterNewMark(ann); // in an every-mark study the confidence prompt follows (its line replaces the one above)
     return ann.annotation_id;
@@ -1372,7 +1506,7 @@ export class Workspace {
     const current = ids.length ? this.store.get(ids[0]).label : this.currentLabel;
     const title = ids.length ? (ids.length === 1 ? 'Change the selected annotation to' : `Change ${ids.length} annotations to`) : 'Type of the next annotation';
     const r = this.typeMenuBtn ? this.typeMenuBtn.getBoundingClientRect() : null;
-    const chosen = await pickType({ title, catalogue: this.cat, current, quick: this.quick, at: r ? { x: r.left, y: r.bottom + 4 } : null });
+    const chosen = await pickType({ title, catalogue: this.cat, current, quick: this.quick, at: r ? { x: r.left, y: r.bottom + 4 } : null, about: (l) => this.showGuide(l) });
     if (chosen) { logger.noteInput('dialog:' + title); this.applyType(chosen); }
   }
 
@@ -1381,7 +1515,7 @@ export class Workspace {
     this.select([id]);
     if (!this._checkEditable()) return;
     const current = this.store.get(id).label;
-    const chosen = await pickType({ title: `Change ${current} to`, catalogue: this.cat, current, quick: this.quick, at });
+    const chosen = await pickType({ title: `Change ${current} to`, catalogue: this.cat, current, quick: this.quick, at, about: (l) => this.showGuide(l) });
     if (chosen && chosen !== current) { logger.noteInput(`dialog:Change ${current} to`); this.applyType(chosen); }
   }
 
@@ -1416,6 +1550,9 @@ export class Workspace {
       for (const l of s.labels) sub.push({ label: `${l.label}  (${l.value})`, swatch: l.colour, italic: l.is_group, checked: l.label === a.label,
         onSelect: () => { logger.noteInput(`menu:${l.label}`); this.relabel(id, l.label); } });
     }
+    const u = this.cat.uncertain;
+    if (u) items.push({ label: `${UNCERTAIN_TEXT}  (${u.value})`, swatch: u.colour, shortcut: touchFirst() ? null : '0', disabled: u.label === a.label,
+      title: `${u.label}: an artifact whose type cannot be told, listed for an expert to review`, onSelect: () => { logger.noteInput('menu:Uncertain'); this.relabel(id, u.label); } });
     items.push({ label: this.quick.length ? 'Other type' : 'Change type to', submenu: sub });
     items.push({ separator: true }, { label: 'Edit times…', onSelect: () => { this.select([id]); this.editTimesOfSelected(); } },
       { label: 'Edit channels…', onSelect: () => this.editChannelsOf(id) }, ...this._confidenceMenuItems(id, a));
@@ -1506,7 +1643,7 @@ export class Workspace {
     const ids = this.targetIds();
     if (!ids.length || !this._checkEditable()) return;
     const current = this.store.get(ids[0]).label;
-    const label = await pickType({ title: ids.length === 1 ? 'Change type' : `Change the type of ${ids.length} annotations`, catalogue: this.cat, current, quick: this.quick });
+    const label = await pickType({ title: ids.length === 1 ? 'Change type' : `Change the type of ${ids.length} annotations`, catalogue: this.cat, current, quick: this.quick, about: (l) => this.showGuide(l) });
     if (!label || (label === current && ids.length === 1)) return;
     logger.noteInput('dialog:Change type');
     this.store.setLabelMany(ids, label);
@@ -1544,11 +1681,125 @@ export class Workspace {
   }
 
   async chooseChannelsForNew() {
-    const chosen = await chooseChannels({ title: 'Channels for new annotations', channels: this.s.channels, chosen: this.selectedChannels, map: this._channelMapOptions() });
+    const chosen = await chooseChannels({ title: 'Channels for new annotations', channels: this.s.channels, chosen: this.selectedChannels, map: this._channelMapOptions(),
+      bad: this.readOnly ? null : { marked: this.store.badChannels } });
     if (!chosen) return;
     logger.noteInput('dialog:Channels for new annotations');
+    if (chosen.action) { this.setChannelsBad(chosen.channels, chosen.action === 'bad'); return; }
     this.setSelectedChannels(chosen.channels);
     this.setScope('channels');
+  }
+
+  // ===================================================== channels marked bad, and choosing channels
+  /**
+   * Mark channels as bad for the whole recording, or good again (the right-click menu of a channel's name,
+   * and the channel chooser): one step of the history, so that Undo takes it back. The study's own bad
+   * channels are left as they are.
+   */
+  setChannelsBad(names, bad) {
+    if (!this._checkEditable()) return 0;
+    const study = new Set(this.s.channels.filter((c) => c.bad).map((c) => c.name));
+    const todo = names.filter((n) => !study.has(n) && this.store.isBad(n) !== bad);
+    let n = 0;
+    for (const name of todo) if (this.store.setChannelBad(name, bad)) n += 1;
+    const skipped = names.filter((x) => study.has(x));
+    const list = namesText(todo);
+    if (n) {
+      this.say(bad ? `${list} marked bad for the whole recording: ${n === 1 ? 'its trace is' : 'their traces are'} hatched and greyed, and saved with your work (${undoHint()}).`
+        : `${list} no longer marked bad (${undoHint()}).`);
+    } else if (skipped.length) {
+      this.say(`${namesText(skipped)} ${skipped.length === 1 ? 'is' : 'are'} bad in the study's own channel list already.`);
+    } else {
+      this.say(bad ? 'Those channels are marked bad already.' : 'Those channels are not marked bad.');
+    }
+    return n;
+  }
+
+  /** The menu of a channel's name (right-click, or a long press on a touch screen). */
+  showChannelMenu(name, x, y) {
+    const ch = this.s.channels.find((c) => c.name === name);
+    if (!ch) return;
+    const items = [{ section: name }];
+    if (ch.bad) items.push({ label: 'Bad in the study\'s channel list', disabled: true, title: 'The study\'s channels.tsv marks this channel bad; it cannot be changed here.' });
+    else if (this.store.isBad(name)) items.push({ label: 'Not bad after all: mark it good again', onSelect: () => { logger.noteInput('menu:Mark channel good'); this.setChannelsBad([name], false); } });
+    else items.push({ label: 'Mark as bad for the whole recording', onSelect: () => { logger.noteInput('menu:Mark channel bad'); this.setChannelsBad([name], true); } });
+    if (!this.viewer.overlay) {
+      const sel = this.selectedChannels.includes(name);
+      items.push({ separator: true }, { label: sel ? 'Take out of the channel selection' : 'Add to the channel selection', onSelect: () => {
+        logger.noteInput('menu:Channel selection');
+        const set = new Set(this.selectedChannels);
+        if (sel) set.delete(name); else set.add(name);
+        this.setSelectedChannels([...set]);
+        if (!sel) this.setScope('channels');
+      } }, { label: 'Clear channel selection', shortcut: touchFirst() ? null : 'X', disabled: !this.selectedChannels.length,
+        onSelect: () => this.clearChannelSelection('menu') });
+    }
+    items.push({ separator: true }, { label: 'Show this channel alone', onSelect: () => this.isolate(name, 'menu') });
+    showMenu(items, x, y, { className: 'channel-menu' });
+  }
+
+  /** Clear channel selection (X, or the button in the toolbar). */
+  clearChannelSelection(via = 'key') {
+    if (!this.selectedChannels.length) { this.say('No channels are selected.'); return; }
+    const n = this.selectedChannels.length;
+    this.channelAnchor = null;
+    this.setSelectedChannels([]);
+    logger.event('channel_selection_cleared', { n_cleared: n, via });
+    this.say(`Channel selection cleared (${plural(n, 'channel')}). Click or drag down the channel names to choose others.`);
+  }
+
+  /** The channels from row a to row b (indices into the channels), in recording order. */
+  _channelRange(a, b) {
+    const [lo, hi] = [Math.min(a, b), Math.max(a, b)];
+    return this.s.channels.slice(lo, hi + 1).map((c) => c.name);
+  }
+
+  /** While a drag goes down the channel names: the range so far, shown at once and logged at the end. */
+  _dragNames(g, e) {
+    const v = this.viewer;
+    const y = e.clientY - v.over.getBoundingClientRect().top;
+    if (!g.moved && Math.abs(y - g.y) < 4) return;
+    g.moved = true;
+    // past the first or last row on screen, the channels scroll on, a row at a time
+    const now = performance.now();
+    const top = v.rowsTop;
+    const bottom = top + v.rowH * Math.min(v.view.nChannels, v.channels.length);
+    if ((y < top || y > bottom) && now - (g.scrolledAt || 0) > 60) { g.scrolledAt = now; v.scrollChannels(y < top ? -1 : 1, 'drag'); }
+    const row = v.rowNear(y);
+    if (row === g.row && g.names) return;
+    g.row = row;
+    const range = this._channelRange(g.startRow, row);
+    const chosen = new Set(g.add ? [...g.base, ...range] : range);
+    g.names = this.s.channels.map((c) => c.name).filter((n) => chosen.has(n));
+    this.selectedChannels = g.names;
+    v.setSelectedChannels(g.names, true);
+    this.chanSummary.textContent = `${g.names.length} channels`;
+  }
+
+  /** The end of a press on the channel names: a drag chooses its range, a click works as before (or Shift+click a range). */
+  _endNames(g, e) {
+    if (g.moved) {
+      logger.noteInput('channel_names_drag');
+      this.channelAnchor = g.startRow;
+      if (this.selection.length) this.select(null);
+      this.setScope('channels');
+      this.setSelectedChannels(g.names || []);
+      const n = this.selectedChannels.length;
+      this.say(`${plural(n, 'channel')} selected for the next annotation: ${namesText(this.selectedChannels)}. ${g.add ? '' : `${touchFirst() ? '' : `${CTRL}+drag adds more, `}`}${touchFirst() ? 'Clear channel selection' : 'X'} clears them.`);
+      return;
+    }
+    logger.noteInput('eeg_click');
+    if (g.shift && this.channelAnchor !== null && this.channelAnchor !== undefined && !this.targetIds().length) {
+      const range = this._channelRange(this.channelAnchor, g.startRow);
+      const chosen = new Set(g.add ? [...this.selectedChannels, ...range] : range);
+      this.setScope('channels');
+      this.setSelectedChannels([...chosen]);
+      this.say(`${plural(this.selectedChannels.length, 'channel')} selected for the next annotation: ${namesText(this.selectedChannels)}.`);
+      return;
+    }
+    this.channelAnchor = g.startRow;
+    if (g.add && !this.targetIds().length && this.scope !== 'channels') this.setScope('channels');
+    this.onChannelClicked(g.channel);
   }
 
   jumpTo(id, { keepSelection = false } = {}) {
@@ -1684,10 +1935,17 @@ export class Workspace {
       this.gesture = null;
       if (g && g.kind === 'draw') this.viewer.setDragPreview(null);
       if (g && (g.kind === 'resize' || g.kind === 'move')) this.viewer.setAnnotations(this.store.annotations());
+      if (g && g.kind === 'names') this.setSelectedChannels(g.base);
       return;
     }
     if (type === 'longpress') {
-      // On a touch screen, a long press on an annotation is the right-click: its menu.
+      // On a touch screen, a long press on an annotation is the right-click: its menu (on a channel's name, the channel's).
+      if (info && info.area === 'channel_names' && info.channel && !this.readOnly && !(g && g.moved)) {
+        this.gesture = null;
+        logger.noteInput('eeg_long_press');
+        this.showChannelMenu(info.channel, e.clientX, e.clientY);
+        return;
+      }
       if (!info || !info.annotation || this.readOnly || (g && g.moved)) return;
       this.gesture = null;
       logger.noteInput('eeg_long_press');
@@ -1697,6 +1955,7 @@ export class Workspace {
     }
     if (type === 'contextmenu') {
       e.preventDefault();
+      if (info && info.area === 'channel_names' && info.channel && !this.readOnly) { this.gesture = null; this.showChannelMenu(info.channel, e.clientX, e.clientY); return; }
       if (info && info.annotation && !this.readOnly) { this.select([info.annotation], { via: 'eeg_click' }); this.showContextMenu(info.annotation, e.clientX, e.clientY); }
       return;
     }
@@ -1710,7 +1969,15 @@ export class Workspace {
     if (type === 'pointerdown') {
       if (e.button !== 0 || !info) return;
       this.viewer.over.focus({ preventScroll: true });
-      if (info.area === 'channel_names') { if (info.channel) { logger.noteInput('eeg_click'); this.onChannelClicked(info.channel); } return; }
+      if (info.area === 'channel_names') {
+        if (!info.channel) return;
+        if (this.viewer.overlay || this.readOnly) { logger.noteInput('eeg_click'); this.onChannelClicked(info.channel); return; }
+        // A press on the names: a click chooses that channel, a drag down them a range (Ctrl or Cmd: added), Shift+click a range.
+        try { this.viewer.over.setPointerCapture(e.pointerId); } catch { /* the pointer has gone */ }
+        this.gesture = { kind: 'names', startRow: info.row, row: info.row, y: info.y, moved: false, channel: info.channel,
+          add: e.ctrlKey || e.metaKey, shift: e.shiftKey, base: [...this.selectedChannels] };
+        return;
+      }
       if (info.area === 'tags') { logger.noteInput('eeg_click'); this.select([info.tag], { via: 'eeg_click' }); return; }
       if (info.area !== 'eeg') return;
       this.viewer.over.setPointerCapture(e.pointerId);
@@ -1731,6 +1998,7 @@ export class Workspace {
     }
     if (type === 'pointermove') {
       this._hoverCursor(info, e);
+      if (g && g.kind === 'names') { this._dragNames(g, e); return; }
       if (!g || !info) return;
       const dx = Math.abs(info.x - g.x);
       if (g.kind === 'press') {
@@ -1770,6 +2038,7 @@ export class Workspace {
     if (type === 'pointerup') {
       this.gesture = null;
       if (!g) return;
+      if (g.kind === 'names') { this._endNames(g, e); return; }
       if (g.kind === 'draw') {
         this.viewer.setDragPreview(null);
         logger.noteInput('eeg_drag');
@@ -1830,6 +2099,32 @@ export class Workspace {
       this.say(`Change not applied: ${exc.message}`);
     }
     this.viewer.setAnnotations(this.store.annotations());
+  }
+
+  /**
+   * The fine adjustment of a selected mark's edge (Alt with the arrow keys, Shift for the end): 10 ms (at
+   * least one sample) earlier or later, each press one step that Undo takes back.
+   */
+  nudgeEdge(edge, dir) {
+    const ids = this.targetIds();
+    if (ids.length !== 1) { this.say('Select one annotation first (click it, or press N), then Alt with the arrow keys moves its start, and Alt+Shift its end.'); return; }
+    if (!this._checkEditable()) return;
+    const a = this.store.get(ids[0]);
+    const step = nudgeSamples(this.sf);
+    const min = this.s.minDuration || 1;
+    let start = a.onset_sample; let stop = endSample(a);
+    if (edge === 'start') start = clamp(start + dir * step, 0, stop - min);
+    else stop = clamp(stop + dir * step, start + min, this.s.recording.nSamples);
+    if (start === a.onset_sample && stop === endSample(a)) { this.say(`The ${edge} of ${a.label} cannot move further that way.`); return; }
+    this._applyEdit(() => this.store.setSamples(a.annotation_id, start, stop, `move the ${edge}`));
+    const now = this.store.has(a.annotation_id) ? this.store.get(a.annotation_id) : null;
+    if (now && !this.store.lastAutoMerged) {
+      const t = (edge === 'start' ? now.onset_sample : endSample(now)) / this.sf;
+      this.say(`${edge === 'start' ? 'Start' : 'End'} of ${now.label} at ${t.toFixed(3)} s (${now.duration_samples} samples, ${this._spanText(now)}). `
+        + `Alt+${edge === 'start' ? '' : 'Shift+'}arrow moves it by ${Math.round((step / this.sf) * 1000)} ms; ${undoHint()}.`);
+      const x = this.viewer.tToX(t);
+      if (x < this.viewer.x0 || x > this.viewer.x1) this.viewer.showInterval(now.onset_sample, now.duration_samples);
+    }
   }
 
   /** "3.008–3.604 s", as the Annotations list shows an annotation's times. */
@@ -2151,6 +2446,11 @@ export class Workspace {
       if ((lk === 'z' && e.shiftKey) || lk === 'y') return handled('Redo', () => this.redo());
       return;
     }
+    if (e.altKey && (k === 'ArrowLeft' || k === 'ArrowRight') && !this.readOnly) {
+      // Alt (Option) with the arrow keys: the selected mark's start a little earlier or later; with Shift, its end.
+      const edge = e.shiftKey ? 'end' : 'start';
+      return handled(edge === 'end' ? 'Move the end' : 'Move the start', () => this.nudgeEdge(edge, k === 'ArrowLeft' ? -1 : 1));
+    }
     if (e.altKey) return;
     if (this._viewKey(e, handled)) return;
     const v = this.viewer;
@@ -2176,6 +2476,7 @@ export class Workspace {
     if (k === 'p' || k === 'P') return handled('Previous annotation', () => this.stepSelection(-1));
     if ((k === 'u' || k === 'U') && this.timed) return handled('Next part not yet viewed', () => this.nextUnviewed('key'));
     if (this.readOnly) return;
+    if (k === '0' && this.cat.uncertain) return handled(`Type 0: ${UNCERTAIN_TEXT}`, () => this.applyType(UNCERTAIN_LABEL));
     const digit = /^[1-9]$/.test(k) ? Number(k) : null;
     if (digit && digit <= this.quick.length) {
       const name = this.quick[digit - 1];
@@ -2186,6 +2487,7 @@ export class Workspace {
     if (k === '[') return handled('Mark start', () => this.markKey('start'));
     if (k === ']') return handled('Mark end', () => this.markKey('end'));
     if (k === 'c' || k === 'C') return handled('Whole montage or selected channels', () => this.toggleScope());
+    if (k === 'x' || k === 'X') return handled('Clear channel selection', () => this.clearChannelSelection('key'));
     if (k === ',' || k === '<') return handled('Time cursor back', () => this.nudgeCursor(-1, e.shiftKey || k === '<'));
     if (k === '.' || k === '>') return handled('Time cursor forward', () => this.nudgeCursor(1, e.shiftKey || k === '>'));
     if (k === 'd' || k === 'D') return handled('Confidence', () => this.askConfidence());
@@ -2649,11 +2951,12 @@ export class Workspace {
     }
     if (this.kind === 'tryout') {
       if (this.store.size) {
-        const c = await choose('Close the try-out?', `Nothing you marked in this file is kept.\n\nDownload my annotations: save them as a file first.`,
+        const c = await choose('Close the try-out?', `Your marks in this file are kept only in this browser, and closing lets them go.\n\nDownload my annotations: save them as a file first.`,
           ['Download my annotations', 'Close', 'Keep looking'], 0);
         if (c === 'Keep looking') return false;
         if (c === 'Download my annotations') { this.downloadTryOut(); return false; }
       }
+      await s.discardDrafts({ close: true }); // this browser's copy goes with the try-out
       this.app.leaveRecording(this, 'tryout_closed');
       return true;
     }

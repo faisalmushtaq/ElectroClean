@@ -13,6 +13,7 @@ import { h, clear } from '../ui/dom.js';
 import { reviewButton, reviewCount, reviewsCard } from './reviews.js';
 import { setAsideButton } from './assignments.js';
 import { trainingGateCard } from './training_gate.js';
+import { answeredChip, questionnaireCard } from './questionnaire.js';
 import { icon } from '../views/common.js';
 import {
   INVITE_STATES, MODES, ROLES, STATUS, checkAnnotatorId, checkEmail, csvText, dateText, invitationText, inviteLink, inviteMessage, mailtoHref,
@@ -158,7 +159,8 @@ export class AnnotatorsSection {
     this.accountsMail = h('div.admin-stack');
     this.table = dataTable([
       { title: 'Account', sort: (u) => u.annotator_id, render: (u) => h('span', {}, h('b', {}, u.annotator_id), u.display_name ? ` · ${u.display_name}` : '',
-        u.email ? h('span.caption.block', {}, u.email) : null) },
+        u.full_name && u.full_name !== u.display_name ? h('span.caption.block', {}, u.full_name) : null, // their own name, from the questionnaire
+        u.email ? h('span.caption.block', {}, u.email) : null, answeredChip(u)) },
       { title: 'Roles', sort: (u) => `${rolesOf(u).join(',')} ${u.status}`, render: (u) => h('span.chips-inline', {}, ['admin', 'expert', 'annotator'].filter((r) => rolesOf(u).includes(r))
         .map((r) => chip(ROLES[r], r === 'annotator' ? '' : 'active')),
         u.status === 'disabled' ? chip('Switched off', 'warning') : null, u.programme ? h('span.caption.block', {}, `Programme: ${u.programme}`) : null) },
@@ -185,7 +187,7 @@ export class AnnotatorsSection {
     const role = this.filters.role.value;
     const status = this.filters.status.value;
     this.table.update(this.users.filter((u) => (!role || rolesOf(u).includes(role)) && (!status || u.status === status) &&
-      (!q || `${u.annotator_id} ${u.display_name || ''} ${u.email || ''}`.toLowerCase().includes(q))), { keepPage: true });
+      (!q || `${u.annotator_id} ${u.display_name || ''} ${u.full_name || ''} ${u.email || ''}`.toLowerCase().includes(q))), { keepPage: true });
   }
 
   _bulkBar(keys) {
@@ -662,6 +664,7 @@ export class AnnotatorsSection {
           h('div.row.inline-form', {}, prog, progSave),
           h('h3', {}, 'Remove'), removeHost)),
       trainingGateCard(this.area, u, (n) => this.reload(n)), // the training path, its skips and the gate (training_gate.js)
+      questionnaireCard(this.area, u), // the sign-up questionnaire's answers and the contact details (questionnaire.js)
       card('Work',
         h('p.caption', {}, 'Each recording given to this person, with the time it was open and not paused in their browser (breaks left out), the annotations saved, when, and how many times.'),
         itemsNote, items,

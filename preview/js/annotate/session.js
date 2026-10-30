@@ -9,11 +9,16 @@ import { confidenceMode } from './confidence.js';
 import { addInterval, fromDraft, toDraft, viewedFraction as coverageFraction } from '../viewer/coverage.js';
 import { local, newId, nowLocalIso, session as tabStorage } from '../util.js';
 import { DEFAULT_ANNOTATION, DEFAULT_HIDE, DEFAULT_SCALINGS } from '../api/demo_catalogue.js';
-import { localDraft, localDraftKey } from './local_drafts.js';
+import { draftTime, localDraft, localDraftKey } from './local_drafts.js';
 
-export { localDraft, localDraftKey };
+export { draftTime, localDraft, localDraftKey };
 
 const REMOTE_EVERY_MS = 30000;
+/**
+ * This browser's copy of a draft is written this long after the last change (a burst of changes, such
+ * as dragging an edge, writes once), and at once when the page is hidden, reloaded or closed.
+ */
+export const LOCAL_DELAY_MS = 300;
 /** After a draft that did not reach the study, the next try comes this much later (or at once when the connection returns). */
 const RETRY_MS = 5000;
 /** A discard or Save and Finish waits at most this long for a draft still on its way to the study. */
@@ -103,6 +108,8 @@ export class AnnotationSession {
     this.store = new AnnotationStore({
       chNames: this.channels.map((c) => c.name), nSamples: this.recording.nSamples, sfreq: this.recording.sfreq,
       labels: this.catalogue.labelNames, minDurationSamples: this.minDuration,
+      // annotation.merge_overlapping: overlapping marks of one type on the same channels join (marks apart never do)
+      autoMerge: !(study.annotation && study.annotation.merge_overlapping === false),
     });
     this.scalings = { ...DEFAULT_SCALINGS, ...((this.manifest && this.manifest.display && this.manifest.display.scalings) || {}) };
     this.events = this.manifest ? this.manifest.original_events || []
@@ -129,14 +136,23 @@ export class AnnotationSession {
     // A revision opens with the annotations of the latest saved version (docs/web/using.md, "History and revisions").
     this.revision = o.revision && Number.isInteger(o.revision.revises) ? { ...o.revision } : null;
     if (this.revision) {
-      this.store.reset((this.revision.annotations || []).filter((a) => this.catalogue.has(a.label)));
-      this.savedVersion = JSON.stringify(this.store.toJSON());
+      this.store.reset((this.revision.annotations || []).filter((a) => this.catalogue.has(a.label)), this._knownBad(this.revision.bad_channels));
+      this.savedVersion = this._versionText();
     }
     this.store.addListener(() => { this._dirty = true; this._scheduleLocal(); });
   }
 
   /** True when the annotations differ from the version being revised. */
-  get changedSinceSaved() { return Boolean(this.revision) && JSON.stringify(this.store.toJSON()) !== this.savedVersion; }
+  get changedSinceSaved() { return Boolean(this.revision) && this._versionText() !== this.savedVersion; }
+
+  /** The annotations and the channels marked bad, as text to compare. */
+  _versionText() { return JSON.stringify([this.store.toJSON(), this.store.badChannels]); }
+
+  /** Of a list of channel names (from a draft or a saved version), those shown, as the store takes them. */
+  _knownBad(list) {
+    const shown = new Set(this.channels.map((c) => c.name));
+    return Array.isArray(list) ? list.filter((n) => typeof n === 'string' && shown.has(n)) : [];
+  }
 
   /** Seconds worked on the recording, earlier sessions included and pauses left out. */
   get elapsedS() { return this.clock ? this.clock.elapsedS : this.elapsedBase; }
@@ -150,7 +166,9 @@ export class AnnotationSession {
   get localKey() {
     // A revision's copy is kept apart, so that it is never confused with older unfinished work.
     const rev = this.revision ? `|revises-${this.revision.revises}` : '';
-    return localDraftKey(this.backend, this.me && this.me.annotator_id, this.recordingId, this.mode, this.contextId) + rev;
+    // A try-out's copy is kept by the file's fingerprint, so that another file of the same name never takes it.
+    const file = this.tryOut && this.sha256 ? `|sha-${this.sha256}` : '';
+    return localDraftKey(this.backend, this.me && this.me.annotator_id, this.recordingId, this.mode, this.contextId) + rev + file;
   }
 
   /** The parts on screen so far changed (a merged list): kept in the drafts like a change of annotations. */
@@ -166,6 +184,7 @@ export class AnnotationSession {
   draftPayload() {
     return {
       annotations: this.store.toJSON(),
+      bad_channels: this.store.badChannels,
       view: this.view ? { ...this.view } : null,
       elapsed_s: Math.round(this.elapsedS * 10) / 10,
       viewed: toDraft(this.viewed),
@@ -180,14 +199,16 @@ export class AnnotationSession {
     const rev = this.revision ? this.revision.revises : undefined;
     const candidates = [remote, mine].filter((d) => d && Array.isArray(d.annotations) && (rev === undefined || d.revises === rev));
     if (!candidates.length) return null;
-    candidates.sort((a, b) => String(b.saved_at || '').localeCompare(String(a.saved_at || '')));
+    // The newer by the moment each was kept: the study writes its time in its own time zone, this
+    // browser in the person's, so their texts cannot be compared as they are.
+    candidates.sort((a, b) => draftTime(b) - draftTime(a));
     const d = candidates[0];
     return d.annotations.length || (d.elapsed_s || 0) > 5 ? d : null;
   }
 
   restore(draft) {
     const ok = draft.annotations.filter((a) => this.catalogue.has(a.label));
-    this.store.reset(ok);
+    this.store.reset(ok, this._knownBad(draft.bad_channels));
     this.elapsedBase = Number(draft.elapsed_s) || 0;
     this.clock = null;
     this.viewed = fromDraft(draft.viewed, this.recording.durationS);
@@ -200,15 +221,24 @@ export class AnnotationSession {
   /** Drafts may be written: never once the session has closed, nor while its drafts are deleted. */
   get mayKeepDraft() { return this.canSave && !this.closed && !this._discarding; }
 
-  _scheduleLocal() {
-    if (!this.mayKeepDraft) return;
-    clearTimeout(this._localTimer);
-    this._localTimer = setTimeout(() => this.saveLocal(), 1200);
+  /**
+   * This browser's copy may be written: as for drafts, and also in a try-out, whose marks are kept
+   * only in this browser (never with the study) so that a reload of the page does not lose them.
+   */
+  get mayKeepLocal() {
+    return (this.canSave || (this.tryOut && !this.readOnly && !this.finished)) && !this.closed && !this._discarding;
   }
 
+  _scheduleLocal() {
+    if (!this.mayKeepLocal) return;
+    clearTimeout(this._localTimer);
+    this._localTimer = setTimeout(() => this.saveLocal(), LOCAL_DELAY_MS);
+  }
+
+  /** Write this browser's copy now (synchronous, so that it is done before a reload or a closing page goes). */
   saveLocal() {
     clearTimeout(this._localTimer); // this save replaces one waiting
-    if (!this.mayKeepDraft || this.submitting) return;
+    if (!this.mayKeepLocal || this.submitting) return;
     if (local.set(this.localKey, this.draftPayload()) && this.onSaved) this.onSaved('browser', new Date());
   }
 
@@ -275,10 +305,14 @@ export class AnnotationSession {
    * (bringBackDiscarded); nothing is set aside when there was nothing to lose.
    */
   async discardDrafts({ draft = null, close = false } = {}) {
-    if (this.tryOut) return;
+    if (this.tryOut) { // only this browser's copy: nothing of a try-out reaches the study
+      if (close) this.close();
+      this.forgetLocal();
+      return;
+    }
     const work = draft || this.draftPayload();
     const worth = draft ? draft.annotations.length || (draft.elapsed_s || 0) > 5
-      : this.revision ? this.changedSinceSaved : this.store.size > 0;
+      : this.revision ? this.changedSinceSaved : this.store.size > 0 || this.store.badChannels.length > 0;
     if (close) this.close();
     // No draft may be written once it is deleted: nothing new starts, and one already on its way arrives first.
     this._discarding = true;
@@ -305,7 +339,7 @@ export class AnnotationSession {
     const d = this.discarded;
     if (!d) return null;
     const ok = d.annotations.filter((a) => this.catalogue.has(a.label));
-    this.store.replaceAll(ok, 'bring back the work set aside');
+    this.store.replaceAll(ok, 'bring back the work set aside', this._knownBad(d.bad_channels));
     const extra = Number(d.elapsed_s) || 0;
     if (this.clock) this.clock.baseS += extra; else this.elapsedBase += extra;
     const before = fromDraft(d.viewed, this.recording.durationS);
@@ -357,7 +391,8 @@ export class AnnotationSession {
       result = await this.backend.submit({
         recording_id: this.recordingId, mode: this.mode, context_id: this.contextId,
         // the session's ID goes with it, so that the saved files and the interaction log of this session carry the same ID
-        annotations: this.store.toJSON(), session: { ...this.sessionInfo(visitId), session_id: this.sessionId }, sha256: this.sha256,
+        annotations: this.store.toJSON(), bad_channels: this.store.badChannels,
+        session: { ...this.sessionInfo(visitId), session_id: this.sessionId }, sha256: this.sha256,
         ...(this.revision ? { revises: this.revision.revises } : {}),
       });
     } finally {

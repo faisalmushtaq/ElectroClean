@@ -19,7 +19,7 @@ import { appHeader, downloadFiles, smallScreenNotice } from './views/common.js';
 import { friendlyDuration, nowLocalIso, plural, session } from './util.js';
 import { loadPart, loadParts, partNow, preloadParts } from './lazy.js';
 
-const VIEWS = ['signin', 'home', 'open', 'annotate', 'review', 'training', 'quiz'];
+const VIEWS = ['signin', 'home', 'open', 'annotate', 'review', 'training', 'quiz', 'questionnaire', 'guide'];
 /** The admin area's plain hashes (js/admin/model.js lists its sections). */
 const ADMIN_ROUTE = /^admin(-[a-z]+)?$/;
 /** The expert area's plain hashes (js/expert/sections.js lists its sections; the same rule as its EXPERT_ROUTE). */
@@ -124,8 +124,10 @@ export class App {
     // A bookmarked section of the admin area opens again once its administrator has signed in.
     const asked = (location.hash || '').replace(/^#/, '');
     if (ADMIN_ROUTE.test(asked) || EXPERT_ROUTE.test(asked)) this._adminReturn = asked;
+    this._reloadedIn = asked; // annotate/reopen.js
     const invite = takeInvite();
     this._render(h('main.page.loading', {}, h('p.subtitle', {}, 'Starting ElectroTag…')), 'signin');
+    if (asked === 'guide') { await this.showGuide(); return; } // no sign-in
     let where;
     try { where = await findBackend(); } catch { where = { kind: 'demo', source: 'none' }; }
     this.where = where;
@@ -258,14 +260,43 @@ export class App {
     // tried again when it is needed.
     preloadParts([...(this.backend.isDemo ? [] : ['readers']), ...(this.isAdmin ? [] : ['home']), ...PRELOAD, ...(this.me.programme ? ['coach', 'practice'] : [])]);
     const want = (location.hash || '').replace(/^#/, '');
+    // a reload while a recording was open: it opens again
+    const reloadedIn = this._reloadedIn;
+    this._reloadedIn = null;
+    if (want === 'annotate' || reloadedIn === 'annotate') {
+      const reopen = await loadPart('reopen').catch(() => null);
+      if (reopen && await reopen.reopenAfterReload(this)) return;
+    }
     // Administrators start in the admin area (or where a reload left them); they can still annotate.
     const back = this._adminReturn;
     this._adminReturn = null;
+    // The sign-up questionnaire comes before any work (js/views/questionnaire.js); then the way on as usual.
+    const q = this.me.questionnaire;
+    if (q && q.asked && !q.answered) {
+      await this.showQuestionnaire({ first: true, then: () => this._land(want, back, quiet) });
+      return;
+    }
+    await this._land(want, back, quiet);
+  }
+
+  /** Where a person starts once signed in: the expert or admin area, the training path or home. */
+  async _land(want, back, quiet) {
+    if (want === 'questionnaire') { await this.showQuestionnaire(); return; }
     const expertWanted = [want, back].find((r) => EXPERT_ROUTE.test(r || ''));
     if (this.isExpert && expertWanted && (EXPERT_ROUTE.test(want) || !want || want === 'signin')) await this.showExpert(expertWanted);
     else if (this.isAdmin && (ADMIN_ROUTE.test(want) || !want || want === 'signin')) await this.showAdmin(ADMIN_ROUTE.test(want) ? want : (ADMIN_ROUTE.test(back || '') ? back : 'admin'));
     else if (this.inTraining() && (!want || want === 'signin' || want === 'training' || quiet)) await this.showTraining();
     else this.showHome();
+  }
+
+  /**
+   * The sign-up questionnaire (js/views/questionnaire.js): `first` at the first sign-in, when `then` is the way on
+   * once it is saved; otherwise opened from home to change the answers. The interaction log is paused while it is
+   * shown and records only that it was answered, with the number of questions answered.
+   */
+  showQuestionnaire(opts = {}) {
+    const asked = this.backend.questionnaire().then((data) => ({ data }), (error) => ({ error })); // while the part loads
+    return this._withParts(['questionnaire'], 'questionnaire', ({ openQuestionnaire }) => openQuestionnaire(this, asked, opts));
   }
 
   /** A trainee with stages still to do (once training is complete, home and its next recording come first). */
@@ -397,6 +428,10 @@ export class App {
       this.quizView.destroy(); // the quiz's answers are with the study; its recordings are closed
       this.quizView = null;
     }
+    if (this.guideView && this.guideView.el !== el) {
+      this.guideView.destroy();
+      this.guideView = null;
+    }
     if (this.snippetsView && this.snippetsView.el !== el) {
       this.snippetsView.destroy(); // the training path's snippets (js/training/snippets.js): their recordings are closed
       this.snippetsView = null;
@@ -469,24 +504,27 @@ export class App {
     this.notice = notice;
     document.body.dataset.route = route;
     logger.topWindow = route;
-    if (ADMIN_ROUTE.test(route)) this._pauseLog(); else this._resumeLog();
+    if (ADMIN_ROUTE.test(route)) this._pauseLog();
+    else if (route === 'questionnaire') this._pauseLog(null); // its answers never reach the log
+    else this._resumeLog();
     if (location.hash !== `#${route}`) {
       this._settingHash = true;
       location.hash = route;
     }
     document.title = { signin: 'ElectroTag – sign in', home: 'ElectroTag – your recordings', open: 'ElectroTag – open a recording',
       annotate: `ElectroTag – ${this.ws ? this.ws.s.recording.fileName : 'annotate'}`, review: 'ElectroTag – practice review',
-      training: 'ElectroTag – training programme', quiz: 'ElectroTag – quiz' }[route]
+      training: 'ElectroTag – training programme', quiz: 'ElectroTag – quiz', questionnaire: 'ElectroTag – about you' }[route]
       || (ADMIN_ROUTE.test(route) ? 'ElectroTag – admin' : EXPERT_ROUTE.test(route) ? 'ElectroTag – expert work' : 'ElectroTag');
   }
 
   // The interaction log records annotating; what an administrator does in the admin area is not
   // part of it (only that the area was opened and left).
-  _pauseLog() {
+  _pauseLog(opened = 'admin_area_opened') {
     if (this._adminLogPaused || !logger.enabled) return;
-    logger.event('admin_area_opened', {});
+    if (opened) logger.event(opened, {});
     logger.enabled = false;
     this._adminLogPaused = true;
+    this._pausedFor = opened;
   }
 
   _resumeLog() {
@@ -494,7 +532,7 @@ export class App {
     this._adminLogPaused = false;
     if (this.me && this.visitId) {
       logger.enabled = true;
-      logger.event('admin_area_closed', {});
+      if (this._pausedFor) logger.event('admin_area_closed', {});
     }
   }
 
@@ -509,6 +547,7 @@ export class App {
       if (!dialogOpen()) this.ws.close();
       return;
     }
+    if (want === 'guide') { this.showGuide(); return; }
     if (!this.me) { if (want !== 'signin') this.showSignin(); return; }
     if (ADMIN_ROUTE.test(want)) { if (this.isAdmin) this.showAdmin(want); else this.showHome(); return; }
     if (EXPERT_ROUTE.test(want)) { if (this.isExpert) this.showExpert(want); else this.showHome(); return; }
@@ -518,6 +557,7 @@ export class App {
       return;
     }
     if (want === 'home') this.showHome();
+    else if (want === 'questionnaire') this.showQuestionnaire();
     else if (want === 'training' && this.me.programme) this.showTraining();
     else if (want === 'open') this.openFromComputer(null);
     else if (want === 'signin') this.showHome();
@@ -531,6 +571,11 @@ export class App {
   goBack() {
     if (this.me && this.me.programme && this._fromTraining) this.showTraining();
     else this.showHome();
+  }
+
+  /** The artifact reference guide as a page of its own (js/guide/guide.js). */
+  showGuide() {
+    return this._withParts(['guide'], 'guide', ({ showGuidePage }) => showGuidePage(this));
   }
 
   showHome() {
@@ -951,8 +996,9 @@ export class App {
       this.openView && this.openView.showProblem(exc.message, [this.openView.chooseAgainButton()]);
       return;
     }
-    if (!tryOut) {
-      const draft = session.pickDraft(match.draft);
+    {
+      // a try-out's work is only in this browser
+      const draft = session.pickDraft(tryOut ? null : match.draft);
       if (draft) {
         const resume = Boolean(this.openView && this.openView.resume);
         const yes = resume || await this._askRestore(session, draft);
@@ -1053,23 +1099,24 @@ export class App {
     }
     const next = result.next ? (this.assignments.items || []).find((i) => i.recording_id === result.next) : null;
     const demo = this.backend.isDemo ? `\n\n${DEMO_NOTICE}` : '';
+    const extra = await loadPart('myFiles').then((m) => m.savedFor(this, s, result), () => null); // the files just saved, to keep
     const milestone = reached.length ? `\n\nMilestone reached: ${reached.map((m) => m.name).join(', ')}.` : '';
     this.celebrate = reached;
     this.showHome();
     if (s.revision) {
       const v = (result.revision && result.revision.version) || s.revision.version;
       const go = next ? await ask('Revision saved', `Your revision of ${fileName} is saved as version ${v}. Version ${v - 1} is kept as it was.${milestone}${demo}\n\nNext: ${next.file_name}.`,
-        { yes: 'Open next recording', no: 'Back to my recordings' })
-        : await inform('Revision saved', `Your revision of ${fileName} is saved as version ${v}. Version ${v - 1} is kept as it was.${milestone}${demo}`);
+        { yes: 'Open next recording', no: 'Back to my recordings', extra })
+        : await inform('Revision saved', `Your revision of ${fileName} is saved as version ${v}. Version ${v - 1} is kept as it was.${milestone}${demo}`, { extra });
       if (next && go) this.openAssignment(next);
       return;
     }
     if (next) {
       const go = await ask('Saved', `Your annotations of ${fileName} are saved and the recording is complete.${milestone}${demo}\n\nNext: ${next.file_name}.`,
-        { yes: 'Open next recording', no: 'Back to my recordings' });
+        { yes: 'Open next recording', no: 'Back to my recordings', extra });
       if (go) this.openAssignment(next);
     } else {
-      await inform('Saved', `Your annotations of ${fileName} are saved and the recording is complete. That was your last recording.${milestone}${demo}`);
+      await inform('Saved', `Your annotations of ${fileName} are saved and the recording is complete. That was your last recording.${milestone}${demo}`, { extra });
     }
   }
 

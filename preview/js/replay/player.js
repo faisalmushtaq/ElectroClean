@@ -86,10 +86,11 @@ export async function segmentEvents(backend, seg, { onPage = null } = {}) {
 export class ReplayPlayer {
   /**
    * @param {Workspace} ws a view-only workspace of kind 'replay'
-   * @param {{index: object, backend: object}} o index: the answer of replay_index_get
+   * @param {{index: object, backend: object, back?: object|null}} o index: the answer of replay_index_get; back: where an expert returns
    */
-  constructor(ws, { index, backend }) {
+  constructor(ws, { index, backend, back = null }) {
     this.ws = ws;
+    this.back = back;
     this.index = index;
     this.backend = backend;
     this.sf = ws.sf;
@@ -165,7 +166,9 @@ export class ReplayPlayer {
     this.el = h('section.review.card.replay-panel', { 'aria-label': 'Replay' },
       h('h2', {}, `Replay of ${who}`),
       h('p.caption', {}, `How ${ix.annotator_id} worked on ${ix.file_name}, from the study's record of the session. Notes and anything typed are never recorded: a note shows only its length.`),
-      this.segList, this.countEl, this.endEl, h('h3', {}, 'What happened last'), this.recent);
+      this.segList, this.countEl, this.endEl, h('h3', {}, 'What happened last'), this.recent,
+      this.back && this.back.route ? h('div.btn-row', {}, h('button.btn.small', { type: 'button', 'data-log': 'replay-overlay',
+        title: `Everyone's marks on ${ix.file_name}, with ${ix.annotator_id} in a lane`, onclick: () => this.openOverlay() }, 'Everyone\'s marks on this recording')) : null);
     this.ws.reviewHost.append(this.el);
     this.ws.hintEl.textContent = touchFirst() ? 'Tap Play  ·  drag along the bar to go anywhere in the session'
       : 'Space  play or pause  ·  , .  step  ·  < >  changes  ·  - =  speed  ·  ?  keys';
@@ -455,6 +458,17 @@ export class ReplayPlayer {
     return false;
   }
 
+  /** Leave the replay for everyone's marks on the same recording (js/expert/overlay.js), this person in a lane. */
+  async openOverlay() {
+    const app = this.ws.app;
+    const ix = this.index;
+    const { startOverlay } = await import('../expert/overlay.js');
+    this.ws.destroy();
+    if (app.ws === this.ws) app.ws = null;
+    const got = await startOverlay(app, { recording_id: ix.recording_id, mode: ix.mode || 'standard', context_id: ix.context_id || '', focus: [ix.annotator_id] }, this.back);
+    if (!got) await app.showExpert(this.back.route, this.back.params || null);
+  }
+
   destroy() {
     this.playing = false;
     cancelAnimationFrame(this._raf);
@@ -485,7 +499,7 @@ export async function openReplay(app, { recording, fp, view, target }) {
   app.ws = ws;
   app._render(ws.el, back && back.route ? 'expert-replay' : 'annotate');
   ws.mount(app.content);
-  const player = new ReplayPlayer(ws, { index: target, backend: app.backend });
+  const player = new ReplayPlayer(ws, { index: target, backend: app.backend, back });
   await player.load();
   return player;
 }
