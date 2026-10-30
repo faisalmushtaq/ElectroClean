@@ -492,7 +492,7 @@ export class DemoBackend {
     const aid = this._aid();
     const items = this._workItems(aid);
     const nxt = this._nextItem(aid, items);
-    return {
+    const out = {
       items: items.map((i) => {
         // As the completion register says of a finished recording: its time and annotations (the latest save).
         const last = i.status === 'done' ? this._attempts(i.key).pop() : null;
@@ -507,11 +507,15 @@ export class DemoBackend {
           saved: i.saved ? { version: i.saved.version, first_saved_at: i.saved.first_saved_at, total_elapsed_s: i.saved.total_elapsed_s } : null,
           revising: i.revising,
           problem: this.feedback.problemOf(aid, i),
+          handout: null,
         };
       }),
+      due: [],
       next: nxt ? nxt.rid : null,
       next_item: nxt ? { recording_id: nxt.rid, mode: nxt.mode, context_id: nxt.context_id } : null,
     };
+    const ho = (this._admin.s.library || {}).handouts; // hand-outs' titles and due dates (demo_library.js)
+    return ho && Object.keys(ho).length ? (await this._admin._library()).decorate(aid, items, out) : out;
   }
 
   /** service.py find_item: one of the person's work items, or the error the server gives. */

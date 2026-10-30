@@ -45,7 +45,10 @@ const PYTHON = findPython();
 //   any       anything, or missing on one side
 const TIMES = ['saved_at', 'created_at', 'modified_at', 'reported_at', 'reviewed_at', 'registered_at', 'first_saved_at', 'completed_at',
   'generated_at', 'started_at', 'answered_at', 'finished_at', 'closed_at', 'last_seen', 'last_activity', 'last_active', 'at', 'resolved_at',
-  'returned_at', 'expires_at', 'invited_at', 'ended_at', 'added_at', 'changed_at', 'updated_at', 'save_times\\[\\]', 'today', 'days\\[\\]'].join('|');
+  'returned_at', 'expires_at', 'invited_at', 'ended_at', 'added_at', 'changed_at', 'save_times\\[\\]', 'today', 'days\\[\\]',
+  // datasets, hand-outs and tracking (docs/web/api.md, "Datasets, collections, groups and hand-outs")
+  'opened_at', 'assigned_at', 'set_aside_at', 'handed_out_at', 'given_at', 'first_assigned_at', 'last_saved_at', 'updated_at', 'removed_at',
+  'first_registered_at', 'last_registered_at'].join('|');
 export const ALLOWED = [
   ['.*', `(.*\\.)?(${TIMES})`, 'type', 'times: each side stamps its own'],
   ['.*', '(.*\\.)?(token|visit_id|session_id|problem_id|review_id|annotation\\.annotation_id)', 'type', 'IDs and tokens: each side makes its own'],
@@ -72,13 +75,6 @@ export const ALLOWED = [
 
   // Until the sandbox's own answers (js/api/demo.js) carry `task: null`, the browser reads a missing task as none.
   ['.*', '(items\\[\\]\\.)?task', 'any', 'the sandbox makes no tasks (they need the study server: demo_admin.js SERVER_ONLY), so its items and matches have none'],
-
-  // Datasets and hand-outs (docs/web/api.md, "Datasets, collections, groups and hand-outs"): until the sandbox's
-  // stand-in (js/api/demo_library.js) answers them, the browser reads a missing hand-out, due list, dataset or count
-  // as none.
-  ['.*', 'items\\[\\]\\.handout|due', 'any', "the sandbox's items carry no hand-out until its stand-in for hand-outs is built"],
-  ['admin overview', 'counts\\.(overdue|handouts_open)', 'any', 'the sandbox has no hand-outs yet, so nothing is overdue'],
-  ['admin (recordings_list|recording_update)', 'recordings?(\\[\\])?\\.dataset_id', 'any', "the sandbox's recordings are all in the built-in dataset"],
 ];
 
 // ------------------------------------------------------------------ comparison
@@ -547,7 +543,112 @@ async function script(call) {
   await call('questionnaire (no demographics)', (s) => s.b.questionnaire());
   await call('questionnaire save (an institution needed)', (s) => s.b.saveQuestionnaire({ answers: { ...answers, age_band: undefined, gender: undefined, first_language: undefined }, contacts: { full_name: 'Demo annotator', email: 'a01@example.org' } }));
   await call('questionnaire save (demographics gone)', (s) => s.b.saveQuestionnaire({ answers, contacts: { full_name: 'Demo annotator', email: 'a01@example.org', institution: 'Leeds' } }));
+  await call('logout', (s) => s.b.logout());
+
+  // ------------------------------------------------------------ datasets, collections, groups and hand-outs (ADMIN)
+  // Every read and write of docs/web/api.md "Datasets, collections, groups and hand-outs" that the sandbox answers
+  // (js/api/demo_library.js), with their refusals. A hand-out shared out k per recording uses Tasks, which are
+  // server-only (demo_admin.js SERVER_ONLY), so the sandbox answers it with needs_server and it is checked in
+  // tests/test_web_datasets.py and ui_library_demo.test.mjs rather than here.
+  const DS = 'youth-low-density-2026';
+  await call('login', (s) => s.b.login('ADMIN', s.password));
+  await call('admin datasets_list', (s) => s.b.admin('datasets_list', {}));
+  await call('admin dataset_get (built-in)', (s) => s.b.admin('dataset_get', { dataset_id: 'study-recordings' }));
+  await call('admin dataset_get (unknown)', (s) => s.b.admin('dataset_get', { dataset_id: 'nothing' }));
+  const youth = { request_id: hex(0xd1), name: 'Youth low-density 2026', licence: 'CC0', origin: 'https://openneuro.org/datasets/ds003420', notes: 'Only for the study team' };
+  await call('admin dataset_create', (s) => s.b.admin('dataset_create', youth));
+  await call('admin dataset_create (sent again)', (s) => s.b.admin('dataset_create', youth));
+  await call('admin dataset_create (taken)', (s) => s.b.admin('dataset_create', { request_id: hex(0xd2), dataset_id: DS, name: 'Again' }));
+  await call('admin dataset_create (no name)', (s) => s.b.admin('dataset_create', { request_id: hex(0xd3) }));
+  await call('admin dataset_create (no request ID)', (s) => s.b.admin('dataset_create', { name: 'Unnamed' }));
+  await call('admin dataset_create (target out of range)', (s) => s.b.admin('dataset_create', { request_id: hex(0xd4), name: 'Many', ratings_target: 30 }));
+  await call('admin dataset_create (to remove)', (s) => s.b.admin('dataset_create', { request_id: hex(0xd5), dataset_id: 'spare', name: 'Spare', ratings_target: 1 }));
+  await call('admin dataset_update', (s) => s.b.admin('dataset_update', { dataset_id: DS, citation: 'Example et al. (2026)', ratings_target: 1 }));
+  await call('admin dataset_update (nothing)', (s) => s.b.admin('dataset_update', { dataset_id: DS, citation: 'Example et al. (2026)' }));
+  await call('admin dataset_update (archive the built-in)', (s) => s.b.admin('dataset_update', { dataset_id: 'study-recordings', state: 'archived' }));
+  await call('admin dataset_update (the built-in)', (s) => s.b.admin('dataset_update', { dataset_id: 'study-recordings', description: 'The first recordings' }));
+  await call('admin recordings_move', (s) => s.b.admin('recordings_move', { recording_ids: [r2, r3], dataset_id: DS }));
+  await call('admin recordings_move (again)', (s) => s.b.admin('recordings_move', { recording_ids: [r2], dataset_id: DS }));
+  await call('admin recordings_move (unknown)', (s) => s.b.admin('recordings_move', { recording_ids: ['nope.edf'], dataset_id: DS }));
+  await call('admin dataset_update (prefix with recordings)', (s) => s.b.admin('dataset_update', { dataset_id: DS, path_prefix: 'youth' }));
+  await call('admin dataset_remove (not empty)', (s) => s.b.admin('dataset_remove', { dataset_id: DS }));
+  await call('admin dataset_remove (built-in)', (s) => s.b.admin('dataset_remove', { dataset_id: 'study-recordings' }));
+  await call('admin dataset_remove', (s) => s.b.admin('dataset_remove', { dataset_id: 'spare' }));
+  await call('admin dataset_get', (s) => s.b.admin('dataset_get', { dataset_id: DS }));
+  await call('admin recordings_list (one dataset)', (s) => s.b.admin('recordings_list', { dataset_id: DS }));
+  await call('admin recordings_list (unknown dataset)', (s) => s.b.admin('recordings_list', { dataset_id: 'spare' }));
+  const pilot = { request_id: hex(0xc5), name: 'Pilot: hard recordings', description: 'The hardest ones', recording_ids: [r3, r1, 'nope.edf', r3] };
+  await call('admin collection_create', async (s) => { const r = await s.b.admin('collection_create', pilot); s.mem.cid = r.collection.collection_id; return r; });
+  await call('admin collection_create (sent again)', (s) => s.b.admin('collection_create', pilot));
+  await call('admin collection_create (taken)', (s) => s.b.admin('collection_create', { ...pilot, request_id: hex(0xc6), collection_id: s.mem.cid }));
+  await call('admin collection_create (not a list)', (s) => s.b.admin('collection_create', { request_id: hex(0xc7), name: 'Odd', recording_ids: r1 }));
+  await call('admin collections_list', (s) => s.b.admin('collections_list', {}));
+  await call('admin collection_update (order)', (s) => s.b.admin('collection_update', { collection_id: s.mem.cid, order: [r1, r3] }));
+  await call('admin collection_update (order missing one)', (s) => s.b.admin('collection_update', { collection_id: s.mem.cid, order: [r1] }));
+  await call('admin collection_update (add)', (s) => s.b.admin('collection_update', { collection_id: s.mem.cid, add: [r2], name: 'Pilot: the hard ones' }));
+  await call('admin collection_update (add unknown)', (s) => s.b.admin('collection_update', { collection_id: s.mem.cid, add: ['nope.edf'] }));
+  await call('admin collection_get', (s) => s.b.admin('collection_get', { collection_id: s.mem.cid }));
+  await call('admin collection_get (unknown)', (s) => s.b.admin('collection_get', { collection_id: 'c-nothing' }));
+  const ras = { request_id: hex(0x61), name: 'Leeds RAs', description: 'Research assistants', members: ['a01'] };
+  await call('admin group_create', async (s) => { const r = await s.b.admin('group_create', ras); s.mem.gid = r.group.group_id; return r; });
+  await call('admin group_create (sent again)', (s) => s.b.admin('group_create', ras));
+  await call('admin group_create (nobody of that ID)', (s) => s.b.admin('group_create', { request_id: hex(0x62), name: 'Ghosts', members: ['Z99'] }));
+  await call('admin groups_list', (s) => s.b.admin('groups_list', {}));
+  const handout = (s, extra = {}) => ({ target: { kind: 'dataset', id: DS }, groups: [s.mem.gid], people: ['A02'], mode: 'all', due_at: '2026-01-05', follow_groups: true, note: 'For the team only', ...extra });
+  await call('admin handouts_preview_get', (s) => s.b.admin('handouts_preview_get', handout(s)));
+  await call('admin handouts_preview_get (nobody)', (s) => s.b.admin('handouts_preview_get', handout(s, { groups: [], people: [] })));
+  await call('admin handouts_preview_get (unknown group)', (s) => s.b.admin('handouts_preview_get', handout(s, { groups: ['g-nothing'] })));
+  await call('admin handouts_preview_get (unknown dataset)', (s) => s.b.admin('handouts_preview_get', handout(s, { target: { kind: 'dataset', id: 'spare' } })));
+  await call('admin handouts_preview_get (not a mode)', (s) => s.b.admin('handouts_preview_get', handout(s, { mode: 'some' })));
+  await call('admin handout_create (not a date)', (s) => s.b.admin('handout_create', handout(s, { request_id: hex(0xe0), due_at: '2026-13-01' })));
+  await call('admin handout_create', async (s) => { const r = await s.b.admin('handout_create', handout(s, { request_id: hex(0xe1) })); s.mem.hid = r.handout.handout_id; return r; });
+  await call('admin handout_create (sent again)', (s) => s.b.admin('handout_create', handout(s, { request_id: hex(0xe1) })));
+  await call('admin handout_create (a collection)', async (s) => {
+    const r = await s.b.admin('handout_create', { request_id: hex(0xe2), target: { kind: 'collection', id: s.mem.cid }, people: ['A01', 'A02'], due_at: '2099-11-20', note: 'Hard ones first' });
+    s.mem.hid2 = r.handout.handout_id;
+    return r;
+  });
+  await call('admin handouts_list', (s) => s.b.admin('handouts_list', {}));
+  await call('admin handouts_list (overdue)', (s) => s.b.admin('handouts_list', { overdue: true }));
+  await call('admin handouts_list (A01, a collection)', (s) => s.b.admin('handouts_list', { annotator_id: 'a01', target: { kind: 'collection', id: s.mem.cid } }));
+  await call('admin handout_update', (s) => s.b.admin('handout_update', { handout_id: s.mem.hid, due_at: '2026-02-01', title: 'Youth recordings' }));
+  await call('admin handout_update (nothing)', (s) => s.b.admin('handout_update', { handout_id: s.mem.hid, title: 'Youth recordings' }));
+  await call('admin handout_update (no such hand-out)', (s) => s.b.admin('handout_update', { handout_id: 'h-0000000000' }));
+  await call('admin group_update (a new member)', (s) => s.b.admin('group_update', { group_id: s.mem.gid, add: ['E01'], description: 'RAs and one expert' }));
+  await call('admin group_update (again)', (s) => s.b.admin('group_update', { group_id: s.mem.gid, add: ['E01'] }));
+  await call('admin group_remove (in use)', (s) => s.b.admin('group_remove', { group_id: s.mem.gid }));
+  await call('admin collection_remove (in use)', (s) => s.b.admin('collection_remove', { collection_id: s.mem.cid }));
+  await call('admin overview (hand-outs)', (s) => s.b.admin('overview', {}));
+  await call('admin tracking_datasets_get', (s) => s.b.admin('tracking_datasets_get', {}));
+  await call('admin tracking_datasets_get (hand-outs)', (s) => s.b.admin('tracking_datasets_get', { kind: 'handout', refresh: true }));
+  await call('admin tracking_datasets_get (not a kind)', (s) => s.b.admin('tracking_datasets_get', { kind: 'people' }));
+  await call('admin tracking_recordings_get', (s) => s.b.admin('tracking_recordings_get', { kind: 'dataset', id: DS }));
+  await call('admin tracking_recordings_get (a hand-out)', (s) => s.b.admin('tracking_recordings_get', { kind: 'handout', id: s.mem.hid }));
+  await call('admin tracking_recordings_get (overdue, one page)', (s) => s.b.admin('tracking_recordings_get', { kind: 'collection', id: s.mem.cid, overdue: false, limit: 1 }));
+  await call('admin tracking_recordings_get (one person)', (s) => s.b.admin('tracking_recordings_get', { kind: 'collection', id: s.mem.cid, annotator_id: 'A01', status: 'revised' }));
+  await call('admin tracking_recordings_get (bad limit)', (s) => s.b.admin('tracking_recordings_get', { kind: 'dataset', id: DS, limit: 0 }));
+  await call('admin tracking_recordings_get (unknown)', (s) => s.b.admin('tracking_recordings_get', { kind: 'collection', id: 'c-nothing' }));
+  await call('admin notify_preview_get', (s) => s.b.admin('notify_preview_get', {}));
+  await call('admin notify_preview_get (overdue)', (s) => s.b.admin('notify_preview_get', { kind: 'overdue' }));
+  await call('logout', (s) => s.b.logout());
+  // A01's side: the hand-outs' titles and due dates, and nothing of the datasets' or collections' own details
+  await call('login', (s) => s.b.login('A01', s.password));
+  await call('assignments (hand-outs)', async (s) => { const r = await s.b.assignments(); (s.mem.seen || (s.mem.seen = [])).push(r); return r; });
+  await call('me (hand-outs)', async (s) => { const r = await s.b.me(); s.mem.seen.push(r); return r; });
+  await call('match (hand-outs)', async (s) => { const r = await s.b.match(await matchBody(r2)); s.mem.seen.push(r); return r; });
+  await call('logout', (s) => s.b.logout());
+  await call('login', (s) => s.b.login('ADMIN', s.password));
+  await call('admin handout_withdraw', (s) => s.b.admin('handout_withdraw', { handout_id: s.mem.hid2 }));
+  await call('admin handout_withdraw (again)', (s) => s.b.admin('handout_withdraw', { handout_id: s.mem.hid2 }));
+  await call('admin handout_update (withdrawn)', (s) => s.b.admin('handout_update', { handout_id: s.mem.hid2, due_at: null }));
+  await call('admin collection_remove', (s) => s.b.admin('collection_remove', { collection_id: s.mem.cid }));
+  await call('admin group_update (take one out)', (s) => s.b.admin('group_update', { group_id: s.mem.gid, remove: ['E01'] }));
+  await call('admin assignments_list (after the hand-outs)', (s) => s.b.admin('assignments_list', {}));
+  await call('admin audit (hand-outs)', (s) => s.b.admin('audit', {}));
 }
+
+/** What a study team keeps to itself (decision 1 of the project lead): no answer of A01's may carry any of it. */
+export const TEAM_ONLY = ['Youth low-density 2026', 'Only for the study team', 'Pilot', 'hard', 'For the team only', 'Hard ones first', 'Example et al.', 'openneuro'];
 
 const outcome = async (fn) => {
   try {
@@ -595,10 +696,18 @@ test('the sandbox answers the visitor\'s calls as the study server does', { skip
       const label = n > 1 ? `${name} #${n}` : name;
       const a = await outcome(() => fn(py));
       const b = await outcome(() => fn(js));
+      if (process.env.ELECTROTAG_PARITY_TRACE) console.log(label, a.ok !== undefined ? 'ok' : `${a.error.status} ${a.error.code}`, b.ok !== undefined ? 'ok' : `${b.error.status} ${b.error.code}`);
       if (a.ok !== undefined && b.ok !== undefined) { both += 1; differences(label, a.ok, b.ok, '', found); }
       else if (a.error && b.error) differences(label, a.error, b.error, 'error', found);
       else found.push(`${label}: ${a.error ? `the server refuses (${a.error.status} ${a.error.code}: ${a.error.message})` : 'the server answers'}, ${b.error ? `the sandbox refuses (${b.error.status} ${b.error.code}: ${b.error.message})` : 'the sandbox answers'}`);
     });
+    // annotators see a hand-out only by its title: neither side tells A01 a dataset's or collection's details
+    for (const side of [py, js]) {
+      assert.equal(side.mem.seen.length, 3, 'the assignments, me and match answers of A01 were kept');
+      const text = JSON.stringify(side.mem.seen);
+      for (const secret of TEAM_ONLY) assert.ok(!text.includes(secret), `${side === py ? 'the server' : 'the sandbox'} tells A01 "${secret}"`);
+      assert.ok(text.includes('Youth recordings') && text.includes('Recordings due 20 November'), 'A01 sees the titles');
+    }
     // the script ran to its end, with answers (not only refusals) from both
     assert.ok(seen.size > 120 && both > 100, `${seen.size} calls, ${both} answered by both`);
     if (process.env.ELECTROTAG_PARITY_DUMP) fs.writeFileSync(process.env.ELECTROTAG_PARITY_DUMP, found.join('\n'));

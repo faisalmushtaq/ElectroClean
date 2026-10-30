@@ -10,7 +10,7 @@ import { formatHms, local } from '../util.js';
 import { quizCard } from '../training/quiz_card.js';
 import { deviceHomeLine } from './device.js';
 import { recordingsCard } from './home_list.js';
-import { partNow } from '../lazy.js';
+import { loadPart, partNow } from '../lazy.js';
 import { localDraft } from '../annotate/local_drafts.js';
 import { todayKey } from '../annotate/clock.js';
 import { percentText } from '../viewer/coverage.js';
@@ -143,9 +143,35 @@ export function homeView(app) {
       guideLine(),
       questionnaireLine(app),
       h('div.home-grid', {},
-        h('div.col', {}, nextCard, outcomesHost(app), expertCard(app), !training && items.length ? progressCard(p) : null, programme && !training && !waiting ? trainingDoneCard(app) : null,
+        h('div.col', {}, nextCard, dueHost(app), outcomesHost(app), expertCard(app), !training && items.length ? progressCard(p) : null, programme && !training && !waiting ? trainingDoneCard(app) : null,
           list, quizCard(app)),
         sideColumn([...games(app), demo]))));
+}
+
+/**
+ * The Due card (home_due.js, loaded only when something the study team handed out has a due date): drawn at
+ * once when its part is at hand, otherwise in a moment. Show these narrows the list to that hand-out.
+ */
+function dueHost(app) {
+  const due = app.assignments && Array.isArray(app.assignments.due) ? app.assignments.due : [];
+  if (!due.length) return null;
+  const show = (title) => {
+    app.homeList = { ...(app.homeList || {}), handout: title, tab: 'todo', page: 0, query: '' };
+    app.showHome();
+    requestAnimationFrame(() => document.querySelector('.recordings-card')?.scrollIntoView({ block: 'start' }));
+  };
+  const card = (part) => part.dueCard(app, { show, today: todayDate() });
+  const now = partNow('homeDue');
+  if (now) return card(now);
+  const host = h('div.due-host');
+  loadPart('homeDue').then((m) => { const c = card(m); if (c) host.replaceWith(c); else host.remove(); }, () => host.remove());
+  return host;
+}
+
+/** This computer's date, YYYY-MM-DD (for writing a due date without its year when it is this year). */
+function todayDate() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 /** The game elements' cards (home_games.js, loaded with GET /me/achievements when the study has them on). */

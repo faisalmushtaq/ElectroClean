@@ -94,6 +94,23 @@ orders the list by the recordings you worked on most recently (unfinished work f
 name, or by length. The list shows 25 recordings at a time, with Previous and Next below it. The
 tab and the order you chose are remembered in this browser.
 
+## Due dates
+
+Your study team may give you recordings in hand-outs, each with a title of its own such as "Youth
+recordings" or "Recordings due 20 November", and some with a date by which the team hopes to have them.
+When a hand-out has a due date, a Due card on your first page gives one line for it: its title, how many
+of its recordings are left, and the date, for example "Youth recordings: 12 of 40 left, due Friday 20
+November". Once the date has passed and recordings remain, the line says "was due" and carries an Overdue
+badge, and so does each of its recordings that is still open in your list. Show these narrows the list to
+that hand-out's recordings, with Show every recording to return to them all.
+
+In the To do and All tabs, the recordings of each hand-out are listed together under its title, the
+one due first at the top, then those without a date, and then Other recordings for anything given to you
+outside a hand-out. Inside each group the order is the one you chose with Sort. Due dates help you plan
+and leave Open next recording as it was: the study decides the order of the work, because that order is
+part of its research design. The title is all you see of a hand-out; the study team keeps its own notes
+about where the recordings come from.
+
 ## History and revisions
 
 The History tab lists every recording you have saved, the most recent first, with when it was

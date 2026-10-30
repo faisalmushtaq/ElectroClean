@@ -57,6 +57,15 @@ datasets analysed. Administrators who do not annotate are not asked. The interac
 that the questionnaire was answered and how many questions were. The sandbox's own accounts start with
 example answers.
 
+Annotators given recordings with a due date see a Due card on their first page, one line for each
+hand-out with its title, how many of its recordings are left and the date, marked Overdue once the date
+has passed while work remains; Show these narrows the list to that hand-out. The To do and All tabs list
+each hand-out's recordings together under its title, the one due first at the top, then Other
+recordings, with an Overdue badge on each open recording of an overdue hand-out. The order of the work is
+unchanged. The public sandbox now does all of this in the browser too: datasets, collections, groups,
+hand-outs in which everyone gets all of it, the tracking grids and the list of what would be notified,
+while a share-out k per recording still needs a study server or Firebase.
+
 Recordings of every channel count up to 256 (and 257, EGI's nets with their reference) have been
 checked in the browser against MNE-Python, through registration, saving, the agreement analysis and
 adjudication, on a new synthetic set (`scripts/make_channel_matrix.py`, 32 recordings in every
