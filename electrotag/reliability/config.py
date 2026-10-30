@@ -10,6 +10,12 @@ from typing import Any
 CHANNEL_MODES = ("time_only", "time_and_channel")
 MATCH_CRITERIA = ("iou", "tolerance", "iou_and_tolerance")
 ANY_ARTIFACT = "ANY-artifact"
+#: Which versions of the annotations an analysis uses (electrotag/reliability/versions.py).
+VERSIONS = ("original", "corrected", "adjudicated")
+#: What a recording group is: the whole recording, or each task's part of it (a task's window).
+UNITS = ("recording", "task")
+#: The annotator ID of every adjudicated version (a reserved ID, never an account).
+ADJUDICATED = "ADJUDICATED"
 #: Suffix of the roll-up category of a group term: the group term and every type below it.
 ROLLUP_SUFFIX = " + subtypes"
 
@@ -53,6 +59,9 @@ class AnalysisConfig:
     reference_annotator: str | None = None  # if set, compare everyone with this annotator only
     duplicate_policy: str = "latest"  # or "error"
     channel_exclude: tuple[str, ...] = ()
+    # The originals (as annotated), the experts' corrections of them, or the adjudicated versions as the reference
+    versions: str = "original"
+    unit: str = "recording"  # or "task": each task's part of a recording is compared on its own
 
     # Report
     timeline_max_recordings: int = 12
@@ -61,7 +70,19 @@ class AnalysisConfig:
     min_events_per_category: int = 5
     extra_measures: tuple[str, ...] = field(default_factory=tuple)
 
+    def __post_init__(self) -> None:
+        # The adjudicated versions are the reference: everyone is compared with them.
+        if self.versions == "adjudicated" and not self.reference_annotator:
+            self.reference_annotator = ADJUDICATED
+
     def validate(self) -> None:
+        if self.versions not in VERSIONS:
+            raise ValueError(f"versions must be one of {VERSIONS}")
+        if self.unit not in UNITS:
+            raise ValueError(f"unit must be one of {UNITS}")
+        if self.versions == "adjudicated" and self.reference_annotator != ADJUDICATED:
+            raise ValueError(f"The adjudicated versions are compared with everyone else, so the reference annotator "
+                             f"must be {ADJUDICATED} (or none)")
         if not self.resolutions_s or any(r <= 0 for r in self.resolutions_s):
             raise ValueError("Resolutions must be positive numbers of seconds")
         if len(set(self.resolutions_s)) != len(self.resolutions_s):

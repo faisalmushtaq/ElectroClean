@@ -213,7 +213,7 @@ def _change_table(rows: list[dict[str, Any]]) -> str:
 
 
 ROW_COLUMNS = [("annotator_id", "Annotator"), ("order", "Order"), ("mode", "Mode"), ("recording", "Recording"),
-               ("outcome", "Outcome"), ("active_s", "Active (s)"), ("wall_s", "Wall (s)"), ("clicks", "Clicks"),
+               ("segment", "Kind"), ("outcome", "Outcome"), ("active_s", "Active (s)"), ("wall_s", "Wall (s)"), ("clicks", "Clicks"),
                ("key_presses", "Keys"), ("shortcuts", "Shortcuts"), ("annotations_created", "Created"),
                ("final_annotations", "Saved"), ("seconds_per_annotation", "s per annotation"),
                ("share_seen", "Share seen"), ("undos", "Undos"), ("share_rated", "Share rated"),
@@ -261,6 +261,53 @@ def _marks_table(tables: ActivityTables) -> str:
             + "".join(body) + "</tbody></table>")
 
 
+def _table(head: list[str], rows: list[list[str]]) -> str:
+    body = ["<tr>" + "".join(f"<td>{c}</td>" if i == 0 else f'<td class="num">{c}</td>' for i, c in enumerate(r))
+            + "</tr>" for r in rows]
+    return ("<table><thead><tr>" + "".join(f"<th>{_esc(h)}</th>" for h in head) + "</tr></thead><tbody>"
+            + "".join(body) + "</tbody></table>")
+
+
+def _expert_table(tables: ActivityTables) -> str:
+    """Per person: corrections of others' work, adjudication decisions and replays watched. Empty without any."""
+    rows = tables.recordings
+    cols = ("corrections_submitted", "adjudication_decisions", "replays_watched")
+    if not any(_int(r.get(c)) for r in rows for c in cols):
+        return ""
+    out = []
+    for who in sorted({r["annotator_id"] for r in rows if any(_int(r.get(c)) for c in cols)}):
+        mine = [r for r in rows if r["annotator_id"] == who]
+        corrections = sum(_int(r.get("corrections_submitted")) for r in mine)
+        changes = sum(_int(r.get("correction_changes")) for r in mine)
+        decisions = sum(_int(r.get("adjudication_decisions")) for r in mine)
+        weighted = [(_int(r.get("adjudication_decisions")), _num(r.get("adjudication_mean_s"))) for r in mine
+                    if _int(r.get("adjudication_decisions")) and not math.isnan(_num(r.get("adjudication_mean_s")))]
+        n_w = sum(n for n, _ in weighted)
+        mean_s = sum(n * x for n, x in weighted) / n_w if n_w else float("nan")
+        replays = sum(_int(r.get("replays_watched")) for r in mine)
+        watched_min = sum(_num(r.get("replay_watched_s")) for r in mine
+                          if not math.isnan(_num(r.get("replay_watched_s")))) / 60
+        out.append([_esc(who), f"{corrections:,}", f"{changes:,}", f"{decisions:,}", _fmt(mean_s, 1),
+                    f"{replays:,}", _fmt(watched_min, 1)])
+    return _table(["Person", "Corrections", "Marks changed", "Adjudication decisions", "Seconds per decision",
+                   "Replays watched", "Minutes watched"], out)
+
+
+def _skips_table(tables: ActivityTables) -> str:
+    """Per trainee: the stages of the training path they skipped. Empty when nobody skipped one."""
+    rows = [r for r in tables.recordings if _int(r.get("stages_skipped"))]
+    if not rows:
+        return ""
+    out = []
+    for who in sorted({r["annotator_id"] for r in rows}):
+        names: list[str] = []
+        for r in sorted((r for r in rows if r["annotator_id"] == who), key=lambda r: _int(r.get("order"))):
+            names += [x.strip() for x in str(r.get("stages_skipped_names") or "").split(",") if x.strip()]
+        out.append([_esc(who), f"{sum(_int(r.get('stages_skipped')) for r in rows if r['annotator_id'] == who):,}",
+                    _esc(", ".join(dict.fromkeys(names)))])
+    return _table(["Trainee", "Skips", "Stages skipped"], out)
+
+
 def report_html(tables: ActivityTables, *, files: dict[str, str] | None = None) -> str:
     rows = tables.recordings
     finished = [r for r in rows if r["segment"] == "recording" and r["outcome"] == "finished"]
@@ -302,6 +349,20 @@ def report_html(tables: ActivityTables, *, files: dict[str, str] | None = None) 
                      "recording's reviews counted once. Rated, Share rated and With a note leave out recordings that "
                      "opened with annotations the logs do not show.</p>"
                      f"{marks}</section>")
+    expert = _expert_table(tables)
+    if expert:
+        parts.append('<section class="card" data-section="expert-work"><h2>Expert work</h2><p class="sub">For each '
+                     "person who did expert work: the corrections of others' saved work the study kept and the marks "
+                     "they added, removed or changed; the conflicts they decided in adjudications, with the mean "
+                     "seconds spent on a conflict before deciding it; and the sessions they watched as replays. "
+                     "This work is not anyone's annotation, so it is left out of the curves above.</p>"
+                     f"{expert}</section>")
+    skips = _skips_table(tables)
+    if skips:
+        parts.append('<section class="card" data-section="stages-skipped"><h2>Training stages skipped</h2>'
+                     '<p class="sub">For each trainee: how often they skipped a stage of the training path, and '
+                     "which stages (the competency assessment cannot be skipped).</p>"
+                     f"{skips}</section>")
     head = "".join(f"<th>{_esc(h)}</th>" for _c, h in ROW_COLUMNS)
     body = []
     for r in rows:

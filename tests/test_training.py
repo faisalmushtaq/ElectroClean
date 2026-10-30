@@ -121,6 +121,36 @@ def test_consensus_requires_comparable_experts():
         build_consensus([doc("E1", []), doc("E2", [], n=2000)])
 
 
+def test_consensus_with_weights():
+    e1 = doc("E1", [("EMG-artifact", 1, 3, ())])
+    e2 = doc("E2", [("EMG-artifact", 2, 4, ("C1",))])
+    e3 = doc("E3", [("EMG-artifact", 2.5, 5, ())])
+    plain = build_consensus([e1, e2, e3])
+    # equal weights give exactly the unweighted strict majority, and no weights change nothing
+    equal = build_consensus([e1, e2, e3], weights={"E1": 0.8, "E2": 0.8, "E3": 0.8})
+    spans = [(a.label, a.onset_sample, a.end_sample, a.channels) for a in plain.document.annotations]
+    assert [(a.label, a.onset_sample, a.end_sample, a.channels) for a in equal.document.annotations] == spans
+    assert "weights" not in plain.rule and equal.rule["weights"] == {"E1": 0.8, "E2": 0.8, "E3": 0.8}
+    # a heavy expert carries the vote alone wherever they marked (more than half of the total weight)
+    heavy = build_consensus([e1, e2, e3], weights={"E1": 3.0, "E2": 1.0, "E3": 1.0})
+    assert [(a.onset_sample, a.end_sample) for a in heavy.document.annotations] == [(100, 300)]
+    assert heavy.rule["min_weight_share"] == 0.5 and "weighted vote" in heavy.rule["description"]
+    notes = [d["note"] for d in heavy.disagreements if d["kind"] == "time"]
+    assert "1 of 3 experts, 60% of the weight; in consensus" in notes
+    # exactly half of the weight is not a majority: two equal experts must agree
+    pair = build_consensus([e1, e2], weights={"E1": 1, "E2": 1})
+    assert [(a.onset_sample, a.end_sample) for a in pair.document.annotations] == [(200, 300)]
+    # an expert with no weight takes part in the channels only
+    zero = build_consensus([e1, e2, e3], weights={"E1": 0, "E2": 1, "E3": 1})
+    assert [(a.onset_sample, a.end_sample) for a in zero.document.annotations] == [(250, 400)]
+    for bad in ({"E1": 1, "E2": 1}, {"E1": -1, "E2": 1, "E3": 1}, {"E1": 0, "E2": 0, "E3": 0},
+                {"E1": float("nan"), "E2": 1, "E3": 1}, {"E1": True, "E2": 1, "E3": 1}):
+        with pytest.raises(AnnotationError):
+            build_consensus([e1, e2, e3], weights=bad)
+    with pytest.raises(AnnotationError, match="not both"):
+        build_consensus([e1, e2, e3], weights={"E1": 1, "E2": 1, "E3": 1}, min_agreement=2)
+
+
 # ----------------------------------------------------------- reference sets
 def test_reference_set_provenance_and_integrity(tmp_path):
     rs = ReferenceSet.create(tmp_path, "pilot", name="Pilot", method="single_expert", experts=["E1"])

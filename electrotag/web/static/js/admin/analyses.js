@@ -9,9 +9,10 @@ import {
   MATCH_CRITERIA, agreementSettingsFile, agreementSummaryRows, analysisProblems, defaultAnalysisConfig, fileParts, parseList, parseNumber, parseNumbers, setLabel,
 } from './model.js';
 import {
-  card, checkbox, checkList, docsLink, downloadText, elapsedTimer, field, infoTable, messageArea, numberInput, progressLine, reportFrame, sectionHead, select,
+  card, checkbox, checkList, dataTable, docsLink, downloadText, elapsedTimer, field, infoTable, messageArea, numberInput, progressLine, reportFrame, sectionHead, select,
   textInput,
 } from './ui.js';
+import { UNIT_CHOICES, VERSION_CHOICES, compareKeyResults, comparisonTsv, numberText, versionHint, versionSummaryRows } from './versions_model.js';
 
 /** A link to a part of the reliability guide (docs/reliability_guide.md), for the settings of the analysis. */
 const guide = (anchor, text = 'In the reliability guide') => docsLink(text, 'reliability_guide.md', anchor);
@@ -32,8 +33,31 @@ function downloads(base, html, tables, extra = []) {
 
 /** The analysis in a few plain figures; the key results are in the report below. */
 function summaryTable(summary) {
-  const rows = agreementSummaryRows(summary);
+  const rows = [...versionSummaryRows(summary), ...agreementSummaryRows(summary)];
   return rows.length ? infoTable(rows) : null;
+}
+
+/** "Compared with the original versions": the key results of both analyses side by side. */
+function comparisonCard(original, answer, versions) {
+  if (original.failed) {
+    return card('Compared with the original versions', h('p.caption', {}, `The originals could not be analysed for the comparison: ${original.failed.message || original.failed}`));
+  }
+  const rows = compareKeyResults(original.summary, answer.summary);
+  const words = Object.fromEntries(VERSION_CHOICES);
+  const table = dataTable([
+    { title: 'Annotator pair', key: 'pair', cls: 'nowrap' },
+    { title: 'Measure', key: 'measure' },
+    { title: 'Originals', num: true, render: (r) => numberText(r.original) },
+    { title: versions === 'adjudicated' ? 'Against the adjudicated' : 'Corrected', num: true, render: (r) => numberText(r.version) },
+    { title: 'Difference', num: true, render: (r) => numberText(r.difference, { signed: true }) },
+  ], rows, { empty: 'Neither analysis has key results to compare.', pageSize: 60, caption: 'Key results compared' });
+  return card('Compared with the original versions',
+    h('p.caption', {}, versions === 'adjudicated'
+      ? 'The originals compare the annotators with each other; this analysis compares each with the adjudicated versions, so their pairs differ and the mean over pairs is the row to compare. The difference is this analysis minus the originals.'
+      : `The same analysis of the originals and of the versions ${String(words[versions] || versions).toLowerCase()}: the difference is the corrected versions minus the originals.`),
+    table,
+    h('div.btn-row.downloads', {}, h('button.btn.small', { type: 'button', 'data-log': 'agreement-compare-download',
+      onclick: () => downloadText(`agreement_${versions}_compared.tsv`, comparisonTsv(rows, versions), 'text/tab-separated-values;charset=utf-8') }, 'The comparison (TSV)')));
 }
 
 export class AnalysesSection {
@@ -105,6 +129,24 @@ export class AnalysesSection {
       { legend: 'Recordings (none ticked: all)', name: 'agreement-recordings' });
     const modes = SESSION_MODES.map(([v, t]) => ({ v, box: checkbox(t, v === 'standard') }));
     const reference = select([['', 'Nobody: compare every pair'], ...this.users.map((u) => [u.annotator_id, u.annotator_id])]);
+    reference.setAttribute('data-field', 'reference');
+    const versions = select(VERSION_CHOICES, 'original');
+    versions.setAttribute('data-field', 'versions');
+    const unit = select(UNIT_CHOICES, 'recording');
+    unit.setAttribute('data-field', 'unit');
+    const compare = checkbox('Compare with the original versions', true, { hint: 'Runs the analysis of the originals too and shows the key results side by side.' });
+    const vHint = h('span', {}, versionHint('original'));
+    const syncVersions = () => {
+      const v = versions.value;
+      vHint.textContent = versionHint(v);
+      compare.hidden = v === 'original';
+      // The adjudicated versions are the reference: everyone is compared with them.
+      reference.disabled = v === 'adjudicated';
+      if (v === 'adjudicated') reference.value = '';
+      refField.hidden = v === 'adjudicated';
+    };
+    versions.addEventListener('change', syncVersions);
+    const refField = field('Reference annotator', reference, { hint: 'When chosen, everyone is compared with this person only, for example an expert.' });
     const labels = this.area.labels;
     const categories = checkList(labels.map((l) => ({ value: l.label, text: l.label })), { selected: labels.map((l) => l.label),
       legend: 'Artifact categories (ANY-artifact is always included)', name: 'agreement-categories' });
@@ -133,6 +175,7 @@ export class AnalysesSection {
     };
     criterion.addEventListener('change', syncCriterion);
     syncCriterion();
+    syncVersions();
     const msg = messageArea();
     const progress = progressLine();
     const result = this.results.agreement;
@@ -171,6 +214,11 @@ export class AnalysesSection {
       const body = { modes: chosenModes, config: cfg };
       if (annotators.values().length) body.annotator_ids = annotators.values();
       if (recordings.values().length) body.recording_ids = recordings.values();
+      if (versions.value !== 'original') body.versions = versions.value;
+      if (unit.value !== 'recording') body.unit = unit.value;
+      // With the comparison, the originals first (the same choices otherwise), then the version chosen.
+      const original = body.versions && compare.input.checked
+        ? await this.area.backend.admin('agreement', { ...body, versions: 'original' }).catch((exc) => ({ failed: exc })) : null;
       const r = await this.area.backend.admin('agreement', body);
       // The settings in the form electrotag-agreement --config reads, with the recordings left out.
       const file = agreementSettingsFile(r, body);
@@ -182,13 +230,18 @@ export class AnalysesSection {
         h('p.caption', {}, 'To repeat this analysis on the results zip (Results), save The settings used (JSON) beside its Annotated_Events folder and run:'),
         h('pre.command.agreement-command', {}, file.command),
         r.report_html ? reportFrame(r.report_html, 'Agreement report') : h('p.caption', {}, 'The study sent no report.')));
+      if (original) result.prepend(comparisonCard(original, r, body.versions));
     }));
     this.agreementHost.append(card('Agreement between annotators',
       h('p.caption', {}, 'Compares annotators by category, time and channel. The defaults are starting points: choose and report the settings for each study. ',
         guide('choosing-settings', 'The reliability guide'), ' explains each measure and how to choose the settings.'),
       h('div.admin-grid', {}, annotators, recordings),
       h('fieldset.admin-fieldset', {}, h('legend', {}, 'Sessions'), h('div.row.wrap', {}, modes.map((m) => m.box))),
-      field('Reference annotator', reference, { hint: 'When chosen, everyone is compared with this person only, for example an expert.' }),
+      h('div.form-grid', {},
+        field('Versions', versions, { hint: [vHint, ' ', guide('versions-of-the-annotations')] }),
+        field('Compare', unit, { hint: hintWith("A task's part of a recording (its window) can be compared on its own, so that the rest of the recording does not count.", 'versions-of-the-annotations') })),
+      compare,
+      refField,
       h('details.admin-details', {}, h('summary', {}, 'Categories'), categories),
       h('details.admin-details', {}, h('summary', {}, 'Settings of the analysis'),
         h('fieldset.admin-fieldset', {}, h('legend', {}, 'Compare'), h('div.row.wrap', {}, time, channel)),

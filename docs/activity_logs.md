@@ -425,7 +425,12 @@ reviewed work, a table gives for each annotator the annotations saved in their
 finished recordings, how many of them had a rating and the share rated, how
 many had a note, the problems they reported and the reviews of their work they
 read, with each recording's reviews counted once however often they were
-opened. The last table lists every row.
+opened. When the logs hold expert work, an Expert work table gives for each
+person the corrections of others' work the study kept with the marks they
+changed, the conflicts they decided in adjudications with the mean seconds per
+decision, and the replays they watched with the minutes watched; and when a
+trainee skipped a stage of the training path, a Training stages skipped table
+lists the stages. The last table lists every row.
 
 ### Active time
 
@@ -460,6 +465,28 @@ feedback an annotator reads on reviewed work forms a row with `segment` set to
 `feedback`, with `reviews_received`, `feedback_items` and
 `feedback_items_opened`; a revision opened with the feedback beside it gives the
 same columns on its own row.
+
+### Expert work and skipped stages
+
+An expert's correction, an adjudication and a replay each form a row of their
+own, with `segment` set to `correction`, `adjudication` or `replay` (from the
+`correction_started`, `adjudication_opened` or `recording_opened` with
+`segment` `adjudication`, and `replay_opened` events), so they never count as
+anyone's annotation: they are left out of `recordings_opened`, the learning
+curves and the first and last recordings. Their outcome is `finished` when the
+correction was submitted, the adjudication finished or the replay closed. The
+columns `corrections_submitted` and `correction_changes` come from
+`correction_submitted` (a second press that found the correction kept already,
+`already`, is not counted again), `adjudication_decisions` and
+`adjudication_mean_s` from `adjudication_decision` and its `seconds`, and
+`replays_watched` and `replay_watched_s` from `replay_opened` and the
+`watched_s` of `replay_closed`. The annotator's view of a correction of their
+work is a `feedback` row. The platform tour (its `recording_opened` has
+`segment` `tour`) is a `tour` row, finished with `tour_finished` and closed with
+`tour_left`, and the snippets' events form one `snippets` row per visit. A
+skipped stage of the training path (`stage_skipped`, counted as well under the
+name `training_stage_skipped`) is counted in `stages_skipped` of the visit's
+`training` row, and `stages_skipped_names` lists the stages in order.
 
 ### visits.tsv
 
@@ -512,7 +539,7 @@ assessment recordings separately.
 | `mode` | standard, guided, practice or assessment: the recording's own mode (in the training programme one visit has recordings of several modes). |
 | `context_id` | Reference set of training work (empty for standard annotation). |
 | `recording` | Recording ID (path relative to the dataset); 'quiz' for the short-segment quiz. |
-| `segment` | recording (a recording opened for annotation), review (a practice recording reviewed against the reference), feedback (the annotator reading the reviews of their saved work, read only), quiz, or training (training events outside a recording). |
+| `segment` | recording (a recording opened for annotation), review (a practice recording reviewed against the reference), feedback (the annotator reading the reviews or corrections of their saved work, read only), correction (an expert correcting someone's saved work), replay (a session played back), adjudication (an expert deciding the conflicts between versions), tour (the platform tour), snippets (the gallery of artifact snippets), quiz, or training (training events outside a recording). |
 | `window_no` | Number of the recording opened within the visit (1, 2, ...). |
 | `order` | Position among all of this annotator's rows, in the order they were started (1 = first). |
 | `order_in_mode` | The same, counting only rows of the same mode. |
@@ -585,6 +612,14 @@ assessment recordings separately.
 | `quiz_proportion_correct` | Quiz: proportion correct. |
 | `quiz_mean_response_s` | Quiz: mean seconds from showing a segment to answering. |
 | `score` | practice_score if there is one, otherwise quiz_proportion_correct. |
+| `corrections_submitted` | Correction: corrections of someone's saved work that the study kept (a press that found the correction kept already does not count again). |
+| `correction_changes` | Correction: marks added, removed or changed in those corrections. |
+| `adjudication_decisions` | Adjudication: conflicts decided (a decision the study had already does not count again). |
+| `adjudication_mean_s` | Adjudication: mean seconds spent on a conflict before deciding it. |
+| `replays_watched` | Replay: sessions played back (the replay opened). |
+| `replay_watched_s` | Replay: seconds of the replay watched. |
+| `stages_skipped` | Training: stages of the training path skipped (stage_skipped). |
+| `stages_skipped_names` | Training: the stages skipped, in order (for example tour, snippets). |
 
 ## Analysing the tables
 

@@ -36,6 +36,19 @@ INPUT_EVENTS = frozenset({"mouse_press", "mouse_release", "double_click", "wheel
                           "field_edited"})
 INACTIVE_STATES = frozenset({"inactive", "hidden", "suspended"})
 TRAINING_PREFIXES = ("guided_", "practice_", "assessment_", "training_", "stage_")
+#: Events of the gallery of artifact snippets (the training path's "Meet the artifacts"), outside any recording.
+SNIPPET_PREFIXES = ("snippet_", "snippets_")
+#: A stage of the training path skipped. The design named it training_stage_skipped; the training path logs
+#: stage_skipped (docs/activity_logs.md), and both are counted.
+STAGE_SKIPPED = ("stage_skipped", "training_stage_skipped")
+#: The kind of a recording's segment, from an event in it (the first that applies; recording otherwise).
+SEGMENT_OF_EVENT = {"practice_review_opened": "review", "correction_started": "correction",
+                    "correction_feedback_shown": "feedback", "replay_opened": "replay",
+                    "adjudication_opened": "adjudication"}
+#: The kind of a segment from the ``segment`` of its recording_opened.
+SEGMENT_OF_OPENED = {"feedback": "feedback", "adjudication": "adjudication", "tour": "tour"}
+#: Segments that are not annotation of one's own (their outcome: finished when ended as their kind ends them).
+EXPERT_SEGMENTS = ("correction", "replay", "adjudication")
 #: Events that change annotations; each carries the annotations it touched.
 ANNOTATION_CHANGES = frozenset({"annotation_created", "annotation_deleted", "annotation_edited",
                                 "annotation_relabelled", "annotation_channels_changed", "confidence_set", "note_set",
@@ -80,8 +93,11 @@ RECORDING_COLUMNS: list[tuple[str, str]] = [
     ("context_id", "Reference set of training work (empty for standard annotation)."),
     ("recording", "Recording ID (path relative to the dataset); 'quiz' for the short-segment quiz."),
     ("segment", "recording (a recording opened for annotation), review (a practice recording reviewed against "
-                "the reference), feedback (the annotator reading the reviews of their saved work, read only), "
-                "quiz, or training (training events outside a recording)."),
+                "the reference), feedback (the annotator reading the reviews or corrections of their saved work, "
+                "read only), correction (an expert correcting someone's saved work), replay (a session played "
+                "back), adjudication (an expert deciding the conflicts between versions), tour (the platform tour), "
+                "snippets (the gallery of artifact snippets), quiz, or training (training events outside a "
+                "recording)."),
     ("window_no", "Number of the recording opened within the visit (1, 2, ...)."),
     ("order", "Position among all of this annotator's rows, in the order they were started (1 = first)."),
     ("order_in_mode", "The same, counting only rows of the same mode."),
@@ -160,6 +176,16 @@ RECORDING_COLUMNS: list[tuple[str, str]] = [
     ("quiz_proportion_correct", "Quiz: proportion correct."),
     ("quiz_mean_response_s", "Quiz: mean seconds from showing a segment to answering."),
     ("score", "practice_score if there is one, otherwise quiz_proportion_correct."),
+    ("corrections_submitted", "Correction: corrections of someone's saved work that the study kept (a press that "
+                              "found the correction kept already does not count again)."),
+    ("correction_changes", "Correction: marks added, removed or changed in those corrections."),
+    ("adjudication_decisions", "Adjudication: conflicts decided (a decision the study had already does not count "
+                               "again)."),
+    ("adjudication_mean_s", "Adjudication: mean seconds spent on a conflict before deciding it."),
+    ("replays_watched", "Replay: sessions played back (the replay opened)."),
+    ("replay_watched_s", "Replay: seconds of the replay watched."),
+    ("stages_skipped", "Training: stages of the training path skipped (stage_skipped)."),
+    ("stages_skipped_names", "Training: the stages skipped, in order (for example tour, snippets)."),
 ]
 
 
@@ -255,6 +281,11 @@ def _most(events: list[dict[str, Any]], key: str) -> int:
     return max((int(x) for x in values if not math.isnan(x)), default=0)
 
 
+def _int0(value: Any) -> int:
+    x = _num(value)
+    return 0 if math.isnan(x) else int(x)
+
+
 def _length(item: dict[str, Any]) -> int:
     x = _num(item.get("note_length"))
     return 0 if math.isnan(x) else int(x)
@@ -319,6 +350,7 @@ def segments(visit: VisitLog) -> list[Segment]:
     order: list[Segment] = []
     quiz: Segment | None = None
     training: Segment | None = None
+    snippets: Segment | None = None
     latest_for: dict[str, Segment] = {}
     for e in visit.events:
         w = e.get("window_no")
@@ -331,10 +363,16 @@ def segments(visit: VisitLog) -> list[Segment]:
                 order.append(seg)
             seg.events.append(e)
             latest_for[seg.recording] = seg
-            if kind == "practice_review_opened":
-                seg.kind = "review"
-            elif kind == "recording_opened" and e.get("segment") == "feedback":
-                seg.kind = "feedback"
+            if seg.kind == "recording":
+                if kind in SEGMENT_OF_EVENT:
+                    seg.kind = SEGMENT_OF_EVENT[kind]
+                elif kind == "recording_opened" and e.get("segment") in SEGMENT_OF_OPENED:
+                    seg.kind = SEGMENT_OF_OPENED[str(e.get("segment"))]
+        elif kind.startswith(SNIPPET_PREFIXES):
+            if snippets is None:
+                snippets = Segment(visit, "snippets", "snippets", None)
+                order.append(snippets)
+            snippets.events.append(e)
         elif kind.startswith("quiz_"):
             if quiz is None:
                 quiz = Segment(visit, "quiz", "quiz", None)
@@ -446,6 +484,15 @@ def segment_row(seg: Segment) -> dict[str, Any]:
         start_n = int(opened.get("annotations_restored", 0) or 0) if opened else 0
     if seg.kind in ("review", "feedback"):
         outcome = "finished" if closed else "not_finished"
+    elif seg.kind in EXPERT_SEGMENTS:
+        done = {"correction": "correction_submitted", "replay": "replay_closed",
+                "adjudication": "adjudication_finished"}[seg.kind]
+        left = {"correction": "correction_left", "replay": "replay_closed", "adjudication": "adjudication_closed"}
+        outcome = ("finished" if _last(ev, done) else
+                   "closed_without_saving" if (_last(ev, left[seg.kind]) or closed) else "not_finished")
+    elif seg.kind == "tour":
+        outcome = "finished" if _last(ev, "tour_finished") else ("closed_without_saving" if _last(ev, "tour_left")
+                                                                 else "not_finished")
     elif seg.kind != "recording":
         outcome = "finished" if (_last(ev, "quiz_finished") or (seg.kind == "training" and ev)) else "not_finished"
     row: dict[str, Any] = {
@@ -529,6 +576,22 @@ def segment_row(seg: Segment) -> dict[str, Any]:
         "quiz_mean_response_s": sum(rts) / len(rts) if rts else _nan(),
     }
     row["score"] = practice_score if not math.isnan(practice_score) else quiz_prop
+    # Expert work (docs/activity_logs.md, "Corrections and replays", "Adjudication and the library")
+    submitted = [e for e in ev if e.get("type") == "correction_submitted" and not e.get("already")]
+    decisions = [e for e in ev if e.get("type") == "adjudication_decision" and not e.get("already")]
+    decision_s = [_num(e.get("seconds")) for e in decisions if not math.isnan(_num(e.get("seconds")))]
+    watched = [_num(e.get("watched_s")) for e in ev if e.get("type") == "replay_closed"]
+    skipped = [str(e.get("stage") or "") for e in ev if e.get("type") in STAGE_SKIPPED]
+    row.update({
+        "corrections_submitted": len(submitted),
+        "correction_changes": sum(_int0(e.get(k)) for e in submitted for k in ("added", "removed", "changed")),
+        "adjudication_decisions": len(decisions),
+        "adjudication_mean_s": sum(decision_s) / len(decision_s) if decision_s else _nan(),
+        "replays_watched": kinds["replay_opened"],
+        "replay_watched_s": sum(w for w in watched if not math.isnan(w)),
+        "stages_skipped": len(skipped),
+        "stages_skipped_names": ", ".join(s for s in skipped if s),
+    })
     # For following the annotations across rows (summarise); not written to the tables.
     row["_changes"] = [e for e in ev if e.get("type") in ANNOTATION_CHANGES]
     row["_start_n"] = start_n
@@ -540,7 +603,9 @@ def visit_row(v: VisitLog, rows: list[dict[str, Any]]) -> dict[str, Any]:
     end = _num(ev[-1].get("t")) if ev else 0.0
     inputs = [_num(e.get("t")) for e in ev if e.get("type") in INPUT_EVENTS]
     kinds = Counter(str(e.get("type")) for e in ev)
-    feedback_opened = sum(1 for e in ev if e.get("type") == "recording_opened" and e.get("segment") == "feedback")
+    # the feedback on one's work, adjudications and the tour open a recording without annotating it as one's own
+    feedback_opened = sum(1 for e in ev if e.get("type") == "recording_opened"
+                          and e.get("segment") in SEGMENT_OF_OPENED)
     ratings = [a.get("confidence") for e in ev if e.get("type") == "confidence_set"
                for a in (e.get("annotations") or []) if isinstance(a, dict)]
     notes = [a for e in ev if e.get("type") == "note_set" for a in (e.get("annotations") or [])
@@ -558,7 +623,7 @@ def visit_row(v: VisitLog, rows: list[dict[str, Any]]) -> dict[str, Any]:
         "ended": v.close_reason,
         "wall_s": end,
         "active_s": active_seconds(inputs, 0.0, end, v.idle_after_s, inactive_intervals(ev, end)),
-        # practice reviews and the feedback on reviewed work aside
+        # practice reviews, the feedback on reviewed work, adjudications and the tour aside
         "recordings_opened": kinds["recording_opened"] - kinds["practice_review_opened"] - feedback_opened,
         "recordings_finished": kinds["recording_finished"],
         "recordings_closed_without_saving": kinds["closed_without_saving"],

@@ -7,6 +7,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from electrotag.app.annotations.labels import LabelCatalogue
 from electrotag.app.annotations.model import AnnotationDocument, AnnotationError
@@ -38,6 +39,8 @@ class AgreementDataset:
     catalogue: LabelCatalogue
     files: list[dict[str, str]]
     warnings: list[str]
+    #: The versions chosen (electrotag/reliability/versions.py), for the versions' tables and the report.
+    selection: Any = None
 
     @property
     def annotators(self) -> list[str]:
@@ -96,17 +99,29 @@ def select_annotation_files(
 
 
 def build_dataset(
-    documents: Iterable[tuple[str, AnnotationDocument]], config: AnalysisConfig, *, files: list[dict[str, str]] | None = None
+    documents: Iterable[tuple[str, AnnotationDocument]], config: AnalysisConfig, *,
+    files: list[dict[str, str]] | None = None, records: Any = None,
 ) -> AgreementDataset:
-    """Group documents by recording and check that they are comparable."""
+    """Group documents by recording and check that they are comparable.
+
+    ``config.versions`` chooses which versions are compared (:mod:`electrotag.reliability.versions`):
+    the originals by default, derived versions (corrections, adjudicated versions) being left out;
+    ``records`` (a :class:`~electrotag.reliability.versions.StudyRecords`) holds the study's
+    adjudication and task records when they are known."""
+    from electrotag.reliability.versions import derived_of, select_versions
+
     warnings: list[str] = []
     catalogue: LabelCatalogue | None = None
     by_key: dict[tuple[str, str], list[tuple[str, AnnotationDocument]]] = {}
+    derived: list[tuple[str, AnnotationDocument]] = []
     for source, doc in documents:
         if doc.mode not in config.modes:
             continue
-        if (doc.context or {}).get("derived"):
-            continue  # a correction or an adjudicated version: the analyses use the original annotations
+        if derived_of(doc) is not None:
+            # a correction or an adjudicated version: used only when config.versions asks for it
+            if config.versions != "original":
+                derived.append((source, doc))
+            continue
         if config.annotators is not None and doc.annotator_id not in config.annotators:
             continue
         if catalogue is None:
@@ -148,9 +163,15 @@ def build_dataset(
                 f"{key[1]} saved {key[0]} {len(items)} times (revisions or repeats); using the latest ({items[-1][0]})"
             )
         chosen[key] = items[-1]
+    selection = select_versions(by_key, chosen, derived, config, records=records)
+    warnings.extend(selection.warnings)
+    for _source, doc in derived:
+        if doc.catalogue.sha256 != catalogue.sha256 and not doc.catalogue.compatible_with(catalogue):
+            raise AnnotationError(f"{_source} uses a label catalogue that gives labels or codes a different meaning "
+                                  "from the others'. They cannot be compared.")
 
     per_recording: dict[str, list[tuple[str, str, AnnotationDocument]]] = {}
-    for (rid, aid), (source, doc) in sorted(chosen.items()):
+    for (rid, aid), (source, doc) in sorted(selection.chosen.items()):
         per_recording.setdefault(rid, []).append((aid, source, doc))
 
     groups: dict[str, RecordingGroup] = {}
@@ -191,7 +212,8 @@ def build_dataset(
     for g in groups.values():
         if excluded:
             g.ch_names = tuple(c for c in g.ch_names if c not in excluded)
-    return AgreementDataset(groups=groups, catalogue=catalogue, files=files or [], warnings=warnings)
+    return AgreementDataset(groups=groups, catalogue=catalogue, files=files or [], warnings=warnings,
+                            selection=selection)
 
 
 _ATTEMPT_RE = re.compile(r"_attempt-(\d+)_annotations\.json$")
@@ -273,9 +295,18 @@ def _display_path(f: Path, bases: list[Path]) -> str:
     return f.name
 
 
-def load_dataset(paths: Iterable[Path | str], config: AnalysisConfig, *, strict: bool = False) -> AgreementDataset:
-    """Read and group the annotation files; with ``strict``, unknown annotators are an error."""
+def load_dataset(paths: Iterable[Path | str], config: AnalysisConfig, *, strict: bool = False,
+                 records: Any = None) -> AgreementDataset:
+    """Read and group the annotation files; with ``strict``, unknown annotators are an error.
+
+    The study's adjudication and task records are ``records`` when given; otherwise, for an analysis
+    of derived versions or by task, they are read from the folders given (``adjudications/`` and
+    ``tasks/tasks.json``, as a study's export and results zip hold them)."""
     bases = [Path(p) for p in paths]
+    if records is None and (config.versions != "original" or config.unit == "task"):
+        from electrotag.reliability.versions import StudyRecords
+
+        records = StudyRecords.read(bases)
     files = collect_annotation_files(bases)
     if not files:
         raise FileNotFoundError(
@@ -283,15 +314,15 @@ def load_dataset(paths: Iterable[Path | str], config: AnalysisConfig, *, strict:
             + ". Choose the folder that holds the annotators' results (normally Annotated_Events)."
         )
     docs = []
-    records = []
+    file_rows: list[dict[str, str]] = []
     for f in files:
         try:
             doc = read_annotations_json(f)
         except AnnotationError as exc:
-            records.append({"path": _display_path(f, bases), "status": f"skipped: {exc}"})
+            file_rows.append({"path": _display_path(f, bases), "status": f"skipped: {exc}"})
             continue
         docs.append((_display_path(f, bases), doc))
-        records.append(
+        file_rows.append(
             {
                 "path": _display_path(f, bases),
                 "sha256": sha256_file(f),
@@ -307,7 +338,7 @@ def load_dataset(paths: Iterable[Path | str], config: AnalysisConfig, *, strict:
         msg = unknown_names("annotator", config.annotators, found)
         if msg:
             raise ValueError(msg)
-    ds = build_dataset(docs, config, files=records)
-    skipped = [r for r in records if r["status"].startswith("skipped")]
+    ds = build_dataset(docs, config, files=file_rows, records=records)
+    skipped = [r for r in file_rows if r["status"].startswith("skipped")]
     ds.warnings.extend(f"{r['path']}: {r['status']}" for r in skipped)
     return ds

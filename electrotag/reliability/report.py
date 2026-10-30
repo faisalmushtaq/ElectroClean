@@ -459,6 +459,161 @@ COLUMN_TITLES.update({
 })
 
 
+COLUMN_TITLES.update({
+    "version": ("Version", "original, corrected (an expert's correction, or the adjudication of several), "
+                "adjudicated, pending (a correction waiting for adjudication) or left_out"),
+    "attempt": ("Version saved", "The annotator's attempt (each Save and Finish of a recording is the next)"),
+    "source": ("File", ""),
+    "corrected_by": ("Corrected by", ""),
+    "correction_id": ("Correction", ""),
+    "unit_id": ("Adjudication", "The task, recording or corrections adjudicated"),
+    "note": ("Note", ""),
+    "via": ("How", "correction: one expert's; adjudication: several experts' corrections, adjudicated"),
+    "n_original": ("Marks before", "Annotations in the original"),
+    "n_corrected": ("Marks after", "Annotations in the corrected version"),
+    "added": ("Added", ""),
+    "removed": ("Removed", ""),
+    "changed": ("Changed", "Marks whose type, start, end, channels, confidence or note changed"),
+    "relabelled": ("Type changed", ""),
+    "reasons": ("Reasons", "The corrector's reason for each change, counted (JSON)"),
+    "f1_with_original": ("F1 with the original", "Event F1, type by type, time only, at the main threshold "
+                         "(1 = unchanged)"),
+    "unit_kind": ("Kind", "task, recording, or corrections"),
+    "group": ("Compared as", "The recording, or recording#adjudication for a part of it"),
+    "window_start_s": ("Part from (s)", ""),
+    "window_end_s": ("Part to (s)", ""),
+    "adjudicator": ("Adjudicator", ""),
+    "n_conflicts": ("Conflicts", ""),
+    "presence": ("Presence", "Conflicts where someone has no mark"),
+    "type": ("Type", "Conflicts between artifact types"),
+    "timing": ("Timing", "Conflicts of start or end beyond the tolerance"),
+    "split": ("Split", "Conflicts where one person has two or more marks"),
+    "kept_one": ("Kept one", "Decisions that kept one person's marks"),
+    "kept_all": ("Kept all", "Decisions that kept everyone's marks"),
+    "kept_none": ("Kept none", "Decisions that kept no mark"),
+    "edited": ("Edited", "Decisions that replaced the marks with the adjudicator's own"),
+    "n_decided": ("Decided", ""),
+    "mean_decision_s": ("Seconds per decision", "Mean time between decisions, from the start of the adjudication"),
+    "f1_before": ("F1 before", "Mean event F1 between the versions compared (type by type, time only, at the main "
+                  "threshold, as the key results)"),
+    "f1_after": ("F1 after", "Mean event F1 of each version compared with the adjudicated version"),
+    "n_adjudicated": ("Marks adjudicated", "Annotations in the adjudicated version"),
+    "label_1": ("Type", ""),
+    "label_2": ("Confused with", ""),
+    "n_units": ("Adjudications", ""),
+    "kept_label_1": ("Decided for the first", ""),
+    "kept_label_2": ("Decided for the second", ""),
+    "kept_both": ("Both kept", ""),
+    "kept_neither_or_edited": ("Neither or edited", ""),
+    "n_kept": ("Kept", "Marks the adjudicated version has with the same type (matched as the agreement does)"),
+    "share_kept": ("Share kept", "Of the annotator's marks"),
+    "n_conflict_marks": ("Marks in conflicts", ""),
+    "n_decided_for": ("Conflicts decided for them", "Decisions that kept this person's marks (or everyone's)"),
+    "adjudications": ("Adjudications", ""),
+    "reason": ("Reason", ""),
+    "n_changes": ("Changes", ""),
+})
+NOWRAP |= {"version", "unit_id", "group", "label_1", "label_2", "corrected_by"}
+#: The tables of the versions analysed (reliability/versions.py), shown in their own section.
+VERSION_TABLES = ("versions", "corrections_effect", "adjudication", "adjudication_pairs", "adjudication_survival")
+VERSION_WORDS = {"original": "the original annotations, as the annotators saved them",
+                 "corrected": "the corrected versions: each annotator's work as an expert corrected it, where it was "
+                 "corrected, and as saved otherwise",
+                 "adjudicated": "each annotator against the adjudicated version of every finished adjudication"}
+
+
+def versions_paragraph(result: Any) -> str:
+    """The "Versions analysed" box at the top of the report (empty for the originals analysed by recording)."""
+    cfg = result.config
+    v = result.settings_record.get("versions") or {}
+    if cfg.versions == "original" and getattr(cfg, "unit", "recording") == "recording":
+        return ""
+    parts = [f"This analysis compares {VERSION_WORDS.get(cfg.versions, cfg.versions)}."]
+    by = v.get("by") or {}
+    if cfg.versions == "corrected":
+        n = int(v.get("replaced") or 0)
+        parts.append(f"{n} saved version{'s were' if n != 1 else ' was'} replaced by a correction"
+                     + (" (" + ", ".join(f"{k}: {by[k]}" for k in sorted(by)) + ")." if by else "."))
+    elif cfg.versions == "adjudicated":
+        n = int(v.get("replaced") or 0)
+        parts.append(f"{n} finished adjudication{'s are' if n != 1 else ' is'} the reference"
+                     + (" (adjudicated by " + ", ".join(f"{k}: {by[k]}" for k in sorted(by)) + ")." if by else "."))
+    pending = v.get("pending") or []
+    if pending:
+        parts.append(f"Correction pending adjudication, left out: {', '.join(pending)}.")
+    left = [r for r in v.get("left_out") or [] if r not in pending]
+    if left:
+        parts.append(f"Left out: {len(left)} recording{'s' if len(left) != 1 else ''} without a version to compare.")
+    if getattr(cfg, "unit", "recording") == "task":
+        parts.append("Each task's part of a recording is compared on its own (recording#task).")
+    return ("<div class='box' data-section='versions'><b>Versions analysed.</b> " + html.escape(" ".join(parts))
+            + " The table versions.tsv lists the file used for each annotator and recording.</div>")
+
+
+def _versions_section(result: Any, add: Callable[[str], None]) -> None:
+    """Corrections and adjudication: what they changed (versions.py's tables)."""
+    from electrotag.reliability.versions import survival_by_annotator
+
+    t = result.tables
+    cfg = result.config
+    if not any(n in t for n in VERSION_TABLES):
+        return
+    add("<h2 data-section='versions-effect'>Corrections and adjudication</h2>")
+    ce = t.get("corrections_effect")
+    if ce is not None and cfg.versions == "corrected":
+        if ce.empty:
+            add("<p class='muted'>No saved version analysed was corrected.</p>")
+        else:
+            f1 = pd.to_numeric(ce["f1_with_original"], errors="coerce").mean()
+            add(f"<p>{len(ce)} corrected file{'s' if len(ce) != 1 else ''}: {int(ce['added'].sum())} marks added, "
+                f"{int(ce['removed'].sum())} removed and {int(ce['changed'].sum())} changed "
+                f"({int(ce['relabelled'].sum())} of them to another type). The corrected versions agree with the "
+                f"originals at a mean event F1 of {_cell(f1)} (1 would mean nothing changed).</p>")
+            reasons: dict[str, int] = {}
+            for text in ce["reasons"]:
+                try:
+                    for k, n in json.loads(text).items():
+                        reasons[k] = reasons.get(k, 0) + int(n)
+                except (ValueError, TypeError, AttributeError):
+                    continue
+            if reasons:
+                from electrotag.reliability.versions import REASON_WORDS
+
+                add(_table(pd.DataFrame([{"reason": REASON_WORDS.get(k, k), "n_changes": n}
+                                         for k, n in sorted(reasons.items(), key=lambda kv: -kv[1])]),
+                           caption="The correctors' reasons for their changes."))
+            add(_table(ce.drop(columns=["reasons"]), caption="Each corrected file (corrections_effect.tsv)."))
+    adj = t.get("adjudication")
+    if adj is not None and cfg.versions == "adjudicated":
+        if adj.empty:
+            add("<p class='muted'>No adjudication is finished yet.</p>")
+        else:
+            before = pd.to_numeric(adj["f1_before"], errors="coerce").mean()
+            after = pd.to_numeric(adj["f1_after"], errors="coerce").mean()
+            add(f"<div class='key' data-section='before-after'><b>Before and after adjudication.</b> Over "
+                f"{len(adj)} adjudication{'s' if len(adj) != 1 else ''} with {int(adj['n_conflicts'].sum())} "
+                f"conflicts, the versions compared agreed with each other at a mean event F1 of {_cell(before)} "
+                f"before adjudication, and with the adjudicated version at {_cell(after)} after it (event F1 over "
+                "every type, time only, at the main threshold, as in the key results).</div>")
+            add(_table(adj[["unit_id", "recording", "adjudicator", "annotators", "n_conflicts", "presence", "type",
+                            "timing", "channels", "split", "kept_one", "kept_all", "kept_none", "edited",
+                            "mean_decision_s", "f1_before", "f1_after"]],
+                       caption="Each adjudication: its conflicts by kind, the decisions by choice (from the study's "
+                       "records; n/a when they were not available) and the agreement before and after."))
+        pairs = t.get("adjudication_pairs")
+        if pairs is not None and not pairs.empty:
+            add(_table(pairs, caption="Conflicts between two types, by pair of types, and which type the decisions "
+                       "kept."))
+        surv = t.get("adjudication_survival")
+        if surv is not None and not surv.empty:
+            rows = survival_by_annotator(surv.to_dict("records"))
+            add(_table(pd.DataFrame(rows), caption="How much of each annotator's work the adjudicated versions kept: "
+                       "their marks matched by an adjudicated mark of the same type."))
+    if "versions" in t:
+        add("<details><summary>The version used for each annotator and recording</summary>"
+            + _table(t["versions"]) + "</details>")
+
+
 # -------------------------------------------------------------------- page
 CSS = BASE_CSS + """
 body { max-width: 1150px; margin: 0 auto; padding: 40px 24px 64px; }
@@ -572,6 +727,7 @@ def build_html_report(result: Any) -> str:
         f"annotators: {html.escape(', '.join(result.dataset.annotators))} · label catalogue "
         f"{html.escape(result.dataset.catalogue.catalogue_id)} {html.escape(result.dataset.catalogue.catalogue_version)}</p>"
     )
+    add(versions_paragraph(result))
     warnings = rec.get("warnings", [])
     if not has_pairs:
         add("<div class='warn'><b>Nothing to compare.</b> " + html.escape(warnings[0] if warnings else "")
@@ -601,6 +757,7 @@ def build_html_report(result: Any) -> str:
             + _table(key) + "</div>")
     if warnings:
         add("<h2>Warnings</h2><ul>" + "".join(f"<li>{html.escape(w)}</li>" for w in warnings) + "</ul>")
+    _versions_section(result, add)
 
     # Overview
     add("<h2>1. Recordings and annotations</h2>")
@@ -758,7 +915,8 @@ def build_html_report(result: Any) -> str:
 
     # Extra measures
     extra = [n for n in tables
-             if not n.startswith(("descriptives_", "timeresolved_", "events_", "confusion_", "confidence_"))]
+             if not n.startswith(("descriptives_", "timeresolved_", "events_", "confusion_", "confidence_"))
+             and n not in VERSION_TABLES]
     if extra:
         add("<h2>Additional measures</h2>")
         for n in extra:

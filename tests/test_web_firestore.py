@@ -1172,3 +1172,40 @@ def test_adjudication_through_the_expert_function(study: str, recordings: Path) 
     _, body = callable_("et_my_feedback", {"study": study}, annotator)
     assert [c["decision"]["outcome"] for c in body["result"]["adjudications"]["items"][0]["conflicts"]] == [
         "yours_kept", "yours_kept", "yours_kept"]
+
+
+# ------------------------------------------------------ derived versions in the analyses (H6)
+def test_agreement_of_the_derived_versions_over_firestore(service: StudyService, recordings: Path) -> None:
+    """The agreement reads a Firestore study through results_tree, which writes the derived versions beside the
+    originals: the corrected and the adjudicated versions are found there, also when annotators are chosen."""
+    from electrotag.web.adjudication import unit_id_for
+
+    store = service.store
+    store.put_user("E02", display_name="Expert two", roles=["expert"])
+    ok(service, "submit", A01, submission(recordings, SUB1, DISAGREE[0]))
+    ok(service, "submit", A02, submission(recordings, SUB1, DISAGREE[1]))
+    body = {"config": {"resolutions_s": [1.0]}, "annotator_ids": ["A01", "A02"]}
+    original = ok(service, "admin", ADMIN, {"op": "agreement", **body})
+    assert original["summary"]["versions"]["used"] == "original" and "versions.tsv" not in original["tables"]
+    # E02 corrects A01's work: the blink was the eye movement A02 saw
+    fixed = [{**DISAGREE[0][0], "label": DISAGREE[1][0]["label"]}, *DISAGREE[0][1:]]
+    ok(service, "expert", User("E02", roles=("expert",)), {"op": "correction_save", **_correction(
+        recordings, "7" * 32, fixed, {DISAGREE[0][0]["annotation_id"]: "wrong_type"})})
+    corrected = ok(service, "admin", ADMIN, {"op": "agreement", "versions": "corrected", **body})
+    v = corrected["summary"]["versions"]
+    assert (v["used"], v["replaced"], v["by"]) == ("corrected", 1, {"E02": 1})
+    effect = corrected["tables"]["corrections_effect.tsv"].splitlines()
+    assert len(effect) == 2 and "\tE02\tcorrection\t" in effect[1]
+    # E01 adjudicates the two annotators' versions; the reference is ADJUDICATED, kept although annotators are chosen
+    uid = unit_id_for("recording", SUB1)
+    got = ok(service, "expert", E01, {"op": "adjudication_start", "unit_id": uid})
+    for c in got["conflicts"]:
+        ok(service, "expert", E01, {"op": "adjudication_decide", "unit_id": uid, "conflict_id": c["conflict_id"],
+                                    "choice": "A", "reason_code": "clear_artifact"})
+    ok(service, "expert", E01, {"op": "adjudication_finish", "unit_id": uid})
+    adj = ok(service, "admin", ADMIN, {"op": "agreement", "versions": "adjudicated", **body})
+    assert adj["summary"]["config"]["reference_annotator"] == "ADJUDICATED"
+    assert {r["pair"] for r in adj["summary"]["key_results"]} >= {"ADJUDICATED – A01", "ADJUDICATED – A02"}
+    rows = adj["tables"]["adjudication.tsv"].splitlines()
+    row = dict(zip(rows[0].split("\t"), rows[1].split("\t"), strict=True))
+    assert row["unit_id"] == uid and row["adjudicator"] == "E01" and row["kept_one"] == str(len(got["conflicts"]))

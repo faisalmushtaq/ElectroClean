@@ -278,3 +278,80 @@ def test_the_logs_guide_lists_every_column_as_the_tables_describe_it():
         section = guide[guide.index(heading):]
         table = section[section.index("| Column | Meaning |"):].split("\n\n", 1)[0].splitlines()[2:]
         assert table == [f"| `{c}` | {d} |" for c, d in columns], heading
+
+
+def expert_log(path):
+    """An expert's visit: a correction, an adjudication, a replay, and a trainee's skips (docs/activity_logs.md)."""
+    b = LogBuilder(path, "E01", T0)
+    b.context = {"recording": "r1", "window_no": 1}
+    b.event(0.0, "correction_started", annotator_id="A01", recording_id="r1", attempt=1, n_annotations=3)
+    b.event(1.0, "annotations_snapshot", part=1, n_parts=1, annotations=[])
+    b.event(5.0, "key", key="Delete")
+    b.event(9.0, "correction_submitted", added=1, removed=1, changed=2, elapsed_s=9.0, already=False)
+    b.event(10.0, "correction_submitted", added=1, removed=1, changed=2, elapsed_s=9.0, already=True)
+    b.context = {"recording": "r2", "window_no": 2}
+    b.event(20.0, "recording_opened", segment="adjudication", unit_id="r-1", duration_s=60.0)
+    b.event(20.0, "adjudication_opened", unit_id="r-1", n_conflicts=3, decided=0, mode="decide", letters=2)
+    b.event(30.0, "adjudication_decision", conflict_id="c-1", kinds=["type"], choice="A", seconds=10.0)
+    b.event(50.0, "adjudication_decision", conflict_id="c-2", kinds=["presence"], choice="none", seconds=20.0)
+    b.event(51.0, "adjudication_decision", conflict_id="c-2", kinds=["presence"], choice="none", seconds=1.0,
+            already=True)
+    b.event(52.0, "adjudication_finished", unit_id="r-1", n_conflicts=2, by_choice={"one": 1, "none": 1})
+    b.context = {"recording": "r1", "window_no": 3}
+    b.event(60.0, "replay_opened", annotator_id="A01", recording_id="r1", n_segments=1, n_events=40)
+    b.event(90.0, "replay_closed", watched_s=27.5, ended="closed", same=True)
+    b.context = {}
+    return b.write()
+
+
+def test_expert_work_and_skipped_stages_are_summarised(tmp_path):
+    t = rows_for(expert_log(tmp_path / "e.jsonl"))
+    correction, adjudication, replay = t.recordings
+    assert [r["segment"] for r in t.recordings] == ["correction", "adjudication", "replay"]
+    assert correction["outcome"] == "finished" and correction["corrections_submitted"] == 1
+    assert correction["correction_changes"] == 4 and correction["final_annotations"] == ""
+    assert adjudication["adjudication_decisions"] == 2 and adjudication["adjudication_mean_s"] == pytest.approx(15)
+    assert adjudication["outcome"] == "finished"
+    assert replay["replays_watched"] == 1 and replay["replay_watched_s"] == pytest.approx(27.5)
+    (visit,) = t.visits
+    assert visit["recordings_opened"] == 0  # none of these is annotation of one's own
+    # a trainee skips two stages of the training path
+    b = LogBuilder(tmp_path / "t.jsonl", "T01", T0)
+    b.event(1.0, "training_path_opened", stages={})
+    b.event(2.0, "stage_skipped", set_id="s", stage="tour", policy=["tour", "snippets"])
+    b.event(3.0, "stage_skip_cancelled", set_id="s", stage="snippets")
+    b.event(4.0, "stage_skipped", set_id="s", stage="snippets", policy=["tour", "snippets"])
+    b.event(5.0, "snippet_viewed", snippet_id="s01", label="Eye-blink-artifact")
+    b.context = {"recording": "tour", "window_no": 1}
+    b.event(6.0, "recording_opened", segment="tour", duration_s=30.0)
+    b.event(9.0, "tour_left", step="mark")
+    b.context = {}
+    b.write()
+    trainee = rows_for(b.path).recordings
+    training = next(r for r in trainee if r["segment"] == "training")
+    assert training["stages_skipped"] == 2 and training["stages_skipped_names"] == "tour, snippets"
+    assert [r["segment"] for r in trainee] == ["training", "snippets", "tour"]
+    assert next(r for r in trainee if r["segment"] == "tour")["outcome"] == "closed_without_saving"
+
+
+def test_the_report_has_the_expert_work_and_the_stages_skipped(tmp_path):
+    expert_log(tmp_path / "logs" / "e.jsonl")
+    b = LogBuilder(tmp_path / "logs" / "t.jsonl", "T01", T0 + timedelta(hours=1))
+    b.event(2.0, "stage_skipped", set_id="s", stage="guided", policy=["guided"])
+    b.write()
+    tables, paths = write_activity([tmp_path / "logs"], tmp_path / "out")
+    header = paths["recordings"].read_text(encoding="utf-8").splitlines()[0].split("\t")
+    for column in ("corrections_submitted", "correction_changes", "adjudication_decisions", "adjudication_mean_s",
+                   "replays_watched", "replay_watched_s", "stages_skipped", "stages_skipped_names"):
+        assert column in header
+    page = paths["report"].read_text(encoding="utf-8")
+    start = page.index('data-section="expert-work"')
+    row = page[page.index("<td>E01</td>", start):page.index("</tr>", page.index("<td>E01</td>", start))]
+    cells = [c.split(">", 1)[1] for c in row.split("</td>") if ">" in c]
+    assert cells == ["E01", "1", "4", "2", "15.0", "1", "0.5"]
+    skips = page[page.index('data-section="stages-skipped"'):]
+    assert "<td>T01</td>" in skips and "guided" in skips.split("</table>")[0]
+    plain = demo_logs(tmp_path / "plain")
+    _, paths = write_activity([plain], tmp_path / "out2")
+    page = paths["report"].read_text(encoding="utf-8")
+    assert 'data-section="expert-work"' not in page and 'data-section="stages-skipped"' not in page

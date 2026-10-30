@@ -690,7 +690,7 @@ study's own recordings have `"self_contained": false` and `"scope": "study"`.
 | `quiz_item_remove` | `{"set_id", "item_id"}` | `{}`; 404 `unknown_item` |
 | `progress` | `{}` | as `GET /admin/progress` |
 | `stats` | `{"work"?: "study" \| "all"}` | `Stats` (below): how far the study has got and how long the work takes, from the completion register (`elapsed_s`, `n_annotations`, `completed_at`), the drafts, the assignments, the accounts' `last_seen` and the visits. `work` `study` counts the study's own annotation (mode `standard`), `all` training too; 400 otherwise. A recording saved more than once (a revision, or a practice recording repeated) counts as one recording done, on the day of its first save, with the annotations of its latest attempt and the time of all its attempts together; `saved` per recording is the number of people who saved it |
-| `agreement` | `{"annotator_ids"?, "recording_ids"?, "modes"?: ["standard"], "config"?: {..AnalysisConfig fields..}}` | `{"summary": {"n_recordings", "n_comparable_recordings", "annotators", "config", "key_results": [..], "unusable": {"recordings_left_out", "recording_ids", "assignments"}}, "report_html": str, "tables": {"<name>.tsv": str}, "warnings": [..], "settings_file": {"config": {..AnalysisConfig..}, "recording_ids": [..] \| null, "exclude_recording_ids": [..], "command": str}}`, computed on demand with `electrotag.reliability` (the files of `electrotag-agreement`). Annotators and modes are chosen with `annotator_ids` and `modes`, not in `config`; settings it refuses give 400 `invalid_config`; 422 `not_enough` when no recording has two annotators. When the tables would exceed 12 MB, `events_matched.tsv` and `events_unmatched.tsv` are left out with a warning; `annotation_notes.tsv` (every annotation with a note: `recording_id`, `annotator_id`, `mode`, `annotation_id`, `label`, `onset_s`, `duration_s`, `channels`, `confidence`, `note`) is always sent. `settings_file` is the file `electrotag-agreement --config` reads, so that `command` (`electrotag-agreement Annotated_Events --config agreement_settings.json`) repeats the analysis on the results zip with the same recordings and the same numbers. A study recording that any annotator set aside as one that cannot be annotated is left out for every annotator, with a warning and a paragraph at the top of the report that give the counts (`summary.unusable`) |
+| `agreement` | `{"annotator_ids"?, "recording_ids"?, "modes"?: ["standard"], "versions"?: "original", "unit"?: "recording", "config"?: {..AnalysisConfig fields..}}` | `{"summary": {"n_recordings", "n_comparable_recordings", "annotators", "config", "key_results": [..], "unusable": {"recordings_left_out", "recording_ids", "assignments"}, "versions", "unit"}, "report_html": str, "tables": {"<name>.tsv": str}, "warnings": [..], "settings_file": {"config": {..AnalysisConfig..}, "recording_ids": [..] \| null, "exclude_recording_ids": [..], "command": str}}`, computed on demand with `electrotag.reliability` (the files of `electrotag-agreement`). Annotators and modes are chosen with `annotator_ids` and `modes`, not in `config`; settings it refuses give 400 `invalid_config`; 422 `not_enough` when no recording has two annotators. When the tables would exceed 12 MB, `events_matched.tsv` and `events_unmatched.tsv` are left out with a warning; `annotation_notes.tsv` (every annotation with a note: `recording_id`, `annotator_id`, `mode`, `annotation_id`, `label`, `onset_s`, `duration_s`, `channels`, `confidence`, `note`) is always sent. `settings_file` is the file `electrotag-agreement --config` reads, so that `command` (`electrotag-agreement Annotated_Events --config agreement_settings.json`) repeats the analysis on the results zip with the same recordings and the same numbers. A study recording that any annotator set aside as one that cannot be annotated is left out for every annotator, with a warning and a paragraph at the top of the report that give the counts (`summary.unusable`). `versions` and `unit` choose the corrected or adjudicated versions and windows compared on their own (see "Derived versions in the analyses" below) |
 | `activity` | `{"annotator_ids"?}` | `{"report_html": str, "tables": {"visits.tsv": str, "recordings.tsv": str}}`, with `electrotag.activity`; 422 `no_logs` when there are no interaction logs |
 | `competency` | `{"set_id", "annotator_id"}` | `{"report": {..}, "html": str}` (`competency_report`, made again and kept, and `competency_html`); 404 `not_complete` until every assessment recording is saved (also for a set without assessment recordings) |
 | `results_zip` | `{}` | `{"file_name", "base64", "size_bytes"}`: the results folder as `GET /admin/results.zip` gives it, quiz results, problem reports and reviews included (docs/file_formats.md), with the study's settings (`study/electrotag_study.json`), its audit log (`study/audit_log.jsonl`, oldest first), its recordings' manifests (`study/manifests.json`) and a `README.txt`; 413 `too_large` (with `size_bytes`) above 25,000,000 bytes (use `electrotag-web export`) |
@@ -742,7 +742,7 @@ Authentication where it is not available answers 503 `auth_unavailable`.
 ```jsonc
 {"kind": "annotator", "annotator_id": "E1", "mode": "standard", "context_id": ""}   // that person's saved annotations of the recording
 {"kind": "document", "document": {...}}          // an _annotations.json (from a results folder, or saved by the desktop application, 1.1.0 or earlier)
-{"kind": "consensus", "annotator_ids": ["E1", "E2", "E3"], "min_agreement": null, "merge_gap_s": 0.0, "min_duration_s": 0.0}
+{"kind": "consensus", "annotator_ids": ["E1", "E2", "E3"], "min_agreement": null, "merge_gap_s": 0.0, "min_duration_s": 0.0, "weights": null}
 {"kind": "adjudicated", "adjudicator_id": "E4", "expert_ids": ["E1", "E2", "E3"]}
 ```
 
@@ -752,7 +752,8 @@ attempt is used. Consensus uses `electrotag.training.consensus.build_consensus`
 and returns its disagreement rows (`{"kind": "time" | "channels", "label",
 "onset_s", "offset_s", "experts_marking", "experts_not_marking", "note"}`;
 422 `invalid_consensus` when it cannot be built); it needs at least two
-annotators. An adjudicated reference names at least two experts. The reference
+annotators, and `weights` makes it a weighted majority (see "Derived versions
+in the analyses" below). An adjudicated reference names at least two experts. The reference
 is stored with ElectroTag's reference-set code (`ReferenceSet.add_reference`
 in `electrotag/training/reference.py`), which records its provenance: the
 method, the experts, the adjudicator, copies of the source files (the saved
@@ -1198,9 +1199,49 @@ these operations with 501 `needs_server`.
 
 ### Derived versions in the analyses
 
-The agreement analysis's choice of versions (`versions`: original, corrected
-or adjudicated) is described here when it is offered; until then every
-analysis uses the original annotations and leaves derived versions out.
+The admin operation `agreement` takes two more fields, `"versions"?: "original" | "corrected" |
+"adjudicated"` and `"unit"?: "recording" | "task"`, either in the body or inside `config` (they are
+fields of `AnalysisConfig`, so `settings_file` carries them and `electrotag-agreement --config`
+repeats the analysis; the same choice given twice and differently is 400 `invalid_config`). The code
+is `electrotag/reliability/versions.py`, which works on the annotation files alone, with the study's
+adjudication and task records added when they are known.
+
+| `versions` | what is compared |
+| --- | --- |
+| `original` (default) | the annotations as saved; corrections and adjudicated versions are left out, so the results are those of a study that has neither |
+| `corrected` | each annotator's latest attempt, replaced by its correction when an expert corrected that attempt. When two or more experts corrected it, the finished adjudication of their corrections (a unit of kind `corrections`) stands for it; until it is finished the whole recording is left out, as *correction pending adjudication*, with a warning that names it. A correction of an earlier attempt than the latest is not used, and a warning names it |
+| `adjudicated` | every annotator against the adjudicated version of each finished adjudication (of a task or a recording), with the versions that adjudication compared; the reference annotator is `ADJUDICATED` (another one is 400 `invalid_config`), and recordings without a finished adjudication are left out with a warning. 422 `not_enough` while no adjudication is finished |
+
+An adjudication of a task's window is compared on that window only: the documents are cropped to
+it and the group is called `<recording>#<unit>`. With `"unit": "task"`, every task with a window is
+compared that way (its annotators' versions cropped to the window), so that the clean rest of the
+recording does not inflate the agreement; recordings without a task stay whole. The answer's
+`summary` gains `"versions": {"used", "replaced", "by": {corrector or adjudicator: n}, "left_out":
+[recording], "pending": [recording]}` and `"unit"`, and `tables` gains:
+
+| table | when | one row per |
+| --- | --- | --- |
+| `versions.tsv` | any version but `original`, or `unit` `task` | annotator and recording (or part): the version used (`original`, `corrected`, `adjudicated`, `pending`, `left_out`), the attempt, the file, who corrected it, the correction or adjudication |
+| `corrections_effect.tsv` | `corrected` | corrected file: marks before and after, added, removed, changed and relabelled, the corrector's reasons counted (JSON), and the event F1 between the original and the corrected version |
+| `adjudication.tsv` | `adjudicated` | adjudication: its conflicts by kind, the decisions by choice (`kept_one`, `kept_all`, `kept_none`, `edited`) and the mean seconds per decision, and the event F1 between the versions compared (`f1_before`) and of each with the adjudicated version (`f1_after`) |
+| `adjudication_pairs.tsv` | `adjudicated` | pair of artifact types in conflict, with how the decisions went |
+| `adjudication_survival.tsv` | `adjudicated` | annotator and adjudication: their marks, those the adjudicated version kept with the same type, their marks in conflicts and the conflicts decided for them |
+
+The report opens with a "Versions analysed" paragraph and has a section "Corrections and
+adjudication" with these tables. The admin area offers "Compare with the original versions", which
+runs the analysis of the originals with the same choices as well and shows the key results side by
+side, built in the browser from both answers' `summary.key_results`. `electrotag-agreement` takes
+the same choices as `--versions` and `--unit`, and reads the decisions and the tasks from the
+`adjudications/` and `tasks/` folders of a results zip or export.
+
+**Weighted consensus.** The Source `consensus` of `set_add_reference` takes `"weights"?: "gold" |
+{annotator_id: weight}`. With weights, a moment is in the consensus when the people who marked it
+carry more than half of the total weight; with equal weights that is the unweighted strict
+majority, and without `weights` nothing changes. `"gold"` takes each person's `weight` from
+`quality_list` (their accuracy on the known-answer tasks), and is 422 `no_weight` (with
+`annotator_ids`) while anyone has too few known-answer results. Given weights are numbers from 0 to
+1000, one for each of `annotator_ids` and not all 0 (400 otherwise); `weights` with `min_agreement`
+is 422 `invalid_consensus`. The consensus rule kept with the reference records the weights.
 
 ## The same operations on Firebase
 

@@ -85,6 +85,23 @@ a training snippet that keeps where it came from. The results hold every decisio
 (`adjudications/decisions.tsv`) and the library (`library/library.tsv`). The sandbox says that this
 needs a study server.
 
+The agreement analysis can now compare the experts' versions as well as the originals. Versions, in
+the admin area's Analyses (`versions` in the operation, `--versions` for `electrotag-agreement`),
+chooses the originals as annotated (the default, whose results are exactly as before), the versions
+as the experts corrected them (where two experts corrected the same work, the adjudication of their
+corrections; until it is finished, that recording is left out and named), or every annotator against
+the adjudicated versions as the reference. A task's part of a recording can be compared on its own
+(`unit` `task`, `--unit task`), and an adjudicated part always is. Compare with the original
+versions shows the key results of both analyses side by side with their difference, and the report
+opens with the versions analysed and shows what the corrections changed (by reason, and how far each
+corrected file moved from its original) or what the adjudication did (agreement before and after,
+conflicts by kind and by pair of types, the decisions, and how much of each annotator's work the
+adjudicated version kept), with five new tables. The activity analysis counts expert work in rows of
+its own (corrections, adjudication decisions with their time, replays watched), shown in an Expert
+work table and left out of the learning curves, and lists the training stages each trainee skipped.
+A consensus reference can weight each person, by their accuracy on known-answer tasks or by weights
+given, for a later crowd study; without weights it is unchanged.
+
 A changed copy of a recording that is also in a training set (a set made from the study's own
 recordings) is now matched by its name and shape, as any other changed copy is; the study's copy and
 the set's copy were counted as two recordings, so the file was refused as looking like several.

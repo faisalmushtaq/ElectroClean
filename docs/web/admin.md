@@ -383,7 +383,11 @@ Shortest artifact leaves out shorter pieces. Afterwards the page lists every str
 experts disagreed, with who marked it and what the consensus kept, for adjudication; differences
 shorter than 0.1 s, where the experts' boundaries differ a little, are listed apart under their own
 heading, so that the stretches worth adjudicating come first. Download the table (TSV) saves every
-row.
+row. For a crowd study, where people differ in measured accuracy, the admin operation behind this
+page can weight each person, by their accuracy on the known-answer tasks or by weights given
+(`weights` of the consensus Source, [api.md](api.md) "Derived versions in the analyses"): a moment
+is then in the consensus when the people who marked it carry more than half of the total weight.
+The page itself makes the unweighted consensus.
 
 **An adjudicated consensus.** After reviewing the disagreements, an adjudicator annotates the
 recording in the study; their saved annotations become the reference, recorded with the experts
@@ -457,6 +461,20 @@ choose the settings for your study before you look at its results, report them, 
 settings used (JSON) with the report. Each setting links to the part of the reliability guide that
 explains it.
 
+**Versions** chooses what is compared once experts have corrected or adjudicated work: the
+originals, as the annotators saved them (the default, which leaves every correction and adjudicated
+version out); the versions as the experts corrected them, where a recording whose corrections are
+still waiting for adjudication is left out and named in the warnings; or each annotator against the
+adjudicated versions, which are then the reference (the Reference annotator field is hidden).
+**Compare** can take each task's part of a recording on its own rather than whole recordings. With
+another version than the originals, Compare with the original versions (ticked at first) runs the
+analysis of the originals too, with the same choices, and shows above the report a table of the key
+results of both, pair by pair, with their difference; against the adjudicated versions the pairs
+differ, so the mean over pairs is the row to compare. The report then opens with a paragraph on the
+versions analysed and has a section on what the corrections or the adjudication changed, with the
+tables `versions.tsv`, `corrections_effect.tsv`, `adjudication.tsv`, `adjudication_pairs.tsv` and
+`adjudication_survival.tsv` that the reliability guide's "Versions of the annotations" explains.
+
 Above the report, a few lines give the recordings analysed, those with two or more annotators to
 compare, the annotators and the recordings left out because they were set aside; the key results
 are in the report. Besides the tables of the command (the reliability guide lists them), the report
@@ -474,7 +492,9 @@ and gives the same numbers, those large tables included.
 The **activity analysis and learning curves** summarise the interaction logs: time spent, clicks
 and keys, confidence ratings and notes on the annotations saved (counts only, never the text of a
 note), problems reported, the feedback on reviewed work that annotators read, and how annotators got
-faster with practice, for everyone or for the annotators ticked.
+faster with practice, for everyone or for the annotators ticked. Expert work (corrections,
+adjudication decisions and replays watched) has a table of its own and stays out of the learning
+curves, and a second table lists the training stages each trainee skipped.
 
 A **competency report** compares a trainee's assessment recordings with a reference set's
 references and criteria, once every assessment recording is saved, and shows whether the criteria

@@ -92,7 +92,8 @@ class Analyses:
     def agreement(self, body: dict[str, Any]) -> dict[str, Any]:
         from electrotag.app.annotations.model import AnnotationError
         from electrotag.reliability.analysis import run_analysis
-        from electrotag.reliability.config import AnalysisConfig
+        from electrotag.reliability.config import ADJUDICATED, AnalysisConfig
+        from electrotag.reliability.data import load_dataset
         from electrotag.reliability.report import build_html_report, key_results
         from electrotag.web.service import clean_json
 
@@ -107,14 +108,23 @@ class Analyses:
             raise ApiError(400, "invalid_config", "config must be an object of analysis settings")
         if {"annotators", "modes"} & set(given):
             raise ApiError(400, "invalid_config", "Choose the annotators and modes with annotator_ids and modes")
+        # The versions compared and the unit (docs/web/api.md, "Derived versions in the analyses"): in the body, or
+        # in the settings as electrotag-agreement --config reads them.
+        chosen = {k: body[k] for k in ("versions", "unit") if body.get(k) is not None}
+        for k, v in chosen.items():
+            if k in given and given[k] != v:
+                raise ApiError(400, "invalid_config", f"{k} is given twice, as {v!r} and in config as {given[k]!r}")
         try:
-            cfg = AnalysisConfig.from_dict({**AnalysisConfig().to_dict(), **given, "annotators": annotators,
-                                            "modes": list(modes)})
+            cfg = AnalysisConfig.from_dict({**AnalysisConfig().to_dict(), **given, **chosen,
+                                            "annotators": annotators, "modes": list(modes)})
         except (ValueError, TypeError) as exc:
             raise ApiError(400, "invalid_config", f"The analysis settings are not valid: {exc}") from exc
+        records = self._records(cfg)
         with tempfile.TemporaryDirectory(prefix="electrotag-agreement-") as tmp:
-            root = self.store.results_tree(Path(tmp), annotator_ids=set(annotators) if annotators else None,
-                                           modes=set(modes))
+            # The adjudicated versions are ADJUDICATED's (a reserved ID); a derived version needs them too.
+            wanted_people = set(annotators) | ({ADJUDICATED} if cfg.versions != "original" else set()) \
+                if annotators else None
+            root = self.store.results_tree(Path(tmp), annotator_ids=wanted_people, modes=set(modes))
             # A recording an annotator reported as one that cannot be annotated is left out for everyone: its
             # other annotations would be compared with a judgement nobody could make (docs/web/api.md).
             unusable = self.service.feedback.unusable_recordings() if "standard" in modes else {}
@@ -124,10 +134,13 @@ class Analyses:
             if not files:
                 raise ApiError(422, "not_enough", "No saved annotations match: nothing to compare yet.")
             try:
-                result = run_analysis(files, cfg, strict=True)
+                result = run_analysis(load_dataset(files, cfg, strict=True, records=records), cfg, strict=True)
             except (ValueError, FileNotFoundError, AnnotationError) as exc:
                 raise ApiError(400, "invalid_config", str(exc)) from exc
         if not result.has_comparisons:
+            if cfg.versions == "adjudicated":
+                raise ApiError(422, "not_enough", "No adjudication is finished yet for the annotators and recordings "
+                               "chosen, so there is no adjudicated version to compare them with.")
             raise ApiError(422, "not_enough", "No recording has been saved by two of the annotators being compared, "
                            "so there is no agreement to measure yet.")
         warnings = list(result.settings_record.get("warnings", []))
@@ -166,11 +179,23 @@ class Analyses:
         })
         summary["unusable"] = {"recordings_left_out": len(left_out), "recording_ids": left_out,
                                "assignments": sum(unusable[r] for r in left_out)}
+        summary["versions"] = clean_json(record.get("versions") or {"used": cfg.versions})
+        summary["unit"] = cfg.unit
         html = build_html_report(result)
         if unusable_note:
             html = _with_note(html, unusable_note)
         return {"summary": summary, "report_html": html, "tables": tables, "warnings": warnings,
                 "settings_file": settings_file}
+
+    def _records(self, cfg: Any) -> Any:
+        """The study's adjudication and task records, for an analysis of derived versions or by task."""
+        from electrotag.reliability.versions import StudyRecords
+
+        if cfg.versions == "original" and cfg.unit != "task":
+            return None
+        tasks = self.store.records("tasks") if cfg.unit == "task" else []
+        adjudications = self.store.records("adjudications") if cfg.versions == "adjudicated" else []
+        return StudyRecords.of(adjudications, tasks)
 
     @staticmethod
     def _annotation_files(root: Path, recordings: set[str] | None, leave_out: set[str] | None = None) -> list[Path]:

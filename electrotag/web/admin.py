@@ -1159,8 +1159,9 @@ class Admin:
             k = source.get("min_agreement")
             if k is not None and (isinstance(k, bool) or not isinstance(k, int)):
                 raise _bad("source.min_agreement must be a whole number of experts (or null for a majority)")
+            weights = self._consensus_weights(source.get("weights"), aids)
             try:
-                res = build_consensus(docs, min_agreement=k,
+                res = build_consensus(docs, min_agreement=k, weights=weights,
                                       min_duration_s=_number(source, "min_duration_s", minimum=0, maximum=3600,
                                                              default=0.0),
                                       merge_gap_s=_number(source, "merge_gap_s", minimum=0, maximum=3600, default=0.0))
@@ -1178,6 +1179,33 @@ class Admin:
             if ename is not None and ename != name:
                 files.append(keep(ename, saved[ename]))
         return {"doc": doc, "method": "adjudicated", "experts": experts, "adjudicator": adj, "files": files}
+
+    # ------------------------------------------------- weighted consensus (H6: a crowd study's aggregation)
+    def _consensus_weights(self, raw: Any, aids: list[str]) -> dict[str, float] | None:
+        """``source.weights`` of a consensus: none (every expert counts the same), ``"gold"`` (each one's accuracy on
+        the known-answer tasks, ``quality_list``'s weight) or ``{annotator_id: weight}``."""
+        if raw is None:
+            return None
+        if raw == "gold":
+            rows = {r["annotator_id"]: r for r in self.service.tasks.op_quality(None, {})["annotators"]}
+            missing = [a for a in aids if (rows.get(a) or {}).get("weight") is None]
+            if missing:
+                n = int(self.service.settings.review.gold_min_items)
+                raise ApiError(422, "no_weight", f"{', '.join(missing)} {'has' if len(missing) == 1 else 'have'} "
+                               f"fewer than {n} known-answer results, so there is no accuracy to weight by yet. Give "
+                               "the weights yourself, or make the consensus without weights.", annotator_ids=missing)
+            return {a: float(rows[a]["weight"]) for a in aids}
+        if not isinstance(raw, dict) or set(raw) != set(aids):
+            raise _bad("source.weights must be \"gold\" or give a weight for each of source.annotator_ids")
+        out = {}
+        for a in aids:
+            w = raw[a]
+            if isinstance(w, bool) or not isinstance(w, (int, float)) or not math.isfinite(w) or not 0 <= w <= 1000:
+                raise _bad(f"The weight of {a} must be a number from 0 to 1000")
+            out[a] = float(w)
+        if not any(out.values()):
+            raise _bad("At least one expert's weight must be above 0")
+        return out
 
     def op_set_add_reference(self, user: User, body: dict[str, Any]) -> dict[str, Any]:
         from electrotag.app.annotations.model import AnnotationError, validate_annotation

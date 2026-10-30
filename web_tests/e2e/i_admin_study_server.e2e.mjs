@@ -179,6 +179,75 @@ export const tests = [
     },
   },
   {
+    name: 'the agreement of the corrected and the adjudicated versions, compared with the originals',
+    needs: 'study',
+    async run(t) {
+      const { assert } = t;
+      await needsAdminOperations(t);
+      const fileName = 'sub-003_task-rest_eeg.edf';
+      const rid = 'sub-003/eeg/sub-003_task-rest_eeg.edf';
+      await saveAs(t, 'A01', fileName, [['Eye-blink-artifact', 3.0, 3.4], ['EMG-artifact', 10, 12]]);
+      await saveAs(t, 'A02', fileName, [['Eye-blink-artifact', 3.05, 3.45], ['Movement-artifact', 20, 21]]);
+      // E01 corrects A01's latest version (through the expert channel, as the correction view does): the EMG was a
+      // movement artifact, as A02 saw it.
+      const e01 = await login(t, 'E01');
+      const got = await api(t, 'POST', '/expert/saved_attempt_get', { annotator_id: 'A01', recording_id: rid }, e01);
+      assert.equal(got.status, 200, JSON.stringify(got.json));
+      const original = got.json.annotations;
+      const bytes = fs.readFileSync(recordingFile(t, fileName));
+      const sf = got.json.manifest.sfreq;
+      const emg = original.find((a) => a.label === 'EMG-artifact');
+      const corrected = original.map((a) => (a === emg ? { ...a, label: 'Movement-artifact', onset_sample: Math.round(20 * sf), duration_samples: Math.round(sf) } : a));
+      const cid = crypto.randomBytes(16).toString('hex');
+      const saved = await api(t, 'POST', '/expert/correction_save', { correction_id: cid, annotator_id: 'A01', recording_id: rid,
+        attempt: got.json.attempt, annotations: corrected, changes: [{ annotation_id: emg.annotation_id, reason: 'wrong_type' }],
+        session: { started_at: new Date().toISOString(), elapsed_s: 20 }, sha256: crypto.createHash('sha256').update(bytes).digest('hex') }, e01);
+      assert.equal(saved.status, 200, JSON.stringify(saved.json));
+
+      const page = await adminPage(t);
+      await goSection(page, 'Analyses', 'admin-analyses');
+      const form = page.locator('.admin-card', { hasText: 'Agreement between annotators' });
+      await form.locator('input[data-name="agreement-annotators"][value="A01"]').check();
+      await form.locator('input[data-name="agreement-annotators"][value="A02"]').check();
+      await page.selectOption('select[data-field="versions"]', 'corrected');
+      assert.ok(await page.isVisible('label.check:has-text("Compare with the original versions")'));
+      await page.click('[data-log="agreement-run"]');
+      const compared = page.locator('.admin-card', { hasText: 'Compared with the original versions' });
+      await compared.waitFor({ timeout: 240000 });
+      const table = (await compared.innerText()).replace(/\s+/g, ' ');
+      assert.match(table, /A01 – A02 Event F1, all categories/);
+      assert.match(await page.innerText('.admin-section[data-section="analyses"]'), /Saved versions replaced by a correction\s+1 \(E01 1\)/);
+      assert.ok(await page.locator('.downloads button', { hasText: 'corrections_effect.tsv' }).count(), 'the corrections\' table is offered');
+      await t.screenshot(page, 'admin_server_agreement_corrected');
+      const html = await page.frameLocator('iframe.report-frame').first().locator('body').innerText();
+      assert.match(html, /Versions analysed/);
+
+      // E01 adjudicates A01's and A02's versions, and the agreement is measured against the adjudicated version.
+      const units = await api(t, 'POST', '/expert/adjudication_list', {}, e01);
+      const unit = (units.json.units || []).find((u) => u.recording_id === rid && u.kind === 'recording');
+      if (unit && unit.status !== 'adjudicated') {
+        const started = await api(t, 'POST', '/expert/adjudication_start', { unit_id: unit.unit_id }, e01);
+        if (started.status === 200) {
+          for (const c of started.json.conflicts) {
+            if (c.decision) continue;
+            await api(t, 'POST', '/expert/adjudication_decide', { unit_id: unit.unit_id, conflict_id: c.conflict_id, choice: 'A', reason_code: 'clear_artifact' }, e01);
+          }
+          const fin = await api(t, 'POST', '/expert/adjudication_finish', { unit_id: unit.unit_id }, e01);
+          assert.equal(fin.status, 200, JSON.stringify(fin.json));
+        }
+      }
+      await page.selectOption('select[data-field="versions"]', 'adjudicated');
+      assert.equal(await page.isVisible('select[data-field="reference"]'), false, 'the adjudicated versions are the reference');
+      await page.click('[data-log="agreement-run"]');
+      await page.waitForFunction(() => /against the adjudicated/i.test(document.querySelector('.admin-section[data-section="analyses"]')?.innerText || ''), null, { timeout: 240000 });
+      await page.waitForFunction(() => /Adjudications used/.test(document.querySelector('.admin-section[data-section="analyses"]')?.innerText || ''), null, { timeout: 240000 });
+      const report = await page.frameLocator('iframe.report-frame').first().locator('body').innerText();
+      assert.match(report, /Before and after adjudication/);
+      assert.match(report, /ADJUDICATED/);
+      await t.screenshot(page, 'admin_server_agreement_adjudicated');
+    },
+  },
+  {
     name: 'recordings chosen on this computer reach the study server as manifests',
     needs: 'study',
     async run(t) {

@@ -18,6 +18,13 @@ Consensus rule (per artifact category, applied sample by sample):
 
 The default ``min_agreement`` is a strict majority of the experts.
 
+**Weighted consensus** (for a crowd study, where people differ in measured accuracy): with
+``weights`` (expert ID -> a weight, such as each person's accuracy on known-answer tasks), a sample
+is in the consensus when the experts who marked the category there carry more than half of the
+total weight (a weighted majority). With equal weights this is exactly the unweighted strict
+majority, so the default without weights is unchanged. The channel rule stays the count of experts
+described above, with a strict majority of them.
+
 The disagreement list has one row for every stretch of time during which the
 same subset of experts (some but not all) marked a category, noting whether
 that stretch ended up in the consensus after the duration and gap rules, and
@@ -66,6 +73,47 @@ def _threshold_intervals(lists: list[list[Interval]], k: int, n_samples: int) ->
     return out
 
 
+def _weighted_intervals(lists: list[list[Interval]], weights: list[float], n_samples: int) -> list[Interval]:
+    """Stretches where the lists covering them carry more than half of the total weight (each list's own overlaps
+    counted once: the lists are unions)."""
+    total = sum(weights)
+    deltas: dict[int, float] = {}
+    for ints, w in zip(lists, weights, strict=True):
+        for a, b in ints:
+            deltas[a] = deltas.get(a, 0.0) + w
+            deltas[b] = deltas.get(b, 0.0) - w
+    out: list[Interval] = []
+    level = 0.0
+    start = None
+    for x in sorted(deltas):
+        level += deltas[x]
+        inside = level > total / 2 + 1e-9 * max(1.0, total)
+        if inside and start is None:
+            start = x
+        elif not inside and start is not None:
+            out.append((start, x))
+            start = None
+    if start is not None:
+        out.append((start, n_samples))
+    return out
+
+
+def check_weights(weights: dict[str, float], ids: list[str]) -> list[float]:
+    """The weights of the experts ``ids``, in order: each a finite number at least 0, and not all 0."""
+    missing = [i for i in ids if i not in weights]
+    if missing:
+        raise AnnotationError(f"No weight was given for {', '.join(missing)}")
+    out = []
+    for i in ids:
+        w = weights[i]
+        if isinstance(w, bool) or not isinstance(w, (int, float)) or not math.isfinite(w) or w < 0:
+            raise AnnotationError(f"The weight of {i} must be a number of at least 0")
+        out.append(float(w))
+    if not any(w > 0 for w in out):
+        raise AnnotationError("At least one expert must have a weight above 0")
+    return out
+
+
 def _partial_intervals(lists: list[list[Interval]], n: int) -> list[tuple[int, int, tuple[int, ...]]]:
     """Segments covered by some but not all lists: ``(start, stop, indices of the covering lists)``.
 
@@ -93,7 +141,10 @@ def build_consensus(
     min_agreement: int | None = None,
     min_duration_s: float = 0.0,
     merge_gap_s: float = 0.0,
+    weights: dict[str, float] | None = None,
 ) -> ConsensusResult:
+    """The consensus of ``experts`` (see the module's description); ``weights`` makes the time rule a weighted
+    majority."""
     if len(experts) < 2:
         raise AnnotationError("A consensus needs at least two experts")
     rec = experts[0].recording
@@ -109,6 +160,9 @@ def build_consensus(
     k = min_agreement if min_agreement is not None else math.floor(n / 2) + 1
     if not 1 <= k <= n:
         raise AnnotationError(f"min_agreement must be between 1 and {n}")
+    if weights is not None and min_agreement is not None:
+        raise AnnotationError("Give either weights or the number of experts who must agree, not both")
+    w = check_weights(weights, ids) if weights is not None else None
     timing = rec.timing
     ch_names = rec.ch_names
     min_len = timing.duration_to_samples(min_duration_s)
@@ -121,7 +175,8 @@ def build_consensus(
         per_expert = [category_intervals(d, label) for d in experts]
         if not any(per_expert):
             continue
-        cons = _threshold_intervals(per_expert, k, timing.n_samples)
+        cons = (_threshold_intervals(per_expert, k, timing.n_samples) if w is None
+                else _weighted_intervals(per_expert, w, timing.n_samples))
         if gap > 0:
             cons = union((a, b + gap) for a, b in cons)
             cons = [(a, min(b - gap, timing.n_samples)) for a, b in cons]
@@ -169,7 +224,12 @@ def build_consensus(
             inside = _covered(a, b, cons)
             status = "in consensus" if inside == b - a else "not in consensus" if inside == 0 else "partly in consensus"
             note = f"{len(members)} of {n} experts; {status}"
-            if (len(members) >= k) != (status == "in consensus"):
+            enough = len(members) >= k
+            if w is not None:
+                share = sum(w[i] for i in members) / sum(w)
+                note = f"{len(members)} of {n} experts, {share:.0%} of the weight; {status}"
+                enough = share > 0.5 + 1e-9
+            if enough != (status == "in consensus"):
                 note += " (after the minimum-duration and gap rules)"
             disagreements.append({
                 "kind": "time", "label": label, "onset_s": a / timing.sfreq, "offset_s": b / timing.sfreq,
@@ -186,6 +246,11 @@ def build_consensus(
         "merge_gap_s": merge_gap_s,
         "description": "sample-wise vote per category; channels by the same vote among contributing experts",
     }
+    if w is not None:
+        rule["weights"] = dict(zip(ids, w, strict=True))
+        rule["min_weight_share"] = 0.5
+        rule["description"] = ("sample-wise weighted vote per category (more than half of the total weight); "
+                               "channels by a strict majority of the contributing experts")
     doc = AnnotationDocument(
         recording=rec,
         annotator_id="REFERENCE",

@@ -51,7 +51,8 @@ electrotag agreement Annotated_Events --config agreement_settings.json
 
 run on the results zip analyses the same recordings and gives the same numbers.
 `--config` also reads the `analysis_settings.json` of an earlier analysis, which
-records the recordings chosen as well. `--recordings` keeps only the recordings
+records the recordings chosen as well; both record the versions compared (see
+*Versions of the annotations* below). `--recordings` keeps only the recordings
 named, and `--exclude-recordings` leaves out the research annotation of those
 named while their practice and assessment sessions stay. From Python:
 
@@ -310,6 +311,59 @@ ratings were volunteered, so the rated marks are a self-selected subset and the
 confidence of an unrated mark is unknown. Every other table uses all marks.
 Annotators' notes are listed with each event in `events_matched.tsv` and
 `events_unmatched.tsv` and take part in no statistic.
+
+## Versions of the annotations
+
+A study keeps every annotator's saved work as it was saved, and beside it, in
+`Annotated_Events/derived/`, two kinds of derived version: an expert's
+correction of someone's saved attempt, and the adjudicated version an expert
+makes by deciding every conflict between two or more versions
+([file formats](file_formats.md)). The setting `versions`
+(`--versions` on the command line, Versions in the admin area) chooses what is
+compared. With `original`, the default, derived versions are left out and the
+results are exactly those of a study that has none.
+
+With `corrected`, each annotator's latest attempt of a recording is replaced by
+the correction of that attempt where there is one. When two or more experts
+corrected the same attempt, their corrections disagreed and were compared and
+adjudicated like independent annotations; the adjudication of those corrections
+then stands for the corrected version. Until it is finished the recording is
+left out of the analysis, as *correction pending adjudication*, and a warning
+names it. A correction made of an earlier attempt than the annotator's latest is
+not used, and a warning names it too. `corrections_effect.tsv` gives, for each
+corrected file, the marks added, removed and changed (and how many changed
+type), the corrector's reasons counted, and the event F1 between the original
+and the corrected version, type by type at the main threshold: 1 means the
+correction changed nothing that matching can see.
+
+With `adjudicated`, every annotator is compared with the adjudicated version of
+each finished adjudication, which becomes the reference annotator `ADJUDICATED`;
+the versions compared are those the adjudication itself compared, and a
+recording without a finished adjudication is left out. `adjudication.tsv` gives,
+for each adjudication, its conflicts by kind, the decisions by choice (keeping
+one person's marks, everyone's, nobody's, or the adjudicator's own), the mean
+seconds per decision, and two event F1 figures: between the versions compared
+before adjudication (`f1_before`), and of each of them with the adjudicated
+version after it (`f1_after`). The difference shows how far the adjudication
+moved the reference towards or away from each annotator. `adjudication_pairs.tsv`
+counts the conflicts between two artifact types by pair, with the type the
+decisions kept, and `adjudication_survival.tsv` counts, for each annotator, how
+many of their marks the adjudicated version kept with the same type.
+The decisions come from the study's adjudication records: the admin area has
+them, and the command line reads them from the `adjudications/` folder of a
+results zip or `electrotag web export`; without them the decisions' columns are
+empty and the rest is computed from the annotation files alone.
+
+A task can give annotators a part of a recording (a window). An adjudication of
+a window is always compared on that window only, the documents cropped to it
+and named `<recording>#<unit>`; with `unit` set to `task` (`--unit task`),
+every task with a window is compared that way, from the `tasks/tasks.json` of
+the results folder. Comparing whole recordings would count the clean rest of
+the recording as agreement and inflate the time-resolved measures.
+`versions.tsv` lists the file used for every annotator and recording, and the
+report opens with a paragraph saying which versions were analysed. In the admin
+area, "Compare with the original versions" runs the analysis of the originals
+as well and shows the key results of both side by side with their difference.
 
 ## Choosing settings
 

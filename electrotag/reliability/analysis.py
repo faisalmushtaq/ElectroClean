@@ -202,7 +202,8 @@ def selection_problems(ds: AgreementDataset, cfg: AnalysisConfig) -> list[str]:
         msg = unknown_names("category", cfg.categories, ds.catalogue.label_names)
         if msg:
             problems.append(msg)
-    if cfg.reference_annotator and cfg.reference_annotator not in ds.annotators:
+    # (ADJUDICATED is absent when no adjudication is finished; the versions' warning says so.)
+    if cfg.reference_annotator and cfg.reference_annotator not in ds.annotators and cfg.versions != "adjudicated":
         msg = unknown_names("reference annotator", [cfg.reference_annotator], ds.annotators)
         if msg:
             problems.append(msg)
@@ -257,6 +258,15 @@ def run_analysis(
         for tname, rows in MEASURES[name](ds, cfg).items():
             key = f"{name}_{tname}"
             tables[key] = pd.DataFrame(rows) if rows else pd.DataFrame(columns=TABLE_COLUMNS.get(key))
+    # The versions analysed, and what the corrections or the adjudication changed (reliability/versions.py).
+    from electrotag.reliability.versions import TABLE_COLUMNS as VERSION_COLUMNS
+    from electrotag.reliability.versions import version_tables
+
+    if cfg.versions != "original":
+        step("Comparing the versions")
+    for tname, rows in version_tables(ds.selection, cfg).items():
+        tables[tname] = pd.DataFrame(rows, columns=VERSION_COLUMNS.get(tname)) if rows else \
+            pd.DataFrame(columns=VERSION_COLUMNS.get(tname))
     first = comparison_warnings(ds, cfg)
     record = {
         "generated_by": f"ElectroTag {__version__}",
@@ -271,6 +281,8 @@ def run_analysis(
         "confidence": {"setting": dataset_setting(ds), "explanation": confidence_explanation(ds, cfg)},
         "warnings": first + ds.warnings + [w for g in ds.groups.values() for w in g.warnings],
     }
+    if ds.selection is not None:
+        record["versions"] = ds.selection.summary()
     return AnalysisResult(cfg, ds, tables, record)
 
 

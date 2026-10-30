@@ -12,7 +12,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from electrotag.reliability.config import CHANNEL_MODES, MATCH_CRITERIA, AnalysisConfig
+from electrotag.reliability.config import ADJUDICATED, CHANNEL_MODES, MATCH_CRITERIA, UNITS, VERSIONS, AnalysisConfig
 
 #: Exit status when the analysis ran but no recording had two annotators to compare.
 EXIT_NOTHING_TO_COMPARE = 3
@@ -26,6 +26,8 @@ examples:
       --resolutions 0.05 0.1 --iou-thresholds 0 0.2 0.5 --categories EMG-artifact Eye-blink-artifact
   electrotag-agreement A01_folder A02_folder --reference A01
   electrotag-agreement /data/MyStudy/Annotated_Events --config agreement_settings.json
+  electrotag-agreement /data/MyStudy/Annotated_Events --versions corrected
+  electrotag-agreement /data/MyStudy/Annotated_Events --versions adjudicated --unit task
 
 exit status: 0 when the analysis ran, 2 for a mistake in the command (for example an unknown
 category or annotator, or a results folder that already holds results), and
@@ -83,6 +85,13 @@ def build_parser(prog: str = "electrotag-agreement") -> argparse.ArgumentParser:
                      help="Leave out the research annotation of these recordings, as the admin area leaves out the "
                      "recordings an annotator set aside as ones that cannot be annotated (their practice and "
                      "assessment sessions stay)")
+    sel.add_argument("--versions", choices=VERSIONS,
+                     help="Which versions to compare: original (as annotated), corrected (experts' corrections in "
+                     "place of the work they correct) or adjudicated (everyone compared with the adjudicated "
+                     f"versions, as reference {ADJUDICATED}) (default: {_D.versions})")
+    sel.add_argument("--unit", choices=UNITS,
+                     help="recording compares whole recordings; task compares each task's part of a recording on "
+                     "its own, from the tasks/tasks.json of the results folder (default: recording)")
     tr = p.add_argument_group("time-resolved agreement")
     tr.add_argument("--resolutions", type=float, nargs="+", metavar="SECONDS",
                     help=f"Bin widths in seconds, besides the exact (sample-by-sample) comparison "
@@ -163,11 +172,18 @@ def config_from_args(args: argparse.Namespace) -> AnalysisConfig:
         "reference": "reference_annotator",
         "modes": "modes",
         "min_events": "min_events_per_category",
+        "versions": "versions",
+        "unit": "unit",
     }
     for arg, key in mapping.items():
         value = getattr(args, arg)
         if value is not None:
             data[key] = value
+    # A settings file of an analysis of the adjudicated versions names ADJUDICATED as its reference; another
+    # choice of versions on the command line drops it unless --reference names it.
+    if args.versions not in (None, "adjudicated") and args.reference is None \
+            and str(data.get("reference_annotator") or "").upper() == ADJUDICATED:
+        data["reference_annotator"] = None
     if data.get("annotators"):
         data["annotators"] = [a.upper() for a in data["annotators"]]
     if data.get("reference_annotator"):
@@ -202,7 +218,14 @@ def main(argv: list[str] | None = None, prog: str = "electrotag-agreement") -> i
             if not inputs:
                 raise ValueError("No annotation files of the recordings chosen were found in "
                                  + ", ".join(str(p) for p in args.inputs))
-        result = run_analysis(inputs, cfg, strict=True)
+        source = inputs
+        if inputs is not args.inputs and (cfg.versions != "original" or cfg.unit == "task"):
+            # the files chosen: the study's records are read from the folders given
+            from electrotag.reliability.data import load_dataset
+            from electrotag.reliability.versions import StudyRecords
+
+            source = load_dataset(inputs, cfg, strict=True, records=StudyRecords.read(args.inputs))
+        result = run_analysis(source, cfg, strict=True)
     except (ValueError, FileNotFoundError, AnnotationError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

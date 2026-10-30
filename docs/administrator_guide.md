@@ -336,7 +336,13 @@ There are three ways to establish a reference.
    the same subset of experts (some but not all) marked, saying whether it
    ended up in the consensus, and one row for each consensus interval where the
    experts chose different channels, giving every expert's selection and the
-   consensus result.
+   consensus result. For a crowd study, where people differ in measured
+   accuracy, each person can carry a weight (their accuracy on the
+   known-answer tasks, or weights given): a sample is then in the consensus
+   when the experts who marked it carry more than half of the total weight,
+   which with equal weights is the same strict majority
+   (`build_consensus(..., weights=...)`, and `weights` of the admin area's
+   consensus Source).
 3. **Adjudication.** An adjudicator is given the disagreement list and
    annotates the recording to produce the final version, which becomes the
    reference; the experts whose disagreements were adjudicated are recorded
