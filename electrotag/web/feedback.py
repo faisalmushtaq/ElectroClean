@@ -579,6 +579,9 @@ def feedback_files(store: Any) -> dict[str, bytes]:
                          "status": "overall", "note": r.get("overall_note")})
         out[f"{base}.tsv"] = _tsv(REVIEW_COLUMNS, rows)
         out[f"{base}.json"] = json.dumps(r, indent=1, ensure_ascii=False).encode("utf-8")
+    from electrotag.web.corrections import correction_files
+
+    out.update(correction_files(store))  # experts' corrections: every change with its reason (docs/file_formats.md)
     return out
 
 
