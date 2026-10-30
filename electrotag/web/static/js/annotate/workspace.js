@@ -47,14 +47,15 @@ import { CONTEXT_S, boundsOf, itemWindow, outsideStretches } from '../viewer/bou
 export { friendlyDuration, plural };
 
 const MODE_TEXT = { standard: 'Annotation', guided: 'Guided training', practice: 'Practice', assessment: 'Assessment', tryout: 'Try-out', tour: 'Platform tour', review: 'Practice review',
-  reviewing: 'Review', feedback: 'Feedback', correcting: 'Correction', replay: 'Replay', corrected: 'Corrected version' };
+  reviewing: 'Review', feedback: 'Feedback', correcting: 'Correction', replay: 'Replay', corrected: 'Corrected version', overlay: 'Everyone\'s marks' };
 /**
  * Views that only show annotations (no toolbar): a practice review, an administrator's review pass, the feedback on saved work,
- * a replay of a session and an annotator's view of a correction of their work (js/expert/, js/replay/).
+ * a replay of a session, an annotator's view of a correction of their work and the overlay of everyone's marks
+ * (js/expert/, js/replay/).
  */
-const VIEW_ONLY_KINDS = ['review', 'reviewing', 'feedback', 'replay', 'corrected'];
+const VIEW_ONLY_KINDS = ['review', 'reviewing', 'feedback', 'replay', 'corrected', 'overlay'];
 /** Views of someone's work opened from the expert area or for its feedback, which their own part closes (opts.onLeave). */
-const PART_KINDS = ['correcting', 'replay', 'corrected'];
+const PART_KINDS = ['correcting', 'replay', 'corrected', 'overlay'];
 const DRAG_PX = 3;
 const DRAW_ON_TITLE = 'Draw/edit is on: drag across the EEG to mark artifacts and change annotations. Press it to switch to view only, where nothing can change.';
 const DRAWING_OFF = 'View only: annotations cannot be drawn or changed. Press Draw/edit to mark artifacts.';

@@ -152,11 +152,14 @@ test('the path names each stage\'s state, and the skip question says what is ski
 
 test('other parts of the training add to a stage\'s card through the path\'s registries, without the path knowing them', () => {
   assert.deepEqual(Object.keys(STAGE_LINES), STAGES);
-  // the replay part's "Watch an expert at work" (js/replay/watch.js), shown only to trainees the study lets watch
-  assert.equal(WATCH_EXPERT.length, 1);
-  const expert = { me: { roles: ['expert'], study: { replay: { enabled: true, trainees_watch_experts: true } } } };
-  assert.equal(WATCH_EXPERT[0](expert, {}, {}), null);
-  assert.equal(WATCH_EXPERT[0](null, {}, {}), null);
+  // the replay part's "Watch an expert at work" (js/replay/watch.js) and the crowd of a training recording
+  // (js/expert/crowd_entry.js), shown only to trainees the study lets watch or see the crowd
+  assert.equal(WATCH_EXPERT.length, 2);
+  const expert = { me: { roles: ['expert'], study: { replay: { enabled: true, trainees_watch_experts: true, trainees_see_crowd: true } } } };
+  for (const entry of WATCH_EXPERT) {
+    assert.equal(entry(expert, {}, {}), null);
+    assert.equal(entry(null, {}, {}), null);
+  }
 });
 
 // ---------------------------------------------------------------- the snippets

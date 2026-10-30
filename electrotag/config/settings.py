@@ -283,12 +283,14 @@ class ReplaySettings:
 
     enabled: bool = True  # experts and administrators may replay annotators' sessions
     trainees_watch_experts: bool = True  # trainees may watch the sessions of experts who have agreed to it
+    trainees_see_crowd: bool = False  # trainees may see everyone's marks as a crowd, on teaching recordings only
 
     @classmethod
     def from_dict(cls, block: dict[str, Any]) -> ReplaySettings:
         d = cls()
         return cls(enabled=_flag(block, "replay", "enabled", d.enabled),
-                   trainees_watch_experts=_flag(block, "replay", "trainees_watch_experts", d.trainees_watch_experts))
+                   trainees_watch_experts=_flag(block, "replay", "trainees_watch_experts", d.trainees_watch_experts),
+                   trainees_see_crowd=_flag(block, "replay", "trainees_see_crowd", d.trainees_see_crowd))
 
 
 @dataclass(frozen=True)

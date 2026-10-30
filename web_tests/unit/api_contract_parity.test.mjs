@@ -293,6 +293,8 @@ async function script(call) {
   await call('my_correction_get (none)', (s) => s.b.expert('my_correction_get', { correction_id: hex(0xc0) }));
   await call('replay_index_get as an annotator', (s) => s.b.expert('replay_index_get', { annotator_id: 'A01', recording_id: r1 }));
   await call('teaching_list as an annotator', (s) => s.b.expert('teaching_list', {}));
+  await call('overlay_get as an annotator', (s) => s.b.expert('overlay_get', { recording_id: r1 }));
+  await call('overlay_teaching_list as an annotator', (s) => s.b.expert('overlay_teaching_list', {}));
   await call('correction_save as an annotator', (s) => s.b.expert('correction_save', { correction_id: hex(0xc0) }));
   await call('training stage (not a trainee)', (s) => s.b.trainingStage({ stage: 'tour', action: 'skip' }));
   await call('training snippets (not a trainee)', (s) => s.b.trainingSnippets());
@@ -343,6 +345,14 @@ async function script(call) {
   await call('expert replay_events_get (a whole visit)', (s) => s.b.expert('replay_events_get', { visit_id: s.mem.visit }));
   await call('expert replay_events_get (no such part)', (s) => s.b.expert('replay_events_get', { visit_id: s.mem.visit, window_no: 4 }));
   await call('expert teaching_list', (s) => s.b.expert('teaching_list', {}));
+  // everyone's marks on r1 (overlay.py; demo_overlay.js over the sandbox's own saved work), with the correction above
+  await call('expert overlay_get', (s) => s.b.expert('overlay_get', { recording_id: r1, include: ['corrected'], detail: ['A01', 'A01~E01'] }));
+  await call('expert overlay_get (a page)', (s) => s.b.expert('overlay_get', { recording_id: r1, limit: 1, offset: 1 }));
+  await call('expert overlay_get (nobody yet)', (s) => s.b.expert('overlay_get', { recording_id: RIDS[1] }));
+  await call('expert overlay_get (not a version)', (s) => s.b.expert('overlay_get', { recording_id: r1, include: ['everything'] }));
+  await call('expert overlay_get (no recording)', (s) => s.b.expert('overlay_get', { recording_id: 'nothing/like/this.edf' }));
+  await call('expert overlay_get (too many lanes)', (s) => s.b.expert('overlay_get', { recording_id: r1, detail: ['A01', 'A02', 'A03', 'A04', 'A05', 'A06', 'A07', 'A08', 'A09'] }));
+  await call('expert overlay_teaching_list', (s) => s.b.expert('overlay_teaching_list', {}));
   await call('admin as an expert', (s) => s.b.admin('overview', {}));
   await call('logout', (s) => s.b.logout());
   await call('login', (s) => s.b.login('A01', s.password));

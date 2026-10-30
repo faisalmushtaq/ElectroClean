@@ -201,6 +201,7 @@ export class SettingsSection {
     const goldMin = numberInput({ value: rv.gold_min_items ?? 3, min: 1, max: 100, step: 1 });
     const replays = checkbox('Let experts and administrators replay annotators\' sessions step by step, from the interaction log', rp.enabled !== false);
     const traineesWatch = checkbox('Let trainees watch the sessions of experts who have agreed to it', rp.trainees_watch_experts !== false);
+    const traineesCrowd = checkbox('Let trainees see everyone\'s marks as a crowd, with nobody named, on the training recordings for learning with the experts', rp.trainees_see_crowd === true);
     // the training path
     const skippable = new Set(Array.isArray(tr.skippable) ? tr.skippable : Object.keys(SKIPPABLE_STAGES));
     const skipBoxes = Object.entries(SKIPPABLE_STAGES).map(([stage, text]) => {
@@ -254,7 +255,7 @@ export class SettingsSection {
             onset_tolerance_s: numberOf(onsetTol, 'Start tolerance', { min: 0, max: 60 }), offset_tolerance_s: numberOf(offsetTol, 'End tolerance', { min: 0, max: 60 }),
             channel_jaccard: numberOf(channelShare, 'Share of channels in common', { min: 0, max: 1 }) },
           gold_min_items: numberOf(goldMin, 'Known-answer recordings before accuracy counts', { min: 1, max: 100, integer: true }) },
-        replay: { enabled: replays.input.checked, trainees_watch_experts: traineesWatch.input.checked },
+        replay: { enabled: replays.input.checked, trainees_watch_experts: traineesWatch.input.checked, trainees_see_crowd: traineesCrowd.input.checked },
         training: { skippable: skipBoxes.filter((b) => b.input.checked).map((b) => b.input.dataset.stage), gate: gate.value,
           tour: tour.input.checked, snippets_quiz_required: snippetsQuiz.input.checked },
         logging: { interactions: interactions.input.checked, pointer_hz: numberOf(pointer, 'Pointer samples per second', { min: 0, max: 60 }),
@@ -347,7 +348,7 @@ export class SettingsSection {
           field('Start tolerance (s)', onsetTol), field('End tolerance (s)', offsetTol),
           field('Share of channels in common', channelShare, { hint: 'Below it, two marks differ in their channels. From 0 to 1.' })),
         h('h3', {}, 'Replays'),
-        replays, traineesWatch,
+        replays, traineesWatch, traineesCrowd,
         h('p.caption', {}, 'Each expert decides for their own sessions in the expert area, and every change is in the audit log. Replays use the interaction log for teaching and checking work: say so in the study\'s information for participants, and check that the ethics approval covers it.')),
       card('Training policy',
         h('p.caption', {}, 'The training path has five stages: a tour of the platform, examples of each artifact type, learning with '

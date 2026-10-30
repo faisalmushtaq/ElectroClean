@@ -269,7 +269,7 @@ def test_the_matching_criteria_are_those_of_the_agreement_analysis() -> None:
 def test_the_admin_area_reads_and_changes_the_new_blocks(admin: Api) -> None:
     s = admin.admin_ok("settings_get")["settings"]
     assert s["review"]["matching"]["match_criterion"] == "iou" and s["training"]["gate"] == "met"
-    assert s["replay"] == {"enabled": True, "trainees_watch_experts": True}
+    assert s["replay"] == {"enabled": True, "trainees_watch_experts": True, "trainees_see_crowd": False}
     after = admin.admin_ok("settings_update", {"settings": {"training": {"skippable": ["tour"], "gate": "completed"},
                                                             "review": {"matching": {"iou_threshold": 0.3}}}})
     assert after["settings"]["training"] == {**s["training"], "skippable": ["tour"], "gate": "completed"}

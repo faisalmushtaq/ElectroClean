@@ -120,6 +120,7 @@ export class EegViewer {
     this.ghost = null;
     this.layers = []; // read-only marks beside the annotations, such as a correction's original (setLayers)
     this.replayPointer = null; // where a replayed session's pointer is (setReplayPointer)
+    this.crowd = null; // what is drawn under the layers, such as the crowd's share of people marking (setCrowd)
     this.flash = null;
     this.markStart = null;
     this.dragPreview = null;
@@ -346,6 +347,12 @@ export class EegViewer {
 
   /** Read-only layers of marks drawn as outlines beside the annotations (layers.js): [{id, annotations, style, prefix, visible}]. */
   setLayers(layers) { this.layers = normaliseLayers(layers); this.invalidate(['over']); }
+
+  /**
+   * Something drawn over the EEG under the layers, such as the crowd's share of people marking each moment in the
+   * overlay of everyone's marks (js/expert/overlay.js): an object with paint(ctx, viewer), or null.
+   */
+  setCrowd(painter) { this.crowd = painter && typeof painter.paint === 'function' ? painter : null; this.invalidate(['over']); }
 
   /** Show or hide one layer (true when it is now shown). */
   toggleLayer(id, on = null) {
@@ -1062,6 +1069,11 @@ export class EegViewer {
       this._tags.push({ id: tg.a.annotation_id, x: tg.x - tg.w / 2, y, w: tg.w, h: TAG_ROW_H - 3 });
     });
     this._drawMarkers(ctx, x0, x1, y0, y1);
+    if (this.crowd) {
+      const t0 = performance.now();
+      this.crowd.paint(ctx, this);
+      this.stats.crowd = performance.now() - t0;
+    }
     this._drawLayers(ctx);
     // the drag in progress
     if (this.dragPreview) {
@@ -1177,23 +1189,40 @@ export class EegViewer {
     const s1 = (this.view.startS + this.view.durationS) * this.sfreq;
     ctx.font = `11px ${FONT}`;
     for (const { layer, a } of layerMarks(this.layers, this.annotations, s0, s1)) {
-      const colour = this.catalogue.colourFor(a.label);
+      const colour = layer.colour || this.catalogue.colourFor(a.label);
       const xa = clamp(this.sampleToX(a.onset_sample), x0, x1);
       const xb = clamp(this.sampleToX(end(a)), x0, x1);
+      const spans = this._rowSpans(a.channels);
+      if (layer.colour) { // a person's own colour: on a dark edge, so that the light ones show on the white EEG
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
+        ctx.lineWidth = 3.5;
+        for (const [ya, yb] of spans) ctx.strokeRect(xa + 1, ya + 2, Math.max(1, xb - xa - 2), yb - ya - 4);
+      }
       ctx.strokeStyle = colour;
-      ctx.lineWidth = 1.5;
-      if (layer.style === 'dashed') ctx.setLineDash([5, 4]);
-      for (const [ya, yb] of this._rowSpans(a.channels)) ctx.strokeRect(xa + 0.5, ya + 1.5, Math.max(1, xb - xa - 1), yb - ya - 3);
+      ctx.lineWidth = layer.colour ? 2 : 1.5;
+      if (layer.dash) ctx.setLineDash(layer.dash); else if (layer.style === 'dashed') ctx.setLineDash([5, 4]);
+      for (const [ya, yb] of spans) ctx.strokeRect(xa + (layer.colour ? 1 : 0.5), ya + (layer.colour ? 2 : 1.5), Math.max(1, xb - xa - (layer.colour ? 2 : 1)), yb - ya - (layer.colour ? 4 : 3));
       ctx.setLineDash([]);
-      // its name at the foot of the outline, as much of it as fits: "Original: Eye-blink-artifact", "Original", or nothing
+      // its name at the foot of the outline, as much of it as fits: "Original: Eye-blink-artifact", "Original", or nothing;
+      // a person's own layer names them inside the outline's top, a line lower for each layer before it
       const text = [`${layer.prefix}${a.label}`, layer.prefix.replace(/[:\s]+$/, '')].find((x) => x && ctx.measureText(x).width + 12 <= xb - xa);
       if (text) {
         const w = ctx.measureText(text).width + 8;
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-        ctx.fillRect(xa + 2, y1 - 20, w, 16);
-        ctx.fillStyle = legibleOnWhite(colour);
-        ctx.textAlign = 'left';
-        ctx.fillText(text, xa + 6, y1 - 8);
+        const k = layer.colour ? Math.max(0, this.layers.findIndex((l) => l.id === layer.id)) : 0;
+        const top = layer.colour && spans.length ? spans[0][0] + 4 + 15 * k : y1 - 20;
+        if (!layer.colour) {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+          ctx.fillRect(xa + 2, y1 - 20, w, 16);
+          ctx.fillStyle = legibleOnWhite(colour);
+          ctx.textAlign = 'left';
+          ctx.fillText(text, xa + 6, y1 - 8);
+        } else if (top + 16 <= (spans.length ? spans[0][1] - 2 : y1)) {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+          ctx.fillRect(xa + 3, top, w, 15);
+          ctx.fillStyle = '#000000';
+          ctx.textAlign = 'left';
+          ctx.fillText(text, xa + 7, top + 11);
+        }
       }
     }
     const spot = pointerSpot(this.replayPointer, this.visibleRows(), this);

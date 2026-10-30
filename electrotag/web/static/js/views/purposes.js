@@ -93,6 +93,7 @@ export const PURPOSES = {
   corrected: fromPart('correctionFeedback', 'openCorrected', 'Open', 'corrected'), // the annotator's view of a correction
   adjudicate: async (app, o) => (await import('../expert/adjudicate.js')).openAdjudication(app, o), // the adjudication pass
   library: async (app, o) => (await import('../expert/adjudicate.js')).openAdjudication(app, o), // a library entry, read only
+  overlay: fromPart('overlay', 'openOverlay', 'Open', 'overlay'), // everyone's marks on one recording (js/expert/overlay.js)
   planted: async (app, o) => { // an expert trying a correct-the-marks exercise (js/training/correct.js)
     if (!(await checkStudyCopy(app, o.recording, o.fp, o.view, o.target, { verb: 'Try', kind: 'planted' }))) return;
     await (await import('../training/correct.js')).openPlantedTry(app, o);

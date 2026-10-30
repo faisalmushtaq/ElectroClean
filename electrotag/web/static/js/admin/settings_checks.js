@@ -59,7 +59,7 @@ export function trainingProblems(t) {
 /** Problems with the replay block, in plain words. */
 export function replayProblems(rp) {
   const out = [];
-  for (const k of ['enabled', 'trainees_watch_experts']) {
+  for (const k of ['enabled', 'trainees_watch_experts', 'trainees_see_crowd']) {
     if (k in rp && typeof rp[k] !== 'boolean') out.push(`replay.${k} is on or off (true or false).`);
   }
   return out;

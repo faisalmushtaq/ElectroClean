@@ -39,6 +39,7 @@ const PARTS = Object.freeze({
   corrections: './expert/correction_pass.js',
   correctionFeedback: './expert/correction_feedback.js',
   replay: './replay/player.js',
+  overlay: './expert/overlay.js',
   demoTraining: './api/demo_training_stages.js',
   tour: './training/tour.js',
   snippets: './training/snippets.js',

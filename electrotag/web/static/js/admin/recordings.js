@@ -321,6 +321,10 @@ export class RecordingsSection {
       ]),
       (r.warnings || []).length ? h('div.banner', {}, h('p', {}, h('b', {}, 'Found when it was added')), h('ul', {}, r.warnings.map((w) => h('li', {}, w)))) : null,
       field('Notes', notes), h('div.btn-row', {}, save, retire),
+      r.scope === 'study' && (r.done ?? 0) > 0 ? h('div.btn-row', {}, h('button.btn', { type: 'button', 'data-log': 'recording-overlay',
+        title: 'Everyone\'s saved marks on this recording, over the EEG',
+        onclick: async () => (await import('../expert/overlay.js')).startOverlay(this.area.app, { recording_id: r.recording_id },
+          { route: 'admin-recordings', params: null }) }, 'Everyone\'s marks…')) : null,
       h('h3', {}, 'Remove'),
       h('p.caption', {}, 'Removing deletes the recording\'s registration, its description in the study; the EEG file never reached the study. A recording that someone has saved, or that a reference set uses, stays; retire it instead.'),
       removeHost));

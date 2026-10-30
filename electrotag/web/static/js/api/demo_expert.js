@@ -15,6 +15,7 @@ import { CORRECTION_FEEDBACK, CORRECTION_OPEN_OPS, CORRECTION_OPS } from './demo
 import { SNIPPET_EXPERT_OPS } from './demo_training_stages.js';
 import { ADJUDICATION_OPS } from './demo_adjudication.js';
 import { PLANTED_OPS } from './demo_planted.js';
+import { OVERLAY_OPEN_OPS, OVERLAY_OPS } from './demo_overlay.js';
 
 /** Replay consent: whether trainees may watch replays of the caller's own sessions (expert.py, the same names). */
 const CONSENT_OPS = {
@@ -45,10 +46,11 @@ const PARTS = [
   SNIPPET_EXPERT_OPS, // the training path's snippets (demo_training_stages.js)
   ADJUDICATION_OPS, // adjudication and the library: they need the study's Python code (needsServer)
   PLANTED_OPS, // correct the marks: one ready-made exercise to try; making one needs a server (demo_planted.js)
+  OVERLAY_OPS, // everyone's marks on one recording, over the sandbox's own saved work (demo_overlay.js)
 ];
 
 /** Operations that people without the expert role may ask for too (expert.py OPEN_OPS); each checks the rest itself. */
-export const OPEN_EXPERT = new Set([...CORRECTION_OPEN_OPS]);
+export const OPEN_EXPERT = new Set([...CORRECTION_OPEN_OPS, ...OVERLAY_OPEN_OPS]);
 /** What GET /me/feedback lists, by part (expert.py FEEDBACK_PARTS): (expert) => [item]. */
 export const FEEDBACK_PARTS = { ...CORRECTION_FEEDBACK };
 

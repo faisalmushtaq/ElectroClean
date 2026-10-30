@@ -1,7 +1,9 @@
 // Read-only layers of marks drawn over the EEG beside the annotations (viewer.setLayers), and the
 // replay's pointer (viewer.setReplayPointer): the arithmetic, without the page, so that it can be
 // tested in Node. A layer is {id, annotations, style: 'dashed', prefix, visible}: the original of a
-// correction, drawn as dashed outlines so that a removed or moved mark stays visible. A mark of a
+// correction, drawn as dashed outlines so that a removed or moved mark stays visible. A layer may also
+// have a colour of its own and a line pattern (`colour`, `dash`: one person's marks in the overlay of
+// everyone's marks, js/expert/overlay.js), drawn instead of the type's colour and the dashes. A mark of a
 // layer that is exactly one of the annotations on screen (the same ID, type, times and channels) is
 // left out, since the annotation itself shows it.
 
@@ -23,6 +25,8 @@ export function normaliseLayers(layers) {
   return (Array.isArray(layers) ? layers : []).filter((l) => l && Array.isArray(l.annotations)).map((l, i) => ({
     id: String(l.id || `layer-${i + 1}`), annotations: l.annotations, style: l.style === 'solid' ? 'solid' : 'dashed',
     prefix: typeof l.prefix === 'string' ? l.prefix : '', visible: l.visible !== false,
+    colour: typeof l.colour === 'string' && /^#[0-9a-f]{6}$/i.test(l.colour) ? l.colour : null,
+    dash: Array.isArray(l.dash) && l.dash.every((x) => Number.isFinite(x) && x >= 0) ? l.dash : null,
   }));
 }
 

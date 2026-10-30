@@ -733,10 +733,14 @@ stage skipped while the policy allowed it stays skipped, and a gate switched
 off opens every trainee's study recordings. The admin area shows these under
 Study settings, Training policy.
 
-The `replay` block, `{"enabled": true, "trainees_watch_experts": true}`, says
-whether experts and administrators may replay annotators' sessions step by
-step from the interaction log (`enabled`), and whether trainees may watch the
-sessions of experts who have agreed to it (`trainees_watch_experts`). Each
+The `replay` block, `{"enabled": true, "trainees_watch_experts": true,
+"trainees_see_crowd": false}`, says whether experts and administrators may
+replay annotators' sessions step by step from the interaction log (`enabled`),
+whether trainees may watch the sessions of experts who have agreed to it
+(`trainees_watch_experts`), and whether trainees may see everyone's saved marks
+on a training recording for learning with the experts as an unnamed crowd
+(`trainees_see_crowd`, off by default; experts and administrators always see
+everyone's marks, by name). Each
 expert gives or withdraws that agreement for their own sessions in the expert
 area, and every change is written to the audit log. Replays use the
 interaction logs for teaching and for checking work, a purpose of their own:
