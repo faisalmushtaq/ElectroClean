@@ -79,13 +79,19 @@ export function channelMap({ layout, fileName = null, channels, picked, colours 
   let scales = [1];
   let ext = extentOf(points);
   const spacing = minSpacing(points);
+  // The map's height is at most half the window; when the dialog would then need scrolling (a short
+  // window, or two rows of banks above the map), it is lowered so that the count of channels chosen,
+  // under the map, stays in view. Worked out once for each height of the window.
+  let fittedFor = null;
+  let limitH = null;
   function place() {
     const w = viewport.clientWidth;
     if (!w) return;
     const target = coarse() ? 40 : 28;
     // Neighbours are kept apart by the widest label too (E128 is wider than a circle).
     const room = Math.max(target, Math.min(64, 7 * Math.max(...points.map((p) => p.name.length)) + 12));
-    const maxH = Math.max(240, Math.min(520, Math.round(window.innerHeight * 0.5)));
+    if (fittedFor !== window.innerHeight) { fittedFor = null; limitH = null; }
+    const maxH = limitH ?? Math.max(240, Math.min(520, Math.round(window.innerHeight * 0.5)));
     ext = extentOf(points);
     // The first size shows the whole head; + climbs to the size where every name fits, and beyond.
     const s = mapScale(points, { widthPx: w - 8, heightPx: maxH - 8, targetPx: room });
@@ -120,6 +126,17 @@ export function channelMap({ layout, fileName = null, channels, picked, colours 
     }
     zoomOut.disabled = zoomAt === 0;
     zoomIn.disabled = zoomAt === scales.length - 1;
+    if (fittedFor === null) {
+      fittedFor = window.innerHeight;
+      const body = el.closest('.dialog-body');
+      const over = body ? body.scrollHeight - body.clientHeight : 0;
+      if (over > 1 && viewport.offsetHeight - over < maxH) {
+        limitH = Math.max(200, Math.round(viewport.offsetHeight - over));
+        if (first) zoomAt = null; // placed again from the start, at the lower height
+        place();
+        return;
+      }
+    }
     if (first) {
       viewport.scrollLeft = (cw - viewport.clientWidth) / 2;
       viewport.scrollTop = (ch - viewport.clientHeight) / 2;
