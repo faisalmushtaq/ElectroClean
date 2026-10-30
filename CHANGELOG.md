@@ -23,27 +23,21 @@ out as tasks now writes each person's assignments in one step, which on Firebase
 share-out far quicker. This part covers the study's records and operations
 (docs/web/api.md, "Datasets, collections, groups and hand-outs").
 
-The study team can track who has rated which recordings and when. For every dataset, collection and
-hand-out, the admin area's figures give each person's recordings given, opened, in progress, saved,
-revised, set aside and waiting for the training gate, with the overdue ones and the dates, and for any
-one of them a grid of its recordings against people, paged a thousand at a time and filtered by
-status, person, overdue work, ratings or a search, showing each recording's ratings against its
-target. Everything is derived from the study's own records, and a study of 5,000 recordings and ten
-people answers in about a second; on Firebase the figures are kept for up to two minutes and can be
-read again at once. The study sends no email: the admin area lists what would be notified instead
-(datasets and collections newly fully rated, a reminder for each person with overdue work as they
-would read it, and a weekly summary the team can copy). The results zip and `electrotag web export`
-gain a `datasets/` folder with the datasets, collections, groups with their membership history,
-hand-outs and the tracking at that moment (docs/file_formats.md).
-
-Annotators given recordings with a due date see a Due card on their first page, one line for each
-hand-out with its title, how many of its recordings are left and the date, marked Overdue once the date
-has passed while work remains; Show these narrows the list to that hand-out. The To do and All tabs list
-each hand-out's recordings together under its title, the one due first at the top, then Other
-recordings, with an Overdue badge on each open recording of an overdue hand-out. The order of the work is
-unchanged. The public sandbox now does all of this in the browser too: datasets, collections, groups,
-hand-outs in which everyone gets all of it, the tracking grids and the list of what would be notified,
-while a share-out k per recording still needs a study server or Firebase.
+The admin area has three new sections for this. Datasets (under Data) lists the source datasets with
+their details, licence, target of ratings and how many of their recordings have met it, with a page
+for each that shows the summary worked out from its recordings and lets the team move recordings to
+another dataset or add them to a collection; collections are picked by hand or built from filters
+(datasets, file name, format, length and "rated by at most"), with a random sample that its seed
+repeats. Its Tracking tab shows datasets, collections or hand-outs by people, then one target's
+recordings by people with each cell's dates, and downloads them as a table. Groups (under People)
+keep their members with the history of who joined and left, and Hand-outs (under People) give a
+dataset or collection to people and groups, all of it or k per recording through the Tasks preview,
+with a due date and the title annotators see; overdue people are marked there, in the grids and on
+Overview. ElectroTag sends no email yet: What would be notified, on the Hand-outs page, lists what a
+notice would say for the team to copy. Adding recordings asks for their dataset and points out an ID
+that belongs to another dataset before anything is sent, and the Recordings list has a Dataset column
+and filter. The study team sees each person's name beside their ID in these lists once it has been
+given.
 
 Annotators and experts now answer a short sign-up questionnaire at their first sign-in, before any
 recording, training or expert work opens, and the study refuses that work until they have: their
@@ -62,6 +56,28 @@ analyses add the answers current at each piece of work, and the agreement by the
 datasets analysed. Administrators who do not annotate are not asked. The interaction log records only
 that the questionnaire was answered and how many questions were. The sandbox's own accounts start with
 example answers.
+
+Annotators given recordings with a due date see a Due card on their first page, one line for each
+hand-out with its title, how many of its recordings are left and the date, marked Overdue once the date
+has passed while work remains; Show these narrows the list to that hand-out. The To do and All tabs list
+each hand-out's recordings together under its title, the one due first at the top, then Other
+recordings, with an Overdue badge on each open recording of an overdue hand-out. The order of the work is
+unchanged. The public sandbox now does all of this in the browser too: datasets, collections, groups,
+hand-outs in which everyone gets all of it, the tracking grids and the list of what would be notified,
+while a share-out k per recording still needs a study server or Firebase.
+
+The study team can track who has rated which recordings and when. For every dataset, collection and
+hand-out, the admin area's figures give each person's recordings given, opened, in progress, saved,
+revised, set aside and waiting for the training gate, with the overdue ones and the dates, and for any
+one of them a grid of its recordings against people, paged a thousand at a time and filtered by
+status, person, overdue work, ratings or a search, showing each recording's ratings against its
+target. Everything is derived from the study's own records, and a study of 5,000 recordings and ten
+people answers in about a second; on Firebase the figures are kept for up to two minutes and can be
+read again at once. The study sends no email: the admin area lists what would be notified instead
+(datasets and collections newly fully rated, a reminder for each person with overdue work as they
+would read it, and a weekly summary the team can copy). The results zip and `electrotag web export`
+gain a `datasets/` folder with the datasets, collections, groups with their membership history,
+hand-outs and the tracking at that moment (docs/file_formats.md).
 
 Recordings of every channel count up to 256 (and 257, EGI's nets with their reference) have been
 checked in the browser against MNE-Python, through registration, saving, the agreement analysis and

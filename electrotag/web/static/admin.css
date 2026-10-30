@@ -324,6 +324,47 @@ th.num .th-sort { flex-direction: row-reverse; }
 .report-frame { display: block; width: 100%; height: 72vh; min-height: 420px; border: 1px solid var(--hairline); border-radius: 0; background: #FFFFFF; margin-top: 12px; }
 .downloads { margin-bottom: 4px; }
 
+/* ------------------------------------------------- datasets, groups and hand-outs */
+/* Forms that open inside a card (a new dataset, collection or group) sit on the band with a rule at the left, like the bar of actions on many. */
+.ds-form, .ds-inline-new { border: 1px solid var(--hairline); border-left: 2px solid var(--ink); background: var(--band); padding: 16px; margin: 8px 0 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.ds-form h3 { margin: 0; }
+.ds-form .admin-grid { gap: 16px 24px; }
+.ds-inline-new { margin: 0 0 12px; }
+.ds-new-host[hidden] { display: none; }
+.ds-fields { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); max-width: 1040px; }
+.ds-fields .admin-field.wide { grid-column: 1 / -1; }
+.ds-description { margin: 0 0 12px; max-width: 820px; }
+.ds-open { text-align: left; font-weight: 600; }
+.ds-rated { display: inline-flex; flex-direction: column; gap: 2px; min-width: 140px; }
+.ds-matches { margin: 0; font: var(--t-16); color: var(--ink); }
+.ds-filters { display: flex; flex-direction: column; gap: 12px; }
+.ds-figures-row { align-items: center; gap: 8px 12px; margin: 4px 0 8px; }
+.ds-order { display: inline-flex; gap: 4px; }
+/* The tracking grids: one column a person; the cells stay on one line where they fit, and the table scrolls inside its card when they do not. */
+table.admin-list td.ds-cell { white-space: nowrap; }
+.ds-count, .ds-status { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-variant-numeric: tabular-nums lining-nums; }
+.ds-track-detail:empty { display: none; }
+/* The hand-out form in four steps, each under its heading. */
+.ho-steps { display: flex; flex-direction: column; gap: 20px; }
+.ho-step { display: flex; flex-direction: column; gap: 8px; padding-top: 16px; border-top: 1px solid var(--hairline); min-width: 0; }
+.ho-step:first-child { padding-top: 0; border-top: none; }
+.ho-step h3 { margin: 0; }
+.ho-step > .admin-field { max-width: 560px; }
+.ho-preview { margin-top: 8px; }
+.ho-title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; }
+.ho-title h2 { margin: 0; }
+.ho-change { margin: 12px 0; align-items: end; }
+.ho-change .row.inline-form { align-items: end; gap: 8px; }
+.ho-add { margin: 12px 0; }
+.ho-notice { border-top: 1px solid var(--hairline); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.ho-notice h3 { margin: 0; }
+pre.ho-notice-text {
+  background: var(--surface); border: 1px solid var(--hairline); border-left: 2px solid var(--ink); border-radius: 0; padding: 12px 16px; margin: 0;
+  white-space: pre-wrap; overflow-wrap: anywhere; font: var(--t-14); color: var(--text); max-height: 320px; overflow-y: auto;
+}
+.overview-late { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0; }
+.overview-late .chip { margin-right: 4px; }
+
 /* ------------------------------------------------------------ narrow screens */
 /* A narrower header keeps the brand whole and gives Find the room of the name beside Sign out. */
 @media (max-width: 1180px) {
@@ -372,6 +413,8 @@ th.num .th-sort { flex-direction: row-reverse; }
   table.admin-list td .chip { height: auto; min-height: 24px; padding-block: 2px; white-space: normal; }
   .field.num { max-width: none; }
   .report-frame { height: 60vh; }
+  table.admin-list td.ds-cell { white-space: normal; }
+  .ds-form, .ds-inline-new { padding: 12px; }
 }
 
 /* Fingers: fields at 16 pixels (Safari zooms into smaller ones) and larger section links. */

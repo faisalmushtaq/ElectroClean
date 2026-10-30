@@ -497,6 +497,54 @@ async function script(call) {
   await call('admin overview (after training)', (s) => s.b.admin('overview', {}));
   await call('logout', (s) => s.b.logout());
 
+  // ------------------------------------------------------------ the sign-up questionnaire (A02, added by ADMIN)
+  await call('login', (s) => s.b.login('A02', 'long enough'));
+  await call('me (not answered)', (s) => s.b.me());
+  await call('match before the questionnaire', async (s) => s.b.match(await matchBody(r1)));
+  await call('put_draft before the questionnaire', (s) => s.b.putDraft(r1, 'standard', '', { annotations: [], elapsed_s: 1 }));
+  await call('training before the questionnaire', (s) => s.b.training());
+  await call('quiz before the questionnaire', (s) => s.b.quiz(QUIZ.set_id, { action: 'get' }));
+  await call('expert before the questionnaire', (s) => s.b.expert('replay_consent_get', {}));
+  await call('questionnaire (new)', (s) => s.b.questionnaire());
+  const answers = { datasets_analysed: '11–30', eeg_years: '6–10', annotation_hours: '51–200', artifact_training: 'Other', eeg_systems: ['OpenBCI', 'BioSemi', 'Other'],
+    eeg_setting: 'Both', confidence: '4', career_stage: 'Postdoc', discipline: 'Engineering', country: '  Ghana ', age_band: PREFER_NOT, gender: 'Prefer to self-describe', first_language: 'Twi' };
+  const contacts = { full_name: 'Ama Owusu', email: 'ama@example.org', phone: '+44 113 000 0000', institution: 'University of Leeds' };
+  await call('questionnaire save (a question left out)', (s) => s.b.saveQuestionnaire({ answers: { ...answers, eeg_years: null }, contacts }));
+  await call('questionnaire save (not an option)', (s) => s.b.saveQuestionnaire({ answers: { ...answers, datasets_analysed: 'Lots' }, contacts }));
+  await call('questionnaire save (prefer not to say with others)', (s) => s.b.saveQuestionnaire({ answers: { ...answers, eeg_systems: ['OpenBCI', PREFER_NOT] }, contacts }));
+  await call('questionnaire save (no such question)', (s) => s.b.saveQuestionnaire({ answers: { ...answers, shoe_size: '9' }, contacts }));
+  await call('questionnaire save (no name)', (s) => s.b.saveQuestionnaire({ answers, contacts: { ...contacts, full_name: ' ' } }));
+  await call('questionnaire save (not an email)', (s) => s.b.saveQuestionnaire({ answers, contacts: { ...contacts, email: 'ama' } }));
+  await call('questionnaire save', (s) => s.b.saveQuestionnaire({ answers, other: { artifact_training: 'A summer school', eeg_systems: 'Our own amplifier', gender: 'Agender', age_band: 'ignored' }, contacts }));
+  await call('questionnaire save (sent again)', (s) => s.b.saveQuestionnaire({ answers, other: { artifact_training: 'A summer school', eeg_systems: 'Our own amplifier', gender: 'Agender' }, contacts }));
+  await call('me (answered)', (s) => s.b.me());
+  await call('match after the questionnaire', async (s) => s.b.match(await matchBody(r2)));
+  await call('questionnaire save (changed)', (s) => s.b.saveQuestionnaire({ answers: { ...answers, datasets_analysed: '31–100' }, contacts: { ...contacts, phone: '' } }));
+  await call('questionnaire (after a change)', (s) => s.b.questionnaire());
+  await call('admin as A02', (s) => s.b.admin('questionnaire_summary', {}));
+  await call('logout', (s) => s.b.logout());
+  await call('login', (s) => s.b.login('ADMIN', s.password));
+  await call('me (an administrator is not asked)', (s) => s.b.me());
+  await call('admin questionnaire_get', (s) => s.b.admin('questionnaire_get', { annotator_id: 'a02' }));
+  await call('admin questionnaire_get (an example account)', (s) => s.b.admin('questionnaire_get', { annotator_id: 'T01' }));
+  await call('admin questionnaire_get (not answered)', (s) => s.b.admin('questionnaire_get', { annotator_id: 'E02' }));
+  await call('admin questionnaire_summary', (s) => s.b.admin('questionnaire_summary', {}));
+  await call('admin contacts_download', (s) => s.b.admin('contacts_download', {}));
+  await call('admin users_list (names)', (s) => s.b.admin('users_list', {}));
+  await call('admin settings_update (questionnaire, an option twice)', (s) => s.b.admin('settings_update', { settings: { questionnaire: { questions: [{ id: 'x', group: 'career', text: 'X?', type: 'choice', options: ['a', 'A'] }] } } }));
+  await call('admin settings_update (questionnaire, prefer not to say listed)', (s) => s.b.admin('settings_update', { settings: { questionnaire: { questions: [{ id: 'x', group: 'career', text: 'X?', type: 'choice', options: ['Yes', 'Prefer not to say'] }] } } }));
+  await call('admin settings_update (questionnaire, a contact level)', (s) => s.b.admin('settings_update', { settings: { questionnaire: { contacts: { phone: 'sometimes' } } } }));
+  await call('admin settings_update (no demographics)', (s) => s.b.admin('settings_update', { settings: { questionnaire: { demographics: false, contacts: { full_name: 'required', email: 'required', phone: 'off', institution: 'required' } } } }));
+  await call('admin questionnaire_summary (no demographics)', (s) => s.b.admin('questionnaire_summary', {}));
+  await call('admin audit (questionnaire)', (s) => s.b.admin('audit', {}));
+  await call('logout', (s) => s.b.logout());
+  await call('login', (s) => s.b.login('A01', s.password));
+  await call('me (the questions changed)', (s) => s.b.me());
+  await call('questionnaire (no demographics)', (s) => s.b.questionnaire());
+  await call('questionnaire save (an institution needed)', (s) => s.b.saveQuestionnaire({ answers: { ...answers, age_band: undefined, gender: undefined, first_language: undefined }, contacts: { full_name: 'Demo annotator', email: 'a01@example.org' } }));
+  await call('questionnaire save (demographics gone)', (s) => s.b.saveQuestionnaire({ answers, contacts: { full_name: 'Demo annotator', email: 'a01@example.org', institution: 'Leeds' } }));
+  await call('logout', (s) => s.b.logout());
+
   // ------------------------------------------------------------ datasets, collections, groups and hand-outs (ADMIN)
   // Every read and write of docs/web/api.md "Datasets, collections, groups and hand-outs" that the sandbox answers
   // (js/api/demo_library.js), with their refusals. A hand-out shared out k per recording uses Tasks, which are
@@ -597,54 +645,6 @@ async function script(call) {
   await call('admin group_update (take one out)', (s) => s.b.admin('group_update', { group_id: s.mem.gid, remove: ['E01'] }));
   await call('admin assignments_list (after the hand-outs)', (s) => s.b.admin('assignments_list', {}));
   await call('admin audit (hand-outs)', (s) => s.b.admin('audit', {}));
-  await call('logout', (s) => s.b.logout());
-
-  // ------------------------------------------------------------ the sign-up questionnaire (A02, added by ADMIN)
-  await call('login', (s) => s.b.login('A02', 'long enough'));
-  await call('me (not answered)', (s) => s.b.me());
-  await call('match before the questionnaire', async (s) => s.b.match(await matchBody(r1)));
-  await call('put_draft before the questionnaire', (s) => s.b.putDraft(r1, 'standard', '', { annotations: [], elapsed_s: 1 }));
-  await call('training before the questionnaire', (s) => s.b.training());
-  await call('quiz before the questionnaire', (s) => s.b.quiz(QUIZ.set_id, { action: 'get' }));
-  await call('expert before the questionnaire', (s) => s.b.expert('replay_consent_get', {}));
-  await call('questionnaire (new)', (s) => s.b.questionnaire());
-  const answers = { datasets_analysed: '11–30', eeg_years: '6–10', annotation_hours: '51–200', artifact_training: 'Other', eeg_systems: ['OpenBCI', 'BioSemi', 'Other'],
-    eeg_setting: 'Both', confidence: '4', career_stage: 'Postdoc', discipline: 'Engineering', country: '  Ghana ', age_band: PREFER_NOT, gender: 'Prefer to self-describe', first_language: 'Twi' };
-  const contacts = { full_name: 'Ama Owusu', email: 'ama@example.org', phone: '+44 113 000 0000', institution: 'University of Leeds' };
-  await call('questionnaire save (a question left out)', (s) => s.b.saveQuestionnaire({ answers: { ...answers, eeg_years: null }, contacts }));
-  await call('questionnaire save (not an option)', (s) => s.b.saveQuestionnaire({ answers: { ...answers, datasets_analysed: 'Lots' }, contacts }));
-  await call('questionnaire save (prefer not to say with others)', (s) => s.b.saveQuestionnaire({ answers: { ...answers, eeg_systems: ['OpenBCI', PREFER_NOT] }, contacts }));
-  await call('questionnaire save (no such question)', (s) => s.b.saveQuestionnaire({ answers: { ...answers, shoe_size: '9' }, contacts }));
-  await call('questionnaire save (no name)', (s) => s.b.saveQuestionnaire({ answers, contacts: { ...contacts, full_name: ' ' } }));
-  await call('questionnaire save (not an email)', (s) => s.b.saveQuestionnaire({ answers, contacts: { ...contacts, email: 'ama' } }));
-  await call('questionnaire save', (s) => s.b.saveQuestionnaire({ answers, other: { artifact_training: 'A summer school', eeg_systems: 'Our own amplifier', gender: 'Agender', age_band: 'ignored' }, contacts }));
-  await call('questionnaire save (sent again)', (s) => s.b.saveQuestionnaire({ answers, other: { artifact_training: 'A summer school', eeg_systems: 'Our own amplifier', gender: 'Agender' }, contacts }));
-  await call('me (answered)', (s) => s.b.me());
-  await call('match after the questionnaire', async (s) => s.b.match(await matchBody(r2)));
-  await call('questionnaire save (changed)', (s) => s.b.saveQuestionnaire({ answers: { ...answers, datasets_analysed: '31–100' }, contacts: { ...contacts, phone: '' } }));
-  await call('questionnaire (after a change)', (s) => s.b.questionnaire());
-  await call('admin as A02', (s) => s.b.admin('questionnaire_summary', {}));
-  await call('logout', (s) => s.b.logout());
-  await call('login', (s) => s.b.login('ADMIN', s.password));
-  await call('me (an administrator is not asked)', (s) => s.b.me());
-  await call('admin questionnaire_get', (s) => s.b.admin('questionnaire_get', { annotator_id: 'a02' }));
-  await call('admin questionnaire_get (an example account)', (s) => s.b.admin('questionnaire_get', { annotator_id: 'T01' }));
-  await call('admin questionnaire_get (not answered)', (s) => s.b.admin('questionnaire_get', { annotator_id: 'E02' }));
-  await call('admin questionnaire_summary', (s) => s.b.admin('questionnaire_summary', {}));
-  await call('admin contacts_download', (s) => s.b.admin('contacts_download', {}));
-  await call('admin users_list (names)', (s) => s.b.admin('users_list', {}));
-  await call('admin settings_update (questionnaire, an option twice)', (s) => s.b.admin('settings_update', { settings: { questionnaire: { questions: [{ id: 'x', group: 'career', text: 'X?', type: 'choice', options: ['a', 'A'] }] } } }));
-  await call('admin settings_update (questionnaire, prefer not to say listed)', (s) => s.b.admin('settings_update', { settings: { questionnaire: { questions: [{ id: 'x', group: 'career', text: 'X?', type: 'choice', options: ['Yes', 'Prefer not to say'] }] } } }));
-  await call('admin settings_update (questionnaire, a contact level)', (s) => s.b.admin('settings_update', { settings: { questionnaire: { contacts: { phone: 'sometimes' } } } }));
-  await call('admin settings_update (no demographics)', (s) => s.b.admin('settings_update', { settings: { questionnaire: { demographics: false, contacts: { full_name: 'required', email: 'required', phone: 'off', institution: 'required' } } } }));
-  await call('admin questionnaire_summary (no demographics)', (s) => s.b.admin('questionnaire_summary', {}));
-  await call('admin audit (questionnaire)', (s) => s.b.admin('audit', {}));
-  await call('logout', (s) => s.b.logout());
-  await call('login', (s) => s.b.login('A01', s.password));
-  await call('me (the questions changed)', (s) => s.b.me());
-  await call('questionnaire (no demographics)', (s) => s.b.questionnaire());
-  await call('questionnaire save (an institution needed)', (s) => s.b.saveQuestionnaire({ answers: { ...answers, age_band: undefined, gender: undefined, first_language: undefined }, contacts: { full_name: 'Demo annotator', email: 'a01@example.org' } }));
-  await call('questionnaire save (demographics gone)', (s) => s.b.saveQuestionnaire({ answers, contacts: { full_name: 'Demo annotator', email: 'a01@example.org', institution: 'Leeds' } }));
 }
 
 /** What a study team keeps to itself (decision 1 of the project lead): no answer of A01's may carry any of it. */

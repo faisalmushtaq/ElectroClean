@@ -267,6 +267,26 @@ async function main() {
       // The change log names the new account.
       await go('Records', 'admin-records');
       await page.waitForFunction(() => /A07/.test(document.querySelector('.admin-section[data-section="records"]')?.innerText || ''), null, { timeout: 60000 });
+
+      // A hand-out of the built-in dataset to A01, with a due date, then the tracking grid (datasets.py, tracking.py on Firestore).
+      await go('Hand-outs', 'admin-handouts');
+      const ho = page.locator('[data-card="handout-form"]');
+      await ho.locator('option[value="dataset:study-recordings"]').waitFor({ state: 'attached', timeout: 60000 });
+      await ho.locator('.admin-field', { hasText: 'Dataset or collection' }).locator('select').selectOption('dataset:study-recordings');
+      await ho.locator('input[data-name="handout-people"][value="A01"]').check();
+      const due = new Date(Date.now() + 7 * 86400000);
+      await ho.locator('.admin-field', { hasText: 'Due date' }).locator('input').fill(`${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}-${String(due.getDate()).padStart(2, '0')}`);
+      await page.click('[data-log="handout-preview"]');
+      await page.waitForSelector('.ho-preview .tasks-summary', { timeout: 60000 });
+      assert.match(await page.innerText('.ho-preview'), /3 recordings to 1 person/);
+      await page.click('[data-log="handout-create"]');
+      await page.waitForFunction(() => /Handed out: Study recordings, to 1 person/.test(document.querySelector('.admin-main')?.innerText || ''), null, { timeout: 120000 });
+      await go('Datasets', 'admin-datasets');
+      await page.locator('.admin-tabs button[data-tab="tracking"]').click();
+      await page.waitForSelector('button[data-track="dataset:study-recordings"]', { timeout: 120000 });
+      const cell = page.locator('.ds-summary tbody tr', { has: page.locator('button[data-track="dataset:study-recordings"]') }).locator('[data-person="A01"]');
+      assert.match(await cell.innerText(), /\d of 3/);
+      await shot(page, 'admin_tracking');
     }],
   ];
 

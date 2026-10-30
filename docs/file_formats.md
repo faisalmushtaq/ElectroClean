@@ -371,6 +371,36 @@ known-answer task they saved, with the columns `annotator_id`, `task_id`, `recor
 `event_recall` and `scored_at`. The scores compare the saved annotations with the set's reference as
 the practice feedback does, within the task's part of the recording when it has one.
 
+## The sign-up questionnaire (results zip and export)
+
+The answers to the sign-up questionnaire (docs/web/using.md, "Before your first recording") are
+written below `questionnaire/` in the results zip and by `electrotag web export`, by annotator ID and
+with no name or contact detail.
+
+`questionnaire/answers.tsv` has a row for each set of answers a person gave, the oldest first for each
+person, with the columns `annotator_id`, `questionnaire_version` (the version of the questions
+answered: `q-` and ten hexadecimal digits of the SHA-256 of their wording and options),
+`answered_at` (local time with its UTC offset), `current` (`true` for the person's answers now,
+`false` for an earlier set), then a column named after each question's `id`, the current questions
+first and then any asked only in an earlier version, with `<id>_other` beside a question that asks for
+the person's own words. An answer is the option chosen, the options chosen separated by `; `, the
+text given, `prefer_not_to_say`, or `n/a` when the question was not answered (or not asked in that
+version).
+
+`questionnaire/answers.json` holds the same as JSON: `{"schema": "electrotag.questionnaire_answers",
+"schema_version": 1, "generated_at", "current_version", "prefer_not_to_say": "prefer_not_to_say",
+"definitions": {version: [question]}, "people": [{"annotator_id", "history": [{"at", "version",
+"answers": {id: answer}, "other": {id: text}}]}]}`, where `definitions` gives the wording, options and
+groups of each version answered (the format of the `questionnaire` setting) and a `multi` answer is a
+list.
+
+`contacts.csv`, at the top of the results zip, is there only when the administrator ticked Include
+names and contact details. It identifies people, so keep it apart from the research data. Its columns
+are `annotator_id`, `full_name`, `email`, `phone`, `institution`, `updated_at` (when the person last
+changed them) and `account` (`active`, `disabled` or `removed`); a value that starts with `=`, `+`,
+`-` or `@` is written with an apostrophe before it, so that a spreadsheet does not take it for a
+formula. The README of the zip says the same.
+
 ## Datasets, collections, groups, hand-outs and tracking (results zip and export)
 
 The study's source datasets, its collections, its groups and its hand-outs (docs/web/admin.md,
@@ -424,36 +454,6 @@ without a hand-out). `datasets/recording_ratings.tsv` has a row for each study r
 columns `recording_id`, `dataset_id`, `retired`, `n_given` (people who hold it), `n_rated` (people who
 saved it in study mode, a revision counted once) and `n_set_aside` (people who reported that it cannot
 be annotated, which is no rating).
-
-## The sign-up questionnaire (results zip and export)
-
-The answers to the sign-up questionnaire (docs/web/using.md, "Before your first recording") are
-written below `questionnaire/` in the results zip and by `electrotag web export`, by annotator ID and
-with no name or contact detail.
-
-`questionnaire/answers.tsv` has a row for each set of answers a person gave, the oldest first for each
-person, with the columns `annotator_id`, `questionnaire_version` (the version of the questions
-answered: `q-` and ten hexadecimal digits of the SHA-256 of their wording and options),
-`answered_at` (local time with its UTC offset), `current` (`true` for the person's answers now,
-`false` for an earlier set), then a column named after each question's `id`, the current questions
-first and then any asked only in an earlier version, with `<id>_other` beside a question that asks for
-the person's own words. An answer is the option chosen, the options chosen separated by `; `, the
-text given, `prefer_not_to_say`, or `n/a` when the question was not answered (or not asked in that
-version).
-
-`questionnaire/answers.json` holds the same as JSON: `{"schema": "electrotag.questionnaire_answers",
-"schema_version": 1, "generated_at", "current_version", "prefer_not_to_say": "prefer_not_to_say",
-"definitions": {version: [question]}, "people": [{"annotator_id", "history": [{"at", "version",
-"answers": {id: answer}, "other": {id: text}}]}]}`, where `definitions` gives the wording, options and
-groups of each version answered (the format of the `questionnaire` setting) and a `multi` answer is a
-list.
-
-`contacts.csv`, at the top of the results zip, is there only when the administrator ticked Include
-names and contact details. It identifies people, so keep it apart from the research data. Its columns
-are `annotator_id`, `full_name`, `email`, `phone`, `institution`, `updated_at` (when the person last
-changed them) and `account` (`active`, `disabled` or `removed`); a value that starts with `=`, `+`,
-`-` or `@` is written with an apostrophe before it, so that a spreadsheet does not take it for a
-formula. The README of the zip says the same.
 
 ## Adjudications and the library (results zip and export)
 
