@@ -116,7 +116,14 @@ adjudicated version kept), with five new tables. The activity analysis counts ex
 its own (corrections, adjudication decisions with their time, replays watched), shown in an Expert
 work table and left out of the learning curves, and lists the training stages each trainee skipped.
 A consensus reference can weight each person, by their accuracy on known-answer tasks or by weights
-given, for a later crowd study; without weights it is unchanged.
+given, for a later crowd study; without weights it is unchanged. Learn with the experts gains "correct
+the marks": a guided recording can open with a copy of the experts' marks with deliberate mistakes
+(a mark left out, a confusable type, a moved start or end, a mark where there is none), which the
+trainee puts right and saves, then reads which mistakes they fixed and any new ones. Experts and
+administrators make the exercise in the expert area's new Correct the marks (from a seed, so every
+trainee meets the same one, or from an expert's own flawed annotation file), try it as a trainee
+would with a check in the browser, and give it to trainees in Training; the sandbox has one
+ready-made exercise to try.
 
 A changed copy of a recording that is also in a training set (a set made from the study's own
 recordings) is now matched by its name and shape, as any other changed copy is; the study's copy and

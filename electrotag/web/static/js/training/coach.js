@@ -19,6 +19,8 @@ import { DEMO_NOTICE } from '../api/notice.js';
  * coach below steps aside for it as soon as it reads the recording's guidance.
  */
 export const GUIDANCE_PANELS = {};
+/** Modules that register a guidance's panel when they load, loaded the first time a recording needs them. */
+export const GUIDANCE_PARTS = { correct: () => import('./correct.js') };
 
 export function minutesText(seconds) {
   const s = Math.max(0, Math.round(seconds));
@@ -110,6 +112,9 @@ export class GuidedCoach {
     } catch (exc) {
       this._feedback(`The coach could not reach the study: ${exc.message}`, 'banner');
       return;
+    }
+    if (!GUIDANCE_PANELS[g.guidance] && GUIDANCE_PARTS[g.guidance]) {
+      try { await GUIDANCE_PARTS[g.guidance](); } catch (exc) { this._feedback(`This part of the training could not be loaded: ${exc.message}. Close the recording and open it again.`, 'banner'); return; }
     }
     const other = GUIDANCE_PANELS[g.guidance];
     if (other && this.ws.coach === this) {

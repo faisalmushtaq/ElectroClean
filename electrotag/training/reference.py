@@ -60,8 +60,12 @@ USE_NAMES = {
     "practice": "practice (on your own, with feedback)",
     "assessment": "assessment (blinded)",
 }
-#: How much help each guided recording gives (see electrotag/training/guided.py).
-GUIDANCE_LEVELS = ("show", "find", "find_unnamed")
+#: How much help each guided recording gives, step by step (see electrotag/training/guided.py).
+STEP_LEVELS = ("show", "find", "find_unnamed")
+#: The ways a guided recording can be used: a level of step-by-step help, or "correct" (correct the marks: the trainee
+#: puts right a copy of the experts' marks with deliberate mistakes, electrotag/training/planted.py), which is only
+#: ever chosen for a recording, never by its place in the set.
+GUIDANCE_LEVELS = (*STEP_LEVELS, "correct")
 DEFAULT_DIRNAME = Path("derivatives") / "electrotag_reference_sets"
 #: The longest snippet, in seconds, and the most context shown on each side of it.
 SNIPPET_MAX_S = 60.0
@@ -222,7 +226,7 @@ class ReferenceSet:
             return chosen
         order = self.guided_recordings
         index = order.index(recording_id) if recording_id in order else 0
-        return GUIDANCE_LEVELS[min(index, len(GUIDANCE_LEVELS) - 1)]
+        return STEP_LEVELS[min(index, len(STEP_LEVELS) - 1)]
 
     def guided_note(self, annotation_id: str) -> str:
         return str(dict(self.guided.get("notes", {})).get(annotation_id, ""))

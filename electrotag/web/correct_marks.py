@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import secrets
 import tempfile
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -253,6 +254,10 @@ def remove(service: StudyService, user: User, body: dict[str, Any]) -> dict[str,
         raise _bad(f"{rid} has no correct-the-marks exercise", "no_exercise", 404)
     out = _keep(service, user, rs, rid, None, "set_planted_remove",
                 f"Removed the correct-the-marks exercise of {rid} in {rs.set_id}", {})
+    if rs.recordings[rid].get("guidance") == "correct":  # the recording goes back to the guided coach's steps
+        with service.administration._editing(rs.set_id) as edited:
+            edited.set_guidance(rid, "")
+        out["set"] = service.administration.set_record(service.reference_set(rs.set_id))
     return {"set": out["set"]}
 
 
@@ -277,12 +282,57 @@ def trainee_score(service: StudyService, rs: ReferenceSet, rid: str, document: A
 
     rec = stored(rs, rid) or {}
     ref = _reference(rs, rid)
-    fb = practice_feedback(document, ref, rs)
+    # scored as practice is (the comparison reads the modes of practice, not "guided")
+    fb = practice_feedback(replace(document, mode="practice"), ref, rs)
     score = score_corrections(list(rec.get("errors") or []), list(document.annotations), list(ref.annotations),
                               float(ref.recording.timing.sfreq), _tolerance(rs),
                               planted=[from_wire(a) for a in rec.get("annotations") or []])
     return {"kind": "correct", "event_f1": fb["overall"].get("event_f1"), "feedback": fb, "planted": score,
             "fixed": score["fixed"], "n_errors": score["n_errors"], "new_mistakes": score["new_mistakes"]}
+
+
+class CorrectTheMarks:
+    """The training path's hook for a guided recording whose guidance is ``correct`` (``coach.GUIDANCE_KINDS``):
+    what ``GET /training/guided/{rid}`` answers, the check at Save and Finish, and what is kept and answered after
+    the save. Saving counts the recording as done whatever the score: this is a learning stage."""
+
+    def view(self, coach: Any, user: User, rs: ReferenceSet, item: Any) -> dict[str, Any]:
+        rid = item.recording_id
+        return {"recording_id": rid, "context_id": rs.set_id, **trainee_view(coach.service, rs, rid),
+                "complete": False}
+
+    def verify(self, coach: Any, user: User, rs: ReferenceSet, rid: str, anns: list[Any], sfreq: float
+               ) -> dict[str, Any]:
+        trainee_view(coach.service, rs, rid)  # 409 no_exercise when it is gone or stale: nothing to score against
+        rec = stored(rs, rid) or {}
+        return {"kind": "correct", "guidance": "correct", "steps": 0, "n_planted": len(rec.get("errors") or []),
+                "seed": rec.get("seed"), "n_annotations": len(anns)}
+
+    def record(self, coach: Any, user: User, rs: ReferenceSet, rid: str, summary: dict[str, Any],
+               document: Any) -> dict[str, Any]:
+        from electrotag.web.service import clean_json
+
+        scored = trainee_score(coach.service, rs, rid, document)
+        planted = scored["planted"]
+        entry = {**summary, "kind": "correct", "event_f1": scored["event_f1"], "fixed": planted["fixed"],
+                 "n_errors": planted["n_errors"], "new_mistakes": planted["new_mistakes"]}
+        try:
+            coach.store.progress(rs, user.annotator_id).record_guided(rid, clean_json(entry))
+        except OSError:
+            pass
+        coach.store.clear_guided_state(user.annotator_id, rs.set_id, rid)
+        fb = scored["feedback"]["overall"]
+        return clean_json({"summary": {"steps": 0, "stars": 0, "max_stars": 0, "attempts": 0, "failed_attempts": 0,
+                                       "shown": 0, "time_s": 0.0, "kind": "correct"},
+                           "message": f"Recording saved. {planted['message']}",
+                           "feedback": {"score": {"event_f1": fb.get("event_f1"),
+                                                  "label_accuracy": fb.get("label_accuracy")},
+                                        "planted": {k: planted[k] for k in ("n_errors", "fixed", "not_fixed",
+                                                                            "new_mistakes", "items", "new",
+                                                                            "message")}}})
+
+
+CORRECT_THE_MARKS = CorrectTheMarks()
 
 
 # ------------------------------------------------------------------ the expert channel
@@ -311,5 +361,6 @@ def _set_planted_remove(service: StudyService, user: User, body: dict[str, Any])
     return remove(service, user, body)
 
 
-__all__ = ["INSTRUCTION", "get", "is_current", "listing", "make", "make_from", "planted_out", "remove", "stored",
+__all__ = ["CORRECT_THE_MARKS", "INSTRUCTION", "get", "is_current", "listing", "make", "make_from", "planted_out",
+           "remove", "stored",
            "trainee_score", "trainee_view"]

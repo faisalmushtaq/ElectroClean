@@ -80,6 +80,17 @@ def build_study(folder: Path) -> Path:
                 rs.set_guidance(rid, r["guidance"])
             notes.update(r.get("notes") or {})
         rs.guided = {**rs.guided, "notes": notes}
+        # the sandbox's ready-made correct-the-marks exercise (js/api/demo_planted.js), kept as the study keeps one
+        planted = {}
+        for rid, p in (ts.get("planted") or {}).items():
+            from electrotag.training.planted import reference_sha256
+
+            planted[rid] = {"annotations": p["annotations"], "errors": p["errors"], "seed": p["seed"],
+                            "counts": p["counts"], "requested": p["counts"], "capped": p["capped"], "notes": [],
+                            "method": "auto", "made_by": "ElectroTag", "made_at": "2026-10-30T10:00:00.000+00:00",
+                            "reference_sha256": reference_sha256(rs.reference_document(rid))}
+        if planted:
+            rs.guided["planted"] = planted
         rs.set_guided_tolerance(ts["guided_tolerance"])
         rs.set_practice_pass(ts["pass"])
         quiz = spec["quiz"]

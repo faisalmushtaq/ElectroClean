@@ -153,3 +153,37 @@ def test_the_trainees_side(service: StudyService) -> None:
     assert ex(service, E01, "planted_get", set_id="example", recording_id=GUIDED1)["planted"]["stale"] is True
     with pytest.raises(ApiError):
         trainee_view(service, rs, GUIDED1)
+
+
+def test_a_trainee_corrects_the_marks_on_the_training_path(service: StudyService, template: Path) -> None:
+    from tests.web_helpers import as_wire, skip_to_guided_in, submission
+
+    t01 = User("T01", "Trainee")
+    recordings = template / "recordings"
+    # the study team gives the first guided recording as an exercise: refused until one is made
+    with pytest.raises(ApiError) as e:
+        service.call("admin", ADMIN, {"op": "set_recording_update", "set_id": "example", "recording_id": GUIDED1,
+                                      "guidance": "correct"})
+    assert e.value.code == "no_exercise"
+    made = ex(service, E01, "set_planted_make", set_id="example", recording_id=GUIDED1, seed=11)["planted"]
+    service.call("admin", ADMIN, {"op": "set_recording_update", "set_id": "example", "recording_id": GUIDED1,
+                                  "guidance": "correct"})
+    rs = service.reference_set("example")
+    assert rs.guidance_for(GUIDED1) == "correct" and rs.guidance_for(rs.guided_recordings[1]) == "find"
+    skip_to_guided_in(service, t01)
+    view = service.call("guided_get", t01, {"recording_id": GUIDED1})
+    assert view["guidance"] == "correct" and view["n_steps"] == 0 and view["n_planted"] == made["n_errors"]
+    assert view["start_annotations"] == made["annotations"] and "errors" not in view
+    # Save and Finish with the experts' marks: every planted mistake fixed, nothing new
+    ref = reference_annotations(service.store, "example", GUIDED1)
+    out = service.call("submit", t01, submission(recordings, GUIDED1, [as_wire(a) for a in ref], "guided", "example"))
+    planted = out["guided"]["feedback"]["planted"]
+    assert (planted["fixed"], planted["n_errors"], planted["new_mistakes"]) == (made["n_errors"], made["n_errors"], 0)
+    assert out["guided"]["message"].startswith("Recording saved. You fixed")
+    prog = service.store.progress(rs, "T01").guided[GUIDED1]
+    assert prog["kind"] == "correct" and prog["fixed"] == made["n_errors"] and prog["event_f1"] == 1.0
+    stage = next(s for s in service.call("training", t01, {})["stages"] if s["key"] == "guided")
+    assert stage["done"] >= 1
+    # removing the exercise gives the recording back to the step-by-step coach
+    ex(service, E01, "set_planted_remove", set_id="example", recording_id=GUIDED1)
+    assert service.reference_set("example").guidance_for(GUIDED1) == "show"

@@ -1026,6 +1026,7 @@ export class App {
       await this.openReview(s, result.feedback);
       return;
     }
+    if (s.mode === 'guided' && ws.coach && typeof ws.coach.afterSaved === 'function') { await ws.coach.afterSaved(this, result); return; }
     if (s.mode === 'guided') {
       const g = ws.coach && ws.coach.summary;
       const coach = partNow('coach');

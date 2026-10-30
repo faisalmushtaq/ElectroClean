@@ -521,8 +521,14 @@ not to restore, is moved to `.electrotag/interrupted/autosave/`.
 `recordings` (use `guided`, `practice` or `assessment`, reference file, its SHA-256,
 per-recording provenance including the consensus rule), `criteria`
 (competency criteria), optional `analysis` overrides, `quiz` items (an item promoted from the library of conflicts keeps its `source`),
-`practice_review`, the training programme's `guided` settings (tolerance and
-the experts' notes), `practice_pass`, `recordings_dir` for a self-contained set,
+`practice_review`, the training programme's `guided` settings (tolerance,
+the experts' notes and, under `planted`, each correct-the-marks exercise by
+recording: `annotations`, the copy with its mistakes; `errors`, each mistake with
+its `kind` (`missing`, `type`, `boundary`, `extra`, or `channels` when found in an
+expert's own file), `reference_id`, `planted_id`, `label`, samples and `detail`;
+`seed`, `counts`, `capped`, `notes`, `method` (`auto` or `from_annotations`),
+`made_by`, `made_at` and `reference_sha256`, the fingerprint of the reference it
+was made from), `practice_pass`, `recordings_dir` for a self-contained set,
 `assigned_annotators`, `snippets` (the examples of artifact types for the training path's *Meet the
 artifacts* that the study team added or promoted from the library of conflicts: `snippet_id`, `recording_id`,
 `start_s`, `end_s`, `label`, `explanation`, `context_s`, `channels` and `source`;

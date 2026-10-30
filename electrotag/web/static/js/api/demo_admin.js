@@ -57,6 +57,12 @@ const SERVER_ONLY = {
   task_update: 'change a task',
   task_remove: 'remove a task',
   quality_list: "measure annotators' accuracy on known answers",
+  // Correct the marks (electrotag/web/correct_marks.py): exercises are made with the study's Python code; the
+  // sandbox's ready-made one is in the expert area (demo_planted.js).
+  set_planted_get: 'look at correct-the-marks exercises here (the expert area has the sandbox\'s ready-made one)',
+  set_planted_make: 'make correct-the-marks exercises (the expert area has the sandbox\'s ready-made one to try)',
+  set_planted_from: 'make correct-the-marks exercises (the expert area has the sandbox\'s ready-made one to try)',
+  set_planted_remove: 'remove correct-the-marks exercises',
 };
 
 const bad = (message, code = 'bad_request', status = 400) => new ApiError(status, code, message);
@@ -991,7 +997,8 @@ export class DemoAdmin {
       throw bad('In the demonstration, the training set keeps its two recordings to learn with and one to practise on; a study server or Firebase lets you change how a recording is used.', 'demo_limit', 422);
     }
     if (body.guidance === undefined || body.guidance === null) throw bad('Nothing to change: give use or guidance');
-    if (!['auto', 'show', 'find', 'find_unnamed'].includes(body.guidance)) throw bad('guidance must be one of auto, show, find, find_unnamed');
+    if (body.guidance === 'correct') throw needsServer('give trainees a correct-the-marks exercise (the expert area has one to try)');
+    if (!['auto', 'show', 'find', 'find_unnamed'].includes(body.guidance)) throw bad('guidance must be one of auto, show, find, find_unnamed, correct');
     if (r.use !== 'guided') warnings.push('How much help a recording gives matters only for guided recordings.');
     r.guidance = body.guidance;
     changes.push(`guidance ${body.guidance}`);

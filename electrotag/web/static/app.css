@@ -1354,3 +1354,18 @@ button.review-line { text-align: left; font: var(--t-14); }
 .watch-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--hairline); }
 .corrected-line { text-align: left; }
 @media (pointer: coarse) { .replay-scrub { height: 40px; } .replay-track { top: 18px; } }
+
+/* Correct the marks (js/training/correct.js, js/admin/planted.js, js/expert/planted.js) */
+.planted-items { list-style: none; margin: 8px 0 12px; padding: 0; }
+.planted-item { display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--hairline); font: var(--t-14); }
+.planted-item .ico { flex: none; margin-top: 2px; }
+.planted-item.fixed .ico { background-color: var(--accent); }
+.planted-item.not-fixed .ico { background-color: var(--warning-text); }
+.planted-item .planted-text { flex: 1 1 auto; min-width: 0; }
+.planted-item .btn { flex: none; }
+.planted-panel .coach-buttons { flex-wrap: wrap; gap: 8px; }
+.planted-recordings { list-style: none; margin: 0; padding: 0; }
+.planted-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--hairline); }
+.planted-row > span:first-child { flex: 1 1 auto; min-width: 0; }
+.planted-row:last-child { border-bottom: 0; }
+.planted-dialog .planted-items { max-height: 50vh; overflow-y: auto; }

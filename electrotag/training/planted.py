@@ -11,7 +11,8 @@ mistake are planted, each on a different reference mark and never overlapping an
 ========== ===========================================================================================
 missing    a reference mark left out (one at least 0.3 s from its neighbours, so that it is clearly absent)
 type       a mark given a confusable type: another type of the same group in the catalogue (an eye
-           blink called a vertical eye movement), or of the same section when the group has no other
+           blink called a vertical eye movement), or of the same section when the group has no other;
+           one the reference itself uses when there is one
 boundary   the start or the end moved by two to three times the guided tolerance, without reaching a
            neighbour or leaving the recording
 extra      a mark where the experts marked nothing, at least 1 s from every reference mark, of a type the
@@ -164,9 +165,11 @@ def plant_errors(ref: AnnotationDocument, *, seed: int, counts: Mapping[str, Any
         if made["type"] >= want["type"] or sum(made.values()) >= budget:
             break
         options = confusable(a.label, catalogue, used_labels)
+        # a type the reference itself uses when there is one (the trainee meets it there), else one of the nearest
+        options = [o for o in options if o in used_labels] or options[:3]
         if not options:
             continue
-        new = options[rng.randrange(len(options))] if len(options) > 1 else options[0]
+        new = options[rng.randrange(len(options))]
         changed[a.annotation_id] = replace(a, label=new)
         made["type"] += 1
         errors.append({"kind": "type", "reference_id": a.annotation_id, "label": a.label, "planted_label": new,

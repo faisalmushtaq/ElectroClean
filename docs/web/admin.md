@@ -865,6 +865,36 @@ reference set: the type, times and explanation start from the decision and its r
 change them. The item keeps a note of the conflict it came from, and promoting the same entry to
 the same set again gives the item made before.
 
+## Correct the marks
+
+An exercise for Learn with the experts, made from a guided recording of a reference set: a copy of the
+experts' marks with deliberate mistakes, which trainees put right. Experts reach it in the expert
+area's **Correct the marks**, which lists every set's guided recordings and whether each has an
+exercise; administrators also reach it from a guided recording's Manage in Training.
+
+**Make the exercise** copies the experts' marks and plants the mistakes in the copy: a mark left out
+(one well apart from its neighbours), a mark given a type it is easily mistaken for (another type of
+the same family, preferably one the reference uses), a start or an end moved by two to three times
+the guided tolerance, and a mark where the experts marked nothing. None overlaps another mark, and
+every mark of the copy has a new identifier, so nothing in it shows which marks were changed. Choose
+how many of each kind (one each by default) and, if you want, the **seed**: the same seed always gives
+the same exercise, so every trainee meets the same one, and **Make it again** with another seed gives
+another. A small reference takes fewer mistakes than asked (at most half its marks are changed), and
+the page says so. The page lists each mistake in plain words. **Use an annotation file with
+deliberate mistakes** takes an expert's own flawed version instead (annotate the recording with the
+mistakes you want trainees to find and give its `_annotations.json`): the study finds the mistakes by
+comparing it with the reference. **Try it** opens the recording from this computer with the copy, as a
+trainee sees it, but nothing is saved: correct it, press **Check my corrections** to see what a trainee
+would be told, and **Show the experts' marks** to see the reference as dashed outlines. **Remove the
+exercise** gives the recording back to the step-by-step coach.
+
+To give the exercise to trainees, choose **Correct the marks** under "How much help the guided
+recording gives" in the recording's Manage; the study refuses that until the recording has an
+exercise. When a recording's reference is replaced, its exercise no longer fits it and trainees are
+not given it until it is made again. Trainees who did the recording before keep their results. In the
+sandbox, the first guided recording of the demonstration set has a ready-made exercise to try; making
+exercises needs a study server or Firebase.
+
 ## When something goes wrong
 
 Every problem is reported on the page where it happened, in plain words: the study's own message

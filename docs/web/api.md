@@ -1349,6 +1349,21 @@ the reference had too few marks, or too little room, for every mistake asked for
 the reference's marks are changed. `stale` is true when the reference was replaced after the
 exercise was made: trainees are then not given it until it is made again.
 
+A guided recording becomes the trainee's exercise with `set_recording_update` `{"guidance":
+"correct"}` (409 `no_exercise` while it has no current exercise; "auto" never chooses it, and removing
+the exercise gives the recording back to the step-by-step coach). For it, `GET /training/guided/{rid}`
+answers `{"recording_id", "context_id", "guidance": "correct", "n_steps": 0, "start_annotations":
+[Annotation], "instruction", "n_planted", "complete": false}`, never which marks are wrong (409
+`no_exercise` when the exercise is gone or stale); the guided step operations are not used. Save and
+Finish skips the step checks, and the answer's `guided` is `{"summary", "message", "feedback": {"score":
+{"event_f1", "label_accuracy"}, "planted": {"n_errors", "fixed", "not_fixed", "new_mistakes", "items":
+[{"kind", "fixed", "problems", "label", "onset_s", "offset_s", "detail", "reference_id", "planted_id"}],
+"new": [{"kind": "broken" | "added", ...}], "message"}}}`. A mistake on a reference mark is fixed when
+the trainee's mark standing for it has the experts' type, start, end and channels within the guided
+tolerance; an extra mark is fixed when nothing of the trainee's still overlaps it. The recording counts
+as done whatever the score; the trainee's progress keeps `{"kind": "correct", "event_f1", "fixed",
+"n_errors", "new_mistakes"}` for it.
+
 ## The same operations on Firebase
 
 On Firebase every operation above is a callable Cloud Function (Python, 2nd

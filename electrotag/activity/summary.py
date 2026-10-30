@@ -46,9 +46,9 @@ SEGMENT_OF_EVENT = {"practice_review_opened": "review", "correction_started": "c
                     "correction_feedback_shown": "feedback", "replay_opened": "replay",
                     "adjudication_opened": "adjudication"}
 #: The kind of a segment from the ``segment`` of its recording_opened.
-SEGMENT_OF_OPENED = {"feedback": "feedback", "adjudication": "adjudication", "tour": "tour"}
+SEGMENT_OF_OPENED = {"feedback": "feedback", "adjudication": "adjudication", "tour": "tour", "planted": "planted"}
 #: Segments that are not annotation of one's own (their outcome: finished when ended as their kind ends them).
-EXPERT_SEGMENTS = ("correction", "replay", "adjudication")
+EXPERT_SEGMENTS = ("correction", "replay", "adjudication", "planted")
 #: Events that change annotations; each carries the annotations it touched.
 ANNOTATION_CHANGES = frozenset({"annotation_created", "annotation_deleted", "annotation_edited",
                                 "annotation_relabelled", "annotation_channels_changed", "confidence_set", "note_set",
@@ -95,9 +95,9 @@ RECORDING_COLUMNS: list[tuple[str, str]] = [
     ("segment", "recording (a recording opened for annotation), review (a practice recording reviewed against "
                 "the reference), feedback (the annotator reading the reviews or corrections of their saved work, "
                 "read only), correction (an expert correcting someone's saved work), replay (a session played "
-                "back), adjudication (an expert deciding the conflicts between versions), tour (the platform tour), "
-                "snippets (the gallery of artifact snippets), quiz, or training (training events outside a "
-                "recording)."),
+                "back), adjudication (an expert deciding the conflicts between versions), planted (an expert "
+                "trying a correct-the-marks exercise), tour (the platform tour), snippets (the gallery of artifact "
+                "snippets), quiz, or training (training events outside a recording)."),
     ("window_no", "Number of the recording opened within the visit (1, 2, ...)."),
     ("order", "Position among all of this annotator's rows, in the order they were started (1 = first)."),
     ("order_in_mode", "The same, counting only rows of the same mode."),
@@ -486,8 +486,9 @@ def segment_row(seg: Segment) -> dict[str, Any]:
         outcome = "finished" if closed else "not_finished"
     elif seg.kind in EXPERT_SEGMENTS:
         done = {"correction": "correction_submitted", "replay": "replay_closed",
-                "adjudication": "adjudication_finished"}[seg.kind]
-        left = {"correction": "correction_left", "replay": "replay_closed", "adjudication": "adjudication_closed"}
+                "adjudication": "adjudication_finished", "planted": "planted_checked"}[seg.kind]
+        left = {"correction": "correction_left", "replay": "replay_closed", "adjudication": "adjudication_closed",
+                "planted": "closed_without_saving"}
         outcome = ("finished" if _last(ev, done) else
                    "closed_without_saving" if (_last(ev, left[seg.kind]) or closed) else "not_finished")
     elif seg.kind == "tour":

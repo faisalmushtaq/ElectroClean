@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 
 import { DemoBackend, exampleRecording, QUIZ, recordingIdOf, TRAINING_SET } from '../../electrotag/web/static/js/api/demo.js';
 import { HttpBackend } from '../../electrotag/web/static/js/api/http.js';
+import { READY_MADE, READY_RID } from '../../electrotag/web/static/js/api/demo_planted.js';
 import { channelType, demoSpecs, exampleNote, syntheticEdfBytes, truthAnnotations } from '../../electrotag/web/static/js/eeg/synthetic.js';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -163,6 +164,7 @@ function writeSandbox(dir) {
     },
     quiz: { feedback: QUIZ.feedback, items: QUIZ.items },
   };
+  sandbox.training_set.planted = { [READY_RID]: READY_MADE }; // the sandbox's ready-made correct-the-marks exercise
   fs.writeFileSync(path.join(dir, 'sandbox.json'), JSON.stringify(sandbox, null, 1));
 }
 
@@ -276,6 +278,7 @@ async function script(call) {
   // (js/api/demo_adjudication.js, checked in ui_adjudication_model.test.mjs). Both sides refuse an annotator alike.
   await call('expert adjudication_list as an annotator', (s) => s.b.expert('adjudication_list', {}));
   await call('expert library_list as an annotator', (s) => s.b.expert('library_list', {}));
+  await call('expert planted_list as an annotator', (s) => s.b.expert('planted_list', {}));
   await call('my feedback', (s) => s.b.myFeedback());
   await call('my_correction_get (none)', (s) => s.b.expert('my_correction_get', { correction_id: hex(0xc0) }));
   await call('replay_index_get as an annotator', (s) => s.b.expert('replay_index_get', { annotator_id: 'A01', recording_id: r1 }));
@@ -288,6 +291,16 @@ async function script(call) {
   // ------------------------------------------------------------ an expert who also annotates (E01)
   await call('login', (s) => s.b.login('E01', s.password));
   await call('me (expert)', (s) => s.b.me());
+  // Correct the marks: the sandbox has one ready-made exercise (js/api/demo_planted.js), which the server's study is
+  // given too, so the reads compare exactly. Making, replacing and removing one (set_planted_make, set_planted_from,
+  // set_planted_remove, and the admin channel's set_planted_*) are server-only: the mistakes are planted with the
+  // study's Python code (electrotag/training/planted.py), and the sandbox answers needs_server (demo_planted.js,
+  // demo_admin.js SERVER_ONLY); tests/test_web_correct_marks.py and ui_planted.test.mjs check them.
+  await call('expert planted_list', (s) => s.b.expert('planted_list', {}));
+  await call('expert planted_get', (s) => s.b.expert('planted_get', { set_id: QUIZ.set_id, recording_id: RIDS[0] }));
+  await call('expert planted_get (no exercise)', (s) => s.b.expert('planted_get', { set_id: QUIZ.set_id, recording_id: RIDS[1] }));
+  await call('expert planted_get (a practice recording)', (s) => s.b.expert('planted_get', { set_id: QUIZ.set_id, recording_id: RIDS[2] }));
+  await call('expert planted_get (no recording)', (s) => s.b.expert('planted_get', { set_id: QUIZ.set_id }));
   await call('assignments (expert)', (s) => s.b.assignments());
   await call('expert replay_consent_get', (s) => s.b.expert('replay_consent_get', {}));
   await call('expert replay_consent_set', (s) => s.b.expert('replay_consent_set', { teaching: true }));

@@ -621,3 +621,13 @@ class Coach:
                 "summary_html": (f"<p>You have completed all assessment recordings in <b>"
                                  f"{html.escape(rs.name or rs.set_id)}</b>.</p>" + competency_summary_html(rep)),
                 "message": "You have completed all assessment recordings."}
+
+
+def _register_guidance_kinds() -> None:
+    """The guided recordings another part of the path handles: correct the marks (electrotag/web/correct_marks.py)."""
+    from electrotag.web.correct_marks import CORRECT_THE_MARKS
+
+    GUIDANCE_KINDS.setdefault("correct", CORRECT_THE_MARKS)
+
+
+_register_guidance_kinds()

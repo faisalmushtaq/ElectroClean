@@ -1292,6 +1292,12 @@ class Admin:
             raise _bad(f"guidance must be one of auto, {', '.join(GUIDANCE_LEVELS)}")
         if use is None and guidance is None:
             raise _bad("Nothing to change: give use or guidance")
+        if guidance == "correct":  # correct the marks needs the recording's exercise (electrotag/web/correct_marks.py)
+            from electrotag.web.correct_marks import is_current
+
+            if not is_current(rs0, rid):
+                raise ApiError(409, "no_exercise", f"{rid} has no correct-the-marks exercise made from its reference. "
+                               "Make one first (Correct the marks, in this recording's Manage).")
         warnings: list[str] = []
         old_use = rs0.recordings[rid].get("use")
         if use is not None and use != old_use:

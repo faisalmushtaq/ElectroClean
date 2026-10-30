@@ -368,7 +368,14 @@ the study had it); the reason's text is never logged. `adjudication_skipped`
 (`conflict_id`), `adjudication_lanes` (`mode`: `all` or the one letter shown),
 `adjudication_finished` (`unit_id`, `n_conflicts`, `by_choice`) and
 `adjudication_closed` (`unit_id`, `decided`, `n_conflicts`, `reason`) follow
-the rest. In the library: `library_filtered` (the names of the filters used,
+the rest. Correct the marks (docs/web/admin.md) logs `planted_opened` (`mode`: `trainee` on
+the training path, or `try` for an expert trying an exercise; `n_planted`; `restored` when a draft
+was continued), with an `annotations_snapshot` of the copy it opens with, then
+`planted_checked` (`fixed`, `n_errors`, `new_mistakes`: an expert's Check my corrections),
+`planted_reference_layer` (`shown`), `planted_item_jumped` (`kind`, `fixed`), `planted_restarted`
+and, after a trainee's save, `planted_result_shown` (`fixed`, `n_errors`, `new_mistakes`); an
+expert's try opens with `recording_opened` (`segment` `planted`). Making an exercise in the expert
+area logs `planted_made` (`set_id`, `n_errors`, `capped` or `from`) and `planted_removed`. In the library: `library_filtered` (the names of the filters used,
 never what was typed in the search, and the number shown), `library_opened_entry`
 (`status`, `kinds`), `library_downloaded` (`kind`, `n`) and `library_promoted`
 (`to`, `already`, `explanation_length`). On an annotator's home page,
@@ -555,7 +562,7 @@ assessment recordings separately.
 | `mode` | standard, guided, practice or assessment: the recording's own mode (in the training programme one visit has recordings of several modes). |
 | `context_id` | Reference set of training work (empty for standard annotation). |
 | `recording` | Recording ID (path relative to the dataset); 'quiz' for the short-segment quiz. |
-| `segment` | recording (a recording opened for annotation), review (a practice recording reviewed against the reference), feedback (the annotator reading the reviews or corrections of their saved work, read only), correction (an expert correcting someone's saved work), replay (a session played back), adjudication (an expert deciding the conflicts between versions), tour (the platform tour), snippets (the gallery of artifact snippets), quiz, or training (training events outside a recording). |
+| `segment` | recording (a recording opened for annotation), review (a practice recording reviewed against the reference), feedback (the annotator reading the reviews or corrections of their saved work, read only), correction (an expert correcting someone's saved work), replay (a session played back), adjudication (an expert deciding the conflicts between versions), planted (an expert trying a correct-the-marks exercise), tour (the platform tour), snippets (the gallery of artifact snippets), quiz, or training (training events outside a recording). |
 | `window_no` | Number of the recording opened within the visit (1, 2, ...). |
 | `order` | Position among all of this annotator's rows, in the order they were started (1 = first). |
 | `order_in_mode` | The same, counting only rows of the same mode. |

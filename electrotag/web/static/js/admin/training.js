@@ -180,6 +180,16 @@ export class TrainingSection {
     syncGuidance();
     const notesHost = h('div.admin-stack');
     const notesBtn = actionButton('Edit the guided notes', { working: 'Loading…', msg, onClick: () => this._guidedNotes(notesHost, s, r) });
+    // Correct the marks (js/admin/planted.js): an exercise made from a guided recording's reference
+    const plantedHost = h('div.admin-stack');
+    const plantedBtn = actionButton('Correct the marks…', { working: 'Loading…', msg, log: 'planted-manage', onClick: async () => {
+      const { plantedPanel, startPlantedTry } = await import('./planted.js');
+      const b = this.area.app.backend;
+      clear(plantedHost);
+      plantedHost.append(plantedPanel({ api: { read: (op, x) => b.expert(op, x), write: (op, x) => b.expert(op, x) }, setId: s.set_id, recordingId: r.recording_id,
+        onTry: (target) => startPlantedTry(this.area.app, target, { route: 'expert-planted', params: { recording: r.recording_id } }),
+        onChanged: () => {} }));
+    } });
     const removeHost = h('div.btn-row');
     removeHost.append(h('button.btn.destructive', { type: 'button', onclick: async () => {
       if (!(await confirmInline(removeHost, { text: `Remove ${r.recording_id} from ${s.name || s.set_id}? Its reference goes with it.`, yes: 'Remove it' }))) return;
@@ -199,6 +209,10 @@ export class TrainingSection {
         'what the artifact looks like here and why it is marked on these channels. The example set\'s notes describe only the ' +
         'simulation; replace them with your experts\' explanations when you use real recordings.'),
       h('div.btn-row', {}, notesBtn), notesHost,
+      r.use === 'guided' ? h('h3', {}, 'Correct the marks') : null,
+      r.use === 'guided' ? h('p.caption', {}, 'An exercise instead of the step-by-step coach: a copy of the experts\' marks with deliberate mistakes, '
+        + 'which trainees put right. Make it here, then choose Correct the marks under How much help the guided recording gives.') : null,
+      r.use === 'guided' ? h('div.btn-row', {}, plantedBtn) : null, plantedHost,
       h('h3', {}, 'Remove'), removeHost));
     host.querySelector('h3').tabIndex = -1;
     host.querySelector('h3').focus({ preventScroll: false });

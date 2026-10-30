@@ -79,6 +79,7 @@ export const GUIDANCE = Object.freeze({
   show: 'Show each artifact',
   find: 'Name each artifact, trainee finds it',
   find_unnamed: 'Only say an artifact follows',
+  correct: 'Correct the marks (an exercise made first)',
 });
 export const SELECTION = Object.freeze({
   random: 'Random order',

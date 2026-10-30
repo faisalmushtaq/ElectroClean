@@ -721,6 +721,15 @@ one when you used Show me. Save and Finish becomes available once every artifact
 each step took counts only while the recording is open: if you close it and come back later, the
 step's time carries on from your last action on it.
 
+A study can make a guided recording an exercise in correcting the marks instead. The recording then
+opens with a copy of the experts' marks in which some are deliberately wrong: a mark left out, a mark
+of a type it is easily mistaken for, a start or an end moved, or a mark where there is no artifact.
+The panel on the right says how many mistakes there are, never which. Correct them as you would your
+own marks (change a type, drag an edge, delete a mark, mark what is missing), then press Save and
+Finish. ElectroTag then lists each planted mistake, fixed or not, and any new mistake you made (a right
+mark you changed, or a mark where the experts marked nothing), and the recording counts as done
+whatever the result: this stage is for learning.
+
 In the fourth stage, On your own, you annotate a practice recording without help. After you save it,
 ElectroTag shows your result in plain words: whether you reached the pass mark, your score, and what
 the score is made of, for example "You found 7 of the experts' 8 artifacts and made 3 marks they did

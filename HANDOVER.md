@@ -308,7 +308,13 @@ the set's `reference_set.json`), skipping and resuming stages, and the competenc
 (`electrotag/web/training_path.py`). Its hooks for the parts still to come are registries: a guided
 recording whose guidance another part handles, such as "correct the marks", registers in
 `GUIDANCE_KINDS` (`electrotag/web/coach.py`) and `GUIDANCE_PANELS` (`js/training/coach.js`), and the
-replay part's "Watch an expert" adds a line to `WATCH_EXPERT` in `js/training/path.js`. The tour's
+replay part's "Watch an expert" adds a line to `WATCH_EXPERT` in `js/training/path.js`. "Correct the
+marks" is in place on those hooks (`electrotag/training/planted.py`, `electrotag/web/correct_marks.py`,
+`js/training/correct.js`; made in the expert area's Correct the marks), and the analyses compare the
+corrected and adjudicated versions (`electrotag/reliability/versions.py`). Two things are left there:
+the admin area's consensus form does not yet offer the weights by known-answer accuracy that the
+operation takes (`weights` of the consensus Source), and the sandbox can only try its one ready-made
+exercise, not give it to trainees. The tour's
 practice recording is made in the browser; a tour recording taken from a set is left for later. The
 sandbox's training set has no assessment, so the gate is always open there; the end-to-end test of
 the gate runs against the real study server. The project lead decided that experts
