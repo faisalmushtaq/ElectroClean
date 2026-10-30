@@ -1206,6 +1206,7 @@ def test_everyones_marks_through_et_expert(study: str, recordings: Path) -> None
     email = f"e01-{study}@example.org"
     admin_ok(svc, "user_add", {"annotator_id": "E01", "email": email, "roles": ["annotator", "expert"],
                                "password": "an-expert-password"})
+    prefill_example(svc.store, "E01", "Expert one")  # E01 has answered the sign-up questionnaire
     a01 = sign_in(f"a01-{study}@example.org")
     _, body = callable_("et_submit", {"study": study, **submission(recordings, SUB1, [BLINK, EMG])}, a01)
     assert body["result"]["saved"] is True, body
