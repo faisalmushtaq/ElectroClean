@@ -70,12 +70,22 @@ export function correctionsFor(app, it) {
   return (app.corrections && app.corrections.items || []).filter((c) => c.recording_id === it.recording_id && (it.mode || 'standard') === 'standard');
 }
 
-/** "Corrected by E01: 3 changes" (the latest correction of the recording), or null. */
+/** Who corrected the version and how many changes there are ("Corrected by E01: 3 changes"), as it stands (expert/settled.js), or null. */
 export function correctedText(list) {
   if (!list || !list.length) return null;
   const c = list[0];
+  const names = (people) => {
+    const n = (people || []).map((p) => p.corrector_name || p.corrector_id);
+    return n.length <= 1 ? n[0] || '' : `${n.slice(0, -1).join(', ')} and ${n[n.length - 1]}`;
+  };
   const n = Object.values(c.counts || {}).reduce((a, b) => a + (Number(b) || 0), 0);
-  return `Corrected by ${c.corrector_name || c.corrector_id}: ${n} change${n === 1 ? '' : 's'}${list.length > 1 ? ` (${list.length} corrections)` : ''}`;
+  const changes = `${n} change${n === 1 ? '' : 's'}`;
+  if (c.standing === 'pending') return `Corrected by ${names(c.correctors)}, who disagree in places: the study is settling it`;
+  if (c.standing === 'adjudicated') {
+    const a = c.adjudication || {};
+    return `Corrected by ${names(c.correctors)}, settled by ${a.adjudicator_name || a.adjudicator_id || 'an expert'}: ${changes}`;
+  }
+  return `Corrected by ${c.corrector_name || c.corrector_id}: ${changes}${list.length > 1 ? ` (${list.length} corrections)` : ''}`;
 }
 
 /** The annotator opens the latest correction of a recording: its file from this computer, then the corrected version beside theirs. */
@@ -84,20 +94,31 @@ export async function openCorrection(app, it, c) {
   try {
     target = await app.backend.expert('my_correction_get', { correction_id: c.correction_id });
   } catch (exc) {
-    if (exc.status !== 401) await inform('The correction cannot be shown', exc.message);
+    if (exc.status !== 401) await inform(exc.code === 'pending_adjudication' ? 'The experts disagree' : 'The correction cannot be shown', exc.message);
     return null;
   }
+  const who = target.standing === 'adjudicated' ? `${(target.correctors || []).map((p) => p.corrector_name || p.corrector_id).join(' and ')} corrected your version ${target.attempt}, and their disagreements were settled`
+    : `${c.corrector_name || c.corrector_id} corrected your version ${c.attempt}`;
   return app.openFromComputer({ recording_id: it.recording_id, file_name: it.file_name, format: it.format }, { purpose: { kind: 'corrected', route: 'open', target,
     title: `See the correction of ${it.file_name}`,
-    note: `${c.corrector_name || c.corrector_id} corrected your version ${c.attempt}. Open the recording from this computer: the corrected version is shown read only, with yours beside it and the reason for each change.` } });
+    note: `${who}. Open the recording from this computer: the corrected version is shown read only, with yours beside it and the reason for each change.` } });
 }
 
-function correctedCaption(app, it) {
+function correctedCaption(app, it, { card = false } = {}) {
   const list = correctionsFor(app, it);
   const text = correctedText(list);
   if (!text) return null;
-  return h('button.link.caption.block.corrected-line', { type: 'button', 'data-corrected': it.recording_id, 'data-log': 'corrected-line',
-    title: 'See the correction', onclick: () => openCorrection(app, it, list[0]) }, text);
+  const c = list[0];
+  if (c.standing === 'pending') {
+    return h('span.caption.block.corrected-line.pending', { 'data-corrected': it.recording_id, title: 'You will see the corrected version once the study has settled where the experts disagree' }, text);
+  }
+  const line = h('button.link.caption.block.corrected-line', { type: 'button', 'data-corrected': it.recording_id, 'data-log': 'corrected-line',
+    title: 'See the correction', onclick: () => openCorrection(app, it, c) }, text);
+  if (c.standing !== 'adjudicated' || !card) return line;
+  // the outcome card of the experts' disagreements, readable without the recording's file (expert/settled.js, loaded when needed)
+  const host = h('span.settled-host', { 'data-corrected': it.recording_id });
+  import('../expert/settled.js').then((m) => { const link = m.settledLink(c); if (link) host.append(link); else host.remove(); }).catch(() => host.remove());
+  return [line, host];
 }
 
 function time(it) {
@@ -204,7 +225,7 @@ export function recordingsCard(app) {
     const s = savedOf(it) || {};
     return h('tr', { 'data-id': it.recording_id, 'data-log-text': it.file_name },
       h('td.name', {}, h('span.file-line', { title: it.recording_id }, it.file_name),
-        h('span.caption.when', {}, `Saved ${savedText(s.saved_at)}${it.revising ? ' · revision under way' : ''}`), feedbackCaption(app, it), correctedCaption(app, it)),
+        h('span.caption.when', {}, `Saved ${savedText(s.saved_at)}${it.revising ? ' · revision under way' : ''}`), feedbackCaption(app, it), correctedCaption(app, it, { card: true })),
       h('td.num', {}, String(s.version || 1)),
       h('td.num.opt', {}, s.n_annotations === null || s.n_annotations === undefined ? 'n/a' : String(s.n_annotations)),
       h('td.num.opt', {}, s.elapsed_s === null || s.elapsed_s === undefined ? 'n/a' : spanText(s.elapsed_s)),

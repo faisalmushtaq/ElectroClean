@@ -715,7 +715,8 @@ reloading the page.
 
 Experts, and administrators, open the expert area from the Expert work card on their home page
 (My recordings, for an administrator); an expert also finds Expert work in the header. My
-recordings in the expert area's header leads back.
+recordings in the expert area's header leads back, and an administrator also has Admin there, which
+returns to the admin area in one press.
 Its menu lists the parts of the expert work the study offers, and its Overview says what the area is
 for. Expert work is logged like annotation work, while the admin area is not.
 
@@ -724,7 +725,11 @@ from the record of how they worked. Trainees may watch an expert's sessions only
 agrees: tick Let trainees watch replays of my sessions and press Save my choice, and untick it to
 withdraw. Each expert decides for their own sessions only; the study's audit log keeps every change,
 and a save that changes nothing writes nothing. When the study's settings do not show experts'
-sessions to trainees (Study settings, Replays), the choice is kept for when they do.
+sessions to trainees (Study settings, Replays), the choice is kept for when they do. Trainees are
+shown only an expert's sessions on the training recordings for learning with the experts (the guided
+recordings of a training set with its own recordings), never a study recording, so that nobody
+watches an expert mark a recording they hold, or may later be given, as study work; "Replaying a
+session" below says how to give them sessions to watch.
 
 ### Saved work
 
@@ -733,7 +738,8 @@ first, with its version, when it was saved, its number of annotations and how ma
 version has. Choose a person, a recording, or whether it was corrected, to narrow the list. Each row
 has Correct and Replay; your own work has no Correct, because you revise it from your history on the
 home page, and Correct is off while the study takes no corrections (Study settings, Corrections and
-adjudication).
+adjudication). A correction you kept in this browser when you left it shows as "Yours in progress, in
+this browser" in its row, whose Correct button then reads Carry on.
 
 ### Correcting saved work
 
@@ -745,13 +751,23 @@ original, takes the outlines away and brings them back. Change, add and remove m
 annotate.
 
 The Changes panel on the right lists the difference from the saved version as it stands, in the
-order of the recording: "Added Eye-blink-artifact 12.30–12.71 s", "Changed type: Eye-blink-artifact to
-Eye-artifact", "Removed EMG-artifact 4.10–4.62 s". Give each change its reason with a chip (Missed
-artifact, Not an artifact, Wrong type, Start or end, Channels, Should be split or merged, Other) and,
-if it helps the annotator, a note of up to 300 characters; a note on the whole correction may go
-below. J and K go to the next and previous change, R to its reasons. Which changes need a reason is
-the study's choice (every change, by default; or only changed and removed marks; or none), and
-Submit the correction outlines in amber each change still without one.
+order of the recording and in plain words: "Added Eye-blink-artifact 12.30–12.71 s", "Changed type:
+Eye-blink-artifact to Eye-artifact", "Removed EMG-artifact 4.10–4.62 s". Give each change its reason
+with a chip and, if it helps the annotator, a note of up to 300 characters; a note on the whole
+correction may go below. The chips are numbered 1 to 7 (Missed artifact, Not an artifact, Wrong type,
+Start or end, Channels, Should be split or merged, Other), and each change is offered the reasons
+that suit it: an added mark is never Not an artifact, a removed mark never Missed artifact, and a
+changed mark, which is still marked, neither; the study refuses those combinations too. Which changes
+need a reason is the study's choice (every change, by default; or only changed and removed marks; or
+none), and Submit the correction outlines in amber each change still without one.
+
+The keys are those of the other expert views. N and P go to the next and previous change and show
+it on the EEG; Shift+N and Shift+P select the next and previous mark, changed or not, as N and P do
+when annotating. R goes to the current change's reasons, where the left and right arrow keys or the
+reason's number choose one, Space takes it back and Esc returns to the EEG; Shift and a number gives
+the current change that reason from anywhere. The keyboard stays on the chosen chip while the list is
+drawn again. L shows or hides the original, and ? lists every key of the view. On a touch screen the
+chips are large enough for a finger and the keys are not mentioned.
 
 Submit the correction asks once, then saves the correction as a new version of the person's work,
 credited to you: the five result files in `derived/corrections/` (docs/file_formats.md), with each
@@ -773,19 +789,29 @@ recording up to the version shown is played in order, a second apart. The view f
 small blue ring shows their pointer, their annotations build up in the Annotations tab as they made
 them, and a line under the EEG says what they did; the side panel lists the sessions and what
 happened last. Under the EEG are Play and Pause (Space), the speed from half to sixteen times (- and
-=), steps to the previous and next event (, and .) and change of the annotations (< and >), Home for
-the start, and a bar to go anywhere in the session, with a tick for each change of the annotations
-and the pauses greyed. Skip pauses (I) shortens every stillness to three seconds; moving through
-the EEG yourself leaves the person's view, and Follow again (F) returns to it. At the end, the player
-says whether the replay ends with the saved version. Notes and anything typed are never recorded, so
+=), steps to the previous and next event (, and .) and change of the annotations (< and >, or N and
+P as in the other expert views), Home for the start, and a bar to go anywhere in the session, with a
+tick for each change of the annotations and the pauses greyed. Skip pauses (I) shortens every stillness to three seconds; moving through
+the EEG yourself leaves the person's view, and Follow again (F) returns to it. What happened last, in
+the side panel, folds a key pressed several times in a row into one line ("× 3"), and ? lists the
+player's keys. At the end, the player says whether the replay ends with the saved version, on the
+line under the EEG and near the top of the side panel, in view on a small screen too. Notes and anything typed are never recorded, so
 a note shows only its length. A session saved before ElectroTag recorded the annotations a session
 opens with may start from the end of the session before it; when the study does not record how
 annotators work, there is nothing to replay and the saved version is shown.
 
 Experts and administrators may replay anyone while the study's replays are on (Study settings,
-Replays). Trainees may watch only the sessions of experts who agree to it (Your sessions for teaching,
-above), and only while the study shows experts' sessions to trainees; the study checks this for
-every request. Replays are logged in the watcher's own record.
+Replays). Trainees, and annotators, may watch only the sessions of experts who agree to it (Your
+sessions for teaching, above), only while the study shows experts' sessions to trainees, and only on a
+teaching recording: a recording of a training set that keeps its own recordings, used there for
+learning with the experts, which the study's own recordings hold neither under its name nor as the
+same file. Annotations stay independent that way: nobody watches an expert mark a recording they
+hold, or may later be given, as study work, and the practice and assessment recordings, whose answers
+a replay would give away, are never shown. An expert's sessions on study recordings are never shown
+for teaching. To give trainees sessions to watch, have an expert who agrees to it annotate the
+guided recordings of such a set as training work on that set (the admin channel's `assign` with the
+set and the mode `practice`). The study checks all of this for every request, and gives a trainee
+one session at a time. Replays are logged in the watcher's own record.
 
 ## Adjudication
 

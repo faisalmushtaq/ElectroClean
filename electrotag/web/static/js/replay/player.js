@@ -3,10 +3,14 @@
 // view-only annotation view of kind 'replay'. The view follows the annotator's scrolling, a small
 // ink-blue ring shows their pointer, the annotations build up as they made them (in the Annotations
 // tab too), and a caption says what they did. Under the EEG are Play and Pause (Space), the speed
-// (- and =), a step to the previous or next event (, and .) or change of the annotations (< and >),
+// (- and =), a step to the previous or next event (, and .) or change of the annotations (< and >, or N
+// and P as in the other expert views),
 // Home for the start, and a scrubber with a tick for each change and the pauses greyed; Skip pauses
 // (I) shortens every stillness to three seconds, and Follow the annotator (F) is left by moving
-// through the EEG oneself. At the end the player says whether the replay matches the saved version.
+// through the EEG oneself. At the end the player says whether the replay matches the saved version,
+// on the line under the EEG and near the top of the side panel, so that it is in view on a small
+// screen. "What happened last" folds a key pressed several times in a row into one line ("× 3"), and ?
+// lists the player's keys (js/expert/key_sheet.js); on a touch screen the keys are not mentioned.
 //
 // The events come page by page from replay_events_get (js/replay/model.js rebuilds the state). The
 // replay itself is logged in the watcher's own log as replay_opened, replay_control and replay_closed.
@@ -14,6 +18,8 @@
 import { h, clear } from '../ui/dom.js';
 import { logger, keyName } from '../log/logger.js';
 import { icon } from '../views/common.js';
+import { touchFirst } from '../util.js';
+import { isHelpKey, showKeySheet } from '../expert/key_sheet.js';
 import { AnnotationSession } from '../annotate/session.js';
 import { Workspace } from '../annotate/workspace.js';
 import { SPEEDS, buildTimeline, captionOf, clock, clockTenths, compareWithSaved, compressIdle, mapTime, nextChange, nextEvent, prevChange, prevEvent, stateAt } from './model.js';
@@ -27,6 +33,32 @@ export function segmentsFor(segments, attempt) {
   const list = segments || [];
   const i = attempt ? list.findIndex((s) => s.attempt === attempt) : -1;
   return i >= 0 ? list.slice(0, i + 1) : list;
+}
+
+/** The player's keys, for its key sheet (?). */
+export const REPLAY_KEYS = Object.freeze([
+  { title: 'Playing', rows: [['Space', 'play or pause'], ['- / =', 'slower or faster (half to sixteen times)'], ['Home', 'back to the start'],
+    ['I', 'skip pauses: every stillness shortened to three seconds'], ['F', 'follow the annotator\'s view, or look around yourself']] },
+  { title: 'Stepping', rows: [[', / .', 'the previous or next event'], ['N / P', 'the next or previous change of the annotations, as in the other expert views'],
+    ['< / >', 'the previous or next change of the annotations'],
+    ['Left arrow / Right arrow', 'on the bar under the EEG: five seconds back or on'], ['?', 'this list of keys']] },
+]);
+
+/**
+ * "What happened last": the latest `n` lines, newest first, a line said several times in a row folded into one
+ * with its count ([{text, t, change, times}]), from the time line's items up to index `idx`.
+ */
+export function recentLines(items, idx, captionOf, n = 6) {
+  const out = [];
+  for (let i = idx; i >= 0; i--) {
+    const text = captionOf(items[i].e);
+    if (!text) continue;
+    const last = out[out.length - 1];
+    if (last && last.text === text) { last.times += 1; continue; }
+    if (out.length >= n) break;
+    out.push({ text, t: items[i].t, change: items[i].change, times: 1 });
+  }
+  return out;
 }
 
 /** A segment in words: "Session 2: 14 October at 10:05, saved as version 1". */
@@ -120,8 +152,8 @@ export class ReplayPlayer {
         h('div.segmented.replay-speeds', { role: 'group', 'aria-label': 'Speed (- and =)' }, this.speedBtns)),
       this.scrub,
       h('div.replay-row', {},
-        h('label.replay-toggle', {}, this.skipBox, ' Skip pauses (I)'),
-        h('label.replay-toggle', {}, this.followBox, ' Follow the annotator (F)'),
+        h('label.replay-toggle', {}, this.skipBox, ' Skip pauses', h('span.key-hint.inline', {}, ' (I)')),
+        h('label.replay-toggle', {}, this.followBox, ' Follow the annotator', h('span.key-hint.inline', {}, ' (F)')),
         this.followAgain),
       this.caption);
     this.ws.eegHost.append(this.bar);
@@ -133,9 +165,10 @@ export class ReplayPlayer {
     this.el = h('section.review.card.replay-panel', { 'aria-label': 'Replay' },
       h('h2', {}, `Replay of ${who}`),
       h('p.caption', {}, `How ${ix.annotator_id} worked on ${ix.file_name}, from the study's record of the session. Notes and anything typed are never recorded: a note shows only its length.`),
-      this.segList, this.countEl, h('h3', {}, 'What happened last'), this.recent, this.endEl);
+      this.segList, this.countEl, this.endEl, h('h3', {}, 'What happened last'), this.recent);
     this.ws.reviewHost.append(this.el);
-    this.ws.hintEl.textContent = 'Space  play or pause  ·  , .  step  ·  < >  changes  ·  - =  speed  ·  I  skip pauses  ·  F  follow';
+    this.ws.hintEl.textContent = touchFirst() ? 'Tap Play  ·  drag along the bar to go anywhere in the session'
+      : 'Space  play or pause  ·  , .  step  ·  < >  changes  ·  - =  speed  ·  ?  keys';
   }
 
   _scrubbing() {
@@ -323,6 +356,11 @@ export class ReplayPlayer {
     if (!this.timeline) return;
     const tl = this.timeline;
     this.t = Math.min(Math.max(0, t), tl.duration);
+    if (this.ended && this.t < tl.duration - 1e-6) { // moved back from the end: the line under the EEG follows again
+      this.ended = false;
+      this.endEl.hidden = true;
+      this._lastIdx = -2;
+    }
     if (log) logger.event('replay_control', { action: log, t: Math.round(this.t * 10) / 10 });
     const pc = tl.duration ? (100 * this.t) / tl.duration : 0;
     this.fill.style.width = `${pc}%`;
@@ -369,17 +407,13 @@ export class ReplayPlayer {
   }
 
   _caption(st, idx) {
-    const items = this.timeline.items;
-    const said = [];
-    for (let i = idx; i >= 0 && said.length < RECENT; i--) {
-      const text = captionOf(items[i].e);
-      if (text) said.push({ text, t: items[i].t, change: items[i].change });
-    }
+    const said = recentLines(this.timeline.items, idx, captionOf, RECENT);
     const now = said[0] ? said[0].text : 'The start of the session';
-    this.caption.textContent = `${st.paused ? 'Paused by the annotator. ' : ''}${st.dialog ? `Dialog open: ${st.dialog.title}. ` : ''}${now}`;
+    if (!this.ended) this.caption.textContent = `${st.paused ? 'Paused by the annotator. ' : ''}${st.dialog ? `Dialog open: ${st.dialog.title}. ` : ''}${now}`;
     clear(this.recent);
     const at = this.timeline.duration < 600 ? clockTenths : clock;
-    this.recent.append(...said.map((x) => h('li', { class: x.change ? 'change' : null }, h('span.replay-at', {}, at(x.t)), ' ', x.text)));
+    this.recent.append(...said.map((x) => h('li', { class: x.change ? 'change' : null }, h('span.replay-at', {}, at(x.t)), ' ', x.text,
+      x.times > 1 ? h('span.replay-times', { title: `${x.times} times in a row` }, ` × ${x.times}`) : null)));
   }
 
   /** The end of the last session: does the replay end with the saved version? */
@@ -388,12 +422,18 @@ export class ReplayPlayer {
     this.ended = true;
     const saved = this.index.saved;
     this.endEl.hidden = false;
-    if (!saved) { this.endEl.textContent = 'The end of the record of this session.'; this.endEl.className = 'replay-end note'; return; }
+    if (!saved) {
+      this.endEl.textContent = 'The end of the record of this session.';
+      this.endEl.className = 'replay-end note';
+      this.caption.textContent = this.endEl.textContent;
+      return;
+    }
     const cmp = compareWithSaved(this.full.finalState, saved.annotations || [], this.sf);
     this.result = cmp;
     this.endEl.className = cmp.same ? 'replay-end success' : 'replay-end note';
     this.endEl.textContent = cmp.same ? `The replay matches the saved version ${saved.attempt}.`
       : `The replay differs from the saved version ${saved.attempt} in ${cmp.differing} mark${cmp.differing === 1 ? '' : 's'}: the record may be missing part of the session.`;
+    this.caption.textContent = `The end. ${this.endEl.textContent}`; // under the EEG, in view on a small screen too
     logger.event('replay_control', { action: 'end', same: cmp.same, differing: cmp.differing });
   }
 
@@ -401,13 +441,14 @@ export class ReplayPlayer {
     if (e.ctrlKey || e.metaKey || e.altKey) return false;
     const k = e.key;
     const take = (action, fn) => { e.preventDefault(); logger.shortcut(keyName(e), action); fn(); return true; };
+    if (isHelpKey(e)) return take('Keys', () => { void showKeySheet('Keys of the replay', REPLAY_KEYS, { view: 'replay', foot: null }); });
     if (k === ' ') return take('Play or pause', () => this.toggle('key'));
     if (k === '-' || k === '_') return take('Slower', () => this.stepSpeed(-1));
     if (k === '=' || k === '+') return take('Faster', () => this.stepSpeed(1));
     if (k === ',') return take('Previous event', () => this.stepEvent(-1));
     if (k === '.') return take('Next event', () => this.stepEvent(1));
-    if (k === '<') return take('Previous change', () => this.stepChange(-1));
-    if (k === '>') return take('Next change', () => this.stepChange(1));
+    if (k === '<' || ((k === 'p' || k === 'P') && !e.shiftKey)) return take('Previous change', () => this.stepChange(-1));
+    if (k === '>' || ((k === 'n' || k === 'N') && !e.shiftKey)) return take('Next change', () => this.stepChange(1));
     if (k === 'Home') return take('To the start', () => { this.pause('key'); this.seek(0, 'start'); });
     if (k === 'i' || k === 'I') return take('Skip pauses', () => this.setSkip(!this.skipPauses, 'key'));
     if (k === 'f' || k === 'F') return take('Follow the annotator', () => this.setFollow(!this.follow, 'key'));

@@ -4,7 +4,7 @@
 // correction keeps the IDs of the marks it changes; each change is added, removed or changed, with
 // the fields that changed (label, onset, end, channels, confidence, note), in the order of the
 // recording. The words for the changes and their reasons are here too, for the correction view and
-// the annotator's feedback.
+// the annotator's feedback, with the reasons that suit each kind of change.
 
 /** Why a mark was changed (corrections.py REASONS), in the order of the chips. */
 export const REASONS = Object.freeze({
@@ -17,6 +17,16 @@ export const REASONS = Object.freeze({
   other: 'Other',
 });
 export const CHANGES = Object.freeze(['added', 'removed', 'changed']);
+/** The reasons that suit each kind of change (corrections.py REASONS_FOR): an added mark is never "Not an artifact". */
+export const REASONS_FOR = Object.freeze({
+  added: Object.freeze(['missed', 'wrong_type', 'boundaries', 'channels', 'split_merge', 'other']),
+  removed: Object.freeze(['not_artifact', 'wrong_type', 'boundaries', 'channels', 'split_merge', 'other']),
+  changed: Object.freeze(['wrong_type', 'boundaries', 'channels', 'split_merge', 'other']),
+});
+/** The words for a kind of change in a sentence (corrections.py CHANGE_WORDS). */
+export const CHANGE_WORDS = Object.freeze({ added: 'an added mark', removed: 'a removed mark', changed: 'a changed mark' });
+/** The key of each reason, shown on its chip: its place in REASONS (Shift and the digit chooses it). */
+export const REASON_KEYS = Object.freeze(Object.fromEntries(Object.keys(REASONS).map((k, i) => [k, String(i + 1)])));
 export const MAX_NOTE = 300;
 export const MAX_OVERALL = 1000;
 
@@ -83,6 +93,17 @@ export function changeCounts(changes) {
   for (const c of changes) out[c.change] += 1;
   return out;
 }
+
+/** Where a correction in progress is kept in this browser: by the expert, the person and the version corrected. */
+export function correctionKey(backend, me, target) {
+  return `electrotag.correction|${(backend && backend.kind) || ''}|${me || ''}|${target.annotator_id}|${target.recording_id}|v${target.attempt}`;
+}
+
+/** The reasons a change may be given, in the order of the chips. */
+export function reasonsFor(change) { return REASONS_FOR[change] || Object.keys(REASONS); }
+
+/** What a kind of change is called on its row, in plain words. */
+export const KIND_WORDS = Object.freeze({ added: 'Added', removed: 'Removed', changed: 'Changed' });
 
 /** "2 added, 1 removed" (corrections.py counts_text), or "no changes". */
 export function countsText(counts) {

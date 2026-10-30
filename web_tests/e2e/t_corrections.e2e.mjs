@@ -4,7 +4,11 @@
 // a reason for each change (refused without them) and submits the correction once; A01 sees the
 // changes and their reasons beside their own version; and E01 replays A01's session, which plays back
 // to the saved version. In the demonstration, and on the real study server with the files from this
-// computer, where the original files stay untouched and the correction is a derived version.
+// computer, where the original files stay untouched and the correction is a derived version. Also:
+// the keys of the correction view (N and P, the reason chips as a radio group, ? for a key sheet), a
+// correction kept in this browser in Saved work, the replay's end in view at 1280 by 720, trainees
+// never watching an expert on a recording that can be study work (and watching one on a training
+// recording, on the study server), and an administrator's way back from the expert area.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -39,12 +43,13 @@ async function fromSavedWork(page, who, button) {
   await row.locator(`button[data-log="work-${button}"]`).click();
 }
 
-/** Change the first mark's type (2), delete the second (Delete) and add one (1, a drag): three changes. */
+/** Change the first mark's type (2), delete the second (Delete) and add one (1, a drag): three changes. Shift+N selects the
+ *  next mark, changed or not (N alone goes to the next change, as in the other expert views). */
 async function makeChanges(page, at) {
   await page.evaluate(() => globalThis.ElectroTag.ws.viewer.over.focus());
-  await page.keyboard.press('n');
+  await page.keyboard.press('Shift+N');
   await page.keyboard.press('2');
-  await page.keyboard.press('n');
+  await page.keyboard.press('Shift+N');
   await page.keyboard.press('Delete');
   await mark(page, at, at + 0.5);
   await page.waitForFunction(() => globalThis.ElectroTag.ws.pass.changes.length === 3);
@@ -145,15 +150,57 @@ export const tests = [
       assert.equal(await page.locator('.correction-row.needs-reason').count(), 3);
       assert.equal(await page.locator('.dialog').count(), 0);
       await t.screenshot(page, 'correction_reasons_missing');
-      // J and K move between the changes
+      // N and P move between the changes, as in the other expert views
       await page.evaluate(() => globalThis.ElectroTag.ws.viewer.over.focus());
       assert.equal(await page.evaluate(() => globalThis.ElectroTag.ws.pass.current), 0, 'the first change without a reason is the current one');
-      await page.keyboard.press('j');
-      await page.keyboard.press('j');
+      await page.keyboard.press('n');
+      await page.keyboard.press('n');
       assert.equal(await page.evaluate(() => globalThis.ElectroTag.ws.pass.current), 2);
-      await page.keyboard.press('k');
+      await page.keyboard.press('p');
       assert.equal(await page.evaluate(() => globalThis.ElectroTag.ws.pass.current), 1);
+      // the rows in plain words, and only the reasons that suit each change
+      const rowText = await page.locator('.correction-row .correction-text').allTextContents();
+      assert.deepEqual(rowText.map((x) => x.split(' ')[0]).sort(), ['Added', 'Changed', 'Removed']);
+      assert.equal(await page.locator('.correction-kind').count(), 0, 'no raw added, changed or removed chips');
+      assert.equal(await page.locator('.correction-row[data-change="added"] [data-reason="not_artifact"]').count(), 0, 'an added mark is never "Not an artifact"');
+      assert.equal(await page.locator('.correction-row[data-change="removed"] [data-reason="missed"]').count(), 0);
+      // R goes to the reasons, a radio group: the arrow keys choose, and the focus stays on the chosen chip after the list is drawn again
+      await page.keyboard.press('r');
+      const focused = () => page.evaluate(() => { const a = document.activeElement; return a && a.dataset ? [a.getAttribute('role'), a.dataset.reason || '', a.closest('.correction-row') && a.closest('.correction-row').dataset.change] : null; });
+      const first = await focused();
+      assert.equal(first[0], 'radio');
+      await page.keyboard.press('ArrowRight');
+      const second = await focused();
+      assert.equal(second[0], 'radio', 'the focus is on a chip after the list was drawn again');
+      assert.notEqual(second[1], first[1]);
+      assert.equal(await page.locator(`.correction-row.current [data-reason="${second[1]}"][aria-checked="true"]`).count(), 1, 'the arrow key chose it');
+      assert.equal(await page.evaluate(() => globalThis.ElectroTag.ws.pass.changes.length), 3, 'the arrow keys did not reach the EEG');
+      await page.keyboard.press('Escape');
+      await page.keyboard.press('Shift+Digit7'); // anywhere: Other for the current change
+      assert.equal(await page.locator('.correction-row.current [data-reason="other"][aria-checked="true"]').count(), 1);
+      await t.screenshot(page, 'correction_keyboard_reasons');
+      // ? lists the view's keys
+      await page.evaluate(() => globalThis.ElectroTag.ws.viewer.over.focus());
+      await page.keyboard.press('?');
+      await page.waitForSelector('.dialog.key-sheet');
+      assert.match(await page.textContent('.dialog.key-sheet'), /N \/ P.*next and previous change/);
+      await t.screenshot(page, 'correction_key_sheet');
+      await page.keyboard.press('Escape');
       await giveReasons(page, 'Eyes, not muscle');
+      // Back keeps the correction in this browser; Saved work says so, and Carry on brings it back
+      await page.click('.ws-header button.back');
+      await clickDialogButton(page, 'Keep it in this browser');
+      await waitForRoute(page, 'expert-work');
+      const row = page.locator('[data-section="work"] tbody tr', { hasText: 'A01' }).first();
+      await row.locator('.chip', { hasText: 'Yours in progress, in this browser' }).waitFor();
+      assert.equal(await row.locator('button[data-log="work-correct"]').textContent(), 'Carry on');
+      await t.screenshot(page, 'saved_work_kept');
+      await row.locator('button[data-log="work-correct"]').click();
+      await waitForRoute(page, 'expert-correct');
+      await page.locator('button[data-log^="example-"]').click();
+      await clickDialogButton(page, 'Carry on');
+      await page.waitForSelector('.correction-pass');
+      await page.waitForFunction(() => globalThis.ElectroTag.ws.pass.changes.length === 3);
       assert.match(await page.textContent('.correction-progress'), /each with its reason/);
       assert.equal(await page.locator('.correction-row.needs-reason').count(), 0);
       await t.screenshot(page, 'correction_pass');
@@ -187,21 +234,37 @@ export const tests = [
       const snap = ev.find((e) => e.type === 'annotations_snapshot' && e.reason === 'correction');
       assert.ok(snap && snap.annotations.length === 2 && snap.n_parts === 1);
 
-      // E01 replays A01's session: it plays back to the saved version
+      // E01 replays A01's session: it plays back to the saved version, and says so in view on a small screen
+      await page.setViewportSize({ width: 1280, height: 720 });
       await fromSavedWork(page, 'A01', 'replay');
       await waitForRoute(page, 'expert-replay');
       await page.locator('button[data-log^="example-"]').click();
       const end = await playToTheEnd(page);
       assert.match(end, /The replay matches the saved version 1/);
+      for (const sel of ['.replay-end', '.replay-caption']) {
+        const box = await page.locator(sel).boundingBox();
+        assert.ok(box && box.y >= 0 && box.y + box.height <= 720, `${sel} is in view at 1280 by 720 (${JSON.stringify(box)})`);
+      }
+      assert.match(await page.textContent('.replay-caption'), /The end\. The replay matches the saved version 1/);
+      await t.screenshot(page, 'replay_end');
+      await page.keyboard.press('?');
+      await page.waitForSelector('.dialog.key-sheet');
+      assert.match(await page.textContent('.dialog.key-sheet'), /Space.*play or pause/);
+      await page.keyboard.press('Escape');
       assert.equal(await page.evaluate(() => globalThis.ElectroTag.ws.store.size), 2, 'the annotations built up as they were made');
       await page.keyboard.press('Home');
       assert.equal(await page.evaluate(() => globalThis.ElectroTag.ws.store.size), 0, 'back at the start');
       await page.keyboard.press('>');
       assert.equal(await page.evaluate(() => globalThis.ElectroTag.ws.store.size), 1, 'the first change');
+      await page.keyboard.press('n'); // N and P step through the changes too, as in the other expert views
+      assert.equal(await page.evaluate(() => globalThis.ElectroTag.ws.store.size), 2, 'the second change');
+      await page.keyboard.press('p');
+      assert.equal(await page.evaluate(() => globalThis.ElectroTag.ws.store.size), 1);
       assert.match(await page.textContent('.replay-caption'), /Created Eye-blink-artifact|Created /);
       await t.screenshot(page, 'replay_player');
       await page.click('.ws-header button.back');
       await waitForRoute(page, 'expert-work');
+      await page.setViewportSize({ width: 1440, height: 900 });
       const watched = (await events(page)).map((e) => e.type);
       assert.ok(watched.includes('replay_opened') && watched.includes('replay_closed') && watched.includes('replay_control'));
 
@@ -230,12 +293,27 @@ export const tests = [
     },
   },
   {
-    name: 'a trainee watches an expert who agreed to it: Watch an expert at work, and the replay of the expert\'s session',
+    name: 'a trainee never watches an expert on a recording that can be study work, and an administrator goes back to the admin area from the expert area',
     async run(t) {
       const { assert } = t;
       const page = await t.newPage({ width: 1440, height: 900 });
       await signIn(page, 'ADMIN');
       await page.evaluate(() => globalThis.ElectroTag.backend.admin('assign', { annotator_ids: ['E01'], all: true }));
+      // the administrator's way back from the expert area (once the first view after signing in is shown)
+      await page.waitForFunction(() => (globalThis.ElectroTag.route || '').startsWith('admin') && document.querySelector('.admin-nav'), null, { timeout: 30000 });
+      await page.evaluate(() => globalThis.ElectroTag.showExpert('expert'));
+      await waitForRoute(page, 'expert');
+      await page.click('.app-header [data-log="expert-to-admin"]');
+      await waitForRoute(page, 'admin');
+      // the planted exercise's panel has no stray "null" before an exercise is made
+      await page.evaluate(() => globalThis.ElectroTag.showExpert('expert-planted'));
+      await page.waitForSelector('[data-section="planted"] .planted-row');
+      await page.locator('.planted-row').nth(1).locator('[data-log="planted-open"]').click();
+      await page.waitForSelector('.planted-admin summary');
+      assert.doesNotMatch(await page.textContent('.planted-admin'), /null/);
+      await page.locator('.planted-row').first().locator('[data-log="planted-open"]').click();
+      await page.waitForSelector('.planted-admin table');
+      assert.doesNotMatch(await page.textContent('.planted-admin'), /null/);
       await switchTo(page, 'E01');
       await page.evaluate(() => globalThis.ElectroTag.showHome());
       await waitForRoute(page, 'home');
@@ -245,32 +323,57 @@ export const tests = [
       await clickDialogButton(page, 'Save and Finish');
       await page.waitForSelector('.dialog .dialog-title', { timeout: 15000 });
       await page.locator('.dialog-buttons button', { hasText: /Back to my recordings|^OK$/ }).first().click();
-      // T01 sees nothing to watch until E01 agrees: Watch an expert at work is on Learn with the experts, on the training path
-      await switchTo(page, 'T01');
-      await page.evaluate(() => globalThis.ElectroTag.showTraining());
-      await waitForRoute(page, 'training');
-      await page.click('[data-stage="guided"] .watch-entry');
-      await page.waitForSelector('.dialog .dialog-title:text("Watch an expert")');
-      assert.match(await page.textContent('.dialog'), /No expert has a session to show yet/);
-      await clickDialogButton(page, 'OK');
-      assert.equal(await page.evaluate(async () => { try { await globalThis.ElectroTag.backend.expert('replay_index_get', { annotator_id: 'E01', recording_id: 'x' }); return 'answered'; } catch (e) { return e.code; } }), 'forbidden');
-      await switchTo(page, 'E01');
       await page.evaluate(() => globalThis.ElectroTag.backend.expert('replay_consent_set', { teaching: true }));
+      const rid = await page.evaluate(() => globalThis.ElectroTag.backend.state.submissions.find((x) => x.annotator_id === 'E01').recording_id);
+      // T01, and A01 who holds the same recording as study work: nothing to watch, and the study refuses the replay
+      for (const who of ['T01', 'A01']) {
+        await switchTo(page, who);
+        const refused = await page.evaluate(async (r) => {
+          const out = [];
+          for (const body of [{ annotator_id: 'E01', recording_id: r }, { annotator_id: 'E01', recording_id: r, mode: 'guided', context_id: 'example' }]) {
+            try { await globalThis.ElectroTag.backend.expert('replay_index_get', body); out.push('answered'); } catch (e) { out.push(e.code); }
+          }
+          const list = await globalThis.ElectroTag.backend.expert('teaching_list', {});
+          return [...out, list.sessions.length];
+        }, rid);
+        assert.deepEqual(refused, ['forbidden', 'forbidden', 0], who);
+      }
       await switchTo(page, 'T01');
       await page.evaluate(() => globalThis.ElectroTag.showTraining());
       await waitForRoute(page, 'training');
       await t.screenshot(page, 'watch_entry');
       await page.click('[data-stage="guided"] .watch-entry');
-      await page.waitForSelector('.dialog.watch-dialog .watch-list li');
-      assert.match(await page.textContent('.watch-list'), /E01\): sub-demo02_task-rest_eeg\.edf, 1 annotation/);
-      await t.screenshot(page, 'watch_dialog');
-      await page.click('.watch-list button[data-log="watch-session"]');
-      await waitForRoute(page, 'open');
+      await page.waitForSelector('.dialog .dialog-title:text("Watch an expert")');
+      assert.match(await page.textContent('.dialog'), /No expert has a session to show yet/);
+      await clickDialogButton(page, 'OK');
+    },
+  },
+  {
+    name: 'on an iPad: the reason chips are large enough for a finger, and no keyboard hints are shown',
+    async run(t) {
+      const { assert } = t;
+      const page = await t.newPage({ width: 1180, height: 820, ipad: true });
+      await signIn(page, 'A01');
+      await waitForRoute(page, 'home');
+      await openExample(page, 0);
+      await page.evaluate(() => { const ws = globalThis.ElectroTag.ws; ws.store.addInterval('Eye-blink-artifact', 2.0, 2.4, []); ws.store.addInterval('EMG-artifact', 5.0, 5.6, []); });
+      await pressSave(page);
+      await clickDialogButton(page, 'Save and Finish');
+      await page.waitForSelector('.dialog .dialog-title', { timeout: 15000 });
+      await page.locator('.dialog-buttons button', { hasText: /Back to my recordings|^OK$/ }).first().click();
+      await switchTo(page, 'E01');
+      await fromSavedWork(page, 'A01', 'correct');
+      await waitForRoute(page, 'expert-correct');
       await page.locator('button[data-log^="example-"]').click();
-      assert.match(await playToTheEnd(page), /The replay matches the saved version 1/);
-      assert.equal(await page.locator('.ws-toolbar').count(), 0, 'view only');
-      await page.click('.ws-header button.back');
-      await page.waitForFunction(() => ['home', 'training'].includes(globalThis.ElectroTag.route));
+      await page.waitForSelector('.correction-pass');
+      await page.evaluate(() => { const ws = globalThis.ElectroTag.ws; const [a, b] = ws.store.annotations(); ws.store.setLabel(a.annotation_id, 'Eye-movement-artifact'); ws.store.delete(b.annotation_id); });
+      await page.waitForFunction(() => globalThis.ElectroTag.ws.pass.changes.length === 2);
+      const heights = await page.$$eval('.reason-chips .seg', (els) => els.map((e) => e.getBoundingClientRect().height));
+      assert.ok(heights.length && heights.every((x) => x >= 40), `chips at least 40 pixels tall: ${heights.join(', ')}`);
+      assert.equal(await page.locator('.key-hint:visible').count(), 0, 'no keys on the chips');
+      assert.doesNotMatch(await page.textContent('.ws-hint'), /N \/ P|\?  keys/, 'the hint names no keys');
+      assert.doesNotMatch(await page.textContent('.correction-pass'), /N and P go to/);
+      await t.screenshot(page, 'correction_ipad');
     },
   },
   {
@@ -343,6 +446,106 @@ export const tests = [
       await page.waitForSelector('.correction-feedback', { timeout: 30000 });
       assert.equal(await page.locator('.correction-feedback-row').count(), 3);
       assert.match(await page.textContent('.correction-feedback'), /Starts with the eyes/);
+
+      // A second expert corrects the same version differently: K01 is told the experts disagree, and sees neither version
+      const target = await api(t, admin, 'POST', '/expert/saved_attempt_get', { annotator_id: 'K01', recording_id: 'sub-003/eeg/sub-003_task-rest_eeg.edf' });
+      const [m1, ...rest] = target.annotations;
+      const sha256 = crypto.createHash('sha256').update(fs.readFileSync(filesFor(t.study.dir, file)[0])).digest('hex');
+      await api(t, admin, 'POST', '/expert/correction_save', { correction_id: crypto.randomBytes(16).toString('hex'), annotator_id: 'K01', recording_id: target.recording_id,
+        attempt: target.attempt, annotations: [{ ...m1, label: 'Chewing-artifact' }, ...rest], sha256, session: { elapsed_s: 30 },
+        changes: [{ annotation_id: m1.annotation_id, reason: 'wrong_type', note: 'Jaw, not eyes' }] });
+      await page.click('.ws-header button.back');
+      await page.waitForFunction(() => ['home', 'training'].includes(globalThis.ElectroTag.route));
+      await page.evaluate(() => globalThis.ElectroTag.reloadHome());
+      await page.click('.rec-tabs [data-tab="history"]');
+      await page.waitForSelector('.corrected-line.pending');
+      assert.match(await page.textContent('.corrected-line.pending'), /who disagree in places: the study is settling it/);
+      assert.equal(await page.locator('button.corrected-line').count(), 0, 'nothing to open: neither expert\'s version is shown');
+      await t.screenshot(page, 'history_corrections_pending');
+      const pending = await page.evaluate(async () => { const fb = await globalThis.ElectroTag.backend.myFeedback(); return fb.corrections.items[0]; });
+      assert.equal(pending.standing, 'pending');
+      assert.deepEqual(pending.changes, []);
+      // E03 adjudicates the two corrections and keeps E01's; K01 then sees the settled version and the decision
+      await api(t, admin, 'POST', '/admin/user_add', { annotator_id: 'E03', display_name: 'Expert three', password: PASSWORD, roles: ['expert'] });
+      const e03 = (await api(t, null, 'POST', '/login', { annotator_id: 'E03', password: PASSWORD })).token;
+      const unit = (await api(t, e03, 'POST', '/expert/adjudication_list', {})).units.find((u) => u.kind === 'corrections' && u.corrected && u.corrected.annotator_id === 'K01');
+      const got = await api(t, e03, 'POST', '/expert/adjudication_start', { unit_id: unit.unit_id });
+      for (const c of got.conflicts) {
+        const letter = (c.marks.find((x) => x.annotator_id === 'E01') || c.marks[0]).letter;
+        await api(t, e03, 'POST', '/expert/adjudication_decide', { unit_id: unit.unit_id, conflict_id: c.conflict_id, choice: letter, reason_code: 'type_evidence', reason: 'the eyes move' });
+      }
+      await api(t, e03, 'POST', '/expert/adjudication_finish', { unit_id: unit.unit_id });
+      await page.evaluate(() => globalThis.ElectroTag.reloadHome());
+      await page.click('.rec-tabs [data-tab="history"]');
+      await page.waitForSelector('button.corrected-line');
+      assert.match(await page.textContent('button.corrected-line'), /settled by Expert three/);
+      await t.screenshot(page, 'history_corrections_settled');
+      // the outcome card, readable without the recording's file
+      await page.click('button.settled-open');
+      await page.waitForSelector('.dialog.settled-dialog .settled-row');
+      assert.match(await page.textContent('.dialog.settled-dialog'), /Expert one's correction was kept/);
+      assert.match(await page.textContent('.dialog.settled-dialog'), /Why: the type shows in the EEG: the eyes move/);
+      await t.screenshot(page, 'history_corrections_outcome');
+      await clickDialogButton(page, 'Close');
+      await page.click('button.corrected-line');
+      await waitForRoute(page, 'open');
+      await page.setInputFiles('input[data-log="file-input"]', filesFor(t.study.dir, file));
+      await page.waitForSelector('.correction-feedback[data-standing="adjudicated"]', { timeout: 30000 });
+      assert.doesNotMatch(await page.textContent('.correction-feedback'), /Jaw, not eyes/, 'the rejected version\'s change is not taught');
+      assert.match(await page.textContent('.correction-feedback'), /Where the experts disagreed/);
+      await t.screenshot(page, 'correction_feedback_settled');
+    },
+  },
+  {
+    name: 'on the study server: a trainee watches an expert on a training recording for learning with the experts, never on study work',
+    needs: 'study',
+    async run(t) {
+      const { assert } = t;
+      const file = 'sub-example01_task-example_eeg.vhdr';
+      const rid = `sub-example01/eeg/${file}`;
+      const admin = (await api(t, null, 'POST', '/login', { annotator_id: 'ADMIN', password: PASSWORD })).token;
+      await api(t, admin, 'POST', '/admin/assign', { annotator_ids: ['E01'], recording_ids: [rid], mode: 'practice', context_id: 'example' });
+      const e01 = (await api(t, null, 'POST', '/login', { annotator_id: 'E01', password: PASSWORD })).token;
+      // E01 annotates the example set's first guided recording in practice mode: a session in the log, then the save
+      const sid = crypto.randomBytes(16).toString('hex');
+      const visit = (await api(t, e01, 'POST', '/visits', { client: { user_agent: 'e2e' }, mode: 'practice', context_id: 'example' })).visit_id;
+      const at = { recording: rid, window_no: 1 };
+      const mark = { annotation_id: crypto.randomBytes(16).toString('hex'), label: 'Eye-blink-artifact', onset_sample: 500, duration_samples: 100, channels: [],
+        created_at: '2026-10-30T10:00:00.000+00:00', modified_at: '2026-10-30T10:00:00.000+00:00' };
+      const summary = { id: mark.annotation_id, label: mark.label, onset_s: 2, offset_s: 2.4, channels: [], confidence: null, note_length: 0 };
+      await api(t, e01, 'POST', `/visits/${visit}/events`, { events: [
+        { t: 1, type: 'recording_opened', ...at, session_id: sid, mode: 'practice', annotations_restored: 0 },
+        { t: 1.5, type: 'view', ...at, t_start: 0, duration: 10, ch_start: 0, n_channels: 20, scale_factor: 1 },
+        { t: 3, type: 'annotation_created', ...at, annotations: [summary], n_total: 1, via: 'drag' },
+        { t: 5, type: 'recording_finished', ...at, session_id: sid, attempt: 1 }] });
+      await api(t, e01, 'POST', `/visits/${visit}/close`, { reason: 'signed_out' });
+      const data = filesFor(t.study.dir, file).find((f) => f.endsWith('.eeg'));
+      const sha256 = crypto.createHash('sha256').update(fs.readFileSync(data)).digest('hex');
+      await api(t, e01, 'POST', '/submissions', { recording_id: rid, mode: 'practice', context_id: 'example', annotations: [mark], sha256,
+        session: { started_at: '2026-10-30T10:00:00.000+00:00', elapsed_s: 20, session_id: sid, client: { user_agent: 'e2e' } } });
+      await api(t, e01, 'POST', '/expert/replay_consent_set', { teaching: true });
+      // T01 finds it under Watch an expert at work, and only it: E01's study work is never listed
+      const page = await t.newPage({ url: t.study.base, width: 1280, height: 720 });
+      await signIn(page, 'T01', PASSWORD);
+      await page.waitForFunction(() => globalThis.ElectroTag && globalThis.ElectroTag.me);
+      const listed = await page.evaluate(() => globalThis.ElectroTag.backend.expert('teaching_list', {}));
+      assert.ok(listed.sessions.length >= 1 && listed.sessions.every((x) => x.mode !== 'standard' && x.context_id === 'example'), JSON.stringify(listed));
+      await page.evaluate(() => globalThis.ElectroTag.showTraining());
+      await waitForRoute(page, 'training');
+      await page.click('[data-stage="guided"] .watch-entry');
+      await page.waitForSelector('.dialog.watch-dialog .watch-list li');
+      const item = page.locator('.watch-list li', { hasText: file }).first();
+      await t.screenshot(page, 'watch_dialog_training');
+      await item.locator('button[data-log="watch-session"]').click();
+      await waitForRoute(page, 'open');
+      await page.setInputFiles('input[data-log="file-input"]', filesFor(t.study.dir, file));
+      assert.match(await playToTheEnd(page), /The replay matches the saved version 1/);
+      // and a study recording E01 saved stays out of reach
+      const study = await api(t, admin, 'POST', '/expert/work_list', { annotator_id: 'E01' });
+      for (const w of study.items) {
+        const code = await page.evaluate(async (r) => { try { await globalThis.ElectroTag.backend.expert('replay_index_get', { annotator_id: 'E01', recording_id: r }); return 'answered'; } catch (e) { return e.code; } }, w.recording_id);
+        assert.equal(code, 'forbidden');
+      }
     },
   },
 ];

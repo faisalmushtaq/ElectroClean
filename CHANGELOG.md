@@ -52,6 +52,23 @@ and logs work brought back in a tab; the logging notice says that sessions can b
 results zip and the export hold `corrections/corrections.tsv` and `.json`, and the demonstration does
 all of this in the browser.
 
+Corrections and replays after a usability review. Trainees and annotators watch an expert only on
+the training recordings for learning with the experts, never on a study recording, which they may hold
+or later be given (nor on practice or assessment recordings): the study refuses the list, the replay
+and its events otherwise, and gives them one session at a time. When two experts correct the same
+version, the annotator sees that the experts disagree and the study is settling it, then the
+adjudicated corrected version with the experts' reasons and each decision, and Where the experts
+disagreed in their history; never one expert's version alone. The correction view moves to N and P
+for the next and previous change (Shift+N and Shift+P select any mark), its reason chips are a radio
+group chosen with the arrow keys or their numbers (Shift and a number from anywhere), keep the
+keyboard's place when the list is drawn again, offer only the reasons that suit the change (the study
+refuses "Not an artifact" for an added mark), and the rows read in plain words. ? shows the keys of
+the correction view, the annotator's view of a correction and the replay. The replay's end shows
+under the EEG and near the top of its panel, What happened last folds repeated presses, Saved work
+shows a correction kept in this browser (Carry on), an administrator in the expert area has Admin
+in the header, keyboard hints are left out on touch screens, and the Correct the marks panel no
+longer shows a stray "null".
+
 Administrators can now share recordings out as tasks, in a new Tasks section of the admin area
 (under People): each recording, or each part of one, goes to 2 to 6 annotators who annotate it
 independently, so that their disagreements can be adjudicated. Choose the people, the recordings,

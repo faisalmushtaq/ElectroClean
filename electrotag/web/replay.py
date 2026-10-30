@@ -14,10 +14,16 @@ annotations already present (a restored draft, a revision); a segment logged bef
 from where the segment before it ended.
 
 **Who may watch.** Experts and administrators may replay anyone's sessions while the study's
-``replay.enabled`` is on. Anyone else (a trainee) may watch an expert's sessions only when that expert
-agrees to their sessions being used for teaching (``replay_consent_set``) and the study's
-``replay.trainees_watch_experts`` is on; ``teaching_list`` lists what there is to watch. These are
-checked here, on the server, for every request.
+``replay.enabled`` is on. Anyone else (a trainee, or an annotator) may watch an expert's sessions only
+when that expert agrees to their sessions being used for teaching (``replay_consent_set``) and the
+study's ``replay.trainees_watch_experts`` is on, and then only the expert's sessions on a **teaching
+recording** (:func:`teaching_recording`): a recording of a self-contained training set, used there for
+learning with the experts, which the study's own register does not hold under its ID or its
+fingerprint. Annotations stay independent that way: nobody watches an expert mark a recording they
+hold, or may later be given, as study work, nor one of the practice or assessment recordings, whose
+answers it would give away (the rule for snippets in ``training/reference.py``). ``teaching_list``
+lists what there is to watch. These are checked here, on the server, for every request, and
+``replay_events_get`` gives such a watcher one segment at a time, never a whole visit.
 """
 
 from __future__ import annotations
@@ -27,8 +33,8 @@ from typing import TYPE_CHECKING, Any
 
 from electrotag.web.errors import ApiError
 from electrotag.web.expert import consent_of, expert_op
-from electrotag.web.manifest import SCOPE_STUDY
-from electrotag.web.store import MODES, StoreError, User, attempt_of, parse_roles
+from electrotag.web.manifest import SCOPE_STUDY, fingerprint_of, set_scope
+from electrotag.web.store import MODES, StoreError, User, attempt_of, latest_entry, parse_roles
 
 if TYPE_CHECKING:
     from electrotag.web.service import StudyService
@@ -62,6 +68,41 @@ def may_replay(service: StudyService, user: User, annotator_id: str) -> None:
     if not _is_expert_account(service, annotator_id) or not consent_of(service, annotator_id)["teaching"]:
         raise ApiError(403, "forbidden", "You can watch the sessions of experts who have agreed to it for teaching; "
                        "this one is not among them.")
+
+
+#: Why a trainee may not watch an expert's session on a recording (403 ``forbidden``).
+NOT_FOR_TEACHING = ("Trainees watch experts only on the training recordings for learning with the experts, so that "
+                    "what you annotate for the study stays your own judgement. This session is not on one of them.")
+
+
+def teaching_recording(service: StudyService, recording_id: str, mode: str, context_id: str) -> bool:
+    """True when an expert's session on this recording, in this mode and training set, may be shown to trainees: a
+    recording of a self-contained training set (never the study's own register), used there for learning with the
+    experts (``guided``: practice and assessment recordings would give their answers away), and neither its ID nor
+    its fingerprint in the study's register, so that nobody can be given it as study work."""
+    from electrotag.training.reference import ReferenceSetError
+
+    if mode == "standard" or not context_id:
+        return False
+    try:
+        rs = service.store.reference_set(context_id)
+    except ReferenceSetError:
+        return False
+    if not rs.self_contained or (rs.recordings.get(recording_id) or {}).get("use") != "guided":
+        return False
+    m = service.store.manifest(set_scope(rs.set_id), recording_id)
+    if m is None or service.store.manifest(SCOPE_STUDY, recording_id) is not None:
+        return False
+    sha, size = fingerprint_of(m)
+    return not (sha and any(o.get("scope") == SCOPE_STUDY for o in service.store.manifests_by_fingerprint(sha, size)))
+
+
+def may_watch(service: StudyService, user: User, annotator_id: str, recording_id: str, mode: str,
+              context_id: str) -> None:
+    """Raise unless ``user`` may watch ``annotator_id``'s sessions on this recording (see the module docstring)."""
+    may_replay(service, user, annotator_id)
+    if not user.is_expert and not teaching_recording(service, recording_id, mode, context_id):
+        raise ApiError(403, "forbidden", NOT_FOR_TEACHING)
 
 
 def _when(started_at: Any, offset_s: Any) -> str | None:
@@ -125,6 +166,29 @@ def _strip(seg: dict[str, Any]) -> dict[str, Any]:
                                 "n_events", "first_seq", "last_seq")}
 
 
+def _training_entries(service: StudyService, aid: str, rid: str, mode: str, ctx: str) -> list[dict[str, Any]]:
+    return sorted((e for e in service.store.completion_entries(aid) if e.get("recording_id") == rid
+                   and e.get("mode", "standard") == mode and e.get("context", "") == ctx
+                   and e.get("status") == "completed"), key=attempt_of)
+
+
+def _saved_training(service: StudyService, aid: str, rid: str, mode: str, ctx: str,
+                    attempt: int | None) -> dict[str, Any] | None:
+    """The saved version of a training recording to compare the end of a replay with (the latest, or ``attempt``)."""
+    from electrotag.web.corrections import _document, wire_annotations
+
+    entries = _training_entries(service, aid, rid, mode, ctx)
+    entry = next((e for e in entries if attempt_of(e) == attempt), None) if attempt is not None else (
+        latest_entry(entries) if entries else None)
+    if entry is None:
+        return None
+    doc, raw = _document(service.store.saved_files(aid, rid, mode, ctx, attempt_of(entry)))
+    if raw is None:
+        return None
+    return {"attempt": attempt_of(entry), "saved_at": entry.get("completed_at") or None,
+            "annotations": wire_annotations(doc)}
+
+
 @expert_op("replay_index_get", open_to_all=True)
 def replay_index_get(service: StudyService, user: User, body: dict[str, Any]) -> dict[str, Any]:
     """The segments of one person's sessions on a recording, with what the replay needs to show them."""
@@ -137,7 +201,7 @@ def replay_index_get(service: StudyService, user: User, body: dict[str, Any]) ->
     if mode not in MODES:
         raise _bad(f"mode must be one of {', '.join(MODES)}")
     ctx = str(body.get("context_id") or "") if mode != "standard" else ""
-    may_replay(service, user, aid)
+    may_watch(service, user, aid, rid, mode, ctx)
     scope = service.scope_for(mode, ctx)
     m = service.store.manifest(scope, rid)
     if m is None:
@@ -156,6 +220,8 @@ def replay_index_get(service: StudyService, user: User, body: dict[str, Any]) ->
                      "annotations": annotations}
         except ApiError:
             saved = None
+    else:
+        saved = _saved_training(service, aid, rid, mode, ctx, attempt)
     rec = service.store.user_record(aid) or {}
     return {"logging": bool(service.settings.logging_interactions), "annotator_id": aid,
             "display_name": str(rec.get("display_name") or ""), "recording_id": rid, "mode": mode, "context_id": ctx,
@@ -178,6 +244,12 @@ def replay_events_get(service: StudyService, user: User, body: dict[str, Any]) -
     window = body.get("window_no")
     if window is not None and (isinstance(window, bool) or not isinstance(window, int)):
         raise _bad("window_no must be a whole number")
+    if not user.is_expert:  # a trainee: one segment, on a teaching recording (the module docstring)
+        row = next((r for r in service.store.visit_index(vid) if r.get("window_no") == window), None) \
+            if window is not None else None
+        if row is None or not teaching_recording(service, str(row.get("recording_id") or ""),
+                                                 str(row.get("mode") or "standard"), str(row.get("context_id") or "")):
+            raise ApiError(403, "forbidden", NOT_FOR_TEACHING)
     start = body.get("from_seq", 0)
     limit = body.get("limit", 4000)
     for value, what in ((start, "from_seq"), (limit, "limit")):
@@ -213,39 +285,47 @@ def replay_events_get(service: StudyService, user: User, body: dict[str, Any]) -
 
 @expert_op("teaching_list", open_to_all=True)
 def teaching_list(service: StudyService, user: User, body: dict[str, Any]) -> dict[str, Any]:
-    """What a trainee may watch: the saved study recordings of the experts who agree to their sessions being
-    used for teaching, each with a session in the log to replay."""
+    """What a trainee may watch: the sessions of the experts who agree to their sessions being used for teaching,
+    on teaching recordings only (:func:`teaching_recording`), the latest saved version of each, with a session in
+    the log to replay."""
     r = service.settings.replay
     shown = bool(r.enabled and r.trainees_watch_experts)
     out: list[dict[str, Any]] = []
     if shown:
+        allowed: dict[tuple[str, str, str], bool] = {}
+
+        def teaching(rid: str, mode: str, ctx: str) -> bool:
+            key = (rid, mode, ctx)
+            if key not in allowed:
+                allowed[key] = teaching_recording(service, rid, mode, ctx)
+            return allowed[key]
+
         for u in service.store.user_records():
             aid = u["annotator_id"]
             if aid == user.annotator_id or not _is_expert_account(service, aid):
                 continue
             if not consent_of(service, aid)["teaching"]:
                 continue
-            finished: dict[str, int] = {}
+            finished: set[tuple[str, str, str]] = set()
             for v in service.store.visit_records(aid, limit=MAX_VISITS):
                 for row in service.store.visit_index(v["visit_id"]):
-                    if (row.get("mode") or "standard") == "standard" and row.get("outcome") == "finished":
-                        rid = str(row.get("recording_id"))
-                        finished[rid] = finished.get(rid, 0) + 1
-            entries = [e for e in service.store.completion_entries(aid) if e.get("mode", "standard") == "standard"
-                       and e.get("status") == "completed" and e.get("recording_id") in finished]
-            latest: dict[str, dict[str, Any]] = {}
-            for e in entries:
-                rid = str(e.get("recording_id"))
-                if rid not in latest or attempt_of(e) > attempt_of(latest[rid]):
-                    latest[rid] = e
-            for rid, e in latest.items():
-                m = service.store.manifest(SCOPE_STUDY, rid)
+                    key = (str(row.get("recording_id")), str(row.get("mode") or "standard"),
+                           str(row.get("context_id") or ""))
+                    if row.get("outcome") == "finished" and teaching(*key):
+                        finished.add(key)
+            for rid, mode, ctx in sorted(finished):
+                entries = _training_entries(service, aid, rid, mode, ctx)
+                if not entries:
+                    continue
+                e = latest_entry(entries)
+                m = service.store.manifest(set_scope(ctx), rid)
                 if m is None:
                     continue
                 out.append({"annotator_id": aid, "display_name": u.get("display_name", ""), "recording_id": rid,
-                            "file_name": m.get("file_name", ""), "attempt": attempt_of(e),
-                            "saved_at": e.get("completed_at") or None, "n_annotations": _int(e.get("n_annotations"))})
-    out.sort(key=lambda i: (i["annotator_id"], i["file_name"]))
+                            "file_name": m.get("file_name", ""), "mode": mode, "context_id": ctx,
+                            "attempt": attempt_of(e), "saved_at": e.get("completed_at") or None,
+                            "n_annotations": _int(e.get("n_annotations"))})
+    out.sort(key=lambda i: (i["annotator_id"], i["file_name"], i["mode"]))
     return {"shown": shown, "sessions": out}
 
 
@@ -256,4 +336,4 @@ def _int(value: Any) -> int | None:
         return None
 
 
-__all__ = ["MAX_PAGE", "may_replay", "segments_of"]
+__all__ = ["MAX_PAGE", "NOT_FOR_TEACHING", "may_replay", "may_watch", "segments_of", "teaching_recording"]

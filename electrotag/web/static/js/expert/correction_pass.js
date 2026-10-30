@@ -4,7 +4,11 @@
 // a dashed layer beside them, so that a removed or moved mark stays visible (L shows or hides it).
 // The Changes panel lists the difference from the original as it is now (js/expert/diff.js), each
 // change with reason chips and a short note; a change without a reason the study asks for is
-// outlined. J and K go to the next and previous change, R to its reasons.
+// outlined. N and P go to the next and previous change (the same keys as the other expert views;
+// Shift+N and Shift+P select any mark, as N and P do when annotating), R to its reasons. Each change's
+// chips are a radio group: the arrow keys or the chip's number choose, Shift and the number chooses
+// from anywhere, and the focus stays on the chosen chip when the list is drawn again. Only the reasons
+// that suit the change are offered (diff.js REASONS_FOR). ? shows the view's keys.
 //
 // Submit the correction makes the correction's ID at the first press and keeps it until the study
 // has the correction, and sends correction_save once (it is never repeated by itself; pressed again
@@ -15,10 +19,11 @@
 import { h, clear } from '../ui/dom.js';
 import { ask, choose, inform } from '../ui/dialog.js';
 import { logger, keyName } from '../log/logger.js';
-import { local, newId, nowLocalIso, plural, debounce } from '../util.js';
+import { local, newId, nowLocalIso, plural, debounce, touchFirst } from '../util.js';
 import { AnnotationSession } from '../annotate/session.js';
 import { Workspace } from '../annotate/workspace.js';
-import { MAX_NOTE, MAX_OVERALL, REASONS, changeCounts, changeText, countsText, diffAnnotations, needsReason, suggestedReason } from './diff.js';
+import { CHANGE_WORDS, MAX_NOTE, MAX_OVERALL, REASONS, REASON_KEYS, changeCounts, changeText, correctionKey, countsText, diffAnnotations, needsReason, reasonsFor } from './diff.js';
+import { isHelpKey, showKeySheet } from './key_sheet.js';
 
 /** The study's rule for reasons (review.reason_required), in words for the panel. */
 export const RULE_TEXT = Object.freeze({
@@ -27,9 +32,22 @@ export const RULE_TEXT = Object.freeze({
   never: 'Reasons are optional in this study.',
 });
 
-/** Where a correction in progress is kept in this browser: by the expert, the person and the version corrected. */
-export function correctionKey(backend, me, target) {
-  return `electrotag.correction|${(backend && backend.kind) || ''}|${me || ''}|${target.annotator_id}|${target.recording_id}|v${target.attempt}`;
+export { correctionKey };
+
+/** The keys of the correction view, for its key sheet (?). */
+export const CORRECTION_KEYS = Object.freeze([
+  { title: 'The changes', rows: [['N / P', 'the next and previous change, shown on the EEG'], ['Shift+N / Shift+P', 'the next and previous mark, changed or not (to select one to change)'],
+    ['L', 'show or hide the original as dashed outlines']] },
+  { title: 'Reasons', rows: [['R', 'go to the reasons of the current change'], ['Left arrow / Right arrow', 'in the reasons: choose the previous or next one'],
+    ['1–7', 'in the reasons: choose the reason with that number'], ['Shift+1–7', 'anywhere: give the current change the reason with that number'],
+    ['Space', 'in the reasons: choose the reason, or take it back'], ['Esc', 'leave the reasons for the EEG']] },
+  { title: 'Marking', rows: [['1–9', 'give the selected mark that type, or the next mark'], ['Delete', 'remove the selected mark'], ['?', 'this list of keys']] },
+]);
+
+/** A change's reason, if it suits the change (one kept from before may not). */
+export function reasonOf(c, reasons) {
+  const r = (reasons[c.annotation_id] || {}).reason || '';
+  return r && reasonsFor(c.change).includes(r) ? r : '';
 }
 
 /**
@@ -40,7 +58,7 @@ export class CorrectionSession extends AnnotationSession {
   constructor(o) {
     super(o);
     this.target = o.target;
-    this.extra = { correction_id: null, reasons: {}, overall_note: '' };
+    this.extra = { correction_id: null, reasons: {}, overall_note: '', n_changes: 0 };
   }
 
   get localKey() { return correctionKey(this.backend, this.me && this.me.annotator_id, this.target); }
@@ -68,7 +86,7 @@ export function correctionBody({ correctionId, target, annotations, changes, rea
   return {
     correction_id: correctionId, annotator_id: target.annotator_id, recording_id: target.recording_id, mode: 'standard', attempt: target.attempt,
     annotations, sha256, session,
-    changes: changes.map((c) => ({ annotation_id: c.annotation_id, reason: (reasons[c.annotation_id] || {}).reason || '',
+    changes: changes.map((c) => ({ annotation_id: c.annotation_id, reason: reasonOf(c, reasons),
       note: String((reasons[c.annotation_id] || {}).note || '').slice(0, MAX_NOTE).trim() })),
     overall_note: String(overall || '').slice(0, MAX_OVERALL).trim(),
   };
@@ -76,7 +94,7 @@ export function correctionBody({ correctionId, target, annotations, changes, rea
 
 /** The changes still without a reason the study's rule asks for. */
 export function missingReasons(changes, reasons, rule) {
-  return changes.filter((c) => needsReason(c.change, rule) && !(reasons[c.annotation_id] || {}).reason).map((c) => c.annotation_id);
+  return changes.filter((c) => needsReason(c.change, rule) && !reasonOf(c, reasons)).map((c) => c.annotation_id);
 }
 
 export class CorrectionPass {
@@ -135,9 +153,11 @@ export class CorrectionPass {
       h('div.correction-head', {}, this.progress, this.layerBtn),
       this.list,
       h('label.review-overall-label', {}, h('span', {}, 'A note on the whole correction (optional)'), this.overall),
-      h('p.caption.review-keys', {}, `J and K go to the next and previous change, R to its reasons, L shows or hides the original. ${RULE_TEXT[this.rule] || ''}`));
+      h('p.caption.review-keys', {}, touchFirst() ? RULE_TEXT[this.rule] || ''
+        : `N and P go to the next and previous change, R to its reasons (there the arrow keys or the numbers choose), L shows or hides the original, and ? lists every key. ${RULE_TEXT[this.rule] || ''}`));
     this.ws.reviewHost.append(this.el);
-    this.ws.hintEl.textContent = 'J / K  next, previous change  ·  R  reasons  ·  L  the original  ·  drag: mark as usual';
+    this.ws.hintEl.textContent = touchFirst() ? 'Tap a change to see it on the EEG  ·  mark on the EEG as usual'
+      : 'N / P  next, previous change  ·  R  reasons  ·  L  the original  ·  ?  keys';
   }
 
   /** The list of changes, worked out again from the annotations as they are now. */
@@ -145,6 +165,7 @@ export class CorrectionPass {
     if (this.ws._destroyed) return;
     const current = this.ws.store.toJSON();
     this.changes = diffAnnotations(this.original, current);
+    this.s.extra.n_changes = this.changes.length; // kept with the draft, for Saved work's "in progress" (work.js)
     const ids = new Set(this.changes.map((c) => c.annotation_id));
     for (const id of Object.keys(this.reasons)) if (!ids.has(id)) delete this.reasons[id]; // a change taken back
     for (const id of [...this.flagged]) if (!ids.has(id)) this.flagged.delete(id);
@@ -153,6 +174,7 @@ export class CorrectionPass {
   }
 
   _draw() {
+    const keep = this._focusState();
     clear(this.list);
     if (!this.changes.length) this.list.append(h('li.caption.correction-empty', {}, 'No changes yet. The dashed outlines show the saved version.'));
     this.rows = this.changes.map((c, i) => this._row(c, i));
@@ -163,15 +185,42 @@ export class CorrectionPass {
       ? `${plural(this.changes.length, 'change')} (${countsText(counts)})${missing.length ? `, ${missing.length} without a reason` : ', each with its reason'}`
       : 'No changes yet';
     this.submitBtn.disabled = this.saving || !this.changes.length;
+    this._restoreFocus(keep);
+  }
+
+  /** Where the keyboard's focus is in the list, so that drawing it again does not lose it. */
+  _focusState() {
+    const a = typeof document !== 'undefined' ? document.activeElement : null;
+    if (!a || !this.list.contains(a)) return null;
+    const row = a.closest('.correction-row');
+    return row ? { id: row.dataset.id, reason: a.dataset.reason || null, note: a.classList.contains('review-note'),
+      at: a.classList.contains('review-note') ? a.selectionStart : null } : null;
+  }
+
+  _restoreFocus(keep) {
+    if (!keep) return;
+    const row = (this.rows || []).find((r) => r.dataset.id === keep.id);
+    if (!row) return;
+    const el = keep.note ? row.querySelector('input.review-note')
+      : keep.reason ? row.querySelector(`[data-reason="${keep.reason}"]`) || row.querySelector('[role="radio"][tabindex="0"]')
+        : row.querySelector('.review-item-head');
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    if (keep.note && Number.isInteger(keep.at)) try { el.setSelectionRange(keep.at, keep.at); } catch { /* not a text field */ }
   }
 
   _row(c, i) {
     const r = this.reasons[c.annotation_id] || {};
+    const chosen = reasonOf(c, this.reasons);
     const m = c.after || c.before;
     const l = this.ws.cat.get(m.label);
-    const missing = needsReason(c.change, this.rule) && !r.reason;
-    const chips = Object.entries(REASONS).map(([key, text]) => h('button.seg', { type: 'button', 'aria-pressed': String(r.reason === key), 'data-reason': key,
-      'data-log': 'correction-reason', onclick: () => { this.go(i, { quiet: true }); this.setReason(i, r.reason === key ? '' : key, 'button'); } }, text));
+    const missing = needsReason(c.change, this.rule) && !chosen;
+    const allowed = reasonsFor(c.change);
+    const tabStop = chosen || allowed[0];
+    const chips = allowed.map((key) => h('button.seg.reason-chip', { type: 'button', role: 'radio', 'aria-checked': String(chosen === key), 'data-reason': key,
+      tabindex: key === tabStop ? '0' : '-1', 'data-log': 'correction-reason', title: `${REASONS[key]} (Shift+${REASON_KEYS[key]})`,
+      onclick: () => { this.go(i, { quiet: true }); this.setReason(i, chosen === key ? '' : key, 'button'); } },
+    h('span.key-hint', { 'aria-hidden': 'true' }, REASON_KEYS[key]), REASONS[key]));
     const note = h('input.field.review-note', { type: 'text', maxlength: String(MAX_NOTE), placeholder: 'Note (optional)', value: r.note || '',
       'aria-label': `Note on: ${changeText(c, this.sf)}` });
     note.addEventListener('input', () => {
@@ -180,14 +229,43 @@ export class CorrectionPass {
       this.s.saveLocal();
     });
     note.addEventListener('change', () => logger.event('correction_reason_set', { annotation_id: c.annotation_id, change: c.change,
-      reason: (this.reasons[c.annotation_id] || {}).reason || null, note_length: note.value.trim().length }));
+      reason: reasonOf(c, this.reasons) || null, note_length: note.value.trim().length }));
     note.addEventListener('focus', () => this.go(i, { quiet: true }));
     const head = h('button.review-item-head', { type: 'button', 'data-log': 'correction-change', onclick: () => this.go(i) },
-      h('span.swatch', { style: { background: l ? l.colour : '#999999' } }), h('span.chip.correction-kind', { 'data-change': c.change }, c.change),
+      h('span.swatch', { style: { background: l ? l.colour : '#999999' } }),
       h('span.correction-text', {}, changeText(c, this.sf)));
+    const group = h('div.segmented.review-marks.reason-chips', { role: 'radiogroup', 'aria-label': `Reason for: ${changeText(c, this.sf)}` }, chips);
+    group.addEventListener('keydown', (e) => this._chipKey(e, i, allowed));
     return h('li.review-row.correction-row', { 'data-id': c.annotation_id, 'data-change': c.change,
       class: [i === this.current ? 'current' : '', missing && this.flagged.has(c.annotation_id) ? 'needs-reason' : ''].filter(Boolean).join(' ') || null },
-    head, h('div.segmented.review-marks.reason-chips', { role: 'group', 'aria-label': `Reason for: ${changeText(c, this.sf)}` }, chips), note);
+    head, group, note);
+  }
+
+  /** The keys of a change's reason chips (a radio group): the arrow keys, Home and End, the numbers, Space and Esc. */
+  _chipKey(e, i, allowed) {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const at = allowed.indexOf(e.target && e.target.dataset ? e.target.dataset.reason : '');
+    const take = (fn) => { e.preventDefault(); e.stopPropagation(); fn(); };
+    const to = (k) => take(() => { logger.shortcut(keyName(e), 'Reason'); this.go(i, { quiet: true }); this.setReason(i, allowed[k], 'arrow'); });
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') return to((at + 1 + allowed.length) % allowed.length);
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') return to((Math.max(0, at) - 1 + allowed.length) % allowed.length);
+    if (e.key === 'Home') return to(0);
+    if (e.key === 'End') return to(allowed.length - 1);
+    if (/^[1-9]$/.test(e.key) && !e.shiftKey) return take(() => this.reasonByNumber(i, Number(e.key), 'digit'));
+    if (e.key === 'Escape') return take(() => this.ws.viewer.over.focus());
+    return undefined;
+  }
+
+  /** Give change i the reason with number n (its place in REASONS), when that reason suits the change. */
+  reasonByNumber(i, n, via) {
+    const c = this.changes[i];
+    if (!c) return;
+    const key = Object.keys(REASONS)[n - 1];
+    if (!key) return;
+    if (!reasonsFor(c.change).includes(key)) { this.ws.say(`${REASONS[key]} is not a reason for ${CHANGE_WORDS[c.change]}.`); return; }
+    logger.shortcut(via === 'digit' ? String(n) : `Shift+${n}`, `Reason: ${REASONS[key]}`);
+    this.setReason(i, key, via);
+    if (via === 'shift') this.ws.say(`${i + 1} of ${this.changes.length}: ${REASONS[key]}`);
   }
 
   /** Give change i a reason ('' clears it). */
@@ -202,9 +280,9 @@ export class CorrectionPass {
     this.s.saveLocal();
     this._draw();
     const row = this.rows[i];
-    if (row) {
-      const btn = row.querySelector(`[data-reason="${reason}"]`) || row.querySelector('.seg');
-      if (via !== 'button' && btn) btn.focus({ preventScroll: true });
+    if (row && (via === 'arrow' || via === 'digit')) {
+      const btn = row.querySelector(`[data-reason="${reason}"]`) || row.querySelector('[role="radio"]');
+      if (btn) btn.focus({ preventScroll: true });
     }
   }
 
@@ -218,7 +296,7 @@ export class CorrectionPass {
     if (quiet) return;
     if (c.after && this.ws.store.has(c.annotation_id)) this.ws.jumpTo(c.annotation_id);
     else this.ws.viewer.showInterval(c.before.onset_sample, c.before.duration_samples, []);
-    this.ws.say(`${i + 1} of ${this.changes.length}: ${changeText(c, this.sf)}. R gives its reason.`);
+    this.ws.say(`${i + 1} of ${this.changes.length}: ${changeText(c, this.sf)}.${touchFirst() ? '' : ' R gives its reason.'}`);
   }
 
   step(delta) {
@@ -236,21 +314,27 @@ export class CorrectionPass {
     this.ws.say(this.layerOn ? 'The original version is shown as dashed outlines (L hides it).' : 'The original version is hidden (L shows it again).');
   }
 
-  /** J, K, R and L; true when the key was taken. */
+  /** N, P, R, L, Shift+1–7 and ?; true when the key was taken. */
   onKey(e) {
     if (e.ctrlKey || e.metaKey || e.altKey) return false;
     const k = String(e.key).toLowerCase();
     const take = (action, fn) => { e.preventDefault(); logger.shortcut(keyName(e), action); fn(); return true; };
-    if (k === 'j') return take('Next change', () => this.step(1));
-    if (k === 'k') return take('Previous change', () => this.step(-1));
+    if (isHelpKey(e)) return take('Keys', () => { void showKeySheet('Keys of the correction view', CORRECTION_KEYS, { view: 'correction' }); });
+    if (e.shiftKey && /^Digit[1-9]$/.test(e.code || '')) {
+      e.preventDefault();
+      if (this.current < 0) this.step(1);
+      if (this.current >= 0) this.reasonByNumber(this.current, Number(e.code.slice(5)), 'shift');
+      return true;
+    }
+    if (!e.shiftKey && k === 'n') return take('Next change', () => this.step(1));
+    if (!e.shiftKey && k === 'p') return take('Previous change', () => this.step(-1));
     if (k === 'l') return take('Show or hide the original', () => this.toggleLayer('key'));
     if (k === 'r') {
       return take('Reason', () => {
         if (this.current < 0) this.step(1);
         const row = this.rows[this.current];
         if (!row) return;
-        const r = (this.reasons[this.changes[this.current].annotation_id] || {}).reason;
-        (row.querySelector(`[data-reason="${r}"]`) || row.querySelector('.seg')).focus();
+        (row.querySelector('[role="radio"][tabindex="0"]') || row.querySelector('[role="radio"]')).focus();
       });
     }
     return false;
@@ -325,7 +409,11 @@ export class CorrectionPass {
   /** Before leaving: keep the correction in this browser for later, discard it, or carry on. */
   async beforeClose() {
     if (this.saving) { this.ws.say('Saving the correction: wait for the study\'s answer before you leave.'); return false; }
-    if (!this.changed) { logger.event('correction_left', { n_changes: 0, kept: false }); return true; }
+    if (!this.changed) {
+      if (!this.s.extra.correction_id) this.s.forgetLocal(); // nothing to carry on with (a pause may have kept a copy)
+      logger.event('correction_left', { n_changes: 0, kept: false });
+      return true;
+    }
     const later = 'Keep it in this browser';
     const discard = 'Discard the correction';
     const stay = 'Keep correcting';
