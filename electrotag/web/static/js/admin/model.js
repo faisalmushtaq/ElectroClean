@@ -691,7 +691,8 @@ export function progressCounts(items) {
   const c = { assigned: 0, done: 0, in_progress: 0, todo: 0, unusable: 0 };
   for (const i of items || []) {
     c.assigned += 1;
-    if (i.status in c) c[i.status] += 1;
+    const st = i.status === 'locked' ? 'todo' : i.status; // locked: to do once the trainee has passed the assessment
+    if (st in c) c[st] += 1;
   }
   return c;
 }
@@ -700,9 +701,10 @@ export function progressCounts(items) {
 export function programmeText(p) {
   if (!p) return '';
   if (p.error) return p.message || p.error;
-  const names = { guided: 'Guided', practice: 'Practice', assessment: 'Assessment' };
-  return (p.stages || []).filter((s) => s.status !== 'not_used' && s.total)
-    .map((s) => `${names[s.key] || s.key} ${s.done} of ${s.total}${s.status === 'completed' ? ' (completed)' : s.status === 'locked' ? ' (locked)' : ''}`)
+  const names = { tour: 'Tour', snippets: 'Snippets', guided: 'Guided', practice: 'Practice', assessment: 'Assessment' };
+  const state = { completed: ' (completed)', locked: ' (locked)', skipped: ' (skipped)' };
+  return (p.stages || []).filter((s) => s.status !== 'not_used' && (s.total || s.status === 'skipped'))
+    .map((s) => (s.total ? `${names[s.key] || s.key} ${s.done} of ${s.total}${state[s.status] || ''}` : `${names[s.key] || s.key} skipped`))
     .join(' · ') || 'Not started';
 }
 

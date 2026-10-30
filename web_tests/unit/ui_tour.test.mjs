@@ -36,7 +36,7 @@ test('six steps, each naming the keys and controls to use', () => {
   assert.match(channels.body, /^1\. Press \*\*3\*\* \(or click \*\*3\*\* next to Draw as\) to choose EMG-artifact\.$/m);
   assert.match(channels.body, /click the channel names T7 and T8 at the left of the EEG/);
   assert.match(undo.body, /\*\*Ctrl\+Z\*\* \(\*\*⌘Z\*\* on a Mac\), or click \*\*Undo\*\*/);
-  assert.match(confidence.body, /Press \*\*D\*\*, then a number from \*\*1\*\* \(a guess\) to \*\*5\*\* \(certain\)/);
+  assert.match(confidence.body, /Press \*\*D\*\*, then a number from \*\*1\*\* \(not at all sure\) to \*\*5\*\* \(completely sure\)/);
   assert.match(save.body, /press \*\*Save and Finish\*\* at the top right/);
   assert.equal(mark.ghost.label, 'Eye-blink-artifact');
   assert.deepEqual(channels.ghost.channels, ['T7', 'T8']);

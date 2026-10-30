@@ -4,7 +4,6 @@
 // study server the competency gate: a study recording stays locked until the assessment is met.
 import fs from 'node:fs';
 import path from 'node:path';
-import crypto from 'node:crypto';
 import { pressSave, signIn, waitForRoute, waitForTraces, state, eegPoint, drag, annotations, clickDialogButton, skipFirstStages } from './helpers.mjs';
 
 async function coachText(page) { return page.textContent('.coach'); }
@@ -427,19 +426,16 @@ export const tests = [
       };
       const login = async (id, password) => (await call(null, 'POST', '/login', { annotator_id: id, password })).token;
       const SUB1 = 'sub-001/eeg/sub-001_task-rest_eeg.vhdr';
-      const SUB3 = 'sub-003/eeg/sub-003_task-rest_eeg.edf';
-      const edf = path.join(t.study.dir, 'recordings', 'study', SUB3);
-      const sha = crypto.createHash('sha256').update(fs.readFileSync(edf)).digest('hex');
-      const emg = { annotation_id: 'e'.repeat(32), label: 'EMG-artifact', onset_sample: 1280, duration_samples: 256, channels: [],
-        created_at: '2026-10-30T10:00:00.000+00:00', modified_at: '2026-10-30T10:00:00.000+00:00' };
-      // The study team: an expert's saved annotations become the reference of an assessment set for a new trainee.
+      const PRACTICE = 'sub-example03/eeg/sub-example03_task-example_eeg.vhdr';
+      // The study team: the example set's practice reference becomes the assessment of a set of its own, for a new
+      // trainee who also has a study recording. (Nothing is saved in the study's own work, which other specs count.)
+      const refs = path.join(t.study.dir, 'study', 'derivatives', 'electrotag_reference_sets', 'example', 'references');
+      const reference = JSON.parse(fs.readFileSync(path.join(refs, fs.readdirSync(refs).find((f) => f.includes('example03'))), 'utf8'));
       const admin = await login('ADMIN', 'electrotag');
       const op = (name, body) => call(admin, 'POST', `/admin/${name}`, body);
-      await op('assign', { annotator_ids: ['E01'], recording_ids: [SUB3] });
-      const e01 = await login('E01', 'electrotag');
-      await call(e01, 'POST', '/submissions', { recording_id: SUB3, mode: 'standard', context_id: '', annotations: [emg], session: { elapsed_s: 30 }, sha256: sha });
       await op('set_create', { set_id: 'gate-check', name: 'Gate check' });
-      await op('set_add_reference', { set_id: 'gate-check', recording_id: SUB3, recording_scope: 'study', use: 'assessment', source: { kind: 'annotator', annotator_id: 'E01' } });
+      await op('set_add_reference', { set_id: 'gate-check', recording_id: PRACTICE, recording_scope: 'set:example', use: 'assessment',
+        source: { kind: 'document', document: reference } });
       await op('set_update', { set_id: 'gate-check', criteria: { criteria: [{ metric: 'event_f1', threshold: 0.5, scope: 'overall' }], min_reference_events: 1, categories: null } });
       await op('user_add', { annotator_id: 'T05', display_name: 'Trainee five', password: 'trainee five' });
       await op('programme_set', { annotator_id: 'T05', set_id: 'gate-check' });
@@ -476,10 +472,13 @@ export const tests = [
       await waitForRoute(page, 'training');
       await page.click('main.training [data-log="training-continue"]');
       await waitForRoute(page, 'open');
-      await page.setInputFiles('input[data-log="file-input"]', [edf]);
+      const training = path.join(t.study.dir, 'recordings', 'training', 'sub-example03', 'eeg');
+      await page.setInputFiles('input[data-log="file-input"]', fs.readdirSync(training).filter((f) => /\.(vhdr|vmrk|eeg)$/.test(f)).map((f) => path.join(training, f)));
       await waitForRoute(page, 'annotate', 30000);
       await waitForTraces(page);
-      await page.evaluate(() => globalThis.ElectroTag.ws.store.add('EMG-artifact', 1280, 256, []));
+      // the experts' marks, as a trainee who knows them would make them
+      await page.evaluate((anns) => { for (const a of anns) globalThis.ElectroTag.ws.store.add(a.label, a.onset_sample, a.duration_samples, a.channels || []); },
+        reference.annotations.map((a) => ({ label: a.label, onset_sample: a.onset_sample, duration_samples: a.duration_samples, channels: a.channels })));
       await pressSave(page);
       await clickDialogButton(page, 'Save and Finish');
       await waitForRoute(page, 'training', 30000);
@@ -503,6 +502,8 @@ export const tests = [
       await skipFirstStages(page);
       await page.click('[data-log="sign-out"]');
       await signIn(page, 'ADMIN');
+      await waitForRoute(page, 'admin'); // the admin area's first page, before going to the trainee's
+      await page.waitForSelector('.admin-section[data-section="overview"]');
       await page.evaluate(() => globalThis.ElectroTag.showAdmin('admin-annotators', { annotator: 'T01' }));
       await page.waitForSelector('.gate-stages');
       const card = await page.locator('.admin-card', { hasText: 'Training path' }).textContent();

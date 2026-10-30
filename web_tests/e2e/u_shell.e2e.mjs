@@ -6,7 +6,7 @@
 // guide, an invitation opened on a phone, and a study server that does not answer.
 import fs from 'node:fs';
 import path from 'node:path';
-import { signIn, waitForRoute, waitForTraces, openExample, eegPoint, drag, clickDialogButton } from './helpers.mjs';
+import { signIn, waitForRoute, waitForTraces, openExample, eegPoint, drag, clickDialogButton, skipFirstStages } from './helpers.mjs';
 import { profilePage, kept, waitKept } from './l_device.e2e.mjs';
 import { demoSpecs, syntheticEdfBytes } from '../../electrotag/web/static/js/eeg/synthetic.js';
 
@@ -271,6 +271,7 @@ export const tests = [
       await waitForRoute(page, 'training');
       const study = await page.evaluate(() => globalThis.ElectroTag.assignments.items.find((i) => i.mode === 'standard'));
       assert.ok(study, 'U31 has study recordings as well as training');
+      await skipFirstStages(page); // the tour and the snippets: the training recordings come after them
       await page.locator('main.training .btn.primary').first().click();
       await waitForRoute(page, 'open');
       const wanted = (await page.textContent('main h1')).replace(/^Open\s+/, '').trim();

@@ -77,7 +77,7 @@ export function tourSteps({ quickKeys = {}, sfreq = TOUR_SPEC.sfreq } = {}) {
       done: (o) => o.undone },
     { key: 'confidence', title: 'Say how sure you are',
       body: `1. Click your ${blink.label} on the EEG to select it.\n` +
-        '2. Press **D**, then a number from **1** (a guess) to **5** (certain).',
+        '2. Press **D**, then a number from **1** (not at all sure) to **5** (completely sure).',
       done: (o) => o.annotations.some((a) => a.confidence !== null && a.confidence !== undefined) },
     { key: 'save', title: 'Save and finish',
       body: 'When a recording is done, press **Save and Finish** at the top right. In a study it checks your work, ' +
@@ -146,7 +146,9 @@ export class TourCoach {
     this._feedback('', '');
     this.nextBtn.disabled = true;
     this.nextBtn.textContent = this.index === n - 1 ? 'Finish the tour' : 'Next step';
+    // the last step's action is Save and Finish itself, at the top right
     this.skipBtn.hidden = step.key === 'save';
+    this.nextBtn.hidden = step.key === 'save';
     const v = this.ws.viewer;
     v.setGhost(step.ghost ? { ...step.ghost } : null);
     if (step.ghost) v.showInterval(step.ghost.onset_sample, step.ghost.duration_samples, step.ghost.channels);
@@ -221,6 +223,7 @@ export class TourCoach {
       this.sending = false;
       if (exc.status === 401) return;
       this.nextBtn.disabled = false;
+      this.nextBtn.hidden = false;
       this.nextBtn.textContent = 'Try again';
       this._feedback(`Your study could not be told that you finished the tour: ${exc.message} Press Try again.`, 'banner');
       return;

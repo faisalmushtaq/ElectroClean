@@ -220,6 +220,12 @@ def test_study_work_waits_for_the_assessment(gated, recordings: Path, study: Pat
     assert me["training_gate"]["message"].startswith(GATE_TEXT)
     items = {i["recording_id"]: i for i in t01.ok("get", "/assignments")["items"]}
     assert items[SUB1]["status"] == "locked" and items[SUB1]["locked"] == "training_required"
+    # the study team counts a locked recording as one to do
+    admin = Api(client, "ADMIN")
+    assert admin.admin_ok("overview")["counts"]["todo"] >= 2
+    t01_stats = next(p for p in admin.admin_ok("stats")["annotators"] if p["annotator_id"] == "T01")
+    assert t01_stats["todo"] == 2 and t01_stats["assigned"] == 2
+    assert {i["status"] for i in admin.admin_ok("assignments_list", {"annotator_id": "T01"})["items"]} == {"locked"}
     a = t01.ok("get", "/assignments")
     assert a["next"] is None  # the tour comes first, and a locked recording is never next
     body = err(t01.post("/match", match_body(recordings, SUB1)), 403, "training_required")

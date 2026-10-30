@@ -393,7 +393,8 @@ of the set, the type, where the artifact starts and ends, how much EEG to show o
 unless you choose up to 10 s), the channels it is on (none for the whole montage) and an
 explanation of up to 1000 characters. A snippet is at most 60 s long. Practice and assessment
 recordings are never offered, because a snippet of one would show trainees its answers. Remove takes
-a snippet out after asking. Experts can add and remove snippets too.
+a snippet out after asking. Experts add and remove snippets with the same operations in the expert
+channel (`snippet_add` and `snippet_remove` in [the API](api.md), "Training stages").
 
 ### The example training set
 

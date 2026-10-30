@@ -537,7 +537,7 @@ class Admin:
         for u in active:
             for i in self.service.work_items(User(u["annotator_id"], u.get("display_name", ""), u["role"])):
                 counts["assignments"] += 1
-                counts[i.status] += 1
+                counts["todo" if i.status == "locked" else i.status] += 1  # locked: to do once training is passed
         counts.update(self._feedback_counts())
         recent, _next = self.store.audit_page(None, 10)
         saved = sorted(self._entries(), key=lambda e: e.get("completed_at", ""), reverse=True)[:10]
@@ -1469,7 +1469,8 @@ class Admin:
             active = rec.get("status", "active") == "active"
             items = [i for i in self.service.work_items(person) if counted(i.mode)]
             mine = by_person.get(aid, [])
-            counts = {k: sum(1 for i in items if i.status == k) for k in ("done", "in_progress", "todo", "unusable")}
+            status = {id(i): "todo" if i.status == "locked" else i.status for i in items}  # locked: to do after training
+            counts = {k: sum(1 for i in items if status[id(i)] == k) for k in ("done", "in_progress", "todo", "unusable")}
             in_progress_s, last = 0.0, [str(rec.get("last_seen") or ""), last_visit.get(aid, "")]
             for i in items:
                 if i.status == "in_progress":

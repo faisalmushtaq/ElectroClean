@@ -13,6 +13,7 @@ import { COMPLETE_TEXT, LOCKED_TEXT, STAGE_LINES, WATCH_EXPERT, countText, detai
 import { galleryOrder, groupSnippets, whereText } from '../../electrotag/web/static/js/training/snippets.js';
 import { nextSnippetId, parseChannels } from '../../electrotag/web/static/js/admin/snippets.js';
 import { eventText } from '../../electrotag/web/static/js/admin/training_gate.js';
+import { programmeText, progressCounts } from '../../electrotag/web/static/js/admin/model.js';
 import { DemoBackend, TRAINING_SET } from '../../electrotag/web/static/js/api/demo.js';
 import { Catalogue } from '../../electrotag/web/static/js/catalogue.js';
 import { CATALOGUE } from '../../electrotag/web/static/js/api/demo_catalogue.js';
@@ -156,4 +157,8 @@ test('the admin area\'s snippets: the next ID, and the channels typed checked ag
   assert.match(eventText({ event: 'stage_skipped', stage: 'tour', at: '2026-10-30T10:15:00+00:00' }), /^Find your way around skipped, /);
   assert.match(eventText({ event: 'training_reopened', from: 'practice', by: 'ADMIN', at: '2026-10-30T10:15:00+00:00' }),
     /^Training reopened \(from On your own\) by ADMIN, /);
+  // a trainee's path in a line (Results, Progress): skips named; a locked study recording counts as one to do
+  const stages = stageStates(base({ events: [ev('stage_skipped', 'tour'), ev('stage_skipped', 'snippets'), ev('stage_skipped', 'guided')] }));
+  assert.equal(programmeText({ stages }), 'Tour skipped · Snippets skipped · Guided 0 of 2 (skipped) · Practice 0 of 1 · Assessment 0 of 1 (locked)');
+  assert.deepEqual(progressCounts([{ status: 'locked' }, { status: 'done' }]), { assigned: 2, done: 1, in_progress: 0, todo: 1, unusable: 0 });
 });
