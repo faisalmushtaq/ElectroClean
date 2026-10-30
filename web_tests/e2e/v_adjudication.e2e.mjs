@@ -331,10 +331,13 @@ export const tests = [
         await page.click('[data-section="queue"] [data-tab="finished"]');
         await page.click('[data-section="queue"] [data-log="adjudication-make-reference"]');
         await page.waitForSelector('.dialog.reference-dialog');
+        // for learning with the experts: a practice or assessment reference would keep the recording out of the
+        // quiz item promoted below, since the item would show trainees the answers they are scored against
+        await page.selectOption('.reference-dialog select >> nth=1', 'guided');
         await t.screenshot(page, 'adjudication_make_reference');
         await clickDialogButton(page, 'Make it a reference');
         await page.waitForSelector('[data-section="queue"] .admin-msg .success', { timeout: 15000 });
-        assert.match(await page.textContent('[data-section="queue"] .admin-msg'), /is now a practice reference of/);
+        assert.match(await page.textContent('[data-section="queue"] .admin-msg'), /is now a guided reference of/);
 
         // the library: filter by the confused pair, promote the first entry to a quiz item
         await page.evaluate(() => globalThis.ElectroTag.showExpert('expert-library'));
